@@ -1,0 +1,2180 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPECODE — Sample Pages</title>
+  <style>
+/* ================================================================
+   SPECODE DESIGN SYSTEM — tokens.css
+   Version: 1.0.0
+   
+   ⚠️  규칙:
+   - 이 파일만 수정하면 전체 테마 변경
+   - components.css에서 primitive 토큰 직접 사용 금지
+   - 반드시 semantic 토큰만 참조할 것
+   - Claude Code: 하드코딩 절대 금지
+================================================================ */
+
+/* ----------------------------------------------------------------
+   PRIMITIVE TOKENS  (절대값 — components에서 직접 사용 금지)
+---------------------------------------------------------------- */
+:root {
+
+  /* Gray */
+  --p-gray-950: #0d0e16;
+  --p-gray-900: #111219;
+  --p-gray-850: #13141c;
+  --p-gray-800: #161720;
+  --p-gray-750: #181924;
+  --p-gray-700: #1a1b26;
+  --p-gray-650: #1c1e2c;
+  --p-gray-600: #1e2030;
+  --p-gray-550: #222438;
+  --p-gray-500: #2e3248;
+  --p-gray-400: #474f68;
+  --p-gray-300: #646c88;
+  --p-gray-200: #7c84a0;
+  --p-gray-150: #9aa0b8;
+  --p-gray-100: #b8bdd4;
+  --p-gray-50:  #d4d8ec;
+  --p-gray-0:   #eef0f8;
+
+  /* Indigo (primary brand) */
+  --p-indigo-900: #1e2050;
+  --p-indigo-700: #2d3480;
+  --p-indigo-500: #4a56d4;
+  --p-indigo-400: #5b68e8;
+  --p-indigo-300: #6e7bf0;
+  --p-indigo-200: #9099f5;
+  --p-indigo-100: #c4c8fb;
+
+  /* Amber (accent / logo) */
+  --p-amber-500: #d4820a;
+  --p-amber-400: #f5a623;
+  --p-amber-300: #ffb840;
+  --p-amber-100: #fde8b8;
+
+  /* Green */
+  --p-green-500: #2e8a5c;
+  --p-green-400: #3a9a6e;
+  --p-green-300: #4caf82;
+  --p-green-100: #c0e8d4;
+
+  /* Red */
+  --p-red-500: #a83030;
+  --p-red-400: #c04848;
+  --p-red-300: #d95f5f;
+  --p-red-100: #f0c8c8;
+
+  /* Yellow */
+  --p-yellow-400: #d99a38;
+  --p-yellow-300: #e8b050;
+  --p-yellow-100: #f5e0b0;
+
+  /* Blue */
+  --p-blue-400: #3a8acc;
+  --p-blue-300: #4a9edd;
+  --p-blue-100: #c0ddf5;
+
+  /* ── Spacing (4px grid) ── */
+  --p-space-1:  4px;
+  --p-space-2:  8px;
+  --p-space-3:  12px;
+  --p-space-4:  16px;
+  --p-space-5:  20px;
+  --p-space-6:  24px;
+  --p-space-8:  32px;
+  --p-space-10: 40px;
+  --p-space-12: 48px;
+  --p-space-16: 64px;
+
+  /* ── Font sizes ── */
+  --p-text-2xs: 9.5px;
+  --p-text-xs:  11px;
+  --p-text-sm:  12px;
+  --p-text-md:  12.5px;
+  --p-text-base:13px;
+  --p-text-lg:  14px;
+  --p-text-xl:  16px;
+  --p-text-2xl: 20px;
+  --p-text-3xl: 24px;
+  --p-text-4xl: 30px;
+
+  /* ── Border radius ── */
+  --p-r-0:  0px;
+  --p-r-1:  2px;
+  --p-r-2:  4px;
+  --p-r-3:  6px;
+  --p-r-4:  8px;
+  --p-r-5:  10px;
+  --p-r-6:  12px;
+  --p-r-full: 9999px;
+
+  /* ── Duration ── */
+  --p-dur-fast:   100ms;
+  --p-dur-normal: 160ms;
+  --p-dur-slow:   260ms;
+  --p-dur-slower: 400ms;
+
+  /* ── Easing ── */
+  --p-ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --p-ease-spring:  cubic-bezier(0.22, 1, 0.36, 1);
+  --p-ease-out:     cubic-bezier(0, 0, 0.2, 1);
+  --p-ease-in:      cubic-bezier(0.4, 0, 1, 1);
+}
+
+
+/* ================================================================
+   SEMANTIC TOKENS — DARK (default)
+================================================================ */
+[data-theme="dark"], :root {
+
+  --color-bg-root:     var(--p-gray-850);
+  --color-bg-titlebar: var(--p-gray-700);
+  --color-bg-menubar:  var(--p-gray-800);
+  --color-bg-toolbar:  var(--p-gray-750);
+  --color-bg-sidebar:  var(--p-gray-800);
+  --color-bg-content:  var(--p-gray-850);
+  --color-bg-card:     var(--p-gray-650);
+  --color-bg-surface:  var(--p-gray-600);
+  --color-bg-elevated: var(--p-gray-550);
+  --color-bg-input:    var(--p-gray-750);
+  --color-bg-input-hover: var(--p-gray-650);
+  --color-bg-label:    var(--p-gray-600);
+  --color-bg-overlay:  rgba(0,0,0,0.6);
+  --color-bg-table-odd:  var(--p-gray-750);
+  --color-bg-table-even: var(--p-gray-650);
+  --color-bg-table-hover:rgba(91,104,232,0.08);
+  --color-bg-table-sel:  rgba(91,104,232,0.12);
+
+  --color-border:        rgba(255,255,255,0.10);
+  --color-border-subtle: rgba(255,255,255,0.06);
+  --color-border-strong: rgba(255,255,255,0.18);
+  --color-border-focus:  var(--p-indigo-400);
+
+  --color-text-primary:   var(--p-gray-50);
+  --color-text-secondary: var(--p-gray-200);
+  --color-text-tertiary:  var(--p-gray-400);
+  --color-text-disabled:  var(--p-gray-500);
+  --color-text-heading:   var(--p-gray-100);
+  --color-text-inverse:   var(--p-gray-850);
+  --color-text-link:      var(--p-indigo-300);
+
+  --color-brand:        var(--p-indigo-400);
+  --color-brand-hover:  var(--p-indigo-300);
+  --color-brand-subtle: rgba(91,104,232,0.14);
+  --color-brand-border: rgba(91,104,232,0.32);
+  --color-brand-glow:   rgba(91,104,232,0.20);
+
+  --color-accent:        var(--p-amber-400);
+  --color-accent-hover:  var(--p-amber-300);
+  --color-accent-subtle: rgba(245,166,35,0.12);
+  --color-accent-border: rgba(245,166,35,0.32);
+  --color-accent-glow:   rgba(245,166,35,0.18);
+
+  --color-success:        var(--p-green-300);
+  --color-success-subtle: rgba(76,175,130,0.11);
+  --color-success-border: rgba(76,175,130,0.28);
+
+  --color-error:          var(--p-red-300);
+  --color-error-subtle:   rgba(217,95,95,0.11);
+  --color-error-border:   rgba(217,95,95,0.30);
+
+  --color-warning:        var(--p-yellow-300);
+  --color-warning-subtle: rgba(232,176,80,0.11);
+  --color-warning-border: rgba(232,176,80,0.28);
+
+  --color-info:           var(--p-blue-300);
+  --color-info-subtle:    rgba(74,158,221,0.11);
+  --color-info-border:    rgba(74,158,221,0.28);
+
+  --shadow-xs:    0 1px 2px rgba(0,0,0,0.3);
+  --shadow-sm:    0 1px 4px rgba(0,0,0,0.4);
+  --shadow-md:    0 4px 14px rgba(0,0,0,0.45);
+  --shadow-lg:    0 8px 28px rgba(0,0,0,0.55);
+  --shadow-xl:    0 16px 48px rgba(0,0,0,0.65);
+  --shadow-card:  0 0 0 1px rgba(255,255,255,0.04) inset, 0 2px 8px rgba(0,0,0,0.4);
+  --shadow-focus: 0 0 0 2px var(--color-brand-glow);
+  --shadow-focus-error: 0 0 0 2px var(--color-error-subtle);
+  --shadow-btn-brand: 0 1px 8px var(--color-brand-glow);
+  --shadow-btn-accent: 0 1px 8px var(--color-accent-glow);
+}
+
+
+/* ================================================================
+   SEMANTIC TOKENS — LIGHT
+================================================================ */
+[data-theme="light"] {
+
+  --color-bg-root:     #e8eaf2;
+  --color-bg-titlebar: #2a2d3e;
+  --color-bg-menubar:  #f0f1f6;
+  --color-bg-toolbar:  #eceef6;
+  --color-bg-sidebar:  #eceef6;
+  --color-bg-content:  #e8eaf2;
+  --color-bg-card:     #f4f5fa;
+  --color-bg-surface:  #ffffff;
+  --color-bg-elevated: #f0f2f8;
+  --color-bg-input:    #ffffff;
+  --color-bg-input-hover: #f8f9fc;
+  --color-bg-label:    #eceef6;
+  --color-bg-overlay:  rgba(0,0,0,0.45);
+  --color-bg-table-odd:  #f4f5fa;
+  --color-bg-table-even: #f8f9fc;
+  --color-bg-table-hover:rgba(74,86,212,0.06);
+  --color-bg-table-sel:  rgba(74,86,212,0.09);
+
+  --color-border:        rgba(0,0,0,0.12);
+  --color-border-subtle: rgba(0,0,0,0.07);
+  --color-border-strong: rgba(0,0,0,0.22);
+  --color-border-focus:  var(--p-indigo-500);
+
+  --color-text-primary:   #1e2135;
+  --color-text-secondary: #5a6080;
+  --color-text-tertiary:  #9aa0b8;
+  --color-text-disabled:  #c0c5d8;
+  --color-text-heading:   #2e3248;
+  --color-text-inverse:   #ffffff;
+  --color-text-link:      var(--p-indigo-500);
+
+  --color-brand:        var(--p-indigo-500);
+  --color-brand-hover:  var(--p-indigo-400);
+  --color-brand-subtle: rgba(74,86,212,0.09);
+  --color-brand-border: rgba(74,86,212,0.28);
+  --color-brand-glow:   rgba(74,86,212,0.16);
+
+  --color-accent:        var(--p-amber-400);
+  --color-accent-hover:  var(--p-amber-300);
+  --color-accent-subtle: rgba(245,166,35,0.10);
+  --color-accent-border: rgba(245,166,35,0.28);
+  --color-accent-glow:   rgba(245,166,35,0.15);
+
+  --color-success:        var(--p-green-400);
+  --color-success-subtle: rgba(58,154,110,0.09);
+  --color-success-border: rgba(58,154,110,0.25);
+
+  --color-error:          var(--p-red-400);
+  --color-error-subtle:   rgba(192,72,72,0.09);
+  --color-error-border:   rgba(192,72,72,0.28);
+
+  --color-warning:        var(--p-yellow-400);
+  --color-warning-subtle: rgba(217,154,56,0.10);
+  --color-warning-border: rgba(217,154,56,0.25);
+
+  --color-info:           var(--p-blue-400);
+  --color-info-subtle:    rgba(58,138,204,0.09);
+  --color-info-border:    rgba(58,138,204,0.25);
+
+  --shadow-xs:    0 1px 2px rgba(0,0,0,0.08);
+  --shadow-sm:    0 1px 4px rgba(0,0,0,0.10);
+  --shadow-md:    0 4px 14px rgba(0,0,0,0.12);
+  --shadow-lg:    0 8px 28px rgba(0,0,0,0.15);
+  --shadow-xl:    0 16px 48px rgba(0,0,0,0.18);
+  --shadow-card:  0 1px 3px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-focus: 0 0 0 2px var(--color-brand-glow);
+  --shadow-focus-error: 0 0 0 2px var(--color-error-subtle);
+  --shadow-btn-brand: 0 1px 8px var(--color-brand-glow);
+  --shadow-btn-accent: 0 1px 8px var(--color-accent-glow);
+}
+
+
+/* ================================================================
+   SEMANTIC TOKENS — DARK PURPLE
+   다크와 라이트의 중간, 보라 톤 기반
+================================================================ */
+[data-theme="dark-purple"] {
+
+  --color-bg-root:     #1a1428;
+  --color-bg-titlebar: #130f1e;
+  --color-bg-menubar:  #1e1830;
+  --color-bg-toolbar:  #1c162a;
+  --color-bg-sidebar:  #1e1830;
+  --color-bg-content:  #1a1428;
+  --color-bg-card:     #241e38;
+  --color-bg-surface:  #2a2442;
+  --color-bg-elevated: #302848;
+  --color-bg-input:    #1e1830;
+  --color-bg-input-hover: #241e38;
+  --color-bg-label:    #2a2442;
+  --color-bg-overlay:  rgba(10,6,18,0.7);
+  --color-bg-table-odd:  #1e1830;
+  --color-bg-table-even: #241e38;
+  --color-bg-table-hover:rgba(139,92,246,0.08);
+  --color-bg-table-sel:  rgba(139,92,246,0.14);
+
+  --color-border:        rgba(255,255,255,0.10);
+  --color-border-subtle: rgba(255,255,255,0.06);
+  --color-border-strong: rgba(255,255,255,0.18);
+  --color-border-focus:  #a78bfa;
+
+  --color-text-primary:   #e8e0f8;
+  --color-text-secondary: #b0a4c8;
+  --color-text-tertiary:  #7a6e98;
+  --color-text-disabled:  #4a4060;
+  --color-text-heading:   #d4cceb;
+  --color-text-inverse:   #1a1428;
+  --color-text-link:      #c4b5fd;
+
+  --color-brand:        #8b5cf6;
+  --color-brand-hover:  #a78bfa;
+  --color-brand-subtle: rgba(139,92,246,0.14);
+  --color-brand-border: rgba(139,92,246,0.32);
+  --color-brand-glow:   rgba(139,92,246,0.22);
+
+  --color-accent:        var(--p-amber-400);
+  --color-accent-hover:  var(--p-amber-300);
+  --color-accent-subtle: rgba(245,166,35,0.12);
+  --color-accent-border: rgba(245,166,35,0.32);
+  --color-accent-glow:   rgba(245,166,35,0.18);
+
+  --color-success:        #4ade80;
+  --color-success-subtle: rgba(74,222,128,0.11);
+  --color-success-border: rgba(74,222,128,0.28);
+
+  --color-error:          #f87171;
+  --color-error-subtle:   rgba(248,113,113,0.11);
+  --color-error-border:   rgba(248,113,113,0.30);
+
+  --color-warning:        var(--p-yellow-300);
+  --color-warning-subtle: rgba(232,176,80,0.11);
+  --color-warning-border: rgba(232,176,80,0.28);
+
+  --color-info:           #67e8f9;
+  --color-info-subtle:    rgba(103,232,249,0.11);
+  --color-info-border:    rgba(103,232,249,0.28);
+
+  --shadow-xs:    0 1px 2px rgba(0,0,0,0.35);
+  --shadow-sm:    0 1px 4px rgba(0,0,0,0.45);
+  --shadow-md:    0 4px 14px rgba(0,0,0,0.50);
+  --shadow-lg:    0 8px 28px rgba(0,0,0,0.60);
+  --shadow-xl:    0 16px 48px rgba(0,0,0,0.70);
+  --shadow-card:  0 0 0 1px rgba(255,255,255,0.04) inset, 0 2px 8px rgba(0,0,0,0.45);
+  --shadow-focus: 0 0 0 2px var(--color-brand-glow);
+  --shadow-focus-error: 0 0 0 2px var(--color-error-subtle);
+  --shadow-btn-brand: 0 1px 8px var(--color-brand-glow);
+  --shadow-btn-accent: 0 1px 8px var(--color-accent-glow);
+}
+
+
+/* ================================================================
+   COMPONENT TOKENS
+================================================================ */
+:root {
+  --font-base: 'Geist', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'DM Mono', 'Consolas', monospace;
+
+  --space-1:  var(--p-space-1);
+  --space-2:  var(--p-space-2);
+  --space-3:  var(--p-space-3);
+  --space-4:  var(--p-space-4);
+  --space-5:  var(--p-space-5);
+  --space-6:  var(--p-space-6);
+  --space-8:  var(--p-space-8);
+  --space-10: var(--p-space-10);
+  --space-12: var(--p-space-12);
+
+  --text-2xs: var(--p-text-2xs);
+  --text-xs:  var(--p-text-xs);
+  --text-sm:  var(--p-text-sm);
+  --text-md:  var(--p-text-md);
+  --text-base:var(--p-text-base);
+  --text-lg:  var(--p-text-lg);
+  --text-xl:  var(--p-text-xl);
+  --text-2xl: var(--p-text-2xl);
+  --text-3xl: var(--p-text-3xl);
+
+  --radius-sm:   var(--p-r-2);
+  --radius-md:   var(--p-r-3);
+  --radius-card: var(--p-r-4);
+  --radius-lg:   var(--p-r-5);
+  --radius-full: var(--p-r-full);
+
+  --transition:        var(--p-dur-normal) var(--p-ease-default);
+  --transition-fast:   var(--p-dur-fast)   var(--p-ease-default);
+  --transition-slow:   var(--p-dur-slow)   var(--p-ease-default);
+  --transition-spring: var(--p-dur-slow)   var(--p-ease-spring);
+
+  --sidebar-width:           200px;
+  --sidebar-width-collapsed: 47px;
+
+  --height-titlebar:  34px;
+  --height-menubar:   28px;
+  --height-toolbar:   34px;
+  --height-statusbar: 22px;
+}
+
+/* ================================================================
+   SPECODE DESIGN SYSTEM — components.css
+   Version: 1.0.0
+   
+   ⚠️  규칙:
+   - primitive 토큰 직접 참조 절대 금지
+   - 반드시 semantic 토큰(--color-*, --shadow-*, --space-* 등)만 사용
+   - 하드코딩 금지 (색상, 폰트, 간격, 반경 모두)
+   - 컴포넌트 추가 시 이 파일 하단에 섹션 추가
+================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+/* ── RESET & BASE ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 16px; }
+
+body {
+  font-family: var(--font-base);
+  font-size: var(--text-base);
+  color: var(--color-text-primary);
+  background: var(--color-bg-root);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ================================================================
+   APP CHROME
+================================================================ */
+
+/* ── Titlebar ── */
+.sp-titlebar {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--color-bg-titlebar);
+  border-bottom: 1px solid var(--color-border);
+  height: var(--height-titlebar); flex-shrink: 0;
+  padding: 0 var(--space-3); user-select: none;
+}
+.sp-titlebar-left { display: flex; align-items: center; gap: var(--space-2); }
+.sp-titlebar-logo {
+  display: flex; align-items: center; gap: 6px;
+  font-size: var(--text-md); font-weight: 700; letter-spacing: 0.02em;
+  color: var(--p-gray-100);
+}
+.sp-titlebar-logo .logo-ic {
+  width: 16px; height: 16px;
+  background: var(--color-accent-subtle); border: 1px solid var(--color-accent-border);
+  border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center;
+  font-size: 10px;
+}
+.sp-titlebar-sep  { color: var(--color-text-tertiary); font-weight: 300; }
+.sp-titlebar-path { font-size: var(--text-sm); color: var(--color-text-tertiary); font-family: var(--font-mono); }
+.sp-titlebar-right { display: flex; align-items: center; gap: 1px; }
+.sp-win-btn {
+  width: 30px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--color-text-tertiary); cursor: pointer;
+  border-radius: var(--radius-sm); transition: all var(--transition-fast); font-size: 12px;
+}
+.sp-win-btn:hover { background: rgba(255,255,255,0.08); color: var(--color-text-primary); }
+.sp-win-btn.is-close:hover { background: #c0404a; color: #fff; }
+
+/* ── Menubar ── */
+.sp-menubar {
+  display: flex; align-items: center;
+  background: var(--color-bg-menubar);
+  border-bottom: 1px solid var(--color-border);
+  height: var(--height-menubar); flex-shrink: 0;
+  padding: 0 var(--space-2); gap: 1px;
+}
+.sp-menu-item {
+  padding: 4px 11px; border-radius: var(--radius-sm);
+  font-size: var(--text-md); color: var(--color-text-secondary);
+  cursor: pointer; transition: all var(--transition-fast);
+  border: 1px solid transparent;
+}
+.sp-menu-item:hover  { background: rgba(255,255,255,0.05); color: var(--color-text-primary); }
+.sp-menu-item.is-active { background: var(--color-brand-subtle); color: var(--color-brand); border-color: var(--color-brand-border); }
+.sp-menu-sep { width: 1px; height: 14px; background: var(--color-border-subtle); margin: 0 var(--space-1); }
+
+/* ── Toolbar ── */
+.sp-toolbar {
+  display: flex; align-items: center;
+  background: var(--color-bg-toolbar);
+  border-bottom: 1px solid var(--color-border);
+  height: var(--height-toolbar); flex-shrink: 0;
+  padding: 0 var(--space-2); gap: var(--space-1);
+}
+.sp-toolbar-btn {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: var(--radius-sm);
+  font-size: var(--text-sm); font-weight: 500; font-family: var(--font-base);
+  color: var(--color-text-secondary); cursor: pointer;
+  border: 1px solid transparent; transition: all var(--transition-fast);
+}
+.sp-toolbar-btn svg { width: 12px; height: 12px; flex-shrink: 0; }
+.sp-toolbar-btn:hover { background: rgba(255,255,255,0.05); color: var(--color-text-primary); border-color: var(--color-border-subtle); }
+.sp-toolbar-btn.is-primary { background: var(--color-brand-subtle); color: var(--color-brand); border-color: var(--color-brand-border); }
+.sp-toolbar-btn.is-primary:hover { background: var(--color-brand); color: var(--color-text-inverse); }
+.sp-toolbar-sep   { width: 1px; height: 18px; background: var(--color-border); margin: 0 var(--space-1); }
+.sp-toolbar-space { flex: 1; }
+.sp-toolbar-info  { font-size: var(--text-xs); color: var(--color-text-tertiary); font-family: var(--font-mono); }
+
+/* ── Statusbar ── */
+.sp-statusbar {
+  display: flex; align-items: center;
+  background: var(--color-bg-menubar);
+  border-top: 1px solid var(--color-border);
+  height: var(--height-statusbar); flex-shrink: 0;
+  font-family: var(--font-mono); font-size: var(--text-xs);
+}
+.sp-status-cell {
+  display: flex; align-items: center; gap: 4px;
+  padding: 0 11px; color: var(--color-text-tertiary);
+  border-right: 1px solid var(--color-border-subtle);
+  height: 100%; white-space: nowrap;
+}
+.sp-status-cell.is-ok   { color: var(--color-success); }
+.sp-status-cell.is-warn { color: var(--color-warning); }
+.sp-status-cell.is-err  { color: var(--color-error); }
+.sp-status-cell .dot { width: 5px; height: 5px; border-radius: var(--radius-full); background: currentColor; }
+.sp-status-space { flex: 1; }
+
+/* ── Sidebar ── */
+.sp-sidebar {
+  width: var(--sidebar-width); flex-shrink: 0;
+  background: var(--color-bg-sidebar);
+  border-right: 1px solid var(--color-border);
+  padding: var(--space-2) 0; overflow-y: auto; overflow-x: hidden;
+  transition: width var(--transition-spring);
+  position: relative;
+}
+.sp-sidebar::-webkit-scrollbar { width: 2px; }
+.sp-sidebar::-webkit-scrollbar-thumb { background: var(--color-border); }
+
+.sp-sidebar.is-collapsed { width: var(--sidebar-width-collapsed); }
+
+/* Sidebar toggle button */
+.sp-sidebar-toggle {
+  position: absolute; top: 7px; right: -11px;
+  width: 21px; height: 21px; border-radius: var(--radius-full);
+  background: var(--color-bg-card); border: 1px solid var(--color-border);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; z-index: 20; color: var(--color-text-tertiary);
+  transition: all var(--transition-fast); box-shadow: var(--shadow-sm);
+}
+.sp-sidebar-toggle:hover { color: var(--color-text-primary); border-color: var(--color-border-strong); }
+.sp-sidebar-toggle svg { width: 9px; height: 9px; transition: transform var(--transition-slow); flex-shrink: 0; }
+.sp-sidebar.is-collapsed .sp-sidebar-toggle svg { transform: rotate(180deg); }
+
+/* Sidebar sections */
+.sp-sidebar-section { margin-bottom: var(--space-1); }
+.sp-sidebar-section + .sp-sidebar-section { border-top: 1px solid var(--color-border-subtle); padding-top: var(--space-2); margin-top: var(--space-1); }
+
+.sp-sidebar-title {
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--color-text-tertiary);
+  padding: 0 14px var(--space-1); white-space: nowrap;
+  transition: opacity var(--transition-fast), height var(--transition-slow);
+}
+.sp-sidebar.is-collapsed .sp-sidebar-title { opacity: 0; height: 0; padding: 0; overflow: hidden; }
+
+.sp-sidebar-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 14px; font-size: var(--text-md); color: var(--color-text-secondary);
+  cursor: pointer; transition: all var(--transition-fast);
+  border-left: 2px solid transparent; white-space: nowrap;
+}
+.sp-sidebar-item svg { width: 15px; height: 15px; flex-shrink: 0; color: var(--color-text-tertiary); transition: all var(--transition-fast); }
+.sp-sidebar-item span { transition: opacity var(--transition-fast); overflow: hidden; }
+.sp-sidebar-item .item-count {
+  font-size: var(--text-2xs); font-weight: 600;
+  background: var(--color-brand-subtle); color: var(--color-brand);
+  border: 1px solid var(--color-brand-border);
+  padding: 1px 5px; border-radius: var(--radius-sm);
+  font-family: var(--font-mono); transition: opacity var(--transition-fast);
+}
+.sp-sidebar-item:hover { background: rgba(255,255,255,0.04); color: var(--color-text-heading); }
+.sp-sidebar-item:hover svg { color: var(--color-text-secondary); }
+.sp-sidebar-item.is-active { background: rgba(255,255,255,0.05); color: var(--color-text-primary); border-left-color: var(--color-brand); }
+.sp-sidebar-item.is-active svg { color: var(--color-brand); }
+
+/* Collapsed state */
+.sp-sidebar.is-collapsed .sp-sidebar-item { padding: 9px 0; justify-content: center; border-left-color: transparent !important; }
+.sp-sidebar.is-collapsed .sp-sidebar-item svg { width: 20px; height: 20px; }
+.sp-sidebar.is-collapsed .sp-sidebar-item span,
+.sp-sidebar.is-collapsed .sp-sidebar-item .item-count { display: none; }
+.sp-sidebar.is-collapsed .sp-sidebar-item.is-active { background: rgba(255,255,255,0.06); }
+.sp-sidebar.is-collapsed .sp-sidebar-item:hover svg { color: var(--color-text-primary); }
+
+/* Tooltip on collapsed */
+.sp-sidebar.is-collapsed .sp-sidebar-item { position: relative; }
+.sp-sidebar.is-collapsed .sp-sidebar-item:hover::after {
+  content: attr(data-label);
+  position: absolute; left: calc(var(--sidebar-width-collapsed) + 6px); top: 50%; transform: translateY(-50%);
+  background: var(--color-bg-card); border: 1px solid var(--color-border-strong);
+  color: var(--color-text-primary); font-size: var(--text-xs); font-family: var(--font-base);
+  padding: 4px 9px; border-radius: var(--radius-md); white-space: nowrap;
+  box-shadow: var(--shadow-md); pointer-events: none; z-index: 200;
+}
+
+
+/* ================================================================
+   GROUP BOX (Win32 DNA)
+================================================================ */
+.sp-group {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+.sp-group-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.025) 0%, transparent 100%);
+}
+[data-theme="light"] .sp-group-header { background: linear-gradient(180deg, rgba(0,0,0,0.02) 0%, transparent 100%); }
+.sp-group-title {
+  display: flex; align-items: center; gap: 7px;
+  font-size: var(--text-md); font-weight: 600; color: var(--color-text-heading);
+  letter-spacing: 0.01em;
+}
+.sp-group-title svg { width: 12px; height: 12px; color: var(--color-brand); flex-shrink: 0; }
+.sp-group-body { padding: 14px; }
+
+
+/* ================================================================
+   FORM — INPUTS
+================================================================ */
+
+/* Field wrapper */
+.sp-field { margin-bottom: var(--space-3); }
+.sp-field:last-child { margin-bottom: 0; }
+.sp-field-row { display: flex; gap: var(--space-2); }
+.sp-field-row .sp-field { flex: 1; }
+
+/* Label — top */
+.sp-label {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--color-text-tertiary);
+  margin-bottom: 5px;
+}
+.sp-label-req  { color: var(--color-brand); font-size: var(--text-xs); text-transform: none; letter-spacing: 0; font-weight: 400; }
+.sp-label-opt  { color: var(--color-text-disabled); font-size: var(--text-xs); text-transform: none; letter-spacing: 0; font-weight: 400; font-style: italic; }
+
+/* Input base */
+.sp-input {
+  width: 100%; background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm); padding: 7px 10px;
+  font-size: var(--text-base); font-family: var(--font-base); color: var(--color-text-primary);
+  outline: none; transition: all var(--transition-fast); -webkit-appearance: none;
+  line-height: 1.4;
+}
+.sp-input::placeholder { color: var(--color-text-disabled); }
+.sp-input:hover  { border-color: var(--color-border-strong); background: var(--color-bg-input-hover); }
+.sp-input:focus  { border-color: var(--color-border-focus); box-shadow: var(--shadow-focus); background: var(--color-bg-input-hover); }
+.sp-input:disabled { opacity: 0.45; cursor: not-allowed; }
+.sp-input.is-ok  { border-color: var(--color-success-border); }
+.sp-input.is-ok:focus { box-shadow: 0 0 0 2px var(--color-success-subtle); }
+.sp-input.is-err { border-color: var(--color-error-border); background: var(--color-error-subtle); }
+.sp-input.is-err:focus { box-shadow: var(--shadow-focus-error); }
+
+/* Input with icon */
+.sp-input-wrap { position: relative; display: flex; align-items: center; }
+.sp-input-icon { position: absolute; left: 9px; color: var(--color-text-disabled); pointer-events: none; transition: color var(--transition-fast); }
+.sp-input-icon svg { width: 12px; height: 12px; }
+.sp-input-wrap:focus-within .sp-input-icon { color: var(--color-brand); }
+.sp-input-wrap .sp-input { padding-left: 28px; }
+.sp-input-suffix { position: absolute; right: 9px; color: var(--color-text-tertiary); font-family: var(--font-mono); font-size: var(--text-xs); pointer-events: none; }
+.sp-input-action { position: absolute; right: 6px; background: none; border: none; cursor: pointer; color: var(--color-text-tertiary); padding: 3px; border-radius: var(--radius-sm); transition: all var(--transition-fast); }
+.sp-input-action svg { width: 13px; height: 13px; display: block; }
+.sp-input-action:hover { color: var(--color-text-primary); background: var(--color-bg-elevated); }
+
+/* Select */
+.sp-select-wrap { position: relative; }
+.sp-select-wrap .sp-input { padding-right: 26px; cursor: pointer; }
+.sp-select-arrow { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); color: var(--color-text-tertiary); pointer-events: none; }
+.sp-select-arrow svg { width: 11px; height: 11px; }
+
+/* Textarea */
+.sp-textarea {
+  resize: vertical; min-height: 72px; line-height: 1.65;
+}
+
+/* Hint */
+.sp-hint {
+  display: flex; align-items: center; gap: 4px;
+  font-size: var(--text-xs); margin-top: 4px; color: var(--color-text-tertiary); line-height: 1.4;
+}
+.sp-hint svg { width: 11px; height: 11px; flex-shrink: 0; }
+.sp-hint.is-ok  { color: var(--color-success); }
+.sp-hint.is-err { color: var(--color-error); }
+.sp-hint.is-warn { color: var(--color-warning); }
+
+
+/* ── Inline label field (DB 연결 폼 스타일) ── */
+.sp-field-inline {
+  display: flex; align-items: stretch;
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  background: var(--color-bg-input); overflow: hidden;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.sp-field-inline:focus-within { border-color: var(--color-border-focus); box-shadow: var(--shadow-focus); }
+.sp-field-inline.is-ok  { border-color: var(--color-success-border); }
+.sp-field-inline.is-err { border-color: var(--color-error-border); background: var(--color-error-subtle); }
+
+.sp-inline-label {
+  font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--color-text-tertiary);
+  background: var(--color-bg-label); border-right: 1px solid var(--color-border);
+  padding: 0 10px; min-width: 82px; flex-shrink: 0;
+  display: flex; align-items: center;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.sp-field-inline:focus-within .sp-inline-label { color: var(--color-brand); background: var(--color-brand-subtle); }
+.sp-field-inline.is-err .sp-inline-label { color: var(--color-error); }
+.sp-field-inline.is-ok  .sp-inline-label { color: var(--color-success); }
+
+.sp-inline-input {
+  flex: 1; background: transparent; border: none; outline: none;
+  padding: 7px 10px; font-size: var(--text-base); font-family: var(--font-base); color: var(--color-text-primary);
+}
+.sp-inline-input::placeholder { color: var(--color-text-disabled); }
+.sp-inline-select {
+  flex: 1; position: relative;
+}
+.sp-inline-select select {
+  width: 100%; background: transparent; border: none; outline: none;
+  padding: 7px 26px 7px 10px; font-size: var(--text-base);
+  font-family: var(--font-base); color: var(--color-text-primary);
+  cursor: pointer; -webkit-appearance: none;
+}
+.sp-inline-select-arrow {
+  position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
+  color: var(--color-text-tertiary); pointer-events: none;
+}
+.sp-inline-select-arrow svg { width: 11px; height: 11px; }
+
+
+/* ================================================================
+   BUTTONS
+================================================================ */
+.sp-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 6px 13px; border-radius: var(--radius-sm);
+  font-size: var(--text-sm); font-weight: 500; font-family: var(--font-base);
+  cursor: pointer; border: 1px solid transparent;
+  transition: all var(--transition-fast); white-space: nowrap; line-height: 1;
+  text-decoration: none;
+}
+.sp-btn:active { transform: translateY(1px); }
+.sp-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+.sp-btn svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+/* Variants */
+.sp-btn-primary {
+  background: var(--color-brand); color: var(--color-text-inverse);
+  border-color: var(--color-brand); box-shadow: var(--shadow-btn-brand);
+}
+.sp-btn-primary:hover { background: var(--color-brand-hover); }
+
+.sp-btn-accent {
+  background: var(--color-accent); color: #1a1200;
+  border-color: var(--color-accent); font-weight: 600; box-shadow: var(--shadow-btn-accent);
+}
+.sp-btn-accent:hover { background: var(--color-accent-hover); }
+
+.sp-btn-secondary {
+  background: var(--color-bg-elevated); color: var(--color-text-secondary);
+  border-color: var(--color-border);
+}
+.sp-btn-secondary:hover { color: var(--color-text-primary); border-color: var(--color-border-strong); background: var(--color-bg-surface); }
+
+.sp-btn-ghost {
+  background: transparent; color: var(--color-text-secondary);
+}
+.sp-btn-ghost:hover { color: var(--color-text-primary); background: var(--color-bg-elevated); border-color: var(--color-border-subtle); }
+
+.sp-btn-danger {
+  background: var(--color-error-subtle); color: var(--color-error);
+  border-color: var(--color-error-border);
+}
+.sp-btn-danger:hover { background: var(--color-error); color: #fff; border-color: var(--color-error); }
+
+.sp-btn-success {
+  background: var(--color-success-subtle); color: var(--color-success);
+  border-color: var(--color-success-border);
+}
+.sp-btn-success:hover { background: var(--color-success); color: #fff; }
+
+/* Sizes */
+.sp-btn-xs  { padding: 3px 8px;  font-size: var(--text-xs); }
+.sp-btn-sm  { padding: 5px 11px; font-size: var(--text-sm); }
+.sp-btn-lg  { padding: 9px 18px; font-size: var(--text-base); }
+.sp-btn-xl  { padding: 11px 22px;font-size: var(--text-lg); }
+.sp-btn-full { width: 100%; }
+
+/* Icon only */
+.sp-btn-icon {
+  width: 28px; height: 28px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.sp-btn-icon svg { width: 13px; height: 13px; }
+.sp-btn-icon.sp-btn-sm { width: 24px; height: 24px; }
+.sp-btn-icon.sp-btn-lg { width: 34px; height: 34px; }
+
+/* Button row */
+.sp-btn-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.sp-btn-row-spacer { flex: 1; }
+
+
+/* ================================================================
+   BADGES & TAGS
+================================================================ */
+.sp-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: var(--radius-sm);
+  font-size: var(--text-xs); font-weight: 600;
+  letter-spacing: 0.04em; font-family: var(--font-mono); line-height: 1.5;
+  white-space: nowrap;
+}
+.sp-badge .dot { width: 5px; height: 5px; border-radius: var(--radius-full); background: currentColor; flex-shrink: 0; }
+
+.sp-badge-brand   { background: var(--color-brand-subtle);   color: var(--color-brand);   border: 1px solid var(--color-brand-border); }
+.sp-badge-accent  { background: var(--color-accent-subtle);  color: var(--color-accent);  border: 1px solid var(--color-accent-border); }
+.sp-badge-success { background: var(--color-success-subtle); color: var(--color-success); border: 1px solid var(--color-success-border); }
+.sp-badge-error   { background: var(--color-error-subtle);   color: var(--color-error);   border: 1px solid var(--color-error-border); }
+.sp-badge-warning { background: var(--color-warning-subtle); color: var(--color-warning); border: 1px solid var(--color-warning-border); }
+.sp-badge-info    { background: var(--color-info-subtle);    color: var(--color-info);    border: 1px solid var(--color-info-border); }
+.sp-badge-neutral { background: rgba(255,255,255,0.06); color: var(--color-text-secondary); border: 1px solid var(--color-border); }
+
+.sp-badge-lg { padding: 3px 9px; font-size: var(--text-xs); border-radius: var(--radius-md); }
+.sp-badge-pill { border-radius: var(--radius-full); }
+
+
+/* ================================================================
+   TOGGLE SWITCH
+================================================================ */
+.sp-toggle-track {
+  width: 36px; height: 20px; border-radius: 10px;
+  background: var(--color-border); position: relative; cursor: pointer;
+  flex-shrink: 0; transition: all var(--transition-fast);
+  display: inline-block;
+}
+.sp-toggle-track::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 14px; height: 14px; border-radius: var(--radius-full);
+  background: var(--color-text-tertiary); transition: all var(--transition-fast);
+}
+.sp-toggle-track.is-on { background: var(--color-brand); box-shadow: 0 0 8px var(--color-brand-glow); }
+.sp-toggle-track.is-on::after { transform: translateX(16px); background: #fff; }
+.sp-toggle-track:disabled,
+.sp-toggle-track.is-disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Toggle row */
+.sp-toggle-row {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  padding: 10px 12px;
+  background: var(--color-bg-input); border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm); cursor: pointer;
+  transition: all var(--transition-fast); user-select: none;
+}
+.sp-toggle-row:hover { border-color: var(--color-border-strong); }
+.sp-toggle-row-info p    { font-size: var(--text-base); color: var(--color-text-primary); }
+.sp-toggle-row-info span { font-size: var(--text-xs); color: var(--color-text-tertiary); margin-top: 1px; display: block; }
+
+
+/* ================================================================
+   RADIO
+================================================================ */
+.sp-radio-group { display: flex; gap: var(--space-1); }
+.sp-radio-option {
+  flex: 1; padding: 6px 10px;
+  background: var(--color-bg-input); border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm); font-size: var(--text-sm); color: var(--color-text-secondary);
+  cursor: pointer; text-align: center; transition: all var(--transition-fast);
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+}
+.sp-radio-option:hover { color: var(--color-text-primary); border-color: var(--color-border-strong); }
+.sp-radio-option.is-selected { border-color: var(--color-brand-border); background: var(--color-brand-subtle); color: var(--color-text-primary); }
+.sp-radio-option .radio-dot {
+  width: 12px; height: 12px; border-radius: var(--radius-full);
+  border: 1.5px solid var(--color-border-strong);
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--transition-fast); flex-shrink: 0;
+}
+.sp-radio-option.is-selected .radio-dot {
+  border-color: var(--color-brand); background: var(--color-brand);
+}
+.sp-radio-option.is-selected .radio-dot::after {
+  content: ''; width: 4px; height: 4px;
+  border-radius: var(--radius-full); background: #fff;
+}
+
+/* ── Checkbox ── */
+.sp-checkbox-wrap {
+  display: flex; align-items: center; gap: var(--space-2);
+  cursor: pointer; user-select: none;
+  font-size: var(--text-base); color: var(--color-text-secondary);
+}
+.sp-checkbox-wrap:hover { color: var(--color-text-primary); }
+.sp-checkbox {
+  width: 14px; height: 14px; flex-shrink: 0;
+  accent-color: var(--color-brand); cursor: pointer;
+}
+.sp-checkbox-wrap .req { color: var(--color-warning); font-weight: 600; }
+
+
+/* ================================================================
+   DATA TABLE
+================================================================ */
+.sp-table-wrap {
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm); overflow: hidden;
+}
+.sp-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.sp-table thead tr {
+  background: linear-gradient(180deg, var(--color-bg-label) 0%, var(--color-bg-input) 100%);
+  border-bottom: 1px solid var(--color-border);
+}
+.sp-table thead th {
+  padding: 6px 11px; text-align: left;
+  font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--color-text-tertiary);
+  border-right: 1px solid var(--color-border-subtle);
+  cursor: pointer; user-select: none; white-space: nowrap;
+}
+.sp-table thead th:last-child { border-right: none; }
+.sp-table thead th:hover { color: var(--color-text-primary); }
+.sp-table thead th.is-sorted { color: var(--color-brand); }
+.sp-table tbody tr {
+  border-bottom: 1px solid var(--color-border-subtle);
+  cursor: pointer; transition: background var(--transition-fast);
+}
+.sp-table tbody tr:nth-child(odd)  { background: var(--color-bg-table-odd); }
+.sp-table tbody tr:nth-child(even) { background: var(--color-bg-table-even); }
+.sp-table tbody tr:hover           { background: var(--color-bg-table-hover); }
+.sp-table tbody tr.is-selected     { background: var(--color-bg-table-sel); }
+.sp-table td {
+  padding: 7px 11px; color: var(--color-text-primary);
+  border-right: 1px solid var(--color-border-subtle);
+}
+.sp-table td:last-child { border-right: none; }
+.sp-table td.is-mono { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-secondary); }
+.sp-table td.is-muted { color: var(--color-text-tertiary); }
+
+
+/* ================================================================
+   TABS
+================================================================ */
+.sp-tab-bar {
+  display: flex; align-items: center;
+  border-bottom: 1px solid var(--color-border);
+  gap: 0;
+}
+.sp-tab {
+  padding: 8px 14px; font-size: var(--text-sm); font-weight: 500;
+  color: var(--color-text-secondary); cursor: pointer;
+  border-bottom: 2px solid transparent; transition: all var(--transition-fast);
+  margin-bottom: -1px; white-space: nowrap;
+}
+.sp-tab:hover  { color: var(--color-text-heading); }
+.sp-tab.is-active { color: var(--color-text-primary); border-bottom-color: var(--color-brand); }
+
+/* Segmented tabs */
+.sp-tab-seg {
+  display: flex; gap: 2px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); padding: 3px;
+}
+.sp-tab-seg-item {
+  padding: 5px 14px; border-radius: var(--radius-sm);
+  font-size: var(--text-sm); font-weight: 500;
+  color: var(--color-text-secondary); cursor: pointer;
+  transition: all var(--transition-fast); white-space: nowrap;
+  border: 1px solid transparent;
+}
+.sp-tab-seg-item:hover { color: var(--color-text-primary); }
+.sp-tab-seg-item.is-active {
+  background: var(--color-bg-card); color: var(--color-text-primary);
+  border-color: var(--color-border); box-shadow: var(--shadow-xs);
+}
+
+
+/* ================================================================
+   MODAL / DIALOG
+================================================================ */
+.sp-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: var(--color-bg-overlay);
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(4px);
+  animation: sp-fade-in var(--p-dur-fast) var(--p-ease-out);
+}
+@keyframes sp-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+.sp-modal {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-xl);
+  width: 420px; max-width: calc(100vw - 32px);
+  animation: sp-slide-up var(--p-dur-slow) var(--p-ease-spring);
+  position: relative;
+}
+@keyframes sp-slide-up { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+
+.sp-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.sp-modal-title { font-size: var(--text-lg); font-weight: 700; color: var(--color-text-primary); letter-spacing: -0.01em; }
+.sp-modal-close {
+  width: 24px; height: 24px; border-radius: var(--radius-sm);
+  background: var(--color-bg-elevated); border: 1px solid var(--color-border);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--color-text-secondary); cursor: pointer; font-size: 12px;
+  transition: all var(--transition-fast);
+}
+.sp-modal-close:hover { color: var(--color-text-primary); border-color: var(--color-border-strong); }
+.sp-modal-body   { padding: 16px; }
+.sp-modal-footer {
+  display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2);
+  padding: 12px 16px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+
+/* ================================================================
+   TOAST / NOTIFICATION
+================================================================ */
+.sp-toast {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 11px 14px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-lg);
+  min-width: 280px; max-width: 380px;
+  animation: sp-toast-in var(--p-dur-slow) var(--p-ease-spring);
+}
+@keyframes sp-toast-in { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
+.sp-toast-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+.sp-toast-content { flex: 1; }
+.sp-toast-title { font-size: var(--text-sm); font-weight: 600; color: var(--color-text-primary); margin-bottom: 2px; }
+.sp-toast-desc  { font-size: var(--text-xs); color: var(--color-text-secondary); line-height: 1.5; }
+.sp-toast-close { color: var(--color-text-tertiary); cursor: pointer; font-size: 12px; flex-shrink: 0; padding: 2px; border-radius: 3px; }
+.sp-toast-close:hover { color: var(--color-text-primary); }
+.sp-toast.is-success { border-color: var(--color-success-border); }
+.sp-toast.is-error   { border-color: var(--color-error-border); }
+.sp-toast.is-warning { border-color: var(--color-warning-border); }
+.sp-toast.is-info    { border-color: var(--color-info-border); }
+
+
+/* ================================================================
+   MISC UTILITIES
+================================================================ */
+.sp-divider { height: 1px; background: var(--color-border-subtle); margin: var(--space-3) 0; }
+.sp-divider-strong { height: 1px; background: var(--color-border); }
+
+.sp-section-title {
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--color-text-tertiary);
+  margin-bottom: var(--space-2);
+}
+
+.sp-code {
+  font-family: var(--font-mono); font-size: var(--text-xs);
+  background: var(--color-bg-elevated); border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm); padding: 1px 5px; color: var(--color-text-heading);
+}
+
+.sp-kbd {
+  font-family: var(--font-mono); font-size: var(--text-xs);
+  background: var(--color-bg-elevated); border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm); padding: 2px 6px;
+  color: var(--color-text-secondary); box-shadow: var(--shadow-xs);
+}
+
+.sp-avatar {
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, var(--color-brand), #8b5cf6);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; color: #fff; flex-shrink: 0;
+  font-family: var(--font-base);
+}
+.sp-avatar-sm  { width: 24px; height: 24px; font-size: var(--text-xs); }
+.sp-avatar-md  { width: 32px; height: 32px; font-size: var(--text-sm); }
+.sp-avatar-lg  { width: 40px; height: 40px; font-size: var(--text-base); }
+.sp-avatar-xl  { width: 52px; height: 52px; font-size: var(--text-xl); }
+
+/* Loading spinner */
+.sp-spinner {
+  width: 14px; height: 14px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-brand);
+  border-radius: var(--radius-full);
+  animation: sp-spin 0.7s linear infinite; display: inline-block;
+}
+.sp-spinner-lg { width: 24px; height: 24px; border-width: 3px; }
+@keyframes sp-spin { to { transform: rotate(360deg); } }
+
+/* Empty state */
+.sp-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: var(--space-12) var(--space-6); text-align: center; gap: var(--space-3);
+}
+.sp-empty-icon { font-size: 32px; opacity: 0.35; }
+.sp-empty-title { font-size: var(--text-base); font-weight: 600; color: var(--color-text-secondary); }
+.sp-empty-desc  { font-size: var(--text-sm); color: var(--color-text-tertiary); line-height: 1.6; max-width: 280px; }
+
+/* Scrollbar */
+.sp-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
+.sp-scroll::-webkit-scrollbar-track { background: transparent; }
+.sp-scroll::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
+.sp-scroll::-webkit-scrollbar-thumb:hover { background: var(--color-border-strong); }
+
+  </style>
+  <script>
+/* ================================================================
+   SPECODE Design System — app.js
+   공통: 3테마 토글, 사이드바 접기, 티커
+================================================================ */
+(function () {
+  'use strict';
+
+  var THEMES = ['dark', 'light', 'dark-purple'];
+  var THEME_ICONS = { dark: '🌙', light: '☀️', 'dark-purple': '🔮' };
+
+  /* ── Theme ── */
+  function getTheme() {
+    return localStorage.getItem('sp-theme') || 'dark';
+  }
+
+  function setTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    localStorage.setItem('sp-theme', t);
+    updateThemeUI(t);
+  }
+
+  function cycleTheme() {
+    var cur = getTheme();
+    var idx = THEMES.indexOf(cur);
+    var next = THEMES[(idx + 1) % THEMES.length];
+    setTheme(next);
+  }
+
+  function updateThemeUI(t) {
+    document.querySelectorAll('.sp-theme-cycle').forEach(function (btn) {
+      btn.textContent = THEME_ICONS[t] || '🌙';
+      btn.setAttribute('title', t);
+    });
+    // Update theme selector buttons
+    document.querySelectorAll('[data-theme-set]').forEach(function (btn) {
+      btn.classList.toggle('is-active', btn.getAttribute('data-theme-set') === t);
+    });
+  }
+
+  /* ── Sidebar ── */
+  function toggleSidebar() {
+    var s = document.getElementById('sidebar');
+    if (s) s.classList.toggle('is-collapsed');
+  }
+
+  /* ── Ticker ── */
+  function initTicker(events) {
+    var el = document.getElementById('ticker-text');
+    if (!el || !events || !events.length) return;
+    var idx = 0;
+    function update() {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(6px)';
+      setTimeout(function () {
+        var ev = events[idx];
+        el.textContent = ev.user + "님이 '" + ev.target + "' " + ev.action + "하였습니다.";
+        el.style.opacity = '1';
+        el.style.transform = 'translateY(0)';
+        idx = (idx + 1) % events.length;
+      }, 180);
+    }
+    setInterval(update, 4500);
+    update();
+  }
+
+  /* ── Boot ── */
+  function boot() {
+    setTheme(getTheme());
+
+    document.querySelectorAll('.sp-theme-cycle').forEach(function (btn) {
+      btn.addEventListener('click', cycleTheme);
+    });
+    document.querySelectorAll('[data-theme-set]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        setTheme(btn.getAttribute('data-theme-set'));
+      });
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+
+  window.SPECODE = {
+    setTheme: setTheme,
+    cycleTheme: cycleTheme,
+    toggleSidebar: toggleSidebar,
+    initTicker: initTicker
+  };
+})();
+
+  </script>
+  <style>
+    /* ── Page-level layout (Header+Sidebar+Content+Footer, no menubar/toolbar) ── */
+    .sp-app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    .sp-body { display: flex; flex: 1; overflow: hidden; }
+    .sp-content { flex: 1; overflow-y: auto; overflow-x: hidden; background: var(--color-bg-content); }
+    .sp-content-inner { padding: var(--space-5); max-width: 1200px; }
+
+    /* ── Header (replaces titlebar+menubar+toolbar) ── */
+    .sp-header {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--color-bg-titlebar);
+      border-bottom: 1px solid var(--color-border);
+      height: 44px; flex-shrink: 0; padding: 0 var(--space-3);
+      user-select: none;
+    }
+    .sp-header-left { display: flex; align-items: center; gap: var(--space-3); }
+    .sp-header-right { display: flex; align-items: center; gap: var(--space-3); }
+
+    .sp-header-logo {
+      display: flex; align-items: center; gap: 6px;
+      font-size: var(--text-lg); font-weight: 700; letter-spacing: 0.02em;
+      color: var(--color-text-heading); text-decoration: none;
+    }
+    .sp-header-logo .logo-ic {
+      width: 22px; height: 22px;
+      background: var(--color-accent); border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; color: #1a1200;
+    }
+    .sp-header-project {
+      font-size: var(--text-sm); color: var(--color-text-secondary);
+      font-family: var(--font-mono); display: flex; align-items: center; gap: var(--space-1);
+    }
+    .sp-header-sep { color: var(--color-text-tertiary); font-weight: 300; }
+
+    .sp-header-icon {
+      width: 28px; height: 28px; border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--color-text-tertiary); cursor: pointer;
+      transition: all 100ms ease; border: 1px solid transparent;
+      background: transparent; font-size: 14px;
+    }
+    .sp-header-icon:hover { color: var(--color-text-primary); background: rgba(255,255,255,0.06); }
+
+    /* Theme picker mini */
+    .sp-theme-picker {
+      display: flex; gap: 2px; background: var(--color-bg-elevated);
+      border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 2px;
+    }
+    .sp-theme-pick {
+      width: 22px; height: 22px; border-radius: var(--radius-sm);
+      border: 1px solid transparent; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 11px; transition: all 100ms ease; background: transparent;
+    }
+    .sp-theme-pick:hover { background: rgba(255,255,255,0.08); }
+    .sp-theme-pick.is-active { border-color: var(--color-brand-border); background: var(--color-brand-subtle); }
+
+    /* ── Footer / Statusbar (slim) ── */
+    .sp-footer {
+      display: flex; align-items: center;
+      background: var(--color-bg-menubar);
+      border-top: 1px solid var(--color-border);
+      height: 24px; flex-shrink: 0;
+      font-family: var(--font-mono); font-size: var(--text-xs); padding: 0 var(--space-2);
+    }
+    .sp-footer-cell {
+      display: flex; align-items: center; gap: 4px;
+      padding: 0 10px; color: var(--color-text-tertiary);
+      border-right: 1px solid var(--color-border-subtle);
+      height: 100%; white-space: nowrap;
+    }
+    .sp-footer-cell.is-ok { color: var(--color-success); }
+    .sp-footer-cell.is-warn { color: var(--color-warning); }
+    .sp-footer-cell .dot { width: 5px; height: 5px; border-radius: 9999px; background: currentColor; }
+    .sp-footer-space { flex: 1; }
+
+    /* ── Breadcrumb ── */
+    .sp-breadcrumb {
+      font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.10em;
+      text-transform: uppercase; color: var(--color-text-tertiary);
+      margin-bottom: var(--space-4);
+    }
+    .sp-breadcrumb a { color: var(--color-text-tertiary); text-decoration: none; }
+    .sp-breadcrumb a:hover { color: var(--color-text-primary); }
+    .sp-breadcrumb .sep { margin: 0 6px; }
+
+    /* ── Page Header ── */
+    .sp-page-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      margin-bottom: var(--space-5);
+    }
+    .sp-page-title { font-size: var(--text-2xl); font-weight: 700; color: var(--color-text-heading); letter-spacing: -0.01em; }
+    .sp-page-desc { font-size: var(--text-sm); color: var(--color-text-tertiary); margin-top: 4px; }
+
+    /* ── Stat Grid ── */
+    .sp-stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); margin-bottom: var(--space-5); }
+    .sp-stat-card { padding: var(--space-4); }
+    .sp-stat-label { font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.10em; text-transform: uppercase; color: var(--color-text-tertiary); margin-bottom: var(--space-1); }
+    .sp-stat-value { font-size: var(--text-3xl); font-weight: 700; color: var(--color-text-heading); letter-spacing: -0.02em; display: flex; align-items: baseline; gap: var(--space-2); }
+    .sp-stat-change { font-size: var(--text-xs); font-weight: 600; }
+    .sp-stat-change.is-up { color: var(--color-success); }
+    .sp-stat-change.is-down { color: var(--color-error); }
+    .sp-stat-sub { font-size: var(--text-xs); color: var(--color-text-tertiary); margin-top: 4px; }
+
+    /* ── Progress ── */
+    .sp-progress { height: 5px; background: var(--color-border); border-radius: 9999px; overflow: hidden; }
+    .sp-progress-bar { height: 100%; border-radius: 9999px; transition: width 400ms ease; }
+    .sp-progress-bar.is-brand { background: var(--color-brand); }
+    .sp-progress-bar.is-success { background: var(--color-success); }
+    .sp-progress-bar.is-warn { background: var(--color-warning); }
+
+    /* ── Dual column ── */
+    .sp-col-2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: var(--space-4); }
+
+    /* ── Timeline ── */
+    .sp-timeline-item { display: flex; gap: var(--space-3); padding: var(--space-2) 0; position: relative; }
+    .sp-timeline-item:not(:last-child)::after {
+      content:''; position:absolute; left:14px; top:32px; bottom:-4px; width:1px; background:var(--color-border-subtle);
+    }
+    .sp-timeline-dot {
+      width: 28px; height: 28px; flex-shrink: 0; border-radius: 9999px;
+      display: flex; align-items: center; justify-content: center; font-size: 12px;
+    }
+    .sp-timeline-dot.is-brand { background: var(--color-brand-subtle); color: var(--color-brand); }
+    .sp-timeline-dot.is-success { background: var(--color-success-subtle); color: var(--color-success); }
+    .sp-timeline-dot.is-warn { background: var(--color-warning-subtle); color: var(--color-warning); }
+    .sp-timeline-dot.is-accent { background: var(--color-accent-subtle); color: var(--color-accent); }
+
+    /* ── Pagination ── */
+    .sp-pagination { display: flex; align-items: center; gap: 3px; }
+    .sp-page-btn {
+      width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+      border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+      background: var(--color-bg-input); color: var(--color-text-secondary);
+      font-size: var(--text-sm); font-weight: 500; cursor: pointer; transition: all 100ms ease;
+      font-family: var(--font-base);
+    }
+    .sp-page-btn:hover { border-color: var(--color-border-strong); color: var(--color-text-primary); }
+    .sp-page-btn.is-active { background: var(--color-brand); color: var(--color-text-inverse); border-color: var(--color-brand); }
+
+    /* ── KV pairs ── */
+    .sp-kv { display: grid; grid-template-columns: 110px 1fr; gap: var(--space-1) var(--space-3); font-size: var(--text-sm); }
+    .sp-kv-key { color: var(--color-text-tertiary); font-weight: 600; }
+    .sp-kv-val { color: var(--color-text-primary); }
+
+    /* ── Code block ── */
+    .sp-code-block {
+      background: var(--p-gray-900); border: 1px solid var(--color-border);
+      border-radius: var(--radius-card); padding: var(--space-3); overflow-x: auto;
+      font-family: var(--font-mono); font-size: var(--text-xs); line-height: 1.7; color: #c4c8fb;
+    }
+    .sp-code-block .kw { color: #c084fc; }
+    .sp-code-block .str { color: #86efac; }
+    .sp-code-block .cm { color: #4a5568; font-style: italic; }
+
+    /* ── Login page ── */
+    .sp-login-wrap {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: var(--color-bg-root); position: relative; overflow: hidden;
+    }
+    .sp-login-wrap::before {
+      content: ''; position: absolute; inset: 0;
+      background-image: linear-gradient(rgba(139,92,246,0.03) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(139,92,246,0.03) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+    .sp-login-card {
+      position: relative; z-index: 1; width: 380px; max-width: calc(100vw - 32px);
+      background: var(--color-bg-card); border: 1px solid var(--color-border);
+      border-radius: var(--radius-card); box-shadow: var(--shadow-xl); padding: var(--space-8);
+    }
+    .sp-login-logo { display: flex; align-items: center; justify-content: center; gap: var(--space-2); margin-bottom: var(--space-6); }
+    .sp-login-title { text-align: center; font-size: var(--text-xl); font-weight: 700; color: var(--color-text-heading); margin-bottom: var(--space-1); }
+    .sp-login-sub { text-align: center; font-size: var(--text-sm); color: var(--color-text-tertiary); margin-bottom: var(--space-5); }
+    .sp-login-divider { display: flex; align-items: center; gap: var(--space-3); margin: var(--space-4) 0; color: var(--color-text-tertiary); font-size: var(--text-xs); }
+    .sp-login-divider::before, .sp-login-divider::after { content:''; flex:1; height:1px; background:var(--color-border); }
+    .sp-social-btn {
+      width: 100%; padding: 8px; display: flex; align-items: center; justify-content: center; gap: var(--space-2);
+      background: var(--color-bg-input); border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+      font-family: var(--font-base); font-size: var(--text-sm); font-weight: 500; color: var(--color-text-primary);
+      cursor: pointer; transition: all 100ms ease; margin-bottom: var(--space-2);
+    }
+    .sp-social-btn:hover { background: var(--color-bg-elevated); border-color: var(--color-border-strong); }
+    .sp-login-footer { text-align: center; margin-top: var(--space-5); font-size: var(--text-xs); color: var(--color-text-tertiary); }
+    .sp-login-footer a { color: var(--color-brand); text-decoration: none; font-weight: 600; }
+
+    /* ── Page switcher (demo nav) ── */
+    .sp-demo-nav {
+      position: fixed; bottom: var(--space-3); right: var(--space-3);
+      display: flex; gap: var(--space-1); z-index: 300; 
+    }
+    .sp-demo-btn {
+      padding: 6px 12px; border-radius: var(--radius-sm);
+      background: var(--color-bg-card); border: 1px solid var(--color-border);
+      color: var(--color-text-secondary); font-size: var(--text-xs); font-weight: 600;
+      cursor: pointer; transition: all 100ms ease; box-shadow: var(--shadow-md);
+      font-family: var(--font-base);
+    }
+    .sp-demo-btn:hover { color: var(--color-text-primary); border-color: var(--color-brand-border); }
+    .sp-demo-btn.is-active { background: var(--color-brand); color: var(--color-text-inverse); border-color: var(--color-brand); }
+
+    .sp-page { display: none; }
+    .sp-page.is-visible { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    .sp-page-login.is-visible { display: block; }
+
+    /* ── Ticker (footer) ── */
+    .sp-ticker-text {
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+
+    /* ── Sidebar docs card ── */
+    .sp-sidebar-card {
+      margin: var(--space-2) var(--space-2) var(--space-1);
+      padding: var(--space-3);
+      background: var(--color-brand-subtle); border: 1px solid var(--color-brand-border);
+      border-radius: var(--radius-card);
+    }
+    .sp-sidebar-card-title { font-size: var(--text-sm); font-weight: 600; color: var(--color-brand); margin-bottom: 2px; }
+    .sp-sidebar-card-desc { font-size: var(--text-xs); color: var(--color-text-tertiary); }
+    .sp-sidebar.is-collapsed .sp-sidebar-card { display: none; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 1: DASHBOARD
+═══════════════════════════════════════════════════════════════ -->
+<div class="sp-page is-visible" id="page-dashboard">
+  <!-- HEADER -->
+  <div class="sp-header">
+    <div class="sp-header-left">
+      <a class="sp-header-logo" href="#">
+        <div class="logo-ic">⚡</div> SPECODE
+      </a>
+      <span class="sp-header-sep">/</span>
+      <div class="sp-header-project">온실가스 감축 예산관리 <span style="color:var(--color-text-disabled)">▾</span></div>
+    </div>
+    <div class="sp-header-right">
+      <div class="sp-theme-picker">
+        <button class="sp-theme-pick" data-theme-set="dark" title="Dark">🌙</button>
+        <button class="sp-theme-pick" data-theme-set="dark-purple" title="Dark Purple">🔮</button>
+        <button class="sp-theme-pick" data-theme-set="light" title="Light">☀️</button>
+      </div>
+      <button class="sp-btn sp-btn-primary sp-btn-sm" style="gap:4px;border-radius:var(--radius-full);font-size:var(--text-xs);font-weight:700;letter-spacing:0.02em;">✦ AI Summary</button>
+      <div class="sp-header-icon">🔔</div>
+      <div class="sp-header-icon">⚙️</div>
+      <div class="sp-avatar sp-avatar-sm">GS</div>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div class="sp-body">
+    <!-- SIDEBAR -->
+    <aside class="sp-sidebar" id="sidebar">
+      <div class="sp-sidebar-toggle" onclick="SPECODE.toggleSidebar()">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="7,2 3,6 7,10"/></svg>
+      </div>
+      <div class="sp-sidebar-section">
+        <div class="sp-sidebar-title">Navigation</div>
+        <div class="sp-sidebar-item is-active" data-label="Overview">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          <span>Overview</span>
+        </div>
+        <div class="sp-sidebar-item" data-label="Configuration" onclick="showPage('page-config')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>
+          <span>Configuration</span>
+        </div>
+        <div class="sp-sidebar-item" data-label="Deploy">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          <span>Deploy</span>
+        </div>
+      </div>
+      <div class="sp-sidebar-section">
+        <div class="sp-sidebar-title">System</div>
+        <div class="sp-sidebar-item" data-label="Database">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>
+          <span>Database</span>
+        </div>
+        <div class="sp-sidebar-item" data-label="API Keys">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zM15.5 8.5L19 12"/></svg>
+          <span>API Keys</span>
+        </div>
+        <div class="sp-sidebar-item" data-label="Users">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          <span>Users</span>
+        </div>
+      </div>
+      <div style="flex:1"></div>
+      <div class="sp-sidebar-card">
+        <div class="sp-sidebar-card-title">📖 Docs</div>
+        <div class="sp-sidebar-card-desc">설계 가이드 문서를 확인하세요.</div>
+      </div>
+    </aside>
+
+    <!-- CONTENT -->
+    <main class="sp-content sp-scroll">
+      <div class="sp-content-inner">
+        <div class="sp-breadcrumb">
+          <a href="#">Projects</a><span class="sep">›</span><a href="#">Overview</a>
+        </div>
+
+        <div class="sp-page-header">
+          <div>
+            <div class="sp-page-title">Dashboard</div>
+            <div class="sp-page-desc">프로젝트 진행 현황을 한눈에 확인하세요.</div>
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="sp-stat-grid">
+          <div class="sp-group sp-stat-card">
+            <div class="sp-stat-label">전체 기능</div>
+            <div class="sp-stat-value">142 <span class="sp-stat-change is-up">↑12%</span></div>
+            <div class="sp-stat-sub">지난주 대비</div>
+          </div>
+          <div class="sp-group sp-stat-card">
+            <div class="sp-stat-label">AI 생성률</div>
+            <div class="sp-stat-value">82%<span class="sp-stat-change is-up">↑5%</span></div>
+            <div class="sp-progress" style="margin-top:var(--space-2)"><div class="sp-progress-bar is-brand" style="width:82%"></div></div>
+          </div>
+          <div class="sp-group sp-stat-card">
+            <div class="sp-stat-label">설계 완료</div>
+            <div class="sp-stat-value">98 <span class="sp-badge sp-badge-success sp-badge-pill" style="font-size:10px">69%</span></div>
+            <div class="sp-stat-sub">142건 중</div>
+          </div>
+          <div class="sp-group sp-stat-card">
+            <div class="sp-stat-label">변경 추적</div>
+            <div class="sp-stat-value">3 <span class="sp-badge sp-badge-warning sp-badge-pill" style="font-size:10px">주의</span></div>
+            <div class="sp-stat-sub">개발 이후 설계 변경</div>
+          </div>
+        </div>
+
+        <!-- Chart + Timeline -->
+        <div class="sp-col-2" style="margin-bottom:var(--space-5)">
+          <div class="sp-group">
+            <div class="sp-group-header">
+              <div class="sp-group-title">📊 주간 AI 태스크 처리량</div>
+              <span class="sp-badge sp-badge-neutral">이번 주</span>
+            </div>
+            <div class="sp-group-body" style="padding-bottom:var(--space-2)">
+              <svg viewBox="0 0 700 140" style="width:100%;height:160px;" preserveAspectRatio="none">
+                <defs><linearGradient id="gbar" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--color-brand)" stop-opacity="0.8"/><stop offset="100%" stop-color="var(--color-brand)" stop-opacity="0.3"/></linearGradient></defs>
+                <rect x="30" y="80" width="55" height="60" rx="3" fill="url(#gbar)" opacity="0.6"/>
+                <rect x="115" y="50" width="55" height="90" rx="3" fill="url(#gbar)" opacity="0.7"/>
+                <rect x="200" y="30" width="55" height="110" rx="3" fill="url(#gbar)" opacity="0.75"/>
+                <rect x="285" y="55" width="55" height="85" rx="3" fill="url(#gbar)" opacity="0.65"/>
+                <rect x="370" y="20" width="55" height="120" rx="3" fill="url(#gbar)" opacity="0.8"/>
+                <rect x="455" y="40" width="55" height="100" rx="3" fill="url(#gbar)" opacity="0.7"/>
+                <rect x="540" y="10" width="55" height="130" rx="3" fill="var(--color-accent)" opacity="0.85"/>
+              </svg>
+              <div style="display:flex;justify-content:space-between;padding:0 var(--space-3);font-size:var(--text-2xs);color:var(--color-text-tertiary);font-weight:600;">
+                <span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span>일</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sp-group">
+            <div class="sp-group-header">
+              <div class="sp-group-title">🕐 최근 활동</div>
+              <a style="font-size:var(--text-xs);color:var(--color-text-link);cursor:pointer;font-weight:600;">전체 보기 →</a>
+            </div>
+            <div class="sp-group-body sp-scroll" style="max-height:220px;overflow-y:auto">
+              <div class="sp-timeline-item">
+                <div class="sp-timeline-dot is-brand">✦</div>
+                <div>
+                  <div style="font-size:var(--text-sm);font-weight:600;color:var(--color-text-heading)">AI 코드 생성 완료</div>
+                  <div style="font-size:var(--text-xs);color:var(--color-text-tertiary);margin-top:2px">회원가입 기능 3개 파일 생성</div>
+                  <div style="font-size:var(--text-2xs);color:var(--color-text-disabled);font-family:var(--font-mono);margin-top:4px">2분 전</div>
+                </div>
+              </div>
+              <div class="sp-timeline-item">
+                <div class="sp-timeline-dot is-success">✓</div>
+                <div>
+                  <div style="font-size:var(--text-sm);font-weight:600;color:var(--color-text-heading)">설계 문서 승인</div>
+                  <div style="font-size:var(--text-xs);color:var(--color-text-tertiary);margin-top:2px">예산관리 화면 설계 승인 by 김PM</div>
+                  <div style="font-size:var(--text-2xs);color:var(--color-text-disabled);font-family:var(--font-mono);margin-top:4px">18분 전</div>
+                </div>
+              </div>
+              <div class="sp-timeline-item">
+                <div class="sp-timeline-dot is-warn">⚠</div>
+                <div>
+                  <div style="font-size:var(--text-sm);font-weight:600;color:var(--color-text-heading)">설계 변경 감지</div>
+                  <div style="font-size:var(--text-xs);color:var(--color-text-tertiary);margin-top:2px">tb_budget 컬럼 추가 → 영향 분석 필요</div>
+                  <div style="font-size:var(--text-2xs);color:var(--color-text-disabled);font-family:var(--font-mono);margin-top:4px">1시간 전</div>
+                </div>
+              </div>
+              <div class="sp-timeline-item">
+                <div class="sp-timeline-dot is-accent">🚀</div>
+                <div>
+                  <div style="font-size:var(--text-sm);font-weight:600;color:var(--color-text-heading)">배포 완료</div>
+                  <div style="font-size:var(--text-xs);color:var(--color-text-tertiary);margin-top:2px">개발서버 v1.2.4 배포 성공</div>
+                  <div style="font-size:var(--text-2xs);color:var(--color-text-disabled);font-family:var(--font-mono);margin-top:4px">2시간 전</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Task Progress Table -->
+        <div class="sp-group">
+          <div class="sp-group-header">
+            <div class="sp-group-title">📋 단위업무별 진행률</div>
+            <button class="sp-btn sp-btn-secondary sp-btn-sm">Export</button>
+          </div>
+          <div class="sp-table-wrap" style="border:none;border-radius:0">
+            <table class="sp-table">
+              <thead><tr><th>단위업무</th><th>요구사항</th><th>화면</th><th>기능</th><th>AI 생성률</th><th>진행률</th><th>상태</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td style="font-weight:600">회원관리</td><td class="is-mono">12</td><td class="is-mono">8</td><td class="is-mono">34</td>
+                  <td><div style="display:flex;align-items:center;gap:var(--space-2)"><div class="sp-progress" style="width:70px"><div class="sp-progress-bar is-brand" style="width:91%"></div></div><span class="is-mono" style="font-size:var(--text-xs)">91%</span></div></td>
+                  <td><div style="display:flex;align-items:center;gap:var(--space-2)"><div class="sp-progress" style="width:70px"><div class="sp-progress-bar is-success" style="width:100%"></div></div><span class="is-mono" style="font-size:var(--text-xs)">100%</span></div></td>
+                  <td><span class="sp-badge sp-badge-success"><span class="dot"></span>완료</span></td>
+                </tr>
+                <tr>
+                  <td style="font-weight:600">예산관리</td><td class="is-mono">18</td><td class="is-mono">14</td><td class="is-mono">52</td>
+                  <td><div style="display:flex;align-items:center;gap:var(--space-2)"><div class="sp-progress" style="width:70px"><div class="sp-progress-bar is-brand" style="width:78%"></div></div><span class="is-mono" style="font-size:var(--text-xs)">78%</span></div></td>
+                  <td><div style="display:flex;align-items:center;gap:var(--space-2)"><div class="sp-progress" style="width:70px"><div class="sp-progress-bar is-brand" style="width:65%"></div></div><span class="is-mono" style="font-size:var(--text-xs)">65%</span></div></td>
+                  <td><span class="sp-badge sp-badge-brand"><span class="dot"></span>진행</span></td>
+                </tr>
+                <tr>
+                  <td style="font-weight:600">성과관리</td><td class="is-mono">8</td><td class="is-mono">6</td><td class="is-mono">22</td>
+                  <td><div style="display:flex;align-items:center;gap:var(--space-2)"><div class="sp-progress" style="width:70px"><div class="sp-progress-bar is-brand" style="width:85%"></div></div><span class="is-mono" style="font-size:var(--text-xs)">85%</span></div></td>
+                  <td><div style="display:flex;align-items:center;gap:var(--space-2)"><div class="sp-progress" style="width:70px"><div class="sp-progress-bar is-warn" style="width:40%"></div></div><span class="is-mono" style="font-size:var(--text-xs)">40%</span></div></td>
+                  <td><span class="sp-badge sp-badge-brand"><span class="dot"></span>진행</span></td>
+                </tr>
+                <tr>
+                  <td style="font-weight:600">통계/보고서</td><td class="is-mono">6</td><td class="is-mono">4</td><td class="is-mono">18</td>
+                  <td><div style="display:flex;align-items:center;gap:var(--space-2)"><div class="sp-progress" style="width:70px"><div class="sp-progress-bar" style="width:0%"></div></div><span class="is-mono is-muted" style="font-size:var(--text-xs)">—</span></div></td>
+                  <td><div style="display:flex;align-items:center;gap:var(--space-2)"><div class="sp-progress" style="width:70px"><div class="sp-progress-bar" style="width:0%"></div></div><span class="is-mono is-muted" style="font-size:var(--text-xs)">0%</span></div></td>
+                  <td><span class="sp-badge sp-badge-neutral">대기</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="sp-footer">
+    <div class="sp-footer-cell is-ok"><span class="dot"></span>Connected</div>
+    <div class="sp-footer-cell is-warn"><span class="dot"></span>변경 추적 3건</div>
+    <div class="sp-footer-cell">
+      <span id="ticker-text" class="sp-ticker-text" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+    </div>
+    <div class="sp-footer-space"></div>
+    <div class="sp-footer-cell">Branch: main</div>
+    <div class="sp-footer-cell">v2.4.1</div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 2: LIST (기능 목록)
+═══════════════════════════════════════════════════════════════ -->
+<div class="sp-page" id="page-list">
+  <div class="sp-header">
+    <div class="sp-header-left">
+      <a class="sp-header-logo" href="#"><div class="logo-ic">⚡</div> SPECODE</a>
+      <span class="sp-header-sep">/</span>
+      <div class="sp-header-project">온실가스 감축 예산관리 <span style="color:var(--color-text-disabled)">▾</span></div>
+    </div>
+    <div class="sp-header-right">
+      <div class="sp-theme-picker">
+        <button class="sp-theme-pick" data-theme-set="dark">🌙</button>
+        <button class="sp-theme-pick" data-theme-set="dark-purple">🔮</button>
+        <button class="sp-theme-pick" data-theme-set="light">☀️</button>
+      </div>
+      <button class="sp-btn sp-btn-primary sp-btn-sm" style="gap:4px;border-radius:var(--radius-full);font-size:var(--text-xs);font-weight:700;">✦ AI Summary</button>
+      <div class="sp-header-icon">🔔</div><div class="sp-header-icon">⚙️</div>
+      <div class="sp-avatar sp-avatar-sm">GS</div>
+    </div>
+  </div>
+  <div class="sp-body">
+    <aside class="sp-sidebar" id="sidebar-list">
+      <div class="sp-sidebar-toggle" onclick="document.getElementById('sidebar-list').classList.toggle('is-collapsed')">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="7,2 3,6 7,10"/></svg>
+      </div>
+      <div class="sp-sidebar-section">
+        <div class="sp-sidebar-title">Navigation</div>
+        <div class="sp-sidebar-item" data-label="Overview" onclick="showPage('page-dashboard')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></div>
+        <div class="sp-sidebar-item is-active" data-label="Configuration"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg><span>Configuration</span></div>
+        <div class="sp-sidebar-item" data-label="Deploy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><span>Deploy</span></div>
+      </div>
+      <div class="sp-sidebar-section">
+        <div class="sp-sidebar-title">단위업무</div>
+        <div class="sp-sidebar-item" data-label="회원관리"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg><span>회원관리</span><span class="item-count">34</span></div>
+        <div class="sp-sidebar-item is-active" data-label="예산관리"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg><span>예산관리</span><span class="item-count">52</span></div>
+        <div class="sp-sidebar-item" data-label="성과관리"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg><span>성과관리</span><span class="item-count">22</span></div>
+      </div>
+      <div style="flex:1"></div>
+      <div class="sp-sidebar-card"><div class="sp-sidebar-card-title">📖 Docs</div><div class="sp-sidebar-card-desc">설계 가이드 문서를 확인하세요.</div></div>
+    </aside>
+    <main class="sp-content sp-scroll">
+      <div class="sp-content-inner">
+        <div class="sp-breadcrumb"><a href="#">Projects</a><span class="sep">›</span><a href="#">Configuration</a><span class="sep">›</span><a href="#">예산관리</a><span class="sep">›</span>기능 목록</div>
+        <div class="sp-page-header">
+          <div><div class="sp-page-title">기능 목록</div><div class="sp-page-desc">예산관리 단위업무의 전체 기능을 관리합니다.</div></div>
+          <div class="sp-btn-row">
+            <button class="sp-btn sp-btn-accent sp-btn-sm">✦ AI 자동 생성</button>
+            <button class="sp-btn sp-btn-primary">+ 기능 추가</button>
+          </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="sp-group" style="margin-bottom:var(--space-3)">
+          <div class="sp-group-body" style="padding:var(--space-2) var(--space-3)">
+            <div style="display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap">
+              <div class="sp-input-wrap" style="flex:1;min-width:200px">
+                <div class="sp-input-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></div>
+                <input class="sp-input" placeholder="기능명, 화면명으로 검색..." style="height:32px;font-size:var(--text-sm)">
+              </div>
+              <div class="sp-select-wrap" style="width:120px">
+                <select class="sp-input" style="height:32px;font-size:var(--text-sm);padding-right:24px"><option>전체 상태</option><option>설계 중</option><option>완료</option></select>
+                <div class="sp-select-arrow"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="2,4 6,8 10,4"/></svg></div>
+              </div>
+              <div class="sp-select-wrap" style="width:120px">
+                <select class="sp-input" style="height:32px;font-size:var(--text-sm);padding-right:24px"><option>전체 화면</option><option>예산 등록</option><option>예산 조회</option></select>
+                <div class="sp-select-arrow"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="2,4 6,8 10,4"/></svg></div>
+              </div>
+              <span style="font-size:var(--text-xs);color:var(--color-text-tertiary);font-weight:600;font-family:var(--font-mono)">52건</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="sp-group">
+          <div class="sp-table-wrap" style="border:none;border-radius:0">
+            <table class="sp-table">
+              <thead><tr><th style="width:32px"><input type="checkbox" class="sp-checkbox"></th><th>기능ID</th><th>기능명</th><th>화면</th><th>영역</th><th>유형</th><th>AI 상태</th><th>상태</th><th>수정일</th></tr></thead>
+              <tbody>
+                <tr onclick="showPage('page-detail')"><td><input type="checkbox" class="sp-checkbox"></td><td class="is-mono">FN-BUD-001</td><td style="font-weight:600;color:var(--color-text-link);cursor:pointer">예산 항목 조회</td><td>예산 조회</td><td>검색 영역</td><td><span class="sp-badge sp-badge-neutral">조회</span></td><td><span class="sp-badge sp-badge-brand"><span class="dot"></span>생성완료</span></td><td><span class="sp-badge sp-badge-success"><span class="dot"></span>완료</span></td><td class="is-mono is-muted">03.24</td></tr>
+                <tr><td><input type="checkbox" class="sp-checkbox"></td><td class="is-mono">FN-BUD-002</td><td style="font-weight:600;color:var(--color-text-link)">예산 신규 등록</td><td>예산 등록</td><td>입력 영역</td><td><span class="sp-badge sp-badge-info">저장</span></td><td><span class="sp-badge sp-badge-brand"><span class="dot"></span>생성완료</span></td><td><span class="sp-badge sp-badge-success"><span class="dot"></span>완료</span></td><td class="is-mono is-muted">03.24</td></tr>
+                <tr><td><input type="checkbox" class="sp-checkbox"></td><td class="is-mono">FN-BUD-003</td><td style="font-weight:600;color:var(--color-text-link)">예산 유효성 검증</td><td>예산 등록</td><td>입력 영역</td><td><span class="sp-badge sp-badge-accent">검증</span></td><td><span class="sp-badge sp-badge-warning"><span class="dot"></span>생성중</span></td><td><span class="sp-badge sp-badge-brand"><span class="dot"></span>진행</span></td><td class="is-mono is-muted">03.24</td></tr>
+                <tr><td><input type="checkbox" class="sp-checkbox"></td><td class="is-mono">FN-BUD-004</td><td style="font-weight:600;color:var(--color-text-link)">예산 승인 요청</td><td>예산 승인</td><td>버튼 영역</td><td><span class="sp-badge sp-badge-info">저장</span></td><td><span class="sp-badge sp-badge-neutral">미생성</span></td><td><span class="sp-badge sp-badge-neutral">대기</span></td><td class="is-mono is-muted">03.23</td></tr>
+                <tr><td><input type="checkbox" class="sp-checkbox"></td><td class="is-mono">FN-BUD-005</td><td style="font-weight:600;color:var(--color-text-link)">예산 상세 조회</td><td>예산 조회</td><td>결과 영역</td><td><span class="sp-badge sp-badge-neutral">조회</span></td><td><span class="sp-badge sp-badge-brand"><span class="dot"></span>생성완료</span></td><td><span class="sp-badge sp-badge-success"><span class="dot"></span>완료</span></td><td class="is-mono is-muted">03.23</td></tr>
+                <tr><td><input type="checkbox" class="sp-checkbox"></td><td class="is-mono">FN-BUD-006</td><td style="font-weight:600;color:var(--color-text-link)">예산 삭제</td><td>예산 조회</td><td>버튼 영역</td><td><span class="sp-badge sp-badge-error">삭제</span></td><td><span class="sp-badge sp-badge-neutral">미생성</span></td><td><span class="sp-badge sp-badge-neutral">대기</span></td><td class="is-mono is-muted">03.22</td></tr>
+                <tr><td><input type="checkbox" class="sp-checkbox"></td><td class="is-mono">FN-BUD-007</td><td style="font-weight:600;color:var(--color-text-link)">예산 엑셀 다운로드</td><td>예산 조회</td><td>버튼 영역</td><td><span class="sp-badge sp-badge-neutral">조회</span></td><td><span class="sp-badge sp-badge-warning"><span class="dot"></span>변경감지</span></td><td><span class="sp-badge sp-badge-warning"><span class="dot"></span>변경</span></td><td class="is-mono is-muted">03.22</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:var(--space-2) var(--space-3);border-top:1px solid var(--color-border-subtle)">
+            <span style="font-size:var(--text-xs);color:var(--color-text-tertiary);font-family:var(--font-mono)">1–7 / 52건</span>
+            <div class="sp-pagination">
+              <button class="sp-page-btn">‹</button>
+              <button class="sp-page-btn is-active">1</button>
+              <button class="sp-page-btn">2</button>
+              <button class="sp-page-btn">3</button>
+              <button class="sp-page-btn">…</button>
+              <button class="sp-page-btn">8</button>
+              <button class="sp-page-btn">›</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <div class="sp-footer">
+    <div class="sp-footer-cell is-ok"><span class="dot"></span>Connected</div>
+    <div class="sp-footer-cell is-warn"><span class="dot"></span>변경 1건</div>
+    <div class="sp-footer-space"></div>
+    <div class="sp-footer-cell">Branch: main</div>
+    <div class="sp-footer-cell">v2.4.1</div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 3: DETAIL (기능 상세)
+═══════════════════════════════════════════════════════════════ -->
+<div class="sp-page" id="page-detail">
+  <div class="sp-header">
+    <div class="sp-header-left">
+      <a class="sp-header-logo" href="#"><div class="logo-ic">⚡</div> SPECODE</a>
+      <span class="sp-header-sep">/</span>
+      <div class="sp-header-project">온실가스 감축 예산관리</div>
+    </div>
+    <div class="sp-header-right">
+      <div class="sp-theme-picker"><button class="sp-theme-pick" data-theme-set="dark">🌙</button><button class="sp-theme-pick" data-theme-set="dark-purple">🔮</button><button class="sp-theme-pick" data-theme-set="light">☀️</button></div>
+      <div class="sp-header-icon">🔔</div><div class="sp-header-icon">⚙️</div>
+      <div class="sp-avatar sp-avatar-sm">GS</div>
+    </div>
+  </div>
+  <div class="sp-body">
+    <aside class="sp-sidebar" id="sidebar-detail">
+      <div class="sp-sidebar-toggle" onclick="document.getElementById('sidebar-detail').classList.toggle('is-collapsed')"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="7,2 3,6 7,10"/></svg></div>
+      <div class="sp-sidebar-section"><div class="sp-sidebar-title">Navigation</div>
+        <div class="sp-sidebar-item" data-label="Overview" onclick="showPage('page-dashboard')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></div>
+        <div class="sp-sidebar-item is-active" data-label="Configuration"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg><span>Configuration</span></div>
+      </div>
+    </aside>
+    <main class="sp-content sp-scroll">
+      <div class="sp-content-inner">
+        <div class="sp-breadcrumb"><a href="#" onclick="showPage('page-list');return false">예산관리 › 기능 목록</a><span class="sep">›</span>FN-BUD-001</div>
+
+        <div class="sp-page-header">
+          <div>
+            <div style="display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-1)">
+              <span class="sp-badge sp-badge-neutral" style="font-family:var(--font-mono)">FN-BUD-001</span>
+              <span class="sp-badge sp-badge-success"><span class="dot"></span>완료</span>
+              <span class="sp-badge sp-badge-brand"><span class="dot"></span>AI 생성완료</span>
+            </div>
+            <div class="sp-page-title">예산 항목 조회</div>
+            <div class="sp-page-desc">화면: 예산 조회 · 영역: 검색 영역 · 유형: 조회 · 수정: 2026.03.24</div>
+          </div>
+          <div class="sp-btn-row">
+            <button class="sp-btn sp-btn-secondary sp-btn-sm">✏️ 수정</button>
+            <button class="sp-btn sp-btn-primary sp-btn-sm">✦ AI 재생성</button>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="sp-tab-bar" style="margin-bottom:var(--space-4)">
+          <div class="sp-tab is-active">명세</div>
+          <div class="sp-tab">AI 컨텍스트</div>
+          <div class="sp-tab">생성 코드</div>
+          <div class="sp-tab">변경 이력</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4)">
+          <!-- Left: Spec -->
+          <div>
+            <div class="sp-group" style="margin-bottom:var(--space-4)">
+              <div class="sp-group-header"><div class="sp-group-title">📋 기본 정보</div></div>
+              <div class="sp-group-body">
+                <div class="sp-kv">
+                  <span class="sp-kv-key">기능ID</span><span class="sp-kv-val" style="font-family:var(--font-mono)">FN-BUD-001</span>
+                  <span class="sp-kv-key">기능명</span><span class="sp-kv-val">예산 항목 조회</span>
+                  <span class="sp-kv-key">소속 화면</span><span class="sp-kv-val">SCR-BUD-001 (예산 조회)</span>
+                  <span class="sp-kv-key">처리 유형</span><span class="sp-kv-val">조회 (SELECT)</span>
+                  <span class="sp-kv-key">담당자</span><span class="sp-kv-val">이민아</span>
+                </div>
+              </div>
+            </div>
+            <div class="sp-group">
+              <div class="sp-group-header"><div class="sp-group-title">⚙️ 입력 파라미터</div><span class="sp-badge sp-badge-accent">REQUIRED</span></div>
+              <div class="sp-table-wrap" style="border:none;border-radius:0">
+                <table class="sp-table">
+                  <thead><tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr></thead>
+                  <tbody>
+                    <tr><td class="is-mono">budget_year</td><td class="is-mono">VARCHAR(4)</td><td><span class="sp-badge sp-badge-error">Y</span></td><td>예산 연도</td></tr>
+                    <tr><td class="is-mono">dept_cd</td><td class="is-mono">VARCHAR(10)</td><td><span class="sp-badge sp-badge-neutral">N</span></td><td>부서 코드</td></tr>
+                    <tr><td class="is-mono">budget_type</td><td class="is-mono">VARCHAR(2)</td><td><span class="sp-badge sp-badge-neutral">N</span></td><td>예산 유형</td></tr>
+                    <tr><td class="is-mono">keyword</td><td class="is-mono">VARCHAR(100)</td><td><span class="sp-badge sp-badge-neutral">N</span></td><td>검색 키워드</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Code Preview -->
+          <div>
+            <div class="sp-group" style="margin-bottom:var(--space-4)">
+              <div class="sp-group-header"><div class="sp-group-title">💻 AI 생성 코드</div><button class="sp-btn sp-btn-ghost sp-btn-sm">📋 Copy</button></div>
+              <div class="sp-group-body">
+                <div class="sp-code-block">
+<span class="cm">&lt;!-- 예산 항목 조회 --&gt;</span>
+<span class="kw">&lt;select</span> id=<span class="str">"selectBudgetList"</span>
+        resultType=<span class="str">"BudgetVO"</span><span class="kw">&gt;</span>
+  <span class="kw">SELECT</span>
+      b.budget_id,
+      b.budget_year,
+      b.budget_nm,
+      d.dept_nm,
+      b.budget_amt
+  <span class="kw">FROM</span> tb_budget b
+  <span class="kw">LEFT JOIN</span> tb_dept d
+    <span class="kw">ON</span> b.dept_cd = d.dept_cd
+  <span class="kw">WHERE</span> b.budget_year = <span class="str">#{budgetYear}</span>
+  <span class="kw">ORDER BY</span> b.reg_dt <span class="kw">DESC</span>
+<span class="kw">&lt;/select&gt;</span>
+                </div>
+              </div>
+            </div>
+            <div class="sp-group">
+              <div class="sp-group-header"><div class="sp-group-title">📊 AI 처리 로그</div></div>
+              <div class="sp-group-body">
+                <div class="sp-timeline-item"><div class="sp-timeline-dot is-success">✓</div><div><div style="font-size:var(--text-sm);font-weight:600;color:var(--color-text-heading)">AI 코드 생성 완료</div><div style="font-size:var(--text-xs);color:var(--color-text-tertiary);margin-top:2px">Mapper XML + Service + Controller (2.3초)</div><div style="font-size:var(--text-2xs);color:var(--color-text-disabled);font-family:var(--font-mono);margin-top:3px">2026-03-24 14:32:18</div></div></div>
+                <div class="sp-timeline-item"><div class="sp-timeline-dot is-brand">🔍</div><div><div style="font-size:var(--text-sm);font-weight:600;color:var(--color-text-heading)">SQL 검증 통과</div><div style="font-size:var(--text-xs);color:var(--color-text-tertiary);margin-top:2px">PostgreSQL 호환성 확인 완료</div><div style="font-size:var(--text-2xs);color:var(--color-text-disabled);font-family:var(--font-mono);margin-top:3px">2026-03-24 14:32:20</div></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <div class="sp-footer"><div class="sp-footer-cell is-ok"><span class="dot"></span>Connected</div><div class="sp-footer-space"></div><div class="sp-footer-cell">Branch: main</div></div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 4: CONFIGURATION (Form — Project Info + DB Connection)
+═══════════════════════════════════════════════════════════════ -->
+<div class="sp-page" id="page-config">
+  <div class="sp-header">
+    <div class="sp-header-left">
+      <a class="sp-header-logo" href="#"><div class="logo-ic">⚡</div> SPECODE</a>
+      <span class="sp-header-sep">/</span>
+      <div class="sp-header-project">Project Configuration</div>
+    </div>
+    <div class="sp-header-right">
+      <div class="sp-theme-picker"><button class="sp-theme-pick" data-theme-set="dark">🌙</button><button class="sp-theme-pick" data-theme-set="dark-purple">🔮</button><button class="sp-theme-pick" data-theme-set="light">☀️</button></div>
+      <div class="sp-header-icon">🔔</div><div class="sp-header-icon">⚙️</div>
+      <div class="sp-avatar sp-avatar-sm">GS</div>
+    </div>
+  </div>
+  <div class="sp-body">
+    <aside class="sp-sidebar" id="sidebar-config">
+      <div class="sp-sidebar-toggle" onclick="document.getElementById('sidebar-config').classList.toggle('is-collapsed')"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="7,2 3,6 7,10"/></svg></div>
+      <div class="sp-sidebar-section"><div class="sp-sidebar-title">Navigation</div>
+        <div class="sp-sidebar-item" data-label="Overview" onclick="showPage('page-dashboard')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></div>
+        <div class="sp-sidebar-item is-active" data-label="Configuration"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg><span>Configuration</span></div>
+        <div class="sp-sidebar-item" data-label="Deploy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><span>Deploy</span></div>
+      </div>
+      <div class="sp-sidebar-section"><div class="sp-sidebar-title">System</div>
+        <div class="sp-sidebar-item" data-label="Database"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg><span>Database</span></div>
+        <div class="sp-sidebar-item" data-label="API Keys"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78z"/></svg><span>API Keys</span></div>
+        <div class="sp-sidebar-item" data-label="Users"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><span>Users</span></div>
+      </div>
+    </aside>
+    <main class="sp-content sp-scroll">
+      <div class="sp-content-inner">
+        <div class="sp-breadcrumb"><a href="#">Projects</a><span class="sep">›</span>Configuration</div>
+
+        <!-- Tabs -->
+        <div class="sp-tab-bar" style="margin-bottom:var(--space-5)">
+          <div class="sp-tab is-active">설정</div>
+          <div class="sp-tab">보안</div>
+          <div class="sp-tab">알림</div>
+          <div class="sp-tab">팀</div>
+        </div>
+
+        <!-- Project Information GroupBox -->
+        <div class="sp-group" style="margin-bottom:var(--space-4)">
+          <div class="sp-group-header">
+            <div class="sp-group-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h6"/></svg>
+              Project Information
+            </div>
+            <span class="sp-badge sp-badge-accent">REQUIRED</span>
+          </div>
+          <div class="sp-group-body">
+            <div style="display:flex;gap:var(--space-2)">
+              <div class="sp-field" style="flex:1">
+                <div class="sp-label">Project Name <span class="sp-label-req">필수</span></div>
+                <input class="sp-input" type="text" placeholder="e.g. SPECODE-PROD">
+              </div>
+              <div class="sp-field" style="width:140px">
+                <div class="sp-label">Version</div>
+                <input class="sp-input" type="text" value="2.4.1" style="font-family:var(--font-mono)">
+              </div>
+            </div>
+            <div style="display:flex;gap:var(--space-2)">
+              <div class="sp-field" style="flex:1">
+                <div class="sp-label">Owner Email</div>
+                <input class="sp-input is-ok" type="email" value="admin@specode.io">
+                <div class="sp-hint is-ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><polyline points="20 6 9 17 4 12"/></svg> Verified account</div>
+              </div>
+              <div class="sp-field" style="flex:1">
+                <div class="sp-label">Environment</div>
+                <div class="sp-select-wrap">
+                  <select class="sp-input"><option>Production</option><option>Staging</option><option>Development</option></select>
+                  <div class="sp-select-arrow"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="2,4 6,8 10,4"/></svg></div>
+                </div>
+              </div>
+            </div>
+            <div class="sp-field">
+              <div class="sp-label">API Endpoint</div>
+              <input class="sp-input is-err" type="url" value="https://api.broken-url">
+              <div class="sp-hint is-err"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Connection refused — check URL</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Database Connection GroupBox (Inline label) -->
+        <div class="sp-group" style="margin-bottom:var(--space-4)">
+          <div class="sp-group-header">
+            <div class="sp-group-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg>
+              Database Connection
+            </div>
+            <span class="sp-badge sp-badge-success sp-badge-pill"><span class="dot"></span>Connected</span>
+          </div>
+          <div class="sp-group-body">
+            <div style="display:flex;gap:var(--space-2);margin-bottom:var(--space-2)">
+              <div style="flex:1">
+                <div class="sp-field-inline">
+                  <div class="sp-inline-label">HOST</div>
+                  <input class="sp-inline-input" type="text" value="db-prod.internal">
+                </div>
+              </div>
+              <div style="width:140px">
+                <div class="sp-field-inline">
+                  <div class="sp-inline-label">PORT</div>
+                  <input class="sp-inline-input" type="text" value="5432" style="font-family:var(--font-mono)">
+                </div>
+              </div>
+            </div>
+            <div class="sp-field-inline" style="margin-bottom:var(--space-2)">
+              <div class="sp-inline-label">DATABASE</div>
+              <input class="sp-inline-input" type="text" value="specode_production">
+            </div>
+            <div style="display:flex;gap:var(--space-2);margin-bottom:var(--space-2)">
+              <div style="flex:1">
+                <div class="sp-field-inline">
+                  <div class="sp-inline-label">USERNAME</div>
+                  <input class="sp-inline-input" type="text" value="specode_app">
+                </div>
+              </div>
+              <div style="flex:1">
+                <div class="sp-field-inline">
+                  <div class="sp-inline-label">PASSWORD</div>
+                  <input class="sp-inline-input" type="password" value="secretpassword">
+                </div>
+              </div>
+            </div>
+            <div class="sp-field-inline">
+              <div class="sp-inline-label">SSL MODE</div>
+              <div class="sp-inline-select-wrap" style="flex:1;position:relative">
+                <select style="width:100%;background:transparent;border:none;outline:none;padding:7px 26px 7px 10px;font-size:var(--text-base);font-family:var(--font-base);color:var(--color-text-primary);cursor:pointer;-webkit-appearance:none">
+                  <option>require</option><option>verify-full</option><option>disable</option>
+                </select>
+                <div style="position:absolute;right:9px;top:50%;transform:translateY(-50%);color:var(--color-text-tertiary);pointer-events:none">
+                  <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" style="width:11px;height:11px"><polyline points="2,4 6,8 10,4"/></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Deploy Settings -->
+        <div class="sp-group">
+          <div class="sp-group-header"><div class="sp-group-title">🚀 Deploy Settings</div></div>
+          <div class="sp-group-body">
+            <div class="sp-toggle-row" onclick="this.querySelector('.sp-toggle-track').classList.toggle('is-on')" style="margin-bottom:var(--space-2)">
+              <div class="sp-toggle-row-info"><p>Auto-deploy on push</p><span>main 브랜치 머지 시 자동 배포</span></div>
+              <div class="sp-toggle-track is-on"></div>
+            </div>
+            <div class="sp-toggle-row" onclick="this.querySelector('.sp-toggle-track').classList.toggle('is-on')" style="margin-bottom:var(--space-2)">
+              <div class="sp-toggle-row-info"><p>Preview deployments</p><span>PR 생성 시 프리뷰 환경 자동 생성</span></div>
+              <div class="sp-toggle-track"></div>
+            </div>
+            <div class="sp-radio-group" style="margin-top:var(--space-3)">
+              <div class="sp-radio-option is-selected" onclick="selectRadio(this)"><span class="radio-dot"></span>Dev</div>
+              <div class="sp-radio-option" onclick="selectRadio(this)"><span class="radio-dot"></span>Staging</div>
+              <div class="sp-radio-option" onclick="selectRadio(this)"><span class="radio-dot"></span>Production</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="sp-btn-row" style="margin-top:var(--space-4)">
+          <button class="sp-btn sp-btn-primary">✓ Save</button>
+          <button class="sp-btn sp-btn-secondary">Validate</button>
+          <div class="sp-btn-row-spacer"></div>
+          <button class="sp-btn sp-btn-danger sp-btn-sm">Reset</button>
+        </div>
+      </div>
+    </main>
+  </div>
+  <div class="sp-footer"><div class="sp-footer-cell is-ok"><span class="dot"></span>Connected</div><div class="sp-footer-cell">3 unsaved</div><div class="sp-footer-space"></div><div class="sp-footer-cell">Branch: main</div></div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 5: LOGIN
+═══════════════════════════════════════════════════════════════ -->
+<div class="sp-page sp-page-login" id="page-login">
+  <div class="sp-login-wrap">
+    <div class="sp-login-card">
+      <div class="sp-login-logo">
+        <div style="width:32px;height:32px;background:var(--color-accent);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:16px;color:#1a1200">⚡</div>
+        <span style="font-size:var(--text-2xl);font-weight:700;color:var(--color-text-heading);letter-spacing:0.02em">SPECODE</span>
+      </div>
+      <div class="sp-login-title">Welcome back</div>
+      <div class="sp-login-sub">SPECODE 계정으로 로그인하세요.</div>
+
+      <button class="sp-social-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+        Google로 계속
+      </button>
+      <button class="sp-social-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        GitHub로 계속
+      </button>
+
+      <div class="sp-login-divider">또는</div>
+
+      <div class="sp-field">
+        <div class="sp-label">이메일</div>
+        <input class="sp-input" type="email" placeholder="name@company.com">
+      </div>
+      <div class="sp-field">
+        <div class="sp-label">비밀번호</div>
+        <input class="sp-input" type="password" placeholder="••••••••">
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-4)">
+        <label class="sp-checkbox-wrap"><input class="sp-checkbox" type="checkbox"><span>로그인 유지</span></label>
+        <a style="font-size:var(--text-xs);color:var(--color-brand);font-weight:600;cursor:pointer;text-decoration:none">비밀번호 찾기</a>
+      </div>
+      <button class="sp-btn sp-btn-primary sp-btn-full sp-btn-lg">로그인</button>
+
+      <div class="sp-login-footer">계정이 없으신가요? <a href="#">회원가입</a></div>
+
+      <!-- Theme picker at bottom -->
+      <div style="display:flex;justify-content:center;margin-top:var(--space-4)">
+        <div class="sp-theme-picker">
+          <button class="sp-theme-pick" data-theme-set="dark">🌙</button>
+          <button class="sp-theme-pick" data-theme-set="dark-purple">🔮</button>
+          <button class="sp-theme-pick" data-theme-set="light">☀️</button>
+        </div>
+      </div>
+    </div>
+    <div style="position:fixed;bottom:var(--space-4);text-align:center;font-size:var(--text-2xs);color:var(--color-text-disabled);letter-spacing:0.05em;width:100%">© 2026 Jamong Company. SPECODE v1.0</div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════
+     DEMO NAV (페이지 전환 버튼)
+═══════════════════════════════════════════════════════════════ -->
+<div class="sp-demo-nav">
+  <button class="sp-demo-btn is-active" onclick="showPage('page-dashboard')">Dashboard</button>
+  <button class="sp-demo-btn" onclick="showPage('page-list')">List</button>
+  <button class="sp-demo-btn" onclick="showPage('page-detail')">Detail</button>
+  <button class="sp-demo-btn" onclick="showPage('page-config')">Config</button>
+  <button class="sp-demo-btn" onclick="showPage('page-login')">Login</button>
+</div>
+
+<script>
+  function showPage(id) {
+    document.querySelectorAll('.sp-page').forEach(function(p) { p.classList.remove('is-visible'); });
+    document.getElementById(id).classList.add('is-visible');
+    document.querySelectorAll('.sp-demo-btn').forEach(function(b) { b.classList.remove('is-active'); });
+    event.target.classList.add('is-active');
+  }
+
+  function selectRadio(el) {
+    el.closest('.sp-radio-group').querySelectorAll('.sp-radio-option').forEach(function(o) { o.classList.remove('is-selected'); });
+    el.classList.add('is-selected');
+  }
+
+  // Ticker
+  SPECODE.initTicker([
+    { user:"김지태", action:"요구사항 변경", target:"회원가입", time:"방금 전" },
+    { user:"이민아", action:"설계 완료", target:"DB 테이블", time:"3분 전" },
+    { user:"AI", action:"태스크 처리", target:"영역 자동 명세", time:"12분 전" },
+  ]);
+</script>
+
+</body>
+</html>

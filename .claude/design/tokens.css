@@ -1,0 +1,398 @@
+/* ================================================================
+   SPECODE DESIGN SYSTEM — tokens.css
+   Version: 1.0.0
+   
+   ⚠️  규칙:
+   - 이 파일만 수정하면 전체 테마 변경
+   - components.css에서 primitive 토큰 직접 사용 금지
+   - 반드시 semantic 토큰만 참조할 것
+   - Claude Code: 하드코딩 절대 금지
+================================================================ */
+
+/* ----------------------------------------------------------------
+   PRIMITIVE TOKENS  (절대값 — components에서 직접 사용 금지)
+---------------------------------------------------------------- */
+:root {
+
+  /* Gray */
+  --p-gray-950: #0d0e16;
+  --p-gray-900: #111219;
+  --p-gray-850: #13141c;
+  --p-gray-800: #161720;
+  --p-gray-750: #181924;
+  --p-gray-700: #1a1b26;
+  --p-gray-650: #1c1e2c;
+  --p-gray-600: #1e2030;
+  --p-gray-550: #222438;
+  --p-gray-500: #2e3248;
+  --p-gray-400: #474f68;
+  --p-gray-300: #646c88;
+  --p-gray-200: #7c84a0;
+  --p-gray-150: #9aa0b8;
+  --p-gray-100: #b8bdd4;
+  --p-gray-50:  #d4d8ec;
+  --p-gray-0:   #eef0f8;
+
+  /* Indigo (primary brand) */
+  --p-indigo-900: #1e2050;
+  --p-indigo-700: #2d3480;
+  --p-indigo-500: #4a56d4;
+  --p-indigo-400: #5b68e8;
+  --p-indigo-300: #6e7bf0;
+  --p-indigo-200: #9099f5;
+  --p-indigo-100: #c4c8fb;
+
+  /* Amber (accent / logo) */
+  --p-amber-500: #d4820a;
+  --p-amber-400: #f5a623;
+  --p-amber-300: #ffb840;
+  --p-amber-100: #fde8b8;
+
+  /* Green */
+  --p-green-500: #2e8a5c;
+  --p-green-400: #3a9a6e;
+  --p-green-300: #4caf82;
+  --p-green-100: #c0e8d4;
+
+  /* Red */
+  --p-red-500: #a83030;
+  --p-red-400: #c04848;
+  --p-red-300: #d95f5f;
+  --p-red-100: #f0c8c8;
+
+  /* Yellow */
+  --p-yellow-400: #d99a38;
+  --p-yellow-300: #e8b050;
+  --p-yellow-100: #f5e0b0;
+
+  /* Blue */
+  --p-blue-400: #3a8acc;
+  --p-blue-300: #4a9edd;
+  --p-blue-100: #c0ddf5;
+
+  /* ── Spacing (4px grid) ── */
+  --p-space-1:  4px;
+  --p-space-2:  8px;
+  --p-space-3:  12px;
+  --p-space-4:  16px;
+  --p-space-5:  20px;
+  --p-space-6:  24px;
+  --p-space-8:  32px;
+  --p-space-10: 40px;
+  --p-space-12: 48px;
+  --p-space-16: 64px;
+
+  /* ── Font sizes ── */
+  --p-text-2xs: 9.5px;
+  --p-text-xs:  11px;
+  --p-text-sm:  12px;
+  --p-text-md:  12.5px;
+  --p-text-base:13px;
+  --p-text-lg:  14px;
+  --p-text-xl:  16px;
+  --p-text-2xl: 20px;
+  --p-text-3xl: 24px;
+  --p-text-4xl: 30px;
+
+  /* ── Border radius ── */
+  --p-r-0:  0px;
+  --p-r-1:  2px;
+  --p-r-2:  4px;
+  --p-r-3:  6px;
+  --p-r-4:  8px;
+  --p-r-5:  10px;
+  --p-r-6:  12px;
+  --p-r-full: 9999px;
+
+  /* ── Duration ── */
+  --p-dur-fast:   100ms;
+  --p-dur-normal: 160ms;
+  --p-dur-slow:   260ms;
+  --p-dur-slower: 400ms;
+
+  /* ── Easing ── */
+  --p-ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --p-ease-spring:  cubic-bezier(0.22, 1, 0.36, 1);
+  --p-ease-out:     cubic-bezier(0, 0, 0.2, 1);
+  --p-ease-in:      cubic-bezier(0.4, 0, 1, 1);
+}
+
+
+/* ================================================================
+   SEMANTIC TOKENS — DARK (default)
+================================================================ */
+[data-theme="dark"], :root {
+
+  --color-bg-root:     var(--p-gray-850);
+  --color-bg-titlebar: var(--p-gray-700);
+  --color-bg-menubar:  var(--p-gray-800);
+  --color-bg-toolbar:  var(--p-gray-750);
+  --color-bg-sidebar:  var(--p-gray-800);
+  --color-bg-content:  var(--p-gray-850);
+  --color-bg-card:     var(--p-gray-650);
+  --color-bg-surface:  var(--p-gray-600);
+  --color-bg-elevated: var(--p-gray-550);
+  --color-bg-input:    var(--p-gray-750);
+  --color-bg-input-hover: var(--p-gray-650);
+  --color-bg-label:    var(--p-gray-600);
+  --color-bg-overlay:  rgba(0,0,0,0.6);
+  --color-bg-table-odd:  var(--p-gray-750);
+  --color-bg-table-even: var(--p-gray-650);
+  --color-bg-table-hover:rgba(91,104,232,0.08);
+  --color-bg-table-sel:  rgba(91,104,232,0.12);
+
+  --color-border:        rgba(255,255,255,0.10);
+  --color-border-subtle: rgba(255,255,255,0.06);
+  --color-border-strong: rgba(255,255,255,0.18);
+  --color-border-focus:  var(--p-indigo-400);
+
+  --color-text-primary:   var(--p-gray-50);
+  --color-text-secondary: var(--p-gray-200);
+  --color-text-tertiary:  var(--p-gray-400);
+  --color-text-disabled:  var(--p-gray-500);
+  --color-text-heading:   var(--p-gray-100);
+  --color-text-inverse:   var(--p-gray-850);
+  --color-text-link:      var(--p-indigo-300);
+
+  --color-brand:        var(--p-indigo-400);
+  --color-brand-hover:  var(--p-indigo-300);
+  --color-brand-subtle: rgba(91,104,232,0.14);
+  --color-brand-border: rgba(91,104,232,0.32);
+  --color-brand-glow:   rgba(91,104,232,0.20);
+
+  --color-accent:        var(--p-amber-400);
+  --color-accent-hover:  var(--p-amber-300);
+  --color-accent-subtle: rgba(245,166,35,0.12);
+  --color-accent-border: rgba(245,166,35,0.32);
+  --color-accent-glow:   rgba(245,166,35,0.18);
+
+  --color-success:        var(--p-green-300);
+  --color-success-subtle: rgba(76,175,130,0.11);
+  --color-success-border: rgba(76,175,130,0.28);
+
+  --color-error:          var(--p-red-300);
+  --color-error-subtle:   rgba(217,95,95,0.11);
+  --color-error-border:   rgba(217,95,95,0.30);
+
+  --color-warning:        var(--p-yellow-300);
+  --color-warning-subtle: rgba(232,176,80,0.11);
+  --color-warning-border: rgba(232,176,80,0.28);
+
+  --color-info:           var(--p-blue-300);
+  --color-info-subtle:    rgba(74,158,221,0.11);
+  --color-info-border:    rgba(74,158,221,0.28);
+
+  --shadow-xs:    0 1px 2px rgba(0,0,0,0.3);
+  --shadow-sm:    0 1px 4px rgba(0,0,0,0.4);
+  --shadow-md:    0 4px 14px rgba(0,0,0,0.45);
+  --shadow-lg:    0 8px 28px rgba(0,0,0,0.55);
+  --shadow-xl:    0 16px 48px rgba(0,0,0,0.65);
+  --shadow-card:  0 0 0 1px rgba(255,255,255,0.04) inset, 0 2px 8px rgba(0,0,0,0.4);
+  --shadow-focus: 0 0 0 2px var(--color-brand-glow);
+  --shadow-focus-error: 0 0 0 2px var(--color-error-subtle);
+  --shadow-btn-brand: 0 1px 8px var(--color-brand-glow);
+  --shadow-btn-accent: 0 1px 8px var(--color-accent-glow);
+}
+
+
+/* ================================================================
+   SEMANTIC TOKENS — LIGHT
+================================================================ */
+[data-theme="light"] {
+
+  --color-bg-root:     #e8eaf2;
+  --color-bg-titlebar: #2a2d3e;
+  --color-bg-menubar:  #f0f1f6;
+  --color-bg-toolbar:  #eceef6;
+  --color-bg-sidebar:  #eceef6;
+  --color-bg-content:  #e8eaf2;
+  --color-bg-card:     #f4f5fa;
+  --color-bg-surface:  #ffffff;
+  --color-bg-elevated: #f0f2f8;
+  --color-bg-input:    #ffffff;
+  --color-bg-input-hover: #f8f9fc;
+  --color-bg-label:    #eceef6;
+  --color-bg-overlay:  rgba(0,0,0,0.45);
+  --color-bg-table-odd:  #f4f5fa;
+  --color-bg-table-even: #f8f9fc;
+  --color-bg-table-hover:rgba(74,86,212,0.06);
+  --color-bg-table-sel:  rgba(74,86,212,0.09);
+
+  --color-border:        rgba(0,0,0,0.12);
+  --color-border-subtle: rgba(0,0,0,0.07);
+  --color-border-strong: rgba(0,0,0,0.22);
+  --color-border-focus:  var(--p-indigo-500);
+
+  --color-text-primary:   #1e2135;
+  --color-text-secondary: #5a6080;
+  --color-text-tertiary:  #9aa0b8;
+  --color-text-disabled:  #c0c5d8;
+  --color-text-heading:   #2e3248;
+  --color-text-inverse:   #ffffff;
+  --color-text-link:      var(--p-indigo-500);
+
+  --color-brand:        var(--p-indigo-500);
+  --color-brand-hover:  var(--p-indigo-400);
+  --color-brand-subtle: rgba(74,86,212,0.09);
+  --color-brand-border: rgba(74,86,212,0.28);
+  --color-brand-glow:   rgba(74,86,212,0.16);
+
+  --color-accent:        var(--p-amber-400);
+  --color-accent-hover:  var(--p-amber-300);
+  --color-accent-subtle: rgba(245,166,35,0.10);
+  --color-accent-border: rgba(245,166,35,0.28);
+  --color-accent-glow:   rgba(245,166,35,0.15);
+
+  --color-success:        var(--p-green-400);
+  --color-success-subtle: rgba(58,154,110,0.09);
+  --color-success-border: rgba(58,154,110,0.25);
+
+  --color-error:          var(--p-red-400);
+  --color-error-subtle:   rgba(192,72,72,0.09);
+  --color-error-border:   rgba(192,72,72,0.28);
+
+  --color-warning:        var(--p-yellow-400);
+  --color-warning-subtle: rgba(217,154,56,0.10);
+  --color-warning-border: rgba(217,154,56,0.25);
+
+  --color-info:           var(--p-blue-400);
+  --color-info-subtle:    rgba(58,138,204,0.09);
+  --color-info-border:    rgba(58,138,204,0.25);
+
+  --shadow-xs:    0 1px 2px rgba(0,0,0,0.08);
+  --shadow-sm:    0 1px 4px rgba(0,0,0,0.10);
+  --shadow-md:    0 4px 14px rgba(0,0,0,0.12);
+  --shadow-lg:    0 8px 28px rgba(0,0,0,0.15);
+  --shadow-xl:    0 16px 48px rgba(0,0,0,0.18);
+  --shadow-card:  0 1px 3px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-focus: 0 0 0 2px var(--color-brand-glow);
+  --shadow-focus-error: 0 0 0 2px var(--color-error-subtle);
+  --shadow-btn-brand: 0 1px 8px var(--color-brand-glow);
+  --shadow-btn-accent: 0 1px 8px var(--color-accent-glow);
+}
+
+
+/* ================================================================
+   SEMANTIC TOKENS — DARK PURPLE
+   다크와 라이트의 중간, 보라 톤 기반
+================================================================ */
+[data-theme="dark-purple"] {
+
+  --color-bg-root:     #1a1428;
+  --color-bg-titlebar: #130f1e;
+  --color-bg-menubar:  #1e1830;
+  --color-bg-toolbar:  #1c162a;
+  --color-bg-sidebar:  #1e1830;
+  --color-bg-content:  #1a1428;
+  --color-bg-card:     #241e38;
+  --color-bg-surface:  #2a2442;
+  --color-bg-elevated: #302848;
+  --color-bg-input:    #1e1830;
+  --color-bg-input-hover: #241e38;
+  --color-bg-label:    #2a2442;
+  --color-bg-overlay:  rgba(10,6,18,0.7);
+  --color-bg-table-odd:  #1e1830;
+  --color-bg-table-even: #241e38;
+  --color-bg-table-hover:rgba(139,92,246,0.08);
+  --color-bg-table-sel:  rgba(139,92,246,0.14);
+
+  --color-border:        rgba(255,255,255,0.10);
+  --color-border-subtle: rgba(255,255,255,0.06);
+  --color-border-strong: rgba(255,255,255,0.18);
+  --color-border-focus:  #a78bfa;
+
+  --color-text-primary:   #e8e0f8;
+  --color-text-secondary: #b0a4c8;
+  --color-text-tertiary:  #7a6e98;
+  --color-text-disabled:  #4a4060;
+  --color-text-heading:   #d4cceb;
+  --color-text-inverse:   #1a1428;
+  --color-text-link:      #c4b5fd;
+
+  --color-brand:        #8b5cf6;
+  --color-brand-hover:  #a78bfa;
+  --color-brand-subtle: rgba(139,92,246,0.14);
+  --color-brand-border: rgba(139,92,246,0.32);
+  --color-brand-glow:   rgba(139,92,246,0.22);
+
+  --color-accent:        var(--p-amber-400);
+  --color-accent-hover:  var(--p-amber-300);
+  --color-accent-subtle: rgba(245,166,35,0.12);
+  --color-accent-border: rgba(245,166,35,0.32);
+  --color-accent-glow:   rgba(245,166,35,0.18);
+
+  --color-success:        #4ade80;
+  --color-success-subtle: rgba(74,222,128,0.11);
+  --color-success-border: rgba(74,222,128,0.28);
+
+  --color-error:          #f87171;
+  --color-error-subtle:   rgba(248,113,113,0.11);
+  --color-error-border:   rgba(248,113,113,0.30);
+
+  --color-warning:        var(--p-yellow-300);
+  --color-warning-subtle: rgba(232,176,80,0.11);
+  --color-warning-border: rgba(232,176,80,0.28);
+
+  --color-info:           #67e8f9;
+  --color-info-subtle:    rgba(103,232,249,0.11);
+  --color-info-border:    rgba(103,232,249,0.28);
+
+  --shadow-xs:    0 1px 2px rgba(0,0,0,0.35);
+  --shadow-sm:    0 1px 4px rgba(0,0,0,0.45);
+  --shadow-md:    0 4px 14px rgba(0,0,0,0.50);
+  --shadow-lg:    0 8px 28px rgba(0,0,0,0.60);
+  --shadow-xl:    0 16px 48px rgba(0,0,0,0.70);
+  --shadow-card:  0 0 0 1px rgba(255,255,255,0.04) inset, 0 2px 8px rgba(0,0,0,0.45);
+  --shadow-focus: 0 0 0 2px var(--color-brand-glow);
+  --shadow-focus-error: 0 0 0 2px var(--color-error-subtle);
+  --shadow-btn-brand: 0 1px 8px var(--color-brand-glow);
+  --shadow-btn-accent: 0 1px 8px var(--color-accent-glow);
+}
+
+
+/* ================================================================
+   COMPONENT TOKENS
+================================================================ */
+:root {
+  --font-base: 'Geist', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'DM Mono', 'Consolas', monospace;
+
+  --space-1:  var(--p-space-1);
+  --space-2:  var(--p-space-2);
+  --space-3:  var(--p-space-3);
+  --space-4:  var(--p-space-4);
+  --space-5:  var(--p-space-5);
+  --space-6:  var(--p-space-6);
+  --space-8:  var(--p-space-8);
+  --space-10: var(--p-space-10);
+  --space-12: var(--p-space-12);
+
+  --text-2xs: var(--p-text-2xs);
+  --text-xs:  var(--p-text-xs);
+  --text-sm:  var(--p-text-sm);
+  --text-md:  var(--p-text-md);
+  --text-base:var(--p-text-base);
+  --text-lg:  var(--p-text-lg);
+  --text-xl:  var(--p-text-xl);
+  --text-2xl: var(--p-text-2xl);
+  --text-3xl: var(--p-text-3xl);
+
+  --radius-sm:   var(--p-r-2);
+  --radius-md:   var(--p-r-3);
+  --radius-card: var(--p-r-4);
+  --radius-lg:   var(--p-r-5);
+  --radius-full: var(--p-r-full);
+
+  --transition:        var(--p-dur-normal) var(--p-ease-default);
+  --transition-fast:   var(--p-dur-fast)   var(--p-ease-default);
+  --transition-slow:   var(--p-dur-slow)   var(--p-ease-default);
+  --transition-spring: var(--p-dur-slow)   var(--p-ease-spring);
+
+  --sidebar-width:           200px;
+  --sidebar-width-collapsed: 47px;
+
+  --height-titlebar:  34px;
+  --height-menubar:   28px;
+  --height-toolbar:   34px;
+  --height-statusbar: 22px;
+}
