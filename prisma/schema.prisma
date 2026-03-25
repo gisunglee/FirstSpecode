@@ -311,6 +311,162 @@ model TbDsDesignChange {
 
 
 // ==========================================
+// [ds] 단위업무 / 화면
+// ==========================================
+
+model TbDsUnitWork {
+  unit_work_id         String    @id @default(uuid())
+  prjct_id             String
+  req_id               String
+  // 표시 ID — 프로젝트 내 순번 (UW-NNNNN 형식)
+  unit_work_display_id String
+  unit_work_nm         String    @default("")
+  unit_work_dc         String?
+  // 담당 멤버 ID (미지정 허용)
+  asign_mber_id        String?
+  bgng_de              String?
+  end_de               String?
+  // 진행률 0~100
+  progrs_rt            Int       @default(0)
+  sort_ordr            Int       @default(0)
+  creat_dt             DateTime  @default(now())
+  mdfcn_dt             DateTime?
+
+  requirement TbRqRequirement @relation(fields: [req_id], references: [req_id])
+  screens     TbDsScreen[]
+
+  @@map("tb_ds_unit_work")
+}
+
+model TbDsScreen {
+  scrn_id         String    @id @default(uuid())
+  prjct_id        String
+  unit_work_id    String?
+  // 표시 ID — 프로젝트 내 순번 (SCR-NNNNN 형식)
+  scrn_display_id String
+  scrn_nm         String    @default("")
+  scrn_dc         String?
+  // 개발자 참조 코드 (예: MBR_LIST)
+  dsply_code      String?
+  // LIST / DETAIL / INPUT / POPUP / TAB / REPORT
+  scrn_ty_code    String    @default("LIST")
+  // 메뉴 분류 (대/중/소)
+  ctgry_l_nm      String?
+  ctgry_m_nm      String?
+  ctgry_s_nm      String?
+  url_path        String?
+  sort_ordr       Int       @default(0)
+  creat_dt        DateTime  @default(now())
+  mdfcn_dt        DateTime?
+
+  unitWork TbDsUnitWork? @relation(fields: [unit_work_id], references: [unit_work_id])
+  areas    TbDsArea[]
+
+  @@map("tb_ds_screen")
+}
+
+model TbDsArea {
+  area_id         String    @id @default(uuid())
+  prjct_id        String
+  scrn_id         String?
+  // 표시 ID — 프로젝트 내 순번 (AR-NNNNN 형식)
+  area_display_id String
+  area_nm         String    @default("")
+  area_dc         String?
+  // SEARCH / GRID / FORM / INFO_CARD / TAB / FULL_SCREEN
+  area_ty_code    String    @default("GRID")
+  // Excalidraw 캔버스 JSON 데이터 (FID-00165)
+  excaldw_data    Json?
+  sort_ordr       Int       @default(0)
+  creat_dt        DateTime  @default(now())
+  mdfcn_dt        DateTime?
+
+  screen    TbDsScreen?    @relation(fields: [scrn_id], references: [scrn_id])
+  functions TbDsFunction[]
+
+  @@map("tb_ds_area")
+}
+
+model TbDsFunction {
+  func_id         String    @id @default(uuid())
+  prjct_id        String
+  area_id         String?
+  // 표시 ID — 프로젝트 내 순번 (FN-NNNNN 형식)
+  func_display_id String
+  func_nm         String    @default("")
+  func_dc         String?
+  // SEARCH / SAVE / DELETE / DOWNLOAD / UPLOAD / NAVIGATE / VALIDATE / OTHER
+  func_ty_code    String    @default("OTHER")
+  // NONE / DESIGN_DONE / IMPL_DONE
+  func_sttus_code String    @default("NONE")
+  // HIGH / MEDIUM / LOW
+  priort_code     String    @default("MEDIUM")
+  // HIGH / MEDIUM / LOW
+  cmplx_code      String    @default("MEDIUM")
+  // 예상 공수 (예: "2h", "1d" 등 자유 형식)
+  efrt_val        String?
+  // 담당 멤버 ID
+  asign_mber_id   String?
+  // 구현 시작/종료일 (YYYY-MM-DD 문자열)
+  impl_bgng_de    String?
+  impl_end_de     String?
+  // 기능 명세 (마크다운)
+  spec_cn         String?
+  sort_ordr       Int       @default(0)
+  creat_dt        DateTime  @default(now())
+  mdfcn_dt        DateTime?
+
+  area           TbDsArea?                   @relation(fields: [area_id], references: [area_id])
+  columnMappings TbDsFunctionColumnMapping[]
+
+  @@map("tb_ds_function")
+}
+
+model TbDsDbTable {
+  tbl_id        String   @id @default(uuid())
+  prjct_id      String
+  tbl_physcl_nm String
+  tbl_lgcl_nm   String?
+  tbl_dc        String?
+  creat_dt      DateTime @default(now())
+
+  columns TbDsTableColumn[]
+
+  @@map("tb_ds_db_table")
+}
+
+model TbDsTableColumn {
+  col_id        String   @id @default(uuid())
+  tbl_id        String
+  col_physcl_nm String
+  col_lgcl_nm   String?
+  data_ty_nm    String?
+  col_dc        String?
+  sort_ordr     Int      @default(0)
+  creat_dt      DateTime @default(now())
+
+  table          TbDsDbTable                 @relation(fields: [tbl_id], references: [tbl_id])
+  columnMappings TbDsFunctionColumnMapping[]
+
+  @@map("tb_ds_table_column")
+}
+
+model TbDsFunctionColumnMapping {
+  mapping_id    String   @id @default(uuid())
+  func_id       String
+  col_id        String
+  use_purps_cn  String?
+  sort_ordr     Int      @default(0)
+  creat_dt      DateTime @default(now())
+
+  function TbDsFunction    @relation(fields: [func_id], references: [func_id])
+  column   TbDsTableColumn @relation(fields: [col_id], references: [col_id])
+
+  @@map("tb_ds_function_column_mapping")
+}
+
+
+// ==========================================
 // [ai] AI 태스크 — 레이아웃 상태바 AI 지표
 // ==========================================
 
@@ -386,6 +542,7 @@ model TbRqRequirement {
   task        TbRqTask?        @relation(fields: [task_id], references: [task_id])
   userStories TbRqUserStory[]
   attachFiles TbCmAttachFile[]
+  unitWorks   TbDsUnitWork[]
 
   @@map("tb_rq_requirement")
 }

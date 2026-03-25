@@ -316,13 +316,13 @@ function RequirementDetailPageInner() {
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
         <button
           onClick={() => router.push(`/projects/${projectId}/requirements`)}
-          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#666" }}
+          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)" }}
         >
           ←
         </button>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
+        <div style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
           {isNew ? "요구사항 등록" : "요구사항 편집"}
-        </h1>
+        </div>
         {/* 변경 이력 탭 진입 (PID-00035) — 신규 모드에서는 비활성 */}
         {!isNew && (
           <button
@@ -431,34 +431,32 @@ function RequirementDetailPageInner() {
           {/* ── AR-00044 원문·현행화 ──────────────────────────────────────────── */}
           <Section title="원문·현행화">
             {/* 탭 헤더 */}
-            <div style={{ display: "flex", gap: 0, marginBottom: 0 }}>
-              {(["current", "original"] as const).map((tab) => (
+            <div style={{ display: "flex", gap: 16, borderBottom: "1px solid var(--color-border)", marginBottom: 12 }}>
+              {(["original", "current"] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
                   onClick={() => setContentTab(tab)}
                   style={{
-                    padding:      "7px 20px",
-                    border:       "1px solid var(--color-border)",
-                    borderBottom: contentTab === tab ? "1px solid var(--color-bg-card)" : "1px solid var(--color-border)",
-                    borderRadius: tab === "current" ? "6px 0 0 0" : "0 6px 0 0",
-                    background:   contentTab === tab ? "var(--color-bg-card)" : "var(--color-bg-muted)",
-                    color:        contentTab === tab ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-                    fontSize:     13,
-                    fontWeight:   contentTab === tab ? 600 : 400,
+                    padding:      "8px 6px",
+                    border:       "none",
+                    borderBottom: contentTab === tab ? "2px solid var(--color-primary, #1976d2)" : "2px solid transparent",
+                    background:   "transparent",
+                    color:        contentTab === tab ? "var(--color-primary, #1976d2)" : "var(--color-text-secondary)",
+                    fontSize:     14,
+                    fontWeight:   contentTab === tab ? 600 : 500,
                     cursor:       "pointer",
-                    position:     "relative",
-                    zIndex:       contentTab === tab ? 1 : 0,
-                    marginBottom: contentTab === tab ? -1 : 0,
+                    transition:   "all 0.2s ease",
+                    marginBottom: -1,
                   }}
                 >
-                  {tab === "current" ? "현행화 (협의·변경 반영본)" : "원문 (RFP·계약서 원문)"}
+                  {tab === "original" ? "원문 (RFP·계약서)" : "현행화 (협의·변경 뱐영)"}
                 </button>
               ))}
             </div>
 
             {/* 에디터 본체 */}
-            <div style={{ position: "relative", zIndex: 0 }}>
+            <div>
               {contentTab === "current" ? (
                 <RichEditor
                   value={form.currentContent}
@@ -651,23 +649,23 @@ function MarkdownEditor({
   return (
     <div>
       {/* 탭 */}
-      <div style={{ display: "flex", gap: 0, marginBottom: 0 }}>
+      <div style={{ display: "flex", gap: 16, borderBottom: "1px solid var(--color-border)", marginBottom: 12 }}>
         {(["edit", "preview"] as const).map((t) => (
           <button
             key={t}
+            type="button"
             onClick={() => onTabChange(t)}
             style={{
-              padding:      "6px 16px",
-              border:       "1px solid var(--color-border)",
-              borderBottom: tab === t ? "1px solid var(--color-bg-card)" : "1px solid var(--color-border)",
-              borderRadius: t === "edit" ? "6px 0 0 0" : "0 6px 0 0",
-              background:   tab === t ? "var(--color-bg-card)" : "var(--color-bg-muted)",
-              color:        "var(--color-text-primary)",
-              fontSize:     12,
+              padding:      "6px 4px",
+              border:       "none",
+              borderBottom: tab === t ? "2px solid var(--color-primary, #1976d2)" : "2px solid transparent",
+              background:   "transparent",
+              color:        tab === t ? "var(--color-primary, #1976d2)" : "var(--color-text-secondary)",
+              fontSize:     13,
+              fontWeight:   tab === t ? 600 : 500,
               cursor:       "pointer",
-              position:     "relative",
-              zIndex:       tab === t ? 1 : 0,
-              marginBottom: tab === t ? -1 : 0,
+              transition:   "all 0.2s ease",
+              marginBottom: -1,
             }}
           >
             {t === "edit" ? "편집" : "미리보기"}
@@ -686,7 +684,7 @@ function MarkdownEditor({
             resize:      "vertical",
             fontFamily:  "monospace",
             fontSize:    13,
-            borderRadius: "0 6px 6px 6px",
+            borderRadius: 6,
           }}
         />
       ) : (
@@ -696,7 +694,7 @@ function MarkdownEditor({
             ...inputStyle,
             minHeight:    rows * 24,
             maxHeight:    600,
-            borderRadius: "0 6px 6px 6px",
+            borderRadius: 6,
             padding:      "12px 16px",
             overflowY:    "auto",
           }}

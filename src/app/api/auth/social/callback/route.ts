@@ -65,8 +65,10 @@ export async function POST(request: NextRequest) {
   const ipAddr    = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const userAgent = request.headers.get("user-agent") ?? "unknown";
 
-  let provdrUserId: string;
-  let provdrEmail:  string | null = null;
+  let provdrUserId:   string;
+  let provdrEmail:    string | null = null;
+  let provdrName:     string | null = null;
+  let provdrImageUrl: string | null = null;
 
   try {
     if (provider === "google") {
@@ -98,7 +100,9 @@ export async function POST(request: NextRequest) {
       }
       const userData = await userRes.json();
       provdrUserId   = userData.sub;
-      provdrEmail    = userData.email ?? null;
+      provdrEmail    = userData.email    ?? null;
+      provdrName     = userData.name     ?? null;
+      provdrImageUrl = userData.picture  ?? null;
 
     } else {
       // ── GitHub code → token 교환 ──
@@ -234,7 +238,12 @@ export async function POST(request: NextRequest) {
 
     const newMember = await prisma.$transaction(async (tx) => {
       const member = await tx.tbCmMember.create({
-        data: { email_addr: provdrEmail!, mber_sttus_code: "ACTIVE" },
+        data: {
+          email_addr:    provdrEmail!,
+          mber_sttus_code: "ACTIVE",
+          ...(provdrName     && { mber_nm:       provdrName }),
+          ...(provdrImageUrl && { profl_img_url: provdrImageUrl }),
+        },
       });
       await tx.tbCmSocialAccount.create({
         data: {

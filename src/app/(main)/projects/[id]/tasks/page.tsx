@@ -162,13 +162,13 @@ function TaskListPageInner() {
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button
             onClick={() => router.back()}
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#666" }}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)" }}
           >
             ←
           </button>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "var(--color-text-primary)" }}>
+          <div style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)" }}>
             과업 목록
-          </h1>
+          </div>
         </div>
         <button
           onClick={() => router.push(`/projects/${projectId}/tasks/new`)}
@@ -234,7 +234,7 @@ function TaskListPageInner() {
                 onDragOver={(e) => e.preventDefault()}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "32px 1fr 100px 70px 120px 80px 120px",
+                  gridTemplateColumns: "32px 1fr 100px 70px 90px 110px 120px",
                   padding: "14px 16px",
                   borderBottom: "1px solid var(--color-border)",
                   alignItems: "center",
@@ -289,8 +289,9 @@ function TaskListPageInner() {
                 </span>
 
                 {/* 진행률 */}
-                <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{
+                    flex: 1,
                     height: 6, borderRadius: 3,
                     background: "#e0e0e0", overflow: "hidden",
                   }}>
@@ -301,9 +302,9 @@ function TaskListPageInner() {
                       borderRadius: 3,
                     }} />
                   </div>
-                  <p style={{ margin: "2px 0 0", fontSize: 11, color: "#888", textAlign: "right" }}>
+                  <span style={{ fontSize: 11, color: "#888", minWidth: 24, textAlign: "right" }}>
                     {task.progressRate}%
-                  </p>
+                  </span>
                 </div>
 
                 {/* 액션 */}

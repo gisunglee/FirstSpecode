@@ -29,7 +29,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const requirements = await prisma.tbRqRequirement.findMany({
       where: { prjct_id: projectId },
       include: {
-        task: { select: { task_id: true, task_nm: true } },
+        task:   { select: { task_id: true, task_nm: true } },
+        // 단위업무 수 집계 — 목록에 배지로 표시
+        _count: { select: { unitWorks: true } },
       },
       orderBy: { sort_ordr: "asc" },
     });
@@ -42,8 +44,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       source:        r.src_code,
       taskId:        r.task_id ?? null,
       taskName:      r.task?.task_nm ?? "미분류",
-      // tb_ds_unit_work 미구현 → 0 고정 (추후 교체)
-      unitWorkCount: 0,
+      unitWorkCount: r._count.unitWorks,
       sortOrder:     r.sort_ordr,
     }));
 

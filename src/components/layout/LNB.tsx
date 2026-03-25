@@ -41,6 +41,7 @@ export default function LNB() {
   const tasksHref        = pBase ? `${pBase}/tasks`         : "#";
   const requirementsHref = pBase ? `${pBase}/requirements`  : "#";
   const userStoriesHref  = pBase ? `${pBase}/user-stories`  : "#";
+  const unitWorksHref    = pBase ? `${pBase}/unit-works`    : "#";
   const baselineHref     = pBase ? `${pBase}/baseline`      : "#";
   const screensHref      = pBase ? `${pBase}/screens`       : "#";
   const functionsHref    = pBase ? `${pBase}/functions`     : "#";
@@ -57,6 +58,7 @@ export default function LNB() {
     { label: "과업",         href: tasksHref,        icon: "📌", isActive: !!pBase && pathname.startsWith(`${pBase}/tasks`) },
     { label: "요구사항",    href: requirementsHref, icon: "📋", isActive: !!pBase && pathname.startsWith(`${pBase}/requirements`) },
     { label: "사용자스토리", href: userStoriesHref, icon: "📖", isActive: !!pBase && pathname.startsWith(`${pBase}/user-stories`) },
+    { label: "단위업무",    href: unitWorksHref,    icon: "🧱", isActive: !!pBase && pathname.startsWith(`${pBase}/unit-works`) },
     { label: "기준선",       href: baselineHref,    icon: "🏁", isActive: !!pBase && pathname.startsWith(`${pBase}/baseline`) },
     { label: "화면 설계",   href: screensHref,      icon: "🖼",  isActive: !!pBase && pathname.startsWith(`${pBase}/screens`) },
     { label: "기능 정의",   href: functionsHref,    icon: "⚙",  isActive: !!pBase && pathname.startsWith(`${pBase}/functions`) },

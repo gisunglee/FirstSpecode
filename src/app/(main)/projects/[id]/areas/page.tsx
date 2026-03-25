@@ -1,92 +1,103 @@
 "use client";
 
 /**
- * RequirementsPage — 요구사항 목록 (PID-00030)
+ * AreasPage — 영역 목록 (PID-00046)
  *
  * 역할:
- *   - 요구사항 목록 조회 (FID-00099)
- *   - 드래그앤드롭 순서 조정 (FID-00101)
- *   - 요구사항 삭제 확인 팝업 (PID-00032 / FID-00109)
- *   - 과업 상세 링크 이동 (FID-00100)
+ *   - 영역 목록 조회 (FID-00151)
+ *   - 드래그앤드롭 순서 조정 (FID-00152)
+ *   - 화면 상세 링크 이동 (FID-00151 화면명 클릭)
+ *   - 기능 목록 바로가기 (FID-00151)
+ *   - 영역 삭제 확인 팝업 (PID-00049 / FID-00166)
+ *
+ * 주요 기술:
+ *   - TanStack Query: 목록 조회 및 낙관적 업데이트
+ *   - useRef 기반 HTML5 네이티브 드래그앤드롭
  */
 
 import { Suspense, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
-type RequirementRow = {
-  requirementId: string;
-  displayId:     string;
-  name:          string;
-  priority:      string;
-  source:        string;
-  taskId:        string | null;
-  taskName:      string;
-  unitWorkCount: number;
-  sortOrder:     number;
+type AreaRow = {
+  areaId:          string;
+  displayId:       string;
+  name:            string;
+  type:            string;
+  sortOrder:       number;
+  screenId:        string | null;
+  screenName:      string;
+  screenDisplayId: string | null;
+  functionCount:   number;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
 
-export default function RequirementsPage() {
+export default function AreasPage() {
   return (
     <Suspense fallback={null}>
-      <RequirementsPageInner />
+      <AreasPageInner />
     </Suspense>
   );
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 
-function RequirementsPageInner() {
-  const params      = useParams<{ id: string }>();
-  const router      = useRouter();
-  const queryClient = useQueryClient();
-  const projectId   = params.id;
+function AreasPageInner() {
+  const params       = useParams<{ id: string }>();
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const queryClient  = useQueryClient();
+  const projectId    = params.id;
+
+  // URL에 screenId 파라미터가 있으면 해당 화면 기준으로 필터
+  const screenIdFilter = searchParams.get("screenId") ?? undefined;
 
   // 삭제 다이얼로그 상태
-  const [deleteTarget, setDeleteTarget] = useState<RequirementRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AreaRow | null>(null);
 
   // ── 드래그 상태 ────────────────────────────────────────────────────────────
   const dragItem     = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
   // ── 데이터 조회 ────────────────────────────────────────────────────────────
+  const queryKey = screenIdFilter
+    ? ["areas", projectId, screenIdFilter]
+    : ["areas", projectId];
+
   const { data, isLoading } = useQuery({
-    queryKey: ["requirements", projectId],
-    queryFn:  () =>
-      authFetch<{ data: { items: RequirementRow[]; totalCount: number } }>(
-        `/api/projects/${projectId}/requirements`
-      ).then((r) => r.data),
+    queryKey,
+    queryFn: () => {
+      const url = screenIdFilter
+        ? `/api/projects/${projectId}/areas?screenId=${screenIdFilter}`
+        : `/api/projects/${projectId}/areas`;
+      return authFetch<{ data: { items: AreaRow[]; totalCount: number } }>(url)
+        .then((r) => r.data);
+    },
   });
 
   const items = data?.items ?? [];
 
   // ── 순서 변경 뮤테이션 ──────────────────────────────────────────────────────
   const sortMutation = useMutation({
-    mutationFn: (orders: { requirementId: string; sortOrder: number }[]) =>
-      authFetch(`/api/projects/${projectId}/requirements/sort`, {
+    mutationFn: (orders: { areaId: string; sortOrder: number }[]) =>
+      authFetch(`/api/projects/${projectId}/areas/sort`, {
         method: "PUT",
         body:   JSON.stringify({ orders }),
       }),
     onError: () => {
       toast.error("순서 변경에 실패했습니다.");
-      queryClient.invalidateQueries({ queryKey: ["requirements", projectId] });
+      queryClient.invalidateQueries({ queryKey });
     },
   });
 
   // ── 드래그 핸들러 ──────────────────────────────────────────────────────────
-  function handleDragStart(index: number) {
-    dragItem.current = index;
-  }
-
-  function handleDragEnter(index: number) {
-    dragOverItem.current = index;
-  }
+  function handleDragStart(index: number) { dragItem.current = index; }
+  function handleDragEnter(index: number) { dragOverItem.current = index; }
 
   function handleDragEnd() {
     const from = dragItem.current;
@@ -99,15 +110,9 @@ function RequirementsPageInner() {
     reordered.splice(to, 0, moved);
 
     // 낙관적 업데이트 후 서버 동기화
-    queryClient.setQueryData(
-      ["requirements", projectId],
-      { items: reordered, totalCount: reordered.length }
-    );
+    queryClient.setQueryData(queryKey, { items: reordered, totalCount: reordered.length });
 
-    const orders = reordered.map((r, idx) => ({
-      requirementId: r.requirementId,
-      sortOrder:     idx + 1,
-    }));
+    const orders = reordered.map((a, idx) => ({ areaId: a.areaId, sortOrder: idx + 1 }));
     sortMutation.mutate(orders);
 
     dragItem.current     = null;
@@ -123,46 +128,48 @@ function RequirementsPageInner() {
     <div style={{ padding: "32px" }}>
       {/* 헤더 */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)" }}>
-            요구사항 목록
-          </div>
-        </div>
+        <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
+          총 {items.length}건
+          {screenIdFilter && (
+            <span style={{ marginLeft: 8, color: "var(--color-primary, #1976d2)", fontSize: 12 }}>
+              (화면 필터 적용)
+            </span>
+          )}
+        </span>
         <button
-          onClick={() => router.push(`/projects/${projectId}/requirements/new`)}
+          onClick={() => {
+            const url = screenIdFilter
+              ? `/projects/${projectId}/areas/new?screenId=${screenIdFilter}`
+              : `/projects/${projectId}/areas/new`;
+            router.push(url);
+          }}
           style={primaryBtnStyle}
         >
           + 신규 등록
         </button>
       </div>
 
-      {/* 총 건수 */}
-      <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
-        총 {items.length}건
-      </div>
-
       {/* 목록 */}
       {items.length === 0 ? (
         <div style={{ padding: "60px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-          등록된 요구사항이 없습니다.
+          등록된 영역이 없습니다.
         </div>
       ) : (
         <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
           {/* 헤더 행 */}
           <div style={gridHeaderStyle}>
             <div />
-            <div>과업명</div>
-            <div>요구사항명</div>
-            <div>우선순위</div>
-            <div>출처</div>
-            <div style={{ textAlign: "center" }}>단위업무</div>
+            <div>화면명</div>
+            <div>영역명</div>
+            <div>유형</div>
+            <div style={{ textAlign: "center" }}>기능수</div>
             <div />
           </div>
 
           {/* 데이터 행 */}
-          {items.map((req, idx) => (
+          {items.map((area, idx) => (
             <div
-              key={req.requirementId}
+              key={area.areaId}
               draggable
               onDragStart={() => handleDragStart(idx)}
               onDragEnter={() => handleDragEnter(idx)}
@@ -174,60 +181,69 @@ function RequirementsPageInner() {
               }}
             >
               {/* 드래그 핸들 */}
-              <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>
-                ☰
-              </div>
+              <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
 
-              {/* 과업명 (클릭 → 과업 상세) */}
+              {/* 화면명 (클릭 → 화면 상세·편집) */}
               <div>
-                {req.taskId ? (
+                {area.screenId ? (
                   <button
-                    onClick={() => router.push(`/projects/${projectId}/tasks/${req.taskId}`)}
+                    onClick={() => router.push(`/projects/${projectId}/screens/${area.screenId}`)}
                     style={linkBtnStyle}
                   >
-                    {req.taskName}
+                    <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
+                      {area.screenDisplayId}
+                    </span>
+                    {area.screenName}
                   </button>
                 ) : (
                   <span style={{ color: "#aaa", fontSize: 13 }}>미분류</span>
                 )}
               </div>
 
-              {/* 요구사항명 (클릭 → 상세) */}
+              {/* 영역명 (클릭 → 영역 상세·편집) */}
               <div>
                 <button
-                  onClick={() => router.push(`/projects/${projectId}/requirements/${req.requirementId}`)}
+                  onClick={() => router.push(`/projects/${projectId}/areas/${area.areaId}`)}
                   style={linkBtnStyle}
                 >
                   <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
-                    {req.displayId}
+                    {area.displayId}
                   </span>
-                  {req.name}
+                  {area.name}
                 </button>
               </div>
 
-              {/* 우선순위 배지 */}
+              {/* 유형 배지 */}
               <div>
-                <span style={priorityBadgeStyle(req.priority)}>
-                  {PRIORITY_LABELS[req.priority] ?? req.priority}
+                <span style={typeBadgeStyle(area.type)}>
+                  {area.type}
                 </span>
               </div>
 
-              {/* 출처 배지 */}
-              <div>
-                <span style={sourceBadgeStyle(req.source)}>
-                  {SOURCE_LABELS[req.source] ?? req.source}
-                </span>
-              </div>
-
-              {/* 단위업무 수 */}
+              {/* 기능 수 */}
               <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
-                {req.unitWorkCount}
+                {area.functionCount}
               </div>
 
-              {/* 삭제 버튼 */}
-              <div>
+              {/* 바로가기(→) + 삭제 */}
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <button
-                  onClick={() => setDeleteTarget(req)}
+                  onClick={() => router.push(`/projects/${projectId}/functions?areaId=${area.areaId}`)}
+                  title="기능 목록으로 이동"
+                  style={{
+                    background:   "none",
+                    border:       "1px solid var(--color-border)",
+                    borderRadius: 4,
+                    cursor:       "pointer",
+                    fontSize:     13,
+                    padding:      "3px 8px",
+                    color:        "var(--color-text-secondary)",
+                  }}
+                >
+                  →
+                </button>
+                <button
+                  onClick={() => setDeleteTarget(area)}
                   style={dangerBtnStyle}
                 >
                   삭제
@@ -238,15 +254,15 @@ function RequirementsPageInner() {
         </div>
       )}
 
-      {/* PID-00032 삭제 확인 팝업 */}
+      {/* PID-00049 삭제 확인 팝업 */}
       {deleteTarget && (
         <DeleteConfirmDialog
-          requirement={deleteTarget}
+          area={deleteTarget}
           projectId={projectId}
           onClose={() => setDeleteTarget(null)}
           onDeleted={() => {
             setDeleteTarget(null);
-            queryClient.invalidateQueries({ queryKey: ["requirements", projectId] });
+            queryClient.invalidateQueries({ queryKey });
           }}
         />
       )}
@@ -254,37 +270,38 @@ function RequirementsPageInner() {
   );
 }
 
-// ── PID-00032 삭제 확인 다이얼로그 ───────────────────────────────────────────
+// ── PID-00049 삭제 확인 다이얼로그 ───────────────────────────────────────────
 
 function DeleteConfirmDialog({
-  requirement, projectId, onClose, onDeleted,
+  area, projectId, onClose, onDeleted,
 }: {
-  requirement: RequirementRow;
-  projectId:   string;
-  onClose:     () => void;
-  onDeleted:   () => void;
+  area:      AreaRow;
+  projectId: string;
+  onClose:   () => void;
+  onDeleted: () => void;
 }) {
-  const [deleteChildren, setDeleteChildren] = useState<boolean | null>(null);
+  const hasFunctions = area.functionCount > 0;
+  const [deleteChildren, setDeleteChildren] = useState<boolean | null>(hasFunctions ? null : true);
 
   const deleteMutation = useMutation({
     mutationFn: () => {
-      if (deleteChildren === null) {
+      if (hasFunctions && deleteChildren === null) {
         throw new Error("하위 데이터 처리 방법을 선택해 주세요.");
       }
       return authFetch(
-        `/api/projects/${projectId}/requirements/${requirement.requirementId}?deleteChildren=${deleteChildren}`,
+        `/api/projects/${projectId}/areas/${area.areaId}?deleteChildren=${deleteChildren ?? true}`,
         { method: "DELETE" }
       );
     },
     onSuccess: () => {
-      toast.success("요구사항이 삭제되었습니다.");
+      toast.success("영역이 삭제되었습니다.");
       onDeleted();
     },
     onError: (err: Error) => toast.error(err.message),
   });
 
   function handleDelete() {
-    if (deleteChildren === null) {
+    if (hasFunctions && deleteChildren === null) {
       toast.error("하위 데이터 처리 방법을 선택해 주세요.");
       return;
     }
@@ -295,32 +312,37 @@ function DeleteConfirmDialog({
     <div style={overlayStyle} onClick={onClose}>
       <div style={dialogStyle} onClick={(e) => e.stopPropagation()}>
         <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700 }}>
-          요구사항을 삭제하시겠습니까?
+          영역을 삭제하시겠습니까?
         </h3>
         <p style={{ margin: "0 0 20px", fontSize: 14, color: "var(--color-text-secondary)" }}>
-          &lsquo;{requirement.name}&rsquo;
+          &lsquo;{area.name}&rsquo;
         </p>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, cursor: "pointer" }}>
-            <input
-              type="radio"
-              name="deleteType"
-              checked={deleteChildren === true}
-              onChange={() => setDeleteChildren(true)}
-            />
-            하위 사용자스토리 전체 삭제
-          </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, cursor: "pointer" }}>
-            <input
-              type="radio"
-              name="deleteType"
-              checked={deleteChildren === false}
-              onChange={() => setDeleteChildren(false)}
-            />
-            요구사항만 삭제 (스토리 미분류 처리)
-          </label>
-        </div>
+        {hasFunctions && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+            <p style={{ margin: "0 0 8px", fontSize: 13, color: "var(--color-text-secondary)" }}>
+              연결된 기능 {area.functionCount}개 처리 방법:
+            </p>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, cursor: "pointer" }}>
+              <input
+                type="radio"
+                name="deleteType"
+                checked={deleteChildren === true}
+                onChange={() => setDeleteChildren(true)}
+              />
+              하위 기능 전체 삭제
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, cursor: "pointer" }}>
+              <input
+                type="radio"
+                name="deleteType"
+                checked={deleteChildren === false}
+                onChange={() => setDeleteChildren(false)}
+              />
+              영역만 삭제 (기능 미분류 상태로 유지)
+            </label>
+          </div>
+        )}
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button onClick={onClose} style={secondaryBtnStyle} disabled={deleteMutation.isPending}>
@@ -341,27 +363,16 @@ function DeleteConfirmDialog({
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
-const PRIORITY_LABELS: Record<string, string> = {
-  HIGH:   "높음",
-  MEDIUM: "중간",
-  LOW:    "낮음",
-};
-
-const SOURCE_LABELS: Record<string, string> = {
-  RFP:    "RFP",
-  ADD:    "추가",
-  CHANGE: "변경",
-};
-
-// ── 스타일 헬퍼 ──────────────────────────────────────────────────────────────
-
-function priorityBadgeStyle(priority: string): React.CSSProperties {
+function typeBadgeStyle(type: string): React.CSSProperties {
   const colors: Record<string, { bg: string; color: string }> = {
-    HIGH:   { bg: "#fdecea", color: "#c62828" },
-    MEDIUM: { bg: "#fff8e1", color: "#e65100" },
-    LOW:    { bg: "#e8f5e9", color: "#2e7d32" },
+    SEARCH:      { bg: "#e3f2fd", color: "#1565c0" },
+    GRID:        { bg: "#e8f5e9", color: "#2e7d32" },
+    FORM:        { bg: "#fff3e0", color: "#e65100" },
+    INFO_CARD:   { bg: "#f3e5f5", color: "#6a1b9a" },
+    TAB:         { bg: "#e0f2f1", color: "#00695c" },
+    FULL_SCREEN: { bg: "#fce4ec", color: "#880e4f" },
   };
-  const c = colors[priority] ?? { bg: "#f5f5f5", color: "#555" };
+  const c = colors[type] ?? { bg: "#f5f5f5", color: "#555" };
   return {
     display:      "inline-block",
     padding:      "2px 8px",
@@ -373,27 +384,9 @@ function priorityBadgeStyle(priority: string): React.CSSProperties {
   };
 }
 
-function sourceBadgeStyle(source: string): React.CSSProperties {
-  const colors: Record<string, { bg: string; color: string }> = {
-    RFP:    { bg: "#e3f2fd", color: "#1565c0" },
-    ADD:    { bg: "#e8f5e9", color: "#2e7d32" },
-    CHANGE: { bg: "#fff3e0", color: "#e65100" },
-  };
-  const c = colors[source] ?? { bg: "#f5f5f5", color: "#555" };
-  return {
-    display:      "inline-block",
-    padding:      "2px 8px",
-    borderRadius: 4,
-    fontSize:     12,
-    fontWeight:   600,
-    background:   c.bg,
-    color:        c.color,
-  };
-}
+// ── 스타일 ────────────────────────────────────────────────────────────────────
 
-// ── 스타일 상수 ──────────────────────────────────────────────────────────────
-
-const GRID_TEMPLATE = "32px minmax(120px, 200px) 1fr 90px 80px 80px 60px";
+const GRID_TEMPLATE = "32px minmax(120px, 200px) 1fr 100px 70px 100px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",
@@ -419,13 +412,13 @@ const gridRowStyle: React.CSSProperties = {
 };
 
 const linkBtnStyle: React.CSSProperties = {
-  background:  "none",
-  border:      "none",
-  cursor:      "pointer",
-  color:       "var(--color-primary, #1976d2)",
-  fontSize:    14,
-  padding:     0,
-  textAlign:   "left",
+  background:     "none",
+  border:         "none",
+  cursor:         "pointer",
+  color:          "var(--color-primary, #1976d2)",
+  fontSize:       14,
+  padding:        0,
+  textAlign:      "left",
   textDecoration: "underline",
 };
 
@@ -461,13 +454,13 @@ const dangerBtnStyle: React.CSSProperties = {
 };
 
 const overlayStyle: React.CSSProperties = {
-  position:        "fixed",
-  inset:           0,
-  background:      "rgba(0,0,0,0.45)",
-  display:         "flex",
-  alignItems:      "center",
-  justifyContent:  "center",
-  zIndex:          1000,
+  position:       "fixed",
+  inset:          0,
+  background:     "rgba(0,0,0,0.45)",
+  display:        "flex",
+  alignItems:     "center",
+  justifyContent: "center",
+  zIndex:         1000,
 };
 
 const dialogStyle: React.CSSProperties = {

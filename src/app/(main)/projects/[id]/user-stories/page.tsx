@@ -127,6 +127,21 @@ function UserStoriesPageInner() {
 
   return (
     <div style={{ padding: "32px" }}>
+      {/* ── 헤더 타이틀 ──────────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)" }}>
+            사용자스토리 목록
+          </div>
+        </div>
+        <button
+          onClick={() => router.push(`/projects/${projectId}/user-stories/new`)}
+          style={primaryBtnStyle}
+        >
+          + 스토리 추가
+        </button>
+      </div>
+
       {/* ── 검색 필터 (AR-00048) ─────────────────────────────────────────────── */}
       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
         <select
@@ -162,17 +177,9 @@ function UserStoriesPageInner() {
         <div style={{ flex: 1 }} />
       </div>
 
-      {/* ── 헤더 ─────────────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
-          총 {data?.totalCount ?? 0}건
-        </span>
-        <button
-          onClick={() => router.push(`/projects/${projectId}/user-stories/new`)}
-          style={primaryBtnStyle}
-        >
-          + 스토리 추가
-        </button>
+      {/* 총 건수 */}
+      <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
+        총 {data?.totalCount ?? 0}건
       </div>
 
       {/* ── 카드 목록 (AR-00049) ─────────────────────────────────────────────── */}

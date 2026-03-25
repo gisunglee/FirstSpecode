@@ -11,7 +11,7 @@
  *   - 드래그앤드롭 순서 변경 (FID-00128)
  */
 
-import { Suspense, useState, useCallback } from "react";
+import { Suspense, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -191,6 +191,65 @@ function PlanningTreePageInner() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  // ── 정렬 뮤테이션 (FID-00128) ───────────────────────────────────────────────
+  const sortTasksMutation = useMutation({
+    mutationFn: (taskIds: string[]) =>
+      authFetch(`/api/projects/${projectId}/tasks/sort`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ taskIds }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["planning-tree", projectId] }),
+    onError:   (err: Error) => toast.error(err.message),
+  });
+
+  const sortReqsMutation = useMutation({
+    mutationFn: (orders: { requirementId: string; sortOrder: number }[]) =>
+      authFetch(`/api/projects/${projectId}/requirements/sort`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ orders }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["planning-tree", projectId] }),
+    onError:   (err: Error) => toast.error(err.message),
+  });
+
+  const sortStoriesMutation = useMutation({
+    mutationFn: (orders: { storyId: string; sortOrder: number }[]) =>
+      authFetch(`/api/projects/${projectId}/user-stories/sort`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ orders }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["planning-tree", projectId] }),
+    onError:   (err: Error) => toast.error(err.message),
+  });
+
+  // ── 과업 레벨 드래그 상태 ────────────────────────────────────────────────────
+  const dragTaskItem     = useRef<number | null>(null);
+  const dragTaskOverItem = useRef<number | null>(null);
+
+  function handleTaskDragStart(fullIdx: number) {
+    dragTaskItem.current = fullIdx;
+  }
+  function handleTaskDragEnter(fullIdx: number) {
+    dragTaskOverItem.current = fullIdx;
+  }
+  function handleTaskDragEnd() {
+    const from = dragTaskItem.current;
+    const to   = dragTaskOverItem.current;
+    if (from === null || to === null || from === to) return;
+
+    const reordered = [...tree.tasks];
+    const [moved]   = reordered.splice(from, 1);
+    if (!moved) { dragTaskItem.current = null; dragTaskOverItem.current = null; return; }
+    reordered.splice(to, 0, moved);
+
+    sortTasksMutation.mutate(reordered.map((t) => t.taskId));
+    dragTaskItem.current     = null;
+    dragTaskOverItem.current = null;
+  }
+
   // ── 노드 필터링 (키워드) ────────────────────────────────────────────────────
   function isTaskVisible(task: TaskNode) {
     if (!kw) return true;
@@ -254,22 +313,36 @@ function PlanningTreePageInner() {
         {/* 트리 본체 */}
         <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
           {/* 과업 노드들 */}
-          {tree.tasks.filter(isTaskVisible).map((task) => (
-            <TaskTreeNode
-              key={task.taskId}
-              task={task}
-              selected={selected}
-              collapsed={collapsed}
-              keyword={kw}
-              highlight={highlight}
-              isReqVisible={isReqVisible}
-              onSelect={setSelected}
-              onToggle={toggleCollapse}
-              onAddReq={(taskId) => addReqMutation.mutate(taskId)}
-              onAddStory={(reqId) => addStoryMutation.mutate(reqId)}
-              onDelete={setDeleteTarget}
-            />
-          ))}
+          {tree.tasks.filter(isTaskVisible).map((task) => {
+            // 키워드 필터링 중에는 DnD 비활성화 (필터된 인덱스와 실제 인덱스 불일치 방지)
+            const fullIdx = tree.tasks.findIndex((t) => t.taskId === task.taskId);
+            return (
+              <div
+                key={task.taskId}
+                draggable={!kw}
+                onDragStart={() => handleTaskDragStart(fullIdx)}
+                onDragEnter={() => handleTaskDragEnter(fullIdx)}
+                onDragEnd={handleTaskDragEnd}
+                onDragOver={(e) => e.preventDefault()}
+              >
+                <TaskTreeNode
+                  task={task}
+                  selected={selected}
+                  collapsed={collapsed}
+                  keyword={kw}
+                  highlight={highlight}
+                  isReqVisible={isReqVisible}
+                  onSelect={setSelected}
+                  onToggle={toggleCollapse}
+                  onAddReq={(taskId) => addReqMutation.mutate(taskId)}
+                  onAddStory={(reqId) => addStoryMutation.mutate(reqId)}
+                  onDelete={setDeleteTarget}
+                  onSortReqs={(orders) => sortReqsMutation.mutate(orders)}
+                  onSortStories={(orders) => sortStoriesMutation.mutate(orders)}
+                />
+              </div>
+            );
+          })}
 
           {/* 미분류 요구사항 */}
           {tree.unclassifiedReqs.filter(isReqVisible).length > 0 && (
@@ -310,6 +383,7 @@ function PlanningTreePageInner() {
                     onToggle={toggleCollapse}
                     onAddStory={(reqId) => addStoryMutation.mutate(reqId)}
                     onDelete={setDeleteTarget}
+                    onSortStories={(orders) => sortStoriesMutation.mutate(orders)}
                   />
                 ))
               }
@@ -376,22 +450,43 @@ function PlanningTreePageInner() {
 
 function TaskTreeNode({
   task, selected, collapsed, keyword, highlight, isReqVisible,
-  onSelect, onToggle, onAddReq, onAddStory, onDelete,
+  onSelect, onToggle, onAddReq, onAddStory, onDelete, onSortReqs, onSortStories,
 }: {
-  task:         TaskNode;
-  selected:     SelectedNode | null;
-  collapsed:    Set<string>;
-  keyword:      string;
-  highlight:    (t: string) => React.ReactNode;
-  isReqVisible: (r: ReqNode) => boolean;
-  onSelect:     (n: SelectedNode) => void;
-  onToggle:     (id: string) => void;
-  onAddReq:     (taskId: string) => void;
-  onAddStory:   (reqId: string) => void;
-  onDelete:     (t: { type: string; id: string; name: string }) => void;
+  task:          TaskNode;
+  selected:      SelectedNode | null;
+  collapsed:     Set<string>;
+  keyword:       string;
+  highlight:     (t: string) => React.ReactNode;
+  isReqVisible:  (r: ReqNode) => boolean;
+  onSelect:      (n: SelectedNode) => void;
+  onToggle:      (id: string) => void;
+  onAddReq:      (taskId: string) => void;
+  onAddStory:    (reqId: string) => void;
+  onDelete:      (t: { type: string; id: string; name: string }) => void;
+  onSortReqs:    (orders: { requirementId: string; sortOrder: number }[]) => void;
+  onSortStories: (orders: { storyId: string; sortOrder: number }[]) => void;
 }) {
-  const isOpen = !collapsed.has(task.taskId);
+  const isOpen   = !collapsed.has(task.taskId);
   const isActive = selected?.type === "task" && selected.id === task.taskId;
+
+  // ── 요구사항 레벨 드래그 상태 ──────────────────────────────────────────────
+  const dragReqItem     = useRef<number | null>(null);
+  const dragReqOverItem = useRef<number | null>(null);
+
+  function handleReqDragEnd() {
+    const from = dragReqItem.current;
+    const to   = dragReqOverItem.current;
+    if (from === null || to === null || from === to) return;
+
+    const reordered = [...task.requirements];
+    const [moved]   = reordered.splice(from, 1);
+    if (!moved) { dragReqItem.current = null; dragReqOverItem.current = null; return; }
+    reordered.splice(to, 0, moved);
+
+    onSortReqs(reordered.map((r, idx) => ({ requirementId: r.reqId, sortOrder: idx + 1 })));
+    dragReqItem.current     = null;
+    dragReqOverItem.current = null;
+  }
 
   return (
     <div>
@@ -409,21 +504,34 @@ function TaskTreeNode({
         onDelete={() => onDelete({ type: "task", id: task.taskId, name: task.name })}
         addTitle="요구사항 추가"
       />
-      {isOpen && task.requirements.filter(isReqVisible).map((req) => (
-        <ReqTreeNode
-          key={req.reqId}
-          req={req}
-          depth={1}
-          selected={selected}
-          collapsed={collapsed}
-          keyword={keyword}
-          highlight={highlight}
-          onSelect={onSelect}
-          onToggle={onToggle}
-          onAddStory={onAddStory}
-          onDelete={onDelete}
-        />
-      ))}
+      {isOpen && task.requirements.filter(isReqVisible).map((req) => {
+        // 키워드 필터링 중에는 DnD 비활성화
+        const fullIdx = task.requirements.findIndex((r) => r.reqId === req.reqId);
+        return (
+          <div
+            key={req.reqId}
+            draggable={!keyword}
+            onDragStart={() => { dragReqItem.current = fullIdx; }}
+            onDragEnter={() => { dragReqOverItem.current = fullIdx; }}
+            onDragEnd={handleReqDragEnd}
+            onDragOver={(e) => e.preventDefault()}
+          >
+            <ReqTreeNode
+              req={req}
+              depth={1}
+              selected={selected}
+              collapsed={collapsed}
+              keyword={keyword}
+              highlight={highlight}
+              onSelect={onSelect}
+              onToggle={onToggle}
+              onAddStory={onAddStory}
+              onDelete={onDelete}
+              onSortStories={onSortStories}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -432,18 +540,19 @@ function TaskTreeNode({
 
 function ReqTreeNode({
   req, depth, selected, collapsed, keyword, highlight,
-  onSelect, onToggle, onAddStory, onDelete,
+  onSelect, onToggle, onAddStory, onDelete, onSortStories,
 }: {
-  req:        ReqNode;
-  depth:      number;
-  selected:   SelectedNode | null;
-  collapsed:  Set<string>;
-  keyword:    string;
-  highlight:  (t: string) => React.ReactNode;
-  onSelect:   (n: SelectedNode) => void;
-  onToggle:   (id: string) => void;
-  onAddStory: (reqId: string) => void;
-  onDelete:   (t: { type: string; id: string; name: string }) => void;
+  req:           ReqNode;
+  depth:         number;
+  selected:      SelectedNode | null;
+  collapsed:     Set<string>;
+  keyword:       string;
+  highlight:     (t: string) => React.ReactNode;
+  onSelect:      (n: SelectedNode) => void;
+  onToggle:      (id: string) => void;
+  onAddStory:    (reqId: string) => void;
+  onDelete:      (t: { type: string; id: string; name: string }) => void;
+  onSortStories: (orders: { storyId: string; sortOrder: number }[]) => void;
 }) {
   const isOpen   = !collapsed.has(req.reqId);
   const isActive = selected?.type === "requirement" && selected.id === req.reqId;
@@ -451,6 +560,29 @@ function ReqTreeNode({
   const priorityColor =
     req.priority === "HIGH"   ? "#ef5350" :
     req.priority === "MEDIUM" ? "#ffa726" : "#66bb6a";
+
+  // ── 스토리 레벨 드래그 상태 ────────────────────────────────────────────────
+  const dragStoryItem     = useRef<number | null>(null);
+  const dragStoryOverItem = useRef<number | null>(null);
+
+  function handleStoryDragEnd() {
+    const from = dragStoryItem.current;
+    const to   = dragStoryOverItem.current;
+    if (from === null || to === null || from === to) return;
+
+    const reordered = [...req.stories];
+    const [moved]   = reordered.splice(from, 1);
+    if (!moved) { dragStoryItem.current = null; dragStoryOverItem.current = null; return; }
+    reordered.splice(to, 0, moved);
+
+    onSortStories(reordered.map((s, idx) => ({ storyId: s.storyId, sortOrder: idx + 1 })));
+    dragStoryItem.current     = null;
+    dragStoryOverItem.current = null;
+  }
+
+  const visibleStories = req.stories.filter(
+    (s) => !keyword || s.name.toLowerCase().includes(keyword) || s.displayId.toLowerCase().includes(keyword)
+  );
 
   return (
     <div>
@@ -469,20 +601,28 @@ function ReqTreeNode({
         onDelete={() => onDelete({ type: "requirement", id: req.reqId, name: req.name })}
         addTitle="사용자스토리 추가"
       />
-      {isOpen && req.stories
-        .filter((s) => !keyword || s.name.toLowerCase().includes(keyword) || s.displayId.toLowerCase().includes(keyword))
-        .map((story) => (
-          <StoryTreeNode
+      {isOpen && visibleStories.map((story) => {
+        const fullIdx = req.stories.findIndex((s) => s.storyId === story.storyId);
+        return (
+          <div
             key={story.storyId}
-            story={story}
-            depth={depth + 1}
-            selected={selected}
-            highlight={highlight}
-            onSelect={onSelect}
-            onDelete={onDelete}
-          />
-        ))
-      }
+            draggable={!keyword}
+            onDragStart={() => { dragStoryItem.current = fullIdx; }}
+            onDragEnter={() => { dragStoryOverItem.current = fullIdx; }}
+            onDragEnd={handleStoryDragEnd}
+            onDragOver={(e) => e.preventDefault()}
+          >
+            <StoryTreeNode
+              story={story}
+              depth={depth + 1}
+              selected={selected}
+              highlight={highlight}
+              onSelect={onSelect}
+              onDelete={onDelete}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -560,6 +700,21 @@ function TreeRow({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
+      {/* 드래그 핸들 — 호버 시에만 표시 */}
+      <span
+        style={{
+          fontSize:   11,
+          color:      hovered ? "var(--color-text-secondary)" : "transparent",
+          width:      12,
+          flexShrink: 0,
+          cursor:     "grab",
+          userSelect: "none",
+        }}
+        title="드래그하여 순서 변경"
+      >
+        ☰
+      </span>
+
       {/* 펼침 화살표 */}
       <span style={{ fontSize: 10, color: "#888", width: 10, flexShrink: 0 }}>
         {hasChildren ? (isOpen ? "▼" : "▶") : ""}
