@@ -52,6 +52,13 @@ export default function GNB() {
     (p) => p.prjct_id === currentProjectId
   );
 
+  // 프로젝트가 1개뿐이고 선택된 게 없으면 자동 선택
+  useEffect(() => {
+    if (!currentProjectId && projects.length === 1) {
+      setCurrentProjectId(projects[0]!.prjct_id);
+    }
+  }, [projects, currentProjectId, setCurrentProjectId]);
+
   // 드롭다운 외부 클릭 시 닫기
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

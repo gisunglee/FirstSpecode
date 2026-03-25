@@ -386,7 +386,7 @@ function sourceBadgeStyle(source: string): React.CSSProperties {
 
 // ── 스타일 상수 ──────────────────────────────────────────────────────────────
 
-const GRID_TEMPLATE = "32px 160px 1fr 90px 80px 80px 60px";
+const GRID_TEMPLATE = "32px minmax(120px, 200px) 1fr 90px 80px 80px 60px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",

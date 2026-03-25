@@ -92,75 +92,63 @@ function BaselinePageInner() {
           저장된 기준선이 없습니다.
         </div>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-          <thead>
-            <tr style={{ background: "var(--color-bg-muted)" }}>
-              {["#", "기준선명", "확정일시", "확정자", "요구사항 수"].map((h) => (
-                <th
-                  key={h}
-                  style={{
-                    padding:      "10px 12px",
-                    textAlign:    "left",
-                    fontWeight:   600,
-                    borderBottom: "2px solid var(--color-border)",
-                    color:        "var(--color-text-secondary)",
-                  }}
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+          {/* 헤더 행 */}
+          <div style={gridHeaderStyle}>
+            <div>#</div>
+            <div>기준선명</div>
+            <div>확정일시</div>
+            <div>확정자</div>
+            <div>요구사항 수</div>
+          </div>
+
+          {/* 데이터 행 */}
+          {items.map((item, idx) => (
+            <div
+              key={item.baselineId}
+              style={{
+                ...gridRowStyle,
+                borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+              }}
+            >
+              <div style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>{idx + 1}</div>
+
+              {/* 기준선명 — 클릭 시 스냅샷 조회 */}
+              <div>
+                <button
+                  onClick={() => setSelectedBaseline(item)}
+                  style={linkBtnStyle}
                 >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item, idx) => (
-              <tr
-                key={item.baselineId}
-                style={{
-                  background:   idx % 2 === 0 ? "transparent" : "var(--color-bg-muted)",
-                  borderBottom: "1px solid var(--color-border)",
-                }}
-              >
-                <td style={{ padding: "10px 12px", color: "var(--color-text-secondary)" }}>
-                  {idx + 1}
-                </td>
-                {/* 기준선명 — 클릭 시 스냅샷 조회 */}
-                <td style={{ padding: "10px 12px" }}>
-                  <span
-                    style={{ cursor: "pointer", color: "var(--color-primary)", fontWeight: 600 }}
-                    onClick={() => setSelectedBaseline(item)}
-                  >
-                    {item.name}
-                  </span>
-                  {item.comment && (
-                    <span style={{ fontSize: 12, color: "#888", marginLeft: 8 }}>{item.comment}</span>
-                  )}
-                </td>
-                <td style={{ padding: "10px 12px", color: "var(--color-text-secondary)" }}>
-                  {new Date(item.confirmedAt).toLocaleString("ko-KR", {
-                    year: "numeric", month: "2-digit", day: "2-digit",
-                    hour: "2-digit", minute: "2-digit",
-                  })}
-                </td>
-                <td style={{ padding: "10px 12px", color: "var(--color-text-secondary)" }}>
-                  {item.confirmerEmail || "-"}
-                </td>
-                <td style={{ padding: "10px 12px" }}>
-                  <span
-                    style={{
-                      padding:      "2px 8px",
-                      borderRadius: 4,
-                      fontSize:     12,
-                      background:   "var(--color-bg-muted)",
-                      color:        "var(--color-text-secondary)",
-                    }}
-                  >
-                    {item.requirementCount}건
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  {item.name}
+                </button>
+                {item.comment && (
+                  <span style={{ fontSize: 12, color: "#888", marginLeft: 8 }}>{item.comment}</span>
+                )}
+              </div>
+
+              <div style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>
+                {new Date(item.confirmedAt).toLocaleString("ko-KR", {
+                  year: "numeric", month: "2-digit", day: "2-digit",
+                  hour: "2-digit", minute: "2-digit",
+                })}
+              </div>
+
+              <div style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>
+                {item.confirmerEmail || "-"}
+              </div>
+
+              <div>
+                <span style={{
+                  display: "inline-block", padding: "2px 10px", borderRadius: 4,
+                  fontSize: 12, fontWeight: 600,
+                  background: "var(--color-bg-muted)", color: "var(--color-text-secondary)",
+                }}>
+                  {item.requirementCount}건
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* 일괄 확정 팝업 */}
@@ -397,6 +385,42 @@ function SnapshotViewPopup({
 }
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
+
+const GRID_TEMPLATE = "50px 1fr 180px 200px 100px";
+
+const gridHeaderStyle: React.CSSProperties = {
+  display:             "grid",
+  gridTemplateColumns: GRID_TEMPLATE,
+  gap:                 12,
+  padding:             "10px 16px",
+  background:          "var(--color-bg-muted)",
+  fontSize:            12,
+  fontWeight:          600,
+  color:               "var(--color-text-secondary)",
+  borderBottom:        "1px solid var(--color-border)",
+  alignItems:          "center",
+};
+
+const gridRowStyle: React.CSSProperties = {
+  display:             "grid",
+  gridTemplateColumns: GRID_TEMPLATE,
+  gap:                 12,
+  padding:             "12px 16px",
+  alignItems:          "center",
+  background:          "var(--color-bg-card)",
+};
+
+const linkBtnStyle: React.CSSProperties = {
+  background:     "none",
+  border:         "none",
+  cursor:         "pointer",
+  color:          "var(--color-primary, #1976d2)",
+  fontSize:       14,
+  fontWeight:     600,
+  padding:        0,
+  textAlign:      "left",
+  textDecoration: "underline",
+};
 
 const primaryBtnStyle: React.CSSProperties = {
   padding:      "8px 20px",

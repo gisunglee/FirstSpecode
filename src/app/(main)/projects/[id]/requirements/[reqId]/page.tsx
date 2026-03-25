@@ -311,7 +311,7 @@ function RequirementDetailPageInner() {
   }
 
   return (
-    <div style={{ padding: "32px", maxWidth: 800 }}>
+    <div style={{ padding: "32px", maxWidth: 1400 }}>
       {/* 헤더 */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
         <button
@@ -340,248 +340,257 @@ function RequirementDetailPageInner() {
             변경 이력
           </button>
         )}
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-
-        {/* ── AR-00043 기본 정보 ──────────────────────────────────────────────── */}
-        <Section title="기본 정보">
-          {/* 상위 과업 선택 */}
-          <FormField label="상위 과업">
-            <select
-              value={form.taskId ?? ""}
-              onChange={(e) => handleChange("taskId", e.target.value || "")}
-              style={inputStyle}
-            >
-              <option value="">미분류</option>
-              {taskOptions.map((t) => (
-                <option key={t.taskId} value={t.taskId}>{t.name}</option>
-              ))}
-            </select>
-          </FormField>
-
-          {/* 요구사항명 */}
-          <FormField label="요구사항명" required>
-            <input
-              type="text"
-              value={form.name}
-              placeholder="요구사항명을 입력하세요"
-              onChange={(e) => handleChange("name", e.target.value)}
-              style={inputStyle}
-            />
-          </FormField>
-
-          {/* 우선순위 + 출처 */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-            <FormField label="우선순위" required>
-              <select
-                value={form.priority}
-                onChange={(e) => handleChange("priority", e.target.value)}
-                style={inputStyle}
-              >
-                <option value="HIGH">높음 (HIGH)</option>
-                <option value="MEDIUM">중간 (MEDIUM)</option>
-                <option value="LOW">낮음 (LOW)</option>
-              </select>
-            </FormField>
-            <FormField label="출처" required>
-              <select
-                value={form.source}
-                onChange={(e) => handleChange("source", e.target.value)}
-                style={inputStyle}
-              >
-                <option value="RFP">RFP</option>
-                <option value="ADD">추가</option>
-                <option value="CHANGE">변경</option>
-              </select>
-            </FormField>
-            <FormField label="RFP 페이지 번호">
-              <input
-                type="text"
-                value={form.rfpPage}
-                placeholder="예: p.23"
-                onChange={(e) => handleChange("rfpPage", e.target.value)}
-                style={inputStyle}
-              />
-            </FormField>
-          </div>
-        </Section>
-
-        {/* ── AR-00044 원문·현행화 ────────────────────────────────────────────── */}
-        <Section title="원문·현행화">
-          {/* 탭 헤더 */}
-          <div style={{ display: "flex", gap: 0, marginBottom: 0 }}>
-            {(["current", "original"] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setContentTab(tab)}
-                style={{
-                  padding:      "7px 20px",
-                  border:       "1px solid var(--color-border)",
-                  borderBottom: contentTab === tab ? "1px solid var(--color-bg-card)" : "1px solid var(--color-border)",
-                  borderRadius: tab === "current" ? "6px 0 0 0" : "0 6px 0 0",
-                  background:   contentTab === tab ? "var(--color-bg-card)" : "var(--color-bg-muted)",
-                  color:        contentTab === tab ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-                  fontSize:     13,
-                  fontWeight:   contentTab === tab ? 600 : 400,
-                  cursor:       "pointer",
-                  position:     "relative",
-                  zIndex:       contentTab === tab ? 1 : 0,
-                  marginBottom: contentTab === tab ? -1 : 0,
-                }}
-              >
-                {tab === "current" ? "현행화 (협의·변경 반영본)" : "원문 (RFP·계약서 원문)"}
-              </button>
-            ))}
-          </div>
-
-          {/* 에디터 본체 */}
-          <div style={{ position: "relative", zIndex: 0 }}>
-            {contentTab === "current" ? (
-              <RichEditor
-                value={form.currentContent}
-                onChange={(html) => handleChange("currentContent", html)}
-                placeholder="협의 또는 변경 사항이 반영된 최신 내용을 입력하세요"
-                minHeight={338}
-              />
-            ) : (
-              <RichEditor
-                value={form.originalContent}
-                onChange={(html) => handleChange("originalContent", html)}
-                placeholder="RFP 또는 계약서의 원문 그대로 입력하세요"
-                minHeight={338}
-              />
-            )}
-          </div>
-        </Section>
-
-        {/* ── AR-00045 분석메모·상세명세 ─────────────────────────────────────── */}
-        <Section title="분석 메모 · 상세 명세">
-          {/* 분석 메모 */}
-          <FormField label="분석 메모">
-            <MarkdownEditor
-              value={form.analysisMemo}
-              tab={analyzeTab}
-              onTabChange={setAnalyzeTab}
-              onChange={(v) => handleChange("analysisMemo", v)}
-              placeholder={`## 분석 내용\n\n- 항목1\n- 항목2`}
-              rows={8}
-            />
-          </FormField>
-
-          {/* AI 초안 생성 버튼 */}
-          <div style={{ display: "flex", justifyContent: "flex-end", margin: "-8px 0 12px" }}>
-            <button
-              onClick={handleAiSpec}
-              disabled={aiLoading || isNew}
-              title={isNew ? "저장 후 AI 초안을 생성할 수 있습니다." : ""}
-              style={{
-                ...secondaryBtnStyle,
-                fontSize: 13,
-                opacity: (aiLoading || isNew) ? 0.5 : 1,
-              }}
-            >
-              {aiLoading ? "⏳ AI 생성 중..." : "✨ AI spec 초안 생성"}
-            </button>
-          </div>
-
-          {/* 상세 명세 */}
-          <FormField label="상세 명세">
-            <MarkdownEditor
-              value={form.detailSpec}
-              tab={specTab}
-              onTabChange={setSpecTab}
-              onChange={(v) => handleChange("detailSpec", v)}
-              placeholder={`## 기능 상세\n\n- 항목1\n- 항목2`}
-              rows={10}
-            />
-          </FormField>
-        </Section>
-
-        {/* ── AR-00046 첨부파일 (수정 모드에서만) ────────────────────────────── */}
-        {!isNew && (
-          <Section title="근거 파일">
-            {files.length === 0 ? (
-              <p style={{ fontSize: 13, color: "#aaa", margin: 0 }}>첨부파일이 없습니다.</p>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
-                {files.map((file) => (
-                  <div
-                    key={file.fileId}
-                    style={{
-                      display:        "flex",
-                      alignItems:     "center",
-                      gap:            12,
-                      padding:        "8px 12px",
-                      border:         "1px solid var(--color-border)",
-                      borderRadius:   6,
-                      background:     "var(--color-bg-muted)",
-                    }}
-                  >
-                    <span style={{ flex: 1, fontSize: 13, wordBreak: "break-all" }}>
-                      📎 {file.fileName}
-                      <span style={{ color: "#aaa", marginLeft: 8, fontSize: 12 }}>
-                        ({formatFileSize(file.fileSize)})
-                      </span>
-                    </span>
-                    <button
-                      onClick={() => handleDownload(file)}
-                      style={{ ...secondaryBtnStyle, fontSize: 12, padding: "4px 10px" }}
-                    >
-                      다운로드
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (confirm(`'${file.fileName}' 파일을 삭제하시겠습니까?`)) {
-                          deleteFileMutation.mutate(file.fileId);
-                        }
-                      }}
-                      disabled={deleteFileMutation.isPending}
-                      style={{ ...dangerBtnStyle, fontSize: 12 }}
-                    >
-                      삭제
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* 파일 첨부 버튼 */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              style={{ display: "none" }}
-              onChange={handleFileUpload}
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              style={secondaryBtnStyle}
-            >
-              + 파일 첨부
-            </button>
-          </Section>
-        )}
-
-        {/* 버튼 */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
+        {/* 취소 / 저장 — 헤더 우측 */}
+        <div style={{ display: "flex", gap: 8 }}>
           <button
             onClick={() => router.push(`/projects/${projectId}/requirements`)}
             disabled={saveMutation.isPending}
-            style={secondaryBtnStyle}
+            style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
           >
             취소
           </button>
           <button
             onClick={handleSave}
             disabled={saveMutation.isPending}
-            style={primaryBtnStyle}
+            style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 20px" }}
           >
             {saveMutation.isPending ? "저장 중..." : "저장"}
           </button>
         </div>
       </div>
+
+      {/* 2단 레이아웃: 왼쪽(기본정보+원문·현행화) / 오른쪽(분석메모·상세명세+근거파일) */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 24, alignItems: "start" }}>
+
+        {/* ── 왼쪽 컬럼 ─────────────────────────────────────────────────────── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+          {/* ── AR-00043 기본 정보 ────────────────────────────────────────────── */}
+          <Section title="기본 정보">
+            {/* 상위 과업 선택 */}
+            <FormField label="상위 과업">
+              <select
+                value={form.taskId ?? ""}
+                onChange={(e) => handleChange("taskId", e.target.value || "")}
+                style={inputStyle}
+              >
+                <option value="">미분류</option>
+                {taskOptions.map((t) => (
+                  <option key={t.taskId} value={t.taskId}>{t.name}</option>
+                ))}
+              </select>
+            </FormField>
+
+            {/* 요구사항명 */}
+            <FormField label="요구사항명" required>
+              <input
+                type="text"
+                value={form.name}
+                placeholder="요구사항명을 입력하세요"
+                onChange={(e) => handleChange("name", e.target.value)}
+                style={inputStyle}
+              />
+            </FormField>
+
+            {/* 우선순위 + 출처 */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+              <FormField label="우선순위" required>
+                <select
+                  value={form.priority}
+                  onChange={(e) => handleChange("priority", e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="HIGH">높음 (HIGH)</option>
+                  <option value="MEDIUM">중간 (MEDIUM)</option>
+                  <option value="LOW">낮음 (LOW)</option>
+                </select>
+              </FormField>
+              <FormField label="출처" required>
+                <select
+                  value={form.source}
+                  onChange={(e) => handleChange("source", e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="RFP">RFP</option>
+                  <option value="ADD">추가</option>
+                  <option value="CHANGE">변경</option>
+                </select>
+              </FormField>
+              <FormField label="RFP 페이지 번호">
+                <input
+                  type="text"
+                  value={form.rfpPage}
+                  placeholder="예: p.23"
+                  onChange={(e) => handleChange("rfpPage", e.target.value)}
+                  style={inputStyle}
+                />
+              </FormField>
+            </div>
+          </Section>
+
+          {/* ── AR-00044 원문·현행화 ──────────────────────────────────────────── */}
+          <Section title="원문·현행화">
+            {/* 탭 헤더 */}
+            <div style={{ display: "flex", gap: 0, marginBottom: 0 }}>
+              {(["current", "original"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setContentTab(tab)}
+                  style={{
+                    padding:      "7px 20px",
+                    border:       "1px solid var(--color-border)",
+                    borderBottom: contentTab === tab ? "1px solid var(--color-bg-card)" : "1px solid var(--color-border)",
+                    borderRadius: tab === "current" ? "6px 0 0 0" : "0 6px 0 0",
+                    background:   contentTab === tab ? "var(--color-bg-card)" : "var(--color-bg-muted)",
+                    color:        contentTab === tab ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+                    fontSize:     13,
+                    fontWeight:   contentTab === tab ? 600 : 400,
+                    cursor:       "pointer",
+                    position:     "relative",
+                    zIndex:       contentTab === tab ? 1 : 0,
+                    marginBottom: contentTab === tab ? -1 : 0,
+                  }}
+                >
+                  {tab === "current" ? "현행화 (협의·변경 반영본)" : "원문 (RFP·계약서 원문)"}
+                </button>
+              ))}
+            </div>
+
+            {/* 에디터 본체 */}
+            <div style={{ position: "relative", zIndex: 0 }}>
+              {contentTab === "current" ? (
+                <RichEditor
+                  value={form.currentContent}
+                  onChange={(html) => handleChange("currentContent", html)}
+                  placeholder="협의 또는 변경 사항이 반영된 최신 내용을 입력하세요"
+                  minHeight={338}
+                />
+              ) : (
+                <RichEditor
+                  value={form.originalContent}
+                  onChange={(html) => handleChange("originalContent", html)}
+                  placeholder="RFP 또는 계약서의 원문 그대로 입력하세요"
+                  minHeight={338}
+                />
+              )}
+            </div>
+          </Section>
+
+          {/* ── AR-00046 첨부파일 (수정 모드에서만) ────────────────────────── */}
+          {!isNew && (
+            <Section title="근거 파일">
+              {files.length === 0 ? (
+                <p style={{ fontSize: 13, color: "#aaa", margin: 0 }}>첨부파일이 없습니다.</p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                  {files.map((file) => (
+                    <div
+                      key={file.fileId}
+                      style={{
+                        display:      "flex",
+                        alignItems:   "center",
+                        gap:          12,
+                        padding:      "8px 12px",
+                        border:       "1px solid var(--color-border)",
+                        borderRadius: 6,
+                        background:   "var(--color-bg-muted)",
+                      }}
+                    >
+                      <span style={{ flex: 1, fontSize: 13, wordBreak: "break-all" }}>
+                        📎 {file.fileName}
+                        <span style={{ color: "#aaa", marginLeft: 8, fontSize: 12 }}>
+                          ({formatFileSize(file.fileSize)})
+                        </span>
+                      </span>
+                      <button
+                        onClick={() => handleDownload(file)}
+                        style={{ ...secondaryBtnStyle, fontSize: 12, padding: "4px 10px" }}
+                      >
+                        다운로드
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(`'${file.fileName}' 파일을 삭제하시겠습니까?`)) {
+                            deleteFileMutation.mutate(file.fileId);
+                          }
+                        }}
+                        disabled={deleteFileMutation.isPending}
+                        style={{ ...dangerBtnStyle, fontSize: 12 }}
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* 파일 첨부 버튼 */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                style={{ display: "none" }}
+                onChange={handleFileUpload}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                style={secondaryBtnStyle}
+              >
+                + 파일 첨부
+              </button>
+            </Section>
+          )}
+        </div>
+
+        {/* ── 오른쪽 컬럼 ───────────────────────────────────────────────────── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+          {/* ── AR-00045 분석메모·상세명세 ──────────────────────────────────── */}
+          <Section title="분석 메모 · 상세 명세">
+            {/* 분석 메모 */}
+            <FormField label="분석 메모">
+              <MarkdownEditor
+                value={form.analysisMemo}
+                tab={analyzeTab}
+                onTabChange={setAnalyzeTab}
+                onChange={(v) => handleChange("analysisMemo", v)}
+                placeholder={`## 분석 내용\n\n- 항목1\n- 항목2`}
+                rows={14}
+              />
+            </FormField>
+
+            {/* AI 초안 생성 버튼 */}
+            <div style={{ display: "flex", justifyContent: "flex-end", margin: "-8px 0 12px" }}>
+              <button
+                onClick={handleAiSpec}
+                disabled={aiLoading || isNew}
+                title={isNew ? "저장 후 AI 초안을 생성할 수 있습니다." : ""}
+                style={{
+                  ...secondaryBtnStyle,
+                  fontSize: 13,
+                  opacity: (aiLoading || isNew) ? 0.5 : 1,
+                }}
+              >
+                {aiLoading ? "⏳ AI 생성 중..." : "✨ AI spec 초안 생성"}
+              </button>
+            </div>
+
+            {/* 상세 명세 */}
+            <FormField label="상세 명세">
+              <MarkdownEditor
+                value={form.detailSpec}
+                tab={specTab}
+                onTabChange={setSpecTab}
+                onChange={(v) => handleChange("detailSpec", v)}
+                placeholder={`## 기능 상세\n\n- 항목1\n- 항목2`}
+                rows={18}
+              />
+            </FormField>
+          </Section>
+        </div>
+      </div>
+
     </div>
   );
 }
@@ -686,6 +695,7 @@ function MarkdownEditor({
           style={{
             ...inputStyle,
             minHeight:    rows * 24,
+            maxHeight:    600,
             borderRadius: "0 6px 6px 6px",
             padding:      "12px 16px",
             overflowY:    "auto",
