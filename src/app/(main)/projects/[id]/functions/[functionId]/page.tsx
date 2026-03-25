@@ -21,6 +21,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import MarkdownEditor from "@/components/ui/MarkdownEditor";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -187,16 +188,17 @@ function FunctionDetailPageInner() {
 
   return (
     <div style={{ padding: "32px", maxWidth: 860 }}>
-      <button
-        onClick={() => router.push(`/projects/${projectId}/functions`)}
-        style={{ ...secondaryBtnStyle, marginBottom: 24, fontSize: 13 }}
-      >
-        ← 기능 목록
-      </button>
-
-      <h2 style={{ margin: "0 0 24px", fontSize: 20, fontWeight: 700 }}>
-        {isNew ? "기능 신규 등록" : `${data?.displayId ?? ""} 기능 편집`}
-      </h2>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
+        <button
+          onClick={() => router.push(`/projects/${projectId}/functions`)}
+          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#666" }}
+        >
+          ←
+        </button>
+        <div style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
+          {isNew ? "기능 신규 등록" : `${data?.displayId ?? ""} 기능 편집`}
+        </div>
+      </div>
 
       {/* ── AR-00078 기본 정보 폼 ────────────────────────────────────────── */}
       <section style={sectionStyle}>
@@ -305,12 +307,11 @@ function FunctionDetailPageInner() {
       {/* ── AR-00079 명세 작성 ──────────────────────────────────────────── */}
       <section style={sectionStyle}>
         <h3 style={sectionTitleStyle}>기능 명세</h3>
-        <textarea
+        <MarkdownEditor
           value={spec}
-          onChange={(e) => setSpec(e.target.value)}
+          onChange={setSpec}
           placeholder="마크다운 형식으로 기능 명세를 작성하세요."
-          rows={10}
-          style={{ ...inputStyle, resize: "vertical", fontFamily: "monospace", fontSize: 13 }}
+          rows={14}
         />
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
           <button onClick={() => {

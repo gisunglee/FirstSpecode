@@ -18,6 +18,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import MarkdownEditor from "@/components/ui/MarkdownEditor";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -112,7 +113,7 @@ function UnitWorkDetailPageInner() {
         setForm({
           reqId:           d.reqId,
           name:            d.name,
-          description:     d.description,
+          description:     d.description ?? "",
           assignMemberId:  d.assignMemberId ?? undefined,
           startDate:       d.startDate ?? undefined,
           endDate:         d.endDate ?? undefined,
@@ -179,9 +180,9 @@ function UnitWorkDetailPageInner() {
         >
           ←
         </button>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
+        <div style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
           {isNew ? "단위업무 등록" : "단위업무 편집"}
-        </h1>
+        </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button
             onClick={() => router.push(`/projects/${projectId}/unit-works`)}
@@ -240,13 +241,12 @@ function UnitWorkDetailPageInner() {
         </FormField>
 
         {/* 설명 */}
-        <FormField label="설명">
-          <textarea
+        <FormField label="설명 (마크다운)">
+          <MarkdownEditor
             value={form.description}
+            onChange={(md) => handleChange("description", md)}
             placeholder="단위업무 설명 (선택)"
-            rows={4}
-            onChange={(e) => handleChange("description", e.target.value)}
-            style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }}
+            rows={10}
           />
         </FormField>
 

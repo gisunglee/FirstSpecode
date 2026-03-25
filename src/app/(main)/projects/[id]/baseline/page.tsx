@@ -74,16 +74,20 @@ function BaselinePageInner() {
 
   return (
     <div style={{ padding: "32px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>기준선 스냅샷 관리</div>
-          <div style={{ fontSize: 13, color: "var(--color-text-secondary)", marginTop: 4 }}>
-            총 {data?.totalCount ?? 0}건
+      {/* 헤더 AR-00055 */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)" }}>
+            기준선 목록
           </div>
         </div>
         <button onClick={() => setCreateOpen(true)} style={primaryBtnStyle}>
           일괄 확정
         </button>
+      </div>
+
+      <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
+        총 {data?.totalCount ?? 0}건
       </div>
 
       {/* 기준선 목록 그리드 (AR-00056) */}

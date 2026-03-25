@@ -230,9 +230,9 @@ function UserStoryDetailPageInner() {
         >
           ←
         </button>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "var(--color-text-primary)" }}>
+        <div style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
           {isNew ? "사용자스토리 추가" : "사용자스토리 편집"}
-        </h1>
+        </div>
       </div>
 
       {/* AR-00050 브레드크럼 */}

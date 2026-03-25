@@ -181,135 +181,90 @@ function AreaDetailPageInner() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // ── AI ASCII 변환 요청 ─────────────────────────────────────────────────────
-  const asciiMutation = useMutation({
-    mutationFn: () =>
-      authFetch(`/api/projects/${projectId}/areas/${areaId}/ai/ascii`, {
-        method: "POST",
-        body:   JSON.stringify({ comment: asciiComment }),
-      }),
-    onSuccess: () => {
-      toast.success("AI ASCII 변환 요청이 접수되었습니다.");
-      setAsciiComment("");
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
+  // ── AI ASCII 변환 요청 ───────────────────────────────────�      {/* 2-컬럼 레이아웃 */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 28, alignItems: "start" }}>
 
-  // ── 목업 생성 요청 ─────────────────────────────────────────────────────────
-  const mockupMutation = useMutation({
-    mutationFn: () =>
-      authFetch(`/api/projects/${projectId}/areas/${areaId}/ai/mockup`, {
-        method: "POST",
-        body:   JSON.stringify({ comment: mockupComment }),
-      }),
-    onSuccess: () => {
-      toast.success("목업 생성이 요청되었습니다.");
-      setMockupComment("");
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
+        {/* 왼쪽 컬럼: 기본 정보 폼 + 요약 + 기능 목록 */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-  // ── 로딩 ───────────────────────────────────────────────────────────────────
-  if (!isNew && isLoading) {
-    return <div style={{ padding: "40px 32px", color: "#888" }}>로딩 중...</div>;
-  }
+          {/* ── AR-00069 기본 정보 폼 ─────────────────────────────────── */}
+          <section style={sectionStyle}>
+            <h3 style={sectionTitleStyle}>기본 정보</h3>
 
-  return (
-    <div style={{ padding: "32px", maxWidth: 800 }}>
-      {/* 뒤로가기 */}
-      <button
-        onClick={() => router.push(`/projects/${projectId}/areas`)}
-        style={{ ...secondaryBtnStyle, marginBottom: 24, fontSize: 13 }}
-      >
-        ← 영역 목록
-      </button>
+            <div style={formGroupStyle}>
+              <label style={labelStyle}>상위 화면</label>
+              <select
+                value={screenId}
+                onChange={(e) => setScreenId(e.target.value)}
+                style={inputStyle}
+              >
+                <option value="">미분류 (화면 없음)</option>
+                {screenOptions.map((s) => (
+                  <option key={s.screenId} value={s.screenId}>
+                    {s.displayId} {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-      {/* 페이지 제목 */}
-      <h2 style={{ margin: "0 0 24px", fontSize: 20, fontWeight: 700 }}>
-        {isNew ? "영역 신규 등록" : `${data?.displayId ?? ""} 영역 편집`}
-      </h2>
+            <div style={formGroupStyle}>
+              <label style={labelStyle}>영역명 <span style={{ color: "#e53935" }}>*</span></label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="영역명을 입력하세요"
+                style={inputStyle}
+              />
+            </div>
 
-      {/* ── AR-00069 기본 정보 폼 ────────────────────────────────────────── */}
-      <section style={sectionStyle}>
-        <h3 style={sectionTitleStyle}>기본 정보</h3>
+            <div style={formGroupStyle}>
+              <label style={labelStyle}>유형</label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+                style={inputStyle}
+              >
+                {AREA_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
 
-        <div style={formGroupStyle}>
-          <label style={labelStyle}>상위 화면</label>
-          <select
-            value={screenId}
-            onChange={(e) => setScreenId(e.target.value)}
-            style={inputStyle}
-          >
-            <option value="">미분류 (화면 없음)</option>
-            {screenOptions.map((s) => (
-              <option key={s.screenId} value={s.screenId}>
-                {s.displayId} {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
+            <div style={formGroupStyle}>
+              <label style={labelStyle}>설명</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="영역 역할·설명"
+                rows={4}
+                style={{ ...inputStyle, resize: "vertical" }}
+              />
+            </div>
 
-        <div style={formGroupStyle}>
-          <label style={labelStyle}>영역명 <span style={{ color: "#e53935" }}>*</span></label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="영역명을 입력하세요"
-            style={inputStyle}
-          />
-        </div>
+            <div style={formGroupStyle}>
+              <label style={labelStyle}>정렬순서</label>
+              <input
+                type="number"
+                value={sortOrder}
+                onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
+                style={{ ...inputStyle, width: 100 }}
+              />
+            </div>
 
-        <div style={formGroupStyle}>
-          <label style={labelStyle}>유형</label>
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-            style={inputStyle}
-          >
-            {AREA_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
-            ))}
-          </select>
-        </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+              <button
+                onClick={handleSave}
+                style={primaryBtnStyle}
+                disabled={saveMutation.isPending}
+              >
+                {saveMutation.isPending ? "저장 중..." : "저장"}
+              </button>
+            </div>
+          </section>
 
-        <div style={formGroupStyle}>
-          <label style={labelStyle}>설명</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="영역 역할·설명"
-            rows={4}
-            style={{ ...inputStyle, resize: "vertical" }}
-          />
-        </div>
-
-        <div style={formGroupStyle}>
-          <label style={labelStyle}>정렬순서</label>
-          <input
-            type="number"
-            value={sortOrder}
-            onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
-            style={{ ...inputStyle, width: 100 }}
-          />
-        </div>
-
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
-          <button
-            onClick={handleSave}
-            style={primaryBtnStyle}
-            disabled={saveMutation.isPending}
-          >
-            {saveMutation.isPending ? "저장 중..." : "저장"}
-          </button>
-        </div>
-      </section>
-
-      {/* 신규 모드이면 아래 섹션 숨김 */}
-      {!isNew && (
-        <>
-          {/* ── AR-00073 요약 정보 ──────────────────────────────────────── */}
-          {data?.summary && (
+          {/* ── AR-00073 요약 정보 ─────────────────────────────────────── */}
+          {!isNew && data?.summary && (
             <section style={{ ...sectionStyle, background: "var(--color-bg-muted)", borderRadius: 8 }}>
               <div style={{ display: "flex", gap: 32, fontSize: 14 }}>
                 <div>
@@ -332,134 +287,192 @@ function AreaDetailPageInner() {
             </section>
           )}
 
-          {/* ── AR-00070 이미지 업로드 및 AI ASCII 변환 ─────────────────── */}
-          <section style={sectionStyle}>
-            <h3 style={sectionTitleStyle}>화면 설계 이미지 / AI ASCII 변환</h3>
-
-            <p style={{ fontSize: 13, color: "var(--color-text-secondary)", marginBottom: 12 }}>
-              이미지 업로드 후 AI ASCII 변환을 요청할 수 있습니다.
-              <br />
-              (이미지 첨부파일 기능은 추후 공통 파일 모듈 연동 예정)
-            </p>
-
-            <div style={formGroupStyle}>
-              <label style={labelStyle}>AI 요청 코멘트</label>
-              <textarea
-                value={asciiComment}
-                onChange={(e) => setAsciiComment(e.target.value)}
-                placeholder="AI에게 추가 지시사항을 입력하세요"
-                rows={3}
-                style={{ ...inputStyle, resize: "vertical" }}
-              />
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button
-                onClick={() => asciiMutation.mutate()}
-                style={{ ...primaryBtnStyle, background: "#7b1fa2" }}
-                disabled={asciiMutation.isPending}
-              >
-                {asciiMutation.isPending ? "요청 중..." : "AI ASCII 변환 요청"}
-              </button>
-            </div>
-          </section>
-
-          {/* ── AR-00071 Excalidraw 설계 및 목업 생성 ───────────────────── */}
-          <section style={sectionStyle}>
-            <h3 style={sectionTitleStyle}>화면 설계 도구</h3>
-
-            <div style={{ marginBottom: 24 }}>
-              <button
-                onClick={() => setExcalidrawOpen(true)}
-                style={{ ...primaryBtnStyle, background: "#1565c0" }}
-              >
-                Excalidraw로 설계하기 ↗
-              </button>
-              {excalidrawData && (
-                <span style={{ marginLeft: 12, fontSize: 13, color: "#2e7d32" }}>
-                  ✓ 설계 데이터 있음
+          {/* ── AR-00074 하단 기능 목록 ───────────────────────────────── */}
+          {!isNew && (
+            <section style={sectionStyle}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>기능 목록</h3>
+                <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                  총 {data?.functions.length ?? 0}개
                 </span>
-              )}
-            </div>
-
-            <h3 style={sectionTitleStyle}>목업 생성</h3>
-            <div style={formGroupStyle}>
-              <label style={labelStyle}>AI 요청 코멘트</label>
-              <textarea
-                value={mockupComment}
-                onChange={(e) => setMockupComment(e.target.value)}
-                placeholder="목업 생성 지시사항"
-                rows={3}
-                style={{ ...inputStyle, resize: "vertical" }}
-              />
-            </div>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button
-                onClick={() => mockupMutation.mutate()}
-                style={{ ...primaryBtnStyle, background: "#e65100" }}
-                disabled={mockupMutation.isPending}
-              >
-                {mockupMutation.isPending ? "요청 중..." : "목업 생성 요청"}
-              </button>
-            </div>
-          </section>
-
-          {/* ── AR-00074 하단 기능 목록 ──────────────────────────────────── */}
-          <section style={sectionStyle}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>기능 목록</h3>
-              <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-                총 {data?.functions.length ?? 0}개
-              </span>
-            </div>
-
-            {!data?.functions.length ? (
-              <div style={{ padding: "32px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-                등록된 기능이 없습니다.
               </div>
-            ) : (
-              <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-                <div style={funcGridHeaderStyle}>
-                  <div>순서</div>
-                  <div>기능명</div>
-                  <div>우선순위</div>
-                  <div>상태</div>
+
+              {!data?.functions.length ? (
+                <div style={{ padding: "32px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+                  등록된 기능이 없습니다.
                 </div>
-                {data.functions.map((fn, idx) => (
-                  <div
-                    key={fn.funcId}
-                    style={{
-                      ...funcGridRowStyle,
-                      borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-                    }}
-                  >
-                    <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-                      {fn.sortOrder}
-                    </div>
-                    <div>
-                      <button
-                        onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
-                        style={linkBtnStyle}
-                      >
-                        <span style={{ fontSize: 12, color: "var(--color-text-secondary)", marginRight: 6 }}>
-                          {fn.displayId}
-                        </span>
-                        {fn.name}
-                      </button>
-                    </div>
-                    <div>
-                      <span style={priorityBadgeStyle(fn.priority)}>{fn.priority}</span>
-                    </div>
-                    <div>
-                      <span style={statusBadgeStyle(fn.status)}>{STATUS_LABELS[fn.status] ?? fn.status}</span>
-                    </div>
+              ) : (
+                <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+                  <div style={funcGridHeaderStyle}>
+                    <div>순서</div>
+                    <div>기능명</div>
+                    <div>우선순위</div>
+                    <div>상태</div>
                   </div>
-                ))}
+                  {data.functions.map((fn, idx) => (
+                    <div
+                      key={fn.funcId}
+                      style={{
+                        ...funcGridRowStyle,
+                        borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+                      }}
+                    >
+                      <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                        {fn.sortOrder}
+                      </div>
+                      <div>
+                        <button
+                          onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
+                          style={linkBtnStyle}
+                        >
+                          <span style={{ fontSize: 12, color: "var(--color-text-secondary)", marginRight: 6 }}>
+                            {fn.displayId}
+                          </span>
+                          {fn.name}
+                        </button>
+                      </div>
+                      <div>
+                        <span style={priorityBadgeStyle(fn.priority)}>{fn.priority}</span>
+                      </div>
+                      <div>
+                        <span style={statusBadgeStyle(fn.status)}>{STATUS_LABELS[fn.status] ?? fn.status}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+        </div>
+ */}
+          {!isNew && (
+            <section style={sectionStyle}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>기능 목록</h3>
+                <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                  총 {data?.functions.length ?? 0}개
+                </span>
               </div>
-            )}
-          </section>
-        </>
-      )}
+
+              {!data?.functions.length ? (
+                <div style={{ padding: "32px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+                  등록된 기능이 없습니다.
+                </div>
+              ) : (
+                <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+                  <div style={funcGridHeaderStyle}>
+                    <div>순서</div>
+                    <div>기능명</div>
+                    <div>우선순위</div>
+                    <div>상태</div>
+                  </div>
+                  {data.functions.map((fn, idx) => (
+                    <div
+                      key={fn.funcId}
+                      style={{
+                        ...funcGridRowStyle,
+                        borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+                      }}
+                    >
+                      <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                        {fn.sortOrder}
+                      </div>
+                      <div>
+                        <button
+                          onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
+                          style={linkBtnStyle}
+                        >
+                          <span style={{ fontSize: 12, color: "var(--color-text-secondary)", marginRight: 6 }}>
+                            {fn.displayId}
+                          </span>
+                          {fn.name}
+                        </button>
+                      </div>
+                      <div>
+                        <span style={priorityBadgeStyle(fn.priority)}>{fn.priority}</span>
+                      </div>
+                      <div>
+                        <span style={statusBadgeStyle(fn.status)}>{STATUS_LABELS[fn.status] ?? fn.status}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+        </div>
+
+        {/* 오른쪽 컬럼: AI 도구 (수정 모드에서만) */}
+        {!isNew && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            {/* ── AR-00070 화면 설계 이미지 / AI ASCII 변환 ─────────────── */}
+            <section style={sectionStyle}>
+              <h3 style={sectionTitleStyle}>화면 설계 이미지 / AI ASCII 변환</h3>
+              <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: "0 0 12px" }}>
+                이미지 업로드 후 AI ASCII 변환을 요청할 수 있습니다.
+              </p>
+              <div style={formGroupStyle}>
+                <label style={labelStyle}>AI 요청 코멘트</label>
+                <textarea
+                  value={asciiComment}
+                  onChange={(e) => setAsciiComment(e.target.value)}
+                  placeholder="AI에게 추가 지시사항을 입력하세요"
+                  rows={3}
+                  style={{ ...inputStyle, resize: "vertical" }}
+                />
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => asciiMutation.mutate()}
+                  style={{ ...primaryBtnStyle, background: "#7b1fa2" }}
+                  disabled={asciiMutation.isPending}
+                >
+                  {asciiMutation.isPending ? "요청 중..." : "AI ASCII 변환 요청"}
+                </button>
+              </div>
+            </section>
+
+            {/* ── AR-00071 화면 설계 도구 ──────────────────────────────── */}
+            <section style={sectionStyle}>
+              <h3 style={sectionTitleStyle}>화면 설계 도구</h3>
+              <div style={{ marginBottom: 16 }}>
+                <button
+                  onClick={() => setExcalidrawOpen(true)}
+                  style={{ ...primaryBtnStyle, background: "#1565c0" }}
+                >
+                  Excalidraw로 설계하기 ↗
+                </button>
+                {excalidrawData && (
+                  <span style={{ marginLeft: 12, fontSize: 13, color: "#2e7d32" }}>
+                    ✓ 설계 데이터 있음
+                  </span>
+                )}
+              </div>
+
+              <h3 style={{ ...sectionTitleStyle, marginTop: 8 }}>목업 생성</h3>
+              <div style={formGroupStyle}>
+                <label style={labelStyle}>AI 요청 코멘트</label>
+                <textarea
+                  value={mockupComment}
+                  onChange={(e) => setMockupComment(e.target.value)}
+                  placeholder="목업 생성 지시사항"
+                  rows={3}
+                  style={{ ...inputStyle, resize: "vertical" }}
+                />
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => mockupMutation.mutate()}
+                  style={{ ...primaryBtnStyle, background: "#e65100" }}
+                  disabled={mockupMutation.isPending}
+                >
+                  {mockupMutation.isPending ? "요청 중..." : "목업 생성 요청"}
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
+      </div>
 
       {/* ── PID-00048 Excalidraw 팝업 ─────────────────────────────────────── */}
       {excalidrawOpen && (

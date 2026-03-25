@@ -19,6 +19,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import MarkdownEditor from "@/components/ui/MarkdownEditor";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,7 @@ type ScreenDetail = {
 type SaveBody = {
   unitWorkId?:  string;
   name:         string;
+  description:  string;
   displayCode:  string;
   type:         string;
   categoryL:    string;
@@ -89,6 +91,7 @@ function ScreenDetailPageInner() {
   const [form, setForm] = useState<SaveBody>({
     unitWorkId:  presetUnitWorkId || undefined,
     name:        "",
+    description: "",
     displayCode: "",
     type:        "LIST",
     categoryL:   "",
@@ -117,6 +120,7 @@ function ScreenDetailPageInner() {
         setForm({
           unitWorkId:  d.unitWorkId ?? undefined,
           name:        d.name,
+          description: d.description ?? "",
           displayCode: d.displayCode,
           type:        d.type,
           categoryL:   d.categoryL,
@@ -175,9 +179,9 @@ function ScreenDetailPageInner() {
         >
           ←
         </button>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
+        <div style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
           {isNew ? "화면 등록" : "화면 편집"}
-        </h1>
+        </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button
             onClick={() => router.push(`/projects/${projectId}/screens`)}
@@ -282,6 +286,16 @@ function ScreenDetailPageInner() {
             />
           </FormField>
         </div>
+
+        {/* 설명 (화면 상세 / scrn_dc) */}
+        <FormField label="화면 설명 (마크다운)">
+          <MarkdownEditor
+            value={form.description}
+            onChange={(md) => handleChange("description", md)}
+            placeholder="화면 내용 및 세부 설계를 작성하세요."
+            rows={14}
+          />
+        </FormField>
       </Section>
 
       {/* AR-00066 하단 영역 목록 (수정 모드에서만, FID-00148) */}

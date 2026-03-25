@@ -321,7 +321,7 @@ function RequirementDetailPageInner() {
           ←
         </button>
         <div style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
-          {isNew ? "요구사항 등록" : "요구사항 편집"}
+          {isNew ? "요구사항 추가" : "요구사항 편집"}
         </div>
         {/* 변경 이력 탭 진입 (PID-00035) — 신규 모드에서는 비활성 */}
         {!isNew && (

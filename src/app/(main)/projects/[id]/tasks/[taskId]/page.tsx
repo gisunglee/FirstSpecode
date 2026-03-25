@@ -148,9 +148,9 @@ function TaskDetailPageInner() {
         >
           ←
         </button>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "var(--color-text-primary)" }}>
+        <div style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
           {isNew ? "과업 추가" : "과업 수정"}
-        </h1>
+        </div>
       </div>
 
       {/* 폼 */}

@@ -44,6 +44,7 @@ export default function LNB() {
   const unitWorksHref    = pBase ? `${pBase}/unit-works`    : "#";
   const baselineHref     = pBase ? `${pBase}/baseline`      : "#";
   const screensHref      = pBase ? `${pBase}/screens`       : "#";
+  const areasHref        = pBase ? `${pBase}/areas`         : "#";
   const functionsHref    = pBase ? `${pBase}/functions`     : "#";
   const aiTasksHref      = pBase ? `${pBase}/ai-tasks`      : "#";
   const planningHref     = pBase ? `${pBase}/planning`      : "#";
@@ -51,23 +52,26 @@ export default function LNB() {
   const membersHref      = pBase ? `${pBase}/members`       : "#";
 
   // NAVIGATION 섹션 — 대시보드·프로젝트 외 모든 항목은 프로젝트 스코프
-  type NavItem = MenuItem & { isActive: boolean };
+  type NavItem = (MenuItem & { isActive: boolean }) | { isSeparator: true };
   const navItems: NavItem[] = [
     { label: "대시보드",    href: "/dashboard",    icon: "◉",  isActive: pathname.startsWith("/dashboard") },
     { label: "프로젝트",    href: "/projects",     icon: "📂", isActive: pathname === "/projects" },
     { label: "과업",         href: tasksHref,        icon: "📌", isActive: !!pBase && pathname.startsWith(`${pBase}/tasks`) },
     { label: "요구사항",    href: requirementsHref, icon: "📋", isActive: !!pBase && pathname.startsWith(`${pBase}/requirements`) },
     { label: "사용자스토리", href: userStoriesHref, icon: "📖", isActive: !!pBase && pathname.startsWith(`${pBase}/user-stories`) },
-    { label: "단위업무",    href: unitWorksHref,    icon: "🧱", isActive: !!pBase && pathname.startsWith(`${pBase}/unit-works`) },
     { label: "기준선",       href: baselineHref,    icon: "🏁", isActive: !!pBase && pathname.startsWith(`${pBase}/baseline`) },
+    { label: "요구분석 일괄 편집", href: planningHref, icon: "📅", isActive: !!pBase && pathname.startsWith(`${pBase}/planning`) },
+    { isSeparator: true },
+    { label: "단위업무",    href: unitWorksHref,    icon: "🧱", isActive: !!pBase && pathname.startsWith(`${pBase}/unit-works`) },
     { label: "화면 설계",   href: screensHref,      icon: "🖼",  isActive: !!pBase && pathname.startsWith(`${pBase}/screens`) },
+    { label: "영역 관리",   href: areasHref,        icon: "📦", isActive: !!pBase && pathname.startsWith(`${pBase}/areas`) },
     { label: "기능 정의",   href: functionsHref,    icon: "⚙",  isActive: !!pBase && pathname.startsWith(`${pBase}/functions`) },
+    { isSeparator: true },
     { label: "AI 태스크",   href: aiTasksHref,      icon: "✨", isActive: !!pBase && pathname.startsWith(`${pBase}/ai-tasks`) },
-    { label: "계획",         href: planningHref,     icon: "📅", isActive: !!pBase && pathname.startsWith(`${pBase}/planning`) },
   ];
 
   // SYSTEM 섹션 항목 — 역할에 따라 동적 구성
-  const systemItems: NavItem[] = [
+  const systemItems: (MenuItem & { isActive: boolean })[] = [
     ...(canAccessSettings && pBase
       ? [{ label: "프로젝트 설정", href: settingsHref, icon: "⚙️", isActive: pathname.startsWith(settingsHref) }]
       : []),
@@ -97,9 +101,12 @@ export default function LNB() {
         {/* NAVIGATION 섹션 */}
         <div className="sp-sidebar-section">
           <div className="sp-sidebar-title">Navigation</div>
-          {navItems.map((item) => (
-            <SidebarLink key={item.label} item={item} isActive={item.isActive} />
-          ))}
+          {navItems.map((item, idx) => {
+            if ("isSeparator" in item) {
+              return <div key={`sep-${idx}`} style={{ height: 1, background: "var(--color-border)", margin: "8px 24px", opacity: 0.5 }} />;
+            }
+            return <SidebarLink key={item.label} item={item} isActive={item.isActive} />;
+          })}
         </div>
 
         {/* SYSTEM 섹션 — 역할 기반 필터링 적용 (UW-00011) */}

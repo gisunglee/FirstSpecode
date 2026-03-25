@@ -188,188 +188,192 @@ function AiTasksPageInner() {
   }
 
   return (
-    <div className="sp-page">
-      <div className="sp-page__header">
-        <h1 className="sp-page__title">AI 태스크</h1>
+    <div style={{ padding: "32px" }}>
+      {/* ── 헤더 타이틀 ──────────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)" }}>
+            AI 태스크 목록
+          </div>
+        </div>
       </div>
 
       {/* ── 필터 영역 AR-00086 ─────────────────────────────────────────────── */}
-      <div className="sp-filter-bar">
-        <div className="sp-filter-bar__item">
-          <label className="sp-label">상태</label>
-          <select
-            className="sp-select sp-select--sm"
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-          >
-            <option value="">전체</option>
-            <option value="PENDING">대기</option>
-            <option value="IN_PROGRESS">처리중</option>
-            <option value="DONE">완료</option>
-            <option value="APPLIED">반영됨</option>
-            <option value="REJECTED">반려</option>
-            <option value="FAILED">실패</option>
-            <option value="TIMEOUT">시간초과</option>
-          </select>
-        </div>
+      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          style={{ ...filterSelectStyle, width: 140 }}
+        >
+          <option value="">상태 전체</option>
+          <option value="PENDING">대기</option>
+          <option value="IN_PROGRESS">처리중</option>
+          <option value="DONE">완료</option>
+          <option value="APPLIED">반영됨</option>
+          <option value="REJECTED">반려</option>
+          <option value="FAILED">실패</option>
+          <option value="TIMEOUT">시간초과</option>
+        </select>
 
-        <div className="sp-filter-bar__item">
-          <label className="sp-label">유형</label>
-          <select
-            className="sp-select sp-select--sm"
-            value={filterTaskType}
-            onChange={(e) => setFilterTaskType(e.target.value)}
-          >
-            <option value="">전체</option>
-            <option value="INSPECT">명세 검토</option>
-            <option value="DESIGN">설계</option>
-            <option value="IMPLEMENT">구현 가이드</option>
-            <option value="MOCKUP">목업</option>
-            <option value="IMPACT">영향도 분석</option>
-            <option value="CUSTOM">자유 요청</option>
-          </select>
-        </div>
+        <select
+          value={filterTaskType}
+          onChange={(e) => setFilterTaskType(e.target.value)}
+          style={{ ...filterSelectStyle, width: 140 }}
+        >
+          <option value="">유형 전체</option>
+          <option value="INSPECT">명세 검토</option>
+          <option value="DESIGN">설계</option>
+          <option value="IMPLEMENT">구현 가이드</option>
+          <option value="MOCKUP">목업</option>
+          <option value="IMPACT">영향도 분석</option>
+          <option value="CUSTOM">자유 요청</option>
+        </select>
 
-        <div className="sp-filter-bar__item">
-          <label className="sp-label">대상</label>
-          <select
-            className="sp-select sp-select--sm"
-            value={filterRefType}
-            onChange={(e) => setFilterRefType(e.target.value)}
-          >
-            <option value="">전체</option>
-            <option value="AREA">영역</option>
-            <option value="FUNCTION">기능</option>
-          </select>
-        </div>
+        <select
+          value={filterRefType}
+          onChange={(e) => setFilterRefType(e.target.value)}
+          style={{ ...filterSelectStyle, width: 140 }}
+        >
+          <option value="">대상 전체</option>
+          <option value="AREA">영역</option>
+          <option value="FUNCTION">기능</option>
+        </select>
+        
+        <div style={{ flex: 1 }} />
+      </div>
+
+      {/* 총 건수 */}
+      <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
+        총 {totalCount}건
       </div>
 
       {/* ── 목록 그리드 AR-00087 ───────────────────────────────────────────── */}
-      <div className="sp-card">
-        <div className="sp-card__header">
-          <span className="sp-text--muted">총 {totalCount}건</span>
+      {isLoading ? (
+        <div style={{ padding: "40px 32px", color: "#888" }}>불러오는 중...</div>
+      ) : items.length === 0 ? (
+        <div style={{ padding: "60px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+          AI 태스크가 없습니다.
         </div>
+      ) : (
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+          {/* 헤더 행 */}
+          <div style={gridHeaderStyle}>
+            <div>요청 유형</div>
+            <div>대상</div>
+            <div>상태</div>
+            <div>요청일시</div>
+            <div>액션</div>
+          </div>
 
-        {isLoading ? (
-          <div className="sp-empty">불러오는 중...</div>
-        ) : items.length === 0 ? (
-          <div className="sp-empty">AI 태스크가 없습니다.</div>
-        ) : (
-          <table className="sp-table">
-            <thead>
-              <tr>
-                <th>요청 유형</th>
-                <th>대상</th>
-                <th>상태</th>
-                <th>요청일시</th>
-                <th>액션</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((row) => (
-                <tr key={row.taskId}>
-                  {/* 요청 유형 */}
-                  <td>
-                    <span className={TASK_TYPE_COLORS[row.taskType]}>
-                      {TASK_TYPE_LABELS[row.taskType]}
+          {/* 데이터 행 */}
+          {items.map((row, idx) => (
+            <div
+              key={row.taskId}
+              style={{
+                ...gridRowStyle,
+                borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+              }}
+            >
+              {/* 요청 유형 */}
+              <div>
+                <span className={TASK_TYPE_COLORS[row.taskType]}>
+                  {TASK_TYPE_LABELS[row.taskType]}
+                </span>
+                {row.refType === "AREA" ? (
+                  <span className="sp-badge sp-badge--neutral" style={{ marginLeft: 4 }}>영역</span>
+                ) : (
+                  <span className="sp-badge sp-badge--info" style={{ marginLeft: 4 }}>기능</span>
+                )}
+              </div>
+
+              {/* 대상 (링크) */}
+              <div>
+                <button
+                  style={linkBtnStyle}
+                  onClick={() => navigateToRef(row)}
+                  type="button"
+                >
+                  {row.refDisplayId && (
+                    <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
+                      {row.refDisplayId}
                     </span>
-                    {row.refType === "AREA" ? (
-                      <span className="sp-badge sp-badge--neutral" style={{ marginLeft: 4 }}>영역</span>
-                    ) : (
-                      <span className="sp-badge sp-badge--info" style={{ marginLeft: 4 }}>기능</span>
-                    )}
-                  </td>
+                  )}
+                  {row.refName}
+                </button>
+              </div>
 
-                  {/* 대상 (링크) */}
-                  <td>
-                    <button
-                      className="sp-link"
-                      onClick={() => navigateToRef(row)}
-                      type="button"
-                    >
-                      {row.refDisplayId && (
-                        <span className="sp-text--muted" style={{ marginRight: 4 }}>
-                          {row.refDisplayId}
-                        </span>
-                      )}
-                      {row.refName}
-                    </button>
-                  </td>
+              {/* 상태 */}
+              <div>
+                <span className={STATUS_COLORS[row.status]}>
+                  {STATUS_LABELS[row.status]}
+                </span>
+                {row.status === "IN_PROGRESS" && (
+                  <span style={{ color: "var(--color-text-secondary)", marginLeft: 6, fontSize: 12 }}>
+                    {formatElapsed(row.elapsedMs)}
+                  </span>
+                )}
+              </div>
 
-                  {/* 상태 */}
-                  <td>
-                    <span className={STATUS_COLORS[row.status]}>
-                      {STATUS_LABELS[row.status]}
-                    </span>
-                    {row.status === "IN_PROGRESS" && (
-                      <span className="sp-text--muted" style={{ marginLeft: 6, fontSize: 12 }}>
-                        {formatElapsed(row.elapsedMs)}
-                      </span>
-                    )}
-                  </td>
+              {/* 요청일시 */}
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                {formatDatetime(row.requestedAt)}
+              </div>
 
-                  {/* 요청일시 */}
-                  <td className="sp-text--muted">
-                    {formatDatetime(row.requestedAt)}
-                  </td>
+              {/* 액션 */}
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                {/* DONE → 결과 확인 버튼 */}
+                {row.status === "DONE" && (
+                  <button
+                    style={primaryBtnStyle}
+                    onClick={() => setResultPopupTaskId(row.taskId)}
+                    type="button"
+                  >
+                    결과 확인
+                  </button>
+                )}
 
-                  {/* 액션 */}
-                  <td>
-                    {/* DONE → 결과 확인 버튼 */}
-                    {row.status === "DONE" && (
-                      <button
-                        className="sp-btn sp-btn--primary sp-btn--sm"
-                        onClick={() => setResultPopupTaskId(row.taskId)}
-                        type="button"
-                      >
-                        결과 확인
-                      </button>
-                    )}
+                {/* APPLIED → 반영완료 텍스트 */}
+                {row.status === "APPLIED" && (
+                  <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>반영완료</span>
+                )}
 
-                    {/* APPLIED → 반영완료 텍스트 */}
-                    {row.status === "APPLIED" && (
-                      <span className="sp-text--muted">반영완료</span>
-                    )}
+                {/* FAILED/REJECTED/TIMEOUT → 재요청 버튼 */}
+                {["FAILED", "REJECTED", "TIMEOUT"].includes(row.status) && (
+                  <button
+                    style={secondaryBtnStyle}
+                    onClick={() => retryMutation.mutate(row.taskId)}
+                    disabled={retryMutation.isPending}
+                    type="button"
+                  >
+                    재요청
+                  </button>
+                )}
 
-                    {/* FAILED/REJECTED/TIMEOUT → 재요청 버튼 */}
-                    {["FAILED", "REJECTED", "TIMEOUT"].includes(row.status) && (
-                      <button
-                        className="sp-btn sp-btn--secondary sp-btn--sm"
-                        onClick={() => retryMutation.mutate(row.taskId)}
-                        disabled={retryMutation.isPending}
-                        type="button"
-                      >
-                        재요청
-                      </button>
-                    )}
+                {/* IN_PROGRESS + 좀비 → 강제 취소 버튼 */}
+                {row.status === "IN_PROGRESS" && row.isZombie && (
+                  <button
+                    style={dangerBtnStyle}
+                    onClick={() => setCancelConfirmId(row.taskId)}
+                    type="button"
+                  >
+                    강제 취소
+                  </button>
+                )}
 
-                    {/* IN_PROGRESS + 좀비 → 강제 취소 버튼 */}
-                    {row.status === "IN_PROGRESS" && row.isZombie && (
-                      <button
-                        className="sp-btn sp-btn--danger sp-btn--sm"
-                        onClick={() => setCancelConfirmId(row.taskId)}
-                        type="button"
-                      >
-                        강제 취소
-                      </button>
-                    )}
+                {/* IN_PROGRESS + 정상 처리중 → 텍스트 */}
+                {row.status === "IN_PROGRESS" && !row.isZombie && (
+                  <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>처리중...</span>
+                )}
 
-                    {/* IN_PROGRESS + 정상 처리중 → 텍스트 */}
-                    {row.status === "IN_PROGRESS" && !row.isZombie && (
-                      <span className="sp-text--muted">처리중...</span>
-                    )}
-
-                    {/* PENDING → 대기중 */}
-                    {row.status === "PENDING" && (
-                      <span className="sp-text--muted">대기중</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+                {/* PENDING → 대기중 */}
+                {row.status === "PENDING" && (
+                  <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>대기중</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── 강제 취소 확인 다이얼로그 ─────────────────────────────────────────── */}
       {cancelConfirmId && (
@@ -640,3 +644,82 @@ function ResultPopup({
     </div>
   );
 }
+
+// ── 스타일 ────────────────────────────────────────────────────────────────────
+
+const GRID_TEMPLATE = "180px 1fr 140px 140px 160px";
+
+const gridHeaderStyle: React.CSSProperties = {
+  display:             "grid",
+  gridTemplateColumns: GRID_TEMPLATE,
+  gap:                 12,
+  padding:             "10px 16px",
+  background:          "var(--color-bg-muted)",
+  fontSize:            12,
+  fontWeight:          600,
+  color:               "var(--color-text-secondary)",
+  borderBottom:        "1px solid var(--color-border)",
+  alignItems:          "center",
+};
+
+const gridRowStyle: React.CSSProperties = {
+  display:             "grid",
+  gridTemplateColumns: GRID_TEMPLATE,
+  gap:                 12,
+  padding:             "12px 16px",
+  alignItems:          "center",
+  background:          "var(--color-bg-card)",
+  transition:          "background 0.1s",
+};
+
+const filterSelectStyle: React.CSSProperties = {
+  padding:      "7px 12px",
+  borderRadius: 6,
+  border:       "1px solid var(--color-border)",
+  background:   "var(--color-bg-card)",
+  color:        "var(--color-text-primary)",
+  fontSize:     13,
+  outline:      "none",
+};
+
+const linkBtnStyle: React.CSSProperties = {
+  background:     "none",
+  border:         "none",
+  cursor:         "pointer",
+  color:          "var(--color-primary, #1976d2)",
+  fontSize:       14,
+  padding:        0,
+  textAlign:      "left",
+  textDecoration: "underline",
+};
+
+const primaryBtnStyle: React.CSSProperties = {
+  padding:      "6px 14px",
+  borderRadius: 4,
+  border:       "none",
+  background:   "var(--color-primary, #1976d2)",
+  color:        "#fff",
+  fontSize:     13,
+  fontWeight:   600,
+  cursor:       "pointer",
+};
+
+const secondaryBtnStyle: React.CSSProperties = {
+  padding:      "6px 14px",
+  borderRadius: 4,
+  border:       "1px solid var(--color-border)",
+  background:   "var(--color-bg-card)",
+  color:        "var(--color-text-primary)",
+  fontSize:     13,
+  cursor:       "pointer",
+};
+
+const dangerBtnStyle: React.CSSProperties = {
+  padding:      "6px 14px",
+  borderRadius: 4,
+  border:       "1px solid #e53935",
+  background:   "transparent",
+  color:        "#e53935",
+  fontSize:     13,
+  cursor:       "pointer",
+};
