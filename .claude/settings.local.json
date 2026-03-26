@@ -57,7 +57,10 @@
       "Bash(rm /Users/igiseong/dev/specode/FirstSpecode/src/app/api/projects/[id]/user-stories/ai-draft/route.ts)",
       "Bash(rmdir /Users/igiseong/dev/specode/FirstSpecode/src/app/api/projects/[id]/user-stories/ai-draft)",
       "Bash(git -C /Users/igiseong/dev/specode/FirstSpecode diff HEAD -- \"src/app/\\(main\\)/projects/[id]/planning/page.tsx\")",
-      "Bash(git -C /Users/igiseong/dev/specode/FirstSpecode status --short)"
+      "Bash(git -C /Users/igiseong/dev/specode/FirstSpecode status --short)",
+      "Bash(git commit:*)",
+      "Bash(git pull:*)",
+      "Bash(git add:*)"
     ]
   }
 }
