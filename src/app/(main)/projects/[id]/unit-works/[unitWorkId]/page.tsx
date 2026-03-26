@@ -37,6 +37,7 @@ type UnitWorkDetail = {
   startDate:      string | null;
   endDate:        string | null;
   progress:       number;
+  sortOrder:      number;
   reqId:          string;
   reqDisplayId:   string;
   reqName:        string;
@@ -57,6 +58,7 @@ type SaveBody = {
   startDate?:      string;
   endDate?:        string;
   progress:        number;
+  sortOrder:       number;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -90,6 +92,7 @@ function UnitWorkDetailPageInner() {
     name:        "",
     description: "",
     progress:    0,
+    sortOrder:   0,
   });
 
   // ── 요구사항 목록 조회 (reqId 선택용) ───────────────────────────────────────
@@ -118,6 +121,7 @@ function UnitWorkDetailPageInner() {
           startDate:       d.startDate ?? undefined,
           endDate:         d.endDate ?? undefined,
           progress:        d.progress,
+          sortOrder:       d.sortOrder,
         });
         return d;
       }),
@@ -137,9 +141,8 @@ function UnitWorkDetailPageInner() {
             body:   JSON.stringify(body),
           }),
     onSuccess: () => {
-      toast.success(isNew ? "단위업무가 등록되었습니다." : "저장되었습니다.");
+      toast.success("저장되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["unit-works", projectId] });
-      router.push(`/projects/${projectId}/unit-works`);
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -171,7 +174,7 @@ function UnitWorkDetailPageInner() {
   }
 
   return (
-    <div style={{ padding: "32px", maxWidth: 900 }}>
+    <div style={{ padding: "32px", maxWidth: 1000 }}>
       {/* 헤더 */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
         <button
@@ -240,8 +243,8 @@ function UnitWorkDetailPageInner() {
           />
         </FormField>
 
-        {/* 기간 + 진행률 */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+        {/* 기간 + 진행률 + 정렬순서 */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16 }}>
           <FormField label="시작일">
             <input
               type="date"
@@ -265,6 +268,15 @@ function UnitWorkDetailPageInner() {
               max={100}
               value={form.progress}
               onChange={(e) => handleChange("progress", parseInt(e.target.value) || 0)}
+              style={inputStyle}
+            />
+          </FormField>
+          <FormField label="정렬순서">
+            <input
+              type="number"
+              min={0}
+              value={form.sortOrder}
+              onChange={(e) => handleChange("sortOrder", parseInt(e.target.value) || 0)}
               style={inputStyle}
             />
           </FormField>

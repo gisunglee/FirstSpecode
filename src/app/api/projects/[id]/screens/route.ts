@@ -49,6 +49,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       name:         s.scrn_nm,
       type:         s.scrn_ty_code,
       categoryL:    s.ctgry_l_nm ?? "",
+      categoryM:    s.ctgry_m_nm ?? "",
+      categoryS:    s.ctgry_s_nm ?? "",
       unitWorkId:   s.unit_work_id ?? null,
       unitWorkName: s.unitWork?.unit_work_nm ?? "미분류",
       areaCount:    s._count.areas,

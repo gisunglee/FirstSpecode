@@ -20,6 +20,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor from "@/components/ui/MarkdownEditor";
+import { ScreenLayoutEditor, type LayoutRow } from "@/components/ui/ScreenLayoutEditor";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -42,8 +43,10 @@ type ScreenDetail = {
   displayId:    string;
   name:         string;
   description:  string;
+  layoutData:   string | null;
   displayCode:  string;
   type:         string;
+  sortOrder:    number;
   categoryL:    string;
   categoryM:    string;
   categoryS:    string;
@@ -58,9 +61,11 @@ type SaveBody = {
   description:  string;
   displayCode:  string;
   type:         string;
+  sortOrder:    number;
   categoryL:    string;
   categoryM:    string;
   categoryS:    string;
+  layoutData?:  string;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -94,10 +99,17 @@ function ScreenDetailPageInner() {
     description: "",
     displayCode: "",
     type:        "LIST",
+    sortOrder:   0,
     categoryL:   "",
     categoryM:   "",
     categoryS:   "",
   });
+
+  // 레이아웃 에디터 상태 (기본: 빈 배열)
+  const [layoutRows, setLayoutRows] = useState<LayoutRow[]>([]);
+
+  // 화면 설명 예시 팝업
+  const [descExampleOpen, setDescExampleOpen] = useState(false);
 
   // ── 단위업무 목록 조회 (단위업무 선택용) ─────────────────────────────────────
   const { data: uwData } = useQuery({
@@ -123,10 +135,15 @@ function ScreenDetailPageInner() {
           description: d.description ?? "",
           displayCode: d.displayCode,
           type:        d.type,
+          sortOrder:   d.sortOrder,
           categoryL:   d.categoryL,
           categoryM:   d.categoryM,
           categoryS:   d.categoryS,
         });
+        // 저장된 레이아웃 데이터 복원
+        if (d.layoutData) {
+          try { setLayoutRows(JSON.parse(d.layoutData)); } catch { /* 잘못된 JSON 무시 */ }
+        }
         return d;
       }),
     enabled: !isNew,
@@ -136,18 +153,24 @@ function ScreenDetailPageInner() {
   const saveMutation = useMutation({
     mutationFn: (body: SaveBody) =>
       isNew
-        ? authFetch(`/api/projects/${projectId}/screens`, {
+        ? authFetch<{ data: { screenId: string } }>(`/api/projects/${projectId}/screens`, {
             method: "POST",
             body:   JSON.stringify(body),
           })
-        : authFetch(`/api/projects/${projectId}/screens/${screenId}`, {
+        : authFetch<{ data: { screenId: string } }>(`/api/projects/${projectId}/screens/${screenId}`, {
             method: "PUT",
             body:   JSON.stringify(body),
           }),
-    onSuccess: () => {
+    onSuccess: (res) => {
       toast.success(isNew ? "화면이 등록되었습니다." : "저장되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["screens", projectId] });
-      router.push(`/projects/${projectId}/screens`);
+      if (isNew && res?.data?.screenId) {
+        // 신규 등록 후 생성된 화면 상세로 이동
+        router.replace(`/projects/${projectId}/screens/${res.data.screenId}`);
+      } else {
+        // 수정 후 현재 페이지 데이터 갱신 (상세에 그대로 유지)
+        queryClient.invalidateQueries({ queryKey: ["screen", projectId, screenId] });
+      }
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -161,7 +184,10 @@ function ScreenDetailPageInner() {
       toast.error("화면명을 입력해 주세요.");
       return;
     }
-    saveMutation.mutate(form);
+    saveMutation.mutate({
+      ...form,
+      layoutData: layoutRows.length > 0 ? JSON.stringify(layoutRows) : undefined,
+    });
   }
 
   // ── 로딩 ───────────────────────────────────────────────────────────────────
@@ -170,7 +196,7 @@ function ScreenDetailPageInner() {
   }
 
   return (
-    <div style={{ padding: "32px", maxWidth: 1000 }}>
+    <div style={{ padding: "32px" }}>
       {/* 헤더 */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
         <button
@@ -200,115 +226,227 @@ function ScreenDetailPageInner() {
         </div>
       </div>
 
-      {/* AR-00065 기본 정보 폼 */}
-      <Section title="기본 정보">
-        {/* 상위 단위업무 선택 */}
-        <FormField label="상위 단위업무">
-          <select
-            value={form.unitWorkId ?? ""}
-            onChange={(e) => handleChange("unitWorkId", e.target.value)}
-            style={selectStyle}
-          >
-            <option value="">미분류</option>
-            {uwOptions.map((uw) => (
-              <option key={uw.unitWorkId} value={uw.unitWorkId}>
-                {uw.displayId} — {uw.name}
-              </option>
-            ))}
-          </select>
-        </FormField>
+      {/* 2-컬럼 레이아웃: 기본 정보 | 화면 설명 */}
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 936px) 1fr", gap: 28, alignItems: "start" }}>
 
-        {/* 화면명 */}
-        <FormField label="화면명" required>
-          <input
-            type="text"
-            value={form.name}
-            placeholder="화면명을 입력하세요"
-            onChange={(e) => handleChange("name", e.target.value)}
-            style={inputStyle}
-          />
-        </FormField>
+        {/* 왼쪽: 기본 정보 + 영역 목록 */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-        {/* 표시코드 + 화면 유형 */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <FormField label="표시코드">
-            <input
-              type="text"
-              value={form.displayCode}
-              placeholder="예: MBR_LIST"
-              onChange={(e) => handleChange("displayCode", e.target.value)}
-              style={inputStyle}
+          {/* AR-00065 기본 정보 폼 */}
+          <Section title="기본 정보">
+            {/* 상위 단위업무 선택 */}
+            <FormField label="상위 단위업무">
+              <select
+                value={form.unitWorkId ?? ""}
+                onChange={(e) => handleChange("unitWorkId", e.target.value)}
+                style={selectStyle}
+              >
+                <option value="">미분류</option>
+                {uwOptions.map((uw) => (
+                  <option key={uw.unitWorkId} value={uw.unitWorkId}>
+                    {uw.displayId} — {uw.name}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+
+            {/* 화면명 */}
+            <FormField label="화면명" required>
+              <input
+                type="text"
+                value={form.name}
+                placeholder="화면명을 입력하세요"
+                onChange={(e) => handleChange("name", e.target.value)}
+                style={inputStyle}
+              />
+            </FormField>
+
+            {/* 표시코드 + 화면 유형 + 정렬 순서 */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 100px", gap: 16 }}>
+              <FormField label="표시코드">
+                <input
+                  type="text"
+                  value={form.displayCode}
+                  placeholder="예: MBR_LIST"
+                  onChange={(e) => handleChange("displayCode", e.target.value)}
+                  style={inputStyle}
+                />
+              </FormField>
+              <FormField label="화면 유형">
+                <select
+                  value={form.type}
+                  onChange={(e) => handleChange("type", e.target.value)}
+                  style={selectStyle}
+                >
+                  <option value="LIST">LIST</option>
+                  <option value="DETAIL">DETAIL</option>
+                  <option value="INPUT">INPUT</option>
+                  <option value="POPUP">POPUP</option>
+                  <option value="TAB">TAB</option>
+                  <option value="REPORT">REPORT</option>
+                </select>
+              </FormField>
+              <FormField label="정렬 순서">
+                <input
+                  type="number"
+                  min={0}
+                  value={form.sortOrder}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, sortOrder: parseInt(e.target.value) || 0 }))
+                  }
+                  style={inputStyle}
+                />
+              </FormField>
+            </div>
+
+            {/* 메뉴 분류 (대/중/소) */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+              <FormField label="대분류">
+                <input
+                  type="text"
+                  value={form.categoryL}
+                  placeholder="예: 회원 관리"
+                  onChange={(e) => handleChange("categoryL", e.target.value)}
+                  style={inputStyle}
+                />
+              </FormField>
+              <FormField label="중분류">
+                <input
+                  type="text"
+                  value={form.categoryM}
+                  placeholder="예: 회원 정보"
+                  onChange={(e) => handleChange("categoryM", e.target.value)}
+                  style={inputStyle}
+                />
+              </FormField>
+              <FormField label="소분류">
+                <input
+                  type="text"
+                  value={form.categoryS}
+                  placeholder="예: 목록 조회"
+                  onChange={(e) => handleChange("categoryS", e.target.value)}
+                  style={inputStyle}
+                />
+              </FormField>
+            </div>
+          </Section>
+
+          {/* 레이아웃 에디터 — 기본 정보 아래 */}
+          <Section title="레이아웃 구성">
+            <ScreenLayoutEditor
+              value={layoutRows}
+              onChange={setLayoutRows}
+              areas={detail?.areas.map((a) => ({
+                areaId:    a.areaId,
+                displayId: a.displayId,
+                name:      a.name,
+              }))}
             />
-          </FormField>
-          <FormField label="화면 유형">
-            <select
-              value={form.type}
-              onChange={(e) => handleChange("type", e.target.value)}
-              style={selectStyle}
-            >
-              <option value="LIST">LIST</option>
-              <option value="DETAIL">DETAIL</option>
-              <option value="INPUT">INPUT</option>
-              <option value="POPUP">POPUP</option>
-              <option value="TAB">TAB</option>
-              <option value="REPORT">REPORT</option>
-            </select>
-          </FormField>
+          </Section>
+
+          {/* AR-00066 영역 목록 (수정 모드에서만, FID-00148) */}
+          {!isNew && detail && (
+            <AreaListSection
+              areas={detail.areas}
+              projectId={projectId}
+              screenId={screenId}
+              router={router}
+            />
+          )}
         </div>
 
-        {/* 메뉴 분류 (대/중/소) */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-          <FormField label="대분류">
-            <input
-              type="text"
-              value={form.categoryL}
-              placeholder="예: 회원 관리"
-              onChange={(e) => handleChange("categoryL", e.target.value)}
-              style={inputStyle}
-            />
-          </FormField>
-          <FormField label="중분류">
-            <input
-              type="text"
-              value={form.categoryM}
-              placeholder="예: 회원 정보"
-              onChange={(e) => handleChange("categoryM", e.target.value)}
-              style={inputStyle}
-            />
-          </FormField>
-          <FormField label="소분류">
-            <input
-              type="text"
-              value={form.categoryS}
-              placeholder="예: 목록 조회"
-              onChange={(e) => handleChange("categoryS", e.target.value)}
-              style={inputStyle}
-            />
-          </FormField>
-        </div>
-
-        {/* 설명 (화면 상세 / scrn_dc) */}
-        <FormField label="화면 설명 (마크다운)">
+        {/* 오른쪽: 화면 설명 (마크다운) */}
+        <Section
+          title="화면 설명"
+          headerRight={
+            <div style={{ display: "flex", gap: 5 }}>
+              <button
+                type="button"
+                onClick={() => setDescExampleOpen(true)}
+                style={ghostSmBtnStyle}
+              >
+                예시
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  handleChange(
+                    "description",
+                    DESCRIPTION_TEMPLATE(detail?.displayId ?? "PID-XXXXX", form.name)
+                  )
+                }
+                style={ghostSmBtnStyle}
+              >
+                템플릿 삽입
+              </button>
+            </div>
+          }
+        >
           <MarkdownEditor
             value={form.description}
             onChange={(md) => handleChange("description", md)}
             placeholder="화면 내용 및 세부 설계를 작성하세요."
-            rows={17}
+            rows={26}
           />
-        </FormField>
-      </Section>
+        </Section>
 
-      {/* AR-00066 하단 영역 목록 (수정 모드에서만, FID-00148) */}
-      {!isNew && detail && (
-        <div style={{ marginTop: 24 }}>
-          <AreaListSection
-            areas={detail.areas}
-            projectId={projectId}
-            screenId={screenId}
-            router={router}
-          />
-        </div>
-      )}
+        {/* 화면 설명 예시 팝업 */}
+        {descExampleOpen && (
+          <div
+            style={{
+              position: "fixed", inset: 0, zIndex: 300,
+              background: "rgba(0,0,0,0.45)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+            onClick={() => setDescExampleOpen(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: "100%", maxWidth: 620,
+                background: "var(--color-bg-card)",
+                border: "1px solid var(--color-border)",
+                borderRadius: 10,
+                boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+                padding: "20px 24px",
+                maxHeight: "80vh",
+                display: "flex", flexDirection: "column",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                  화면 설명 예시
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDescExampleOpen(false)}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#888" }}
+                >
+                  ×
+                </button>
+              </div>
+              <pre
+                style={{
+                  flex: 1,
+                  overflowY: "auto",
+                  background: "var(--color-bg-elevated)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: 6,
+                  padding: "14px 16px",
+                  fontSize: 13,
+                  lineHeight: 1.7,
+                  whiteSpace: "pre-wrap",
+                  color: "var(--color-text-primary)",
+                  margin: 0,
+                }}
+              >
+                {DESCRIPTION_EXAMPLE}
+              </pre>
+            </div>
+          </div>
+        )}
+
+      </div>
     </div>
   );
 }
@@ -382,22 +520,31 @@ function AreaListSection({
 
 // ── 공통 컴포넌트 ─────────────────────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title, headerRight, children,
+}: {
+  title:        string;
+  headerRight?: React.ReactNode;
+  children:     React.ReactNode;
+}) {
   return (
     <div
       style={{
-        border:         "1px solid var(--color-border)",
-        borderRadius:   8,
-        padding:        "20px 24px",
-        background:     "var(--color-bg-card)",
-        display:        "flex",
-        flexDirection:  "column",
-        gap:            16,
+        border:        "1px solid var(--color-border)",
+        borderRadius:  8,
+        padding:       "20px 24px",
+        background:    "var(--color-bg-card)",
+        display:       "flex",
+        flexDirection: "column",
+        gap:           16,
       }}
     >
-      <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
-        {title}
-      </h2>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
+          {title}
+        </h2>
+        {headerRight}
+      </div>
       {children}
     </div>
   );
@@ -511,6 +658,16 @@ const areaGridHeaderStyle: React.CSSProperties = {
   borderBottom:        "1px solid var(--color-border)",
 };
 
+const ghostSmBtnStyle: React.CSSProperties = {
+  padding:      "3px 9px",
+  borderRadius: 5,
+  border:       "1px solid var(--color-border)",
+  background:   "none",
+  color:        "var(--color-text-secondary)",
+  fontSize:     12,
+  cursor:       "pointer",
+};
+
 const areaGridRowStyle: React.CSSProperties = {
   display:             "grid",
   gridTemplateColumns: "60px 1fr 120px",
@@ -519,3 +676,47 @@ const areaGridRowStyle: React.CSSProperties = {
   alignItems:          "center",
   background:          "var(--color-bg-card)",
 };
+
+// ── 화면 설명 예시 / 템플릿 ────────────────────────────────────────────────────
+
+const DESCRIPTION_EXAMPLE = `## [PID-00001] 게시판 목록
+
+### 화면 개요
+
+| 항목 | 내용 |
+|:-----|:-----|
+| **비즈니스 목적** | 프로젝트 내 공지사항을 한눈에 확인하고, 제목·유형·기간 조건으로 필요한 글을 빠르게 찾는다. |
+| **진입 경로** | 메뉴 클릭, 등록/수정 완료 후 리다이렉트 |
+
+### 영역 목록
+
+| 영역ID | 영역명 | 유형 | 설명 |
+|:-------|:-------|:-----|:-----|
+| AR-00001 | 검색 영역 | SEARCH_FORM | 유형·기간·제목 조건 검색 |
+| AR-00002 | 목록 영역 | DATA_GRID | 게시글 목록 표시, 페이징, 글쓰기 버튼 |
+
+### 영역 간 흐름
+
+- 화면 진입 시 → 검색 조건 초기화 → 자동 조회 → 목록 표시
+- 검색 버튼 클릭 → 검색 조건으로 재조회 → 목록 갱신 (1페이지 초기화)
+- 행 클릭 → PID-00002 상세 화면 이동`;
+
+const DESCRIPTION_TEMPLATE = (displayId: string, name: string) =>
+`## [${displayId}] ${name}
+
+### 화면 개요
+
+| 항목 | 내용 |
+|:-----|:-----|
+| **비즈니스 목적** |  |
+| **진입 경로** |  |
+
+### 영역 목록
+
+| 영역ID | 영역명 | 유형 | 설명 |
+|:-------|:-------|:-----|:-----|
+|  |  |  |  |
+
+### 영역 간 흐름
+
+- `;

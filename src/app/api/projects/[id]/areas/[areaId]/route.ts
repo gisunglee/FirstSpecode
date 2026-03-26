@@ -66,6 +66,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       description: area.area_dc ?? "",
       type:        area.area_ty_code,
       sortOrder:   area.sort_ordr,
+      layoutData:  area.layer_data_dc ?? null,
+      commentCn:   area.coment_cn ?? "",
       screenId:    area.scrn_id ?? null,
       screenName:  area.screen?.scrn_nm ?? "미분류",
       screenDisplayId: area.screen?.scrn_display_id ?? null,
@@ -113,12 +115,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { screenId, name, type, description, sortOrder } = body as {
+  const { screenId, name, type, description, sortOrder, layoutData, commentCn } = body as {
     screenId?:    string;
     name?:        string;
     type?:        string;
     description?: string;
     sortOrder?:   number;
+    layoutData?:  string;
+    commentCn?:   string;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "영역명을 입력해 주세요.", 400);
@@ -139,6 +143,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           area_ty_code: type || "GRID",
           area_dc:      description?.trim() || null,
           sort_ordr:    sortOrder ?? existing.sort_ordr,
+          layer_data_dc: layoutData !== undefined ? layoutData : existing.layer_data_dc,
+          coment_cn:     commentCn  !== undefined ? (commentCn || null) : existing.coment_cn,
           mdfcn_dt:     new Date(),
         },
       }),

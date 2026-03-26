@@ -58,6 +58,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       displayId:    screen.scrn_display_id,
       name:         screen.scrn_nm,
       description:  screen.scrn_dc ?? "",
+      layoutData:   screen.layer_data_dc ?? null,
       displayCode:  screen.dsply_code ?? "",
       type:         screen.scrn_ty_code,
       categoryL:    screen.ctgry_l_nm ?? "",
@@ -102,14 +103,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { unitWorkId, name, displayCode, type, categoryL, categoryM, categoryS } = body as {
-    unitWorkId?:  string;
-    name?:        string;
-    displayCode?: string;
-    type?:        string;
-    categoryL?:   string;
-    categoryM?:   string;
-    categoryS?:   string;
+  const { unitWorkId, name, description, displayCode, type, sortOrder, categoryL, categoryM, categoryS, layoutData } = body as {
+    unitWorkId?:   string;
+    name?:         string;
+    description?:  string;
+    displayCode?:  string;
+    type?:         string;
+    sortOrder?:    number;
+    categoryL?:    string;
+    categoryM?:    string;
+    categoryS?:    string;
+    layoutData?:   string;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "화면명을 입력해 주세요.", 400);
@@ -125,14 +129,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       prisma.tbDsScreen.update({
         where: { scrn_id: screenId },
         data:  {
-          unit_work_id: unitWorkId || null,
-          scrn_nm:      name.trim(),
-          dsply_code:   displayCode?.trim() || null,
-          scrn_ty_code: type || "LIST",
-          ctgry_l_nm:   categoryL?.trim() || null,
-          ctgry_m_nm:   categoryM?.trim() || null,
-          ctgry_s_nm:   categoryS?.trim() || null,
-          mdfcn_dt:     new Date(),
+          unit_work_id:  unitWorkId || null,
+          scrn_nm:       name.trim(),
+          scrn_dc:       description?.trim() || null,
+          layer_data_dc: layoutData ?? null,
+          dsply_code:    displayCode?.trim() || null,
+          scrn_ty_code:  type || "LIST",
+          sort_ordr:     sortOrder ?? 0,
+          ctgry_l_nm:    categoryL?.trim() || null,
+          ctgry_m_nm:    categoryM?.trim() || null,
+          ctgry_s_nm:    categoryS?.trim() || null,
+          mdfcn_dt:      new Date(),
         },
       }),
       // 설계 변경 이력 자동 기록 (FID-00147 v3 정책)

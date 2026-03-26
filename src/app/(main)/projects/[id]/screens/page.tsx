@@ -29,6 +29,8 @@ type ScreenRow = {
   name:         string;
   type:         string;
   categoryL:    string;
+  categoryM:    string;
+  categoryS:    string;
   unitWorkId:   string | null;
   unitWorkName: string;
   areaCount:    number;
@@ -150,9 +152,11 @@ function ScreensPageInner() {
             <div />
             <div>단위업무</div>
             <div>화면명</div>
-            <div>유형</div>
-            <div>대분류</div>
+            <div>화면유형</div>
             <div style={{ textAlign: "center" }}>영역수</div>
+            <div>대분류</div>
+            <div>중분류</div>
+            <div>소분류</div>
             <div />
           </div>
 
@@ -200,21 +204,31 @@ function ScreensPageInner() {
                 </button>
               </div>
 
-              {/* 유형 배지 */}
+              {/* 화면유형 배지 */}
               <div>
                 <span style={typeBadgeStyle(screen.type)}>
                   {screen.type}
                 </span>
               </div>
 
-              {/* 대분류 */}
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-                {screen.categoryL || "-"}
-              </div>
-
               {/* 영역 수 */}
               <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
                 {screen.areaCount}
+              </div>
+
+              {/* 대분류 */}
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {screen.categoryL || "-"}
+              </div>
+
+              {/* 중분류 */}
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {screen.categoryM || "-"}
+              </div>
+
+              {/* 소분류 */}
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {screen.categoryS || "-"}
               </div>
 
               {/* 바로가기(→) + 삭제 (FID-00143) */}
@@ -378,7 +392,7 @@ function typeBadgeStyle(type: string): React.CSSProperties {
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-const GRID_TEMPLATE = "32px minmax(120px, 200px) 1fr 80px 100px 70px 100px";
+const GRID_TEMPLATE = "32px minmax(100px, 160px) 1fr 72px 52px 90px 90px 90px 100px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",

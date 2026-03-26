@@ -100,13 +100,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { name, description, assignMemberId, startDate, endDate, progress } = body as {
+  const { name, description, assignMemberId, startDate, endDate, progress, sortOrder } = body as {
     name?:           string;
     description?:    string;
     assignMemberId?: string;
     startDate?:      string;
     endDate?:        string;
     progress?:       number;
+    sortOrder?:      number;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "단위업무명을 입력해 주세요.", 400);
@@ -129,6 +130,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         bgng_de:       startDate?.trim() || null,
         end_de:        endDate?.trim() || null,
         progrs_rt:     progress ?? existing.progrs_rt,
+        sort_ordr:     sortOrder ?? existing.sort_ordr,
         mdfcn_dt:      new Date(),
       },
     });

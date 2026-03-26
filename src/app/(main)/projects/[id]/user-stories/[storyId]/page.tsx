@@ -344,8 +344,7 @@ function UserStoryDetailPageInner() {
           </button>
         </div>
       </div>
-    </div>{/* 카드 컨테이너 끝 */ }
-    </div >
+    </div>
   );
 }
 

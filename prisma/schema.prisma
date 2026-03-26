@@ -346,6 +346,8 @@ model TbDsScreen {
   scrn_display_id String
   scrn_nm         String    @default("")
   scrn_dc         String?
+  // 레이아웃 데이터 (JSON 문자열, LayoutRow[] 구조)
+  layer_data_dc   String?
   // 개발자 참조 코드 (예: MBR_LIST)
   dsply_code      String?
   // LIST / DETAIL / INPUT / POPUP / TAB / REPORT
@@ -375,6 +377,10 @@ model TbDsArea {
   area_dc         String?
   // SEARCH / GRID / FORM / INFO_CARD / TAB / FULL_SCREEN
   area_ty_code    String    @default("GRID")
+  // 레이아웃 구성 데이터 (JSON 문자열, LayoutRow[] 구조)
+  layer_data_dc   String?
+  // AI 요청 코멘트
+  coment_cn       String?
   // Excalidraw 캔버스 JSON 데이터 (FID-00165)
   excaldw_data    Json?
   sort_ordr       Int       @default(0)
@@ -541,7 +547,6 @@ model TbRqRequirement {
 
   task        TbRqTask?        @relation(fields: [task_id], references: [task_id])
   userStories TbRqUserStory[]
-  attachFiles TbCmAttachFile[]
   unitWorks   TbDsUnitWork[]
 
   @@map("tb_rq_requirement")
@@ -587,9 +592,9 @@ model TbRqAcceptanceCriteria {
 model TbCmAttachFile {
   attach_file_id String   @id @default(uuid())
   prjct_id       String
-  // 참조 테이블명 (e.g. 'tb_rq_requirement')
+  // 참조 테이블명 (e.g. 'tb_rq_requirement', 'tb_ds_area')
   ref_tbl_nm     String
-  // 참조 레코드 ID
+  // 참조 레코드 ID (다형성 — FK 제약 없음)
   ref_id         String
   // FILE / IMAGE
   file_ty_code   String   @default("FILE")
@@ -598,10 +603,9 @@ model TbCmAttachFile {
   file_path_nm   String
   file_sz        Int
   file_extsn_nm  String
+  // AI 요청 참조 여부 (Y/N)
+  req_ref_yn     String?
   creat_dt       DateTime @default(now())
-
-  // 요구사항 첨부파일 역참조
-  requirement TbRqRequirement? @relation(fields: [ref_id], references: [req_id])
 
   @@map("tb_cm_attach_file")
 }

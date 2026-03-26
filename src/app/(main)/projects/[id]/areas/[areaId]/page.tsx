@@ -23,6 +23,9 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import MarkdownEditor from "@/components/ui/MarkdownEditor";
+import { ScreenLayoutEditor, type LayoutRow } from "@/components/ui/ScreenLayoutEditor";
+import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -35,6 +38,8 @@ type AreaDetail = {
   sortOrder:   number;
   screenId:    string | null;
   screenName:  string;
+  layoutData:     string | null;
+  commentCn:      string;
   excalidrawData: object | null;
   summary: {
     functionCount: number;
@@ -88,9 +93,14 @@ function AreaDetailPageInner() {
   const [sortOrder,   setSortOrder]   = useState<number>(0);
   const [screenId,    setScreenId]    = useState(presetScreenId);
 
+  // ── 레이아웃 상태 ───────────────────────────────────────────────────────────
+  const [layoutRows, setLayoutRows] = useState<LayoutRow[]>([]);
+
   // ── AI 상태 ────────────────────────────────────────────────────────────────
-  const [asciiComment,  setAsciiComment]  = useState("");
-  const [mockupComment, setMockupComment] = useState("");
+  const [asciiComment, setAsciiComment] = useState("");
+
+  // ── 설명 예시 팝업 상태 ────────────────────────────────────────────────────
+  const [descExampleOpen, setDescExampleOpen] = useState(false);
 
   // ── Excalidraw 팝업 상태 ───────────────────────────────────────────────────
   const [excalidrawOpen,  setExcalidrawOpen]  = useState(false);
@@ -124,7 +134,11 @@ function AreaDetailPageInner() {
       setDescription(data.description);
       setSortOrder(data.sortOrder);
       setScreenId(data.screenId ?? "");
+      setAsciiComment(data.commentCn ?? "");
       setExcalidrawData(data.excalidrawData);
+      if (data.layoutData) {
+        try { setLayoutRows(JSON.parse(data.layoutData)); } catch { /* 잘못된 JSON 무시 */ }
+      }
     }
   }, [data]);
 
@@ -137,6 +151,8 @@ function AreaDetailPageInner() {
         type,
         description: description.trim(),
         sortOrder:   sortOrder || 0,
+        layoutData:  layoutRows.length > 0 ? JSON.stringify(layoutRows) : undefined,
+        commentCn:   asciiComment,
       };
       if (isNew) {
         return authFetch<{ data: { areaId?: string } }>(`/api/projects/${projectId}/areas`, {
@@ -181,33 +197,7 @@ function AreaDetailPageInner() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // ── AI ASCII 변환 요청 ─────────────────────────────────────────
-  const asciiMutation = useMutation({
-    mutationFn: () =>
-      authFetch(`/api/projects/${projectId}/areas/${areaId}/ai/ascii`, {
-        method: "POST",
-        body:   JSON.stringify({ comment: asciiComment }),
-      }),
-    onSuccess: () => {
-      toast.success("AI ASCII 변환 요청이 접수되었습니다.");
-      setAsciiComment("");
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
 
-  // ── 목업 생성 요청 ─────────────────────────────────────────
-  const mockupMutation = useMutation({
-    mutationFn: () =>
-      authFetch(`/api/projects/${projectId}/areas/${areaId}/ai/mockup`, {
-        method: "POST",
-        body:   JSON.stringify({ comment: mockupComment }),
-      }),
-    onSuccess: () => {
-      toast.success("목업 생성이 요청되었습니다.");
-      setMockupComment("");
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
 
   // ── 로딩 ───────────────────────────────────────────────────────
   if (!isNew && isLoading) {
@@ -227,7 +217,15 @@ function AreaDetailPageInner() {
         <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
           {isNew ? "영역 신규 등록" : `${data?.displayId ?? ""} 영역 편집`}
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {!isNew && (
+            <button
+              onClick={() => setExcalidrawOpen(true)}
+              style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
+            >
+              Excalidraw로 설계하기 ↗
+            </button>
+          )}
           <button
             onClick={() => router.push(`/projects/${projectId}/areas`)}
             style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
@@ -245,7 +243,7 @@ function AreaDetailPageInner() {
       </div>
 
       {/* 2-컬럼 레이아웃 */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 28, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 936px) 1fr", gap: 28, alignItems: "start" }}>
 
         {/* 왼쪽 컬럼: 기본 정보 폼 + 요약 + 기능 목록 */}
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -254,66 +252,105 @@ function AreaDetailPageInner() {
           <section style={sectionStyle}>
             <h3 style={sectionTitleStyle}>기본 정보</h3>
 
-            <div style={formGroupStyle}>
-              <label style={labelStyle}>상위 화면</label>
-              <select
-                value={screenId}
-                onChange={(e) => setScreenId(e.target.value)}
-                style={inputStyle}
-              >
-                <option value="">미분류 (화면 없음)</option>
-                {screenOptions.map((s) => (
-                  <option key={s.screenId} value={s.screenId}>
-                    {s.displayId} {s.name}
-                  </option>
-                ))}
-              </select>
+            {/* 상위 화면 + 영역명 */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <div style={formGroupStyle}>
+                <label style={labelStyle}>상위 화면</label>
+                <select
+                  value={screenId}
+                  onChange={(e) => setScreenId(e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="">미분류 (화면 없음)</option>
+                  {screenOptions.map((s) => (
+                    <option key={s.screenId} value={s.screenId}>
+                      {s.displayId} {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={formGroupStyle}>
+                <label style={labelStyle}>영역명 <span style={{ color: "#e53935" }}>*</span></label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="영역명을 입력하세요"
+                  style={inputStyle}
+                />
+              </div>
             </div>
 
-            <div style={formGroupStyle}>
-              <label style={labelStyle}>영역명 <span style={{ color: "#e53935" }}>*</span></label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="영역명을 입력하세요"
-                style={inputStyle}
-              />
+            {/* 유형 + 정렬순서 */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <div style={formGroupStyle}>
+                <label style={labelStyle}>유형</label>
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value)}
+                  style={inputStyle}
+                >
+                  {AREA_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={formGroupStyle}>
+                <label style={labelStyle}>정렬순서</label>
+                <input
+                  type="number"
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
+                  style={inputStyle}
+                />
+              </div>
             </div>
 
+            {/* 설명 (마크다운) */}
             <div style={formGroupStyle}>
-              <label style={labelStyle}>유형</label>
-              <select
-                value={type}
-                onChange={(e) => setType(e.target.value)}
-                style={inputStyle}
-              >
-                {AREA_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div style={formGroupStyle}>
-              <label style={labelStyle}>설명</label>
-              <textarea
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                <label style={{ ...labelStyle, marginBottom: 0 }}>설명 (마크다운)</label>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button type="button" onClick={() => setDescExampleOpen(true)} style={ghostSmBtnStyle}>
+                    예시
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDescription(DESCRIPTION_TEMPLATE(data?.displayId ?? "AR-XXXXX", name))}
+                    style={ghostSmBtnStyle}
+                  >
+                    템플릿 삽입
+                  </button>
+                </div>
+              </div>
+              <MarkdownEditor
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={setDescription}
                 placeholder="영역 역할·설명"
-                rows={4}
-                style={{ ...inputStyle, resize: "vertical" }}
+                rows={16}
               />
             </div>
 
-            <div style={formGroupStyle}>
-              <label style={labelStyle}>정렬순서</label>
-              <input
-                type="number"
-                value={sortOrder}
-                onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
-                style={{ ...inputStyle, width: 100 }}
-              />
-            </div>
+            {/* 설명 예시 팝업 */}
+            {descExampleOpen && (
+              <div
+                style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
+                onClick={() => setDescExampleOpen(false)}
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ width: "100%", maxWidth: 816, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.2)", padding: "20px 24px", maxHeight: "80vh", display: "flex", flexDirection: "column" }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>설명 예시</span>
+                    <button type="button" onClick={() => setDescExampleOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#888" }}>×</button>
+                  </div>
+                  <pre style={{ flex: 1, overflowY: "auto", background: "var(--color-bg-elevated)", border: "1px solid var(--color-border)", borderRadius: 6, padding: "14px 16px", fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", color: "var(--color-text-primary)", margin: 0 }}>
+                    {DESCRIPTION_EXAMPLE}
+                  </pre>
+                </div>
+              </div>
+            )}
 
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
               <button
@@ -408,73 +445,32 @@ function AreaDetailPageInner() {
           )}
         </div>
 
-        {/* 오른쪽 컬럼: AI 도구 (수정 모드에서만) */}
+        {/* 오른쪽 컬럼: AI 요청 코멘트 + 레이아웃 구성 (수정 모드에서만) */}
         {!isNew && (
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            {/* ── AR-00070 화면 설계 이미지 / AI ASCII 변환 ─────────────── */}
             <section style={sectionStyle}>
-              <h3 style={sectionTitleStyle}>화면 설계 이미지 / AI ASCII 변환</h3>
-              <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: "0 0 12px" }}>
-                이미지 업로드 후 AI ASCII 변환을 요청할 수 있습니다.
-              </p>
-              <div style={formGroupStyle}>
-                <label style={labelStyle}>AI 요청 코멘트</label>
-                <textarea
-                  value={asciiComment}
-                  onChange={(e) => setAsciiComment(e.target.value)}
-                  placeholder="AI에게 추가 지시사항을 입력하세요"
-                  rows={3}
-                  style={{ ...inputStyle, resize: "vertical" }}
-                />
-              </div>
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button
-                  onClick={() => asciiMutation.mutate()}
-                  style={secondaryBtnStyle}
-                  disabled={asciiMutation.isPending}
-                >
-                  {asciiMutation.isPending ? "요청 중..." : "AI ASCII 변환 요청"}
-                </button>
-              </div>
+              <h3 style={sectionTitleStyle}>AI 요청 코멘트</h3>
+              <textarea
+                value={asciiComment}
+                onChange={(e) => setAsciiComment(e.target.value)}
+                placeholder="AI에게 추가 지시사항을 입력하세요"
+                rows={6}
+                style={{ ...inputStyle, resize: "vertical" }}
+              />
             </section>
 
-            {/* ── AR-00071 화면 설계 도구 ──────────────────────────────── */}
             <section style={sectionStyle}>
-              <h3 style={sectionTitleStyle}>화면 설계 도구</h3>
-              <div style={{ marginBottom: 16 }}>
-                <button
-                  onClick={() => setExcalidrawOpen(true)}
-                  style={primaryBtnStyle}
-                >
-                  Excalidraw로 설계하기 ↗
-                </button>
-                {excalidrawData && (
-                  <span style={{ marginLeft: 12, fontSize: 13, color: "#2e7d32" }}>
-                    ✓ 설계 데이터 있음
-                  </span>
-                )}
-              </div>
+              <h3 style={sectionTitleStyle}>레이아웃 구성</h3>
+              <ScreenLayoutEditor
+                value={layoutRows}
+                onChange={setLayoutRows}
+                columnLabelPlaceholder="구성 요소명"
+              />
+            </section>
 
-              <h3 style={{ ...sectionTitleStyle, marginTop: 8 }}>목업 생성</h3>
-              <div style={formGroupStyle}>
-                <label style={labelStyle}>AI 요청 코멘트</label>
-                <textarea
-                  value={mockupComment}
-                  onChange={(e) => setMockupComment(e.target.value)}
-                  placeholder="목업 생성 지시사항"
-                  rows={3}
-                  style={{ ...inputStyle, resize: "vertical" }}
-                />
-              </div>
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button
-                  onClick={() => mockupMutation.mutate()}
-                  style={secondaryBtnStyle}
-                  disabled={mockupMutation.isPending}
-                >
-                  {mockupMutation.isPending ? "요청 중..." : "목업 생성 요청"}
-                </button>
-              </div>
+            <section style={sectionStyle}>
+              <h3 style={sectionTitleStyle}>첨부파일</h3>
+              <AreaAttachFiles projectId={projectId} areaId={areaId} />
             </section>
           </div>
         )}
@@ -724,6 +720,16 @@ const secondaryBtnStyle: React.CSSProperties = {
   cursor:       "pointer",
 };
 
+const ghostSmBtnStyle: React.CSSProperties = {
+  padding:      "3px 9px",
+  borderRadius: 5,
+  border:       "1px solid var(--color-border)",
+  background:   "none",
+  color:        "var(--color-text-secondary)",
+  fontSize:     12,
+  cursor:       "pointer",
+};
+
 const overlayStyle: React.CSSProperties = {
   position:       "fixed",
   inset:          0,
@@ -733,3 +739,60 @@ const overlayStyle: React.CSSProperties = {
   justifyContent: "center",
   zIndex:         1000,
 };
+
+// ── 설명 예시 / 템플릿 ──────────────────────────────────────────────────────
+
+const DESCRIPTION_EXAMPLE = `### 영역: [AR-00003] 상세 영역
+
+**유형:** DETAIL_VIEW
+
+**UI 구조**
+\`\`\`
++─────────────────────────────────────────────────────────────────+
+│ [공지] 시스템 점검 안내                                         │
+│ 작성자: 관리자  │  등록일: 2026-03-15 14:30  │  조회: 121       │
+│─────────────────────────────────────────────────────────────────│
+│                                                                 │
+│  (마크다운 렌더링된 본문 내용)                                   │
+│                                                                 │
+│─────────────────────────────────────────────────────────────────│
+│ 📎 첨부파일                                                     │
+│   점검안내서.pdf (2.1MB)  [다운로드]                             │
+│   일정표.xlsx (340KB)     [다운로드]                             │
+│─────────────────────────────────────────────────────────────────│
+│                                    [목록]  [수정]  [삭제]       │
++─────────────────────────────────────────────────────────────────+
+\`\`\`
+
+**구성 항목**
+
+| 항목명 | UI 타입 | DB 매핑 | 비고 |
+|:-------|:--------|:--------|:-----|
+| 유형 배지 | badge | board_type_cd | NOTICE(빨강) / NORMAL(회색) |
+| 제목 | heading (h2) | board_title_nm | |
+| 작성자 | text | reg_user_id → 사용자명 | |
+| 등록일 | datetime | reg_dt | yyyy-MM-dd HH:mm |
+| 조회수 | number | view_cnt | |
+| 본문 | markdown render | board_cn | 마크다운 → HTML 렌더링 |
+| 첨부파일 목록 | file list | tb_cm_attach_file | 파일명(크기) + 다운로드 버튼 |
+| 목록 버튼 | button (default) | - | → PID-00001 (검색조건 유지) |
+| 수정 버튼 | button (primary) | - | → PID-00003, 작성자/관리자만 표시 |
+| 삭제 버튼 | button (danger) | - | 확인 후 논리삭제, 작성자/관리자만 표시 |`;
+
+const DESCRIPTION_TEMPLATE = (displayId: string, name: string) =>
+`### 영역: [${displayId}] ${name}
+
+**유형:**
+
+**UI 구조**
+\`\`\`
++─────────────────────────────────────────────────────────────────+
+│                                                                 │
++─────────────────────────────────────────────────────────────────+
+\`\`\`
+
+**구성 항목**
+
+| 항목명 | UI 타입 | DB 매핑 | 비고 |
+|:-------|:--------|:--------|:-----|
+|  |  |  |  |`;
