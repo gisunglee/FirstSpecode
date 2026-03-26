@@ -66,7 +66,8 @@
       "Bash(cat d:/source/FirstSpecode/src/app/\\\\\\(main\\\\\\)/layout.tsx)",
       "Bash(git push:*)",
       "Bash(git remote:*)",
-      "Bash(ssh -T git@github.com)"
+      "Bash(ssh -T git@github.com)",
+      "Bash(git config:*)"
     ]
   }
 }
