@@ -221,7 +221,9 @@ function ProjectsPageInner() {
     queryClient.invalidateQueries({ queryKey: ["projects"] });
     queryClient.invalidateQueries({ queryKey: ["projects", "my"] });
     setCreateOpen(false);
-    // 생성된 프로젝트 설정 화면으로 이동
+    // 생성된 프로젝트를 현재 프로젝트로 선택 후 설정 화면으로 이동
+    // setCurrentProjectId를 먼저 호출해야 GNB 셀렉터에 바로 반영됨
+    setCurrentProjectId(projectId);
     router.push(`/projects/${projectId}/settings`);
   }
 

@@ -6,6 +6,7 @@
  * 역할:
  *   - GNB(상단) + LNB(좌측) + 메인 컨텐츠 + StatusBar(하단) 배치
  *   - 마운트 시 저장된 테마를 document.documentElement에 반영
+ *   - 마운트 시 미인증 상태면 /auth/login 으로 리다이렉트
  *   - 마운트 시 미확인 제거 안내 이력 조회 → 있으면 모달 표시 (PID-00027)
  *
  * 레이아웃 구조:
@@ -24,6 +25,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import GNB from "./GNB";
@@ -45,6 +47,22 @@ export default function MainLayout({
 }) {
   const { theme } = useAppStore();
   const queryClient = useQueryClient();
+  const router = useRouter();
+
+  // 인증 상태 — 토큰 확인 전까지 화면 미표시 (레이아웃 flash 방지)
+  const [authChecked, setAuthChecked] = useState(false);
+
+  // 마운트 시 access_token 존재 여부로 인증 확인
+  // sessionStorage는 SSR에서 접근 불가 → useEffect(클라이언트 전용)에서 처리
+  useEffect(() => {
+    const token = sessionStorage.getItem("access_token");
+    if (!token) {
+      // 토큰 없으면 로그인 페이지로 이동
+      router.replace("/auth/login");
+      return;
+    }
+    setAuthChecked(true);
+  }, [router]);
 
   // 마운트/테마 변경 시 data-theme 동기화
   useEffect(() => {
@@ -84,6 +102,9 @@ export default function MainLayout({
   });
 
   const notices = noticesData?.notices ?? [];
+
+  // 인증 확인 완료 전까지 아무것도 렌더링하지 않음 (미인증 화면 flash 방지)
+  if (!authChecked) return null;
 
   return (
     <div

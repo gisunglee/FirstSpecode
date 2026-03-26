@@ -60,7 +60,10 @@
       "Bash(git -C /Users/igiseong/dev/specode/FirstSpecode status --short)",
       "Bash(git commit:*)",
       "Bash(git pull:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(ls d:/source/FirstSpecode/src/middleware*)",
+      "Bash(find D:/source/FirstSpecode/src/app/api/projects -name *.ts)",
+      "Bash(cat d:/source/FirstSpecode/src/app/\\\\\\(main\\\\\\)/layout.tsx)"
     ]
   }
 }
