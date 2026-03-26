@@ -246,6 +246,13 @@ function UserStoryDetailPageInner() {
         사용자스토리
       </div>
 
+      {/* 카드 컨테이너 */}
+      <div style={{
+        background:   "var(--color-bg-card)",
+        border:       "1px solid var(--color-border)",
+        borderRadius: "var(--radius-lg)",
+        padding:      "28px 32px",
+      }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
         {/* AI 초안 생성 버튼 */}
@@ -401,6 +408,7 @@ function UserStoryDetailPageInner() {
           </button>
         </div>
       </div>
+      </div>{/* 카드 컨테이너 끝 */}
     </div>
   );
 }
