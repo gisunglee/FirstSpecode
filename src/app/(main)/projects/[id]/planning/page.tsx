@@ -277,6 +277,7 @@ function PlanningTreePageInner() {
         display:      "flex",
         flexDirection: "column",
         overflow:     "hidden",
+        background:   "var(--color-bg-card)",
       }}>
         {/* 검색 + 과업 추가 */}
         <div style={{ padding: "12px", borderBottom: "1px solid var(--color-border)", display: "flex", gap: 8 }}>
@@ -499,7 +500,8 @@ function TaskTreeNode({
         badge={`[${task.reqCount}]`}
         isActive={isActive}
         isOpen={isOpen}
-        onClick={() => { onToggle(task.taskId); onSelect({ type: "task", id: task.taskId }); }}
+        onClick={() => onSelect({ type: "task", id: task.taskId })}
+        onToggle={() => onToggle(task.taskId)}
         onAdd={() => onAddReq(task.taskId)}
         onDelete={() => onDelete({ type: "task", id: task.taskId, name: task.name })}
         addTitle="요구사항 추가"
@@ -596,7 +598,8 @@ function ReqTreeNode({
         isActive={isActive}
         isOpen={isOpen}
         hasChildren={req.storyCount > 0}
-        onClick={() => { if (req.storyCount > 0) onToggle(req.reqId); onSelect({ type: "requirement", id: req.reqId }); }}
+        onClick={() => onSelect({ type: "requirement", id: req.reqId })}
+        onToggle={req.storyCount > 0 ? () => onToggle(req.reqId) : undefined}
         onAdd={() => onAddStory(req.reqId)}
         onDelete={() => onDelete({ type: "requirement", id: req.reqId, name: req.name })}
         addTitle="사용자스토리 추가"
@@ -663,7 +666,7 @@ function StoryTreeNode({
 function TreeRow({
   depth, icon, displayId, name, highlight, badge,
   isActive, isOpen, hasChildren = true,
-  onClick, onAdd, onDelete, addTitle,
+  onClick, onToggle, onAdd, onDelete, addTitle,
 }: {
   depth:        number;
   icon:         string;
@@ -674,7 +677,8 @@ function TreeRow({
   isActive:     boolean;
   isOpen:       boolean;
   hasChildren?: boolean;
-  onClick:      () => void;
+  onClick:      () => void;   // 선택만 (우측 패널)
+  onToggle?:    () => void;   // 접힘/펼침만 (화살표 클릭)
   onAdd?:       () => void;
   onDelete:     () => void;
   addTitle:     string;
@@ -686,7 +690,7 @@ function TreeRow({
       style={{
         display:         "flex",
         alignItems:      "center",
-        paddingLeft:     `${12 + depth * 16}px`,
+        paddingLeft:     `${depth * 10}px`,
         paddingRight:    8,
         paddingTop:      5,
         paddingBottom:   5,
@@ -705,7 +709,7 @@ function TreeRow({
         style={{
           fontSize:   11,
           color:      hovered ? "var(--color-text-secondary)" : "transparent",
-          width:      12,
+          width:      8,
           flexShrink: 0,
           cursor:     "grab",
           userSelect: "none",
@@ -715,8 +719,11 @@ function TreeRow({
         ☰
       </span>
 
-      {/* 펼침 화살표 */}
-      <span style={{ fontSize: 10, color: "#888", width: 10, flexShrink: 0 }}>
+      {/* 펼침 화살표 — 클릭 시 접힘/펼침만, 선택 이벤트 차단 */}
+      <span
+        style={{ fontSize: 10, color: "#888", width: 10, flexShrink: 0 }}
+        onClick={onToggle ? (e) => { e.stopPropagation(); onToggle(); } : undefined}
+      >
         {hasChildren ? (isOpen ? "▼" : "▶") : ""}
       </span>
 
@@ -1051,8 +1058,10 @@ function SaveBar({ onSave, isPending }: { onSave: () => void; isPending: boolean
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
 const panelStyle: React.CSSProperties = {
-  padding:   "28px 32px",
-  maxWidth:  720,
+  padding:    "28px 32px",
+  maxWidth:   720,
+  background: "var(--color-bg-card)",
+  minHeight:  "100%",
 };
 
 const inputStyle: React.CSSProperties = {

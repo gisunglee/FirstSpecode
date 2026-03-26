@@ -240,16 +240,6 @@ function UnitWorkDetailPageInner() {
           />
         </FormField>
 
-        {/* 설명 */}
-        <FormField label="설명 (마크다운)">
-          <MarkdownEditor
-            value={form.description}
-            onChange={(md) => handleChange("description", md)}
-            placeholder="단위업무 설명 (선택)"
-            rows={10}
-          />
-        </FormField>
-
         {/* 기간 + 진행률 */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
           <FormField label="시작일">
@@ -279,6 +269,16 @@ function UnitWorkDetailPageInner() {
             />
           </FormField>
         </div>
+
+        {/* 설명 */}
+        <FormField label="설명 (마크다운)">
+          <MarkdownEditor
+            value={form.description}
+            onChange={(md) => handleChange("description", md)}
+            placeholder="단위업무 설명 (선택)"
+            rows={23}
+          />
+        </FormField>
 
         {/* 진행률 바 (시각적 피드백) */}
         <div>

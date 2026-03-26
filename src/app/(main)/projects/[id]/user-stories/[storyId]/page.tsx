@@ -87,8 +87,6 @@ function UserStoryDetailPageInner() {
     requirementName: string;
   } | null>(null);
 
-  const [aiLoading, setAiLoading] = useState(false);
-
   // ── 요구사항 목록 (선택 드롭다운) ──────────────────────────────────────────
   const { data: reqsData } = useQuery({
     queryKey: ["reqs-for-story", projectId],
@@ -168,34 +166,6 @@ function UserStoryDetailPageInner() {
     saveMutation.mutate();
   }
 
-  // ── AI 초안 생성 ───────────────────────────────────────────────────────────
-  async function handleAiDraft() {
-    if (!form.requirementId) {
-      toast.error("먼저 요구사항을 선택해 주세요.");
-      return;
-    }
-    setAiLoading(true);
-    try {
-      const res = await authFetch<{
-        data: {
-          name: string; persona: string; scenario: string;
-          acceptanceCriteria: { given: string; when: string; then: string }[];
-        };
-      }>(
-        `/api/projects/${projectId}/user-stories/ai-draft`,
-        { method: "POST", body: JSON.stringify({ requirementId: form.requirementId }) }
-      );
-      const d = res.data;
-      setForm((prev) => ({ ...prev, name: d.name, persona: d.persona, scenario: d.scenario }));
-      setAcRows(d.acceptanceCriteria.length > 0 ? d.acceptanceCriteria : [{ given: "", when: "", then: "" }]);
-      toast.success("AI 초안이 생성되었습니다.");
-    } catch {
-      toast.error("초안 생성 중 오류가 발생했습니다.");
-    } finally {
-      setAiLoading(false);
-    }
-  }
-
   // ── 인수기준 행 조작 ───────────────────────────────────────────────────────
   function addAcRow() {
     setAcRows((prev) => [...prev, { given: "", when: "", then: "" }]);
@@ -246,79 +216,62 @@ function UserStoryDetailPageInner() {
         사용자스토리
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-        {/* AI 초안 생성 버튼 */}
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button
-            onClick={handleAiDraft}
-            disabled={aiLoading}
-            style={{ ...secondaryBtnStyle, fontSize: 13, opacity: aiLoading ? 0.5 : 1 }}
-          >
-            {aiLoading ? "⏳ AI 생성 중..." : "✨ AI 초안 생성"}
+        {/* ── 기본 정보 카드 ── */}
+        <Card title="기본 정보">
+          <FormField label="요구사항" required>
+            <select
+              value={form.requirementId}
+              onChange={(e) => setForm((p) => ({ ...p, requirementId: e.target.value }))}
+              style={selectStyle}
+            >
+              <option value="">요구사항을 선택하세요</option>
+              {reqOptions.map((r) => (
+                <option key={r.requirementId} value={r.requirementId}>
+                  [{r.taskName}] {r.name}
+                </option>
+              ))}
+            </select>
+          </FormField>
+
+          <FormField label="스토리명" required>
+            <input
+              type="text"
+              value={form.name}
+              placeholder="예: 회원으로서 로그인 후 대시보드를 볼 수 있다"
+              onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+              style={inputStyle}
+            />
+          </FormField>
+
+          <FormField label="페르소나" required>
+            <input
+              type="text"
+              value={form.persona}
+              placeholder="예: 서비스에 가입한 일반 사용자로서"
+              onChange={(e) => setForm((p) => ({ ...p, persona: e.target.value }))}
+              style={inputStyle}
+            />
+          </FormField>
+
+          <FormField label="시나리오" required>
+            <textarea
+              value={form.scenario}
+              placeholder="예: 나는 이메일과 비밀번호로 로그인하여 프로젝트 목록을 확인하고 싶다."
+              rows={4}
+              onChange={(e) => setForm((p) => ({ ...p, scenario: e.target.value }))}
+              style={{ ...inputStyle, resize: "vertical" }}
+            />
+          </FormField>
+        </Card>
+
+        {/* ── 인수기준 카드 ── */}
+        <Card title="인수기준 (Given / When / Then)" action={
+          <button onClick={addAcRow} style={{ ...secondaryBtnStyle, fontSize: 12, padding: "4px 12px" }}>
+            + 추가
           </button>
-        </div>
-
-        {/* 요구사항 선택 */}
-        <FormField label="요구사항" required>
-          <select
-            value={form.requirementId}
-            onChange={(e) => setForm((p) => ({ ...p, requirementId: e.target.value }))}
-            style={inputStyle}
-          >
-            <option value="">요구사항을 선택하세요</option>
-            {reqOptions.map((r) => (
-              <option key={r.requirementId} value={r.requirementId}>
-                [{r.taskName}] {r.name}
-              </option>
-            ))}
-          </select>
-        </FormField>
-
-        {/* 스토리명 */}
-        <FormField label="스토리명" required>
-          <input
-            type="text"
-            value={form.name}
-            placeholder="예: 회원으로서 로그인 후 대시보드를 볼 수 있다"
-            onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-            style={inputStyle}
-          />
-        </FormField>
-
-        {/* 페르소나 */}
-        <FormField label="페르소나" required>
-          <input
-            type="text"
-            value={form.persona}
-            placeholder="예: 서비스에 가입한 일반 사용자로서"
-            onChange={(e) => setForm((p) => ({ ...p, persona: e.target.value }))}
-            style={inputStyle}
-          />
-        </FormField>
-
-        {/* 시나리오 */}
-        <FormField label="시나리오" required>
-          <textarea
-            value={form.scenario}
-            placeholder="예: 나는 이메일과 비밀번호로 로그인하여 프로젝트 목록을 확인하고 싶다."
-            rows={4}
-            onChange={(e) => setForm((p) => ({ ...p, scenario: e.target.value }))}
-            style={{ ...inputStyle, resize: "vertical" }}
-          />
-        </FormField>
-
-        {/* 인수기준 (Given/When/Then) */}
-        <div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-            <label style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
-              인수기준
-            </label>
-            <button onClick={addAcRow} style={{ ...secondaryBtnStyle, fontSize: 12, padding: "4px 12px" }}>
-              + 인수기준 추가
-            </button>
-          </div>
-
+        }>
           {acRows.length === 0 ? (
             <p style={{ fontSize: 13, color: "#aaa", margin: 0 }}>인수기준이 없습니다.</p>
           ) : (
@@ -329,12 +282,11 @@ function UserStoryDetailPageInner() {
                   style={{
                     border:       "1px solid var(--color-border)",
                     borderRadius: 6,
-                    padding:      "12px 14px",
+                    padding:      "36px 14px 12px",
                     background:   "var(--color-bg-muted)",
                     position:     "relative",
                   }}
                 >
-                  {/* 삭제 버튼 */}
                   <button
                     onClick={() => removeAcRow(idx)}
                     style={{
@@ -352,19 +304,10 @@ function UserStoryDetailPageInner() {
                   >
                     ×
                   </button>
-
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {(["given", "when", "then"] as const).map((field) => (
                       <div key={field} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span
-                          style={{
-                            width:      52,
-                            fontSize:   12,
-                            fontWeight: 700,
-                            color:      FIELD_COLORS[field],
-                            flexShrink: 0,
-                          }}
-                        >
+                        <span style={{ width: 52, fontSize: 12, fontWeight: 700, color: FIELD_COLORS[field], flexShrink: 0 }}>
                           {FIELD_LABELS[field]}
                         </span>
                         <input
@@ -381,10 +324,10 @@ function UserStoryDetailPageInner() {
               ))}
             </div>
           )}
-        </div>
+        </Card>
 
         {/* 버튼 */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button
             onClick={() => router.push(`/projects/${projectId}/user-stories`)}
             disabled={saveMutation.isPending}
@@ -423,6 +366,47 @@ function FormField({ label, required, children }: {
   );
 }
 
+function Card({ title, action, children }: {
+  title:     string;
+  action?:   React.ReactNode;
+  children:  React.ReactNode;
+}) {
+  return (
+    <div style={{
+      border:        "1px solid var(--color-border)",
+      borderRadius:  8,
+      padding:       "20px 24px",
+      background:    "var(--color-bg-card)",
+      display:       "flex",
+      flexDirection: "column",
+      gap:           16,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>{title}</h2>
+        {action}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// 레이블 왼쪽 고정 / 인풋 오른쪽 — 수평 레이아웃
+function InlineField({ label, required, children }: {
+  label:     string;
+  required?: boolean;
+  children:  React.ReactNode;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <label style={{ width: 80, flexShrink: 0, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", textAlign: "right" }}>
+        {label}
+        {required && <span style={{ color: "#e53935", marginLeft: 2 }}>*</span>}
+      </label>
+      <div style={{ flex: 1 }}>{children}</div>
+    </div>
+  );
+}
+
 // ── 인수기준 필드 레이블/색상/플레이스홀더 ──────────────────────────────────
 
 const FIELD_LABELS: Record<string, string>       = { given: "Given:", when: "When:", then: "Then:" };
@@ -445,6 +429,17 @@ const inputStyle: React.CSSProperties = {
   fontSize:     14,
   boxSizing:    "border-box",
   outline:      "none",
+};
+
+// select 전용 — 브라우저 기본 화살표 제거 후 커스텀 화살표
+const selectStyle: React.CSSProperties = {
+  ...inputStyle,
+  paddingRight:       "32px",
+  appearance:         "none",
+  WebkitAppearance:   "none",
+  backgroundImage:    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
+  backgroundRepeat:   "no-repeat",
+  backgroundPosition: "right 10px center",
 };
 
 const primaryBtnStyle: React.CSSProperties = {
