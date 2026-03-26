@@ -46,7 +46,10 @@
       "Bash(grep -n \"mdTab\\\\|setMdTab\\\\|편집.*tab\\\\|tab.*편집\\\\|미리보기\\\\|import.*renderMarkdown\\\\|renderMarkdown\" /d/source/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/tasks/[taskId]/page.tsx)",
       "Bash(grep -n \"export.*config\\\\|bodyParser\\\\|sizeLimit\" /d/source/FirstSpecode/src/app/api/projects/[id]/tasks/[taskId]/route.ts)",
       "Bash(npm list:*)",
-      "Bash(grep -n \"원문\\\\|현행화\\\\|originalContent\\\\|currentContent\\\\|MarkdownField\\\\|renderMarkdown\\\\|mdTab\\\\|편집.*tab\\\\|tab.*편집\" /d/source/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/requirements/[reqId]/page.tsx)"
+      "Bash(grep -n \"원문\\\\|현행화\\\\|originalContent\\\\|currentContent\\\\|MarkdownField\\\\|renderMarkdown\\\\|mdTab\\\\|편집.*tab\\\\|tab.*편집\" /d/source/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/requirements/[reqId]/page.tsx)",
+      "Bash(ls d:/source/FirstSpecode/src/middleware*)",
+      "Bash(find D:/source/FirstSpecode/src/app/api/projects -name *.ts)",
+      "Bash(cat d:/source/FirstSpecode/src/app/\\\\\\(main\\\\\\)/layout.tsx)"
     ]
   }
 }
