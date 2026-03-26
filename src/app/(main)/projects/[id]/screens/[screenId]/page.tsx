@@ -207,7 +207,7 @@ function ScreenDetailPageInner() {
           <select
             value={form.unitWorkId ?? ""}
             onChange={(e) => handleChange("unitWorkId", e.target.value)}
-            style={inputStyle}
+            style={selectStyle}
           >
             <option value="">미분류</option>
             {uwOptions.map((uw) => (
@@ -244,7 +244,7 @@ function ScreenDetailPageInner() {
             <select
               value={form.type}
               onChange={(e) => handleChange("type", e.target.value)}
-              style={inputStyle}
+              style={selectStyle}
             >
               <option value="LIST">LIST</option>
               <option value="DETAIL">DETAIL</option>
@@ -293,7 +293,7 @@ function ScreenDetailPageInner() {
             value={form.description}
             onChange={(md) => handleChange("description", md)}
             placeholder="화면 내용 및 세부 설계를 작성하세요."
-            rows={14}
+            rows={17}
           />
         </FormField>
       </Section>
@@ -454,6 +454,17 @@ const inputStyle: React.CSSProperties = {
   fontSize:     14,
   boxSizing:    "border-box",
   outline:      "none",
+};
+
+// select 전용 — 브라우저 기본 화살표를 제거하고 커스텀 화살표로 대체
+const selectStyle: React.CSSProperties = {
+  ...inputStyle,
+  paddingRight:       "32px",
+  appearance:         "none",
+  WebkitAppearance:   "none",
+  backgroundImage:    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
+  backgroundRepeat:   "no-repeat",
+  backgroundPosition: "right 10px center",
 };
 
 const primaryBtnStyle: React.CSSProperties = {

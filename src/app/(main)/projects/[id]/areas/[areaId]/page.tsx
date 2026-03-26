@@ -181,7 +181,70 @@ function AreaDetailPageInner() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // ── AI ASCII 변환 요청 ───────────────────────────────────�      {/* 2-컬럼 레이아웃 */}
+  // ── AI ASCII 변환 요청 ─────────────────────────────────────────
+  const asciiMutation = useMutation({
+    mutationFn: () =>
+      authFetch(`/api/projects/${projectId}/areas/${areaId}/ai/ascii`, {
+        method: "POST",
+        body:   JSON.stringify({ comment: asciiComment }),
+      }),
+    onSuccess: () => {
+      toast.success("AI ASCII 변환 요청이 접수되었습니다.");
+      setAsciiComment("");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // ── 목업 생성 요청 ─────────────────────────────────────────
+  const mockupMutation = useMutation({
+    mutationFn: () =>
+      authFetch(`/api/projects/${projectId}/areas/${areaId}/ai/mockup`, {
+        method: "POST",
+        body:   JSON.stringify({ comment: mockupComment }),
+      }),
+    onSuccess: () => {
+      toast.success("목업 생성이 요청되었습니다.");
+      setMockupComment("");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // ── 로딩 ───────────────────────────────────────────────────────
+  if (!isNew && isLoading) {
+    return <div style={{ padding: "40px 32px", color: "#888" }}>로딩 중...</div>;
+  }
+
+  return (
+    <div style={{ padding: "32px" }}>
+      {/* 헤더 — 뒤로가기 + 제목 + 취소/저장 한 줄 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
+        <button
+          onClick={() => router.push(`/projects/${projectId}/areas`)}
+          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)" }}
+        >
+          ←
+        </button>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
+          {isNew ? "영역 신규 등록" : `${data?.displayId ?? ""} 영역 편집`}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => router.push(`/projects/${projectId}/areas`)}
+            style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
+          >
+            취소
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saveMutation.isPending}
+            style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 20px" }}
+          >
+            {saveMutation.isPending ? "저장 중..." : "저장"}
+          </button>
+        </div>
+      </div>
+
+      {/* 2-컬럼 레이아웃 */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 28, alignItems: "start" }}>
 
         {/* 왼쪽 컬럼: 기본 정보 폼 + 요약 + 기능 목록 */}
@@ -344,63 +407,6 @@ function AreaDetailPageInner() {
             </section>
           )}
         </div>
- */}
-          {!isNew && (
-            <section style={sectionStyle}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>기능 목록</h3>
-                <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-                  총 {data?.functions.length ?? 0}개
-                </span>
-              </div>
-
-              {!data?.functions.length ? (
-                <div style={{ padding: "32px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-                  등록된 기능이 없습니다.
-                </div>
-              ) : (
-                <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-                  <div style={funcGridHeaderStyle}>
-                    <div>순서</div>
-                    <div>기능명</div>
-                    <div>우선순위</div>
-                    <div>상태</div>
-                  </div>
-                  {data.functions.map((fn, idx) => (
-                    <div
-                      key={fn.funcId}
-                      style={{
-                        ...funcGridRowStyle,
-                        borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-                      }}
-                    >
-                      <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-                        {fn.sortOrder}
-                      </div>
-                      <div>
-                        <button
-                          onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
-                          style={linkBtnStyle}
-                        >
-                          <span style={{ fontSize: 12, color: "var(--color-text-secondary)", marginRight: 6 }}>
-                            {fn.displayId}
-                          </span>
-                          {fn.name}
-                        </button>
-                      </div>
-                      <div>
-                        <span style={priorityBadgeStyle(fn.priority)}>{fn.priority}</span>
-                      </div>
-                      <div>
-                        <span style={statusBadgeStyle(fn.status)}>{STATUS_LABELS[fn.status] ?? fn.status}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          )}
-        </div>
 
         {/* 오른쪽 컬럼: AI 도구 (수정 모드에서만) */}
         {!isNew && (
@@ -424,7 +430,7 @@ function AreaDetailPageInner() {
               <div style={{ display: "flex", justifyContent: "flex-end" }}>
                 <button
                   onClick={() => asciiMutation.mutate()}
-                  style={{ ...primaryBtnStyle, background: "#7b1fa2" }}
+                  style={secondaryBtnStyle}
                   disabled={asciiMutation.isPending}
                 >
                   {asciiMutation.isPending ? "요청 중..." : "AI ASCII 변환 요청"}
@@ -438,7 +444,7 @@ function AreaDetailPageInner() {
               <div style={{ marginBottom: 16 }}>
                 <button
                   onClick={() => setExcalidrawOpen(true)}
-                  style={{ ...primaryBtnStyle, background: "#1565c0" }}
+                  style={primaryBtnStyle}
                 >
                   Excalidraw로 설계하기 ↗
                 </button>
@@ -463,7 +469,7 @@ function AreaDetailPageInner() {
               <div style={{ display: "flex", justifyContent: "flex-end" }}>
                 <button
                   onClick={() => mockupMutation.mutate()}
-                  style={{ ...primaryBtnStyle, background: "#e65100" }}
+                  style={secondaryBtnStyle}
                   disabled={mockupMutation.isPending}
                 >
                   {mockupMutation.isPending ? "요청 중..." : "목업 생성 요청"}
@@ -626,21 +632,22 @@ function statusBadgeStyle(status: string): React.CSSProperties {
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
 const sectionStyle: React.CSSProperties = {
-  marginBottom: 32,
-  padding:      "24px",
-  border:       "1px solid var(--color-border)",
-  borderRadius: 8,
+  padding:       "20px 24px",
+  border:        "1px solid var(--color-border)",
+  borderRadius:  8,
+  background:    "var(--color-bg-card)",
+  display:       "flex",
+  flexDirection: "column",
+  gap:           16,
 };
 
 const sectionTitleStyle: React.CSSProperties = {
-  margin:      "0 0 16px",
-  fontSize:    15,
-  fontWeight:  700,
+  margin:     0,
+  fontSize:   15,
+  fontWeight: 700,
 };
 
-const formGroupStyle: React.CSSProperties = {
-  marginBottom: 16,
-};
+const formGroupStyle: React.CSSProperties = {};
 
 const labelStyle: React.CSSProperties = {
   display:      "block",

@@ -191,12 +191,31 @@ function FunctionDetailPageInner() {
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
         <button
           onClick={() => router.push(`/projects/${projectId}/functions`)}
-          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#666" }}
+          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--color-text-secondary)" }}
         >
           ←
         </button>
         <div style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
           {isNew ? "기능 신규 등록" : `${data?.displayId ?? ""} 기능 편집`}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => router.push(`/projects/${projectId}/functions`)}
+            disabled={saveMutation.isPending}
+            style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
+          >
+            취소
+          </button>
+          <button
+            onClick={() => {
+              if (!name.trim()) { toast.error("기능명을 입력해 주세요."); return; }
+              saveMutation.mutate();
+            }}
+            disabled={saveMutation.isPending}
+            style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 20px" }}
+          >
+            {saveMutation.isPending ? "저장 중..." : "저장"}
+          </button>
         </div>
       </div>
 
@@ -207,7 +226,7 @@ function FunctionDetailPageInner() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 24px" }}>
           <div style={formGroupStyle}>
             <label style={labelStyle}>상위 영역</label>
-            <select value={areaId} onChange={(e) => setAreaId(e.target.value)} style={inputStyle}>
+            <select value={areaId} onChange={(e) => setAreaId(e.target.value)} style={selectStyle}>
               <option value="">미분류 (영역 없음)</option>
               {areaOptions.map((a) => (
                 <option key={a.areaId} value={a.areaId}>{a.displayId} {a.name}</option>
@@ -228,14 +247,14 @@ function FunctionDetailPageInner() {
 
           <div style={formGroupStyle}>
             <label style={labelStyle}>유형</label>
-            <select value={type} onChange={(e) => setType(e.target.value)} style={inputStyle}>
+            <select value={type} onChange={(e) => setType(e.target.value)} style={selectStyle}>
               {FUNC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
 
           <div style={formGroupStyle}>
             <label style={labelStyle}>우선순위</label>
-            <select value={priority} onChange={(e) => setPriority(e.target.value)} style={inputStyle}>
+            <select value={priority} onChange={(e) => setPriority(e.target.value)} style={selectStyle}>
               <option value="HIGH">HIGH — 높음</option>
               <option value="MEDIUM">MEDIUM — 중간</option>
               <option value="LOW">LOW — 낮음</option>
@@ -244,7 +263,7 @@ function FunctionDetailPageInner() {
 
           <div style={formGroupStyle}>
             <label style={labelStyle}>복잡도</label>
-            <select value={complexity} onChange={(e) => setComplexity(e.target.value)} style={inputStyle}>
+            <select value={complexity} onChange={(e) => setComplexity(e.target.value)} style={selectStyle}>
               <option value="HIGH">HIGH — 높음</option>
               <option value="MEDIUM">MEDIUM — 중간</option>
               <option value="LOW">LOW — 낮음</option>
@@ -342,7 +361,7 @@ function FunctionDetailPageInner() {
               <div style={{ display: "flex", justifyContent: "flex-end" }}>
                 <button
                   onClick={() => aiMutation.mutate({ taskType: "INSPECT", comment: inspectComment })}
-                  style={{ ...primaryBtnStyle, background: "#7b1fa2" }}
+                  style={primaryBtnStyle}
                   disabled={aiMutation.isPending}
                 >
                   AI 명세 누락 검토 요청
@@ -362,7 +381,7 @@ function FunctionDetailPageInner() {
               <div style={{ display: "flex", justifyContent: "flex-end" }}>
                 <button
                   onClick={() => aiMutation.mutate({ taskType: "IMPACT", comment: impactComment })}
-                  style={{ ...primaryBtnStyle, background: "#e65100" }}
+                  style={primaryBtnStyle}
                   disabled={aiMutation.isPending}
                 >
                   AI 영향도 분석 요청
@@ -538,7 +557,7 @@ function ColumnMappingPopup({
             <select
               value={selectedTableId}
               onChange={(e) => setSelectedTableId(e.target.value)}
-              style={inputStyle}
+              style={selectStyle}
             >
               <option value="">테이블을 선택하세요</option>
               {tables.map((t) => (
@@ -550,7 +569,7 @@ function ColumnMappingPopup({
           </div>
           <button
             onClick={() => aiDraftMutation.mutate()}
-            style={{ ...primaryBtnStyle, background: "#7b1fa2", flexShrink: 0 }}
+            style={{ ...primaryBtnStyle, flexShrink: 0 }}
             disabled={aiDraftMutation.isPending}
           >
             AI 초안 생성
@@ -649,6 +668,7 @@ const FUNC_TYPES = [
 const sectionStyle: React.CSSProperties = {
   marginBottom: 28, padding: "24px",
   border: "1px solid var(--color-border)", borderRadius: 8,
+  background: "var(--color-bg-card)",
 };
 const sectionTitleStyle: React.CSSProperties = { margin: "0 0 16px", fontSize: 15, fontWeight: 700 };
 const formGroupStyle: React.CSSProperties  = { marginBottom: 16 };
@@ -660,6 +680,14 @@ const inputStyle: React.CSSProperties = {
   width: "100%", padding: "8px 12px", borderRadius: 6,
   border: "1px solid var(--color-border)", fontSize: 14,
   background: "var(--color-bg-card)", color: "var(--color-text-primary)", boxSizing: "border-box",
+};
+const selectStyle: React.CSSProperties = {
+  ...inputStyle,
+  appearance: "none",
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 10px center",
+  paddingRight: 32,
 };
 const primaryBtnStyle: React.CSSProperties = {
   padding: "8px 20px", borderRadius: 6, border: "none",
