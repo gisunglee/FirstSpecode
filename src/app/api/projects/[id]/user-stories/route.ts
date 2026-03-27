@@ -127,9 +127,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   };
 
   if (!requirementId) return apiError("VALIDATION_ERROR", "요구사항을 선택해 주세요.", 400);
-  if (!name?.trim())   return apiError("VALIDATION_ERROR", "스토리명을 입력해 주세요.", 400);
-  if (!persona?.trim())  return apiError("VALIDATION_ERROR", "페르소나를 입력해 주세요.", 400);
-  if (!scenario?.trim()) return apiError("VALIDATION_ERROR", "시나리오를 입력해 주세요.", 400);
+  if (!name?.trim())  return apiError("VALIDATION_ERROR", "스토리명을 입력해 주세요.", 400);
+  // persona, scenario는 선택 항목 (트리에서 빠른 추가 시 생략 가능)
 
   // 요구사항이 이 프로젝트에 속하는지 확인
   const req = await prisma.tbRqRequirement.findUnique({ where: { req_id: requirementId } });
@@ -162,8 +161,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           req_id:           requirementId,
           story_display_id: displayId,
           story_nm:         name.trim(),
-          persona_cn:       persona.trim(),
-          scenario_cn:      scenario.trim(),
+          persona_cn:       persona?.trim() ?? "",
+          scenario_cn:      scenario?.trim() ?? "",
           sort_ordr:        (maxSort?.sort_ordr ?? 0) + 1,
         },
       });

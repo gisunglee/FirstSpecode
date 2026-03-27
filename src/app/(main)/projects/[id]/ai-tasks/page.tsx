@@ -188,7 +188,7 @@ function AiTasksPageInner() {
   }
 
   return (
-    <div style={{ padding: "32px" }}>
+    <div style={{ padding: "20px 24px" }}>
       {/* ── 헤더 타이틀 ──────────────────────────────────────────────────────── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

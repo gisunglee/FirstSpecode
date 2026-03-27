@@ -139,7 +139,7 @@ function TaskDetailPageInner() {
   }
 
   return (
-    <div style={{ padding: "32px", maxWidth: 760 }}>
+    <div style={{ padding: "20px 24px", maxWidth: 760 }}>
       {/* 헤더 */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
         <button

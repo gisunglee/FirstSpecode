@@ -82,7 +82,7 @@ function DeleteDialog({
       <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, background: "var(--color-bg-card)", border: "1px solid var(--color-border-strong)", borderRadius: "var(--radius-card)", boxShadow: "var(--shadow-xl)", padding: "28px 24px" }}>
         <div style={{ fontSize: 28, marginBottom: 12 }}>⚠️</div>
         <h3 style={{ margin: "0 0 10px", fontSize: "var(--text-lg)", fontWeight: 700, color: "var(--color-text-heading)" }}>프로젝트를 삭제하시겠습니까?</h3>
-        <p style={{ margin: "0 0 16px", fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", lineHeight: 1.7 }}>
+        <p style={{ margin: "0 0 8px", fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", lineHeight: 1.7 }}>
           <strong>'{projectName}'</strong>을 삭제하면<br />모든 하위 데이터가 즉시 제거되며 복구할 수 없습니다.
         </p>
         <div style={{ marginBottom: 20 }}>
@@ -178,7 +178,7 @@ function ProjectSettingsInner() {
       </div>
 
       {/* AR-00032 탭 네비게이션 (FID-00074) */}
-      <div style={{ display: "flex", borderBottom: "1px solid var(--color-border)", marginBottom: 24 }}>
+      <div style={{ display: "flex", borderBottom: "1px solid var(--color-border)", marginBottom: 12 }}>
         <button style={tabStyle("basic")}   onClick={() => setActiveTab("basic")}>기본정보</button>
         <button style={tabStyle("ai")}      onClick={() => setActiveTab("ai")}>AI설정</button>
         <button style={tabStyle("history")} onClick={() => setActiveTab("history")}>변경이력</button>
@@ -381,7 +381,7 @@ function AiSettingsTab({ projectId }: { projectId: string }) {
     <div>
       {/* API 키 섹션 */}
       <div style={cardStyle}>
-        <h3 style={{ margin: "0 0 16px", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--color-text-heading)" }}>AI API 키</h3>
+        <h3 style={{ margin: "0 0 8px", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--color-text-heading)" }}>AI API 키</h3>
 
         {/* 키 목록 */}
         {apiKeys.length === 0 && !showAddForm && (
@@ -439,7 +439,7 @@ function AiSettingsTab({ projectId }: { projectId: string }) {
 
       {/* AI 호출 방식 섹션 */}
       <div style={cardStyle}>
-        <h3 style={{ margin: "0 0 16px", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--color-text-heading)" }}>AI 호출 방식</h3>
+        <h3 style={{ margin: "0 0 8px", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--color-text-heading)" }}>AI 호출 방식</h3>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
           {[
             { value: "DIRECT", label: "Claude API 직접 호출", desc: "등록된 API 키로 직접 요청합니다." },
@@ -480,7 +480,7 @@ function HistoryTab({ projectId }: { projectId: string }) {
 
   if (items.length === 0) {
     return (
-      <div style={{ padding: "32px", textAlign: "center", color: "var(--color-text-tertiary)", fontSize: "var(--text-sm)", background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-card)" }}>
+      <div style={{ padding: "20px 24px", textAlign: "center", color: "var(--color-text-tertiary)", fontSize: "var(--text-sm)", background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-card)" }}>
         변경 이력이 없습니다.
       </div>
     );

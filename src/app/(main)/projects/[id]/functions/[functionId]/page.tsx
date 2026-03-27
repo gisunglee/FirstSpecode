@@ -187,7 +187,7 @@ function FunctionDetailPageInner() {
   if (!isNew && isLoading) return <div style={{ padding: "40px 32px", color: "#888" }}>로딩 중...</div>;
 
   return (
-    <div style={{ padding: "32px", maxWidth: 860 }}>
+    <div style={{ padding: "20px 24px", maxWidth: 860 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
         <button
           onClick={() => router.push(`/projects/${projectId}/functions`)}
@@ -349,7 +349,7 @@ function FunctionDetailPageInner() {
           <section style={sectionStyle}>
             <h3 style={sectionTitleStyle}>AI 지원</h3>
 
-            <div style={{ marginBottom: 24 }}>
+            <div style={{ marginBottom: 12 }}>
               <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>AI 명세 누락 검토</h4>
               <textarea
                 value={inspectComment}
@@ -670,7 +670,7 @@ const sectionStyle: React.CSSProperties = {
   border: "1px solid var(--color-border)", borderRadius: 8,
   background: "var(--color-bg-card)",
 };
-const sectionTitleStyle: React.CSSProperties = { margin: "0 0 16px", fontSize: 15, fontWeight: 700 };
+const sectionTitleStyle: React.CSSProperties = { margin: "0 0 8px", fontSize: 15, fontWeight: 700 };
 const formGroupStyle: React.CSSProperties  = { marginBottom: 16 };
 const labelStyle: React.CSSProperties = {
   display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600,

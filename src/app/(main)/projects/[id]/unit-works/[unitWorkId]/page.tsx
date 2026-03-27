@@ -174,7 +174,7 @@ function UnitWorkDetailPageInner() {
   }
 
   return (
-    <div style={{ padding: "32px", maxWidth: 1000 }}>
+    <div style={{ padding: "20px 24px", maxWidth: 900 }}>
       {/* 헤더 */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
         <button

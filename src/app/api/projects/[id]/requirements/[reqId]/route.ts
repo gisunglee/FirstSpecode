@@ -174,15 +174,17 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   try {
     const existing = await prisma.tbRqRequirement.findUnique({
-      where:   { req_id: reqId },
-      include: { attachFiles: true },
+      where: { req_id: reqId },
     });
     if (!existing || existing.prjct_id !== projectId) {
       return apiError("NOT_FOUND", "요구사항을 찾을 수 없습니다.", 404);
     }
 
-    // 첨부파일 물리 삭제 (DB 삭제 전에 처리)
-    for (const file of existing.attachFiles) {
+    // 첨부파일 물리 삭제 (FK 제약 없는 다형성 참조 — ref_tbl_nm + ref_id로 조회)
+    const attachFiles = await prisma.tbCmAttachFile.findMany({
+      where: { ref_tbl_nm: "tb_rq_requirement", ref_id: reqId },
+    });
+    for (const file of attachFiles) {
       deleteFile(file.file_path_nm);
     }
 

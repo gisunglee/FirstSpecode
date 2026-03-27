@@ -119,7 +119,7 @@ function ScreensPageInner() {
   }
 
   return (
-    <div style={{ padding: "32px" }}>
+    <div style={{ padding: "20px 24px" }}>
       {/* 헤더 타이틀 */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -325,7 +325,7 @@ function DeleteConfirmDialog({
         </p>
 
         {hasAreas && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
             <p style={{ margin: "0 0 8px", fontSize: 13, color: "var(--color-text-secondary)" }}>
               연결된 영역 {screen.areaCount}개 처리 방법:
             </p>

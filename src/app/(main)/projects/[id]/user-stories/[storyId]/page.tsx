@@ -191,22 +191,38 @@ function UserStoryDetailPageInner() {
   }
 
   return (
-    <div style={{ padding: "32px", maxWidth: 760 }}>
+    <div style={{ padding: "20px 24px" }}>
       {/* 헤더 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
         <button
           onClick={() => router.push(`/projects/${projectId}/user-stories`)}
           style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#666" }}
         >
           ←
         </button>
-        <div style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
           {isNew ? "사용자스토리 추가" : "사용자스토리 편집"}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => router.push(`/projects/${projectId}/user-stories`)}
+            disabled={saveMutation.isPending}
+            style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
+          >
+            취소
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saveMutation.isPending}
+            style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 20px" }}
+          >
+            {saveMutation.isPending ? "저장 중..." : "저장"}
+          </button>
         </div>
       </div>
 
       {/* AR-00050 브레드크럼 */}
-      <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 28, paddingLeft: 4 }}>
+      <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 12, paddingLeft: 4 }}>
         기획 레이어
         <span style={{ margin: "0 4px" }}>›</span>
         {breadcrumb?.taskName ?? selectedReq?.taskName ?? "과업"}
@@ -216,9 +232,10 @@ function UserStoryDetailPageInner() {
         사용자스토리
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* 2-컬럼 레이아웃: 기본 정보 | 인수기준 */}
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 936px) 1fr", gap: 28, alignItems: "start" }}>
 
-        {/* ── 기본 정보 카드 ── */}
+        {/* 왼쪽: 기본 정보 */}
         <Card title="기본 정보">
           <FormField label="요구사항" required>
             <select
@@ -259,14 +276,14 @@ function UserStoryDetailPageInner() {
             <textarea
               value={form.scenario}
               placeholder="예: 나는 이메일과 비밀번호로 로그인하여 프로젝트 목록을 확인하고 싶다."
-              rows={4}
+              rows={5}
               onChange={(e) => setForm((p) => ({ ...p, scenario: e.target.value }))}
               style={{ ...inputStyle, resize: "vertical" }}
             />
           </FormField>
         </Card>
 
-        {/* ── 인수기준 카드 ── */}
+        {/* 오른쪽: 인수기준 */}
         <Card title="인수기준 (Given / When / Then)" action={
           <button onClick={addAcRow} style={{ ...secondaryBtnStyle, fontSize: 12, padding: "4px 12px" }}>
             + 추가
@@ -290,15 +307,9 @@ function UserStoryDetailPageInner() {
                   <button
                     onClick={() => removeAcRow(idx)}
                     style={{
-                      position: "absolute",
-                      top: 8,
-                      right: 10,
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      fontSize: 16,
-                      color: "#aaa",
-                      lineHeight: 1,
+                      position: "absolute", top: 8, right: 10,
+                      background: "none", border: "none", cursor: "pointer",
+                      fontSize: 16, color: "#aaa", lineHeight: 1,
                     }}
                     title="이 인수기준 삭제"
                   >
@@ -326,23 +337,6 @@ function UserStoryDetailPageInner() {
           )}
         </Card>
 
-        {/* 버튼 */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button
-            onClick={() => router.push(`/projects/${projectId}/user-stories`)}
-            disabled={saveMutation.isPending}
-            style={secondaryBtnStyle}
-          >
-            취소
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saveMutation.isPending}
-            style={primaryBtnStyle}
-          >
-            {saveMutation.isPending ? "저장 중..." : "저장"}
-          </button>
-        </div>
       </div>
     </div>
   );

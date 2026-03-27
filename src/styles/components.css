@@ -147,7 +147,7 @@ body {
 
 /* Sidebar toggle button — wrapper 기준 absolute (nav 밖이므로 overflow 잘림 없음) */
 .sp-sidebar-toggle {
-  position: absolute; top: 7px; right: -13px;
+  position: absolute; top: 42px; right: -13px;
   width: 26px; height: 26px; border-radius: var(--radius-full);
   background: var(--color-bg-card); border: 1.5px solid var(--color-border-strong);
   display: flex; align-items: center; justify-content: center;

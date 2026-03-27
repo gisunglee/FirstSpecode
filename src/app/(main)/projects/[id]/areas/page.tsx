@@ -125,17 +125,22 @@ function AreasPageInner() {
   }
 
   return (
-    <div style={{ padding: "32px" }}>
+    <div style={{ padding: "20px 24px" }}>
       {/* 헤더 */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
-          총 {items.length}건
-          {screenIdFilter && (
-            <span style={{ marginLeft: 8, color: "var(--color-primary, #1976d2)", fontSize: 12 }}>
-              (화면 필터 적용)
-            </span>
-          )}
-        </span>
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 4 }}>
+            영역 목록
+          </div>
+          <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
+            총 {items.length}건
+            {screenIdFilter && (
+              <span style={{ marginLeft: 8, color: "var(--color-primary, #1976d2)", fontSize: 12 }}>
+                (화면 필터 적용)
+              </span>
+            )}
+          </span>
+        </div>
         <button
           onClick={() => {
             const url = screenIdFilter
@@ -319,7 +324,7 @@ function DeleteConfirmDialog({
         </p>
 
         {hasFunctions && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
             <p style={{ margin: "0 0 8px", fontSize: 13, color: "var(--color-text-secondary)" }}>
               연결된 기능 {area.functionCount}개 처리 방법:
             </p>

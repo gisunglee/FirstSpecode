@@ -16,6 +16,8 @@ import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import RichEditor from "@/components/ui/RichEditor";
+import MarkdownEditor from "@/components/ui/MarkdownEditor";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -839,18 +841,22 @@ function TaskDetailPanel({ projectId, taskId, onSaved }: { projectId: string; ta
 // ── 요구사항 상세 패널 ────────────────────────────────────────────────────────
 
 function ReqDetailPanel({ projectId, reqId, onSaved }: { projectId: string; reqId: string; onSaved: () => void }) {
-  const [name,     setName]     = useState("");
-  const [priority, setPriority] = useState("MEDIUM");
-  const [source,   setSource]   = useState("RFP");
-  const [orgnlCn,  setOrgnlCn]  = useState("");
-  const [curncyCn, setCurncyCn] = useState("");
-  const [specCn,   setSpecCn]   = useState("");
-  const [loaded,   setLoaded]   = useState(false);
+  const [name,        setName]        = useState("");
+  const [priority,    setPriority]    = useState("MEDIUM");
+  const [source,      setSource]      = useState("RFP");
+  const [orgnlCn,     setOrgnlCn]     = useState("");
+  const [curncyCn,    setCurncyCn]    = useState("");
+  const [analysisCn,  setAnalysisCn]  = useState("");
+  const [specCn,      setSpecCn]      = useState("");
+  const [taskId,      setTaskId]      = useState<string | null>(null);
+  const [loaded,      setLoaded]      = useState(false);
+  // 원문/현행화 탭 — 현행화가 기본 활성
+  const [contentTab,  setContentTab]  = useState<"current" | "original">("current");
 
   const { isLoading } = useQuery({
     queryKey: ["req-detail-tree", projectId, reqId],
     queryFn:  () =>
-      authFetch<{ data: { name: string; priority: string; source: string; originalContent: string; currentContent: string; detailSpec: string; requirementId: string } }>(
+      authFetch<{ data: { name: string; priority: string; source: string; originalContent: string; currentContent: string; analysisMemo: string; detailSpec: string; requirementId: string; taskId: string | null } }>(
         `/api/projects/${projectId}/requirements/${reqId}`
       ).then((r) => {
         setName(r.data.name);
@@ -858,7 +864,9 @@ function ReqDetailPanel({ projectId, reqId, onSaved }: { projectId: string; reqI
         setSource(r.data.source);
         setOrgnlCn(r.data.originalContent);
         setCurncyCn(r.data.currentContent);
+        setAnalysisCn(r.data.analysisMemo);
         setSpecCn(r.data.detailSpec);
+        setTaskId(r.data.taskId ?? null);
         setLoaded(true);
         return r.data;
       }),
@@ -871,12 +879,14 @@ function ReqDetailPanel({ projectId, reqId, onSaved }: { projectId: string; reqI
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
           requirementId: reqId,
+          // taskId를 반드시 포함해야 과업 연결이 유지됨 (누락 시 null로 덮어써져 미분류 처리됨)
+          taskId,
           name, priority, source,
-          rfpPage: "",
-          originalContent:  orgnlCn,
-          currentContent:   curncyCn,
-          analysisMemo:     "",
-          detailSpec:       specCn,
+          rfpPage:         "",
+          originalContent: orgnlCn,
+          currentContent:  curncyCn,
+          analysisMemo:    analysisCn,
+          detailSpec:      specCn,
         }),
       }),
     onSuccess: () => { toast.success("저장되었습니다."); onSaved(); },
@@ -908,14 +918,47 @@ function ReqDetailPanel({ projectId, reqId, onSaved }: { projectId: string; reqI
             </select>
           </PanelField>
         </div>
-        <PanelField label="원문">
-          <textarea value={orgnlCn} onChange={(e) => setOrgnlCn(e.target.value)} rows={4} style={{ ...inputStyle, resize: "vertical" }} />
-        </PanelField>
-        <PanelField label="현행화">
-          <textarea value={curncyCn} onChange={(e) => setCurncyCn(e.target.value)} rows={4} style={{ ...inputStyle, resize: "vertical" }} />
+
+        {/* 원문 / 현행화 탭 */}
+        <div>
+          <div style={{ display: "flex", borderBottom: "1px solid var(--color-border)", marginBottom: 12 }}>
+            {(["current", "original"] as const).map((tab) => {
+              const label = tab === "current" ? "현행화" : "원문";
+              const active = contentTab === tab;
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setContentTab(tab)}
+                  style={{
+                    padding: "6px 14px",
+                    fontSize: 13,
+                    fontWeight: active ? 600 : 400,
+                    color: active ? "var(--color-brand)" : "var(--color-text-secondary)",
+                    background: "none",
+                    border: "none",
+                    borderBottom: active ? "2px solid var(--color-brand)" : "2px solid transparent",
+                    cursor: "pointer",
+                    marginBottom: -1,
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          {contentTab === "current" ? (
+            <RichEditor key={`current-${reqId}`} value={curncyCn} onChange={setCurncyCn} placeholder="현행화 내용을 입력하세요." minHeight={160} />
+          ) : (
+            <RichEditor key={`original-${reqId}`} value={orgnlCn} onChange={setOrgnlCn} placeholder="원문 내용을 입력하세요." minHeight={160} />
+          )}
+        </div>
+
+        <PanelField label="분석 메모">
+          <MarkdownEditor value={analysisCn} onChange={setAnalysisCn} rows={10} placeholder="분석 메모를 입력하세요." />
         </PanelField>
         <PanelField label="상세 명세">
-          <textarea value={specCn} onChange={(e) => setSpecCn(e.target.value)} rows={5} style={{ ...inputStyle, resize: "vertical" }} />
+          <MarkdownEditor value={specCn} onChange={setSpecCn} rows={10} placeholder="상세 명세를 입력하세요." />
         </PanelField>
       </div>
       <SaveBar onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
@@ -1029,7 +1072,7 @@ function PanelLoading() {
 
 function PanelHeader({ icon, displayType, name }: { icon: string; displayType: string; name: string }) {
   return (
-    <div style={{ marginBottom: 24 }}>
+    <div style={{ marginBottom: 12 }}>
       <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>{icon} {displayType}</div>
       <div style={{ fontSize: 20, fontWeight: 700, color: "var(--color-text-primary)" }}>{name || "(이름 없음)"}</div>
     </div>

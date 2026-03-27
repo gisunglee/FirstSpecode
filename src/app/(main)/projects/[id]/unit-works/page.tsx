@@ -170,7 +170,7 @@ function UnitWorksPageInner() {
   }
 
   return (
-    <div style={{ padding: "32px" }}>
+    <div style={{ padding: "20px 24px" }}>
       {/* ── 헤더 타이틀 ──────────────────────────────────────────────────────── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -443,7 +443,7 @@ function DeleteConfirmDialog({
 
         {/* 화면이 있을 때만 하위 처리 선택지 표시 */}
         {hasScreens && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
             <p style={{ margin: "0 0 8px", fontSize: 13, color: "var(--color-text-secondary)" }}>
               연결된 화면 {unitWork.screenCount}개 처리 방법:
             </p>

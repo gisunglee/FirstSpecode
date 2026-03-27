@@ -120,7 +120,7 @@ function RequirementsPageInner() {
   }
 
   return (
-    <div style={{ padding: "32px" }}>
+    <div style={{ padding: "20px 24px" }}>
       {/* 헤더 */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -301,7 +301,7 @@ function DeleteConfirmDialog({
           &lsquo;{requirement.name}&rsquo;
         </p>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, cursor: "pointer" }}>
             <input
               type="radio"

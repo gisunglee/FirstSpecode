@@ -93,7 +93,7 @@ function RequirementHistoryPageInner() {
   }
 
   return (
-    <div style={{ padding: "32px" }}>
+    <div style={{ padding: "20px 24px" }}>
       {/* 브레드크럼 */}
       <div style={{ fontSize: 13, color: "var(--color-text-secondary)", marginBottom: 20 }}>
         <span
@@ -106,7 +106,7 @@ function RequirementHistoryPageInner() {
         <span>변경 이력</span>
       </div>
 
-      <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 24 }}>변경 이력</div>
+      <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>변경 이력</div>
 
       {/* 이력 그리드 (AR-00052) */}
       {items.length === 0 ? (
@@ -323,7 +323,7 @@ function DiffViewerPopup({
         </div>
 
         {/* 버전 선택 (AR-00053) */}
-        <div style={{ display: "flex", gap: 16, marginBottom: 24, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 16, marginBottom: 12, alignItems: "center" }}>
           <div>
             <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 4 }}>좌측 버전</label>
             <select
@@ -534,7 +534,7 @@ function ConfirmPopup({
     <div style={overlayStyle} onClick={onClose}>
       <div style={dialogStyle} onClick={(e) => e.stopPropagation()}>
         <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700 }}>버전 확정</h3>
-        <p style={{ margin: "0 0 16px", fontSize: 14, color: "var(--color-text-secondary)" }}>
+        <p style={{ margin: "0 0 8px", fontSize: 14, color: "var(--color-text-secondary)" }}>
           <strong style={{ color: "var(--color-text-primary)" }}>{item.versionNo}</strong>
           {" → "}
           <strong style={{ color: "#1565c0" }}>{nextVersion}</strong>

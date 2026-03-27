@@ -153,11 +153,11 @@ function TaskListPageInner() {
   const tasks = orderedTasks.length > 0 ? orderedTasks : data.tasks;
 
   return (
-    <div style={{ padding: "32px", maxWidth: 960 }}>
+    <div style={{ padding: "20px 24px", maxWidth: 960 }}>
       {/* 헤더 */}
       <div style={{
         display: "flex", justifyContent: "space-between",
-        alignItems: "center", marginBottom: 24,
+        alignItems: "center", marginBottom: 12,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button
@@ -179,7 +179,7 @@ function TaskListPageInner() {
       </div>
 
       {/* 총 건수 */}
-      <p style={{ margin: "0 0 16px", fontSize: 14, color: "var(--color-text-secondary)" }}>
+      <p style={{ margin: "0 0 8px", fontSize: 14, color: "var(--color-text-secondary)" }}>
         총 <strong>{data.totalCount}</strong>건
       </p>
 

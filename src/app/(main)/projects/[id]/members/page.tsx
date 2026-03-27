@@ -171,9 +171,9 @@ function MembersPageInner() {
     : ROLE_OPTIONS.filter((o) => o.value !== "OWNER");
 
   return (
-    <div style={{ padding: "32px", maxWidth: 900 }}>
+    <div style={{ padding: "20px 24px", maxWidth: 900 }}>
       {/* 헤더 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
         <button
           onClick={() => router.back()}
           style={{
@@ -189,7 +189,7 @@ function MembersPageInner() {
       </div>
 
       {/* 총 멤버 수 */}
-      <p style={{ margin: "0 0 16px", fontSize: 14, color: "var(--color-text-secondary)" }}>
+      <p style={{ margin: "0 0 8px", fontSize: 14, color: "var(--color-text-secondary)" }}>
         총 <strong>{totalCount}</strong>명
       </p>
 
@@ -220,7 +220,7 @@ function MembersPageInner() {
 
         {/* 바디 */}
         {members.length === 0 ? (
-          <div style={{ padding: "32px", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+          <div style={{ padding: "20px 24px", textAlign: "center", color: "#aaa", fontSize: 14 }}>
             멤버가 없습니다.
           </div>
         ) : (
@@ -441,7 +441,7 @@ function RemoveConfirmDialog({
 }) {
   return (
     <DialogOverlay>
-      <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>
+      <h2 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>
         멤버를 제거하시겠습니까?
       </h2>
 

@@ -73,7 +73,7 @@ function BaselinePageInner() {
   }
 
   return (
-    <div style={{ padding: "32px" }}>
+    <div style={{ padding: "20px 24px" }}>
       {/* 헤더 AR-00055 */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -218,8 +218,8 @@ function CreateBaselinePopup({
   return (
     <div style={overlayStyle} onClick={onClose}>
       <div style={dialogStyle} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700 }}>전체 요구사항 일괄 확정</h3>
-        <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--color-text-secondary)" }}>
+        <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700 }}>전체 요구사항 일괄 확정</h3>
+        <p style={{ margin: "0 0 8px", fontSize: 13, color: "var(--color-text-secondary)" }}>
           현재 프로젝트의 모든 요구사항을 스냅샷으로 저장합니다.
         </p>
 
@@ -242,7 +242,7 @@ function CreateBaselinePopup({
           value={comment}
           onChange={(e) => setComment(e.target.value)}
           placeholder="기준선 생성 사유를 입력해 주세요..."
-          rows={3}
+          rows={8}
           style={{ ...inputStyle, resize: "vertical", marginBottom: 20 }}
         />
 
@@ -473,7 +473,7 @@ const dialogStyle: React.CSSProperties = {
   borderRadius: 10,
   padding:      "28px 32px",
   minWidth:     400,
-  maxWidth:     560,
+  maxWidth:     728,   // 560 * 1.3
   width:        "100%",
   boxShadow:    "0 8px 32px rgba(0,0,0,0.18)",
 };

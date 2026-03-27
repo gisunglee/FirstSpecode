@@ -101,9 +101,6 @@ function RequirementDetailPageInner() {
   const [analyzeTab, setAnalyzeTab] = useState<"edit" | "preview">("edit");
   const [specTab,    setSpecTab]    = useState<"edit" | "preview">("edit");
 
-  // AI 초안 로딩
-  const [aiLoading, setAiLoading] = useState(false);
-
   // 파일 업로드 input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -210,36 +207,6 @@ function RequirementDetailPageInner() {
     saveMutation.mutate(form);
   }
 
-  // ── AI 초안 생성 ───────────────────────────────────────────────────────────
-  async function handleAiSpec() {
-    if (!form.analysisMemo.trim()) {
-      toast.error("분석 메모를 먼저 작성해 주세요.");
-      return;
-    }
-    if (form.detailSpec.trim()) {
-      const ok = confirm("기존 상세 명세 내용을 AI 초안으로 덮어쓰시겠습니까?");
-      if (!ok) return;
-    }
-
-    setAiLoading(true);
-    try {
-      const res = await authFetch<{ data: { spec: string } }>(
-        `/api/projects/${projectId}/requirements/${reqId}/ai/spec`,
-        {
-          method: "POST",
-          body:   JSON.stringify({ analysisMemo: form.analysisMemo }),
-        }
-      );
-      setForm((prev) => ({ ...prev, detailSpec: res.data.spec }));
-      setSpecTab("edit");
-      toast.success("AI 초안이 생성되었습니다.");
-    } catch {
-      toast.error("AI 초안 생성 중 오류가 발생했습니다.");
-    } finally {
-      setAiLoading(false);
-    }
-  }
-
   // ── 파일 업로드 ─────────────────────────────────────────────────────────────
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const selectedFiles = e.target.files;
@@ -311,7 +278,7 @@ function RequirementDetailPageInner() {
   }
 
   return (
-    <div style={{ padding: "32px", maxWidth: 1400 }}>
+    <div style={{ padding: "20px 24px", maxWidth: 1400 }}>
       {/* 헤더 */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
         <button
@@ -557,22 +524,6 @@ function RequirementDetailPageInner() {
                 rows={14}
               />
             </FormField>
-
-            {/* AI 초안 생성 버튼 */}
-            <div style={{ display: "flex", justifyContent: "flex-end", margin: "-8px 0 12px" }}>
-              <button
-                onClick={handleAiSpec}
-                disabled={aiLoading || isNew}
-                title={isNew ? "저장 후 AI 초안을 생성할 수 있습니다." : ""}
-                style={{
-                  ...secondaryBtnStyle,
-                  fontSize: 13,
-                  opacity: (aiLoading || isNew) ? 0.5 : 1,
-                }}
-              >
-                {aiLoading ? "⏳ AI 생성 중..." : "✨ AI spec 초안 생성"}
-              </button>
-            </div>
 
             {/* 상세 명세 */}
             <FormField label="상세 명세">
