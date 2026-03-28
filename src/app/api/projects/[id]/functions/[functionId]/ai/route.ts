@@ -46,9 +46,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "기능을 찾을 수 없습니다.", 404);
     }
 
-    // INSPECT: 명세가 있어야 함
-    if (taskType === "INSPECT" && !fn.spec_cn?.trim()) {
-      return apiError("VALIDATION_ERROR", "명세(spec)를 먼저 작성해 주세요.", 400);
+    // INSPECT: 설명이 있어야 함
+    if (taskType === "INSPECT" && !fn.func_dc?.trim()) {
+      return apiError("VALIDATION_ERROR", "설명(description)을 먼저 작성해 주세요.", 400);
     }
 
     const task = await prisma.tbAiTask.create({
@@ -59,10 +59,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         task_ty_code:    taskType,
         coment_cn:       comment?.trim() || null,
         req_snapshot_data: {
-          funcId:    functionId,
-          funcName:  fn.func_nm,
-          funcType:  fn.func_ty_code,
-          spec:      fn.spec_cn,
+          funcId:      functionId,
+          funcName:    fn.func_nm,
+          funcType:    fn.func_ty_code,
+          description: fn.func_dc,
         },
         req_mber_id:     auth.mberId,
         task_sttus_code: "PENDING",

@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor from "@/components/ui/MarkdownEditor";
 import { ScreenLayoutEditor, type LayoutRow } from "@/components/ui/ScreenLayoutEditor";
+import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -66,6 +67,7 @@ type SaveBody = {
   categoryM:    string;
   categoryS:    string;
   layoutData?:  string;
+  saveHistory?: boolean;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -111,6 +113,15 @@ function ScreenDetailPageInner() {
   // 화면 설명 예시 팝업
   const [descExampleOpen, setDescExampleOpen] = useState(false);
 
+  // 설명 변경 이력 저장 여부 확인 다이얼로그
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+
+  // 이력 조회 팝업 (SettingsHistoryDialog)
+  const [historyViewOpen, setHistoryViewOpen] = useState(false);
+
+  // 이력 저장 시 원본 설명 추적용
+  const [originalDescription, setOriginalDescription] = useState("");
+
   // ── 단위업무 목록 조회 (단위업무 선택용) ─────────────────────────────────────
   const { data: uwData } = useQuery({
     queryKey: ["unit-works-for-select", projectId],
@@ -140,6 +151,8 @@ function ScreenDetailPageInner() {
           categoryM:   d.categoryM,
           categoryS:   d.categoryS,
         });
+        // 설명 변경 감지를 위해 원본 값 보관
+        setOriginalDescription(d.description ?? "");
         // 저장된 레이아웃 데이터 복원
         if (d.layoutData) {
           try { setLayoutRows(JSON.parse(d.layoutData)); } catch { /* 잘못된 JSON 무시 */ }
@@ -161,7 +174,7 @@ function ScreenDetailPageInner() {
             method: "PUT",
             body:   JSON.stringify(body),
           }),
-    onSuccess: (res) => {
+    onSuccess: (res, variables) => {
       toast.success(isNew ? "화면이 등록되었습니다." : "저장되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["screens", projectId] });
       if (isNew && res?.data?.screenId) {
@@ -170,6 +183,12 @@ function ScreenDetailPageInner() {
       } else {
         // 수정 후 현재 페이지 데이터 갱신 (상세에 그대로 유지)
         queryClient.invalidateQueries({ queryKey: ["screen", projectId, screenId] });
+        // 저장 완료 후 원본 설명을 현재 값으로 갱신
+        setOriginalDescription(variables.description ?? "");
+        if (variables.saveHistory) {
+          // 이력 목록 캐시 무효화
+          queryClient.invalidateQueries({ queryKey: ["settings-history", projectId] });
+        }
       }
     },
     onError: (err: Error) => toast.error(err.message),
@@ -179,15 +198,27 @@ function ScreenDetailPageInner() {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
+  function doSave(saveHistory: boolean) {
+    saveMutation.mutate({
+      ...form,
+      layoutData:  layoutRows.length > 0 ? JSON.stringify(layoutRows) : undefined,
+      saveHistory: saveHistory || undefined,
+    });
+    setHistoryDialogOpen(false);
+  }
+
   function handleSave() {
     if (!form.name.trim()) {
       toast.error("화면명을 입력해 주세요.");
       return;
     }
-    saveMutation.mutate({
-      ...form,
-      layoutData: layoutRows.length > 0 ? JSON.stringify(layoutRows) : undefined,
-    });
+    // 수정 모드에서 설명이 변경된 경우 이력 저장 여부 확인
+    const descriptionChanged = !isNew && form.description.trim() !== originalDescription.trim();
+    if (descriptionChanged) {
+      setHistoryDialogOpen(true);
+      return;
+    }
+    doSave(false);
   }
 
   // ── 로딩 ───────────────────────────────────────────────────────────────────
@@ -196,7 +227,7 @@ function ScreenDetailPageInner() {
   }
 
   return (
-    <div style={{ padding: "32px" }}>
+    <div style={{ padding: "20px 24px" }}>
       {/* 헤더 */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
         <button
@@ -227,13 +258,13 @@ function ScreenDetailPageInner() {
       </div>
 
       {/* 2-컬럼 레이아웃: 기본 정보 | 화면 설명 */}
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 936px) 1fr", gap: 28, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 28, alignItems: "start" }}>
 
         {/* 왼쪽: 기본 정보 + 영역 목록 */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
           {/* AR-00065 기본 정보 폼 */}
-          <Section title="기본 정보">
+          <Section title="기본 정보" hideTitle>
             {/* 상위 단위업무 선택 */}
             <FormField label="상위 단위업무">
               <select
@@ -332,8 +363,9 @@ function ScreenDetailPageInner() {
           </Section>
 
           {/* 레이아웃 에디터 — 기본 정보 아래 */}
-          <Section title="레이아웃 구성">
+          <Section title="레이아웃 구성" hideTitle small>
             <ScreenLayoutEditor
+              title="레이아웃 구성"
               value={layoutRows}
               onChange={setLayoutRows}
               areas={detail?.areas.map((a) => ({
@@ -358,8 +390,18 @@ function ScreenDetailPageInner() {
         {/* 오른쪽: 화면 설명 (마크다운) */}
         <Section
           title="화면 설명"
+          small
           headerRight={
             <div style={{ display: "flex", gap: 5 }}>
+              {!isNew && (
+                <button
+                  type="button"
+                  onClick={() => setHistoryViewOpen(true)}
+                  style={ghostSmBtnStyle}
+                >
+                  🕐 변경 이력
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setDescExampleOpen(true)}
@@ -446,6 +488,62 @@ function ScreenDetailPageInner() {
           </div>
         )}
 
+      {/* 설명 변경 이력 저장 여부 확인 다이얼로그 */}
+      {historyDialogOpen && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setHistoryDialogOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: 420, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.2)", padding: "24px 28px" }}
+          >
+            <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
+              변경 이력 저장
+            </p>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+              화면 설명이 변경되었습니다.<br />
+              변경 이력을 함께 저장하시겠습니까?
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setHistoryDialogOpen(false)}
+                style={{ ...secondaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => doSave(false)}
+                disabled={saveMutation.isPending}
+                style={{ ...secondaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
+              >
+                이력 없이 저장
+              </button>
+              <button
+                type="button"
+                onClick={() => doSave(true)}
+                disabled={saveMutation.isPending}
+                style={{ ...primaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
+              >
+                이력과 함께 저장
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 설명 변경 이력 조회 팝업 */}
+      <SettingsHistoryDialog
+        open={historyViewOpen}
+        onClose={() => setHistoryViewOpen(false)}
+        projectId={projectId}
+        itemName="화면 설명"
+        currentValue={form.description}
+        title="화면 설명 변경 이력"
+      />
+
       </div>
     </div>
   );
@@ -462,7 +560,18 @@ function AreaListSection({
   router:    ReturnType<typeof useRouter>;
 }) {
   return (
-    <Section title={`영역 목록 (총 ${areas.length}개)`}>
+    <Section
+      title={`영역 목록 (총 ${areas.length}개)`}
+      small
+      headerRight={
+        <button
+          onClick={() => router.push(`/projects/${projectId}/areas?screenId=${screenId}`)}
+          style={{ ...secondaryBtnStyle, fontSize: 12, padding: "4px 12px" }}
+        >
+          영역 목록 관리 →
+        </button>
+      }
+    >
       {areas.length === 0 ? (
         <p style={{ margin: 0, fontSize: 13, color: "#aaa" }}>등록된 영역이 없습니다.</p>
       ) : (
@@ -471,7 +580,7 @@ function AreaListSection({
           <div style={areaGridHeaderStyle}>
             <div>순서</div>
             <div>영역명</div>
-            <div>유형</div>
+            <div style={{ textAlign: "right" }}>유형</div>
           </div>
           {/* 행 */}
           {areas.map((area, idx) => (
@@ -497,23 +606,13 @@ function AreaListSection({
                   {area.name}
                 </button>
               </div>
-              <div>
+              <div style={{ textAlign: "right" }}>
                 <span style={areaTypeBadgeStyle(area.type)}>{area.type}</span>
               </div>
             </div>
           ))}
         </div>
       )}
-
-      {/* 영역 목록 페이지로 이동 */}
-      <div style={{ marginTop: 12 }}>
-        <button
-          onClick={() => router.push(`/projects/${projectId}/areas?screenId=${screenId}`)}
-          style={{ ...secondaryBtnStyle, fontSize: 13 }}
-        >
-          영역 목록 관리 →
-        </button>
-      </div>
     </Section>
   );
 }
@@ -521,30 +620,42 @@ function AreaListSection({
 // ── 공통 컴포넌트 ─────────────────────────────────────────────────────────────
 
 function Section({
-  title, headerRight, children,
+  title, headerRight, children, small = false, hideTitle = false,
 }: {
   title:        string;
   headerRight?: React.ReactNode;
   children:     React.ReactNode;
+  /** 타이틀을 작은 uppercase 레이블로 표시 */
+  small?:       boolean;
+  /** 타이틀 행 자체를 숨김 */
+  hideTitle?:   boolean;
 }) {
   return (
     <div
       style={{
         border:        "1px solid var(--color-border)",
         borderRadius:  8,
-        padding:       "20px 24px",
+        padding:       small ? "14px 16px" : "20px 24px",
         background:    "var(--color-bg-card)",
         display:       "flex",
         flexDirection: "column",
-        gap:           16,
+        gap:           small ? 10 : 16,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
-          {title}
-        </h2>
-        {headerRight}
-      </div>
+      {!hideTitle && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          {small ? (
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              {title}
+            </span>
+          ) : (
+            <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
+              {title}
+            </h2>
+          )}
+          {headerRight}
+        </div>
+      )}
       {children}
     </div>
   );
@@ -648,7 +759,7 @@ const linkBtnStyle: React.CSSProperties = {
 
 const areaGridHeaderStyle: React.CSSProperties = {
   display:             "grid",
-  gridTemplateColumns: "60px 1fr 120px",
+  gridTemplateColumns: "44px 1fr 100px",
   gap:                 12,
   padding:             "8px 14px",
   background:          "var(--color-bg-muted)",
@@ -670,7 +781,7 @@ const ghostSmBtnStyle: React.CSSProperties = {
 
 const areaGridRowStyle: React.CSSProperties = {
   display:             "grid",
-  gridTemplateColumns: "60px 1fr 120px",
+  gridTemplateColumns: "44px 1fr 100px",
   gap:                 12,
   padding:             "10px 14px",
   alignItems:          "center",

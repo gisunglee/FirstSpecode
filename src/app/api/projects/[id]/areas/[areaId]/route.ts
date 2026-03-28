@@ -115,7 +115,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { screenId, name, type, description, sortOrder, layoutData, commentCn } = body as {
+  const { screenId, name, type, description, sortOrder, layoutData, commentCn, saveHistory } = body as {
     screenId?:    string;
     name?:        string;
     type?:        string;
@@ -123,6 +123,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     sortOrder?:   number;
     layoutData?:  string;
     commentCn?:   string;
+    saveHistory?: boolean;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "영역명을 입력해 주세요.", 400);
@@ -133,6 +134,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "영역을 찾을 수 없습니다.", 404);
     }
 
+    const newDescription = description?.trim() || null;
+
     // 수정 + 설계 변경 이력 (트랜잭션)
     await prisma.$transaction([
       prisma.tbDsArea.update({
@@ -141,7 +144,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           scrn_id:      screenId !== undefined ? (screenId || null) : existing.scrn_id,
           area_nm:      name.trim(),
           area_ty_code: type || "GRID",
-          area_dc:      description?.trim() || null,
+          area_dc:      newDescription,
           sort_ordr:    sortOrder ?? existing.sort_ordr,
           layer_data_dc: layoutData !== undefined ? layoutData : existing.layer_data_dc,
           coment_cn:     commentCn  !== undefined ? (commentCn || null) : existing.coment_cn,
@@ -163,6 +166,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           chg_mber_id: auth.mberId,
         },
       }),
+      // 설명 변경 이력 저장 요청 시 tb_pj_settings_history에 추가 기록
+      ...(saveHistory ? [
+        prisma.tbPjSettingsHistory.create({
+          data: {
+            prjct_id:    projectId,
+            chg_mber_id: auth.mberId,
+            chg_item_nm: "영역 설명",
+            bfr_val_cn:  existing.area_dc ?? null,
+            aftr_val_cn: newDescription,
+          },
+        }),
+      ] : []),
     ]);
 
     return apiSuccess({ areaId });

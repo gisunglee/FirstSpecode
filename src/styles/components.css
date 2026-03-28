@@ -188,7 +188,7 @@ body {
 }
 .sp-sidebar-item:hover { background: rgba(255,255,255,0.04); color: var(--color-text-heading); }
 .sp-sidebar-item:hover svg { color: var(--color-text-secondary); }
-.sp-sidebar-item.is-active { background: rgba(255,255,255,0.05); color: var(--color-text-primary); border-left-color: var(--color-brand); }
+.sp-sidebar-item.is-active { background: var(--color-brand-subtle); color: var(--color-brand); border-left-color: var(--color-brand); border-left-width: 3px; font-weight: 600; }
 .sp-sidebar-item.is-active svg { color: var(--color-brand); }
 
 /* Collapsed state */
@@ -196,7 +196,8 @@ body {
 .sp-sidebar.is-collapsed .sp-sidebar-item svg { width: 20px; height: 20px; }
 .sp-sidebar.is-collapsed .sp-sidebar-item span,
 .sp-sidebar.is-collapsed .sp-sidebar-item .item-count { display: none; }
-.sp-sidebar.is-collapsed .sp-sidebar-item.is-active { background: rgba(255,255,255,0.06); }
+.sp-sidebar.is-collapsed .sp-sidebar-item.is-active { background: var(--color-brand-subtle); }
+.sp-sidebar.is-collapsed .sp-sidebar-item.is-active svg { color: var(--color-brand); }
 .sp-sidebar.is-collapsed .sp-sidebar-item:hover svg { color: var(--color-text-primary); }
 
 /* Tooltip on collapsed */

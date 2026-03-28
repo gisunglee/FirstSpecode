@@ -103,6 +103,19 @@ function formatElapsed(ms: number): string {
   return `${Math.floor(m / 60)}시간 경과`;
 }
 
+// 소요 시간 포맷 (시작 ~ 완료) — 절댓값 사용 (DB 시간 오차 방어)
+function formatDuration(startIso: string, endIso: string | null): string {
+  if (!endIso) return "-";
+  const ms = Math.abs(new Date(endIso).getTime() - new Date(startIso).getTime());
+  const s  = Math.floor(ms / 1000);
+  if (s === 0) return "1초 미만";
+  if (s < 60)  return `${s}초`;
+  const m = Math.floor(s / 60);
+  if (m < 60)  return `${m}분`;
+  const h = Math.floor(m / 60);
+  return m % 60 === 0 ? `${h}시간` : `${h}시간 ${m % 60}분`;
+}
+
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
 
 export default function AiTasksPage() {
@@ -125,6 +138,9 @@ function AiTasksPageInner() {
   const [filterStatus,   setFilterStatus]   = useState<string>("");
   const [filterTaskType, setFilterTaskType] = useState<string>("");
   const [filterRefType,  setFilterRefType]  = useState<string>("");
+
+  // ── 선택된 row 상태 (상세 패널) ───────────────────────────────────────────
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   // ── 결과 확인 팝업 상태 ────────────────────────────────────────────────────
   const [resultPopupTaskId, setResultPopupTaskId] = useState<string | null>(null);
@@ -167,12 +183,23 @@ function AiTasksPageInner() {
     onError: (err) => toast.error(err.message),
   });
 
-  // ── 재요청 뮤테이션 ────────────────────────────────────────────────────────
+  // ── 재요청 뮤테이션 (FAILED/REJECTED/TIMEOUT 전용) ────────────────────────
   const retryMutation = useMutation<{ data: { taskId: string } }, Error, string>({
     mutationFn: (taskId) =>
       authFetch(`/api/projects/${projectId}/ai-tasks/${taskId}/retry`, { method: "POST" }),
     onSuccess: () => {
       toast.success("재요청이 접수되었습니다.");
+      queryClient.invalidateQueries({ queryKey: ["ai-tasks", projectId] });
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  // ── 재실행 뮤테이션 (상태 무관 — 새 PENDING 태스크 생성) ─────────────────
+  const rerunMutation = useMutation<{ data: { taskId: string } }, Error, string>({
+    mutationFn: (taskId) =>
+      authFetch(`/api/projects/${projectId}/ai-tasks/${taskId}/rerun`, { method: "POST" }),
+    onSuccess: () => {
+      toast.success("재실행 요청이 접수되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["ai-tasks", projectId] });
     },
     onError: (err) => toast.error(err.message),
@@ -248,131 +275,178 @@ function AiTasksPageInner() {
       </div>
 
       {/* ── 목록 그리드 AR-00087 ───────────────────────────────────────────── */}
-      {isLoading ? (
-        <div style={{ padding: "40px 32px", color: "#888" }}>불러오는 중...</div>
-      ) : items.length === 0 ? (
-        <div style={{ padding: "60px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-          AI 태스크가 없습니다.
-        </div>
-      ) : (
-        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-          {/* 헤더 행 */}
-          <div style={gridHeaderStyle}>
-            <div>요청 유형</div>
-            <div>대상</div>
-            <div>상태</div>
-            <div>요청일시</div>
-            <div>액션</div>
-          </div>
-
-          {/* 데이터 행 */}
-          {items.map((row, idx) => (
-            <div
-              key={row.taskId}
-              style={{
-                ...gridRowStyle,
-                borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-              }}
-            >
-              {/* 요청 유형 */}
-              <div>
-                <span className={TASK_TYPE_COLORS[row.taskType]}>
-                  {TASK_TYPE_LABELS[row.taskType]}
-                </span>
-                {row.refType === "AREA" ? (
-                  <span className="sp-badge sp-badge--neutral" style={{ marginLeft: 4 }}>영역</span>
-                ) : (
-                  <span className="sp-badge sp-badge--info" style={{ marginLeft: 4 }}>기능</span>
-                )}
-              </div>
-
-              {/* 대상 (링크) */}
-              <div>
-                <button
-                  style={linkBtnStyle}
-                  onClick={() => navigateToRef(row)}
-                  type="button"
-                >
-                  {row.refDisplayId && (
-                    <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
-                      {row.refDisplayId}
-                    </span>
-                  )}
-                  {row.refName}
-                </button>
-              </div>
-
-              {/* 상태 */}
-              <div>
-                <span className={STATUS_COLORS[row.status]}>
-                  {STATUS_LABELS[row.status]}
-                </span>
-                {row.status === "IN_PROGRESS" && (
-                  <span style={{ color: "var(--color-text-secondary)", marginLeft: 6, fontSize: 12 }}>
-                    {formatElapsed(row.elapsedMs)}
-                  </span>
-                )}
-              </div>
-
-              {/* 요청일시 */}
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-                {formatDatetime(row.requestedAt)}
-              </div>
-
-              {/* 액션 */}
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                {/* DONE → 결과 확인 버튼 */}
-                {row.status === "DONE" && (
-                  <button
-                    style={primaryBtnStyle}
-                    onClick={() => setResultPopupTaskId(row.taskId)}
-                    type="button"
-                  >
-                    결과 확인
-                  </button>
-                )}
-
-                {/* APPLIED → 반영완료 텍스트 */}
-                {row.status === "APPLIED" && (
-                  <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>반영완료</span>
-                )}
-
-                {/* FAILED/REJECTED/TIMEOUT → 재요청 버튼 */}
-                {["FAILED", "REJECTED", "TIMEOUT"].includes(row.status) && (
-                  <button
-                    style={secondaryBtnStyle}
-                    onClick={() => retryMutation.mutate(row.taskId)}
-                    disabled={retryMutation.isPending}
-                    type="button"
-                  >
-                    재요청
-                  </button>
-                )}
-
-                {/* IN_PROGRESS + 좀비 → 강제 취소 버튼 */}
-                {row.status === "IN_PROGRESS" && row.isZombie && (
-                  <button
-                    style={dangerBtnStyle}
-                    onClick={() => setCancelConfirmId(row.taskId)}
-                    type="button"
-                  >
-                    강제 취소
-                  </button>
-                )}
-
-                {/* IN_PROGRESS + 정상 처리중 → 텍스트 */}
-                {row.status === "IN_PROGRESS" && !row.isZombie && (
-                  <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>처리중...</span>
-                )}
-
-                {/* PENDING → 대기중 */}
-                {row.status === "PENDING" && (
-                  <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>대기중</span>
-                )}
-              </div>
+      <div>
+          {isLoading ? (
+            <div style={{ padding: "40px 32px", color: "#888" }}>불러오는 중...</div>
+          ) : items.length === 0 ? (
+            <div style={{ padding: "60px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+              AI 태스크가 없습니다.
             </div>
-          ))}
+          ) : (
+            <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+              {/* 헤더 행 */}
+              <div style={gridHeaderStyle}>
+                <div>요청 구분</div>
+                <div>작업유형</div>
+                <div>대상</div>
+                <div>요청시각</div>
+                <div>완료시각</div>
+                <div>소요</div>
+                <div>상태 / 액션</div>
+                <div />
+              </div>
+
+              {/* 데이터 행 */}
+              {items.map((row, idx) => (
+                <div
+                  key={row.taskId}
+                  onClick={() => setSelectedTaskId(row.taskId === selectedTaskId ? null : row.taskId)}
+                  style={{
+                    ...gridRowStyle,
+                    borderTop:   idx === 0 ? "none" : "1px solid var(--color-border)",
+                    cursor:      "pointer",
+                    background:  row.taskId === selectedTaskId
+                      ? "var(--color-brand-subtle, #e8f0fe)"
+                      : "var(--color-bg-card)",
+                    borderLeft:  row.taskId === selectedTaskId
+                      ? "3px solid var(--color-brand, #1976d2)"
+                      : "3px solid transparent",
+                  }}
+                >
+                  {/* 단계 (기능/영역) */}
+                  <div>
+                    {row.refType === "AREA"
+                      ? <span className="sp-badge sp-badge--neutral">영역</span>
+                      : <span className="sp-badge sp-badge--info">기능</span>
+                    }
+                  </div>
+
+                  {/* 요청 구분 (설계/명세검토 등) */}
+                  <div>
+                    <span className={TASK_TYPE_COLORS[row.taskType]}>
+                      {TASK_TYPE_LABELS[row.taskType]}
+                    </span>
+                  </div>
+
+                  {/* 대상 (링크) */}
+                  <div>
+                    <button
+                      style={linkBtnStyle}
+                      onClick={(e) => { e.stopPropagation(); navigateToRef(row); }}
+                      type="button"
+                    >
+                      {row.refDisplayId && (
+                        <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
+                          {row.refDisplayId}
+                        </span>
+                      )}
+                      {row.refName}
+                    </button>
+                  </div>
+
+                  {/* 요청시각 */}
+                  <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                    {formatDatetime(row.requestedAt)}
+                  </div>
+
+                  {/* 완료시각 */}
+                  <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                    {row.completedAt ? formatDatetime(row.completedAt) : (
+                      row.status === "IN_PROGRESS"
+                        ? <span style={{ color: "var(--color-primary, #1976d2)", fontSize: 12 }}>{formatElapsed(row.elapsedMs)}</span>
+                        : <span style={{ color: "#bbb" }}>-</span>
+                    )}
+                  </div>
+
+                  {/* 소요 */}
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", textAlign: "right" }}>
+                    {formatDuration(row.requestedAt, row.completedAt)}
+                  </div>
+
+                  {/* 상태 + 액션 (통합) */}
+                  <div
+                    style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "center" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span className={STATUS_COLORS[row.status]}>
+                      {STATUS_LABELS[row.status]}
+                    </span>
+
+                    {/* DONE → 결과 확인 버튼 */}
+                    {row.status === "DONE" && (
+                      <button
+                        style={{ ...primaryBtnStyle, fontSize: 12, padding: "4px 10px" }}
+                        onClick={() => setResultPopupTaskId(row.taskId)}
+                        type="button"
+                      >
+                        결과 확인
+                      </button>
+                    )}
+
+                    {/* FAILED/REJECTED/TIMEOUT → 재요청 아이콘 버튼 */}
+                    {["FAILED", "REJECTED", "TIMEOUT"].includes(row.status) && (
+                      <button
+                        title="재요청"
+                        style={{ background: "none", border: "1px solid var(--color-border)", borderRadius: 4, cursor: "pointer", fontSize: 16, padding: "2px 7px", color: "var(--color-text-secondary)", lineHeight: 1 }}
+                        onClick={() => retryMutation.mutate(row.taskId)}
+                        disabled={retryMutation.isPending}
+                        type="button"
+                      >
+                        ↺
+                      </button>
+                    )}
+
+                    {/* IN_PROGRESS + 좀비 → 강제 취소 버튼 */}
+                    {row.status === "IN_PROGRESS" && row.isZombie && (
+                      <button
+                        style={{ ...dangerBtnStyle, fontSize: 12, padding: "4px 10px" }}
+                        onClick={() => setCancelConfirmId(row.taskId)}
+                        type="button"
+                      >
+                        강제 취소
+                      </button>
+                    )}
+                  </div>
+
+                  {/* 재실행 아이콘 — IN_PROGRESS 제외 모든 상태 */}
+                  <div
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {row.status !== "IN_PROGRESS" && (
+                      <button
+                        title="재실행 (새 대기 태스크 생성)"
+                        onClick={() => rerunMutation.mutate(row.taskId)}
+                        disabled={rerunMutation.isPending}
+                        type="button"
+                        style={{
+                          background: "none",
+                          border:     "1px solid var(--color-border)",
+                          borderRadius: 4,
+                          cursor:     "pointer",
+                          fontSize:   16,
+                          padding:    "2px 7px",
+                          color:      "var(--color-text-secondary)",
+                          lineHeight: 1,
+                        }}
+                      >
+                        ↺
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+
+      {/* ── 상세 모달 — row 선택 시 표시 */}
+      {selectedTaskId && (
+        <TaskDetailPanel
+          projectId={projectId}
+          taskId={selectedTaskId}
+          onClose={() => setSelectedTaskId(null)}
+        />
       )}
 
       {/* ── 강제 취소 확인 다이얼로그 ─────────────────────────────────────────── */}
@@ -400,6 +474,253 @@ function AiTasksPageInner() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ── 상세 모달 ─────────────────────────────────────────────────────────────────
+
+function TaskDetailPanel({
+  projectId,
+  taskId,
+  onClose,
+}: {
+  projectId: string;
+  taskId:    string;
+  onClose:   () => void;
+}) {
+  const queryClient = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["ai-task-detail", projectId, taskId],
+    queryFn:  () =>
+      authFetch<{ data: TaskDetail }>(
+        `/api/projects/${projectId}/ai-tasks/${taskId}`
+      ).then((r) => r.data),
+  });
+
+  // 상태 수정 뮤테이션
+  const statusMutation = useMutation({
+    mutationFn: (status: string) =>
+      authFetch(`/api/projects/${projectId}/ai-tasks/${taskId}`, {
+        method: "PATCH",
+        body:   JSON.stringify({ status }),
+      }),
+    onSuccess: () => {
+      toast.success("상태가 수정되었습니다.");
+      queryClient.invalidateQueries({ queryKey: ["ai-task-detail", projectId, taskId] });
+      queryClient.invalidateQueries({ queryKey: ["ai-tasks", projectId] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // 삭제 뮤테이션
+  const deleteMutation = useMutation({
+    mutationFn: () =>
+      authFetch(`/api/projects/${projectId}/ai-tasks/${taskId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      toast.success("삭제되었습니다.");
+      queryClient.invalidateQueries({ queryKey: ["ai-tasks", projectId] });
+      onClose();
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  return (
+    // 오버레이 — 클릭 시 닫기
+    <div
+      onClick={onClose}
+      style={{
+        position:       "fixed",
+        inset:          0,
+        background:     "rgba(0,0,0,0.45)",
+        display:        "flex",
+        alignItems:     "center",
+        justifyContent: "center",
+        zIndex:         1000,
+      }}
+    >
+      {/* 모달 본체 — 클릭 버블 차단 */}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width:        "min(900px, 92vw)",
+          maxHeight:    "85vh",
+          display:      "flex",
+          flexDirection:"column",
+          border:       "1px solid var(--color-border)",
+          borderRadius: 10,
+          background:   "var(--color-bg-card)",
+          boxShadow:    "0 8px 32px rgba(0,0,0,0.18)",
+          overflow:     "hidden",
+        }}
+      >
+        {/* 헤더 */}
+        <div
+          style={{
+            display:        "flex",
+            alignItems:     "center",
+            justifyContent: "space-between",
+            padding:        "14px 20px",
+            borderBottom:   "1px solid var(--color-border)",
+            background:     "var(--color-bg-muted)",
+            flexShrink:     0,
+          }}
+        >
+          <div>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
+              AI 태스크 상세
+            </span>
+            {data && (
+              <span style={{ marginLeft: 10, fontSize: 12, color: "var(--color-text-secondary)", fontFamily: "monospace" }}>
+                {data.taskId}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--color-text-secondary)", lineHeight: 1 }}
+            type="button"
+          >
+            ×
+          </button>
+        </div>
+
+        {isLoading ? (
+          <div style={{ padding: "48px", textAlign: "center", color: "#aaa", fontSize: 13 }}>
+            불러오는 중...
+          </div>
+        ) : !data ? (
+          <div style={{ padding: "48px", textAlign: "center", color: "#aaa", fontSize: 13 }}>
+            데이터를 불러올 수 없습니다.
+          </div>
+        ) : (
+          <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
+            {/* 메타 정보 */}
+            <div
+              style={{
+                padding:      "12px 20px",
+                borderBottom: "1px solid var(--color-border)",
+                display:      "flex",
+                flexWrap:     "wrap",
+                gap:          10,
+                alignItems:   "center",
+                flexShrink:   0,
+              }}
+            >
+              <span className={TASK_TYPE_COLORS[data.taskType]}>{TASK_TYPE_LABELS[data.taskType]}</span>
+              <span className={STATUS_COLORS[data.status]}>{STATUS_LABELS[data.status]}</span>
+              <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                {data.refDisplayId && <>{data.refDisplayId} — </>}{data.refName}
+                <span style={{ marginLeft: 6 }}>({data.refType === "AREA" ? "영역" : "기능"})</span>
+              </span>
+              <span style={{ fontSize: 13, color: "var(--color-text-secondary)", marginLeft: "auto" }}>
+                요청: {formatDatetime(data.requestedAt)}
+                {data.completedAt && <> &nbsp;·&nbsp; 완료: {formatDatetime(data.completedAt)}</>}
+              </span>
+            </div>
+
+            {/* 좌: 요청 Spec / 우: 응답 피드백 */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", flex: 1, minHeight: 0 }}>
+              {/* 요청 Spec */}
+              <div
+                style={{
+                  padding:     "16px 20px",
+                  borderRight: "1px solid var(--color-border)",
+                  overflowY:   "auto",
+                }}
+              >
+                <div style={panelLabelStyle}>요청 Spec</div>
+                <div style={panelBodyStyle}>
+                  {data.comment || <span style={{ color: "#aaa" }}>내용 없음</span>}
+                </div>
+              </div>
+
+              {/* 응답 피드백 */}
+              <div style={{ padding: "16px 20px", overflowY: "auto" }}>
+                <div style={panelLabelStyle}>응답 피드백</div>
+                <div style={panelBodyStyle}>
+                  {data.resultCn || <span style={{ color: "#aaa" }}>결과 없음</span>}
+                </div>
+              </div>
+            </div>
+
+            {/* 반려 사유 (있을 경우) */}
+            {data.rejectReason && (
+              <div
+                style={{
+                  padding:     "12px 20px",
+                  borderTop:   "1px solid var(--color-border)",
+                  background:  "var(--color-bg-muted)",
+                  flexShrink:  0,
+                }}
+              >
+                <div style={panelLabelStyle}>반려 사유</div>
+                <div style={{ ...panelBodyStyle, color: "#e53935" }}>{data.rejectReason}</div>
+              </div>
+            )}
+
+            {/* 하단 액션 바 */}
+            <div
+              style={{
+                display:        "flex",
+                alignItems:     "center",
+                justifyContent: "space-between",
+                padding:        "12px 20px",
+                borderTop:      "1px solid var(--color-border)",
+                background:     "var(--color-bg-muted)",
+                flexShrink:     0,
+                gap:            12,
+              }}
+            >
+              {/* 왼쪽: 삭제 버튼 */}
+              <button
+                type="button"
+                disabled={deleteMutation.isPending}
+                onClick={() => {
+                  if (window.confirm("이 AI 태스크를 삭제하시겠습니까?")) {
+                    deleteMutation.mutate();
+                  }
+                }}
+                style={{ ...dangerBtnStyle, fontSize: 13, padding: "6px 16px" }}
+              >
+                삭제
+              </button>
+
+              {/* 오른쪽: 상태 콤보박스 */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>상태</span>
+                <select
+                  value={data.status}
+                  disabled={statusMutation.isPending}
+                  onChange={(e) => statusMutation.mutate(e.target.value)}
+                  style={{
+                    padding:      "6px 28px 6px 10px",
+                    borderRadius: 6,
+                    border:       "1px solid var(--color-border)",
+                    background:   "var(--color-bg-card)",
+                    color:        "var(--color-text-primary)",
+                    fontSize:     13,
+                    cursor:       "pointer",
+                    appearance:   "none",
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+                    backgroundRepeat:   "no-repeat",
+                    backgroundPosition: "right 8px center",
+                  }}
+                >
+                  <option value="PENDING">대기</option>
+                  <option value="IN_PROGRESS">처리중</option>
+                  <option value="DONE">완료</option>
+                  <option value="APPLIED">반영됨</option>
+                  <option value="REJECTED">반려</option>
+                  <option value="FAILED">실패</option>
+                  <option value="TIMEOUT">시간초과</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -647,7 +968,7 @@ function ResultPopup({
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-const GRID_TEMPLATE = "180px 1fr 140px 140px 160px";
+const GRID_TEMPLATE = "60px 120px 280px 120px 120px 90px 1fr 48px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",
@@ -660,6 +981,9 @@ const gridHeaderStyle: React.CSSProperties = {
   color:               "var(--color-text-secondary)",
   borderBottom:        "1px solid var(--color-border)",
   alignItems:          "center",
+  textAlign:           "center",
+  // 데이터 행의 borderLeft(3px)와 맞추기 위해 동일하게 추가
+  borderLeft:          "3px solid transparent",
 };
 
 const gridRowStyle: React.CSSProperties = {
@@ -712,6 +1036,25 @@ const secondaryBtnStyle: React.CSSProperties = {
   color:        "var(--color-text-primary)",
   fontSize:     13,
   cursor:       "pointer",
+};
+
+const panelLabelStyle: React.CSSProperties = {
+  fontSize:      11,
+  fontWeight:    700,
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  color:         "var(--color-text-secondary)",
+  marginBottom:  6,
+};
+
+const panelBodyStyle: React.CSSProperties = {
+  fontSize:   12,
+  lineHeight: 1.6,
+  color:      "var(--color-text-primary)",
+  whiteSpace: "pre-wrap",
+  wordBreak:  "break-word",
+  maxHeight:  320,
+  overflowY:  "auto",
 };
 
 const dangerBtnStyle: React.CSSProperties = {

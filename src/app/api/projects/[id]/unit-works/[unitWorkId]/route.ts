@@ -100,7 +100,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { name, description, assignMemberId, startDate, endDate, progress, sortOrder } = body as {
+  const { name, description, assignMemberId, startDate, endDate, progress, sortOrder, saveHistory } = body as {
     name?:           string;
     description?:    string;
     assignMemberId?: string;
@@ -108,6 +108,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     endDate?:        string;
     progress?:       number;
     sortOrder?:      number;
+    saveHistory?:    boolean;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "단위업무명을 입력해 주세요.", 400);
@@ -121,19 +122,49 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "단위업무를 찾을 수 없습니다.", 404);
     }
 
-    await prisma.tbDsUnitWork.update({
-      where: { unit_work_id: unitWorkId },
-      data:  {
-        unit_work_nm:  name.trim(),
-        unit_work_dc:  description?.trim() || null,
-        asign_mber_id: assignMemberId || null,
-        bgng_de:       startDate?.trim() || null,
-        end_de:        endDate?.trim() || null,
-        progrs_rt:     progress ?? existing.progrs_rt,
-        sort_ordr:     sortOrder ?? existing.sort_ordr,
-        mdfcn_dt:      new Date(),
-      },
-    });
+    const newDescription = description?.trim() || null;
+
+    if (saveHistory) {
+      // 설명 변경 이력 저장과 단위업무 수정을 트랜잭션으로 처리
+      await prisma.$transaction([
+        prisma.tbDsUnitWork.update({
+          where: { unit_work_id: unitWorkId },
+          data:  {
+            unit_work_nm:  name.trim(),
+            unit_work_dc:  newDescription,
+            asign_mber_id: assignMemberId || null,
+            bgng_de:       startDate?.trim() || null,
+            end_de:        endDate?.trim() || null,
+            progrs_rt:     progress ?? existing.progrs_rt,
+            sort_ordr:     sortOrder ?? existing.sort_ordr,
+            mdfcn_dt:      new Date(),
+          },
+        }),
+        prisma.tbPjSettingsHistory.create({
+          data: {
+            prjct_id:    projectId,
+            chg_mber_id: auth.mberId,
+            chg_item_nm: "단위업무 설명",
+            bfr_val_cn:  existing.unit_work_dc ?? null,
+            aftr_val_cn: newDescription,
+          },
+        }),
+      ]);
+    } else {
+      await prisma.tbDsUnitWork.update({
+        where: { unit_work_id: unitWorkId },
+        data:  {
+          unit_work_nm:  name.trim(),
+          unit_work_dc:  newDescription,
+          asign_mber_id: assignMemberId || null,
+          bgng_de:       startDate?.trim() || null,
+          end_de:        endDate?.trim() || null,
+          progrs_rt:     progress ?? existing.progrs_rt,
+          sort_ordr:     sortOrder ?? existing.sort_ordr,
+          mdfcn_dt:      new Date(),
+        },
+      });
+    }
 
     return apiSuccess({ unitWorkId });
   } catch (err) {

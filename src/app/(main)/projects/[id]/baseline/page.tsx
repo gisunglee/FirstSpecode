@@ -242,7 +242,7 @@ function CreateBaselinePopup({
           value={comment}
           onChange={(e) => setComment(e.target.value)}
           placeholder="기준선 생성 사유를 입력해 주세요..."
-          rows={8}
+          rows={16}
           style={{ ...inputStyle, resize: "vertical", marginBottom: 20 }}
         />
 

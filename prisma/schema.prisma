@@ -361,10 +361,31 @@ model TbDsScreen {
   creat_dt        DateTime  @default(now())
   mdfcn_dt        DateTime?
 
-  unitWork TbDsUnitWork? @relation(fields: [unit_work_id], references: [unit_work_id])
-  areas    TbDsArea[]
+  unitWork    TbDsUnitWork?          @relation(fields: [unit_work_id], references: [unit_work_id])
+  areas       TbDsArea[]
+  descHistory TbDsScreenDescHistory[]
 
   @@map("tb_ds_screen")
+}
+
+// ==========================================
+// [ds] 화면 설명 변경 이력 — 저장할 때마다 자동 기록
+// ==========================================
+
+model TbDsScreenDescHistory {
+  hist_id     String   @id @default(uuid())
+  scrn_id     String
+  prjct_id    String
+  // 변경 전 설명 (최초 저장 시 NULL)
+  bfr_dc      String?
+  // 변경 후 설명
+  aftr_dc     String?
+  chg_mber_id String
+  creat_dt    DateTime @default(now())
+
+  screen TbDsScreen @relation(fields: [scrn_id], references: [scrn_id], onDelete: Cascade)
+
+  @@map("tb_ds_screen_desc_history")
 }
 
 model TbDsArea {
@@ -416,8 +437,6 @@ model TbDsFunction {
   // 구현 시작/종료일 (YYYY-MM-DD 문자열)
   impl_bgng_de    String?
   impl_end_de     String?
-  // 기능 명세 (마크다운)
-  spec_cn         String?
   sort_ordr       Int       @default(0)
   creat_dt        DateTime  @default(now())
   mdfcn_dt        DateTime?

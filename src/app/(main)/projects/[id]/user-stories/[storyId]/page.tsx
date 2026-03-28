@@ -233,7 +233,7 @@ function UserStoryDetailPageInner() {
       </div>
 
       {/* 2-컬럼 레이아웃: 기본 정보 | 인수기준 */}
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 936px) 1fr", gap: 28, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 28, alignItems: "start" }}>
 
         {/* 왼쪽: 기본 정보 */}
         <Card title="기본 정보">

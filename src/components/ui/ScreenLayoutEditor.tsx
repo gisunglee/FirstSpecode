@@ -46,6 +46,8 @@ interface AreaOption {
 interface ScreenLayoutEditorProps {
   value:    LayoutRow[];
   onChange: (rows: LayoutRow[]) => void;
+  /** 섹션 타이틀 — 출력 버튼과 같은 줄에 표시 */
+  title?:   string;
   /** 하위 영역 목록 — 제공되면 드롭다운으로 영역 선택, 없으면 직접 입력 */
   areas?:   AreaOption[];
   /** 직접 입력 시 placeholder 텍스트 (기본: "영역 라벨") */
@@ -67,7 +69,7 @@ const parseWidth = (text: string): number | null => {
 
 /* ── 메인 컴포넌트 ──────────────────────────────────────────────────────────── */
 
-export function ScreenLayoutEditor({ value, onChange, areas = [], columnLabelPlaceholder = "영역 라벨" }: ScreenLayoutEditorProps) {
+export function ScreenLayoutEditor({ value, onChange, title, areas = [], columnLabelPlaceholder = "영역 라벨" }: ScreenLayoutEditorProps) {
   const [popupOpen, setPopupOpen] = useState(false);
   const [viewMode,  setViewMode]  = useState<"markdown" | "json">("markdown");
   const [copied,    setCopied]    = useState(false);
@@ -157,11 +159,14 @@ export function ScreenLayoutEditor({ value, onChange, areas = [], columnLabelPla
 
   return (
     <div>
-      {/* 헤더 */}
+      {/* 헤더 — title(좌) + 출력 버튼(우) 한 줄 정렬 */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
-          레이아웃 구성
-        </span>
+        {title && (
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            {title}
+          </span>
+        )}
+        {!title && <span />}
         {value.length > 0 && (
           <button
             type="button"

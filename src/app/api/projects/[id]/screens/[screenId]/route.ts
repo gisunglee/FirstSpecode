@@ -103,7 +103,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { unitWorkId, name, description, displayCode, type, sortOrder, categoryL, categoryM, categoryS, layoutData } = body as {
+  const { unitWorkId, name, description, displayCode, type, sortOrder, categoryL, categoryM, categoryS, layoutData, saveHistory } = body as {
     unitWorkId?:   string;
     name?:         string;
     description?:  string;
@@ -114,6 +114,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     categoryM?:    string;
     categoryS?:    string;
     layoutData?:   string;
+    saveHistory?:  boolean;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "화면명을 입력해 주세요.", 400);
@@ -124,14 +125,16 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "화면을 찾을 수 없습니다.", 404);
     }
 
-    // 수정 + 설계 변경 이력 (트랜잭션)
+    const newDescription = description?.trim() || null;
+    const oldDescription = existing.scrn_dc ?? null;
+
     await prisma.$transaction([
       prisma.tbDsScreen.update({
         where: { scrn_id: screenId },
         data:  {
           unit_work_id:  unitWorkId || null,
           scrn_nm:       name.trim(),
-          scrn_dc:       description?.trim() || null,
+          scrn_dc:       newDescription,
           layer_data_dc: layoutData ?? null,
           dsply_code:    displayCode?.trim() || null,
           scrn_ty_code:  type || "LIST",
@@ -160,6 +163,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           chg_mber_id: auth.mberId,
         },
       }),
+      // 사용자가 명시적으로 이력 저장을 선택한 경우에만 설명 변경 이력 기록
+      ...(saveHistory ? [
+        prisma.tbPjSettingsHistory.create({
+          data: {
+            prjct_id:    projectId,
+            chg_mber_id: auth.mberId,
+            chg_item_nm: "화면 설명",
+            bfr_val_cn:  oldDescription,
+            aftr_val_cn: newDescription,
+          },
+        }),
+      ] : []),
     ]);
 
     return apiSuccess({ screenId });

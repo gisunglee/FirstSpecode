@@ -817,7 +817,7 @@ function TaskDetailPanel({ projectId, taskId, onSaved }: { projectId: string; ta
 
   return (
     <div style={panelStyle}>
-      <PanelHeader icon="📁" displayType="과업" name={name} />
+      <PanelHeader icon="📁" displayType="과업" name={name} onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <PanelField label="과업명 *">
           <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
@@ -833,7 +833,6 @@ function TaskDetailPanel({ projectId, taskId, onSaved }: { projectId: string; ta
           <textarea value={definition} onChange={(e) => setDefinition(e.target.value)} rows={4} style={{ ...inputStyle, resize: "vertical" }} />
         </PanelField>
       </div>
-      <SaveBar onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
     </div>
   );
 }
@@ -852,6 +851,8 @@ function ReqDetailPanel({ projectId, reqId, onSaved }: { projectId: string; reqI
   const [loaded,      setLoaded]      = useState(false);
   // 원문/현행화 탭 — 현행화가 기본 활성
   const [contentTab,  setContentTab]  = useState<"current" | "original">("current");
+  // 기본 정보 섹션 접힘 — 기본적으로 접혀 있음
+  const [basicOpen,   setBasicOpen]   = useState(false);
 
   const { isLoading } = useQuery({
     queryKey: ["req-detail-tree", projectId, reqId],
@@ -897,71 +898,86 @@ function ReqDetailPanel({ projectId, reqId, onSaved }: { projectId: string; reqI
 
   return (
     <div style={panelStyle}>
-      <PanelHeader icon="📝" displayType="요구사항" name={name} />
+      <PanelHeader icon="📝" displayType="요구사항" name={name} onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        <PanelField label="요구사항명 *">
-          <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
-        </PanelField>
-        <div style={{ display: "flex", gap: 16 }}>
-          <PanelField label="우선순위" style={{ flex: 1 }}>
-            <select value={priority} onChange={(e) => setPriority(e.target.value)} style={inputStyle}>
-              <option value="HIGH">높음 (HIGH)</option>
-              <option value="MEDIUM">중간 (MEDIUM)</option>
-              <option value="LOW">낮음 (LOW)</option>
-            </select>
-          </PanelField>
-          <PanelField label="출처" style={{ flex: 1 }}>
-            <select value={source} onChange={(e) => setSource(e.target.value)} style={inputStyle}>
-              <option value="RFP">RFP</option>
-              <option value="ADD">추가</option>
-              <option value="CHANGE">변경</option>
-            </select>
-          </PanelField>
-        </div>
 
-        {/* 원문 / 현행화 탭 */}
-        <div>
-          <div style={{ display: "flex", borderBottom: "1px solid var(--color-border)", marginBottom: 12 }}>
-            {(["current", "original"] as const).map((tab) => {
-              const label = tab === "current" ? "현행화" : "원문";
-              const active = contentTab === tab;
-              return (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setContentTab(tab)}
-                  style={{
-                    padding: "6px 14px",
-                    fontSize: 13,
-                    fontWeight: active ? 600 : 400,
-                    color: active ? "var(--color-brand)" : "var(--color-text-secondary)",
-                    background: "none",
-                    border: "none",
-                    borderBottom: active ? "2px solid var(--color-brand)" : "2px solid transparent",
-                    cursor: "pointer",
-                    marginBottom: -1,
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-          {contentTab === "current" ? (
-            <RichEditor key={`current-${reqId}`} value={curncyCn} onChange={setCurncyCn} placeholder="현행화 내용을 입력하세요." minHeight={160} />
-          ) : (
-            <RichEditor key={`original-${reqId}`} value={orgnlCn} onChange={setOrgnlCn} placeholder="원문 내용을 입력하세요." minHeight={160} />
+        {/* 기본 정보 — 기본 접힘 */}
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
+          <button
+            type="button"
+            onClick={() => setBasicOpen((v) => !v)}
+            style={{
+              width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "8px 12px", background: "var(--color-bg-muted)", border: "none",
+              cursor: "pointer", fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)",
+            }}
+          >
+            <span>기본 정보 (요구사항명 · 우선순위 · 출처 · 요구사항 내용)</span>
+            <span style={{ fontSize: 10 }}>{basicOpen ? "▲" : "▼"}</span>
+          </button>
+          {basicOpen && (
+            <div style={{ padding: "16px 12px", display: "flex", flexDirection: "column", gap: 16 }}>
+              <PanelField label="요구사항명 *">
+                <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
+              </PanelField>
+              <div style={{ display: "flex", gap: 16 }}>
+                <PanelField label="우선순위" style={{ flex: 1 }}>
+                  <select value={priority} onChange={(e) => setPriority(e.target.value)} style={inputStyle}>
+                    <option value="HIGH">높음 (HIGH)</option>
+                    <option value="MEDIUM">중간 (MEDIUM)</option>
+                    <option value="LOW">낮음 (LOW)</option>
+                  </select>
+                </PanelField>
+                <PanelField label="출처" style={{ flex: 1 }}>
+                  <select value={source} onChange={(e) => setSource(e.target.value)} style={inputStyle}>
+                    <option value="RFP">RFP</option>
+                    <option value="ADD">추가</option>
+                    <option value="CHANGE">변경</option>
+                  </select>
+                </PanelField>
+              </div>
+              {/* 원문 / 현행화 탭 */}
+              <div>
+                <div style={{ display: "flex", borderBottom: "1px solid var(--color-border)", marginBottom: 12 }}>
+                  {(["current", "original"] as const).map((tab) => {
+                    const label = tab === "current" ? "현행화" : "원문";
+                    const active = contentTab === tab;
+                    return (
+                      <button
+                        key={tab}
+                        type="button"
+                        onClick={() => setContentTab(tab)}
+                        style={{
+                          padding: "6px 14px", fontSize: 13,
+                          fontWeight: active ? 600 : 400,
+                          color: active ? "var(--color-brand)" : "var(--color-text-secondary)",
+                          background: "none", border: "none",
+                          borderBottom: active ? "2px solid var(--color-brand)" : "2px solid transparent",
+                          cursor: "pointer", marginBottom: -1,
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {contentTab === "current" ? (
+                  <RichEditor key={`current-${reqId}`} value={curncyCn} onChange={setCurncyCn} placeholder="현행화 내용을 입력하세요." minHeight={160} />
+                ) : (
+                  <RichEditor key={`original-${reqId}`} value={orgnlCn} onChange={setOrgnlCn} placeholder="원문 내용을 입력하세요." minHeight={160} />
+                )}
+              </div>
+            </div>
           )}
         </div>
 
         <PanelField label="분석 메모">
-          <MarkdownEditor value={analysisCn} onChange={setAnalysisCn} rows={10} placeholder="분석 메모를 입력하세요." />
+          <MarkdownEditor value={analysisCn} onChange={setAnalysisCn} rows={15} placeholder="분석 메모를 입력하세요." />
         </PanelField>
         <PanelField label="상세 명세">
-          <MarkdownEditor value={specCn} onChange={setSpecCn} rows={10} placeholder="상세 명세를 입력하세요." />
+          <MarkdownEditor value={specCn} onChange={setSpecCn} rows={15} placeholder="상세 명세를 입력하세요." />
         </PanelField>
       </div>
-      <SaveBar onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
     </div>
   );
 }
@@ -1009,7 +1025,7 @@ function StoryDetailPanel({ projectId, storyId, onSaved }: { projectId: string; 
 
   return (
     <div style={panelStyle}>
-      <PanelHeader icon="👤" displayType="사용자스토리" name={name} />
+      <PanelHeader icon="👤" displayType="사용자스토리" name={name} onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <PanelField label="스토리명 *">
           <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
@@ -1059,7 +1075,6 @@ function StoryDetailPanel({ projectId, storyId, onSaved }: { projectId: string; 
           </button>
         </div>
       </div>
-      <SaveBar onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
     </div>
   );
 }
@@ -1070,11 +1085,24 @@ function PanelLoading() {
   return <div style={{ padding: 32, color: "#888" }}>로딩 중...</div>;
 }
 
-function PanelHeader({ icon, displayType, name }: { icon: string; displayType: string; name: string }) {
+function PanelHeader({ icon, displayType, name, onSave, isPending }: {
+  icon:        string;
+  displayType: string;
+  name:        string;
+  onSave?:     () => void;
+  isPending?:  boolean;
+}) {
   return (
-    <div style={{ marginBottom: 12 }}>
-      <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>{icon} {displayType}</div>
-      <div style={{ fontSize: 20, fontWeight: 700, color: "var(--color-text-primary)" }}>{name || "(이름 없음)"}</div>
+    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
+      <div>
+        <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>{icon} {displayType}</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "var(--color-text-primary)" }}>{name || "(이름 없음)"}</div>
+      </div>
+      {onSave && (
+        <button onClick={onSave} disabled={isPending} style={{ ...primaryBtnStyle, marginTop: 4 }}>
+          {isPending ? "저장 중..." : "저장"}
+        </button>
+      )}
     </div>
   );
 }

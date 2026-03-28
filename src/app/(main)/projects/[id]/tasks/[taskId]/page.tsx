@@ -151,10 +151,36 @@ function TaskDetailPageInner() {
         <div style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
           {isNew ? "과업 추가" : "과업 수정"}
         </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => router.push(`/projects/${projectId}/tasks`)}
+            disabled={saveMutation.isPending}
+            style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
+          >
+            취소
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saveMutation.isPending}
+            style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 20px" }}
+          >
+            {saveMutation.isPending ? "저장 중..." : "저장"}
+          </button>
+        </div>
       </div>
 
       {/* 폼 */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div
+        style={{
+          border:        "1px solid var(--color-border)",
+          borderRadius:  8,
+          padding:       "24px 28px",
+          background:    "var(--color-bg-card)",
+          display:       "flex",
+          flexDirection: "column",
+          gap:           20,
+        }}
+      >
 
         {/* 과업명 */}
         <FormField label="과업명" required>
@@ -223,23 +249,6 @@ function TaskDetailPageInner() {
           />
         </FormField>
 
-        {/* 버튼 */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
-          <button
-            onClick={() => router.push(`/projects/${projectId}/tasks`)}
-            disabled={saveMutation.isPending}
-            style={secondaryBtnStyle}
-          >
-            취소
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saveMutation.isPending}
-            style={primaryBtnStyle}
-          >
-            {saveMutation.isPending ? "저장 중..." : "저장"}
-          </button>
-        </div>
       </div>
     </div>
   );

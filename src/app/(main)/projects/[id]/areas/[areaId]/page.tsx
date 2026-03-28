@@ -26,6 +26,7 @@ import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor from "@/components/ui/MarkdownEditor";
 import { ScreenLayoutEditor, type LayoutRow } from "@/components/ui/ScreenLayoutEditor";
 import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
+import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -99,6 +100,13 @@ function AreaDetailPageInner() {
   // ── AI 상태 ────────────────────────────────────────────────────────────────
   const [asciiComment, setAsciiComment] = useState("");
 
+  // 원본 설명 추적 — 변경 여부 비교용
+  const [originalDescription, setOriginalDescription] = useState("");
+
+  // 이력 저장 다이얼로그 / 이력 조회 팝업 상태
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [historyViewOpen,   setHistoryViewOpen]   = useState(false);
+
   // ── 설명 예시 팝업 상태 ────────────────────────────────────────────────────
   const [descExampleOpen, setDescExampleOpen] = useState(false);
 
@@ -136,6 +144,8 @@ function AreaDetailPageInner() {
       setScreenId(data.screenId ?? "");
       setAsciiComment(data.commentCn ?? "");
       setExcalidrawData(data.excalidrawData);
+      // 원본 설명 저장 — 변경 여부 비교용
+      setOriginalDescription(data.description ?? "");
       if (data.layoutData) {
         try { setLayoutRows(JSON.parse(data.layoutData)); } catch { /* 잘못된 JSON 무시 */ }
       }
@@ -143,8 +153,8 @@ function AreaDetailPageInner() {
   }, [data]);
 
   // ── 저장 뮤테이션 ──────────────────────────────────────────────────────────
-  const saveMutation = useMutation<{ data: { areaId?: string } }, Error, void>({
-    mutationFn: () => {
+  const saveMutation = useMutation<{ data: { areaId?: string } }, Error, { saveHistory?: boolean }>({
+    mutationFn: ({ saveHistory } = {}) => {
       const body = {
         screenId:    screenId || null,
         name:        name.trim(),
@@ -153,6 +163,7 @@ function AreaDetailPageInner() {
         sortOrder:   sortOrder || 0,
         layoutData:  layoutRows.length > 0 ? JSON.stringify(layoutRows) : undefined,
         commentCn:   asciiComment,
+        saveHistory,
       };
       if (isNew) {
         return authFetch<{ data: { areaId?: string } }>(`/api/projects/${projectId}/areas`, {
@@ -165,13 +176,19 @@ function AreaDetailPageInner() {
         body:   JSON.stringify(body),
       });
     },
-    onSuccess: (res) => {
+    onSuccess: (res, variables) => {
       toast.success(isNew ? "영역이 등록되었습니다." : "저장되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["areas", projectId] });
+      setHistoryDialogOpen(false);
+      // 저장 후 원본 설명 갱신
+      setOriginalDescription(description.trim());
       if (isNew && res.data.areaId) {
         router.replace(`/projects/${projectId}/areas/${res.data.areaId}`);
       } else {
         queryClient.invalidateQueries({ queryKey: ["area", projectId, areaId] });
+        if (variables.saveHistory) {
+          queryClient.invalidateQueries({ queryKey: ["settings-history", projectId] });
+        }
       }
     },
     onError: (err: Error) => toast.error(err.message),
@@ -179,7 +196,14 @@ function AreaDetailPageInner() {
 
   function handleSave() {
     if (!name.trim()) { toast.error("영역명을 입력해 주세요."); return; }
-    saveMutation.mutate();
+
+    // 수정 모드이고 설명이 변경된 경우 → 이력 저장 여부 다이얼로그
+    if (!isNew && description.trim() !== originalDescription) {
+      setHistoryDialogOpen(true);
+      return;
+    }
+
+    saveMutation.mutate({});
   }
 
   // ── Excalidraw 저장 뮤테이션 ──────────────────────────────────────────────
@@ -204,8 +228,48 @@ function AreaDetailPageInner() {
     return <div style={{ padding: "40px 32px", color: "#888" }}>로딩 중...</div>;
   }
 
+  const descriptionChanged = !isNew && description.trim() !== originalDescription;
+
   return (
-    <div style={{ padding: "32px" }}>
+    <div style={{ padding: "20px 24px" }}>
+
+      {/* ── 이력 저장 다이얼로그 ── */}
+      {historyDialogOpen && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setHistoryDialogOpen(false)}
+        >
+          <div
+            style={{ background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 10, padding: "28px 32px", width: 400, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 6 }}>변경 이력 저장</div>
+            <div style={{ fontSize: 13, color: "var(--color-text-secondary)", marginBottom: 20 }}>아래 항목의 변경 내용을 이력으로 남길 수 있습니다.</div>
+            <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, padding: "12px 16px", marginBottom: 24, display: "flex", alignItems: "center", gap: 10, background: "var(--color-bg-base)" }}>
+              <input type="checkbox" checked={descriptionChanged} readOnly style={{ width: 15, height: 15, accentColor: "var(--color-primary, #1976d2)", cursor: "default" }} />
+              <span style={{ fontSize: 14, color: "var(--color-text-primary)" }}>설명</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button onClick={() => setHistoryDialogOpen(false)} disabled={saveMutation.isPending} style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}>취소</button>
+              <button onClick={() => saveMutation.mutate({ saveHistory: false })} disabled={saveMutation.isPending} style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}>이력 없이 저장</button>
+              <button onClick={() => saveMutation.mutate({ saveHistory: true })} disabled={saveMutation.isPending} style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 20px" }}>
+                {saveMutation.isPending ? "저장 중..." : "이력과 함께 저장"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 이력 조회 팝업 ── */}
+      <SettingsHistoryDialog
+        open={historyViewOpen}
+        onClose={() => setHistoryViewOpen(false)}
+        projectId={projectId}
+        itemName="영역 설명"
+        currentValue={description}
+        title="버전 이력 비교"
+      />
+
       {/* 헤더 — 뒤로가기 + 제목 + 취소/저장 한 줄 */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
         <button
@@ -243,19 +307,18 @@ function AreaDetailPageInner() {
       </div>
 
       {/* 2-컬럼 레이아웃 */}
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 936px) 1fr", gap: 28, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 24, alignItems: "start" }}>
 
-        {/* 왼쪽 컬럼: 기본 정보 폼 + 요약 + 기능 목록 */}
+        {/* 왼쪽 컬럼: 기본 정보 + AI코멘트 + 레이아웃 + 첨부파일 + 요약 + 기능목록 */}
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
           {/* ── AR-00069 기본 정보 폼 ─────────────────────────────────── */}
           <section style={sectionStyle}>
-            <h3 style={sectionTitleStyle}>기본 정보</h3>
 
-            {/* 상위 화면 + 영역명 */}
+            {/* 소속 화면 + 유형 */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div style={formGroupStyle}>
-                <label style={labelStyle}>상위 화면</label>
+                <label style={labelStyle}>소속 화면</label>
                 <select
                   value={screenId}
                   onChange={(e) => setScreenId(e.target.value)}
@@ -270,20 +333,6 @@ function AreaDetailPageInner() {
                 </select>
               </div>
               <div style={formGroupStyle}>
-                <label style={labelStyle}>영역명 <span style={{ color: "#e53935" }}>*</span></label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="영역명을 입력하세요"
-                  style={inputStyle}
-                />
-              </div>
-            </div>
-
-            {/* 유형 + 정렬순서 */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-              <div style={formGroupStyle}>
                 <label style={labelStyle}>유형</label>
                 <select
                   value={type}
@@ -294,6 +343,20 @@ function AreaDetailPageInner() {
                     <option key={t.value} value={t.value}>{t.label}</option>
                   ))}
                 </select>
+              </div>
+            </div>
+
+            {/* 영역명 + 정렬순서 */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: 16 }}>
+              <div style={formGroupStyle}>
+                <label style={labelStyle}>영역명 <span style={{ color: "#e53935" }}>*</span></label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="영역명을 입력하세요"
+                  style={inputStyle}
+                />
               </div>
               <div style={formGroupStyle}>
                 <label style={labelStyle}>정렬순서</label>
@@ -306,80 +369,55 @@ function AreaDetailPageInner() {
               </div>
             </div>
 
-            {/* 설명 (마크다운) */}
-            <div style={formGroupStyle}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                <label style={{ ...labelStyle, marginBottom: 0 }}>설명 (마크다운)</label>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button type="button" onClick={() => setDescExampleOpen(true)} style={ghostSmBtnStyle}>
-                    예시
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDescription(DESCRIPTION_TEMPLATE(data?.displayId ?? "AR-XXXXX", name))}
-                    style={ghostSmBtnStyle}
-                  >
-                    템플릿 삽입
-                  </button>
-                </div>
-              </div>
-              <MarkdownEditor
-                value={description}
-                onChange={setDescription}
-                placeholder="영역 역할·설명"
-                rows={16}
-              />
-            </div>
-
-            {/* 설명 예시 팝업 */}
-            {descExampleOpen && (
-              <div
-                style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
-                onClick={() => setDescExampleOpen(false)}
-              >
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  style={{ width: "100%", maxWidth: 816, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.2)", padding: "20px 24px", maxHeight: "80vh", display: "flex", flexDirection: "column" }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>설명 예시</span>
-                    <button type="button" onClick={() => setDescExampleOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#888" }}>×</button>
-                  </div>
-                  <pre style={{ flex: 1, overflowY: "auto", background: "var(--color-bg-elevated)", border: "1px solid var(--color-border)", borderRadius: 6, padding: "14px 16px", fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", color: "var(--color-text-primary)", margin: 0 }}>
-                    {DESCRIPTION_EXAMPLE}
-                  </pre>
-                </div>
-              </div>
-            )}
-
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
-              <button
-                onClick={handleSave}
-                style={primaryBtnStyle}
-                disabled={saveMutation.isPending}
-              >
-                {saveMutation.isPending ? "저장 중..." : "저장"}
-              </button>
-            </div>
           </section>
+
+          {/* ── AI 요청 코멘트 + 레이아웃 + 첨부파일 (수정 모드에서만) ── */}
+          {!isNew && (
+            <>
+              <section style={rightSectionStyle}>
+                <label style={rightLabelStyle}>AI 요청 코멘트</label>
+                <textarea
+                  value={asciiComment}
+                  onChange={(e) => setAsciiComment(e.target.value)}
+                  placeholder="AI에게 추가 지시사항을 입력하세요"
+                  rows={6}
+                  style={{ ...inputStyle, resize: "vertical" }}
+                />
+              </section>
+
+              <section style={rightSectionStyle}>
+                <ScreenLayoutEditor
+                  title="레이아웃 구성"
+                  value={layoutRows}
+                  onChange={setLayoutRows}
+                  columnLabelPlaceholder="구성 요소명"
+                />
+              </section>
+
+              <section style={rightSectionStyle}>
+                <label style={rightLabelStyle}>첨부파일</label>
+                <AreaAttachFiles projectId={projectId} areaId={areaId} />
+              </section>
+            </>
+          )}
 
           {/* ── AR-00073 요약 정보 ─────────────────────────────────────── */}
           {!isNew && data?.summary && (
-            <section style={{ ...sectionStyle, background: "var(--color-bg-muted)", borderRadius: 8 }}>
-              <div style={{ display: "flex", gap: 32, fontSize: 14 }}>
-                <div>
-                  <span style={{ color: "var(--color-text-secondary)" }}>기능 수: </span>
-                  <strong>{data.summary.functionCount}</strong>
+            <section style={{ ...sectionStyle, background: "var(--color-bg-muted)", padding: "12px 16px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", textAlign: "center", fontSize: 13 }}>
+                <div style={{ borderRight: "1px solid var(--color-border)" }}>
+                  <div style={{ color: "var(--color-text-secondary)", marginBottom: 4 }}>기능 수</div>
+                  <strong style={{ fontSize: 18 }}>{data.summary.functionCount}</strong>
                 </div>
-                <div>
-                  <span style={{ color: "var(--color-text-secondary)" }}>설계율: </span>
-                  <strong style={{ color: data.summary.designRate >= 80 ? "#2e7d32" : "#e65100" }}>
+                <div style={{ borderRight: "1px solid var(--color-border)" }}>
+                  <div style={{ color: "var(--color-text-secondary)", marginBottom: 4 }}>설계율</div>
+                  <strong style={{ fontSize: 18, color: data.summary.designRate >= 80 ? "#2e7d32" : "#e65100" }}>
                     {data.summary.designRate}%
                   </strong>
                 </div>
                 <div>
-                  <span style={{ color: "var(--color-text-secondary)" }}>구현율: </span>
-                  <strong style={{ color: data.summary.implRate >= 80 ? "#1565c0" : "#555" }}>
+                  <div style={{ color: "var(--color-text-secondary)", marginBottom: 4 }}>구현율</div>
+                  <strong style={{ fontSize: 18, color: data.summary.implRate >= 80 ? "#1565c0" : "#555" }}>
                     {data.summary.implRate}%
                   </strong>
                 </div>
@@ -387,12 +425,12 @@ function AreaDetailPageInner() {
             </section>
           )}
 
-          {/* ── AR-00074 하단 기능 목록 ───────────────────────────────── */}
+          {/* ── AR-00074 기능 목록 ────────────────────────────────────── */}
           {!isNew && (
             <section style={sectionStyle}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>기능 목록</h3>
-                <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>기능 목록</span>
+                <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
                   총 {data?.functions.length ?? 0}개
                 </span>
               </div>
@@ -445,36 +483,67 @@ function AreaDetailPageInner() {
           )}
         </div>
 
-        {/* 오른쪽 컬럼: AI 요청 코멘트 + 레이아웃 구성 (수정 모드에서만) */}
-        {!isNew && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            <section style={sectionStyle}>
-              <h3 style={sectionTitleStyle}>AI 요청 코멘트</h3>
-              <textarea
-                value={asciiComment}
-                onChange={(e) => setAsciiComment(e.target.value)}
-                placeholder="AI에게 추가 지시사항을 입력하세요"
-                rows={6}
-                style={{ ...inputStyle, resize: "vertical" }}
-              />
-            </section>
+        {/* 오른쪽 컬럼: 설명 (마크다운) */}
+        <div>
+          <section style={sectionStyle}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <label style={{ ...labelStyle, marginBottom: 0 }}>설명 (마크다운)</label>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button type="button" onClick={() => setDescExampleOpen(true)} style={ghostSmBtnStyle}>
+                  예시
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDescription(DESCRIPTION_TEMPLATE(data?.displayId ?? "AR-XXXXX", name))}
+                  style={ghostSmBtnStyle}
+                >
+                  템플릿 삽입
+                </button>
+                {!isNew && (
+                  <button
+                    type="button"
+                    onClick={() => setHistoryViewOpen(true)}
+                    style={{ ...ghostSmBtnStyle, display: "flex", alignItems: "center", gap: 4 }}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    변경 이력
+                  </button>
+                )}
+              </div>
+            </div>
+            <MarkdownEditor
+              value={description}
+              onChange={setDescription}
+              placeholder="영역 역할·설명"
+              rows={28}
+            />
+          </section>
+        </div>
 
-            <section style={sectionStyle}>
-              <h3 style={sectionTitleStyle}>레이아웃 구성</h3>
-              <ScreenLayoutEditor
-                value={layoutRows}
-                onChange={setLayoutRows}
-                columnLabelPlaceholder="구성 요소명"
-              />
-            </section>
-
-            <section style={sectionStyle}>
-              <h3 style={sectionTitleStyle}>첨부파일</h3>
-              <AreaAttachFiles projectId={projectId} areaId={areaId} />
-            </section>
-          </div>
-        )}
       </div>
+
+      {/* 설명 예시 팝업 */}
+      {descExampleOpen && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setDescExampleOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: 816, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.2)", padding: "20px 24px", maxHeight: "80vh", display: "flex", flexDirection: "column" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>설명 예시</span>
+              <button type="button" onClick={() => setDescExampleOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#888" }}>×</button>
+            </div>
+            <pre style={{ flex: 1, overflowY: "auto", background: "var(--color-bg-elevated)", border: "1px solid var(--color-border)", borderRadius: 6, padding: "14px 16px", fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", color: "var(--color-text-primary)", margin: 0 }}>
+              {DESCRIPTION_EXAMPLE}
+            </pre>
+          </div>
+        </div>
+      )}
 
       {/* ── PID-00048 Excalidraw 팝업 ─────────────────────────────────────── */}
       {excalidrawOpen && (
@@ -641,6 +710,25 @@ const sectionTitleStyle: React.CSSProperties = {
   margin:     0,
   fontSize:   15,
   fontWeight: 700,
+};
+
+// 우측 컬럼 전용 — 타이틀 없이 작은 레이블만
+const rightSectionStyle: React.CSSProperties = {
+  padding:       "14px 16px",
+  border:        "1px solid var(--color-border)",
+  borderRadius:  8,
+  background:    "var(--color-bg-card)",
+  display:       "flex",
+  flexDirection: "column",
+  gap:           10,
+};
+
+const rightLabelStyle: React.CSSProperties = {
+  fontSize:   12,
+  fontWeight: 600,
+  color:      "var(--color-text-secondary)",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
 };
 
 const formGroupStyle: React.CSSProperties = {};

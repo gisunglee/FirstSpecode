@@ -38,7 +38,6 @@ type FuncDetail = {
   assignMemberId: string | null;
   implStartDate: string;
   implEndDate:   string;
-  spec:          string;
   sortOrder:     number;
   areaId:        string | null;
   areaName:      string;
@@ -81,6 +80,9 @@ function FunctionDetailPageInner() {
   const isNew        = functionId === "new";
   const presetAreaId = searchParams.get("areaId") ?? "";
 
+  // ── 설명 예시 팝업 상태 ────────────────────────────────────────────────────
+  const [descExampleOpen, setDescExampleOpen] = useState(false);
+
   // ── 폼 상태 ────────────────────────────────────────────────────────────────
   const [name,           setName]           = useState("");
   const [type,           setType]           = useState("OTHER");
@@ -91,7 +93,6 @@ function FunctionDetailPageInner() {
   const [assignMemberId, setAssignMemberId] = useState("");
   const [implStartDate,  setImplStartDate]  = useState("");
   const [implEndDate,    setImplEndDate]    = useState("");
-  const [spec,           setSpec]           = useState("");
   const [areaId,         setAreaId]         = useState(presetAreaId);
 
   // ── AI 상태 ────────────────────────────────────────────────────────────────
@@ -130,7 +131,6 @@ function FunctionDetailPageInner() {
       setAssignMemberId(data.assignMemberId ?? "");
       setImplStartDate(data.implStartDate);
       setImplEndDate(data.implEndDate);
-      setSpec(data.spec);
       setAreaId(data.areaId ?? "");
     }
   }, [data]);
@@ -145,7 +145,6 @@ function FunctionDetailPageInner() {
         assignMemberId: assignMemberId || null,
         implStartDate: implStartDate || null,
         implEndDate:   implEndDate || null,
-        spec: spec.trim(),
       };
       if (isNew) {
         return authFetch<{ data: { funcId?: string } }>(`/api/projects/${projectId}/functions`, {
@@ -187,7 +186,7 @@ function FunctionDetailPageInner() {
   if (!isNew && isLoading) return <div style={{ padding: "40px 32px", color: "#888" }}>로딩 중...</div>;
 
   return (
-    <div style={{ padding: "20px 24px", maxWidth: 860 }}>
+    <div style={{ padding: "20px 24px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
         <button
           onClick={() => router.push(`/projects/${projectId}/functions`)}
@@ -219,215 +218,230 @@ function FunctionDetailPageInner() {
         </div>
       </div>
 
-      {/* ── AR-00078 기본 정보 폼 ────────────────────────────────────────── */}
-      <section style={sectionStyle}>
-        <h3 style={sectionTitleStyle}>기본 정보</h3>
+      {/* ── 2컬럼 레이아웃: 왼쪽 기본 정보, 오른쪽 설명 + 컬럼 매핑 + AI 지원 */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 20, alignItems: "start" }}>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 24px" }}>
-          <div style={formGroupStyle}>
-            <label style={labelStyle}>상위 영역</label>
-            <select value={areaId} onChange={(e) => setAreaId(e.target.value)} style={selectStyle}>
-              <option value="">미분류 (영역 없음)</option>
-              {areaOptions.map((a) => (
-                <option key={a.areaId} value={a.areaId}>{a.displayId} {a.name}</option>
-              ))}
-            </select>
-          </div>
+        {/* ── 왼쪽: AR-00078 기본 정보 ── */}
+        <section style={sectionStyle}>
+          <h3 style={sectionTitleStyle}>기본 정보</h3>
 
-          <div style={formGroupStyle}>
-            <label style={labelStyle}>기능명 <span style={{ color: "#e53935" }}>*</span></label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="기능명을 입력하세요"
-              style={inputStyle}
-            />
-          </div>
-
-          <div style={formGroupStyle}>
-            <label style={labelStyle}>유형</label>
-            <select value={type} onChange={(e) => setType(e.target.value)} style={selectStyle}>
-              {FUNC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-          </div>
-
-          <div style={formGroupStyle}>
-            <label style={labelStyle}>우선순위</label>
-            <select value={priority} onChange={(e) => setPriority(e.target.value)} style={selectStyle}>
-              <option value="HIGH">HIGH — 높음</option>
-              <option value="MEDIUM">MEDIUM — 중간</option>
-              <option value="LOW">LOW — 낮음</option>
-            </select>
-          </div>
-
-          <div style={formGroupStyle}>
-            <label style={labelStyle}>복잡도</label>
-            <select value={complexity} onChange={(e) => setComplexity(e.target.value)} style={selectStyle}>
-              <option value="HIGH">HIGH — 높음</option>
-              <option value="MEDIUM">MEDIUM — 중간</option>
-              <option value="LOW">LOW — 낮음</option>
-            </select>
-          </div>
-
-          <div style={formGroupStyle}>
-            <label style={labelStyle}>예상 공수</label>
-            <input
-              type="text"
-              value={effort}
-              onChange={(e) => setEffort(e.target.value)}
-              placeholder="예: 2h, 0.5d"
-              style={inputStyle}
-            />
-          </div>
-
-          <div style={formGroupStyle}>
-            <label style={labelStyle}>구현 시작일</label>
-            <input
-              type="date"
-              value={implStartDate}
-              onChange={(e) => setImplStartDate(e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-
-          <div style={formGroupStyle}>
-            <label style={labelStyle}>구현 종료일</label>
-            <input
-              type="date"
-              value={implEndDate}
-              onChange={(e) => setImplEndDate(e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-        </div>
-
-        <div style={formGroupStyle}>
-          <label style={labelStyle}>설명</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="기능 설명"
-            rows={3}
-            style={{ ...inputStyle, resize: "vertical" }}
-          />
-        </div>
-
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button onClick={() => {
-            if (!name.trim()) { toast.error("기능명을 입력해 주세요."); return; }
-            saveMutation.mutate();
-          }} style={primaryBtnStyle} disabled={saveMutation.isPending}>
-            {saveMutation.isPending ? "저장 중..." : "저장"}
-          </button>
-        </div>
-      </section>
-
-      {/* ── AR-00079 명세 작성 ──────────────────────────────────────────── */}
-      <section style={sectionStyle}>
-        <h3 style={sectionTitleStyle}>기능 명세</h3>
-        <MarkdownEditor
-          value={spec}
-          onChange={setSpec}
-          placeholder="마크다운 형식으로 기능 명세를 작성하세요."
-          rows={14}
-        />
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
-          <button onClick={() => {
-            if (!name.trim()) { toast.error("기능명을 입력해 주세요."); return; }
-            saveMutation.mutate();
-          }} style={primaryBtnStyle} disabled={saveMutation.isPending}>
-            {saveMutation.isPending ? "저장 중..." : "저장"}
-          </button>
-        </div>
-      </section>
-
-      {/* 신규 모드에서는 AI·매핑 섹션 숨김 */}
-      {!isNew && (
-        <>
-          {/* ── AR-00080 AI 지원 ─────────────────────────────────────── */}
-          <section style={sectionStyle}>
-            <h3 style={sectionTitleStyle}>AI 지원</h3>
-
-            <div style={{ marginBottom: 12 }}>
-              <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>AI 명세 누락 검토</h4>
-              <textarea
-                value={inspectComment}
-                onChange={(e) => setInspectComment(e.target.value)}
-                placeholder="추가 검토 지시사항"
-                rows={2}
-                style={{ ...inputStyle, resize: "vertical", marginBottom: 8 }}
-              />
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button
-                  onClick={() => aiMutation.mutate({ taskType: "INSPECT", comment: inspectComment })}
-                  style={primaryBtnStyle}
-                  disabled={aiMutation.isPending}
-                >
-                  AI 명세 누락 검토 요청
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>AI 영향도 분석</h4>
-              <textarea
-                value={impactComment}
-                onChange={(e) => setImpactComment(e.target.value)}
-                placeholder="추가 분석 지시사항"
-                rows={2}
-                style={{ ...inputStyle, resize: "vertical", marginBottom: 8 }}
-              />
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button
-                  onClick={() => aiMutation.mutate({ taskType: "IMPACT", comment: impactComment })}
-                  style={primaryBtnStyle}
-                  disabled={aiMutation.isPending}
-                >
-                  AI 영향도 분석 요청
-                </button>
-              </div>
-            </div>
-          </section>
-
-          {/* ── AR-00082 하단 컬럼 매핑 목록 ─────────────────────────── */}
-          <section style={sectionStyle}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>컬럼 매핑</h3>
-              <button
-                onClick={() => setMappingPopupOpen(true)}
-                style={{ ...primaryBtnStyle, fontSize: 13, padding: "6px 14px" }}
-              >
-                매핑 관리
-              </button>
-            </div>
-
-            {!data?.columnMappings.length ? (
-              <div style={{ padding: "24px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-                등록된 컬럼 매핑이 없습니다.
-              </div>
-            ) : (
-              <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-                <div style={mappingGridHeaderStyle}>
-                  <div>테이블명</div>
-                  <div>컬럼명</div>
-                  <div>용도</div>
-                </div>
-                {data.columnMappings.map((m, idx) => (
-                  <div
-                    key={m.mappingId}
-                    style={{ ...mappingGridRowStyle, borderTop: idx === 0 ? "none" : "1px solid var(--color-border)" }}
-                  >
-                    <div style={{ fontSize: 13, fontFamily: "monospace" }}>{m.tableName}</div>
-                    <div style={{ fontSize: 13, fontFamily: "monospace" }}>{m.colName}</div>
-                    <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{m.purpose || "-"}</div>
-                  </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 24px" }}>
+            <div style={formGroupStyle}>
+              <label style={labelStyle}>상위 영역</label>
+              <select value={areaId} onChange={(e) => setAreaId(e.target.value)} style={selectStyle}>
+                <option value="">미분류 (영역 없음)</option>
+                {areaOptions.map((a) => (
+                  <option key={a.areaId} value={a.areaId}>{a.displayId} {a.name}</option>
                 ))}
+              </select>
+            </div>
+
+            <div style={formGroupStyle}>
+              <label style={labelStyle}>기능명 <span style={{ color: "#e53935" }}>*</span></label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="기능명을 입력하세요"
+                style={inputStyle}
+              />
+            </div>
+
+            <div style={formGroupStyle}>
+              <label style={labelStyle}>유형</label>
+              <select value={type} onChange={(e) => setType(e.target.value)} style={selectStyle}>
+                {FUNC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+
+            <div style={formGroupStyle}>
+              <label style={labelStyle}>우선순위</label>
+              <select value={priority} onChange={(e) => setPriority(e.target.value)} style={selectStyle}>
+                <option value="HIGH">HIGH — 높음</option>
+                <option value="MEDIUM">MEDIUM — 중간</option>
+                <option value="LOW">LOW — 낮음</option>
+              </select>
+            </div>
+
+            <div style={formGroupStyle}>
+              <label style={labelStyle}>복잡도</label>
+              <select value={complexity} onChange={(e) => setComplexity(e.target.value)} style={selectStyle}>
+                <option value="HIGH">HIGH — 높음</option>
+                <option value="MEDIUM">MEDIUM — 중간</option>
+                <option value="LOW">LOW — 낮음</option>
+              </select>
+            </div>
+
+            <div style={formGroupStyle}>
+              <label style={labelStyle}>예상 공수</label>
+              <input
+                type="text"
+                value={effort}
+                onChange={(e) => setEffort(e.target.value)}
+                placeholder="예: 2h, 0.5d"
+                style={inputStyle}
+              />
+            </div>
+
+            <div style={formGroupStyle}>
+              <label style={labelStyle}>구현 시작일</label>
+              <input
+                type="date"
+                value={implStartDate}
+                onChange={(e) => setImplStartDate(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+
+            <div style={formGroupStyle}>
+              <label style={labelStyle}>구현 종료일</label>
+              <input
+                type="date"
+                value={implEndDate}
+                onChange={(e) => setImplEndDate(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* ── 오른쪽: 설명 + 컬럼 매핑 + AI 지원 ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+          {/* 설명 (func_dc) — MarkdownEditor */}
+          <section style={sectionStyle}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>설명</h3>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button type="button" onClick={() => setDescExampleOpen(true)} style={ghostSmBtnStyle}>
+                  예시
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDescription(DESCRIPTION_TEMPLATE(data?.displayId ?? "FN-XXXXX", name))}
+                  style={ghostSmBtnStyle}
+                >
+                  템플릿 삽입
+                </button>
               </div>
-            )}
+            </div>
+            <MarkdownEditor
+              value={description}
+              onChange={setDescription}
+              placeholder="기능 설명을 마크다운으로 작성하세요."
+              rows={14}
+            />
           </section>
-        </>
-      )}
+
+          {/* 설명 예시 팝업 */}
+          {descExampleOpen && (
+            <div
+              style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
+              onClick={() => setDescExampleOpen(false)}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{ width: "100%", maxWidth: 816, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.2)", padding: "20px 24px", maxHeight: "80vh", display: "flex", flexDirection: "column" }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>설명 예시</span>
+                  <button type="button" onClick={() => setDescExampleOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#888" }}>×</button>
+                </div>
+                <pre style={{ flex: 1, overflowY: "auto", background: "var(--color-bg-elevated)", border: "1px solid var(--color-border)", borderRadius: 6, padding: "14px 16px", fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", color: "var(--color-text-primary)", margin: 0 }}>
+                  {DESCRIPTION_EXAMPLE}
+                </pre>
+              </div>
+            </div>
+          )}
+
+          {/* 신규 모드에서는 컬럼 매핑·AI 지원 숨김 */}
+          {!isNew && (
+            <>
+              {/* ── AR-00082 컬럼 매핑 ── */}
+              <section style={sectionStyle}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                  <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>컬럼 매핑</h3>
+                  <button
+                    onClick={() => setMappingPopupOpen(true)}
+                    style={{ ...primaryBtnStyle, fontSize: 13, padding: "6px 14px" }}
+                  >
+                    매핑 관리
+                  </button>
+                </div>
+
+                {!data?.columnMappings.length ? (
+                  <div style={{ padding: "24px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+                    등록된 컬럼 매핑이 없습니다.
+                  </div>
+                ) : (
+                  <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+                    <div style={mappingGridHeaderStyle}>
+                      <div>테이블명</div>
+                      <div>컬럼명</div>
+                      <div>용도</div>
+                    </div>
+                    {data.columnMappings.map((m, idx) => (
+                      <div
+                        key={m.mappingId}
+                        style={{ ...mappingGridRowStyle, borderTop: idx === 0 ? "none" : "1px solid var(--color-border)" }}
+                      >
+                        <div style={{ fontSize: 13, fontFamily: "monospace" }}>{m.tableName}</div>
+                        <div style={{ fontSize: 13, fontFamily: "monospace" }}>{m.colName}</div>
+                        <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{m.purpose || "-"}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {/* ── AR-00080 AI 지원 ── */}
+              <section style={sectionStyle}>
+                <h3 style={sectionTitleStyle}>AI 지원</h3>
+
+                <div style={{ marginBottom: 12 }}>
+                  <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>AI 명세 누락 검토</h4>
+                  <textarea
+                    value={inspectComment}
+                    onChange={(e) => setInspectComment(e.target.value)}
+                    placeholder="추가 검토 지시사항"
+                    rows={2}
+                    style={{ ...inputStyle, resize: "vertical", marginBottom: 8 }}
+                  />
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <button
+                      onClick={() => aiMutation.mutate({ taskType: "INSPECT", comment: inspectComment })}
+                      style={primaryBtnStyle}
+                      disabled={aiMutation.isPending}
+                    >
+                      AI 명세 누락 검토 요청
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>AI 영향도 분석</h4>
+                  <textarea
+                    value={impactComment}
+                    onChange={(e) => setImpactComment(e.target.value)}
+                    placeholder="추가 분석 지시사항"
+                    rows={2}
+                    style={{ ...inputStyle, resize: "vertical", marginBottom: 8 }}
+                  />
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <button
+                      onClick={() => aiMutation.mutate({ taskType: "IMPACT", comment: impactComment })}
+                      style={primaryBtnStyle}
+                      disabled={aiMutation.isPending}
+                    >
+                      AI 영향도 분석 요청
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </>
+          )}
+        </div>
+      </div>
 
       {/* ── PID-00053 컬럼 매핑 관리 팝업 ────────────────────────────────── */}
       {mappingPopupOpen && data && (
@@ -650,6 +664,12 @@ function ColumnMappingPopup({
   );
 }
 
+// ── 설명 예시 / 템플릿 ────────────────────────────────────────────────────────
+
+const DESCRIPTION_EXAMPLE = `test`;
+
+const DESCRIPTION_TEMPLATE = (displayId: string, name: string) => `test`;
+
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
 const FUNC_TYPES = [
@@ -726,4 +746,14 @@ const mappingEditHeaderStyle: React.CSSProperties = {
 const mappingEditRowStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: MAPPING_EDIT_GRID, gap: 8,
   padding: "8px 12px", alignItems: "center", background: "var(--color-bg-card)",
+};
+
+const ghostSmBtnStyle: React.CSSProperties = {
+  padding:      "3px 9px",
+  borderRadius: 5,
+  border:       "1px solid var(--color-border)",
+  background:   "none",
+  color:        "var(--color-text-secondary)",
+  fontSize:     12,
+  cursor:       "pointer",
 };

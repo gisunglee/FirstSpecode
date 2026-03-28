@@ -86,7 +86,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   const {
     areaId, name, type, description, priority, complexity, effort,
-    assignMemberId, implStartDate, implEndDate, spec, sortOrder,
+    assignMemberId, implStartDate, implEndDate, sortOrder,
   } = body as {
     areaId?:         string;
     name?:           string;
@@ -98,7 +98,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     assignMemberId?: string;
     implStartDate?:  string;
     implEndDate?:    string;
-    spec?:           string;
     sortOrder?:      number;
   };
 
@@ -139,7 +138,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         asign_mber_id:  assignMemberId || null,
         impl_bgng_de:   implStartDate || null,
         impl_end_de:    implEndDate || null,
-        spec_cn:        spec?.trim() || null,
         sort_ordr:      nextSort,
       },
     });

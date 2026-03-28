@@ -106,7 +106,14 @@ function RequirementHistoryPageInner() {
         <span>변경 이력</span>
       </div>
 
-      <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>변경 이력</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <div style={{ fontSize: 18, fontWeight: 700 }}>변경 이력</div>
+      </div>
+
+      {/* 총 건수 */}
+      <div style={{ marginBottom: 12, fontSize: 14, color: "var(--color-text-secondary)" }}>
+        총 {items.length}건
+      </div>
 
       {/* 이력 그리드 (AR-00052) */}
       {items.length === 0 ? (
@@ -114,103 +121,90 @@ function RequirementHistoryPageInner() {
           변경 이력이 없습니다.
         </div>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-          <thead>
-            <tr style={{ background: "var(--color-bg-muted)" }}>
-              {["버전", "구분", "변경일시", "변경자", "코멘트", "액션"].map((h) => (
-                <th
-                  key={h}
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+          {/* 헤더 행 */}
+          <div style={gridHeaderStyle}>
+            <div>버전</div>
+            <div>구분</div>
+            <div>변경일시</div>
+            <div>변경자</div>
+            <div>코멘트</div>
+            <div>액션</div>
+          </div>
+
+          {/* 데이터 행 */}
+          {items.map((item, idx) => (
+            <div
+              key={item.historyId}
+              style={{
+                ...gridRowStyle,
+                borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+              }}
+            >
+              {/* 버전 */}
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{item.versionNo}</div>
+
+              {/* 구분 배지 */}
+              <div>
+                <span
                   style={{
-                    padding:     "10px 12px",
-                    textAlign:   "left",
-                    fontWeight:  600,
-                    borderBottom: "2px solid var(--color-border)",
-                    whiteSpace:  "nowrap",
-                    color:       "var(--color-text-secondary)",
+                    padding:      "2px 8px",
+                    borderRadius: 4,
+                    fontSize:     12,
+                    fontWeight:   600,
+                    background:   item.versionType === "CONFIRMED" ? "#e3f2fd" : "#f3e5f5",
+                    color:        item.versionType === "CONFIRMED" ? "#1565c0" : "#6a1b9a",
                   }}
                 >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item, idx) => (
-              <tr
-                key={item.historyId}
+                  {item.versionType === "CONFIRMED" ? "확정" : "내부"}
+                </span>
+              </div>
+
+              {/* 변경일시 */}
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                {new Date(item.changedAt).toLocaleString("ko-KR", {
+                  year: "numeric", month: "2-digit", day: "2-digit",
+                  hour: "2-digit", minute: "2-digit",
+                })}
+              </div>
+
+              {/* 변경자 */}
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                {item.changerEmail || "-"}
+              </div>
+
+              {/* 코멘트 */}
+              <div
                 style={{
-                  background:   idx % 2 === 0 ? "transparent" : "var(--color-bg-muted)",
-                  borderBottom: "1px solid var(--color-border)",
+                  fontSize:     13,
+                  color:        "var(--color-text-secondary)",
+                  overflow:     "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace:   "nowrap",
                 }}
               >
-                {/* 버전 */}
-                <td style={{ padding: "10px 12px", fontWeight: 700 }}>{item.versionNo}</td>
+                {item.comment || "-"}
+              </div>
 
-                {/* 구분 배지 */}
-                <td style={{ padding: "10px 12px" }}>
-                  <span
-                    style={{
-                      padding:      "2px 8px",
-                      borderRadius: 4,
-                      fontSize:     12,
-                      fontWeight:   600,
-                      background:   item.versionType === "CONFIRMED" ? "#e3f2fd" : "#f3e5f5",
-                      color:        item.versionType === "CONFIRMED" ? "#1565c0" : "#6a1b9a",
-                    }}
-                  >
-                    {item.versionType === "CONFIRMED" ? "확정" : "내부"}
-                  </span>
-                </td>
-
-                {/* 변경일시 */}
-                <td style={{ padding: "10px 12px", color: "var(--color-text-secondary)" }}>
-                  {new Date(item.changedAt).toLocaleString("ko-KR", {
-                    year:   "numeric", month: "2-digit", day: "2-digit",
-                    hour:   "2-digit", minute: "2-digit",
-                  })}
-                </td>
-
-                {/* 변경자 */}
-                <td style={{ padding: "10px 12px", color: "var(--color-text-secondary)" }}>
-                  {item.changerEmail || "-"}
-                </td>
-
-                {/* 코멘트 */}
-                <td style={{ padding: "10px 12px", color: "var(--color-text-secondary)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {item.comment || "-"}
-                </td>
-
-                {/* 액션 버튼 */}
-                <td style={{ padding: "10px 12px" }}>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button
-                      onClick={() => setDiffTarget(item)}
-                      style={secondaryBtnStyle}
-                    >
-                      Diff
+              {/* 액션 버튼 */}
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={() => setDiffTarget(item)} style={secondaryBtnStyle}>
+                  Diff
+                </button>
+                {item.versionType === "INTERNAL" && (
+                  <>
+                    <button onClick={() => setConfirmTarget(item)} style={primaryBtnStyle}>
+                      확정
                     </button>
-                    {item.versionType === "INTERNAL" && (
-                      <>
-                        <button
-                          onClick={() => setConfirmTarget(item)}
-                          style={primaryBtnStyle}
-                        >
-                          확정
-                        </button>
-                        <button
-                          onClick={() => setDeleteTarget(item)}
-                          style={dangerBtnStyle}
-                        >
-                          삭제
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                    <button onClick={() => setDeleteTarget(item)} style={dangerBtnStyle}>
+                      삭제
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Diff 뷰어 팝업 (PID-00036) */}
@@ -578,6 +572,30 @@ function ConfirmPopup({
 }
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
+
+const GRID_TEMPLATE = "90px 80px 180px 1fr 1fr 200px";
+
+const gridHeaderStyle: React.CSSProperties = {
+  display:             "grid",
+  gridTemplateColumns: GRID_TEMPLATE,
+  gap:                 12,
+  padding:             "10px 16px",
+  background:          "var(--color-bg-muted)",
+  fontSize:            12,
+  fontWeight:          600,
+  color:               "var(--color-text-secondary)",
+  borderBottom:        "1px solid var(--color-border)",
+  alignItems:          "center",
+};
+
+const gridRowStyle: React.CSSProperties = {
+  display:             "grid",
+  gridTemplateColumns: GRID_TEMPLATE,
+  gap:                 12,
+  padding:             "12px 16px",
+  alignItems:          "center",
+  background:          "var(--color-bg-card)",
+};
 
 const primaryBtnStyle: React.CSSProperties = {
   padding:      "6px 14px",

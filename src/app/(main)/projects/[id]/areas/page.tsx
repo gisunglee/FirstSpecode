@@ -127,19 +127,9 @@ function AreasPageInner() {
   return (
     <div style={{ padding: "20px 24px" }}>
       {/* 헤더 */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 4 }}>
-            영역 목록
-          </div>
-          <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
-            총 {items.length}건
-            {screenIdFilter && (
-              <span style={{ marginLeft: 8, color: "var(--color-primary, #1976d2)", fontSize: 12 }}>
-                (화면 필터 적용)
-              </span>
-            )}
-          </span>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)" }}>
+          영역 목록
         </div>
         <button
           onClick={() => {
@@ -152,6 +142,16 @@ function AreasPageInner() {
         >
           + 신규 등록
         </button>
+      </div>
+
+      {/* 총 건수 */}
+      <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
+        총 {items.length}건
+        {screenIdFilter && (
+          <span style={{ marginLeft: 8, color: "var(--color-primary, #1976d2)", fontSize: 12 }}>
+            (화면 필터 적용)
+          </span>
+        )}
       </div>
 
       {/* 목록 */}

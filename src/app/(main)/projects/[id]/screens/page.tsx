@@ -24,17 +24,17 @@ import { authFetch } from "@/lib/authFetch";
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
 type ScreenRow = {
-  screenId:     string;
-  displayId:    string;
-  name:         string;
-  type:         string;
-  categoryL:    string;
-  categoryM:    string;
-  categoryS:    string;
-  unitWorkId:   string | null;
+  screenId: string;
+  displayId: string;
+  name: string;
+  type: string;
+  categoryL: string;
+  categoryM: string;
+  categoryS: string;
+  unitWorkId: string | null;
   unitWorkName: string;
-  areaCount:    number;
-  sortOrder:    number;
+  areaCount: number;
+  sortOrder: number;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -50,22 +50,22 @@ export default function ScreensPage() {
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 
 function ScreensPageInner() {
-  const params      = useParams<{ id: string }>();
-  const router      = useRouter();
+  const params = useParams<{ id: string }>();
+  const router = useRouter();
   const queryClient = useQueryClient();
-  const projectId   = params.id;
+  const projectId = params.id;
 
   // 삭제 다이얼로그 상태
   const [deleteTarget, setDeleteTarget] = useState<ScreenRow | null>(null);
 
   // ── 드래그 상태 ────────────────────────────────────────────────────────────
-  const dragItem     = useRef<number | null>(null);
+  const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
   // ── 데이터 조회 ────────────────────────────────────────────────────────────
   const { data, isLoading } = useQuery({
     queryKey: ["screens", projectId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: { items: ScreenRow[]; totalCount: number } }>(
         `/api/projects/${projectId}/screens`
       ).then((r) => r.data),
@@ -78,7 +78,7 @@ function ScreensPageInner() {
     mutationFn: (orders: { screenId: string; sortOrder: number }[]) =>
       authFetch(`/api/projects/${projectId}/screens/sort`, {
         method: "PUT",
-        body:   JSON.stringify({ orders }),
+        body: JSON.stringify({ orders }),
       }),
     onError: () => {
       toast.error("순서 변경에 실패했습니다.");
@@ -92,11 +92,11 @@ function ScreensPageInner() {
 
   function handleDragEnd() {
     const from = dragItem.current;
-    const to   = dragOverItem.current;
+    const to = dragOverItem.current;
     if (from === null || to === null || from === to) return;
 
     const reordered = [...items];
-    const [moved]   = reordered.splice(from, 1);
+    const [moved] = reordered.splice(from, 1);
     if (!moved) return;
     reordered.splice(to, 0, moved);
 
@@ -109,7 +109,7 @@ function ScreensPageInner() {
     const orders = reordered.map((s, idx) => ({ screenId: s.screenId, sortOrder: idx + 1 }));
     sortMutation.mutate(orders);
 
-    dragItem.current     = null;
+    dragItem.current = null;
     dragOverItem.current = null;
   }
 
@@ -124,7 +124,7 @@ function ScreensPageInner() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)" }}>
-            화면 설계 목록
+            화면 목록
           </div>
         </div>
         <button
@@ -237,13 +237,13 @@ function ScreensPageInner() {
                   onClick={() => router.push(`/projects/${projectId}/areas?screenId=${screen.screenId}`)}
                   title="영역 목록으로 이동"
                   style={{
-                    background:   "none",
-                    border:       "1px solid var(--color-border)",
+                    background: "none",
+                    border: "1px solid var(--color-border)",
                     borderRadius: 4,
-                    cursor:       "pointer",
-                    fontSize:     13,
-                    padding:      "3px 8px",
-                    color:        "var(--color-text-secondary)",
+                    cursor: "pointer",
+                    fontSize: 13,
+                    padding: "3px 8px",
+                    color: "var(--color-text-secondary)",
                   }}
                 >
                   →
@@ -281,9 +281,9 @@ function ScreensPageInner() {
 function DeleteConfirmDialog({
   screen, projectId, onClose, onDeleted,
 }: {
-  screen:    ScreenRow;
+  screen: ScreenRow;
   projectId: string;
-  onClose:   () => void;
+  onClose: () => void;
   onDeleted: () => void;
 }) {
   const hasAreas = screen.areaCount > 0;
@@ -371,22 +371,22 @@ function DeleteConfirmDialog({
 
 function typeBadgeStyle(type: string): React.CSSProperties {
   const colors: Record<string, { bg: string; color: string }> = {
-    LIST:        { bg: "#e3f2fd", color: "#1565c0" },
-    DETAIL:      { bg: "#e8f5e9", color: "#2e7d32" },
-    INPUT:       { bg: "#fff3e0", color: "#e65100" },
-    POPUP:       { bg: "#f3e5f5", color: "#6a1b9a" },
-    TAB:         { bg: "#e0f2f1", color: "#00695c" },
-    REPORT:      { bg: "#fce4ec", color: "#880e4f" },
+    LIST: { bg: "#e3f2fd", color: "#1565c0" },
+    DETAIL: { bg: "#e8f5e9", color: "#2e7d32" },
+    INPUT: { bg: "#fff3e0", color: "#e65100" },
+    POPUP: { bg: "#f3e5f5", color: "#6a1b9a" },
+    TAB: { bg: "#e0f2f1", color: "#00695c" },
+    REPORT: { bg: "#fce4ec", color: "#880e4f" },
   };
   const c = colors[type] ?? { bg: "#f5f5f5", color: "#555" };
   return {
-    display:      "inline-block",
-    padding:      "2px 8px",
+    display: "inline-block",
+    padding: "2px 8px",
     borderRadius: 4,
-    fontSize:     12,
-    fontWeight:   600,
-    background:   c.bg,
-    color:        c.color,
+    fontSize: 12,
+    fontWeight: 600,
+    background: c.bg,
+    color: c.color,
   };
 }
 
@@ -395,85 +395,85 @@ function typeBadgeStyle(type: string): React.CSSProperties {
 const GRID_TEMPLATE = "32px minmax(100px, 160px) 1fr 72px 52px 90px 90px 90px 100px";
 
 const gridHeaderStyle: React.CSSProperties = {
-  display:             "grid",
+  display: "grid",
   gridTemplateColumns: GRID_TEMPLATE,
-  gap:                 12,
-  padding:             "10px 16px",
-  background:          "var(--color-bg-muted)",
-  fontSize:            12,
-  fontWeight:          600,
-  color:               "var(--color-text-secondary)",
-  borderBottom:        "1px solid var(--color-border)",
-  alignItems:          "center",
+  gap: 12,
+  padding: "10px 16px",
+  background: "var(--color-bg-muted)",
+  fontSize: 12,
+  fontWeight: 600,
+  color: "var(--color-text-secondary)",
+  borderBottom: "1px solid var(--color-border)",
+  alignItems: "center",
 };
 
 const gridRowStyle: React.CSSProperties = {
-  display:             "grid",
+  display: "grid",
   gridTemplateColumns: GRID_TEMPLATE,
-  gap:                 12,
-  padding:             "12px 16px",
-  alignItems:          "center",
-  background:          "var(--color-bg-card)",
-  transition:          "background 0.1s",
+  gap: 12,
+  padding: "12px 16px",
+  alignItems: "center",
+  background: "var(--color-bg-card)",
+  transition: "background 0.1s",
 };
 
 const linkBtnStyle: React.CSSProperties = {
-  background:     "none",
-  border:         "none",
-  cursor:         "pointer",
-  color:          "var(--color-primary, #1976d2)",
-  fontSize:       14,
-  padding:        0,
-  textAlign:      "left",
+  background: "none",
+  border: "none",
+  cursor: "pointer",
+  color: "var(--color-primary, #1976d2)",
+  fontSize: 14,
+  padding: 0,
+  textAlign: "left",
   textDecoration: "underline",
 };
 
 const primaryBtnStyle: React.CSSProperties = {
-  padding:      "8px 20px",
+  padding: "8px 20px",
   borderRadius: 6,
-  border:       "none",
-  background:   "var(--color-primary, #1976d2)",
-  color:        "#fff",
-  fontSize:     14,
-  fontWeight:   600,
-  cursor:       "pointer",
+  border: "none",
+  background: "var(--color-primary, #1976d2)",
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
 };
 
 const secondaryBtnStyle: React.CSSProperties = {
-  padding:      "8px 16px",
+  padding: "8px 16px",
   borderRadius: 6,
-  border:       "1px solid var(--color-border)",
-  background:   "var(--color-bg-card)",
-  color:        "var(--color-text-primary)",
-  fontSize:     14,
-  cursor:       "pointer",
+  border: "1px solid var(--color-border)",
+  background: "var(--color-bg-card)",
+  color: "var(--color-text-primary)",
+  fontSize: 14,
+  cursor: "pointer",
 };
 
 const dangerBtnStyle: React.CSSProperties = {
-  padding:      "4px 12px",
+  padding: "4px 12px",
   borderRadius: 4,
-  border:       "1px solid #e53935",
-  background:   "transparent",
-  color:        "#e53935",
-  fontSize:     12,
-  cursor:       "pointer",
+  border: "1px solid #e53935",
+  background: "transparent",
+  color: "#e53935",
+  fontSize: 12,
+  cursor: "pointer",
 };
 
 const overlayStyle: React.CSSProperties = {
-  position:       "fixed",
-  inset:          0,
-  background:     "rgba(0,0,0,0.45)",
-  display:        "flex",
-  alignItems:     "center",
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.45)",
+  display: "flex",
+  alignItems: "center",
   justifyContent: "center",
-  zIndex:         1000,
+  zIndex: 1000,
 };
 
 const dialogStyle: React.CSSProperties = {
-  background:   "var(--color-bg-card)",
+  background: "var(--color-bg-card)",
   borderRadius: 10,
-  padding:      "28px 32px",
-  minWidth:     380,
-  maxWidth:     480,
-  boxShadow:    "0 8px 32px rgba(0,0,0,0.18)",
+  padding: "28px 32px",
+  minWidth: 380,
+  maxWidth: 480,
+  boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
 };

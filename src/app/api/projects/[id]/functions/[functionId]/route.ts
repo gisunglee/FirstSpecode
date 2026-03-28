@@ -64,7 +64,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       assignMemberId: fn.asign_mber_id ?? null,
       implStartDate: fn.impl_bgng_de ?? "",
       implEndDate:   fn.impl_end_de ?? "",
-      spec:          fn.spec_cn ?? "",
       sortOrder:     fn.sort_ordr,
       areaId:        fn.area_id ?? null,
       areaName:      fn.area?.area_nm ?? "미분류",
@@ -111,7 +110,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
   const {
     areaId, name, type, description, priority, complexity, effort,
-    assignMemberId, implStartDate, implEndDate, spec, sortOrder,
+    assignMemberId, implStartDate, implEndDate, sortOrder,
   } = body as {
     areaId?:         string;
     name?:           string;
@@ -123,7 +122,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     assignMemberId?: string;
     implStartDate?:  string;
     implEndDate?:    string;
-    spec?:           string;
     sortOrder?:      number;
   };
 
@@ -153,7 +151,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           asign_mber_id: assignMemberId || null,
           impl_bgng_de:  implStartDate || null,
           impl_end_de:   implEndDate || null,
-          spec_cn:       spec?.trim() || null,
           sort_ordr:     sortOrder ?? existing.sort_ordr,
           mdfcn_dt:      new Date(),
         },
