@@ -193,7 +193,7 @@ function UnitWorksPageInner() {
         <select
           value={filterReqId}
           onChange={(e) => setFilterReqId(e.target.value)}
-          style={{ ...inputStyle, width: "auto", minWidth: 200 }}
+          style={{ ...selectStyle, width: "auto", minWidth: 200 }}
         >
           <option value="">전체 요구사항</option>
           {reqOptions.map((r) => (
@@ -524,6 +524,17 @@ const inputStyle: React.CSSProperties = {
   fontSize:     14,
   boxSizing:    "border-box",
   outline:      "none",
+};
+
+// select 전용 — 브라우저 기본 화살표를 제거하고 커스텀 화살표로 대체
+const selectStyle: React.CSSProperties = {
+  ...inputStyle,
+  paddingRight:       "32px",
+  appearance:         "none",
+  WebkitAppearance:   "none",
+  backgroundImage:    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
+  backgroundRepeat:   "no-repeat",
+  backgroundPosition: "right 10px center",
 };
 
 const linkBtnStyle: React.CSSProperties = {
