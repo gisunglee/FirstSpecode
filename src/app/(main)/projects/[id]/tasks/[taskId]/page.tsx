@@ -294,7 +294,7 @@ const inputStyle: React.CSSProperties = {
 const primaryBtnStyle: React.CSSProperties = {
   padding: "8px 24px",
   borderRadius: 6,
-  border: "none",
+  border: "1px solid transparent",
   background: "var(--color-primary, #1976d2)",
   color: "#fff",
   fontSize: 14,

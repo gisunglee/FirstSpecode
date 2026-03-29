@@ -441,8 +441,7 @@ model TbDsFunction {
   creat_dt        DateTime  @default(now())
   mdfcn_dt        DateTime?
 
-  area           TbDsArea?                   @relation(fields: [area_id], references: [area_id])
-  columnMappings TbDsFunctionColumnMapping[]
+  area TbDsArea? @relation(fields: [area_id], references: [area_id])
 
   @@map("tb_ds_function")
 }
@@ -470,24 +469,33 @@ model TbDsTableColumn {
   sort_ordr     Int      @default(0)
   creat_dt      DateTime @default(now())
 
-  table          TbDsDbTable                 @relation(fields: [tbl_id], references: [tbl_id])
-  columnMappings TbDsFunctionColumnMapping[]
+  table       TbDsDbTable      @relation(fields: [tbl_id], references: [tbl_id])
+  colMappings TbDsColMapping[]
 
   @@map("tb_ds_table_column")
 }
 
-model TbDsFunctionColumnMapping {
-  mapping_id    String   @id @default(uuid())
-  func_id       String
-  col_id        String
-  use_purps_cn  String?
-  sort_ordr     Int      @default(0)
-  creat_dt      DateTime @default(now())
+model TbDsColMapping {
+  mapping_id   String   @id @default(uuid())
+  // 참조 엔티티 유형: FUNCTION | AREA | SCREEN ...
+  ref_ty_code  String
+  // 참조 엔티티 ID (func_id, area_id 등)
+  ref_id       String
+  col_id       String
+  // INPUT | OUTPUT | INOUT
+  io_se_code   String?
+  // TEXT | TEXTAREA | SELECT | RADIO | CHECKBOX | DATE | FILE | NUMBER | HIDDEN
+  ui_ty_code   String?
+  // 항목명 (화면에서 부르는 이름)
+  use_purps_cn String?
+  // 설명
+  col_dc       String?
+  sort_ordr    Int      @default(0)
+  creat_dt     DateTime @default(now())
 
-  function TbDsFunction    @relation(fields: [func_id], references: [func_id])
-  column   TbDsTableColumn @relation(fields: [col_id], references: [col_id])
+  column TbDsTableColumn @relation(fields: [col_id], references: [col_id])
 
-  @@map("tb_ds_function_column_mapping")
+  @@map("tb_ds_col_mapping")
 }
 
 

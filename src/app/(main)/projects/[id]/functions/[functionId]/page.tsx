@@ -22,6 +22,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor from "@/components/ui/MarkdownEditor";
+import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
+import ColMappingDialog from "@/components/ui/ColMappingDialog";
+import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -41,19 +44,6 @@ type FuncDetail = {
   sortOrder:     number;
   areaId:        string | null;
   areaName:      string;
-  columnMappings: ColumnMapping[];
-};
-
-type ColumnMapping = {
-  mappingId:      string;
-  colId:          string;
-  colName:        string;
-  colLogicalNm:   string;
-  tableId:        string;
-  tableName:      string;
-  tableLogicalNm: string;
-  purpose:        string;
-  sortOrder:      number;
 };
 
 type AreaOption = { areaId: string; displayId: string; name: string };
@@ -71,17 +61,23 @@ export default function FunctionDetailPage() {
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 
 function FunctionDetailPageInner() {
-  const params       = useParams<{ id: string; functionId: string }>();
-  const router       = useRouter();
-  const searchParams = useSearchParams();
-  const queryClient  = useQueryClient();
-  const projectId    = params.id;
-  const functionId   = params.functionId;
+  const params         = useParams<{ id: string; functionId: string }>();
+  const router         = useRouter();
+  const searchParams   = useSearchParams();
+  const queryClient    = useQueryClient();
+  const { setBreadcrumb } = useAppStore();
+  const projectId      = params.id;
+  const functionId     = params.functionId;
   const isNew        = functionId === "new";
   const presetAreaId = searchParams.get("areaId") ?? "";
 
   // ── 설명 예시 팝업 상태 ────────────────────────────────────────────────────
   const [descExampleOpen, setDescExampleOpen] = useState(false);
+
+  // ── 변경 이력 관련 상태 ────────────────────────────────────────────────────
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [historyViewOpen,   setHistoryViewOpen]   = useState(false);
+  const [originalDescription, setOriginalDescription] = useState("");
 
   // ── 폼 상태 ────────────────────────────────────────────────────────────────
   const [name,           setName]           = useState("");
@@ -94,6 +90,7 @@ function FunctionDetailPageInner() {
   const [implStartDate,  setImplStartDate]  = useState("");
   const [implEndDate,    setImplEndDate]    = useState("");
   const [areaId,         setAreaId]         = useState(presetAreaId);
+  const [sortOrder,      setSortOrder]      = useState(0);
 
   // ── AI 상태 ────────────────────────────────────────────────────────────────
   const [inspectComment, setInspectComment] = useState("");
@@ -120,6 +117,17 @@ function FunctionDetailPageInner() {
     enabled: !isNew,
   });
 
+  // GNB 브레드크럼 설정 — 마운트 시 설정, 언마운트 시 초기화
+  useEffect(() => {
+    const items = [
+      { label: "기능 정의", href: `/projects/${projectId}/functions` },
+      ...(data?.areaName ? [{ label: data.areaName }] : []),
+      { label: isNew ? "신규 등록" : (data?.displayId ?? "편집") },
+    ];
+    setBreadcrumb(items);
+    return () => setBreadcrumb([]);
+  }, [projectId, isNew, data?.areaName, data?.displayId, setBreadcrumb]);
+
   useEffect(() => {
     if (data) {
       setName(data.name);
@@ -132,12 +140,15 @@ function FunctionDetailPageInner() {
       setImplStartDate(data.implStartDate);
       setImplEndDate(data.implEndDate);
       setAreaId(data.areaId ?? "");
+      setSortOrder(data.sortOrder ?? 0);
+      // 설명 변경 감지를 위해 원본 값 보관
+      setOriginalDescription(data.description ?? "");
     }
   }, [data]);
 
   // ── 저장 뮤테이션 ──────────────────────────────────────────────────────────
-  const saveMutation = useMutation<{ data: { funcId?: string } }, Error, void>({
-    mutationFn: () => {
+  const saveMutation = useMutation<{ data: { funcId?: string } }, Error, { saveHistory?: boolean }>({
+    mutationFn: ({ saveHistory } = {}) => {
       const body = {
         areaId: areaId || null,
         name: name.trim(), type, description: description.trim(),
@@ -145,6 +156,8 @@ function FunctionDetailPageInner() {
         assignMemberId: assignMemberId || null,
         implStartDate: implStartDate || null,
         implEndDate:   implEndDate || null,
+        sortOrder,
+        saveHistory:   saveHistory || undefined,
       };
       if (isNew) {
         return authFetch<{ data: { funcId?: string } }>(`/api/projects/${projectId}/functions`, {
@@ -155,13 +168,17 @@ function FunctionDetailPageInner() {
         method: "PUT", body: JSON.stringify(body),
       });
     },
-    onSuccess: (res) => {
+    onSuccess: (res, variables) => {
       toast.success(isNew ? "기능이 등록되었습니다." : "저장되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["functions", projectId] });
       if (isNew && res.data.funcId) {
         router.replace(`/projects/${projectId}/functions/${res.data.funcId}`);
       } else {
         queryClient.invalidateQueries({ queryKey: ["function", projectId, functionId] });
+        setOriginalDescription(description.trim());
+        if (variables?.saveHistory) {
+          queryClient.invalidateQueries({ queryKey: ["settings-history", projectId] });
+        }
       }
     },
     onError: (err: Error) => toast.error(err.message),
@@ -186,32 +203,72 @@ function FunctionDetailPageInner() {
   if (!isNew && isLoading) return <div style={{ padding: "40px 32px", color: "#888" }}>로딩 중...</div>;
 
   return (
-    <div style={{ padding: "20px 24px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-        <button
-          onClick={() => router.push(`/projects/${projectId}/functions`)}
-          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--color-text-secondary)" }}
-        >
-          ←
-        </button>
-        <div style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
-          {isNew ? "기능 신규 등록" : `${data?.displayId ?? ""} 기능 편집`}
+    <div style={{ padding: 0 }}>
+
+      {/* 타이틀 행 — full-width 배경, 좌: ← 타이틀 | 중: 상태 배지(HTML) | 우: 취소·저장 */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 16,
+        padding: "10px 24px",
+        background: "var(--color-bg-card)",
+        borderBottom: "1px solid var(--color-border)",
+        marginBottom: 16,
+      }}>
+
+        {/* 좌: 뒤로 + 타이틀 */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <button
+            onClick={() => router.push(`/projects/${projectId}/functions`)}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}
+          >
+            ←
+          </button>
+          <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+            {isNew ? "기능 신규 등록" : `${data?.displayId ?? ""} 기능 편집`}
+          </span>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+
+        {/* 중: 상태 배지 (단순 HTML) */}
+        {!isNew && (
+          <div style={{ display: "flex", alignItems: "center", gap: 14, flex: 1, flexWrap: "wrap" }}>
+            <div style={statusGroupStyle}>
+              <span style={statusLabelStyle}>작업 상태</span>
+              <span style={{ ...statusDotStyle, background: "#4caf50" }} />
+              <span style={statusValueStyle}>완료</span>
+            </div>
+            <div style={statusDividerStyle} />
+            <div style={statusGroupStyle}>
+              <span style={statusLabelStyle}>PL 검토</span>
+              <span style={{ ...statusDotStyle, background: "#ff9800" }} />
+              <span style={statusValueStyle}>검토 중</span>
+            </div>
+            <div style={statusDividerStyle} />
+            <div style={statusGroupStyle}>
+              <span style={statusLabelStyle}>AI</span>
+              <span style={{ ...statusDotStyle, background: "#1976d2" }} />
+              <span style={statusValueStyle}>명세 생성 중</span>
+            </div>
+          </div>
+        )}
+        {isNew && <div style={{ flex: 1 }} />}
+
+        {/* 우: 취소·저장 */}
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           <button
             onClick={() => router.push(`/projects/${projectId}/functions`)}
             disabled={saveMutation.isPending}
-            style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
+            style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
           >
             취소
           </button>
           <button
             onClick={() => {
               if (!name.trim()) { toast.error("기능명을 입력해 주세요."); return; }
-              saveMutation.mutate();
+              const descChanged = !isNew && description.trim() !== originalDescription.trim();
+              if (descChanged) { setHistoryDialogOpen(true); return; }
+              saveMutation.mutate({});
             }}
             disabled={saveMutation.isPending}
-            style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 20px" }}
+            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
           >
             {saveMutation.isPending ? "저장 중..." : "저장"}
           </button>
@@ -219,15 +276,16 @@ function FunctionDetailPageInner() {
       </div>
 
       {/* ── 2컬럼 레이아웃: 왼쪽 기본 정보, 오른쪽 설명 + 컬럼 매핑 + AI 지원 */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 20, alignItems: "start" }}>
+      <div style={{ padding: "0 24px 24px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr", gap: 20, alignItems: "start" }}>
 
         {/* ── 왼쪽: AR-00078 기본 정보 ── */}
         <section style={sectionStyle}>
-          <h3 style={sectionTitleStyle}>기본 정보</h3>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 24px" }}>
+          {/* 행1: 소속 영역 | 유형 */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
             <div style={formGroupStyle}>
-              <label style={labelStyle}>상위 영역</label>
+              <label style={labelStyle}>소속 영역</label>
               <select value={areaId} onChange={(e) => setAreaId(e.target.value)} style={selectStyle}>
                 <option value="">미분류 (영역 없음)</option>
                 {areaOptions.map((a) => (
@@ -236,6 +294,16 @@ function FunctionDetailPageInner() {
               </select>
             </div>
 
+            <div style={formGroupStyle}>
+              <label style={labelStyle}>유형</label>
+              <select value={type} onChange={(e) => setType(e.target.value)} style={selectStyle}>
+                {FUNC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* 행2: 기능명 | 우선순위 (우선순위 width 고정) */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: "0 16px" }}>
             <div style={formGroupStyle}>
               <label style={labelStyle}>기능명 <span style={{ color: "#e53935" }}>*</span></label>
               <input
@@ -248,27 +316,23 @@ function FunctionDetailPageInner() {
             </div>
 
             <div style={formGroupStyle}>
-              <label style={labelStyle}>유형</label>
-              <select value={type} onChange={(e) => setType(e.target.value)} style={selectStyle}>
-                {FUNC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </div>
-
-            <div style={formGroupStyle}>
               <label style={labelStyle}>우선순위</label>
               <select value={priority} onChange={(e) => setPriority(e.target.value)} style={selectStyle}>
-                <option value="HIGH">HIGH — 높음</option>
-                <option value="MEDIUM">MEDIUM — 중간</option>
-                <option value="LOW">LOW — 낮음</option>
+                <option value="HIGH">높음</option>
+                <option value="MEDIUM">중간</option>
+                <option value="LOW">낮음</option>
               </select>
             </div>
+          </div>
 
+          {/* 행3: 복잡도 | 예상 공수 */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
             <div style={formGroupStyle}>
               <label style={labelStyle}>복잡도</label>
               <select value={complexity} onChange={(e) => setComplexity(e.target.value)} style={selectStyle}>
-                <option value="HIGH">HIGH — 높음</option>
-                <option value="MEDIUM">MEDIUM — 중간</option>
-                <option value="LOW">LOW — 낮음</option>
+                <option value="HIGH">높음</option>
+                <option value="MEDIUM">중간</option>
+                <option value="LOW">낮음</option>
               </select>
             </div>
 
@@ -282,7 +346,10 @@ function FunctionDetailPageInner() {
                 style={inputStyle}
               />
             </div>
+          </div>
 
+          {/* 행4: 구현 시작일 | 구현 종료일 | 정렬 순서 */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 80px", gap: "0 16px" }}>
             <div style={formGroupStyle}>
               <label style={labelStyle}>구현 시작일</label>
               <input
@@ -302,6 +369,17 @@ function FunctionDetailPageInner() {
                 style={inputStyle}
               />
             </div>
+
+            <div style={formGroupStyle}>
+              <label style={labelStyle}>정렬</label>
+              <input
+                type="number"
+                min={0}
+                value={sortOrder}
+                onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
+                style={inputStyle}
+              />
+            </div>
           </div>
         </section>
 
@@ -311,7 +389,7 @@ function FunctionDetailPageInner() {
           {/* 설명 (func_dc) — MarkdownEditor */}
           <section style={sectionStyle}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>설명</h3>
+              <label style={{ ...labelStyle, marginBottom: 0 }}>설명</label>
               <div style={{ display: "flex", gap: 6 }}>
                 <button type="button" onClick={() => setDescExampleOpen(true)} style={ghostSmBtnStyle}>
                   예시
@@ -323,6 +401,11 @@ function FunctionDetailPageInner() {
                 >
                   템플릿 삽입
                 </button>
+                {!isNew && (
+                  <button type="button" onClick={() => setHistoryViewOpen(true)} style={ghostSmBtnStyle}>
+                    🕐 변경 이력
+                  </button>
+                )}
               </div>
             </div>
             <MarkdownEditor
@@ -354,12 +437,68 @@ function FunctionDetailPageInner() {
             </div>
           )}
 
+          {/* 설명 변경 이력 저장 여부 확인 다이얼로그 */}
+          {historyDialogOpen && (
+            <div
+              style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
+              onClick={() => setHistoryDialogOpen(false)}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{ width: "100%", maxWidth: 420, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.2)", padding: "24px 28px" }}
+              >
+                <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                  변경 이력 저장
+                </p>
+                <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+                  기능 설명이 변경되었습니다.<br />
+                  변경 이력을 함께 저장하시겠습니까?
+                </p>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setHistoryDialogOpen(false)}
+                    style={{ ...secondaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setHistoryDialogOpen(false); saveMutation.mutate({}); }}
+                    disabled={saveMutation.isPending}
+                    style={{ ...secondaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
+                  >
+                    이력 없이 저장
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setHistoryDialogOpen(false); saveMutation.mutate({ saveHistory: true }); }}
+                    disabled={saveMutation.isPending}
+                    style={{ ...primaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
+                  >
+                    이력과 함께 저장
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 설명 변경 이력 조회 팝업 */}
+          <SettingsHistoryDialog
+            open={historyViewOpen}
+            onClose={() => setHistoryViewOpen(false)}
+            projectId={projectId}
+            itemName="기능 설명"
+            currentValue={description}
+            title="기능 설명 변경 이력"
+          />
+
           {/* 신규 모드에서는 컬럼 매핑·AI 지원 숨김 */}
           {!isNew && (
             <>
               {/* ── AR-00082 컬럼 매핑 ── */}
               <section style={sectionStyle}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 0 }}>
                   <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>컬럼 매핑</h3>
                   <button
                     onClick={() => setMappingPopupOpen(true)}
@@ -368,30 +507,6 @@ function FunctionDetailPageInner() {
                     매핑 관리
                   </button>
                 </div>
-
-                {!data?.columnMappings.length ? (
-                  <div style={{ padding: "24px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-                    등록된 컬럼 매핑이 없습니다.
-                  </div>
-                ) : (
-                  <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-                    <div style={mappingGridHeaderStyle}>
-                      <div>테이블명</div>
-                      <div>컬럼명</div>
-                      <div>용도</div>
-                    </div>
-                    {data.columnMappings.map((m, idx) => (
-                      <div
-                        key={m.mappingId}
-                        style={{ ...mappingGridRowStyle, borderTop: idx === 0 ? "none" : "1px solid var(--color-border)" }}
-                      >
-                        <div style={{ fontSize: 13, fontFamily: "monospace" }}>{m.tableName}</div>
-                        <div style={{ fontSize: 13, fontFamily: "monospace" }}>{m.colName}</div>
-                        <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{m.purpose || "-"}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </section>
 
               {/* ── AR-00080 AI 지원 ── */}
@@ -442,227 +557,23 @@ function FunctionDetailPageInner() {
           )}
         </div>
       </div>
+      </div>
 
       {/* ── PID-00053 컬럼 매핑 관리 팝업 ────────────────────────────────── */}
-      {mappingPopupOpen && data && (
-        <ColumnMappingPopup
-          projectId={projectId}
-          functionId={functionId}
-          initialMappings={data.columnMappings}
-          onClose={() => setMappingPopupOpen(false)}
-          onSaved={() => {
-            setMappingPopupOpen(false);
-            queryClient.invalidateQueries({ queryKey: ["function", projectId, functionId] });
-          }}
-        />
-      )}
+      <ColMappingDialog
+        open={mappingPopupOpen}
+        onClose={() => setMappingPopupOpen(false)}
+        onSaved={() => setMappingPopupOpen(false)}
+        projectId={projectId}
+        refType="FUNCTION"
+        refId={functionId}
+        title="컬럼 매핑 관리"
+      />
     </div>
   );
 }
 
-// ── PID-00053 컬럼 매핑 관리 팝업 ────────────────────────────────────────────
-
-type DbTable  = { tableId: string; tableName: string; tableLogicalNm: string };
-type DbColumn = { colId: string; colName: string; colLogicalNm: string };
-type EditMapping = { colId: string; tableName: string; colName: string; purpose: string; _tableId: string };
-
-function ColumnMappingPopup({
-  projectId, functionId, initialMappings, onClose, onSaved,
-}: {
-  projectId:       string;
-  functionId:      string;
-  initialMappings: ColumnMapping[];
-  onClose:         () => void;
-  onSaved:         () => void;
-}) {
-  const [selectedTableId, setSelectedTableId] = useState("");
-  const [mappings, setMappings] = useState<EditMapping[]>(
-    initialMappings.map((m) => ({
-      colId:     m.colId,
-      tableName: m.tableName,
-      colName:   m.colName,
-      purpose:   m.purpose,
-      _tableId:  m.tableId,
-    }))
-  );
-
-  // DB 테이블 목록
-  const { data: tablesData } = useQuery({
-    queryKey: ["db-schema", projectId, "tables"],
-    queryFn:  () =>
-      authFetch<{ data: { tables: DbTable[] } }>(`/api/projects/${projectId}/db-schema`)
-        .then((r) => r.data),
-  });
-  const tables = tablesData?.tables ?? [];
-
-  // 선택 테이블의 컬럼 목록
-  const { data: colsData } = useQuery({
-    queryKey: ["db-schema", projectId, "columns", selectedTableId],
-    queryFn:  () =>
-      authFetch<{ data: { columns: DbColumn[] } }>(
-        `/api/projects/${projectId}/db-schema?tableId=${selectedTableId}`
-      ).then((r) => r.data),
-    enabled: !!selectedTableId,
-  });
-  const columns = colsData?.columns ?? [];
-
-  function addRow(colId: string, colName: string) {
-    if (!selectedTableId) return;
-    const tbl = tables.find((t) => t.tableId === selectedTableId);
-    if (!tbl) return;
-    if (mappings.some((m) => m.colId === colId)) {
-      toast.error("이미 추가된 컬럼입니다.");
-      return;
-    }
-    setMappings((prev) => [...prev, { colId, tableName: tbl.tableName, colName, purpose: "", _tableId: selectedTableId }]);
-  }
-
-  function removeRow(idx: number) {
-    setMappings((prev) => prev.filter((_, i) => i !== idx));
-  }
-
-  function updatePurpose(idx: number, value: string) {
-    setMappings((prev) => prev.map((m, i) => i === idx ? { ...m, purpose: value } : m));
-  }
-
-  const saveMutation = useMutation({
-    mutationFn: () =>
-      authFetch(`/api/projects/${projectId}/functions/${functionId}/column-mappings`, {
-        method: "POST",
-        body:   JSON.stringify({ mappings: mappings.map((m) => ({ colId: m.colId, purpose: m.purpose })) }),
-      }),
-    onSuccess: () => {
-      toast.success("컬럼 매핑이 저장되었습니다.");
-      onSaved();
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  // AI 초안 생성 (DESIGN 태스크 요청)
-  const aiDraftMutation = useMutation({
-    mutationFn: () =>
-      authFetch(`/api/projects/${projectId}/functions/${functionId}/ai`, {
-        method: "POST",
-        body:   JSON.stringify({ taskType: "DESIGN" }),
-      }),
-    onSuccess: () => toast.success("AI 컬럼 매핑 초안 생성 요청이 접수되었습니다."),
-    onError:   (err: Error) => toast.error(err.message),
-  });
-
-  return (
-    <div style={{ ...overlayStyle, zIndex: 2000 }} onClick={onClose}>
-      <div
-        style={{
-          background: "var(--color-bg-card)", borderRadius: 10,
-          padding: "28px 32px", width: "min(720px, 92vw)", maxHeight: "85vh",
-          overflowY: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.28)",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>컬럼 매핑 관리</h3>
-          <button onClick={onClose} style={secondaryBtnStyle}>닫기</button>
-        </div>
-
-        {/* AR-00084 테이블 선택 + AI 초안 */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "flex-end" }}>
-          <div style={{ flex: 1 }}>
-            <label style={labelStyle}>테이블 선택</label>
-            <select
-              value={selectedTableId}
-              onChange={(e) => setSelectedTableId(e.target.value)}
-              style={selectStyle}
-            >
-              <option value="">테이블을 선택하세요</option>
-              {tables.map((t) => (
-                <option key={t.tableId} value={t.tableId}>
-                  {t.tableName}{t.tableLogicalNm ? ` (${t.tableLogicalNm})` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button
-            onClick={() => aiDraftMutation.mutate()}
-            style={{ ...primaryBtnStyle, flexShrink: 0 }}
-            disabled={aiDraftMutation.isPending}
-          >
-            AI 초안 생성
-          </button>
-        </div>
-
-        {/* 선택된 테이블의 컬럼 목록 (클릭하여 추가) */}
-        {selectedTableId && columns.length > 0 && (
-          <div style={{ marginBottom: 16, padding: 12, background: "var(--color-bg-muted)", borderRadius: 6 }}>
-            <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--color-text-secondary)", fontWeight: 600 }}>
-              컬럼 클릭하여 추가
-            </p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {columns.map((c) => (
-                <button
-                  key={c.colId}
-                  onClick={() => addRow(c.colId, c.colName)}
-                  style={{
-                    padding: "3px 10px", borderRadius: 4, border: "1px solid var(--color-border)",
-                    background: "var(--color-bg-card)", cursor: "pointer", fontSize: 12,
-                    fontFamily: "monospace",
-                  }}
-                  title={c.colLogicalNm}
-                >
-                  {c.colName}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* AR-00085 매핑 편집 목록 */}
-        {mappings.length > 0 && (
-          <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden", marginBottom: 16 }}>
-            <div style={mappingEditHeaderStyle}>
-              <div>테이블명</div>
-              <div>컬럼명</div>
-              <div>용도</div>
-              <div />
-            </div>
-            {mappings.map((m, idx) => (
-              <div key={idx} style={{ ...mappingEditRowStyle, borderTop: idx === 0 ? "none" : "1px solid var(--color-border)" }}>
-                <div style={{ fontSize: 12, fontFamily: "monospace", color: "var(--color-text-secondary)" }}>
-                  {m.tableName}
-                </div>
-                <div style={{ fontSize: 12, fontFamily: "monospace" }}>{m.colName}</div>
-                <div>
-                  <input
-                    type="text"
-                    value={m.purpose}
-                    onChange={(e) => updatePurpose(idx, e.target.value)}
-                    placeholder="조회조건, 조회결과 등"
-                    style={{ ...inputStyle, fontSize: 12, padding: "4px 8px" }}
-                  />
-                </div>
-                <div style={{ display: "flex", justifyContent: "center" }}>
-                  <button onClick={() => removeRow(idx)} style={{ background: "none", border: "none", cursor: "pointer", color: "#e53935", fontSize: 16 }}>
-                    ×
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button onClick={onClose} style={secondaryBtnStyle} disabled={saveMutation.isPending}>취소</button>
-          <button
-            onClick={() => saveMutation.mutate()}
-            style={primaryBtnStyle}
-            disabled={saveMutation.isPending}
-          >
-            {saveMutation.isPending ? "저장 중..." : "저장"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// ── (구 ColumnMappingPopup 제거됨 — ColMappingDialog 공통 컴포넌트로 교체)
 
 // ── 설명 예시 / 템플릿 ────────────────────────────────────────────────────────
 
@@ -673,20 +584,20 @@ const DESCRIPTION_TEMPLATE = (displayId: string, name: string) => `test`;
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
 const FUNC_TYPES = [
-  { value: "SEARCH",   label: "SEARCH — 검색/조회" },
-  { value: "SAVE",     label: "SAVE — 저장" },
-  { value: "DELETE",   label: "DELETE — 삭제" },
-  { value: "DOWNLOAD", label: "DOWNLOAD — 다운로드" },
-  { value: "UPLOAD",   label: "UPLOAD — 업로드" },
-  { value: "NAVIGATE", label: "NAVIGATE — 이동" },
-  { value: "VALIDATE", label: "VALIDATE — 유효성검증" },
-  { value: "OTHER",    label: "OTHER — 기타" },
+  { value: "SEARCH",   label: "검색/조회" },
+  { value: "SAVE",     label: "저장" },
+  { value: "DELETE",   label: "삭제" },
+  { value: "DOWNLOAD", label: "다운로드" },
+  { value: "UPLOAD",   label: "업로드" },
+  { value: "NAVIGATE", label: "이동" },
+  { value: "VALIDATE", label: "유효성검증" },
+  { value: "OTHER",    label: "기타" },
 ];
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
 const sectionStyle: React.CSSProperties = {
-  marginBottom: 28, padding: "24px",
+  padding: "16px 20px",
   border: "1px solid var(--color-border)", borderRadius: 8,
   background: "var(--color-bg-card)",
 };
@@ -710,7 +621,7 @@ const selectStyle: React.CSSProperties = {
   paddingRight: 32,
 };
 const primaryBtnStyle: React.CSSProperties = {
-  padding: "8px 20px", borderRadius: 6, border: "none",
+  padding: "8px 20px", borderRadius: 6, border: "1px solid transparent",
   background: "var(--color-primary, #1976d2)", color: "#fff",
   fontSize: 14, fontWeight: 600, cursor: "pointer",
 };
@@ -719,34 +630,40 @@ const secondaryBtnStyle: React.CSSProperties = {
   border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
   color: "var(--color-text-primary)", fontSize: 14, cursor: "pointer",
 };
-const overlayStyle: React.CSSProperties = {
-  position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
-  display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
+
+const statusGroupStyle: React.CSSProperties = {
+  display:     "flex",
+  alignItems:  "center",
+  gap:         5,
 };
 
-const MAPPING_GRID   = "1fr 1fr 1fr";
-const MAPPING_EDIT_GRID = "140px 140px 1fr 40px";
+const statusLabelStyle: React.CSSProperties = {
+  fontSize:    11,
+  fontWeight:  600,
+  color:       "var(--color-text-secondary)",
+  letterSpacing: "0.03em",
+};
 
-const mappingGridHeaderStyle: React.CSSProperties = {
-  display: "grid", gridTemplateColumns: MAPPING_GRID, gap: 8,
-  padding: "8px 16px", background: "var(--color-bg-muted)",
-  fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)",
-  borderBottom: "1px solid var(--color-border)",
+const statusDotStyle: React.CSSProperties = {
+  width:        7,
+  height:       7,
+  borderRadius: "50%",
+  flexShrink:   0,
 };
-const mappingGridRowStyle: React.CSSProperties = {
-  display: "grid", gridTemplateColumns: MAPPING_GRID, gap: 8,
-  padding: "10px 16px", alignItems: "center", background: "var(--color-bg-card)",
+
+const statusValueStyle: React.CSSProperties = {
+  fontSize:  12,
+  fontWeight: 500,
+  color:     "var(--color-text-primary)",
 };
-const mappingEditHeaderStyle: React.CSSProperties = {
-  display: "grid", gridTemplateColumns: MAPPING_EDIT_GRID, gap: 8,
-  padding: "8px 12px", background: "var(--color-bg-muted)",
-  fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)",
-  borderBottom: "1px solid var(--color-border)",
+
+const statusDividerStyle: React.CSSProperties = {
+  width:      1,
+  height:     14,
+  background: "var(--color-border)",
+  flexShrink: 0,
 };
-const mappingEditRowStyle: React.CSSProperties = {
-  display: "grid", gridTemplateColumns: MAPPING_EDIT_GRID, gap: 8,
-  padding: "8px 12px", alignItems: "center", background: "var(--color-bg-card)",
-};
+
 
 const ghostSmBtnStyle: React.CSSProperties = {
   padding:      "3px 9px",

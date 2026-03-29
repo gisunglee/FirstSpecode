@@ -14,7 +14,7 @@
  *   - useSearchParams: new 모드 시 unitWorkId pre-select 지원
  */
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor from "@/components/ui/MarkdownEditor";
 import { ScreenLayoutEditor, type LayoutRow } from "@/components/ui/ScreenLayoutEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
+import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -87,6 +88,7 @@ function ScreenDetailPageInner() {
   const searchParams = useSearchParams();
   const router       = useRouter();
   const queryClient  = useQueryClient();
+  const { setBreadcrumb } = useAppStore();
   const projectId    = params.id;
   const screenId     = params.screenId;
   const isNew        = screenId === "new";
@@ -221,42 +223,64 @@ function ScreenDetailPageInner() {
     doSave(false);
   }
 
+  // GNB 브레드크럼 설정 — 마운트 시 설정, 언마운트 시 초기화
+  useEffect(() => {
+    const items = [
+      { label: "화면 설계", href: `/projects/${projectId}/screens` },
+      ...(detail?.unitWorkName ? [{ label: detail.unitWorkName }] : []),
+      { label: isNew ? "신규 등록" : (detail?.displayId ?? "편집") },
+    ];
+    setBreadcrumb(items);
+    return () => setBreadcrumb([]);
+  }, [projectId, isNew, detail?.unitWorkName, detail?.displayId, setBreadcrumb]);
+
   // ── 로딩 ───────────────────────────────────────────────────────────────────
   if (!isNew && isDetailLoading) {
     return <div style={{ padding: "40px 32px", color: "#888" }}>화면 정보를 불러오는 중...</div>;
   }
 
   return (
-    <div style={{ padding: "20px 24px" }}>
-      {/* 헤더 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-        <button
-          onClick={() => router.push(`/projects/${projectId}/screens`)}
-          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#666" }}
-        >
-          ←
-        </button>
-        <div style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
-          {isNew ? "화면 등록" : "화면 편집"}
+    <div style={{ padding: 0 }}>
+      {/* 타이틀 행 — full-width 배경 */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 16,
+        padding: "10px 24px",
+        background: "var(--color-bg-card)",
+        borderBottom: "1px solid var(--color-border)",
+        marginBottom: 16,
+      }}>
+        {/* 좌: 뒤로 + 타이틀 */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
+          <button
+            onClick={() => router.push(`/projects/${projectId}/screens`)}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}
+          >
+            ←
+          </button>
+          <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+            {isNew ? "화면 신규 등록" : `${detail?.displayId ?? ""} 화면 편집`}
+          </span>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        {/* 우: 취소·저장 */}
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           <button
             onClick={() => router.push(`/projects/${projectId}/screens`)}
             disabled={saveMutation.isPending}
-            style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
+            style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
           >
             취소
           </button>
           <button
             onClick={handleSave}
             disabled={saveMutation.isPending}
-            style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 20px" }}
+            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
           >
             {saveMutation.isPending ? "저장 중..." : "저장"}
           </button>
         </div>
       </div>
 
+      <div style={{ padding: "0 24px 24px" }}>
       {/* 2-컬럼 레이아웃: 기본 정보 | 화면 설명 */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 28, alignItems: "start" }}>
 
@@ -393,15 +417,6 @@ function ScreenDetailPageInner() {
           small
           headerRight={
             <div style={{ display: "flex", gap: 5 }}>
-              {!isNew && (
-                <button
-                  type="button"
-                  onClick={() => setHistoryViewOpen(true)}
-                  style={ghostSmBtnStyle}
-                >
-                  🕐 변경 이력
-                </button>
-              )}
               <button
                 type="button"
                 onClick={() => setDescExampleOpen(true)}
@@ -421,6 +436,15 @@ function ScreenDetailPageInner() {
               >
                 템플릿 삽입
               </button>
+              {!isNew && (
+                <button
+                  type="button"
+                  onClick={() => setHistoryViewOpen(true)}
+                  style={ghostSmBtnStyle}
+                >
+                  🕐 변경 이력
+                </button>
+              )}
             </div>
           }
         >
@@ -544,6 +568,7 @@ function ScreenDetailPageInner() {
         title="화면 설명 변경 이력"
       />
 
+      </div>
       </div>
     </div>
   );
@@ -728,7 +753,7 @@ const selectStyle: React.CSSProperties = {
 const primaryBtnStyle: React.CSSProperties = {
   padding:      "8px 24px",
   borderRadius: 6,
-  border:       "none",
+  border:       "1px solid transparent",
   background:   "var(--color-primary, #1976d2)",
   color:        "#fff",
   fontSize:     14,

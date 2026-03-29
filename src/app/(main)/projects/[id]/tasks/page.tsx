@@ -436,7 +436,7 @@ function DeleteTaskDialog({
 const primaryBtnStyle: React.CSSProperties = {
   padding: "8px 18px",
   borderRadius: 6,
-  border: "none",
+  border: "1px solid transparent",
   background: "var(--color-primary, #1976d2)",
   color: "#fff",
   fontSize: 13,

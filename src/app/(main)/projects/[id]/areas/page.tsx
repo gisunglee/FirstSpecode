@@ -125,10 +125,16 @@ function AreasPageInner() {
   }
 
   return (
-    <div style={{ padding: "20px 24px" }}>
-      {/* 헤더 */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)" }}>
+    <div style={{ padding: 0 }}>
+      {/* 헤더 — full-width 배경 */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "10px 24px",
+        background: "var(--color-bg-card)",
+        borderBottom: "1px solid var(--color-border)",
+        marginBottom: 16,
+      }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           영역 목록
         </div>
         <button
@@ -138,12 +144,13 @@ function AreasPageInner() {
               : `/projects/${projectId}/areas/new`;
             router.push(url);
           }}
-          style={primaryBtnStyle}
+          style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
         >
           + 신규 등록
         </button>
       </div>
 
+      <div style={{ padding: "0 24px 24px" }}>
       {/* 총 건수 */}
       <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
         총 {items.length}건
@@ -258,6 +265,7 @@ function AreasPageInner() {
           ))}
         </div>
       )}
+      </div>
 
       {/* PID-00049 삭제 확인 팝업 */}
       {deleteTarget && (
@@ -430,7 +438,7 @@ const linkBtnStyle: React.CSSProperties = {
 const primaryBtnStyle: React.CSSProperties = {
   padding:      "8px 20px",
   borderRadius: 6,
-  border:       "none",
+  border:       "1px solid transparent",
   background:   "var(--color-primary, #1976d2)",
   color:        "#fff",
   fontSize:     14,

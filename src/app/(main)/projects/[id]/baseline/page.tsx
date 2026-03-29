@@ -73,19 +73,27 @@ function BaselinePageInner() {
   }
 
   return (
-    <div style={{ padding: "20px 24px" }}>
-      {/* 헤더 AR-00055 */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)" }}>
-            기준선 목록
-          </div>
+    <div style={{ padding: 0 }}>
+      {/* 헤더 AR-00055 — full-width 배경 */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "10px 24px",
+        background: "var(--color-bg-card)",
+        borderBottom: "1px solid var(--color-border)",
+        marginBottom: 16,
+      }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+          기준선 목록
         </div>
-        <button onClick={() => setCreateOpen(true)} style={primaryBtnStyle}>
+        <button
+          onClick={() => setCreateOpen(true)}
+          style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
+        >
           일괄 확정
         </button>
       </div>
 
+      <div style={{ padding: "0 24px 24px" }}>
       <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
         총 {data?.totalCount ?? 0}건
       </div>
@@ -154,6 +162,8 @@ function BaselinePageInner() {
           ))}
         </div>
       )}
+
+      </div>
 
       {/* 일괄 확정 팝업 */}
       {createOpen && (
@@ -429,7 +439,7 @@ const linkBtnStyle: React.CSSProperties = {
 const primaryBtnStyle: React.CSSProperties = {
   padding:      "8px 20px",
   borderRadius: 6,
-  border:       "none",
+  border:       "1px solid transparent",
   background:   "var(--color-primary, #1976d2)",
   color:        "#fff",
   fontSize:     14,

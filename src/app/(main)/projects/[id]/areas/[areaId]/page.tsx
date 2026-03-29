@@ -27,6 +27,7 @@ import MarkdownEditor from "@/components/ui/MarkdownEditor";
 import { ScreenLayoutEditor, type LayoutRow } from "@/components/ui/ScreenLayoutEditor";
 import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
+import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -80,6 +81,7 @@ function AreaDetailPageInner() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const queryClient  = useQueryClient();
+  const { setBreadcrumb } = useAppStore();
   const projectId    = params.id;
   const areaId       = params.areaId;
   const isNew        = areaId === "new";
@@ -133,6 +135,17 @@ function AreaDetailPageInner() {
     // 신규 모드이면 조회 안 함
     enabled: !isNew,
   });
+
+  // GNB 브레드크럼 설정 — 마운트 시 설정, 언마운트 시 초기화
+  useEffect(() => {
+    const items = [
+      { label: "영역 관리", href: `/projects/${projectId}/areas` },
+      ...(data?.screenName ? [{ label: data.screenName }] : []),
+      { label: isNew ? "신규 등록" : (data?.displayId ?? "편집") },
+    ];
+    setBreadcrumb(items);
+    return () => setBreadcrumb([]);
+  }, [projectId, isNew, data?.screenName, data?.displayId, setBreadcrumb]);
 
   // 상세 데이터로 폼 초기화
   useEffect(() => {
@@ -231,7 +244,7 @@ function AreaDetailPageInner() {
   const descriptionChanged = !isNew && description.trim() !== originalDescription;
 
   return (
-    <div style={{ padding: "20px 24px" }}>
+    <div style={{ padding: 0 }}>
 
       {/* ── 이력 저장 다이얼로그 ── */}
       {historyDialogOpen && (
@@ -270,42 +283,53 @@ function AreaDetailPageInner() {
         title="버전 이력 비교"
       />
 
-      {/* 헤더 — 뒤로가기 + 제목 + 취소/저장 한 줄 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-        <button
-          onClick={() => router.push(`/projects/${projectId}/areas`)}
-          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)" }}
-        >
-          ←
-        </button>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
-          {isNew ? "영역 신규 등록" : `${data?.displayId ?? ""} 영역 편집`}
+      {/* 타이틀 행 — full-width 배경, 좌: ← 타이틀 | 우: Excalidraw·취소·저장 */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 16,
+        padding: "10px 24px",
+        background: "var(--color-bg-card)",
+        borderBottom: "1px solid var(--color-border)",
+        marginBottom: 16,
+      }}>
+        {/* 좌: 뒤로 + 타이틀 */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
+          <button
+            onClick={() => router.push(`/projects/${projectId}/areas`)}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}
+          >
+            ←
+          </button>
+          <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+            {isNew ? "영역 신규 등록" : `${data?.displayId ?? ""} 영역 편집`}
+          </span>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        {/* 우: 버튼 그룹 */}
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           {!isNew && (
             <button
               onClick={() => setExcalidrawOpen(true)}
-              style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
+              style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 12px" }}
             >
-              Excalidraw로 설계하기 ↗
+              Excalidraw ↗
             </button>
           )}
           <button
             onClick={() => router.push(`/projects/${projectId}/areas`)}
-            style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
+            style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
           >
             취소
           </button>
           <button
             onClick={handleSave}
             disabled={saveMutation.isPending}
-            style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 20px" }}
+            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
           >
             {saveMutation.isPending ? "저장 중..." : "저장"}
           </button>
         </div>
       </div>
 
+      <div style={{ padding: "0 24px 24px" }}>
       {/* 2-컬럼 레이아웃 */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 24, alignItems: "start" }}>
 
@@ -523,6 +547,7 @@ function AreaDetailPageInner() {
         </div>
 
       </div>
+      </div>
 
       {/* 설명 예시 팝업 */}
       {descExampleOpen && (
@@ -644,12 +669,12 @@ function ExcalidrawPopup({
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
 const AREA_TYPES = [
-  { value: "SEARCH",      label: "SEARCH — 검색 조건" },
-  { value: "GRID",        label: "GRID — 데이터 목록" },
-  { value: "FORM",        label: "FORM — 입력 폼" },
-  { value: "INFO_CARD",   label: "INFO_CARD — 정보 카드" },
-  { value: "TAB",         label: "TAB — 탭" },
-  { value: "FULL_SCREEN", label: "FULL_SCREEN — 전체화면" },
+  { value: "SEARCH",      label: "검색 조건" },
+  { value: "GRID",        label: "데이터 목록" },
+  { value: "FORM",        label: "입력 폼" },
+  { value: "INFO_CARD",   label: "정보 카드" },
+  { value: "TAB",         label: "탭" },
+  { value: "FULL_SCREEN", label: "전체화면" },
 ];
 
 const STATUS_LABELS: Record<string, string> = {
@@ -790,7 +815,7 @@ const linkBtnStyle: React.CSSProperties = {
 const primaryBtnStyle: React.CSSProperties = {
   padding:      "8px 20px",
   borderRadius: 6,
-  border:       "none",
+  border:       "1px solid transparent",
   background:   "var(--color-primary, #1976d2)",
   color:        "#fff",
   fontSize:     14,

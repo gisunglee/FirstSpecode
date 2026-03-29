@@ -26,18 +26,24 @@ import { authFetch } from "@/lib/authFetch";
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
 type FuncRow = {
-  funcId:        string;
-  displayId:     string;
-  name:          string;
-  type:          string;
-  status:        string;
-  priority:      string;
-  complexity:    string;
-  effort:        string;
-  sortOrder:     number;
-  areaId:        string | null;
-  areaName:      string;
-  areaDisplayId: string | null;
+  funcId:          string;
+  displayId:       string;
+  name:            string;
+  type:            string;
+  status:          string;
+  priority:        string;
+  complexity:      string;
+  effort:          string;
+  sortOrder:       number;
+  areaId:          string | null;
+  areaName:        string;
+  areaDisplayId:   string | null;
+  areaSortOrder:   number;
+  screenId:        string | null;
+  screenName:      string;
+  screenDisplayId: string | null;
+  unitWorkId:      string | null;
+  unitWorkName:    string;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -142,13 +148,17 @@ function FunctionsPageInner() {
   if (isLoading) return <div style={{ padding: "40px 32px", color: "#888" }}>로딩 중...</div>;
 
   return (
-    <div style={{ padding: "20px 24px" }}>
-      {/* 헤더 타이틀 */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)" }}>
-            기능 정의 목록
-          </div>
+    <div style={{ padding: 0 }}>
+      {/* 헤더 타이틀 — full-width 배경 */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "10px 24px",
+        background: "var(--color-bg-card)",
+        borderBottom: "1px solid var(--color-border)",
+        marginBottom: 16,
+      }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+          기능 정의 목록
         </div>
         <button
           onClick={() => {
@@ -157,14 +167,14 @@ function FunctionsPageInner() {
               : `/projects/${projectId}/functions/new`;
             router.push(url);
           }}
-          style={primaryBtnStyle}
+          style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
         >
           + 신규 등록
         </button>
       </div>
 
       {/* 총 건수 */}
-      <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
+      <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)", padding: "0 24px" }}>
         총 {items.length}건
       </div>
 
@@ -173,10 +183,13 @@ function FunctionsPageInner() {
           등록된 기능이 없습니다.
         </div>
       ) : (
+        <div style={{ padding: "0 24px 24px" }}>
         <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
           <div style={gridHeaderStyle}>
             <div />
-            <div>영역명</div>
+            <div>단위업무</div>
+            <div>화면</div>
+            <div>영역</div>
             <div>기능명</div>
             <div>유형</div>
             <div>복잡도</div>
@@ -185,134 +198,152 @@ function FunctionsPageInner() {
             <div />
           </div>
 
-          {items.map((fn, idx) => (
-            <div
-              key={fn.funcId}
-              draggable
-              onDragStart={() => handleDragStart(idx)}
-              onDragEnter={() => handleDragEnter(idx)}
-              onDragEnd={handleDragEnd}
-              onDragOver={(e) => e.preventDefault()}
-              style={{
-                ...gridRowStyle,
-                borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-              }}
-            >
-              <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
+          {items.map((fn, idx) => {
+            const prev = items[idx - 1];
+            // 이전 행과 같은 값이면 셀 숨김 (계층 그룹핑 효과)
+            const showUnitWork = idx === 0 || fn.unitWorkId !== prev.unitWorkId;
+            const showScreen   = idx === 0 || fn.screenId   !== prev.screenId;
+            const showArea     = idx === 0 || fn.areaId     !== prev.areaId;
 
-              {/* 영역명 (클릭 → 영역 상세) */}
-              <div>
-                {fn.areaId ? (
+            return (
+              <div
+                key={fn.funcId}
+                draggable
+                onDragStart={() => handleDragStart(idx)}
+                onDragEnter={() => handleDragEnter(idx)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => e.preventDefault()}
+                style={{
+                  ...gridRowStyle,
+                  borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+                }}
+              >
+                <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
+
+                {/* 단위업무명 */}
+                <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                  {showUnitWork ? (fn.unitWorkId ? fn.unitWorkName : <span style={{ color: "#ccc" }}>-</span>) : ""}
+                </div>
+
+                {/* 화면명 */}
+                <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                  {showScreen ? (fn.screenId ? fn.screenName : <span style={{ color: "#ccc" }}>-</span>) : ""}
+                </div>
+
+                {/* 영역명 (클릭 → 영역 상세) */}
+                <div>
+                  {showArea ? (
+                    fn.areaId ? (
+                      <button
+                        onClick={() => router.push(`/projects/${projectId}/areas/${fn.areaId}`)}
+                        style={linkBtnStyle}
+                      >
+                        {fn.areaName}
+                      </button>
+                    ) : (
+                      <span style={{ color: "#ccc", fontSize: 13 }}>-</span>
+                    )
+                  ) : ""}
+                </div>
+
+                {/* 기능명 (클릭 → 기능 상세) */}
+                <div>
                   <button
-                    onClick={() => router.push(`/projects/${projectId}/areas/${fn.areaId}`)}
+                    onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
                     style={linkBtnStyle}
                   >
-                    <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 4 }}>
-                      {fn.areaDisplayId}
+                    <span style={{ color: "var(--color-text-secondary)", fontSize: 11, marginRight: 3 }}>
+                      {fn.displayId}
                     </span>
-                    {fn.areaName}
+                    {fn.name}
                   </button>
-                ) : (
-                  <span style={{ color: "#aaa", fontSize: 13 }}>미분류</span>
-                )}
-              </div>
+                </div>
 
-              {/* 기능명 (클릭 → 기능 상세) */}
-              <div>
-                <button
-                  onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
-                  style={linkBtnStyle}
-                >
-                  <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 4 }}>
-                    {fn.displayId}
+                {/* 유형 배지 */}
+                <div>
+                  <span style={typeBadgeStyle(fn.type)}>{fn.type}</span>
+                </div>
+
+                {/* 복잡도 인라인 편집 (FID-00168) */}
+                <div>
+                  {editingCell?.funcId === fn.funcId && editingCell.field === "complexity" ? (
+                    <select
+                      autoFocus
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onBlur={() => commitEdit(fn.funcId, "complexity")}
+                      style={{ fontSize: 12, padding: "2px 4px", borderRadius: 4, border: "1px solid var(--color-border)" }}
+                    >
+                      <option value="HIGH">HIGH</option>
+                      <option value="MEDIUM">MEDIUM</option>
+                      <option value="LOW">LOW</option>
+                    </select>
+                  ) : (
+                    <span
+                      onClick={() => startEdit(fn.funcId, "complexity", fn.complexity)}
+                      style={{ ...complexityBadgeStyle(fn.complexity), cursor: "pointer" }}
+                      title="클릭하여 편집"
+                    >
+                      {fn.complexity}
+                    </span>
+                  )}
+                </div>
+
+                {/* 공수 인라인 편집 (FID-00169) */}
+                <div>
+                  {editingCell?.funcId === fn.funcId && editingCell.field === "effort" ? (
+                    <input
+                      autoFocus
+                      type="text"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onBlur={() => commitEdit(fn.funcId, "effort")}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitEdit(fn.funcId, "effort");
+                        if (e.key === "Escape") setEditingCell(null);
+                      }}
+                      placeholder="예: 2h"
+                      style={{ width: 60, fontSize: 12, padding: "2px 4px", borderRadius: 4, border: "1px solid var(--color-border)" }}
+                    />
+                  ) : (
+                    <span
+                      onClick={() => startEdit(fn.funcId, "effort", fn.effort)}
+                      style={{ fontSize: 13, cursor: "pointer", color: fn.effort ? "var(--color-text-primary)" : "#aaa" }}
+                      title="클릭하여 편집"
+                    >
+                      {fn.effort || "-"}
+                    </span>
+                  )}
+                </div>
+
+                {/* 상태 배지 */}
+                <div>
+                  <span style={statusBadgeStyle(fn.status)}>
+                    {STATUS_LABELS[fn.status] ?? fn.status}
                   </span>
-                  {fn.name}
-                </button>
-              </div>
+                </div>
 
-              {/* 유형 배지 */}
-              <div>
-                <span style={typeBadgeStyle(fn.type)}>{fn.type}</span>
-              </div>
-
-              {/* 복잡도 인라인 편집 (FID-00168) */}
-              <div>
-                {editingCell?.funcId === fn.funcId && editingCell.field === "complexity" ? (
-                  <select
-                    autoFocus
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    onBlur={() => commitEdit(fn.funcId, "complexity")}
-                    style={{ fontSize: 12, padding: "2px 4px", borderRadius: 4, border: "1px solid var(--color-border)" }}
-                  >
-                    <option value="HIGH">HIGH</option>
-                    <option value="MEDIUM">MEDIUM</option>
-                    <option value="LOW">LOW</option>
-                  </select>
-                ) : (
-                  <span
-                    onClick={() => startEdit(fn.funcId, "complexity", fn.complexity)}
-                    style={{ ...complexityBadgeStyle(fn.complexity), cursor: "pointer" }}
-                    title="클릭하여 편집"
-                  >
-                    {fn.complexity}
-                  </span>
-                )}
-              </div>
-
-              {/* 공수 인라인 편집 (FID-00169) */}
-              <div>
-                {editingCell?.funcId === fn.funcId && editingCell.field === "effort" ? (
-                  <input
-                    autoFocus
-                    type="text"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    onBlur={() => commitEdit(fn.funcId, "effort")}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commitEdit(fn.funcId, "effort");
-                      if (e.key === "Escape") setEditingCell(null);
+                {/* 액션 버튼 */}
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <button
+                    onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
+                    title="기능 상세"
+                    style={{
+                      background: "none", border: "1px solid var(--color-border)",
+                      borderRadius: 4, cursor: "pointer", fontSize: 13, padding: "3px 8px",
+                      color: "var(--color-text-secondary)",
                     }}
-                    placeholder="예: 2h"
-                    style={{ width: 60, fontSize: 12, padding: "2px 4px", borderRadius: 4, border: "1px solid var(--color-border)" }}
-                  />
-                ) : (
-                  <span
-                    onClick={() => startEdit(fn.funcId, "effort", fn.effort)}
-                    style={{ fontSize: 13, cursor: "pointer", color: fn.effort ? "var(--color-text-primary)" : "#aaa" }}
-                    title="클릭하여 편집"
                   >
-                    {fn.effort || "-"}
-                  </span>
-                )}
+                    →
+                  </button>
+                  <button onClick={() => setDeleteTarget(fn)} style={dangerBtnStyle}>
+                    삭제
+                  </button>
+                </div>
               </div>
-
-              {/* 상태 배지 */}
-              <div>
-                <span style={statusBadgeStyle(fn.status)}>
-                  {STATUS_LABELS[fn.status] ?? fn.status}
-                </span>
-              </div>
-
-              {/* 액션 버튼 */}
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <button
-                  onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
-                  title="기능 상세"
-                  style={{
-                    background: "none", border: "1px solid var(--color-border)",
-                    borderRadius: 4, cursor: "pointer", fontSize: 13, padding: "3px 8px",
-                    color: "var(--color-text-secondary)",
-                  }}
-                >
-                  →
-                </button>
-                <button onClick={() => setDeleteTarget(fn)} style={dangerBtnStyle}>
-                  삭제
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
+        </div>
         </div>
       )}
 
@@ -416,7 +447,7 @@ function statusBadgeStyle(status: string): React.CSSProperties {
   return { display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, ...s };
 }
 
-const GRID_TEMPLATE = "32px minmax(100px,160px) 1fr 80px 90px 70px 90px 100px";
+const GRID_TEMPLATE = "32px 150px 170px 160px 1fr 70px 80px 60px 80px 100px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID_TEMPLATE, gap: 8,
@@ -435,7 +466,7 @@ const linkBtnStyle: React.CSSProperties = {
   padding: 0, textAlign: "left", textDecoration: "underline",
 };
 const primaryBtnStyle: React.CSSProperties = {
-  padding: "8px 20px", borderRadius: 6, border: "none",
+  padding: "8px 20px", borderRadius: 6, border: "1px solid transparent",
   background: "var(--color-primary, #1976d2)", color: "#fff",
   fontSize: 14, fontWeight: 600, cursor: "pointer",
 };

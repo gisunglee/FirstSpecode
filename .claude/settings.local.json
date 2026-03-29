@@ -78,7 +78,15 @@
       "Bash(grep -n \"historyOpen\\\\|diffItem\\\\|deletingHistId\\\\|DescHistoryItem\\\\|DiffView\\\\|diffLines\\\\|이력\\\\|DIFF\" d:/source/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/screens/[screenId]/page.tsx)",
       "Bash(find d:/source/FirstSpecode/src/app/api/projects/[id]/requirements/[reqId]/history -name \"*.ts\")",
       "Bash(xargs head:*)",
-      "Bash(grep -n \"renderMarkdown\\\\|router\\\\b\" d:/source/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/requirements/[reqId]/page.tsx)"
+      "Bash(grep -n \"renderMarkdown\\\\|router\\\\b\" d:/source/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/requirements/[reqId]/page.tsx)",
+      "Bash(find /d/source/FirstSpecode -name *funcId* -o -name *function* -type f)",
+      "Bash(ls -la /d/source/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/functions/)",
+      "Bash(ls -la /d/source/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/functions/[functionId]/)",
+      "Bash(ls -la /d/source/FirstSpecode/src/app/api/projects/[id]/functions/)",
+      "Bash(ls -la /d/source/FirstSpecode/src/app/api/projects/[id]/functions/[functionId]/)",
+      "Bash(find \"D:/source/FirstSpecode/src/app/\\(main\\)/projects\" -name \"page.tsx\")",
+      "Bash(grep -n \"return \\(\\\\|</div>\\\\|};$\\\\|^}\" \"D:/source/FirstSpecode/src/app/\\(main\\)/projects/[id]/unit-works/[unitWorkId]/page.tsx\")",
+      "Bash(grep -n \"^  \\);\\\\s*$\\\\|^  return \\(\\\\s*$\\\\|^}\\\\s*$\\\\|2단 레이아웃\\\\|historyOpen\\\\|diffTarget\\\\|confirmTarget\\\\|deleteTarget\" \"D:/source/FirstSpecode/src/app/\\(main\\)/projects/[id]/requirements/[reqId]/page.tsx\")"
     ]
   }
 }

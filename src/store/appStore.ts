@@ -16,6 +16,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Theme } from "@/types/layout";
 
+export type BreadcrumbItem = { label: string; href?: string };
+
 type AppState = {
   // 현재 작업 중인 프로젝트 ID (null = 프로젝트 미선택)
   currentProjectId: string | null;
@@ -23,6 +25,8 @@ type AppState = {
   theme: Theme;
   // 사이드바 접힘 여부
   sidebarCollapsed: boolean;
+  // GNB 브레드크럼 — 페이지가 마운트 시 설정, 언마운트 시 초기화
+  breadcrumb: BreadcrumbItem[];
 };
 
 type AppActions = {
@@ -31,6 +35,7 @@ type AppActions = {
   toggleTheme: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
+  setBreadcrumb: (items: BreadcrumbItem[]) => void;
 };
 
 // theme와 sidebarCollapsed만 persist — projectId는 세션 초기화 시 재선택
@@ -40,8 +45,10 @@ export const useAppStore = create<AppState & AppActions>()(
       currentProjectId: null,
       theme: "dark",
       sidebarCollapsed: false,
+      breadcrumb: [],
 
       setCurrentProjectId: (id) => set({ currentProjectId: id }),
+      setBreadcrumb: (items) => set({ breadcrumb: items }),
 
       setTheme: (theme) => {
         // document에 data-theme 반영 (CSS 토큰 전환 트리거)

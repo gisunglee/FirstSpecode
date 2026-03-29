@@ -170,22 +170,23 @@ function UnitWorksPageInner() {
   }
 
   return (
-    <div style={{ padding: "20px 24px" }}>
+    <div style={{ padding: 0 }}>
       {/* ── 헤더 타이틀 ──────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)" }}>
+          <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
             단위업무 목록
           </div>
         </div>
         <button
           onClick={() => router.push(`/projects/${projectId}/unit-works/new`)}
-          style={primaryBtnStyle}
+          style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
         >
           + 신규 등록
         </button>
       </div>
 
+      <div style={{ padding: "0 24px 24px" }}>
       {/* ── 검색 필터 ────────────────────────────────────────────────────────── */}
       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
         {/* 요구사항 필터 */}
@@ -310,6 +311,7 @@ function UnitWorksPageInner() {
           ))}
         </div>
       )}
+      </div>
 
       {/* PID-00042 삭제 확인 팝업 */}
       {deleteTarget && (
@@ -538,7 +540,7 @@ const linkBtnStyle: React.CSSProperties = {
 const primaryBtnStyle: React.CSSProperties = {
   padding:      "8px 20px",
   borderRadius: 6,
-  border:       "none",
+  border:       "1px solid transparent",
   background:   "var(--color-primary, #1976d2)",
   color:        "#fff",
   fontSize:     14,

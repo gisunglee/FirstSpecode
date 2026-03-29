@@ -15,13 +15,14 @@
  *   - useSearchParams: new 모드 시 reqId pre-select 지원
  */
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor from "@/components/ui/MarkdownEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
+import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,7 @@ function UnitWorkDetailPageInner() {
   const searchParams  = useSearchParams();
   const router        = useRouter();
   const queryClient   = useQueryClient();
+  const { setBreadcrumb } = useAppStore();
   const projectId     = params.id;
   const unitWorkId    = params.unitWorkId;
   const isNew         = unitWorkId === "new";
@@ -119,7 +121,7 @@ function UnitWorkDetailPageInner() {
   const reqOptions = reqData ?? [];
 
   // ── 기존 단위업무 로드 (수정 모드) ─────────────────────────────────────────
-  const { isLoading: isDetailLoading } = useQuery({
+  const { data: detail, isLoading: isDetailLoading } = useQuery({
     queryKey: ["unit-work", projectId, unitWorkId],
     queryFn:  () =>
       authFetch<{ data: UnitWorkDetail }>(
@@ -195,6 +197,17 @@ function UnitWorkDetailPageInner() {
     saveMutation.mutate(form);
   }
 
+  // GNB 브레드크럼 설정 — 마운트 시 설정, 언마운트 시 초기화
+  useEffect(() => {
+    const items = [
+      { label: "단위업무", href: `/projects/${projectId}/unit-works` },
+      ...(detail?.reqName ? [{ label: `${detail.reqDisplayId} ${detail.reqName}` }] : []),
+      { label: isNew ? "신규 등록" : (detail?.displayId ?? "편집") },
+    ];
+    setBreadcrumb(items);
+    return () => setBreadcrumb([]);
+  }, [projectId, isNew, detail?.reqName, detail?.reqDisplayId, detail?.displayId, setBreadcrumb]);
+
   // ── 로딩 ───────────────────────────────────────────────────────────────────
   if (!isNew && isDetailLoading) {
     return (
@@ -207,7 +220,7 @@ function UnitWorkDetailPageInner() {
   const descriptionChanged = !isNew && form.description !== originalDescription;
 
   return (
-    <div style={{ padding: "20px 24px", maxWidth: 1200 }}>
+    <div style={{ padding: 0, maxWidth: 1200 }}>
 
       {/* ── 이력 저장 다이얼로그 ── */}
       {historyDialogOpen && (
@@ -298,35 +311,46 @@ function UnitWorkDetailPageInner() {
         title="버전 이력 비교"
       />
 
-      {/* 헤더 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-        <button
-          onClick={() => router.push(`/projects/${projectId}/unit-works`)}
-          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#666" }}
-        >
-          ←
-        </button>
-        <div style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
-          {isNew ? "단위업무 등록" : "단위업무 편집"}
+      {/* 타이틀 행 — full-width 배경 */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 16,
+        padding: "10px 24px",
+        background: "var(--color-bg-card)",
+        borderBottom: "1px solid var(--color-border)",
+        marginBottom: 16,
+      }}>
+        {/* 좌: 뒤로 + 타이틀 */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
+          <button
+            onClick={() => router.push(`/projects/${projectId}/unit-works`)}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}
+          >
+            ←
+          </button>
+          <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+            {isNew ? "단위업무 신규 등록" : `${detail?.displayId ?? ""} 단위업무 편집`}
+          </span>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        {/* 우: 취소·저장 */}
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           <button
             onClick={() => router.push(`/projects/${projectId}/unit-works`)}
             disabled={saveMutation.isPending}
-            style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
+            style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
           >
             취소
           </button>
           <button
             onClick={handleSave}
             disabled={saveMutation.isPending}
-            style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 20px" }}
+            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
           >
             {saveMutation.isPending ? "저장 중..." : "저장"}
           </button>
         </div>
       </div>
 
+      <div style={{ padding: "0 24px 24px" }}>
       {/* 폼 — 2단 레이아웃 (좌: 메타 정보, 우: 설명) */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: 20, alignItems: "start" }}>
 
@@ -468,6 +492,7 @@ function UnitWorkDetailPageInner() {
         </div>
 
       </div>
+      </div>
     </div>
   );
 }
@@ -509,7 +534,7 @@ const inputStyle: React.CSSProperties = {
 const primaryBtnStyle: React.CSSProperties = {
   padding:      "8px 24px",
   borderRadius: 6,
-  border:       "none",
+  border:       "1px solid transparent",
   background:   "var(--color-primary, #1976d2)",
   color:        "#fff",
   fontSize:     14,

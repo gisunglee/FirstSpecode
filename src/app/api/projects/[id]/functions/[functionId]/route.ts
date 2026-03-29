@@ -33,17 +33,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       where:   { func_id: functionId },
       include: {
         area: { select: { area_id: true, area_nm: true, area_display_id: true } },
-        // 하단 컬럼 매핑 목록 (AR-00082, FID-00178)
-        columnMappings: {
-          orderBy: { sort_ordr: "asc" },
-          include: {
-            column: {
-              include: {
-                table: { select: { tbl_id: true, tbl_physcl_nm: true, tbl_lgcl_nm: true } },
-              },
-            },
-          },
-        },
       },
     });
 
@@ -68,18 +57,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       areaId:        fn.area_id ?? null,
       areaName:      fn.area?.area_nm ?? "미분류",
       areaDisplayId: fn.area?.area_display_id ?? null,
-      // 컬럼 매핑 목록
-      columnMappings: fn.columnMappings.map((m) => ({
-        mappingId:    m.mapping_id,
-        colId:        m.col_id,
-        colName:      m.column.col_physcl_nm,
-        colLogicalNm: m.column.col_lgcl_nm ?? "",
-        tableId:      m.column.table.tbl_id,
-        tableName:    m.column.table.tbl_physcl_nm,
-        tableLogicalNm: m.column.table.tbl_lgcl_nm ?? "",
-        purpose:      m.use_purps_cn ?? "",
-        sortOrder:    m.sort_ordr,
-      })),
     });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/functions/${functionId}] DB 오류:`, err);
@@ -110,7 +87,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
   const {
     areaId, name, type, description, priority, complexity, effort,
-    assignMemberId, implStartDate, implEndDate, sortOrder,
+    assignMemberId, implStartDate, implEndDate, sortOrder, saveHistory,
   } = body as {
     areaId?:         string;
     name?:           string;
@@ -123,6 +100,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     implStartDate?:  string;
     implEndDate?:    string;
     sortOrder?:      number;
+    saveHistory?:    boolean;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "기능명을 입력해 주세요.", 400);
@@ -137,6 +115,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "기능을 찾을 수 없습니다.", 404);
     }
 
+    const newDescription = description?.trim() || null;
+    const oldDescription = existing.func_dc ?? null;
+
     await prisma.$transaction([
       prisma.tbDsFunction.update({
         where: { func_id: functionId },
@@ -144,7 +125,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           area_id:       areaId !== undefined ? (areaId || null) : existing.area_id,
           func_nm:       name.trim(),
           func_ty_code:  type || "OTHER",
-          func_dc:       description?.trim() || null,
+          func_dc:       newDescription,
           priort_code:   priority || "MEDIUM",
           cmplx_code:    complexity || "MEDIUM",
           efrt_val:      effort?.trim() || null,
@@ -170,6 +151,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           chg_mber_id: auth.mberId,
         },
       }),
+      // 사용자가 명시적으로 이력 저장을 선택한 경우에만 설명 변경 이력 기록
+      ...(saveHistory ? [
+        prisma.tbPjSettingsHistory.create({
+          data: {
+            prjct_id:    projectId,
+            chg_mber_id: auth.mberId,
+            chg_item_nm: "기능 설명",
+            bfr_val_cn:  oldDescription,
+            aftr_val_cn: newDescription,
+          },
+        }),
+      ] : []),
     ]);
 
     return apiSuccess({ funcId: functionId });

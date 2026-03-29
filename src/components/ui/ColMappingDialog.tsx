@@ -1,0 +1,594 @@
+"use client";
+
+/**
+ * ColMappingDialog — 공통 컬럼 매핑 관리 팝업
+ *
+ * 역할:
+ *   - refType + refId 기준으로 tb_ds_col_mapping 데이터를 조회/저장
+ *   - 테이블 선택 → 컬럼 칩 클릭으로 빠른 행 추가
+ *   - + 버튼으로 빈 행 수동 추가
+ *   - 각 행에서 항목명, IO구분, UI유형, 설명 인라인 편집
+ *   - 저장 시 기존 매핑 전체 교체 (POST /api/projects/[id]/col-mappings)
+ *
+ * Props:
+ *   - refType: 'FUNCTION' | 'AREA' | ... (향후 확장)
+ *   - refId:   참조 엔티티 ID
+ */
+
+import { useState, useEffect, useRef } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { authFetch } from "@/lib/authFetch";
+
+// ── 타입 ──────────────────────────────────────────────────────────────────────
+
+type DbTable  = { tableId: string; tableName: string; tableLogicalNm: string };
+type DbColumn = { colId: string; colName: string; colLogicalNm: string };
+
+type MappingRow = {
+  _key:        string;   // React key (로컬 고유값)
+  colId:       string;
+  tableName:   string;
+  colName:     string;
+  _tableId:    string;
+  ioSeCode:    string;   // INPUT | OUTPUT | INOUT | ""
+  uiTyCode:    string;   // TEXT | TEXTAREA | SELECT | ... | ""
+  usePurpsCn:  string;   // 항목명
+  colDc:       string;   // 설명
+};
+
+type ApiMappingItem = {
+  mappingId:      string;
+  colId:          string;
+  colName:        string;
+  colLogicalNm:   string;
+  tableId:        string;
+  tableName:      string;
+  tableLogicalNm: string;
+  ioSeCode:       string;
+  uiTyCode:       string;
+  usePurpsCn:     string;
+  colDc:          string;
+  sortOrder:      number;
+};
+
+export interface ColMappingDialogProps {
+  open:       boolean;
+  onClose:    () => void;
+  onSaved:    () => void;
+  projectId:  string;
+  refType:    string;
+  refId:      string;
+  title?:     string;
+}
+
+// ── 상수 ──────────────────────────────────────────────────────────────────────
+
+const IO_OPTIONS = [
+  { value: "",       label: "—" },
+  { value: "INPUT",  label: "입력(IN)" },
+  { value: "OUTPUT", label: "출력(OUT)" },
+  { value: "INOUT",  label: "입출력" },
+];
+
+const UI_OPTIONS = [
+  { value: "",          label: "—" },
+  { value: "TEXT",      label: "텍스트" },
+  { value: "TEXTAREA",  label: "텍스트영역" },
+  { value: "SELECT",    label: "콤보박스" },
+  { value: "RADIO",     label: "라디오" },
+  { value: "CHECKBOX",  label: "체크박스" },
+  { value: "DATE",      label: "날짜" },
+  { value: "NUMBER",    label: "숫자" },
+  { value: "FILE",      label: "파일" },
+  { value: "HIDDEN",    label: "히든" },
+];
+
+let keyCounter = 0;
+function nextKey() { return `row-${++keyCounter}`; }
+
+// ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
+
+export default function ColMappingDialog({
+  open, onClose, onSaved, projectId, refType, refId, title = "컬럼 매핑 관리",
+}: ColMappingDialogProps) {
+  const queryClient     = useQueryClient();
+  const [rows, setRows] = useState<MappingRow[]>([]);
+  const [selectedTableId, setSelectedTableId] = useState("");
+
+  // ── 기존 매핑 조회 ──────────────────────────────────────────────────────────
+  const { data: mappingData } = useQuery({
+    queryKey: ["col-mappings", projectId, refType, refId],
+    queryFn:  () =>
+      authFetch<{ data: { items: ApiMappingItem[] } }>(
+        `/api/projects/${projectId}/col-mappings?refType=${refType}&refId=${refId}`
+      ).then((r) => r.data),
+    enabled: open && !!refId,
+  });
+
+  // open 될 때 rows 초기화
+  useEffect(() => {
+    if (!open) return;
+    const items = mappingData?.items ?? [];
+    setRows(items.map((m) => ({
+      _key:       nextKey(),
+      colId:      m.colId,
+      tableName:  m.tableName,
+      colName:    m.colName,
+      _tableId:   m.tableId,
+      ioSeCode:   m.ioSeCode,
+      uiTyCode:   m.uiTyCode,
+      usePurpsCn: m.usePurpsCn,
+      colDc:      m.colDc,
+    })));
+    setSelectedTableId("");
+  }, [open, mappingData]);
+
+  // ── DB 테이블 목록 ─────────────────────────────────────────────────────────
+  const { data: tablesData } = useQuery({
+    queryKey: ["db-schema", projectId, "tables"],
+    queryFn:  () =>
+      authFetch<{ data: { tables: DbTable[] } }>(`/api/projects/${projectId}/db-schema`)
+        .then((r) => r.data),
+    enabled: open,
+  });
+  const tables = tablesData?.tables ?? [];
+
+  // ── 선택 테이블의 컬럼 목록 ────────────────────────────────────────────────
+  const { data: colsData } = useQuery({
+    queryKey: ["db-schema", projectId, "columns", selectedTableId],
+    queryFn:  () =>
+      authFetch<{ data: { columns: DbColumn[] } }>(
+        `/api/projects/${projectId}/db-schema?tableId=${selectedTableId}`
+      ).then((r) => r.data),
+    enabled: !!selectedTableId,
+  });
+  const columns = colsData?.columns ?? [];
+
+  // ── 행 조작 ────────────────────────────────────────────────────────────────
+
+  function addRowFromChip(col: DbColumn) {
+    const tbl = tables.find((t) => t.tableId === selectedTableId);
+    if (!tbl) return;
+    if (rows.some((r) => r.colId === col.colId)) {
+      toast.error("이미 추가된 컬럼입니다.");
+      return;
+    }
+    setRows((prev) => [...prev, {
+      _key:       nextKey(),
+      colId:      col.colId,
+      tableName:  tbl.tableName,
+      colName:    col.colName,
+      _tableId:   tbl.tableId,
+      ioSeCode:   "",
+      uiTyCode:   "",
+      usePurpsCn: "",
+      colDc:      "",
+    }]);
+  }
+
+  function addEmptyRow() {
+    setRows((prev) => [...prev, {
+      _key:       nextKey(),
+      colId:      "",
+      tableName:  "",
+      colName:    "",
+      _tableId:   "",
+      ioSeCode:   "",
+      uiTyCode:   "",
+      usePurpsCn: "",
+      colDc:      "",
+    }]);
+  }
+
+  function removeRow(key: string) {
+    setRows((prev) => prev.filter((r) => r._key !== key));
+  }
+
+  function updateRow<K extends keyof MappingRow>(key: string, field: K, value: MappingRow[K]) {
+    setRows((prev) => prev.map((r) => r._key === key ? { ...r, [field]: value } : r));
+  }
+
+  // 빈 행의 테이블.컬럼 선택 → colId / tableName / colName 채움
+  function setRowColumn(key: string, tableId: string, colId: string) {
+    const tbl = tables.find((t) => t.tableId === tableId);
+    if (!tbl) return;
+    // 해당 테이블 컬럼 데이터가 캐시에 없으면 잠시 후 처리됨
+    const col = colsData?.columns.find((c) => c.colId === colId);
+    if (!col) return;
+    setRows((prev) => prev.map((r) => r._key === key ? {
+      ...r, _tableId: tableId, colId, tableName: tbl.tableName, colName: col.colName,
+    } : r));
+  }
+
+  // ── 저장 ──────────────────────────────────────────────────────────────────
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      const validRows = rows.filter((r) => r.colId);
+      return authFetch(`/api/projects/${projectId}/col-mappings`, {
+        method: "POST",
+        body:   JSON.stringify({
+          refType,
+          refId,
+          items: validRows.map((r) => ({
+            colId:      r.colId,
+            ioSeCode:   r.ioSeCode || null,
+            uiTyCode:   r.uiTyCode || null,
+            usePurpsCn: r.usePurpsCn || null,
+            colDc:      r.colDc || null,
+          })),
+        }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["col-mappings", projectId, refType, refId] });
+      toast.success("컬럼 매핑이 저장되었습니다.");
+      onSaved();
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  if (!open) return null;
+
+  return (
+    <div style={overlayStyle} onClick={onClose}>
+      <div style={dialogStyle} onClick={(e) => e.stopPropagation()}>
+
+        {/* ── 고정 상단: 헤더 + 테이블 선택 + 컬럼 칩 ─────────────────── */}
+        <div style={dialogTopStyle}>
+
+          {/* 헤더 */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{title}</h3>
+            <button onClick={onClose} style={closeBtnStyle}>✕</button>
+          </div>
+
+          {/* 테이블 선택 */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+            <select
+              value={selectedTableId}
+              onChange={(e) => setSelectedTableId(e.target.value)}
+              style={{ ...selectStyle, flex: 1 }}
+            >
+              <option value="">테이블 선택 후 컬럼 클릭 → 빠른 추가</option>
+              {tables.map((t) => (
+                <option key={t.tableId} value={t.tableId}>
+                  {t.tableName}{t.tableLogicalNm ? ` — ${t.tableLogicalNm}` : ""}
+                </option>
+              ))}
+            </select>
+            {/* + 행 추가 버튼 — 상단 고정 */}
+            <button onClick={addEmptyRow} style={addRowBtnStyle}>+1</button>
+            <button onClick={() => Array.from({ length: 5 }).forEach(() => addEmptyRow())} style={addRowBtnStyle}>+5</button>
+          </div>
+
+          {/* 컬럼 칩 */}
+          {selectedTableId && columns.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5, padding: "8px 10px", background: "var(--color-bg-muted)", borderRadius: 6, marginBottom: 4 }}>
+              {columns.map((c) => {
+                const alreadyAdded = rows.some((r) => r.colId === c.colId);
+                return (
+                  <button
+                    key={c.colId}
+                    onClick={() => addRowFromChip(c)}
+                    disabled={alreadyAdded}
+                    title={c.colLogicalNm || c.colName}
+                    style={{
+                      padding: "3px 9px", borderRadius: 4,
+                      border: "1px solid var(--color-border)",
+                      background: alreadyAdded ? "var(--color-bg-muted)" : "var(--color-bg-card)",
+                      color: alreadyAdded ? "var(--color-text-disabled)" : "var(--color-text-primary)",
+                      cursor: alreadyAdded ? "default" : "pointer",
+                      fontSize: 12, fontFamily: "monospace",
+                      textDecoration: alreadyAdded ? "line-through" : "none",
+                    }}
+                  >
+                    {c.colName}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* 그리드 헤더 — 고정 */}
+          <div style={gridHeaderStyle}>
+            <div style={{ width: 32, textAlign: "center" }}>NO</div>
+            <div style={{ flex: "0 0 130px" }}>항목명</div>
+            <div style={{ flex: "0 0 90px" }}>IO구분</div>
+            <div style={{ flex: "0 0 110px" }}>UI유형</div>
+            <div style={{ flex: 1 }}>테이블.컬럼</div>
+            <div style={{ flex: 1.2 }}>설명</div>
+            <div style={{ width: 32 }} />
+          </div>
+        </div>
+
+        {/* ── 스크롤 영역: 행 목록만 ────────────────────────────────────── */}
+        <div style={dialogScrollStyle}>
+          {rows.length === 0 ? (
+            <div style={{ padding: "24px 0", textAlign: "center", color: "var(--color-text-secondary)", fontSize: 13 }}>
+              매핑된 컬럼이 없습니다. 위에서 테이블을 선택하거나 + 행 추가를 클릭하세요.
+            </div>
+          ) : (
+            rows.map((row, idx) => (
+              <div key={row._key} style={{ ...gridRowStyle, borderTop: idx === 0 ? "none" : "1px solid var(--color-border)" }}>
+                {/* NO */}
+                <div style={{ width: 32, textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>
+                  {idx + 1}
+                </div>
+
+                {/* 항목명 */}
+                <div style={{ flex: "0 0 130px" }}>
+                  <input
+                    type="text"
+                    value={row.usePurpsCn}
+                    onChange={(e) => updateRow(row._key, "usePurpsCn", e.target.value)}
+                    placeholder="항목명"
+                    style={cellInputStyle}
+                  />
+                </div>
+
+                {/* IO구분 */}
+                <div style={{ flex: "0 0 90px" }}>
+                  <select
+                    value={row.ioSeCode}
+                    onChange={(e) => updateRow(row._key, "ioSeCode", e.target.value)}
+                    style={cellSelectStyle}
+                  >
+                    {IO_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* UI유형 */}
+                <div style={{ flex: "0 0 110px" }}>
+                  <select
+                    value={row.uiTyCode}
+                    onChange={(e) => updateRow(row._key, "uiTyCode", e.target.value)}
+                    style={cellSelectStyle}
+                  >
+                    {UI_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 테이블.컬럼 */}
+                <div style={{ flex: 1 }}>
+                  {row.colId ? (
+                    // 컬럼이 설정된 경우 — 읽기전용 표시
+                    <span style={{ fontSize: 12, fontFamily: "monospace", color: "var(--color-text-secondary)" }}>
+                      {row.tableName}
+                      <span style={{ color: "var(--color-text-disabled)", margin: "0 2px" }}>.</span>
+                      <span style={{ color: "var(--color-text-primary)" }}>{row.colName}</span>
+                    </span>
+                  ) : (
+                    // 빈 행 — 테이블/컬럼 2단 선택
+                    <ColumnPicker
+                      tables={tables}
+                      projectId={projectId}
+                      onSelect={(tableId, colId) => setRowColumn(row._key, tableId, colId)}
+                    />
+                  )}
+                </div>
+
+                {/* 설명 */}
+                <div style={{ flex: 1.2 }}>
+                  <input
+                    type="text"
+                    value={row.colDc}
+                    onChange={(e) => updateRow(row._key, "colDc", e.target.value)}
+                    placeholder="이 컬럼의 사용 설명"
+                    style={cellInputStyle}
+                  />
+                </div>
+
+                {/* 삭제 */}
+                <div style={{ width: 32, display: "flex", justifyContent: "center" }}>
+                  <button
+                    onClick={() => removeRow(row._key)}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#e53935", fontSize: 16, lineHeight: 1 }}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>{/* ── 스크롤 영역 끝 */}
+
+        {/* ── 고정 하단: 취소 + 저장 ───────────────────────────────────── */}
+        <div style={dialogBottomStyle}>
+          <div style={{ display: "flex", gap: 4 }}>
+            <button onClick={onClose} disabled={saveMutation.isPending} style={secondaryBtnStyle}>
+              취소
+            </button>
+            <button
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+              style={primaryBtnStyle}
+            >
+              {saveMutation.isPending ? "저장 중..." : "저장"}
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+// ── 빈 행용 컬럼 피커 ─────────────────────────────────────────────────────────
+
+function ColumnPicker({
+  tables, projectId, onSelect,
+}: {
+  tables:     DbTable[];
+  projectId:  string;
+  onSelect:   (tableId: string, colId: string) => void;
+}) {
+  const [tblId, setTblId] = useState("");
+
+  const { data } = useQuery({
+    queryKey: ["db-schema", projectId, "columns", tblId],
+    queryFn:  () =>
+      authFetch<{ data: { columns: DbColumn[] } }>(
+        `/api/projects/${projectId}/db-schema?tableId=${tblId}`
+      ).then((r) => r.data),
+    enabled: !!tblId,
+  });
+  const cols = data?.columns ?? [];
+
+  return (
+    <div style={{ display: "flex", gap: 4 }}>
+      <select
+        value={tblId}
+        onChange={(e) => setTblId(e.target.value)}
+        style={{ ...cellSelectStyle, flex: 1 }}
+      >
+        <option value="">테이블</option>
+        {tables.map((t) => (
+          <option key={t.tableId} value={t.tableId}>{t.tableName}</option>
+        ))}
+      </select>
+      <select
+        value=""
+        onChange={(e) => { if (e.target.value) onSelect(tblId, e.target.value); }}
+        disabled={!tblId || cols.length === 0}
+        style={{ ...cellSelectStyle, flex: 1 }}
+      >
+        <option value="">컬럼</option>
+        {cols.map((c) => (
+          <option key={c.colId} value={c.colId}>{c.colName}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+// ── 스타일 ────────────────────────────────────────────────────────────────────
+
+const overlayStyle: React.CSSProperties = {
+  position: "fixed", inset: 0,
+  background: "rgba(0,0,0,0.5)",
+  display: "flex", alignItems: "center", justifyContent: "center",
+  zIndex: 2000,
+};
+
+const dialogStyle: React.CSSProperties = {
+  background:    "var(--color-bg-card)",
+  borderRadius:  10,
+  width:         "min(730px, 80vw)",
+  height:        "min(88vh, 700px)",
+  display:       "flex",
+  flexDirection: "column",
+  overflow:      "hidden",               // 다이얼로그 자체는 스크롤 없음 → X버튼 고정
+  boxShadow:     "0 8px 32px rgba(0,0,0,0.28)",
+};
+
+// 고정 상단 영역 (헤더, 테이블 선택, 칩, 그리드 헤더)
+const dialogTopStyle: React.CSSProperties = {
+  padding:    "24px 28px 0",
+  flexShrink: 0,
+  borderBottom: "1px solid var(--color-border)",
+};
+
+// 스크롤 가능한 행 목록 영역
+const dialogScrollStyle: React.CSSProperties = {
+  flex:      1,
+  overflowY: "auto",
+  padding:   "0 28px",
+  // border-bottom은 없음 — dialogBottomStyle이 separator 역할
+};
+
+// 고정 하단 영역 (취소 + 저장)
+const dialogBottomStyle: React.CSSProperties = {
+  padding:        "10px 28px",
+  flexShrink:     0,
+  borderTop:      "1px solid var(--color-border)",
+  display:        "flex",
+  justifyContent: "flex-end",
+  gap:            8,
+};
+
+const closeBtnStyle: React.CSSProperties = {
+  background: "none", border: "none",
+  cursor: "pointer", fontSize: 18,
+  color: "var(--color-text-secondary)",
+  lineHeight: 1, padding: "2px 6px",
+};
+
+const labelStyle: React.CSSProperties = {
+  display: "block", fontSize: 12,
+  color: "var(--color-text-secondary)",
+  marginBottom: 6, fontWeight: 500,
+};
+
+const selectStyle: React.CSSProperties = {
+  width: "100%", padding: "7px 10px",
+  border: "1px solid var(--color-border)",
+  borderRadius: 6, fontSize: 13,
+  background: "var(--color-bg-input)",
+  color: "var(--color-text-primary)",
+};
+
+const gridHeaderStyle: React.CSSProperties = {
+  display:    "flex",
+  alignItems: "center",
+  gap:        8,
+  padding:    "8px 0 8px 0",
+  marginTop:  10,
+  fontSize:   12,
+  fontWeight: 600,
+  color:      "var(--color-text-secondary)",
+  borderTop:  "1px solid var(--color-border)",
+};
+
+const gridRowStyle: React.CSSProperties = {
+  display:    "flex",
+  alignItems: "center",
+  gap:        8,
+  padding:    "6px 0",
+};
+
+const cellInputStyle: React.CSSProperties = {
+  width: "100%", padding: "4px 7px",
+  border: "1px solid var(--color-border)",
+  borderRadius: 4, fontSize: 12,
+  background: "var(--color-bg-input)",
+  color: "var(--color-text-primary)",
+};
+
+const cellSelectStyle: React.CSSProperties = {
+  width: "100%", padding: "4px 6px",
+  border: "1px solid var(--color-border)",
+  borderRadius: 4, fontSize: 12,
+  background: "var(--color-bg-input)",
+  color: "var(--color-text-primary)",
+};
+
+const addRowBtnStyle: React.CSSProperties = {
+  padding:      "7px 16px",
+  border:       "1px solid var(--color-border)",
+  borderRadius: 6,
+  cursor:       "pointer",
+  background:   "transparent",
+  color:        "var(--color-text-secondary)",
+  fontSize:     13,
+  whiteSpace:   "nowrap",
+  flexShrink:   0,
+};
+
+const primaryBtnStyle: React.CSSProperties = {
+  padding: "8px 20px", borderRadius: 6,
+  border: "none", cursor: "pointer",
+  background: "var(--color-primary)",
+  color: "#fff", fontSize: 13, fontWeight: 500,
+};
+
+const secondaryBtnStyle: React.CSSProperties = {
+  padding: "8px 20px", borderRadius: 6,
+  border: "1px solid var(--color-border)",
+  cursor: "pointer", background: "transparent",
+  color: "var(--color-text-primary)", fontSize: 13,
+};

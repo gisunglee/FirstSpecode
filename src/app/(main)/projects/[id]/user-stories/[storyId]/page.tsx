@@ -11,11 +11,12 @@
  *   - 인수기준 행 추가·삭제 (FID-00117)
  */
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -81,11 +82,7 @@ function UserStoryDetailPageInner() {
     { given: "", when: "", then: "" },
   ]);
 
-  // 브레드크럼용 컨텍스트 (수정 모드에서 로드)
-  const [breadcrumb, setBreadcrumb] = useState<{
-    taskName: string;
-    requirementName: string;
-  } | null>(null);
+  const { setBreadcrumb } = useAppStore();
 
   // ── 요구사항 목록 (선택 드롭다운) ──────────────────────────────────────────
   const { data: reqsData } = useQuery({
@@ -105,7 +102,7 @@ function UserStoryDetailPageInner() {
   const reqOptions = reqsData ?? [];
 
   // ── 기존 스토리 로드 (수정 모드) ────────────────────────────────────────────
-  const { isLoading: isDetailLoading } = useQuery({
+  const { data: detail, isLoading: isDetailLoading } = useQuery({
     queryKey: ["user-story", projectId, storyId],
     queryFn: () =>
       authFetch<{ data: StoryDetail }>(
@@ -123,7 +120,6 @@ function UserStoryDetailPageInner() {
             ? d.acceptanceCriteria.map((ac) => ({ given: ac.given, when: ac.when, then: ac.then }))
             : [{ given: "", when: "", then: "" }]
         );
-        setBreadcrumb({ taskName: d.taskName, requirementName: d.requirementName });
         return d;
       }),
     enabled: !isNew,
@@ -179,6 +175,18 @@ function UserStoryDetailPageInner() {
     setAcRows((prev) => prev.map((row, i) => (i === idx ? { ...row, [field]: value } : row)));
   }
 
+  // ── GNB 브레드크럼 ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    const items = [
+      { label: "사용자스토리", href: `/projects/${projectId}/user-stories` },
+      ...(detail?.taskName ? [{ label: detail.taskName }] : []),
+      ...(detail?.requirementName ? [{ label: detail.requirementName }] : []),
+      { label: isNew ? "신규 등록" : (detail?.displayId ?? "편집") },
+    ];
+    setBreadcrumb(items);
+    return () => setBreadcrumb([]);
+  }, [projectId, isNew, detail?.taskName, detail?.requirementName, detail?.displayId, setBreadcrumb]);
+
   // ── 현재 선택된 요구사항의 과업명 표시 ────────────────────────────────────
   const selectedReq = reqOptions.find((r) => r.requirementId === form.requirementId);
 
@@ -191,43 +199,46 @@ function UserStoryDetailPageInner() {
   }
 
   return (
-    <div style={{ padding: "20px 24px" }}>
-      {/* 헤더 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-        <button
-          onClick={() => router.push(`/projects/${projectId}/user-stories`)}
-          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#666" }}
-        >
-          ←
-        </button>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
-          {isNew ? "사용자스토리 추가" : "사용자스토리 편집"}
+    <div style={{ padding: 0 }}>
+      {/* 헤더 타이틀 바 */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            onClick={() => router.push(`/projects/${projectId}/user-stories`)}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#666", lineHeight: 1, padding: "2px 4px" }}
+          >
+            ←
+          </button>
+          <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+            {isNew ? "사용자스토리 추가" : "사용자스토리 편집"}
+          </span>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button
             onClick={() => router.push(`/projects/${projectId}/user-stories`)}
             disabled={saveMutation.isPending}
-            style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
+            style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
           >
             취소
           </button>
           <button
             onClick={handleSave}
             disabled={saveMutation.isPending}
-            style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 20px" }}
+            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
           >
             {saveMutation.isPending ? "저장 중..." : "저장"}
           </button>
         </div>
       </div>
 
+      <div style={{ padding: "0 24px 24px" }}>
       {/* AR-00050 브레드크럼 */}
       <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 12, paddingLeft: 4 }}>
         기획 레이어
         <span style={{ margin: "0 4px" }}>›</span>
-        {breadcrumb?.taskName ?? selectedReq?.taskName ?? "과업"}
+        {detail?.taskName ?? selectedReq?.taskName ?? "과업"}
         <span style={{ margin: "0 4px" }}>›</span>
-        {breadcrumb?.requirementName ?? selectedReq?.name ?? "요구사항"}
+        {detail?.requirementName ?? selectedReq?.name ?? "요구사항"}
         <span style={{ margin: "0 4px" }}>›</span>
         사용자스토리
       </div>
@@ -338,6 +349,7 @@ function UserStoryDetailPageInner() {
         </Card>
 
       </div>
+      </div>
     </div>
   );
 }
@@ -439,7 +451,7 @@ const selectStyle: React.CSSProperties = {
 const primaryBtnStyle: React.CSSProperties = {
   padding: "8px 24px",
   borderRadius: 6,
-  border: "none",
+  border: "1px solid transparent",
   background: "var(--color-primary, #1976d2)",
   color: "#fff",
   fontSize: 14,

@@ -17,7 +17,7 @@
  *   />
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
@@ -68,6 +68,9 @@ export default function SettingsHistoryDialog({
   // "current"는 현재 편집 중인 값을 의미하는 특수 ID
   const [selected, setSelected] = useState<string[]>(["current"]);
 
+  // 최초 자동 선택 여부 추적 — 팝업이 다시 열릴 때마다 리셋
+  const autoSelectedRef = useRef(false);
+
   // ── 이력 조회 ──────────────────────────────────────────────────────────────
   const queryKey = ["settings-history", projectId, itemName];
   const { data, isLoading } = useQuery({
@@ -79,6 +82,22 @@ export default function SettingsHistoryDialog({
     enabled: open,
   });
   const items = data ?? [];
+
+  // 팝업이 열릴 때마다 선택 초기화
+  useEffect(() => {
+    if (open) {
+      setSelected(["current"]);
+      autoSelectedRef.current = false;
+    }
+  }, [open]);
+
+  // 이력 데이터 로드 완료 시 첫 번째(최신) 이력을 자동 선택
+  // open도 deps에 포함: 캐시된 데이터가 있을 때 팝업이 다시 열려도 effect가 실행되도록
+  useEffect(() => {
+    if (!open || autoSelectedRef.current || items.length === 0) return;
+    autoSelectedRef.current = true;
+    setSelected(["current", items[0].histId]);
+  }, [open, items]);
 
   // ── 삭제 뮤테이션 ──────────────────────────────────────────────────────────
   const deleteMutation = useMutation({
@@ -98,8 +117,8 @@ export default function SettingsHistoryDialog({
     setSelected((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id);
       if (prev.length >= 2) {
-        // 2개 초과 선택 불가: 마지막 선택을 새 항목으로 교체
-        return [prev[0], id];
+        // 2개 초과 선택 불가: 가장 오래된 선택(prev[0])을 제거하고 새 항목 추가
+        return [prev[1], id];
       }
       return [...prev, id];
     });

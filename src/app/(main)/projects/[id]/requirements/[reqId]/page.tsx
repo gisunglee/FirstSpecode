@@ -10,11 +10,12 @@
  *   - 첨부파일 업로드·다운로드·삭제 (FID-00106~108)
  */
 
-import { Suspense, useState, useRef } from "react";
+import { Suspense, useState, useRef, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { useAppStore } from "@/store/appStore";
 import { renderMarkdown } from "@/lib/renderMarkdown";
 import RichEditor from "@/components/ui/RichEditor";
 
@@ -131,6 +132,8 @@ function RequirementDetailPageInner() {
   // 파일 업로드 input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const { setBreadcrumb } = useAppStore();
+
   // ── 과업 목록 조회 (taskId 선택용) ─────────────────────────────────────────
   const { data: tasksData } = useQuery({
     queryKey: ["tasks-for-select", projectId],
@@ -142,7 +145,7 @@ function RequirementDetailPageInner() {
   const taskOptions = tasksData ?? [];
 
   // ── 기존 요구사항 로드 (수정 모드) ─────────────────────────────────────────
-  const { isLoading: isDetailLoading } = useQuery({
+  const { data: detail, isLoading: isDetailLoading } = useQuery({
     queryKey: ["requirement", projectId, reqId],
     queryFn:  () =>
       authFetch<{ data: RequirementDetail }>(
@@ -259,6 +262,16 @@ function RequirementDetailPageInner() {
     saveMutation.mutate(form);
   }
 
+  // ── GNB 브레드크럼 ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    const items = [
+      { label: "요구사항", href: `/projects/${projectId}/requirements` },
+      { label: isNew ? "신규 등록" : (detail?.displayId ?? "편집") },
+    ];
+    setBreadcrumb(items);
+    return () => setBreadcrumb([]);
+  }, [projectId, isNew, detail?.displayId, setBreadcrumb]);
+
   // ── 파일 업로드 ─────────────────────────────────────────────────────────────
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const selectedFiles = e.target.files;
@@ -330,46 +343,48 @@ function RequirementDetailPageInner() {
   }
 
   return (
-    <div style={{ padding: "20px 24px", maxWidth: 1400 }}>
-      {/* 헤더 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-        <button
-          onClick={() => router.push(`/projects/${projectId}/requirements`)}
-          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)" }}
-        >
-          ←
-        </button>
-        <div style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
-          {isNew ? "요구사항 추가" : "요구사항 편집"}
-        </div>
-        {/* 변경 이력 팝업 버튼 — 신규 모드에서는 비표시 */}
-        {!isNew && (
+    <div style={{ padding: 0, maxWidth: 1400 }}>
+      {/* 헤더 타이틀 바 */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button
-            onClick={() => setHistoryOpen(true)}
-            style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
+            onClick={() => router.push(`/projects/${projectId}/requirements`)}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#666", lineHeight: 1, padding: "2px 4px" }}
           >
-            이력
+            ←
           </button>
-        )}
-        {/* 취소 / 저장 — 헤더 우측 */}
+          <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+            {isNew ? "요구사항 추가" : "요구사항 편집"}
+          </span>
+        </div>
         <div style={{ display: "flex", gap: 8 }}>
+          {/* 변경 이력 팝업 버튼 — 신규 모드에서는 비표시 */}
+          {!isNew && (
+            <button
+              onClick={() => setHistoryOpen(true)}
+              style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
+            >
+              이력
+            </button>
+          )}
           <button
             onClick={() => router.push(`/projects/${projectId}/requirements`)}
             disabled={saveMutation.isPending}
-            style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
+            style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
           >
             취소
           </button>
           <button
             onClick={handleSave}
             disabled={saveMutation.isPending}
-            style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 20px" }}
+            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
           >
             {saveMutation.isPending ? "저장 중..." : "저장"}
           </button>
         </div>
       </div>
 
+      <div style={{ padding: "0 24px 24px" }}>
       {/* 2단 레이아웃: 왼쪽(기본정보+원문·현행화) / 오른쪽(분석메모·상세명세+근거파일) */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 24, alignItems: "start" }}>
 
@@ -582,6 +597,7 @@ function RequirementDetailPageInner() {
             </FormField>
           </Section>
         </div>
+      </div>
       </div>
 
       {/* ── 변경 이력 팝업 ──────────────────────────────────────────────────── */}
@@ -990,7 +1006,7 @@ const inputStyle: React.CSSProperties = {
 const primaryBtnStyle: React.CSSProperties = {
   padding:      "8px 24px",
   borderRadius: 6,
-  border:       "none",
+  border:       "1px solid transparent",
   background:   "var(--color-primary, #1976d2)",
   color:        "#fff",
   fontSize:     14,

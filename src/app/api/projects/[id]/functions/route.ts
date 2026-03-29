@@ -35,25 +35,66 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         prjct_id: projectId,
         ...(areaId ? { area_id: areaId } : {}),
       },
-      orderBy: { sort_ordr: "asc" },
       include: {
-        area: { select: { area_id: true, area_nm: true, area_display_id: true } },
+        area: {
+          select: {
+            area_id:         true,
+            area_nm:         true,
+            area_display_id: true,
+            sort_ordr:       true,
+            screen: {
+              select: {
+                scrn_id:         true,
+                scrn_nm:         true,
+                scrn_display_id: true,
+                sort_ordr:       true,
+                unitWork: {
+                  select: {
+                    unit_work_id: true,
+                    unit_work_nm: true,
+                    sort_ordr:    true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
+    // 단위업무 → 화면 → 영역 → 기능 정렬순서로 정렬
+    functions.sort((a, b) => {
+      const uwA = a.area?.screen?.unitWork?.sort_ordr ?? 9999;
+      const uwB = b.area?.screen?.unitWork?.sort_ordr ?? 9999;
+      if (uwA !== uwB) return uwA - uwB;
+      const scA = a.area?.screen?.sort_ordr ?? 9999;
+      const scB = b.area?.screen?.sort_ordr ?? 9999;
+      if (scA !== scB) return scA - scB;
+      const arA = a.area?.sort_ordr ?? 9999;
+      const arB = b.area?.sort_ordr ?? 9999;
+      if (arA !== arB) return arA - arB;
+      return a.sort_ordr - b.sort_ordr;
+    });
+
     const items = functions.map((f) => ({
-      funcId:    f.func_id,
-      displayId: f.func_display_id,
-      name:      f.func_nm,
-      type:      f.func_ty_code,
-      status:    f.func_sttus_code,
-      priority:  f.priort_code,
-      complexity: f.cmplx_code,
-      effort:    f.efrt_val ?? "",
-      sortOrder: f.sort_ordr,
-      areaId:    f.area_id ?? null,
-      areaName:  f.area?.area_nm ?? "미분류",
-      areaDisplayId: f.area?.area_display_id ?? null,
+      funcId:          f.func_id,
+      displayId:       f.func_display_id,
+      name:            f.func_nm,
+      type:            f.func_ty_code,
+      status:          f.func_sttus_code,
+      priority:        f.priort_code,
+      complexity:      f.cmplx_code,
+      effort:          f.efrt_val ?? "",
+      sortOrder:       f.sort_ordr,
+      areaId:          f.area_id ?? null,
+      areaName:        f.area?.area_nm ?? "미분류",
+      areaDisplayId:   f.area?.area_display_id ?? null,
+      areaSortOrder:   f.area?.sort_ordr ?? 0,
+      screenId:        f.area?.screen?.scrn_id ?? null,
+      screenName:      f.area?.screen?.scrn_nm ?? "미분류",
+      screenDisplayId: f.area?.screen?.scrn_display_id ?? null,
+      unitWorkId:      f.area?.screen?.unitWork?.unit_work_id ?? null,
+      unitWorkName:    f.area?.screen?.unitWork?.unit_work_nm ?? "미분류",
     }));
 
     return apiSuccess({ items, totalCount: items.length });

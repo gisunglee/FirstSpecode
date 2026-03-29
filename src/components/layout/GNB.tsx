@@ -26,7 +26,7 @@ import type { ProjectOption } from "@/types/layout";
 
 export default function GNB() {
   const router = useRouter();
-  const { currentProjectId, setCurrentProjectId, theme, toggleTheme } =
+  const { currentProjectId, setCurrentProjectId, theme, toggleTheme, breadcrumb } =
     useAppStore();
 
   // 프로젝트 드롭다운 열림 상태
@@ -103,7 +103,7 @@ export default function GNB() {
 
   return (
     <header className="sp-menubar" style={{ justifyContent: "space-between", paddingLeft: "12px", paddingRight: "12px" }}>
-      {/* 좌측: 로고 + 프로젝트 셀렉터 */}
+      {/* 좌측: 로고 + 프로젝트 셀렉터 + 브레드크럼 */}
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
         {/* 로고 */}
         <Link
@@ -222,6 +222,32 @@ export default function GNB() {
             </div>
           )}
         </div>
+
+        {/* 브레드크럼 — 페이지가 동적으로 설정, 프로젝트 셀렉터 바로 옆 */}
+        {breadcrumb.length > 0 && (
+          <>
+            <span className="sp-menu-sep" />
+            <nav style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
+              {breadcrumb.map((item, i) => (
+                <span key={i} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  {i > 0 && <span style={{ color: "var(--color-text-tertiary)", opacity: 0.5, fontSize: 10, lineHeight: 1 }}>›</span>}
+                  {item.href ? (
+                    <button
+                      onClick={() => router.push(item.href!)}
+                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--color-text-secondary)", padding: "2px 3px", borderRadius: "var(--radius-sm)", lineHeight: 1.4 }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-text-primary)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = "var(--color-text-secondary)"; }}
+                    >
+                      {item.label}
+                    </button>
+                  ) : (
+                    <span style={{ color: "var(--color-text-primary)", fontWeight: 500, padding: "2px 3px" }}>{item.label}</span>
+                  )}
+                </span>
+              ))}
+            </nav>
+          </>
+        )}
       </div>
 
       {/* 우측: 테마 스위처 + 유틸리티 */}
