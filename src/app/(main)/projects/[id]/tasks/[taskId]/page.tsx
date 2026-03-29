@@ -14,6 +14,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { useAppStore } from "@/store/appStore";
 import { renderMarkdown } from "@/lib/renderMarkdown";
 import RichEditor from "@/components/ui/RichEditor";
 
@@ -65,8 +66,10 @@ function TaskDetailPageInner() {
     definition: "", content: "", outputInfo: "", rfpPage: "",
   });
 
+  const { setBreadcrumb } = useAppStore();
+
   // ── 기존 과업 로드 (수정 모드) ──────────────────────────────────────────────
-  const { isLoading } = useQuery({
+  const { isLoading, data: taskDetail } = useQuery({
     queryKey: ["task", projectId, taskId],
     queryFn:  () =>
       authFetch<{ data: TaskDetail }>(
@@ -129,6 +132,16 @@ function TaskDetailPageInner() {
     saveMutation.mutate(form);
   }
 
+  // ── GNB 브레드크럼 ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    const items = [
+      { label: "과업", href: `/projects/${projectId}/tasks` },
+      { label: isNew ? "신규 등록" : (taskDetail?.displayId ?? "편집") },
+    ];
+    setBreadcrumb(items);
+    return () => setBreadcrumb([]);
+  }, [projectId, isNew, taskDetail?.displayId, setBreadcrumb]);
+
   // ── 로딩 ───────────────────────────────────────────────────────────────────
   if (!isNew && isLoading) {
     return (
@@ -139,36 +152,39 @@ function TaskDetailPageInner() {
   }
 
   return (
-    <div style={{ padding: "20px 24px", maxWidth: 760 }}>
-      {/* 헤더 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-        <button
-          onClick={() => router.push(`/projects/${projectId}/tasks`)}
-          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#666" }}
-        >
-          ←
-        </button>
-        <div style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
-          {isNew ? "과업 추가" : "과업 수정"}
+    <div style={{ padding: 0 }}>
+      {/* 헤더 타이틀 바 */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            onClick={() => router.push(`/projects/${projectId}/tasks`)}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#666", lineHeight: 1, padding: "2px 4px" }}
+          >
+            ←
+          </button>
+          <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+            {isNew ? "과업 추가" : "과업 수정"}
+          </span>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button
             onClick={() => router.push(`/projects/${projectId}/tasks`)}
             disabled={saveMutation.isPending}
-            style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
+            style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
           >
             취소
           </button>
           <button
             onClick={handleSave}
             disabled={saveMutation.isPending}
-            style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 20px" }}
+            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
           >
             {saveMutation.isPending ? "저장 중..." : "저장"}
           </button>
         </div>
       </div>
 
+      <div style={{ padding: "0 24px 24px", maxWidth: 760 }}>
       {/* 폼 */}
       <div
         style={{
@@ -199,7 +215,7 @@ function TaskDetailPageInner() {
             <select
               value={form.category}
               onChange={(e) => handleChange("category", e.target.value)}
-              style={inputStyle}
+              style={selectStyle}
             >
               <option value="NEW_DEV">신규개발</option>
               <option value="IMPROVE">기능개선</option>
@@ -250,6 +266,7 @@ function TaskDetailPageInner() {
         </FormField>
 
       </div>
+      </div>
     </div>
   );
 }
@@ -289,6 +306,17 @@ const inputStyle: React.CSSProperties = {
   fontSize: 14,
   boxSizing: "border-box",
   outline: "none",
+};
+
+// select 전용 — 브라우저 기본 화살표를 제거하고 커스텀 화살표로 대체
+const selectStyle: React.CSSProperties = {
+  ...inputStyle,
+  paddingRight:       "32px",
+  appearance:         "none",
+  WebkitAppearance:   "none",
+  backgroundImage:    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
+  backgroundRepeat:   "no-repeat",
+  backgroundPosition: "right 10px center",
 };
 
 const primaryBtnStyle: React.CSSProperties = {

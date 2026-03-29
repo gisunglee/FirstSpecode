@@ -215,15 +215,15 @@ function AiTasksPageInner() {
   }
 
   return (
-    <div style={{ padding: "20px 24px" }}>
+    <div style={{ padding: 0 }}>
       {/* ── 헤더 타이틀 ──────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)" }}>
-            AI 태스크 목록
-          </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+          AI 태스크 목록
         </div>
       </div>
+
+      <div style={{ padding: "0 24px 24px" }}>
 
       {/* ── 필터 영역 AR-00086 ─────────────────────────────────────────────── */}
       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
@@ -474,6 +474,7 @@ function AiTasksPageInner() {
           }}
         />
       )}
+      </div>
     </div>
   );
 }

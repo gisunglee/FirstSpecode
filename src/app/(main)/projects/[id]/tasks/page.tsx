@@ -153,53 +153,43 @@ function TaskListPageInner() {
   const tasks = orderedTasks.length > 0 ? orderedTasks : data.tasks;
 
   return (
-    <div style={{ padding: "20px 24px", maxWidth: 960 }}>
+    <div style={{ padding: 0 }}>
       {/* 헤더 */}
-      <div style={{
-        display: "flex", justifyContent: "space-between",
-        alignItems: "center", marginBottom: 12,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button
-            onClick={() => router.back()}
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)" }}
-          >
-            ←
-          </button>
-          <div style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)" }}>
-            과업 목록
-          </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+          과업 목록
         </div>
         <button
           onClick={() => router.push(`/projects/${projectId}/tasks/new`)}
-          style={primaryBtnStyle}
+          style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
         >
           + 과업 추가
         </button>
       </div>
 
+      <div style={{ padding: "0 24px 24px" }}>
       {/* 총 건수 */}
-      <p style={{ margin: "0 0 8px", fontSize: 14, color: "var(--color-text-secondary)" }}>
+      <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
         총 <strong>{data.totalCount}</strong>건
-      </p>
+      </div>
 
       {/* 테이블 */}
       <div style={{
-        background: "var(--color-bg-card)",
         border: "1px solid var(--color-border)",
-        borderRadius: "var(--radius-lg)",
+        borderRadius: 8,
         overflow: "hidden",
       }}>
         {/* 헤더 */}
         <div style={{
           display: "grid",
           gridTemplateColumns: "32px 1fr 100px 70px 120px 80px 120px",
-          padding: "12px 16px",
+          padding: "10px 16px",
           background: "var(--color-bg-muted)",
           borderBottom: "1px solid var(--color-border)",
           fontSize: 12, fontWeight: 600,
           color: "var(--color-text-secondary)",
           gap: 12,
+          alignItems: "center",
         }}>
           <span />
           <span>과업명</span>
@@ -235,12 +225,13 @@ function TaskListPageInner() {
                 style={{
                   display: "grid",
                   gridTemplateColumns: "32px 1fr 100px 70px 90px 110px 120px",
-                  padding: "14px 16px",
-                  borderBottom: "1px solid var(--color-border)",
+                  padding: "12px 16px",
+                  borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
                   alignItems: "center",
                   gap: 12,
                   cursor: "grab",
                   background: "var(--color-bg-card)",
+                  transition: "background 0.1s",
                 }}
               >
                 {/* 드래그 핸들 */}
@@ -340,6 +331,7 @@ function TaskListPageInner() {
           onClose={() => setDeletingTask(null)}
         />
       )}
+      </div>
     </div>
   );
 }

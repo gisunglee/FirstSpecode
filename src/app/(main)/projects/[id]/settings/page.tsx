@@ -168,15 +168,18 @@ function ProjectSettingsInner() {
   });
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 680 }}>
+    <div style={{ padding: 0 }}>
       {/* 헤더 */}
-      <div style={{ marginBottom: 20 }}>
-        <button onClick={() => router.push("/projects")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "var(--text-sm)", color: "var(--color-text-tertiary)", padding: 0, marginBottom: 8 }}>
-          ← 프로젝트 목록
-        </button>
-        <h1 style={{ margin: 0, fontSize: "var(--text-xl)", fontWeight: 700, color: "var(--color-text-heading)" }}>프로젝트 설정</h1>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button onClick={() => router.push("/projects")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#666", lineHeight: 1, padding: "2px 4px" }}>
+            ←
+          </button>
+          <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>프로젝트 설정</span>
+        </div>
       </div>
 
+      <div style={{ padding: "0 24px 24px", maxWidth: 680 }}>
       {/* AR-00032 탭 네비게이션 (FID-00074) */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--color-border)", marginBottom: 12 }}>
         <button style={tabStyle("basic")}   onClick={() => setActiveTab("basic")}>기본정보</button>
@@ -209,6 +212,7 @@ function ProjectSettingsInner() {
       {deleteOpen && (
         <DeleteDialog projectName={project.name} onCancel={() => setDeleteOpen(false)} onConfirm={() => deleteMutation.mutate()} isPending={deleteMutation.isPending} />
       )}
+      </div>
     </div>
   );
 }
