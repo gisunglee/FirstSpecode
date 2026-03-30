@@ -357,7 +357,8 @@ export default function ColMappingDialog({
             <div style={{ flex: "0 0 156px" }}>항목명</div>
             <div style={{ flex: "0 0 90px" }}>IO구분</div>
             <div style={{ flex: "0 0 110px" }}>UI유형</div>
-            <div style={{ flex: "0 0 300px", maxWidth: 300 }}>테이블.컬럼</div>
+            <div style={{ flex: "0 0 150px" }}>테이블</div>
+            <div style={{ flex: "0 0 150px" }}>컬럼</div>
             <div style={{ flex: 2.7 }}>설명</div>
             <div style={{ width: 32 }} />
           </div>
@@ -427,13 +428,14 @@ export default function ColMappingDialog({
                   </select>
                 </div>
 
-                {/* 테이블.컬럼 */}
+                {/* 테이블 / 컬럼 (분리됨) */}
                 <div style={{ flex: "0 0 300px", maxWidth: 300 }}>
                   <ColumnPicker
                     tables={tables}
                     projectId={projectId}
                     initialTableId={row._tableId}
                     initialColId={row.colId}
+                    filterTableIds={filterTableIds}
                     onSelect={(tableId, colId, colName) => setRowColumn(row._key, tableId, colId, colName)}
                   />
                 </div>
@@ -483,12 +485,13 @@ export default function ColMappingDialog({
 // ── 빈 행용 컬럼 피커 ─────────────────────────────────────────────────────────
 
 function ColumnPicker({
-  tables, projectId, initialTableId = "", initialColId = "", onSelect,
+  tables, projectId, initialTableId = "", initialColId = "", filterTableIds = [], onSelect,
 }: {
   tables:         DbTable[];
   projectId:      string;
   initialTableId?: string;
   initialColId?:   string;
+  filterTableIds?: string[];
   onSelect:       (tableId: string, colId: string, colName: string) => void;
 }) {
   const [tblId, setTblId] = useState(initialTableId);
@@ -520,7 +523,10 @@ function ColumnPicker({
         style={{ ...cellSelectStyle, flex: 1 }}
       >
         <option value="">테이블</option>
-        {tables.map((t) => (
+        {(filterTableIds.length > 0 
+          ? tables.filter(t => filterTableIds.includes(t.tableId)) 
+          : tables
+        ).map((t) => (
           <option key={t.tableId} value={t.tableId}>{t.tableName}</option>
         ))}
       </select>
