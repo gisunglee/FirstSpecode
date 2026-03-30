@@ -245,7 +245,7 @@ export default function ColMappingDialog({
           {/* 헤더 */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{title}</h3>
-            <button onClick={onClose} style={closeBtnStyle}>✕</button>
+            <button onClick={onClose} style={closeBtnStyle}>닫기</button>
           </div>
 
           {/* 빠른 추가 영역 (테이블 선택 + 행 추가) */}
@@ -302,18 +302,25 @@ export default function ColMappingDialog({
                 return (
                   <div key={id} style={{
                     display: "flex", alignItems: "center", gap: 4,
-                    padding: "4px 10px", background: "var(--color-bg-card)",
-                    border: "1px solid var(--color-border)", borderRadius: 16,
-                    fontSize: 12, color: "var(--color-text-primary)"
-                  }}>
-                    <span style={{ fontWeight: 500 }}>{tbl.tableName}</span>
+                    padding: "4px 10px", 
+                    background: selectedTableId === id ? "#eff6ff" : "var(--color-bg-card)",
+                    border: selectedTableId === id ? "1px solid #3b82f6" : "1px solid var(--color-border)", 
+                    borderRadius: 16, fontSize: 12, 
+                    color: selectedTableId === id ? "#1d4ed8" : "var(--color-text-primary)",
+                    cursor: "pointer"
+                  }} onClick={() => setSelectedTableId(id)}>
+                    <span style={{ fontWeight: 600 }}>{tbl.tableName}</span>
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation(); // 칩 클릭 방지 (삭제 버튼만 동작)
                         setFilterTableIds(prev => prev.filter(tid => tid !== id));
-                        // 만약 현재 선택된 테이블을 필터에서 제거하면 컬럼 칩도 비움
                         if (selectedTableId === id) setSelectedTableId("");
                       }}
-                      style={{ background: "none", border: "none", cursor: "pointer", color: "#e53935", fontSize: 14, lineHeight: 1, padding: "0 2px" }}
+                      style={{ 
+                        background: "none", border: "none", cursor: "pointer", 
+                        color: selectedTableId === id ? "#3b82f6" : "#e53935", 
+                        fontSize: 14, lineHeight: 1, padding: "0 2px" 
+                      }}
                     >
                       ×
                     </button>
@@ -340,8 +347,7 @@ export default function ColMappingDialog({
                       background: alreadyAdded ? "var(--color-bg-muted)" : "var(--color-bg-card)",
                       color: alreadyAdded ? "var(--color-text-disabled)" : "var(--color-text-primary)",
                       cursor: alreadyAdded ? "default" : "pointer",
-                      fontSize: 12, fontFamily: "monospace",
-                      textDecoration: alreadyAdded ? "line-through" : "none",
+                      fontSize: 12, fontWeight: 500,
                     }}
                   >
                     {c.colName}
@@ -598,10 +604,12 @@ const dialogBottomStyle: React.CSSProperties = {
 };
 
 const closeBtnStyle: React.CSSProperties = {
-  background: "none", border: "none",
-  cursor: "pointer", fontSize: 18,
-  color: "var(--color-text-secondary)",
-  lineHeight: 1, padding: "2px 6px",
+  background: "var(--color-bg-card)", border: "1px solid var(--color-border)",
+  borderRadius: 6, cursor: "pointer", fontSize: 13,
+  color: "var(--color-text-primary)",
+  lineHeight: 1, padding: "10px 24px",
+  fontWeight: 600,
+  boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
 };
 
 const labelStyle: React.CSSProperties = {
