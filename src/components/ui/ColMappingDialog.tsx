@@ -203,8 +203,10 @@ export default function ColMappingDialog({
       ...r, _tableId: tableId, colId, tableName: tbl.tableName, colName,
     } : r));
   }
-  // ── 상태: 필터링용 선택된 테이블 ID 목록
+  // ── 상태: 필터링 및 논리명 보기 설정 ───────────────────────────────────
   const [filterTableIds, setFilterTableIds] = useState<string[]>([]);
+  const [showLogicalAll, setShowLogicalAll] = useState(false);
+  const [showLogicalGrid, setShowLogicalGrid] = useState(false);
 
   // ── 저장 ──────────────────────────────────────────────────────────────────
   const saveMutation = useMutation({
@@ -245,7 +247,20 @@ export default function ColMappingDialog({
           {/* 헤더 */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{title}</h3>
-            <button onClick={onClose} style={closeBtnStyle}>닫기</button>
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12, color: "var(--color-text-secondary)" }}>
+                <span style={{ fontWeight: 600 }}>논리명 보기:</span>
+                <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                  <input type="checkbox" checked={showLogicalAll} onChange={(e) => setShowLogicalAll(e.target.checked)} />
+                  전체
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                  <input type="checkbox" checked={showLogicalGrid} onChange={(e) => setShowLogicalGrid(e.target.checked)} />
+                  그리드
+                </label>
+              </div>
+              <button onClick={onClose} style={closeBtnStyle}>닫기</button>
+            </div>
           </div>
 
           {/* 빠른 추가 영역 (테이블 선택 + 행 추가) */}
@@ -265,7 +280,7 @@ export default function ColMappingDialog({
               <option value="">테이블 선택 (필터링 및 컬럼 빠른 추가)</option>
               {tables.map((t) => (
                 <option key={t.tableId} value={t.tableId}>
-                  {t.tableName}{t.tableLogicalNm ? ` — ${t.tableLogicalNm}` : ""}
+                  {showLogicalAll ? (t.tableLogicalNm || t.tableName) : t.tableName}
                 </option>
               ))}
             </select>
@@ -309,7 +324,9 @@ export default function ColMappingDialog({
                     color: selectedTableId === id ? "#1d4ed8" : "var(--color-text-primary)",
                     cursor: "pointer"
                   }} onClick={() => setSelectedTableId(id)}>
-                    <span style={{ fontWeight: 600 }}>{tbl.tableName}</span>
+                    <span style={{ fontWeight: 600 }}>
+                      {showLogicalAll ? (tbl.tableLogicalNm || tbl.tableName) : tbl.tableName}
+                    </span>
                     <button
                       onClick={(e) => {
                         e.stopPropagation(); // 칩 클릭 방지 (삭제 버튼만 동작)
@@ -342,7 +359,7 @@ export default function ColMappingDialog({
                     disabled={alreadyAdded}
                     title={c.colLogicalNm || c.colName}
                     style={{
-                      padding: "3px 9px", borderRadius: 4,
+                      padding: "5px 12px", borderRadius: 4,
                       border: "1px solid var(--color-border)",
                       background: alreadyAdded ? "var(--color-bg-muted)" : "var(--color-bg-card)",
                       color: alreadyAdded ? "var(--color-text-disabled)" : "var(--color-text-primary)",
@@ -350,7 +367,7 @@ export default function ColMappingDialog({
                       fontSize: 12, fontWeight: 500,
                     }}
                   >
-                    {c.colName}
+                    {showLogicalAll ? (c.colLogicalNm || c.colName) : c.colName}
                   </button>
                 );
               })}
@@ -442,6 +459,7 @@ export default function ColMappingDialog({
                     initialTableId={row._tableId}
                     initialColId={row.colId}
                     filterTableIds={filterTableIds}
+                    showLogical={showLogicalAll || showLogicalGrid}
                     onSelect={(tableId, colId, colName) => setRowColumn(row._key, tableId, colId, colName)}
                   />
                 </div>
@@ -491,13 +509,14 @@ export default function ColMappingDialog({
 // ── 빈 행용 컬럼 피커 ─────────────────────────────────────────────────────────
 
 function ColumnPicker({
-  tables, projectId, initialTableId = "", initialColId = "", filterTableIds = [], onSelect,
+  tables, projectId, initialTableId = "", initialColId = "", filterTableIds = [], showLogical = false, onSelect,
 }: {
   tables:         DbTable[];
   projectId:      string;
   initialTableId?: string;
   initialColId?:   string;
   filterTableIds?: string[];
+  showLogical?:   boolean;
   onSelect:       (tableId: string, colId: string, colName: string) => void;
 }) {
   const [tblId, setTblId] = useState(initialTableId);
@@ -533,7 +552,9 @@ function ColumnPicker({
           ? tables.filter(t => filterTableIds.includes(t.tableId)) 
           : tables
         ).map((t) => (
-          <option key={t.tableId} value={t.tableId}>{t.tableName}</option>
+          <option key={t.tableId} value={t.tableId}>
+            {showLogical ? (t.tableLogicalNm || t.tableName) : t.tableName}
+          </option>
         ))}
       </select>
       <select
@@ -551,7 +572,9 @@ function ColumnPicker({
       >
         <option value="">컬럼</option>
         {cols.map((c) => (
-          <option key={c.colId} value={c.colId}>{c.colName}</option>
+          <option key={c.colId} value={c.colId}>
+            {showLogical ? (c.colLogicalNm || c.colName) : c.colName}
+          </option>
         ))}
       </select>
     </div>
