@@ -203,6 +203,8 @@ export default function ColMappingDialog({
       ...r, _tableId: tableId, colId, tableName: tbl.tableName, colName,
     } : r));
   }
+  // ── 상태: 필터링용 선택된 테이블 ID 목록
+  const [filterTableIds, setFilterTableIds] = useState<string[]>([]);
 
   // ── 저장 ──────────────────────────────────────────────────────────────────
   const saveMutation = useMutation({
@@ -246,14 +248,21 @@ export default function ColMappingDialog({
             <button onClick={onClose} style={closeBtnStyle}>✕</button>
           </div>
 
-          {/* 테이블 선택 */}
+          {/* 빠른 추가 영역 (테이블 선택 + 행 추가) */}
           <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
             <select
               value={selectedTableId}
-              onChange={(e) => setSelectedTableId(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedTableId(val);
+                // 필터 목록에도 추가하여 그리드 동기화
+                if (val && !filterTableIds.includes(val)) {
+                  setFilterTableIds((prev) => [...prev, val]);
+                }
+              }}
               style={{ ...selectStyle, flex: 1 }}
             >
-              <option value="">테이블 선택 후 컬럼 클릭 → 빠른 추가</option>
+              <option value="">테이블 선택 (필터링 및 컬럼 빠른 추가)</option>
               {tables.map((t) => (
                 <option key={t.tableId} value={t.tableId}>
                   {t.tableName}{t.tableLogicalNm ? ` — ${t.tableLogicalNm}` : ""}
@@ -283,6 +292,36 @@ export default function ColMappingDialog({
               +5
             </button>
           </div>
+
+          {/* 테이블 필터 칩 (선택된 테이블들을 핀으로 고정 표시) */}
+          {filterTableIds.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+              {filterTableIds.map((id) => {
+                const tbl = tables.find(t => t.tableId === id);
+                if (!tbl) return null;
+                return (
+                  <div key={id} style={{
+                    display: "flex", alignItems: "center", gap: 4,
+                    padding: "4px 10px", background: "var(--color-bg-card)",
+                    border: "1px solid var(--color-border)", borderRadius: 16,
+                    fontSize: 12, color: "var(--color-text-primary)"
+                  }}>
+                    <span style={{ fontWeight: 500 }}>{tbl.tableName}</span>
+                    <button
+                      onClick={() => {
+                        setFilterTableIds(prev => prev.filter(tid => tid !== id));
+                        // 만약 현재 선택된 테이블을 필터에서 제거하면 컬럼 칩도 비움
+                        if (selectedTableId === id) setSelectedTableId("");
+                      }}
+                      style={{ background: "none", border: "none", cursor: "pointer", color: "#e53935", fontSize: 14, lineHeight: 1, padding: "0 2px" }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* 컬럼 칩 */}
           {selectedTableId && columns.length > 0 && (
@@ -331,12 +370,25 @@ export default function ColMappingDialog({
               매핑된 컬럼이 없습니다. 위에서 테이블을 선택하거나 + 행 추가를 클릭하세요.
             </div>
           ) : (
-            rows.map((row, idx) => (
-              <div key={row._key} style={{ ...gridRowStyle, borderTop: idx === 0 ? "none" : "1px solid var(--color-border)" }}>
-                {/* NO */}
-                <div style={{ width: 32, textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>
-                  {idx + 1}
-                </div>
+            (() => {
+              const visibleRows = filterTableIds.length > 0 
+                ? rows.filter(r => !r._tableId || filterTableIds.includes(r._tableId))
+                : rows;
+
+              if (visibleRows.length === 0) {
+                return (
+                  <div style={{ padding: 40, textAlign: "center", color: "var(--color-text-disabled)" }}>
+                    선택한 필터 조건에 맞는 데이터가 없습니다.
+                  </div>
+                );
+              }
+
+              return visibleRows.map((row, idx) => (
+                <div key={row._key} style={{ ...gridRowStyle, borderTop: idx === 0 ? "none" : "1px solid var(--color-border)" }}>
+                  {/* NO */}
+                  <div style={{ width: 32, textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>
+                    {rows.findIndex(r => r._key === row._key) + 1}
+                  </div>
 
                 {/* 항목명 */}
                 <div style={{ flex: "0 0 156px" }}>
@@ -407,8 +459,9 @@ export default function ColMappingDialog({
                   </button>
                 </div>
               </div>
-            ))
-          )}
+            ));
+          })()
+        )}
         </div>{/* ── 스크롤 영역 끝 */}
 
         {/* ── 고정 하단: 취소 + 저장 ───────────────────────────────────── */}
