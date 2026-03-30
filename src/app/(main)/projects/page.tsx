@@ -228,20 +228,21 @@ function ProjectsPageInner() {
   }
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 900 }}>
+    <div style={{ padding: 0 }}>
       {/* 헤더 */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: "var(--text-xl)", fontWeight: 700, color: "var(--color-text-heading)" }}>
-            프로젝트 목록
-          </h1>
-          <p style={{ margin: "4px 0 0", fontSize: "var(--text-sm)", color: "var(--color-text-tertiary)" }}>
-            {isLoading ? "로딩 중..." : `총 ${items.length}건`}
-          </p>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+          프로젝트 목록
         </div>
-        <button className="sp-btn sp-btn-primary" onClick={() => setCreateOpen(true)}>
+        <button className="sp-btn sp-btn-primary" style={{ fontSize: 12, padding: "5px 14px" }} onClick={() => setCreateOpen(true)}>
           + 프로젝트 생성
         </button>
+      </div>
+
+      <div style={{ padding: "0 24px 24px" }}>
+      {/* 총 건수 */}
+      <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
+        {isLoading ? "로딩 중..." : `총 ${items.length}건`}
       </div>
 
       {/* 목록 */}
@@ -342,6 +343,8 @@ function ProjectsPageInner() {
           ))}
         </div>
       )}
+
+      </div>
 
       {/* 생성 POPUP */}
       {createOpen && (
