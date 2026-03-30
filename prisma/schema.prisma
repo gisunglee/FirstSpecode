@@ -438,6 +438,14 @@ model TbDsFunction {
   impl_bgng_de    String?
   impl_end_de     String?
   sort_ordr       Int       @default(0)
+  // AI 요청 코멘트
+  coment_cn       String?
+  // BEFORE / IN_PROGRESS / DONE
+  assign_work_sttus_code String @default("BEFORE")
+  // BEFORE / IN_REVIEW / FEEDBACK / DONE
+  review_sttus_code      String @default("BEFORE")
+  // 진척률 (0, 10, 20, ... 100)
+  progress_rate          Int    @default(0)
   creat_dt        DateTime  @default(now())
   mdfcn_dt        DateTime?
 

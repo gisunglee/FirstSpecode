@@ -350,7 +350,6 @@ function ProjectsPageInner() {
       {createOpen && (
         <CreateProjectDialog onClose={() => setCreateOpen(false)} onCreated={handleCreated} />
       )}
-      </div>
     </div>
   );
 }

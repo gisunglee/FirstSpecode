@@ -28,22 +28,30 @@ import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
+type AiTaskInfo = { aiTaskId: string; status: string };
+
 type FuncDetail = {
-  funcId:        string;
-  displayId:     string;
-  name:          string;
-  description:   string;
-  type:          string;
-  status:        string;
-  priority:      string;
-  complexity:    string;
-  effort:        string;
-  assignMemberId: string | null;
-  implStartDate: string;
-  implEndDate:   string;
-  sortOrder:     number;
-  areaId:        string | null;
-  areaName:      string;
+  funcId:              string;
+  displayId:           string;
+  name:                string;
+  description:         string;
+  commentCn:           string;
+  type:                string;
+  status:              string;
+  priority:            string;
+  complexity:          string;
+  effort:              string;
+  assignMemberId:      string | null;
+  implStartDate:       string;
+  implEndDate:         string;
+  sortOrder:           number;
+  areaId:              string | null;
+  areaName:            string;
+  aiTasks:             Record<string, AiTaskInfo>;
+  // migration 후 활성화
+  assignWorkStatus:    string;
+  reviewStatus:        string;
+  progressRate:        number;
 };
 
 type AreaOption = { areaId: string; displayId: string; name: string };
@@ -92,9 +100,19 @@ function FunctionDetailPageInner() {
   const [areaId,         setAreaId]         = useState(presetAreaId);
   const [sortOrder,      setSortOrder]      = useState(0);
 
-  // ── AI 상태 ────────────────────────────────────────────────────────────────
-  const [inspectComment, setInspectComment] = useState("");
-  const [impactComment,  setImpactComment]  = useState("");
+  // ── AI 요청 코멘트 상태 ────────────────────────────────────────────────────
+  const [commentCn,        setCommentCn]        = useState("");
+
+  // ── 작업/검토 상태·진척률 ─────────────────────────────────────────────────
+  const [assignWorkStatus, setAssignWorkStatus] = useState("BEFORE");
+  const [reviewStatus,     setReviewStatus]     = useState("BEFORE");
+  const [progressRate,     setProgressRate]     = useState(0);
+
+  // 담당자 작업 상태 변경 시 완료면 진척률 자동 100%
+  function handleWorkStatusChange(val: string) {
+    setAssignWorkStatus(val);
+    if (val === "DONE") setProgressRate(100);
+  }
 
   // ── 컬럼 매핑 팝업 ─────────────────────────────────────────────────────────
   const [mappingPopupOpen, setMappingPopupOpen] = useState(false);
@@ -141,6 +159,10 @@ function FunctionDetailPageInner() {
       setImplEndDate(data.implEndDate);
       setAreaId(data.areaId ?? "");
       setSortOrder(data.sortOrder ?? 0);
+      setCommentCn(data.commentCn ?? "");
+      setAssignWorkStatus(data.assignWorkStatus ?? "BEFORE");
+      setReviewStatus(data.reviewStatus ?? "BEFORE");
+      setProgressRate(data.progressRate ?? 0);
       // 설명 변경 감지를 위해 원본 값 보관
       setOriginalDescription(data.description ?? "");
     }
@@ -152,6 +174,11 @@ function FunctionDetailPageInner() {
       const body = {
         areaId: areaId || null,
         name: name.trim(), type, description: description.trim(),
+        commentCn: commentCn.trim(),
+        assignWorkStatus,
+        reviewStatus,
+        // 작업 완료 시 진척률 강제 100%
+        progressRate: assignWorkStatus === "DONE" ? 100 : progressRate,
         priority, complexity, effort: effort.trim(),
         assignMemberId: assignMemberId || null,
         implStartDate: implStartDate || null,
@@ -184,18 +211,25 @@ function FunctionDetailPageInner() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  // ── AI 컨펌 상태 ──────────────────────────────────────────────────────────
+  const [aiConfirm, setAiConfirm] = useState<{ taskType: string; label: string } | null>(null);
+
   // ── AI 요청 뮤테이션 ──────────────────────────────────────────────────────
   const aiMutation = useMutation({
-    mutationFn: ({ taskType, comment }: { taskType: string; comment: string }) =>
+    mutationFn: ({ taskType }: { taskType: string }) =>
       authFetch(`/api/projects/${projectId}/functions/${functionId}/ai`, {
-        method: "POST", body: JSON.stringify({ taskType, comment }),
+        method: "POST",
+        body: JSON.stringify({ taskType, comment: commentCn.trim() || undefined }),
       }),
-    onSuccess: (_data, vars) => {
+    onSuccess: (_res, vars) => {
       const labels: Record<string, string> = {
-        INSPECT: "AI 명세 누락 검토 요청이 접수되었습니다.",
+        DESIGN:  "AI 설계 요청이 접수되었습니다.",
+        INSPECT: "AI 점검 요청이 접수되었습니다.",
         IMPACT:  "AI 영향도 분석 요청이 접수되었습니다.",
       };
       toast.success(labels[vars.taskType] ?? "AI 요청이 접수되었습니다.");
+      // 상태 갱신을 위해 상세 재조회
+      queryClient.invalidateQueries({ queryKey: ["function", projectId, functionId] });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -227,32 +261,97 @@ function FunctionDetailPageInner() {
           </span>
         </div>
 
-        {/* 중: 상태 배지 (단순 HTML) */}
+        {/* 중: 상태 필드 (작업 상태 · 진척률 · 검토 상태) */}
         {!isNew && (
-          <div style={{ display: "flex", alignItems: "center", gap: 14, flex: 1, flexWrap: "wrap" }}>
-            <div style={statusGroupStyle}>
-              <span style={statusLabelStyle}>작업 상태</span>
-              <span style={{ ...statusDotStyle, background: "#4caf50" }} />
-              <span style={statusValueStyle}>완료</span>
-            </div>
-            <div style={statusDividerStyle} />
-            <div style={statusGroupStyle}>
-              <span style={statusLabelStyle}>PL 검토</span>
-              <span style={{ ...statusDotStyle, background: "#ff9800" }} />
-              <span style={statusValueStyle}>검토 중</span>
-            </div>
-            <div style={statusDividerStyle} />
-            <div style={statusGroupStyle}>
-              <span style={statusLabelStyle}>AI</span>
-              <span style={{ ...statusDotStyle, background: "#1976d2" }} />
-              <span style={statusValueStyle}>명세 생성 중</span>
-            </div>
-          </div>
-        )}
-        {isNew && <div style={{ flex: 1 }} />}
+          <>
+            <div style={{ width: 1, height: 20, background: "var(--color-border)", margin: "0 4px" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
 
-        {/* 우: 취소·저장 */}
-        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              {/* 담당자 작업 상태 */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={headerFieldLabelStyle}>작업 상태</span>
+                <select value={assignWorkStatus} onChange={(e) => handleWorkStatusChange(e.target.value)} style={headerSelectStyle}>
+                  <option value="BEFORE">작업 전</option>
+                  <option value="IN_PROGRESS">작업 중</option>
+                  <option value="DONE">작업 완료</option>
+                </select>
+              </div>
+
+              {/* 진척률 */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={headerFieldLabelStyle}>
+                  진척률{assignWorkStatus === "DONE" && <span style={{ color: "#2e7d32", marginLeft: 3 }}>자동</span>}
+                </span>
+                <select
+                  value={assignWorkStatus === "DONE" ? 100 : progressRate}
+                  onChange={(e) => setProgressRate(Number(e.target.value))}
+                  disabled={assignWorkStatus === "DONE"}
+                  style={{ ...headerSelectStyle, opacity: assignWorkStatus === "DONE" ? 0.6 : 1 }}
+                >
+                  {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((v) => (
+                    <option key={v} value={v}>{v}%</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 검토 상태 */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={headerFieldLabelStyle}>검토 상태</span>
+                <select value={reviewStatus} onChange={(e) => setReviewStatus(e.target.value)} style={headerSelectStyle}>
+                  <option value="BEFORE">검토 전</option>
+                  <option value="IN_REVIEW">검토 중</option>
+                  <option value="FEEDBACK">피드백 필요</option>
+                  <option value="DONE">검토 완료</option>
+                </select>
+              </div>
+
+            </div>
+          </>
+        )}
+
+        {/* 우측 밀어내기 스페이서 */}
+        <div style={{ flex: 1 }} />
+
+        {/* 우: AI 버튼 + 구분선 + 취소·저장 */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <style>{`@keyframes _spin{to{transform:rotate(360deg)}}`}</style>
+
+          {/* AI 요청 버튼들 (신규 모드 제외) */}
+          {!isNew && (
+            <>
+              {AI_TASK_CONFIGS.map(({ taskType, label }) => {
+                const info = data?.aiTasks?.[taskType];
+                const isSpinning = (aiMutation.isPending && aiMutation.variables?.taskType === taskType)
+                  || (info && ["PENDING", "IN_PROGRESS"].includes(info.status));
+                return (
+                  <div key={taskType} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <button
+                      onClick={() => {
+                        // 설명 없으면 차단
+                        if (!description.trim()) {
+                          toast.error("설명을 먼저 입력해 주세요.");
+                          return;
+                        }
+                        setAiConfirm({ taskType, label });
+                      }}
+                      disabled={aiMutation.isPending}
+                      style={aiReqBtnStyle}
+                    >
+                      <span style={isSpinning ? { display: "inline-block", animation: "_spin 1s linear infinite", marginRight: 4 } : { marginRight: 4 }}>
+                        ↻
+                      </span>
+                      {label}
+                    </button>
+                    {info && <AiStatusBadge status={info.status} />}
+                  </div>
+                );
+              })}
+              {/* 구분선 */}
+              <div style={{ width: 1, height: 20, background: "var(--color-border)", margin: "0 4px" }} />
+            </>
+          )}
+
+          {/* 취소·저장 */}
           <button
             onClick={() => router.push(`/projects/${projectId}/functions`)}
             disabled={saveMutation.isPending}
@@ -381,10 +480,23 @@ function FunctionDetailPageInner() {
               />
             </div>
           </div>
+
         </section>
 
         {/* ── 오른쪽: 설명 + 컬럼 매핑 + AI 지원 ── */}
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+          {/* AI 요청 코멘트 */}
+          <section style={sectionStyle}>
+            <label style={{ ...labelStyle, marginBottom: 6 }}>AI 요청 코멘트</label>
+            <textarea
+              value={commentCn}
+              onChange={(e) => setCommentCn(e.target.value)}
+              placeholder="AI 요청 시 참고할 추가 지시사항 (저장 시 함께 저장됩니다)"
+              rows={3}
+              style={{ ...inputStyle, resize: "vertical" }}
+            />
+          </section>
 
           {/* 설명 (func_dc) — MarkdownEditor */}
           <section style={sectionStyle}>
@@ -509,55 +621,50 @@ function FunctionDetailPageInner() {
                 </div>
               </section>
 
-              {/* ── AR-00080 AI 지원 ── */}
-              <section style={sectionStyle}>
-                <h3 style={sectionTitleStyle}>AI 지원</h3>
-
-                <div style={{ marginBottom: 12 }}>
-                  <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>AI 명세 누락 검토</h4>
-                  <textarea
-                    value={inspectComment}
-                    onChange={(e) => setInspectComment(e.target.value)}
-                    placeholder="추가 검토 지시사항"
-                    rows={2}
-                    style={{ ...inputStyle, resize: "vertical", marginBottom: 8 }}
-                  />
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <button
-                      onClick={() => aiMutation.mutate({ taskType: "INSPECT", comment: inspectComment })}
-                      style={primaryBtnStyle}
-                      disabled={aiMutation.isPending}
-                    >
-                      AI 명세 누락 검토 요청
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>AI 영향도 분석</h4>
-                  <textarea
-                    value={impactComment}
-                    onChange={(e) => setImpactComment(e.target.value)}
-                    placeholder="추가 분석 지시사항"
-                    rows={2}
-                    style={{ ...inputStyle, resize: "vertical", marginBottom: 8 }}
-                  />
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <button
-                      onClick={() => aiMutation.mutate({ taskType: "IMPACT", comment: impactComment })}
-                      style={primaryBtnStyle}
-                      disabled={aiMutation.isPending}
-                    >
-                      AI 영향도 분석 요청
-                    </button>
-                  </div>
-                </div>
-              </section>
             </>
           )}
         </div>
       </div>
       </div>
+
+      {/* ── AI 요청 컨펌 다이얼로그 ──────────────────────────────────────── */}
+      {aiConfirm && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setAiConfirm(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: 400, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.2)", padding: "24px 28px" }}
+          >
+            <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
+              AI 요청 확인
+            </p>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+              <strong>{aiConfirm.label}</strong>을 요청하시겠습니까?<br />
+              AI 요청 코멘트가 있으면 함께 전달됩니다.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                onClick={() => setAiConfirm(null)}
+                style={{ ...secondaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
+              >
+                취소
+              </button>
+              <button
+                onClick={() => {
+                  aiMutation.mutate({ taskType: aiConfirm.taskType });
+                  setAiConfirm(null);
+                }}
+                disabled={aiMutation.isPending}
+                style={{ ...primaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
+              >
+                요청
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── PID-00053 컬럼 매핑 관리 팝업 ────────────────────────────────── */}
       <ColMappingDialog
@@ -574,6 +681,36 @@ function FunctionDetailPageInner() {
 }
 
 // ── (구 ColumnMappingPopup 제거됨 — ColMappingDialog 공통 컴포넌트로 교체)
+
+// ── AI 태스크 설정 ────────────────────────────────────────────────────────────
+
+const AI_TASK_CONFIGS = [
+  { taskType: "DESIGN",  label: "AI 설계 요청" },
+  { taskType: "INSPECT", label: "AI 점검 요청" },
+  { taskType: "IMPACT",  label: "AI 영향도 분석" },
+];
+
+function AiStatusBadge({ status }: { status: string }) {
+  const cfg: Record<string, { label: string; color: string; bg: string }> = {
+    PENDING:     { label: "대기 중",  color: "#f57c00", bg: "#fff8e1" },
+    IN_PROGRESS: { label: "처리 중",  color: "#1565c0", bg: "#e3f2fd" },
+    DONE:        { label: "완료",     color: "#2e7d32", bg: "#e8f5e9" },
+    APPLIED:     { label: "적용됨",   color: "#6a1b9a", bg: "#f3e5f5" },
+    REJECTED:    { label: "반려",     color: "#c62828", bg: "#ffebee" },
+    FAILED:      { label: "실패",     color: "#c62828", bg: "#ffebee" },
+    TIMEOUT:     { label: "시간초과", color: "#757575", bg: "#f5f5f5" },
+  };
+  const c = cfg[status] ?? { label: status, color: "#555", bg: "#f5f5f5" };
+  return (
+    <span style={{
+      fontSize: 10, fontWeight: 700, padding: "2px 6px",
+      borderRadius: 4, color: c.color, background: c.bg,
+      border: `1px solid ${c.color}40`, whiteSpace: "nowrap",
+    }}>
+      {c.label}
+    </span>
+  );
+}
 
 // ── 설명 예시 / 템플릿 ────────────────────────────────────────────────────────
 
@@ -664,6 +801,41 @@ const statusDividerStyle: React.CSSProperties = {
   flexShrink: 0,
 };
 
+
+const aiReqBtnStyle: React.CSSProperties = {
+  padding:      "4px 10px",
+  borderRadius: 5,
+  border:       "1px solid var(--color-primary, #1976d2)",
+  background:   "none",
+  color:        "var(--color-primary, #1976d2)",
+  fontSize:     12,
+  fontWeight:   600,
+  cursor:       "pointer",
+  whiteSpace:   "nowrap",
+};
+
+// 헤더 인라인 상태 필드용 스타일
+const headerFieldLabelStyle: React.CSSProperties = {
+  fontSize:      10,
+  fontWeight:    600,
+  color:         "var(--color-text-secondary)",
+  whiteSpace:    "nowrap",
+  letterSpacing: "0.02em",
+};
+
+const headerSelectStyle: React.CSSProperties = {
+  padding:         "3px 24px 3px 8px",
+  borderRadius:    5,
+  border:          "1px solid var(--color-border)",
+  fontSize:        12,
+  background:      "var(--color-bg-card)",
+  color:           "var(--color-text-primary)",
+  cursor:          "pointer",
+  appearance:      "none",
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+  backgroundRepeat:   "no-repeat",
+  backgroundPosition: "right 7px center",
+};
 
 const ghostSmBtnStyle: React.CSSProperties = {
   padding:      "3px 9px",

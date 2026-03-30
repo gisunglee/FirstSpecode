@@ -39,15 +39,7 @@ type AiSettings = {
   callMethod: "DIRECT" | "QUEUE";
 };
 
-type HistoryItem = {
-  changedAt:    string;
-  changerEmail: string;
-  itemName:     string;
-  beforeValue:  string | null;
-  afterValue:   string | null;
-};
-
-type Tab = "basic" | "ai" | "history";
+type Tab = "basic" | "ai";
 
 // ── 복사 확인 POPUP ──────────────────────────────────────────────────────
 function CopyDialog({
@@ -182,15 +174,13 @@ function ProjectSettingsInner() {
       <div style={{ padding: "0 24px 24px", maxWidth: 680 }}>
       {/* AR-00032 탭 네비게이션 (FID-00074) */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--color-border)", marginBottom: 12 }}>
-        <button style={tabStyle("basic")}   onClick={() => setActiveTab("basic")}>기본정보</button>
-        <button style={tabStyle("ai")}      onClick={() => setActiveTab("ai")}>AI설정</button>
-        <button style={tabStyle("history")} onClick={() => setActiveTab("history")}>변경이력</button>
+        <button style={tabStyle("basic")} onClick={() => setActiveTab("basic")}>기본정보</button>
+        <button style={tabStyle("ai")}    onClick={() => setActiveTab("ai")}>AI설정</button>
       </div>
 
       {/* 탭 콘텐츠 */}
-      {activeTab === "basic"   && <BasicInfoTab   projectId={projectId} project={project} isOwner={isOwner} queryClient={queryClient} />}
-      {activeTab === "ai"      && <AiSettingsTab  projectId={projectId} />}
-      {activeTab === "history" && <HistoryTab     projectId={projectId} />}
+      {activeTab === "basic" && <BasicInfoTab  projectId={projectId} project={project} isOwner={isOwner} queryClient={queryClient} />}
+      {activeTab === "ai"    && <AiSettingsTab projectId={projectId} />}
 
       {/* 멤버 관리 바로가기 */}
       <div style={{ display: "flex", gap: 8, marginTop: 24, marginBottom: 16 }}>
@@ -324,7 +314,7 @@ function AiSettingsTab({ projectId }: { projectId: string }) {
     onSuccess: () => {
       toast.success("API 키가 등록되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["ai-settings", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["history", projectId] });
+
       setShowAddForm(false); setNewProvider(""); setNewKey("");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -339,7 +329,7 @@ function AiSettingsTab({ projectId }: { projectId: string }) {
     onSuccess: () => {
       toast.success("API 키가 수정되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["ai-settings", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["history", projectId] });
+
       setEditingId(null); setEditKey("");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -352,7 +342,7 @@ function AiSettingsTab({ projectId }: { projectId: string }) {
     onSuccess: () => {
       toast.success("API 키가 삭제되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["ai-settings", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["history", projectId] });
+
       setConfirmDelId(null);
     },
     onError: (err: Error) => toast.error(err.message),
@@ -366,7 +356,7 @@ function AiSettingsTab({ projectId }: { projectId: string }) {
       }),
     onSuccess: () => {
       toast.success("저장되었습니다.");
-      queryClient.invalidateQueries({ queryKey: ["history", projectId] });
+
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -468,69 +458,3 @@ function AiSettingsTab({ projectId }: { projectId: string }) {
   );
 }
 
-// ── AR-00035 변경이력 탭 (FID-00082) ─────────────────────────────────────
-function HistoryTab({ projectId }: { projectId: string }) {
-  const { data, isLoading } = useQuery({
-    queryKey: ["history", projectId],
-    queryFn: () =>
-      authFetch<{ data: { items: HistoryItem[]; totalCount: number } }>(
-        `/api/projects/${projectId}/settings/history`
-      ).then((r) => r.data),
-  });
-
-  const items = data?.items ?? [];
-
-  if (isLoading) return <div style={{ color: "var(--color-text-tertiary)", fontSize: "var(--text-sm)" }}>로딩 중...</div>;
-
-  if (items.length === 0) {
-    return (
-      <div style={{ padding: "20px 24px", textAlign: "center", color: "var(--color-text-tertiary)", fontSize: "var(--text-sm)", background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-card)" }}>
-        변경 이력이 없습니다.
-      </div>
-    );
-  }
-
-  const thStyle: React.CSSProperties = {
-    padding: "10px 12px", fontSize: 11, fontWeight: 600,
-    color: "var(--color-text-secondary)", textAlign: "left",
-    background: "var(--color-bg-muted)", borderBottom: "1px solid var(--color-border)",
-  };
-  const tdStyle: React.CSSProperties = {
-    padding: "10px 12px", fontSize: 12,
-    color: "var(--color-text-primary)", borderBottom: "1px solid var(--color-border-subtle)",
-    verticalAlign: "top",
-  };
-
-  return (
-    <div style={{ background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-card)", overflow: "hidden" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={{ ...thStyle, width: 140 }}>변경일시</th>
-            <th style={{ ...thStyle, width: 160 }}>변경자</th>
-            <th style={{ ...thStyle, width: 100 }}>항목</th>
-            <th style={thStyle}>변경 내용</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item, i) => (
-            <tr key={i}>
-              <td style={tdStyle}>{new Date(item.changedAt).toLocaleString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
-              <td style={{ ...tdStyle, color: "var(--color-text-secondary)" }}>{item.changerEmail}</td>
-              <td style={tdStyle}>{item.itemName}</td>
-              <td style={tdStyle}>
-                {item.beforeValue && item.afterValue
-                  ? <span>{item.beforeValue} <span style={{ color: "var(--color-text-tertiary)" }}>→</span> {item.afterValue}</span>
-                  : item.afterValue
-                    ? <span style={{ color: "var(--color-success, #22c55e)" }}>등록: {item.afterValue}</span>
-                    : item.beforeValue
-                      ? <span style={{ color: "var(--color-error)" }}>삭제: {item.beforeValue}</span>
-                      : "-"}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}

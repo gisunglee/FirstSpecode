@@ -29,34 +29,56 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const fn = await prisma.tbDsFunction.findUnique({
-      where:   { func_id: functionId },
-      include: {
-        area: { select: { area_id: true, area_nm: true, area_display_id: true } },
-      },
-    });
+    const [fn, aiTaskRows] = await Promise.all([
+      prisma.tbDsFunction.findUnique({
+        where:   { func_id: functionId },
+        include: { area: { select: { area_id: true, area_nm: true, area_display_id: true } } },
+      }),
+      prisma.tbAiTask.findMany({
+        where: {
+          prjct_id:     projectId,
+          ref_ty_code:  "FUNCTION",
+          ref_id:       functionId,
+          task_ty_code: { in: ["DESIGN", "INSPECT", "IMPACT"] },
+        },
+        orderBy: { req_dt: "desc" },
+      }),
+    ]);
 
     if (!fn || fn.prjct_id !== projectId) {
       return apiError("NOT_FOUND", "기능을 찾을 수 없습니다.", 404);
     }
 
+    // 태스크 타입별 최신 1건만 추출
+    const aiTasks: Record<string, { aiTaskId: string; status: string }> = {};
+    for (const t of aiTaskRows) {
+      if (!aiTasks[t.task_ty_code]) {
+        aiTasks[t.task_ty_code] = { aiTaskId: t.ai_task_id, status: t.task_sttus_code };
+      }
+    }
+
     return apiSuccess({
-      funcId:        fn.func_id,
-      displayId:     fn.func_display_id,
-      name:          fn.func_nm,
-      description:   fn.func_dc ?? "",
-      type:          fn.func_ty_code,
-      status:        fn.func_sttus_code,
-      priority:      fn.priort_code,
-      complexity:    fn.cmplx_code,
-      effort:        fn.efrt_val ?? "",
+      funcId:         fn.func_id,
+      displayId:      fn.func_display_id,
+      name:           fn.func_nm,
+      description:    fn.func_dc ?? "",
+      commentCn:        fn.coment_cn               ?? "",
+      assignWorkStatus: fn.assign_work_sttus_code  ?? "BEFORE",
+      reviewStatus:     fn.review_sttus_code        ?? "BEFORE",
+      progressRate:     fn.progress_rate            ?? 0,
+      type:           fn.func_ty_code,
+      status:         fn.func_sttus_code,
+      priority:       fn.priort_code,
+      complexity:     fn.cmplx_code,
+      effort:         fn.efrt_val ?? "",
       assignMemberId: fn.asign_mber_id ?? null,
-      implStartDate: fn.impl_bgng_de ?? "",
-      implEndDate:   fn.impl_end_de ?? "",
-      sortOrder:     fn.sort_ordr,
-      areaId:        fn.area_id ?? null,
-      areaName:      fn.area?.area_nm ?? "미분류",
-      areaDisplayId: fn.area?.area_display_id ?? null,
+      implStartDate:  fn.impl_bgng_de ?? "",
+      implEndDate:    fn.impl_end_de ?? "",
+      sortOrder:      fn.sort_ordr,
+      areaId:         fn.area_id ?? null,
+      areaName:       fn.area?.area_nm ?? "미분류",
+      areaDisplayId:  fn.area?.area_display_id ?? null,
+      aiTasks,
     });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/functions/${functionId}] DB 오류:`, err);
@@ -86,21 +108,27 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 
   const {
-    areaId, name, type, description, priority, complexity, effort,
+    areaId, name, type, description, commentCn,
+    assignWorkStatus, reviewStatus, progressRate,
+    priority, complexity, effort,
     assignMemberId, implStartDate, implEndDate, sortOrder, saveHistory,
   } = body as {
-    areaId?:         string;
-    name?:           string;
-    type?:           string;
-    description?:    string;
-    priority?:       string;
-    complexity?:     string;
-    effort?:         string;
-    assignMemberId?: string;
-    implStartDate?:  string;
-    implEndDate?:    string;
-    sortOrder?:      number;
-    saveHistory?:    boolean;
+    areaId?:           string;
+    name?:             string;
+    type?:             string;
+    description?:      string;
+    commentCn?:        string;
+    assignWorkStatus?: string;
+    reviewStatus?:     string;
+    progressRate?:     number;
+    priority?:         string;
+    complexity?:       string;
+    effort?:           string;
+    assignMemberId?:   string;
+    implStartDate?:    string;
+    implEndDate?:      string;
+    sortOrder?:        number;
+    saveHistory?:      boolean;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "기능명을 입력해 주세요.", 400);
@@ -126,6 +154,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           func_nm:       name.trim(),
           func_ty_code:  type || "OTHER",
           func_dc:       newDescription,
+          coment_cn:             commentCn        !== undefined ? (commentCn.trim() || null) : existing.coment_cn,
+          assign_work_sttus_code: assignWorkStatus !== undefined ? assignWorkStatus          : existing.assign_work_sttus_code,
+          review_sttus_code:      reviewStatus     !== undefined ? reviewStatus              : existing.review_sttus_code,
+          // 작업 완료 시 진척률 강제 100%
+          progress_rate:          progressRate     !== undefined
+            ? (assignWorkStatus === "DONE" ? 100 : progressRate)
+            : existing.progress_rate,
           priort_code:   priority || "MEDIUM",
           cmplx_code:    complexity || "MEDIUM",
           efrt_val:      effort?.trim() || null,
