@@ -189,15 +189,18 @@ export default function ColMappingDialog({
     setRows((prev) => prev.map((r) => r._key === key ? { ...r, [field]: value } : r));
   }
 
-  // 빈 행의 테이블.컬럼 선택 → colId / tableName / colName 채움
-  function setRowColumn(key: string, tableId: string, colId: string) {
+  // 테이블.컬럼 콤보박스 선택 시 값 갱신
+  function setRowColumn(key: string, tableId: string, colId: string, colName: string) {
     const tbl = tables.find((t) => t.tableId === tableId);
-    if (!tbl) return;
-    // 해당 테이블 컬럼 데이터가 캐시에 없으면 잠시 후 처리됨
-    const col = colsData?.columns.find((c) => c.colId === colId);
-    if (!col) return;
+    if (!tbl) {
+        // 테이블 선택창을 '테이블 (비우기)' 로 설정한 경우
+        setRows((prev) => prev.map((r) => r._key === key ? {
+            ...r, _tableId: "", colId: "", tableName: "", colName: "",
+        } : r));
+        return;
+    }
     setRows((prev) => prev.map((r) => r._key === key ? {
-      ...r, _tableId: tableId, colId, tableName: tbl.tableName, colName: col.colName,
+      ...r, _tableId: tableId, colId, tableName: tbl.tableName, colName,
     } : r));
   }
 
@@ -231,7 +234,7 @@ export default function ColMappingDialog({
   if (!open) return null;
 
   return (
-    <div style={overlayStyle} onClick={onClose}>
+    <div style={overlayStyle}>
       <div style={dialogStyle} onClick={(e) => e.stopPropagation()}>
 
         {/* ── 고정 상단: 헤더 + 테이블 선택 + 컬럼 칩 ─────────────────── */}
@@ -257,9 +260,28 @@ export default function ColMappingDialog({
                 </option>
               ))}
             </select>
-            {/* + 행 추가 버튼 — 상단 고정 */}
             <button onClick={addEmptyRow} style={addRowBtnStyle}>+1</button>
-            <button onClick={() => Array.from({ length: 5 }).forEach(() => addEmptyRow())} style={addRowBtnStyle}>+5</button>
+            <button
+              onClick={() => {
+                setRows((prev) => {
+                  const newRows = Array.from({ length: 5 }).map(() => ({
+                    _key:       nextKey(),
+                    colId:      "",
+                    tableName:  "",
+                    colName:    "",
+                    _tableId:   "",
+                    ioSeCode:   "",
+                    uiTyCode:   "",
+                    usePurpsCn: "",
+                    colDc:      "",
+                  }));
+                  return [...prev, ...newRows];
+                });
+              }}
+              style={addRowBtnStyle}
+            >
+              +5
+            </button>
           </div>
 
           {/* 컬럼 칩 */}
@@ -293,11 +315,11 @@ export default function ColMappingDialog({
           {/* 그리드 헤더 — 고정 */}
           <div style={gridHeaderStyle}>
             <div style={{ width: 32, textAlign: "center" }}>NO</div>
-            <div style={{ flex: "0 0 130px" }}>항목명</div>
+            <div style={{ flex: "0 0 156px" }}>항목명</div>
             <div style={{ flex: "0 0 90px" }}>IO구분</div>
             <div style={{ flex: "0 0 110px" }}>UI유형</div>
-            <div style={{ flex: 1 }}>테이블.컬럼</div>
-            <div style={{ flex: 1.2 }}>설명</div>
+            <div style={{ flex: "0 0 300px", maxWidth: 300 }}>테이블.컬럼</div>
+            <div style={{ flex: 2.7 }}>설명</div>
             <div style={{ width: 32 }} />
           </div>
         </div>
@@ -317,7 +339,7 @@ export default function ColMappingDialog({
                 </div>
 
                 {/* 항목명 */}
-                <div style={{ flex: "0 0 130px" }}>
+                <div style={{ flex: "0 0 156px" }}>
                   <input
                     type="text"
                     value={row.usePurpsCn}
@@ -354,26 +376,18 @@ export default function ColMappingDialog({
                 </div>
 
                 {/* 테이블.컬럼 */}
-                <div style={{ flex: 1 }}>
-                  {row.colId ? (
-                    // 컬럼이 설정된 경우 — 읽기전용 표시
-                    <span style={{ fontSize: 12, fontFamily: "monospace", color: "var(--color-text-secondary)" }}>
-                      {row.tableName}
-                      <span style={{ color: "var(--color-text-disabled)", margin: "0 2px" }}>.</span>
-                      <span style={{ color: "var(--color-text-primary)" }}>{row.colName}</span>
-                    </span>
-                  ) : (
-                    // 빈 행 — 테이블/컬럼 2단 선택
-                    <ColumnPicker
-                      tables={tables}
-                      projectId={projectId}
-                      onSelect={(tableId, colId) => setRowColumn(row._key, tableId, colId)}
-                    />
-                  )}
+                <div style={{ flex: "0 0 300px", maxWidth: 300 }}>
+                  <ColumnPicker
+                    tables={tables}
+                    projectId={projectId}
+                    initialTableId={row._tableId}
+                    initialColId={row.colId}
+                    onSelect={(tableId, colId, colName) => setRowColumn(row._key, tableId, colId, colName)}
+                  />
                 </div>
 
                 {/* 설명 */}
-                <div style={{ flex: 1.2 }}>
+                <div style={{ flex: 2.7 }}>
                   <input
                     type="text"
                     value={row.colDc}
@@ -399,18 +413,13 @@ export default function ColMappingDialog({
 
         {/* ── 고정 하단: 취소 + 저장 ───────────────────────────────────── */}
         <div style={dialogBottomStyle}>
-          <div style={{ display: "flex", gap: 4 }}>
-            <button onClick={onClose} disabled={saveMutation.isPending} style={secondaryBtnStyle}>
-              취소
-            </button>
-            <button
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending}
-              style={primaryBtnStyle}
-            >
-              {saveMutation.isPending ? "저장 중..." : "저장"}
-            </button>
-          </div>
+          <button
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+            style={primaryBtnStyle}
+          >
+            {saveMutation.isPending ? "저장 중..." : "저장"}
+          </button>
         </div>
 
       </div>
@@ -421,13 +430,20 @@ export default function ColMappingDialog({
 // ── 빈 행용 컬럼 피커 ─────────────────────────────────────────────────────────
 
 function ColumnPicker({
-  tables, projectId, onSelect,
+  tables, projectId, initialTableId = "", initialColId = "", onSelect,
 }: {
-  tables:     DbTable[];
-  projectId:  string;
-  onSelect:   (tableId: string, colId: string) => void;
+  tables:         DbTable[];
+  projectId:      string;
+  initialTableId?: string;
+  initialColId?:   string;
+  onSelect:       (tableId: string, colId: string, colName: string) => void;
 }) {
-  const [tblId, setTblId] = useState("");
+  const [tblId, setTblId] = useState(initialTableId);
+
+  // 상위에서 initialTableId가 들어오면 동기화 (기존 데이터 로드 시)
+  useEffect(() => {
+    setTblId(initialTableId);
+  }, [initialTableId]);
 
   const { data } = useQuery({
     queryKey: ["db-schema", projectId, "columns", tblId],
@@ -443,7 +459,11 @@ function ColumnPicker({
     <div style={{ display: "flex", gap: 4 }}>
       <select
         value={tblId}
-        onChange={(e) => setTblId(e.target.value)}
+        onChange={(e) => {
+          setTblId(e.target.value);
+          // 테이블 변경 시 컬럼은 초기화
+          onSelect(e.target.value, "", "");
+        }}
         style={{ ...cellSelectStyle, flex: 1 }}
       >
         <option value="">테이블</option>
@@ -452,8 +472,15 @@ function ColumnPicker({
         ))}
       </select>
       <select
-        value=""
-        onChange={(e) => { if (e.target.value) onSelect(tblId, e.target.value); }}
+        value={initialColId}
+        onChange={(e) => {
+          if (e.target.value) {
+            const col = cols.find((c) => c.colId === e.target.value);
+            onSelect(tblId, e.target.value, col?.colName ?? "");
+          } else {
+            onSelect(tblId, "", "");
+          }
+        }}
         disabled={!tblId || cols.length === 0}
         style={{ ...cellSelectStyle, flex: 1 }}
       >
@@ -478,7 +505,7 @@ const overlayStyle: React.CSSProperties = {
 const dialogStyle: React.CSSProperties = {
   background:    "var(--color-bg-card)",
   borderRadius:  10,
-  width:         "min(730px, 80vw)",
+  width:         "min(1100px, 92vw)",
   height:        "min(88vh, 700px)",
   display:       "flex",
   flexDirection: "column",
