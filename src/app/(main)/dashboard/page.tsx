@@ -10,29 +10,18 @@
 
 export default function DashboardPage() {
   return (
-    <div
-      style={{
-        padding: "32px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 16,
-      }}
-    >
-      <div>
-        <h1
-          style={{
-            fontSize: "var(--text-2xl)",
-            fontWeight: 700,
-            color: "var(--color-text-heading)",
-            marginBottom: 8,
-          }}
-        >
+    <div style={{ padding: 0 }}>
+      {/* 헤더 */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           대시보드
-        </h1>
-        <p style={{ fontSize: "var(--text-base)", color: "var(--color-text-tertiary)" }}>
-          SPECODE에 오신 것을 환영합니다. 좌측 메뉴에서 단위업무를 선택하세요.
-        </p>
+        </div>
       </div>
+
+      <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+      <p style={{ margin: 0, fontSize: "var(--text-base)", color: "var(--color-text-tertiary)" }}>
+        SPECODE에 오신 것을 환영합니다. 좌측 메뉴에서 단위업무를 선택하세요.
+      </p>
 
       {/* 레이아웃 확인용 카드 */}
       <div className="sp-group" style={{ maxWidth: 480 }}>
@@ -59,6 +48,7 @@ export default function DashboardPage() {
             GNB · LNB · StatusBar · MainLayout ✓
           </p>
         </div>
+      </div>
       </div>
     </div>
   );

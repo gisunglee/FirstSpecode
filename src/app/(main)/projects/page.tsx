@@ -239,7 +239,7 @@ function ProjectsPageInner() {
         </button>
       </div>
 
-      <div style={{ padding: "0 24px 24px" }}>
+      <div style={{ padding: "0 24px 24px", maxWidth: 900 }}>
       {/* 총 건수 */}
       <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
         {isLoading ? "로딩 중..." : `총 ${items.length}건`}
@@ -350,6 +350,7 @@ function ProjectsPageInner() {
       {createOpen && (
         <CreateProjectDialog onClose={() => setCreateOpen(false)} onCreated={handleCreated} />
       )}
+      </div>
     </div>
   );
 }

@@ -346,7 +346,7 @@ function AreaDetailPageInner() {
                 <select
                   value={screenId}
                   onChange={(e) => setScreenId(e.target.value)}
-                  style={inputStyle}
+                  style={selectStyle}
                 >
                   <option value="">미분류 (화면 없음)</option>
                   {screenOptions.map((s) => (
@@ -361,7 +361,7 @@ function AreaDetailPageInner() {
                 <select
                   value={type}
                   onChange={(e) => setType(e.target.value)}
-                  style={inputStyle}
+                  style={selectStyle}
                 >
                   {AREA_TYPES.map((t) => (
                     <option key={t.value} value={t.value}>{t.label}</option>
@@ -775,6 +775,17 @@ const inputStyle: React.CSSProperties = {
   background:   "var(--color-bg-card)",
   color:        "var(--color-text-primary)",
   boxSizing:    "border-box",
+};
+
+// select 전용 — 브라우저 기본 화살표를 제거하고 커스텀 화살표로 대체
+const selectStyle: React.CSSProperties = {
+  ...inputStyle,
+  paddingRight:       "32px",
+  appearance:         "none",
+  WebkitAppearance:   "none",
+  backgroundImage:    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
+  backgroundRepeat:   "no-repeat",
+  backgroundPosition: "right 10px center",
 };
 
 const FUNC_GRID_TEMPLATE = "60px 1fr 100px 100px";

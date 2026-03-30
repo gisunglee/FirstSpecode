@@ -171,27 +171,25 @@ function MembersPageInner() {
     : ROLE_OPTIONS.filter((o) => o.value !== "OWNER");
 
   return (
-    <div style={{ padding: "20px 24px", maxWidth: 900 }}>
+    <div style={{ padding: 0 }}>
       {/* 헤더 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-        <button
-          onClick={() => router.back()}
-          style={{
-            background: "none", border: "none", cursor: "pointer",
-            fontSize: 20, color: "#666", padding: "0 4px",
-          }}
-        >
-          ←
-        </button>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "var(--color-text-primary)" }}>
-          멤버 목록
-        </h1>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            onClick={() => router.back()}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#666", lineHeight: 1, padding: "2px 4px" }}
+          >
+            ←
+          </button>
+          <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>멤버 목록</span>
+        </div>
       </div>
 
+      <div style={{ padding: "0 24px 24px", maxWidth: 900 }}>
       {/* 총 멤버 수 */}
-      <p style={{ margin: "0 0 8px", fontSize: 14, color: "var(--color-text-secondary)" }}>
+      <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
         총 <strong>{totalCount}</strong>명
-      </p>
+      </div>
 
       {/* 멤버 테이블 */}
       <div style={{
@@ -358,6 +356,7 @@ function MembersPageInner() {
           }}
         />
       )}
+      </div>
     </div>
   );
 }

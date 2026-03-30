@@ -88,9 +88,13 @@ function ProfileSettingsInner() {
   if (!profile) return null;
 
   return (
-    <div style={{ padding: "32px", maxWidth: 640 }}>
-      <h2 style={{ fontSize: "var(--text-xl)", fontWeight: 600, marginBottom: 24 }}>프로필 설정</h2>
+    <div style={{ padding: 0 }}>
+      {/* 헤더 */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>프로필 설정</div>
+      </div>
 
+      <div style={{ padding: "0 24px 24px", maxWidth: 640 }}>
       {/* 탭 네비게이션 */}
       <div style={{ display: "flex", gap: 4, borderBottom: "1px solid var(--color-border)", marginBottom: 32 }}>
         {(["basic", "security", "social"] as Tab[]).map((tab) => {
@@ -117,19 +121,22 @@ function ProfileSettingsInner() {
         })}
       </div>
 
-      {/* 탭 콘텐츠 */}
-      {activeTab === "basic"    && <BasicTab    profile={profile} onRefresh={fetchProfile} />}
-      {activeTab === "security" && <SecurityTab hasPassword={profile.hasPassword} />}
-      {activeTab === "social"   && <SocialTab   social={profile.hasSocialAccounts} hasPassword={profile.hasPassword} onRefresh={fetchProfile} />}
+      {/* 탭 콘텐츠 카드 */}
+      <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, padding: "24px 28px", background: "var(--color-bg-card)" }}>
+        {activeTab === "basic"    && <BasicTab    profile={profile} onRefresh={fetchProfile} />}
+        {activeTab === "security" && <SecurityTab hasPassword={profile.hasPassword} />}
+        {activeTab === "social"   && <SocialTab   social={profile.hasSocialAccounts} hasPassword={profile.hasPassword} onRefresh={fetchProfile} />}
+      </div>
 
       {/* 위험 영역 */}
-      <div style={{ marginTop: 48, paddingTop: 24, borderTop: "1px solid var(--color-border)" }}>
+      <div style={{ marginTop: 16, padding: "16px 20px", border: "1px solid var(--color-border)", borderRadius: 8, background: "var(--color-bg-card)" }}>
         <Link
           href="/settings/account/withdraw"
           style={{ fontSize: "var(--text-sm)", color: "var(--color-error)", textDecoration: "none" }}
         >
           회원 탈퇴
         </Link>
+      </div>
       </div>
     </div>
   );
