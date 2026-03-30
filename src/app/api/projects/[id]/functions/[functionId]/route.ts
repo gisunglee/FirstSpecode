@@ -150,7 +150,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       prisma.tbDsFunction.update({
         where: { func_id: functionId },
         data: {
-          area_id:       areaId !== undefined ? (areaId || null) : existing.area_id,
+          // area_id 직접 지정 대신 relation 연결/해제로 처리 (Prisma v6 호환)
+          area: areaId
+            ? { connect: { area_id: areaId } }
+            : { disconnect: true },
           func_nm:       name.trim(),
           func_ty_code:  type || "OTHER",
           func_dc:       newDescription,

@@ -16,7 +16,7 @@
  *   - functionId === "new"이면 신규 모드
  */
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -24,6 +24,7 @@ import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor from "@/components/ui/MarkdownEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import ColMappingDialog from "@/components/ui/ColMappingDialog";
+import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
 import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
@@ -55,6 +56,16 @@ type FuncDetail = {
 };
 
 type AreaOption = { areaId: string; displayId: string; name: string };
+
+type ColMappingItem = {
+  mappingId:    string;
+  usePurpsCn:  string;
+  ioSeCode:    string;
+  uiTyCode:    string;
+  tableName:   string;
+  colName:     string;
+  sortOrder:   number;
+};;
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
 
@@ -114,8 +125,55 @@ function FunctionDetailPageInner() {
     if (val === "DONE") setProgressRate(100);
   }
 
+  // ── 상태 즉시 저장 (작업상태·진척률·검토상태 변경 시) ─────────────────────
+  // 데이터 로드 후에만 동작하도록 초기화 플래그 사용
+  const statusInitialized = useRef(false);
+
+  const statusMutation = useMutation({
+    mutationFn: (vals: { assignWorkStatus: string; progressRate: number; reviewStatus: string }) =>
+      authFetch(`/api/projects/${projectId}/functions/${functionId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          areaId: areaId || null,
+          name: name.trim() || "미입력",
+          type, description: description.trim(),
+          commentCn: commentCn.trim(),
+          assignWorkStatus: vals.assignWorkStatus,
+          reviewStatus:     vals.reviewStatus,
+          progressRate:     vals.assignWorkStatus === "DONE" ? 100 : vals.progressRate,
+          priority, complexity, effort: effort.trim(),
+          assignMemberId: assignMemberId || null,
+          implStartDate: implStartDate || null,
+          implEndDate:   implEndDate || null,
+          sortOrder,
+        }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["function", projectId, functionId] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  useEffect(() => {
+    if (isNew || !statusInitialized.current) return;
+    statusMutation.mutate({ assignWorkStatus, progressRate, reviewStatus });
+  // statusMutation 은 의존성에서 제외 (stale closure 안전 — 값만 전달하므로)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignWorkStatus, progressRate, reviewStatus]);
+
   // ── 컬럼 매핑 팝업 ─────────────────────────────────────────────────────────
   const [mappingPopupOpen, setMappingPopupOpen] = useState(false);
+
+  // ── 컬럼 매핑 목록 조회 (기존 저장 데이터 표시용) ──────────────────────────
+  const { data: colMappingsData, refetch: refetchMappings } = useQuery({
+    queryKey: ["col-mappings", projectId, "FUNCTION", functionId],
+    queryFn:  () =>
+      authFetch<{ data: { items: ColMappingItem[] } }>(
+        `/api/projects/${projectId}/col-mappings?refType=FUNCTION&refId=${functionId}`
+      ).then((r) => r.data),
+    enabled: !isNew,
+  });
+  const colMappings = colMappingsData?.items ?? [];
 
   // ── 영역 목록 (areaId 선택용) ──────────────────────────────────────────────
   const { data: areasData } = useQuery({
@@ -165,6 +223,8 @@ function FunctionDetailPageInner() {
       setProgressRate(data.progressRate ?? 0);
       // 설명 변경 감지를 위해 원본 값 보관
       setOriginalDescription(data.description ?? "");
+      // 초기 로드 완료 — 이후 상태 변경은 즉시 저장
+      statusInitialized.current = true;
     }
   }, [data]);
 
@@ -261,52 +321,91 @@ function FunctionDetailPageInner() {
           </span>
         </div>
 
-        {/* 중: 상태 필드 (작업 상태 · 진척률 · 검토 상태) */}
+        {/* 중: 현황 패널 (작업상태 · 진척률 · 검토상태) */}
         {!isNew && (
-          <>
-            <div style={{ width: 1, height: 20, background: "var(--color-border)", margin: "0 4px" }} />
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "5px 12px",
+            background: "linear-gradient(135deg, rgba(var(--color-primary-rgb, 25,118,210), 0.06) 0%, transparent 100%)",
+            border: "1px solid rgba(var(--color-primary-rgb, 25,118,210), 0.18)",
+            borderLeft: "3px solid var(--color-primary, #1976d2)",
+            borderRadius: 8,
+          }}>
+            {/* 작업 상태 */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              <span style={{ fontSize: 9, color: "var(--color-text-secondary)", fontWeight: 600, letterSpacing: "0.05em" }}>작업상태</span>
+              <select
+                value={assignWorkStatus}
+                onChange={(e) => handleWorkStatusChange(e.target.value)}
+                style={{
+                  ...statusSelectStyle,
+                  ...(assignWorkStatus === "DONE"        ? { borderColor: "#2e7d32", color: "#2e7d32" }
+                    : assignWorkStatus === "IN_PROGRESS" ? { borderColor: "var(--color-primary, #1976d2)", color: "var(--color-primary, #1976d2)" }
+                    : {}),
+                }}
+              >
+                <option value="BEFORE">작업 전</option>
+                <option value="IN_PROGRESS">작업 중</option>
+                <option value="DONE">작업 완료</option>
+              </select>
+            </div>
 
-              {/* 담당자 작업 상태 */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <span style={headerFieldLabelStyle}>작업 상태</span>
-                <select value={assignWorkStatus} onChange={(e) => handleWorkStatusChange(e.target.value)} style={headerSelectStyle}>
-                  <option value="BEFORE">작업 전</option>
-                  <option value="IN_PROGRESS">작업 중</option>
-                  <option value="DONE">작업 완료</option>
-                </select>
-              </div>
+            <div style={{ width: 1, height: 28, background: "var(--color-border)" }} />
 
-              {/* 진척률 */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <span style={headerFieldLabelStyle}>
-                  진척률{assignWorkStatus === "DONE" && <span style={{ color: "#2e7d32", marginLeft: 3 }}>자동</span>}
+            {/* 진척률 */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 130 }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 9, color: "var(--color-text-secondary)", fontWeight: 600, letterSpacing: "0.05em" }}>진척률</span>
+                <span style={{ fontSize: 9, fontWeight: 700, color: "var(--color-primary, #1976d2)" }}>
+                  {assignWorkStatus === "DONE" ? 100 : progressRate}%
                 </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ flex: 1, height: 4, background: "var(--color-border)", borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{
+                    height: "100%",
+                    width: `${assignWorkStatus === "DONE" ? 100 : progressRate}%`,
+                    background: assignWorkStatus === "DONE" ? "#2e7d32" : "var(--color-primary, #1976d2)",
+                    borderRadius: 2,
+                    transition: "width 0.3s ease",
+                  }} />
+                </div>
                 <select
                   value={assignWorkStatus === "DONE" ? 100 : progressRate}
                   onChange={(e) => setProgressRate(Number(e.target.value))}
                   disabled={assignWorkStatus === "DONE"}
-                  style={{ ...headerSelectStyle, opacity: assignWorkStatus === "DONE" ? 0.6 : 1 }}
+                  style={{ ...statusSelectStyle, minWidth: 56, opacity: assignWorkStatus === "DONE" ? 0.5 : 1 }}
                 >
                   {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((v) => (
                     <option key={v} value={v}>{v}%</option>
                   ))}
                 </select>
               </div>
-
-              {/* 검토 상태 */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <span style={headerFieldLabelStyle}>검토 상태</span>
-                <select value={reviewStatus} onChange={(e) => setReviewStatus(e.target.value)} style={headerSelectStyle}>
-                  <option value="BEFORE">검토 전</option>
-                  <option value="IN_REVIEW">검토 중</option>
-                  <option value="FEEDBACK">피드백 필요</option>
-                  <option value="DONE">검토 완료</option>
-                </select>
-              </div>
-
             </div>
-          </>
+
+            <div style={{ width: 1, height: 28, background: "var(--color-border)" }} />
+
+            {/* 검토 상태 */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              <span style={{ fontSize: 9, color: "var(--color-text-secondary)", fontWeight: 600, letterSpacing: "0.05em" }}>검토상태</span>
+              <select
+                value={reviewStatus}
+                onChange={(e) => setReviewStatus(e.target.value)}
+                style={{
+                  ...statusSelectStyle,
+                  ...(reviewStatus === "DONE"      ? { borderColor: "#2e7d32", color: "#2e7d32" }
+                    : reviewStatus === "IN_REVIEW" ? { borderColor: "var(--color-primary, #1976d2)", color: "var(--color-primary, #1976d2)" }
+                    : reviewStatus === "FEEDBACK"  ? { borderColor: "#e65100", color: "#e65100" }
+                    : {}),
+                }}
+              >
+                <option value="BEFORE">검토 전</option>
+                <option value="IN_REVIEW">검토 중</option>
+                <option value="FEEDBACK">피드백 필요</option>
+                <option value="DONE">검토 완료</option>
+              </select>
+            </div>
+          </div>
         )}
 
         {/* 우측 밀어내기 스페이서 */}
@@ -316,40 +415,38 @@ function FunctionDetailPageInner() {
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           <style>{`@keyframes _spin{to{transform:rotate(360deg)}}`}</style>
 
-          {/* AI 요청 버튼들 (신규 모드 제외) */}
-          {!isNew && (
-            <>
-              {AI_TASK_CONFIGS.map(({ taskType, label }) => {
-                const info = data?.aiTasks?.[taskType];
-                const isSpinning = (aiMutation.isPending && aiMutation.variables?.taskType === taskType)
-                  || (info && ["PENDING", "IN_PROGRESS"].includes(info.status));
-                return (
-                  <div key={taskType} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <button
-                      onClick={() => {
-                        // 설명 없으면 차단
-                        if (!description.trim()) {
-                          toast.error("설명을 먼저 입력해 주세요.");
-                          return;
-                        }
-                        setAiConfirm({ taskType, label });
-                      }}
-                      disabled={aiMutation.isPending}
-                      style={aiReqBtnStyle}
+          {/* AI 요청 버튼들 — 신규 모드에서는 disabled */}
+          <>
+            {AI_TASK_CONFIGS.map(({ taskType, label }) => {
+              const info = data?.aiTasks?.[taskType];
+              const isSpinning = !isNew && (aiMutation.isPending && aiMutation.variables?.taskType === taskType)
+                || !isNew && (info && ["PENDING", "IN_PROGRESS"].includes(info.status));
+              return (
+                <div key={taskType} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <button
+                    onClick={() => {
+                      if (!description.trim()) {
+                        toast.error("설명을 먼저 입력해 주세요.");
+                        return;
+                      }
+                      setAiConfirm({ taskType, label });
+                    }}
+                    disabled={isNew || aiMutation.isPending}
+                    title={isNew ? "저장 후 사용할 수 있습니다" : undefined}
+                    style={{ ...aiReqBtnStyle, opacity: isNew ? 0.4 : 1, cursor: isNew ? "not-allowed" : "pointer" }}
                     >
                       <span style={isSpinning ? { display: "inline-block", animation: "_spin 1s linear infinite", marginRight: 4 } : { marginRight: 4 }}>
                         ↻
                       </span>
                       {label}
                     </button>
-                    {info && <AiStatusBadge status={info.status} />}
+                    {!isNew && info && <AiStatusBadge status={info.status} />}
                   </div>
                 );
               })}
               {/* 구분선 */}
               <div style={{ width: 1, height: 20, background: "var(--color-border)", margin: "0 4px" }} />
             </>
-          )}
 
           {/* 취소·저장 */}
           <button
@@ -378,7 +475,8 @@ function FunctionDetailPageInner() {
       <div style={{ padding: "0 24px 24px" }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr", gap: 20, alignItems: "start" }}>
 
-        {/* ── 왼쪽: AR-00078 기본 정보 ── */}
+        {/* ── 왼쪽: 기본 정보 + 첨부파일 ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <section style={sectionStyle}>
 
           {/* 행1: 소속 영역 | 유형 */}
@@ -482,6 +580,15 @@ function FunctionDetailPageInner() {
           </div>
 
         </section>
+
+        {/* ── 왼쪽 하단: 첨부파일 ── */}
+        {!isNew && (
+          <section style={sectionStyle}>
+            <h3 style={sectionTitleStyle}>첨부파일</h3>
+            <AreaAttachFiles basePath={`/api/projects/${projectId}/functions/${functionId}`} />
+          </section>
+        )}
+        </div>
 
         {/* ── 오른쪽: 설명 + 컬럼 매핑 + AI 지원 ── */}
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -605,24 +712,66 @@ function FunctionDetailPageInner() {
             title="기능 설명 변경 이력"
           />
 
-          {/* 신규 모드에서는 컬럼 매핑·AI 지원 숨김 */}
-          {!isNew && (
-            <>
-              {/* ── AR-00082 컬럼 매핑 ── */}
-              <section style={sectionStyle}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 0 }}>
-                  <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>컬럼 매핑</h3>
-                  <button
-                    onClick={() => setMappingPopupOpen(true)}
-                    style={{ ...primaryBtnStyle, fontSize: 13, padding: "6px 14px" }}
-                  >
-                    매핑 관리
-                  </button>
-                </div>
-              </section>
+          {/* ── AR-00082 컬럼 매핑 — 신규 모드에서는 버튼 disabled */}
+          <section style={sectionStyle}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: colMappings.length > 0 ? 12 : 0 }}>
+              <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>컬럼 매핑</h3>
+              <button
+                onClick={() => setMappingPopupOpen(true)}
+                disabled={isNew}
+                title={isNew ? "저장 후 사용할 수 있습니다" : undefined}
+                style={{ ...primaryBtnStyle, fontSize: 13, padding: "6px 14px", opacity: isNew ? 0.4 : 1, cursor: isNew ? "not-allowed" : "pointer" }}
+              >
+                매핑 관리
+              </button>
+            </div>
 
-            </>
-          )}
+            {/* 저장된 매핑 목록 테이블 */}
+            {colMappings.length > 0 ? (
+              <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
+                {/* 헤더 */}
+                <div style={colMappingHeaderStyle}>
+                  <div style={{ flex: "0 0 120px" }}>항목명</div>
+                  <div style={{ flex: "0 0 72px",  textAlign: "center" }}>IO구분</div>
+                  <div style={{ flex: "0 0 90px" }}>UI유형</div>
+                  <div style={{ flex: "1 1 0" }}>테이블</div>
+                  <div style={{ flex: "1 1 0" }}>컬럼</div>
+                </div>
+                {/* 행 */}
+                {colMappings.map((m, idx) => (
+                  <div
+                    key={m.mappingId}
+                    style={{
+                      ...colMappingRowStyle,
+                      borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+                      background: idx % 2 === 0 ? "var(--color-bg-card)" : "var(--color-bg-muted)",
+                    }}
+                  >
+                    <div style={{ flex: "0 0 120px", fontSize: 12 }}>{m.usePurpsCn || <span style={{ color: "var(--color-text-disabled)" }}>—</span>}</div>
+                    <div style={{ flex: "0 0 72px",  textAlign: "center" }}>
+                      {m.ioSeCode ? (
+                        <span style={{
+                          display: "inline-block", padding: "1px 7px", borderRadius: 4, fontSize: 11, fontWeight: 700,
+                          background: "var(--color-primary, #1976d2)", color: "#fff",
+                        }}>
+                          {m.ioSeCode === "INPUT" ? "IN" : m.ioSeCode === "OUTPUT" ? "OUT" : "IO"}
+                        </span>
+                      ) : <span style={{ color: "var(--color-text-disabled)", fontSize: 12 }}>—</span>}
+                    </div>
+                    <div style={{ flex: "0 0 90px", fontSize: 12, color: "var(--color-text-secondary)" }}>{m.uiTyCode || "—"}</div>
+                    <div style={{ flex: "1 1 0", fontSize: 12, fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.tableName || "—"}</div>
+                    <div style={{ flex: "1 1 0", fontSize: 12, fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.colName || "—"}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              !isNew && (
+                <div style={{ padding: "16px 0 4px", textAlign: "center", fontSize: 13, color: "var(--color-text-disabled)" }}>
+                  등록된 컬럼 매핑이 없습니다.
+                </div>
+              )
+            )}
+          </section>
         </div>
       </div>
       </div>
@@ -670,7 +819,7 @@ function FunctionDetailPageInner() {
       <ColMappingDialog
         open={mappingPopupOpen}
         onClose={() => setMappingPopupOpen(false)}
-        onSaved={() => setMappingPopupOpen(false)}
+        onSaved={() => { setMappingPopupOpen(false); refetchMappings(); }}
         projectId={projectId}
         refType="FUNCTION"
         refId={functionId}
@@ -714,9 +863,96 @@ function AiStatusBadge({ status }: { status: string }) {
 
 // ── 설명 예시 / 템플릿 ────────────────────────────────────────────────────────
 
-const DESCRIPTION_EXAMPLE = `test`;
+const DESCRIPTION_EXAMPLE = `#### 기능: [FN-00001] 게시판 목록 조회
 
-const DESCRIPTION_TEMPLATE = (displayId: string, name: string) => `test`;
+| 항목 | 내용 |
+|:-----|:-----|
+| 기능ID | FN-00001 |
+| 기능명 | 게시판 목록 조회 |
+| 기능유형 | SELECT |
+| API | \`GET /api/board\` |
+| 트리거 | 화면 진입(자동), 검색 버튼 클릭 |
+
+**Input**
+
+| 파라미터 | 타입 | 필수 | DB 매핑 | 설명 |
+|:---------|:-----|:-----|:--------|:-----|
+| projectId | number | Y (세션) | project_id | |
+| boardTypeCd | string | N | board_type_cd | null이면 전체 |
+| keyword | string | N | board_title_nm | LIKE 검색 |
+| startDt | string | N | reg_dt | >= 조건 (yyyy-MM-dd) |
+| endDt | string | N | reg_dt | <= 조건 (yyyy-MM-dd) |
+| page | number | Y | - | 1부터 시작 |
+| size | number | Y | - | 기본 20 |
+
+**Output**
+
+| 필드 | 타입 | DB 매핑 | 설명 |
+|:-----|:-----|:--------|:-----|
+| boardId | number | board_id | |
+| boardTypeCd | string | board_type_cd | |
+| boardTitleNm | string | board_title_nm | |
+| regUserNm | string | (JOIN) | 작성자명 |
+| regDt | string | reg_dt | |
+| viewCnt | number | view_cnt | |
+| fixYn | string | fix_yn | |
+| attachYn | string | (서브쿼리) | 첨부파일 존재 Y/N |
+| totalCount | number | COUNT(*) OVER() | 총 건수 |
+
+**참조 테이블 관계**
+\`\`\`
+tb_cm_board b
+  LEFT JOIN tb_cm_user u ON u.user_id = b.reg_user_id
+\`\`\`
+- 첨부파일 존재 여부: \`EXISTS (SELECT 1 FROM tb_cm_attach_file WHERE ref_type_cd = 'BOARD' AND ref_id = b.board_id AND del_yn = 'N')\`
+
+**처리 로직**
+\`\`\`
+1. project_id 세션에서 획득
+2. del_yn = 'N' 필터
+3. 검색 조건 적용 (boardTypeCd, keyword LIKE, startDt >=, endDt <= +1일)
+4. 정렬: fix_yn DESC, reg_dt DESC (상단고정 우선, 최신순)
+5. 페이징: LIMIT :size OFFSET (:page - 1) * :size
+\`\`\`
+
+**업무 규칙**
+- 검색 결과 0건 → "등록된 게시글이 없습니다" 안내
+- 상단고정 게시글은 페이지와 무관하게 항상 최상단
+- 기간 종료일은 해당일 23:59:59까지 포함`;
+
+const DESCRIPTION_TEMPLATE = (displayId: string, name: string) => `#### 기능: [${displayId}] ${name}
+
+| 항목 | 내용 |
+|:-----|:-----|
+| 기능ID | ${displayId} |
+| 기능명 | ${name} |
+| 기능유형 | |
+| API | \`\` |
+| 트리거 | |
+
+**Input**
+
+| 파라미터 | 타입 | 필수 | DB 매핑 | 설명 |
+|:---------|:-----|:-----|:--------|:-----|
+| | | | | |
+
+**Output**
+
+| 필드 | 타입 | DB 매핑 | 설명 |
+|:-----|:-----|:--------|:-----|
+| | | | |
+
+**참조 테이블 관계**
+\`\`\`
+\`\`\`
+
+**처리 로직**
+\`\`\`
+1.
+\`\`\`
+
+**업무 규칙**
+- `;
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -739,6 +975,17 @@ const sectionStyle: React.CSSProperties = {
   background: "var(--color-bg-card)",
 };
 const sectionTitleStyle: React.CSSProperties = { margin: "0 0 8px", fontSize: 15, fontWeight: 700 };
+const colMappingHeaderStyle: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 8,
+  padding: "7px 12px",
+  background: "var(--color-bg-muted)",
+  borderBottom: "1px solid var(--color-border)",
+  fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)",
+};
+const colMappingRowStyle: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 8,
+  padding: "7px 12px",
+};
 const formGroupStyle: React.CSSProperties  = { marginBottom: 16 };
 const labelStyle: React.CSSProperties = {
   display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600,
@@ -768,40 +1015,6 @@ const secondaryBtnStyle: React.CSSProperties = {
   color: "var(--color-text-primary)", fontSize: 14, cursor: "pointer",
 };
 
-const statusGroupStyle: React.CSSProperties = {
-  display:     "flex",
-  alignItems:  "center",
-  gap:         5,
-};
-
-const statusLabelStyle: React.CSSProperties = {
-  fontSize:    11,
-  fontWeight:  600,
-  color:       "var(--color-text-secondary)",
-  letterSpacing: "0.03em",
-};
-
-const statusDotStyle: React.CSSProperties = {
-  width:        7,
-  height:       7,
-  borderRadius: "50%",
-  flexShrink:   0,
-};
-
-const statusValueStyle: React.CSSProperties = {
-  fontSize:  12,
-  fontWeight: 500,
-  color:     "var(--color-text-primary)",
-};
-
-const statusDividerStyle: React.CSSProperties = {
-  width:      1,
-  height:     14,
-  background: "var(--color-border)",
-  flexShrink: 0,
-};
-
-
 const aiReqBtnStyle: React.CSSProperties = {
   padding:      "4px 10px",
   borderRadius: 5,
@@ -814,27 +1027,20 @@ const aiReqBtnStyle: React.CSSProperties = {
   whiteSpace:   "nowrap",
 };
 
-// 헤더 인라인 상태 필드용 스타일
-const headerFieldLabelStyle: React.CSSProperties = {
-  fontSize:      10,
-  fontWeight:    600,
-  color:         "var(--color-text-secondary)",
-  whiteSpace:    "nowrap",
-  letterSpacing: "0.02em",
-};
-
-const headerSelectStyle: React.CSSProperties = {
+const statusSelectStyle: React.CSSProperties = {
   padding:         "3px 24px 3px 8px",
   borderRadius:    5,
   border:          "1px solid var(--color-border)",
   fontSize:        12,
-  background:      "var(--color-bg-card)",
+  fontWeight:      600,
+  background:      "transparent",
   color:           "var(--color-text-primary)",
   cursor:          "pointer",
   appearance:      "none",
   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
   backgroundRepeat:   "no-repeat",
   backgroundPosition: "right 7px center",
+  transition:      "border-color 0.15s, color 0.15s",
 };
 
 const ghostSmBtnStyle: React.CSSProperties = {

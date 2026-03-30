@@ -420,7 +420,7 @@ function AreaDetailPageInner() {
 
               <section style={rightSectionStyle}>
                 <label style={rightLabelStyle}>첨부파일</label>
-                <AreaAttachFiles projectId={projectId} areaId={areaId} />
+                <AreaAttachFiles basePath={`/api/projects/${projectId}/areas/${areaId}`} />
               </section>
             </>
           )}

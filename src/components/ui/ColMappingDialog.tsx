@@ -378,7 +378,7 @@ export default function ColMappingDialog({
           <div style={gridHeaderStyle}>
             <div style={{ width: 32, textAlign: "center" }}>NO</div>
             <div style={{ flex: "0 0 156px" }}>항목명</div>
-            <div style={{ flex: "0 0 90px" }}>IO구분</div>
+            <div style={{ flex: "0 0 108px" }}>IO구분</div>
             <div style={{ flex: "0 0 110px" }}>UI유형</div>
             <div style={{ flex: "0 0 150px" }}>테이블</div>
             <div style={{ flex: "0 0 150px" }}>컬럼</div>
@@ -425,17 +425,38 @@ export default function ColMappingDialog({
                   />
                 </div>
 
-                {/* IO구분 */}
-                <div style={{ flex: "0 0 90px" }}>
-                  <select
-                    value={row.ioSeCode}
-                    onChange={(e) => updateRow(row._key, "ioSeCode", e.target.value)}
-                    style={cellSelectStyle}
-                  >
-                    {IO_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
+                {/* IO구분 — 토글 버튼 */}
+                <div style={{ flex: "0 0 108px" }}>
+                  <div style={{ display: "flex", gap: 3 }}>
+                    {[
+                      { value: "INPUT",  label: "IN" },
+                      { value: "OUTPUT", label: "OUT" },
+                      { value: "INOUT",  label: "IO" },
+                    ].map((opt) => {
+                      const active = row.ioSeCode === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => updateRow(row._key, "ioSeCode", active ? "" : opt.value)}
+                          style={{
+                            flex: 1,
+                            padding: "4px 0",
+                            borderRadius: 4,
+                            border: active ? "none" : "1px solid var(--color-border)",
+                            background: active ? "var(--color-primary, #1976d2)" : "transparent",
+                            color: active ? "#fff" : "var(--color-text-secondary)",
+                            fontSize: 11,
+                            fontWeight: active ? 700 : 400,
+                            cursor: "pointer",
+                            transition: "all 0.12s",
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* UI유형 */}
@@ -492,6 +513,9 @@ export default function ColMappingDialog({
 
         {/* ── 고정 하단: 취소 + 저장 ───────────────────────────────────── */}
         <div style={dialogBottomStyle}>
+          <button onClick={onClose} disabled={saveMutation.isPending} style={secondaryBtnStyle}>
+            취소
+          </button>
           <button
             onClick={() => saveMutation.mutate()}
             disabled={saveMutation.isPending}
@@ -642,11 +666,16 @@ const labelStyle: React.CSSProperties = {
 };
 
 const selectStyle: React.CSSProperties = {
-  width: "100%", padding: "7px 10px",
+  width: "100%", padding: "7px 28px 7px 10px",
   border: "1px solid var(--color-border)",
   borderRadius: 6, fontSize: 13,
   background: "var(--color-bg-input)",
   color: "var(--color-text-primary)",
+  appearance: "none",
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 10px center",
+  boxSizing: "border-box",
 };
 
 const gridHeaderStyle: React.CSSProperties = {
@@ -677,11 +706,16 @@ const cellInputStyle: React.CSSProperties = {
 };
 
 const cellSelectStyle: React.CSSProperties = {
-  width: "100%", padding: "4px 6px",
+  width: "100%", padding: "4px 24px 4px 6px",
   border: "1px solid var(--color-border)",
   borderRadius: 4, fontSize: 12,
   background: "var(--color-bg-input)",
   color: "var(--color-text-primary)",
+  appearance: "none",
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 8px center",
+  boxSizing: "border-box",
 };
 
 const addRowBtnStyle: React.CSSProperties = {
@@ -699,7 +733,7 @@ const addRowBtnStyle: React.CSSProperties = {
 const primaryBtnStyle: React.CSSProperties = {
   padding: "8px 20px", borderRadius: 6,
   border: "none", cursor: "pointer",
-  background: "var(--color-primary)",
+  background: "var(--color-primary, #1976d2)",
   color: "#fff", fontSize: 13, fontWeight: 500,
 };
 

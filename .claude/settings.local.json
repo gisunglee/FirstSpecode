@@ -89,7 +89,17 @@
       "Bash(grep -n \"^  \\);\\\\s*$\\\\|^  return \\(\\\\s*$\\\\|^}\\\\s*$\\\\|2단 레이아웃\\\\|historyOpen\\\\|diffTarget\\\\|confirmTarget\\\\|deleteTarget\" \"D:/source/FirstSpecode/src/app/\\(main\\)/projects/[id]/requirements/[reqId]/page.tsx\")",
       "Bash(find /d/source/specode/src/app/api/areas -name *.ts)",
       "Bash(find /d/source/FirstSpecode/src/app/api -name *.ts)",
-      "Bash(find /d/source/FirstSpecode/src/app/api/projects -name *.ts)"
+      "Bash(find /d/source/FirstSpecode/src/app/api/projects -name *.ts)",
+      "Bash(grep -n \"ColMappingDialog\\\\|mappingPopup\\\\|컬럼 매핑\\\\|매핑 관리\" /Users/igiseong/dev/specode/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/functions/[functionId]/page.tsx)",
+      "Bash(grep -n \"spec_cn\\\\|spec\" /Users/igiseong/dev/specode/FirstSpecode/src/app/api/projects/[id]/functions/route.ts)",
+      "Bash(grep -rn \"spec_cn\" /Users/igiseong/dev/specode/FirstSpecode/src/app/api/projects/[id]/functions/)",
+      "Bash(DIRECT_URL=\"postgresql://postgres:vrltjd2Tyde@db.wnejonygronvmohkvdqo.supabase.co:5432/postgres\" DATABASE_URL=\"postgresql://postgres.wnejonygronvmohkvdqo:vrltjd2Tyde@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true\" npx prisma db push)",
+      "Bash(node -e \":*)",
+      "Bash(DIRECT_URL=\"postgresql://postgres:vrltjd2Tyde@db.wnejonygronvmohkvdqo.supabase.co:5432/postgres\" DATABASE_URL=\"postgresql://postgres.wnejonygronvmohkvdqo:vrltjd2Tyde@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true\" npx prisma generate)",
+      "Bash(grep -n \"columnMappings\\\\|col_mapping\\\\|colMapping\" /Users/igiseong/dev/specode/FirstSpecode/src/app/api/projects/[id]/functions/[functionId]/route.ts)",
+      "Bash(ls /Users/igiseong/dev/specode/FirstSpecode/src/app/api/projects/[id]/areas/[areaId]/files/)",
+      "Bash(ls /Users/igiseong/dev/specode/FirstSpecode/src/app/api/projects/[id]/areas/[areaId]/files/[fileId]/)",
+      "Bash(grep -n \"AreaAttachFiles\" /Users/igiseong/dev/specode/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/areas/[areaId]/page.tsx)"
     ]
   }
 }

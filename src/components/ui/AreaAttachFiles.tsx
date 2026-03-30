@@ -29,8 +29,8 @@ type AttachFile = {
 };
 
 type Props = {
-  projectId: string;
-  areaId:    string;
+  /** API 기본 경로 (예: /api/projects/{id}/areas/{areaId} 또는 /api/projects/{id}/functions/{funcId}) */
+  basePath: string;
 };
 
 // ── 인증 이미지 컴포넌트 ─────────────────────────────────────────────────────
@@ -112,10 +112,10 @@ function Lightbox({ src, fileName, onClose }: { src: string; fileName: string; o
 
 // ── 메인 컴포넌트 ────────────────────────────────────────────────────────────
 
-export default function AreaAttachFiles({ projectId, areaId }: Props) {
-  const queryClient = useQueryClient();
-  const queryKey    = ["areaFiles", projectId, areaId];
-  const isHovered   = useRef(false);
+export default function AreaAttachFiles({ basePath }: Props) {
+  const queryClient  = useQueryClient();
+  const queryKey     = ["attachFiles", basePath];
+  const isHovered    = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [lightbox, setLightbox] = useState<{ fileId: string; fileName: string } | null>(null);
 
@@ -123,9 +123,7 @@ export default function AreaAttachFiles({ projectId, areaId }: Props) {
   const { data, isLoading } = useQuery({
     queryKey,
     queryFn: () =>
-      authFetch<{ data: { items: AttachFile[] } }>(
-        `/api/projects/${projectId}/areas/${areaId}/files`
-      ).then((r) => r.data),
+      authFetch<{ data: { items: AttachFile[] } }>(`${basePath}/files`).then((r) => r.data),
   });
   const files = data?.items ?? [];
 
@@ -136,7 +134,7 @@ export default function AreaAttachFiles({ projectId, areaId }: Props) {
       fileList.forEach((f) => formData.append("files", f));
       // authFetch는 Content-Type: application/json을 강제하므로 raw fetch 사용
       const at  = typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
-      const res = await fetch(`/api/projects/${projectId}/areas/${areaId}/files`, {
+      const res = await fetch(`${basePath}/files`, {
         method:  "POST",
         body:    formData,
         headers: at ? { Authorization: `Bearer ${at}` } : {},
@@ -154,7 +152,7 @@ export default function AreaAttachFiles({ projectId, areaId }: Props) {
   // ── 삭제 뮤테이션 ─────────────────────────────────────────────────────────
   const deleteMutation = useMutation({
     mutationFn: (fileId: string) =>
-      authFetch(`/api/projects/${projectId}/areas/${areaId}/files/${fileId}`, { method: "DELETE" }),
+      authFetch(`${basePath}/files/${fileId}`, { method: "DELETE" }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey }); toast.success("삭제되었습니다."); },
     onError:   (err: Error) => toast.error(err.message),
   });
@@ -162,7 +160,7 @@ export default function AreaAttachFiles({ projectId, areaId }: Props) {
   // ── req_ref_yn 토글 ───────────────────────────────────────────────────────
   const toggleRefMutation = useMutation({
     mutationFn: ({ fileId, reqRefYn }: { fileId: string; reqRefYn: string }) =>
-      authFetch(`/api/projects/${projectId}/areas/${areaId}/files/${fileId}`, {
+      authFetch(`${basePath}/files/${fileId}`, {
         method: "PATCH",
         body:   JSON.stringify({ reqRefYn }),
       }),
@@ -243,7 +241,7 @@ export default function AreaAttachFiles({ projectId, areaId }: Props) {
                   {/* 썸네일 — 클릭 시 라이트박스 */}
                   <div style={{ width: "100%", height: 72, overflow: "hidden", borderRadius: "4px 4px 0 0", background: "var(--color-bg-muted, #f0f0f0)" }}>
                     <AuthThumb
-                      src={`/api/projects/${projectId}/areas/${areaId}/files/${file.fileId}/view`}
+                      src={`${basePath}/files/${file.fileId}/view`}
                       onClick={() => setLightbox({ fileId: file.fileId, fileName: file.fileName })}
                     />
                   </div>
@@ -314,7 +312,7 @@ export default function AreaAttachFiles({ projectId, areaId }: Props) {
       {/* 라이트박스 */}
       {lightbox && (
         <Lightbox
-          src={`/api/projects/${projectId}/areas/${areaId}/files/${lightbox.fileId}/view`}
+          src={`${basePath}/files/${lightbox.fileId}/view`}
           fileName={lightbox.fileName}
           onClose={() => setLightbox(null)}
         />

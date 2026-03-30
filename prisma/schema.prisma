@@ -437,6 +437,8 @@ model TbDsFunction {
   // 구현 시작/종료일 (YYYY-MM-DD 문자열)
   impl_bgng_de    String?
   impl_end_de     String?
+  // 기능 명세 (마크다운)
+  spec_cn         String?
   sort_ordr       Int       @default(0)
   // AI 요청 코멘트
   coment_cn       String?
