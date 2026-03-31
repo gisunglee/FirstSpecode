@@ -101,7 +101,10 @@
       "Bash(ls /Users/igiseong/dev/specode/FirstSpecode/src/app/api/projects/[id]/areas/[areaId]/files/[fileId]/)",
       "Bash(grep -n \"AreaAttachFiles\" /Users/igiseong/dev/specode/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/areas/[areaId]/page.tsx)",
       "Bash(wc -l \"d:/source/FirstSpecode/src/app/\\(main\\)/projects/[id]/areas/[areaId]/page.tsx\")",
-      "Bash(wc -l \"d:/source/FirstSpecode/src/app/\\(main\\)/projects/[id]/functions/[functionId]/page.tsx\")"
+      "Bash(wc -l \"d:/source/FirstSpecode/src/app/\\(main\\)/projects/[id]/functions/[functionId]/page.tsx\")",
+      "Bash(find d:/source/FirstSpecode/src/app/api/projects/[id] -name route.ts -o -name route.js)",
+      "Bash(ls d:/source/FirstSpecode/src/app/api/projects/[id]/)",
+      "Bash(find \"d:/source/FirstSpecode/src/app/\\(main\\)/projects\" -name \"page.tsx\")"
     ]
   }
 }

@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor from "@/components/ui/MarkdownEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
+import ProgressTracker from "@/components/ui/ProgressTracker";
 import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
@@ -328,24 +329,38 @@ function UnitWorkDetailPageInner() {
 
       {/* 타이틀 행 — full-width 배경 */}
       <div style={{
-        display: "flex", alignItems: "center", gap: 16,
-        padding: "10px 24px",
-        background: "var(--color-bg-card)",
+        display:      "flex",
+        alignItems:   "center",
+        gap:          16,
+        padding:      "10px 24px",
+        background:   "var(--color-bg-card)",
         borderBottom: "1px solid var(--color-border)",
         marginBottom: 16,
       }}>
-        {/* 좌: 뒤로 + 타이틀 */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
+        {/* 좌: 뒤로 + 타이틀 + 단계별 진척률 */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
           <button
             onClick={() => router.push(`/projects/${projectId}/unit-works`)}
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1, flexShrink: 0 }}
           >
             ←
           </button>
-          <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+          <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)", flexShrink: 0 }}>
             {isNew ? "단위업무 신규 등록" : `${detail?.displayId ?? ""} 단위업무 편집`}
           </span>
+          {/* 타이틀과 70px 띄워서 진척률 표시 — 수정 모드에서만 */}
+          {!isNew && detail && (
+            <div style={{ marginLeft: 70 }}>
+              <ProgressTracker
+                projectId={projectId}
+                refTable="tb_ds_unit_work"
+                refId={unitWorkId}
+                phases={["analy", "design", "impl", "test"]}
+              />
+            </div>
+          )}
         </div>
+
         {/* 우: 취소·저장 */}
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           <button

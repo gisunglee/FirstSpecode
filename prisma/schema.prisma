@@ -1,18 +1,3 @@
-// Prisma Schema — Supabase PostgreSQL 연결 설정
-//
-// 역할:
-//   - DB 연결 설정 (Supabase PostgreSQL)
-//   - 데이터 모델 정의
-//
-// 사용법:
-//   - npm run db:push     → 스키마를 DB에 반영 (개발용)
-//   - npm run db:generate → Prisma Client 재생성 (모델 추가/수정 후 필수)
-//   - npm run db:studio   → 브라우저에서 DB 확인
-//
-// 컬럼명 규칙:
-//   - DB 약어 컬럼명을 그대로 사용 (mber_id, prjct_id 등)
-//   - 모든 PK는 UUID (String @default(uuid()))
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -23,275 +8,229 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-
-// ==========================================
-// [cm] 공통 — 회원/인증
-// ==========================================
-
 model TbCmMember {
-  mber_id         String    @id @default(uuid())
-  email_addr      String?   @unique
-  pswd_hash       String?
-  mber_nm         String?
-  profl_img_url   String?
-  mber_sttus_code String    @default("UNVERIFIED")
-  join_dt         DateTime  @default(now())
-  mdfcn_dt        DateTime?
-  wthdrw_dt       DateTime?
-
+  mber_id             String                    @id @default(uuid())
+  email_addr          String?                   @unique
+  pswd_hash           String?
+  mber_nm             String?
+  profl_img_url       String?
+  mber_sttus_code     String                    @default("UNVERIFIED")
+  join_dt             DateTime                  @default(now())
+  mdfcn_dt            DateTime?
+  wthdrw_dt           DateTime?
+  accountLocks        TbCmAccountLock[]
+  emailVerifications  TbCmEmailVerification[]
+  loginAttempts       TbCmLoginAttempt[]
+  memberSessions      TbCmMemberSession[]
+  passwordResetTokens TbCmPasswordResetToken[]
+  refreshTokens       TbCmRefreshToken[]
+  socialAccounts      TbCmSocialAccount[]
+  removalNotices      TbPjMemberRemovalNotice[]
   projectMembers      TbPjProjectMember[]
   settingsHistory     TbPjSettingsHistory[]
-  emailVerifications  TbCmEmailVerification[]
-  refreshTokens       TbCmRefreshToken[]
-  loginAttempts       TbCmLoginAttempt[]
-  accountLocks        TbCmAccountLock[]
-  memberSessions      TbCmMemberSession[]
-  socialAccounts      TbCmSocialAccount[]
-  passwordResetTokens TbCmPasswordResetToken[]
-  removalNotices      TbPjMemberRemovalNotice[]
 
   @@map("tb_cm_member")
 }
 
 model TbCmEmailVerification {
-  vrfctn_id         String    @id @default(uuid())
+  vrfctn_id         String     @id @default(uuid())
   mber_id           String
   email_addr        String
-  vrfctn_token_val  String    @unique
-  // REGISTER / PASSWORD_RESET / EMAIL_CHANGE
-  vrfctn_ty_code    String    @default("REGISTER")
-  // PENDING / VERIFIED / EXPIRED
-  vrfctn_sttus_code String    @default("PENDING")
+  vrfctn_token_val  String     @unique
+  vrfctn_ty_code    String     @default("REGISTER")
+  vrfctn_sttus_code String     @default("PENDING")
   expiry_dt         DateTime
   vrfctn_dt         DateTime?
-  creat_dt          DateTime  @default(now())
-
-  member TbCmMember @relation(fields: [mber_id], references: [mber_id])
+  creat_dt          DateTime   @default(now())
+  member            TbCmMember @relation(fields: [mber_id], references: [mber_id])
 
   @@map("tb_cm_email_verification")
 }
 
 model TbCmRefreshToken {
-  token_id       String    @id @default(uuid())
+  token_id       String     @id @default(uuid())
   mber_id        String
-  token_hash_val String    @unique
-  // 자동 로그인 여부 — 'Y'면 토큰 갱신 시 만료 연장
-  auto_login_yn  String    @default("N")
+  token_hash_val String     @unique
+  auto_login_yn  String     @default("N")
   expiry_dt      DateTime
-  creat_dt       DateTime  @default(now())
+  creat_dt       DateTime   @default(now())
   revoked_dt     DateTime?
-  // 연결된 세션 ID — 로그아웃 시 해당 기기 세션만 무효화하기 위한 연결 고리
   sesn_id        String?
-
-  member TbCmMember @relation(fields: [mber_id], references: [mber_id])
+  member         TbCmMember @relation(fields: [mber_id], references: [mber_id])
 
   @@map("tb_cm_refresh_token")
 }
 
 model TbCmLoginAttempt {
-  attempt_id      String   @id @default(uuid())
+  attempt_id      String     @id @default(uuid())
   mber_id         String
   attempt_ip_addr String?
-  // 'Y' = 성공, 'N' = 실패
-  succes_yn       String   @default("N")
+  succes_yn       String     @default("N")
   fail_rsn_cn     String?
-  creat_dt        DateTime @default(now())
-
-  member TbCmMember @relation(fields: [mber_id], references: [mber_id])
+  creat_dt        DateTime   @default(now())
+  member          TbCmMember @relation(fields: [mber_id], references: [mber_id])
 
   @@map("tb_cm_login_attempt")
 }
 
 model TbCmAccountLock {
-  lock_id                String    @id @default(uuid())
+  lock_id                String     @id @default(uuid())
   mber_id                String
   lock_rsn_cn            String?
-  fail_cnt               Int       @default(0)
+  fail_cnt               Int        @default(0)
   lock_expiry_dt         DateTime?
-  unlock_token_val       String?   @unique
+  unlock_token_val       String?    @unique
   unlock_token_expiry_dt DateTime?
-  // LOCKED / UNLOCK_PENDING / UNLOCKED
-  lock_sttus_code        String    @default("LOCKED")
-  creat_dt               DateTime  @default(now())
+  lock_sttus_code        String     @default("LOCKED")
+  creat_dt               DateTime   @default(now())
   unlocked_dt            DateTime?
-
-  member TbCmMember @relation(fields: [mber_id], references: [mber_id])
+  member                 TbCmMember @relation(fields: [mber_id], references: [mber_id])
 
   @@map("tb_cm_account_lock")
 }
 
 model TbCmMemberSession {
-  sesn_id        String    @id @default(uuid())
+  sesn_id        String     @id @default(uuid())
   mber_id        String
   device_info_cn String?
   ip_addr        String?
-  creat_dt       DateTime  @default(now())
+  creat_dt       DateTime   @default(now())
   last_acces_dt  DateTime?
-  // 로그아웃 시 무효화 일시 기록
   invald_dt      DateTime?
-
-  member TbCmMember @relation(fields: [mber_id], references: [mber_id])
+  member         TbCmMember @relation(fields: [mber_id], references: [mber_id])
 
   @@map("tb_cm_member_session")
 }
 
 model TbCmPasswordResetToken {
-  reset_token_id   String    @id @default(uuid())
+  reset_token_id   String     @id @default(uuid())
   mber_id          String
-  token_val        String    @unique
-  // PENDING / USED / EXPIRED
-  token_sttus_code String    @default("PENDING")
+  token_val        String     @unique
+  token_sttus_code String     @default("PENDING")
   expiry_dt        DateTime
   use_dt           DateTime?
-  creat_dt         DateTime  @default(now())
-
-  member TbCmMember @relation(fields: [mber_id], references: [mber_id])
+  creat_dt         DateTime   @default(now())
+  member           TbCmMember @relation(fields: [mber_id], references: [mber_id])
 
   @@map("tb_cm_password_reset_token")
 }
 
 model TbCmSocialAccount {
-  social_acnt_id    String   @id @default(uuid())
+  social_acnt_id    String     @id @default(uuid())
   mber_id           String
-  // 'GOOGLE' 또는 'GITHUB'
   provdr_code       String
   provdr_user_id    String
   provdr_email_addr String?
-  creat_dt          DateTime @default(now())
+  creat_dt          DateTime   @default(now())
+  member            TbCmMember @relation(fields: [mber_id], references: [mber_id])
 
-  member TbCmMember @relation(fields: [mber_id], references: [mber_id])
-
-  // 동일 소셜 계정 중복 연동 방지
   @@unique([provdr_code, provdr_user_id])
   @@map("tb_cm_social_account")
 }
 
-
-// ==========================================
-// [pj] 프로젝트
-// ==========================================
-
 model TbPjProject {
-  prjct_id      String    @id @default(uuid())
-  prjct_nm      String
-  prjct_dc      String?
-  client_nm     String?
-  bgng_de       DateTime?
-  end_de        DateTime?
-  creat_mber_id String?
-  creat_dt      DateTime  @default(now())
-  mdfcn_dt      DateTime?
-
-  members          TbPjProjectMember[]
-  settings         TbPjProjectSettings[]
-  invitations      TbPjProjectInvitation[]
-  apiKeys          TbPjProjectApiKey[]
-  settingsHistory  TbPjSettingsHistory[]
+  prjct_id        String                  @id @default(uuid())
+  prjct_nm        String
+  prjct_dc        String?
+  client_nm       String?
+  bgng_de         DateTime?
+  end_de          DateTime?
+  creat_mber_id   String?
+  creat_dt        DateTime                @default(now())
+  mdfcn_dt        DateTime?
+  apiKeys         TbPjProjectApiKey[]
+  invitations     TbPjProjectInvitation[]
+  members         TbPjProjectMember[]
+  settings        TbPjProjectSettings?
+  settingsHistory TbPjSettingsHistory[]
 
   @@map("tb_pj_project")
 }
 
 model TbPjProjectSettings {
-  seting_id         String    @id @default(uuid())
-  prjct_id          String    @unique
-  ai_call_mthd_code String    @default("DIRECT")
-  plan_code         String    @default("FREE")
-  creat_dt          DateTime  @default(now())
-  mdfcn_dt          DateTime  @default(now())
-
-  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id])
+  seting_id         String      @id @default(uuid())
+  prjct_id          String      @unique
+  ai_call_mthd_code String      @default("DIRECT")
+  plan_code         String      @default("FREE")
+  creat_dt          DateTime    @default(now())
+  mdfcn_dt          DateTime    @default(now())
+  project           TbPjProject @relation(fields: [prjct_id], references: [prjct_id])
 
   @@map("tb_pj_project_settings")
 }
 
 model TbPjProjectInvitation {
-  invt_id        String    @id @default(uuid())
-  prjct_id       String
-  email_addr     String
-  role_code      String    @default("MEMBER")
-  invt_token_val String    @unique
-  invtr_mber_id  String?
-  invt_sttus_code String   @default("PENDING")
-  invt_dt        DateTime  @default(now())
-  expiry_dt      DateTime
-  accept_dt      DateTime?
-  cancel_dt      DateTime?
-
-  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id])
+  invt_id         String      @id @default(uuid())
+  prjct_id        String
+  email_addr      String
+  role_code       String      @default("MEMBER")
+  invt_token_val  String      @unique
+  invtr_mber_id   String?
+  invt_sttus_code String      @default("PENDING")
+  invt_dt         DateTime    @default(now())
+  expiry_dt       DateTime
+  accept_dt       DateTime?
+  cancel_dt       DateTime?
+  project         TbPjProject @relation(fields: [prjct_id], references: [prjct_id])
 
   @@map("tb_pj_project_invitation")
 }
 
 model TbPjProjectMember {
-  prjct_mber_id   String    @id @default(uuid())
+  prjct_mber_id   String      @id @default(uuid())
   prjct_id        String
   mber_id         String
-  role_code       String    @default("MEMBER")
-  join_dt         DateTime  @default(now())
+  role_code       String      @default("MEMBER")
+  join_dt         DateTime    @default(now())
   last_acces_dt   DateTime?
-  mber_sttus_code String    @default("ACTIVE")
+  mber_sttus_code String      @default("ACTIVE")
   sttus_chg_dt    DateTime?
-
-  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id])
-  member  TbCmMember  @relation(fields: [mber_id], references: [mber_id])
+  member          TbCmMember  @relation(fields: [mber_id], references: [mber_id])
+  project         TbPjProject @relation(fields: [prjct_id], references: [prjct_id])
 
   @@unique([prjct_id, mber_id])
   @@map("tb_pj_project_member")
 }
 
-// 회원 탈퇴 시 참여 프로젝트 OWNER에게 발송되는 제거 안내
 model TbPjProjectApiKey {
-  api_key_id    String    @id @default(uuid())
+  api_key_id    String      @id @default(uuid())
   prjct_id      String
   provdr_nm     String
-  // AES-256-CBC 암호화 저장 (iv:encrypted 형식)
   encpt_key_val String
-  // 화면 표시용 마스킹 (예: sk-****1234)
   mask_key_val  String
-  creat_dt      DateTime  @default(now())
+  creat_dt      DateTime    @default(now())
   mdfcn_dt      DateTime?
-
-  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id])
+  project       TbPjProject @relation(fields: [prjct_id], references: [prjct_id])
 
   @@map("tb_pj_project_api_key")
 }
 
 model TbPjSettingsHistory {
-  hist_id     String   @id @default(uuid())
+  hist_id     String      @id @default(uuid())
   prjct_id    String
   chg_mber_id String
   chg_item_nm String
   bfr_val_cn  String?
   aftr_val_cn String?
-  chg_dt      DateTime @default(now())
-
-  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id])
-  member  TbCmMember  @relation(fields: [chg_mber_id], references: [mber_id])
+  chg_dt      DateTime    @default(now())
+  member      TbCmMember  @relation(fields: [chg_mber_id], references: [mber_id])
+  project     TbPjProject @relation(fields: [prjct_id], references: [prjct_id])
 
   @@map("tb_pj_settings_history")
 }
 
 model TbPjMemberRemovalNotice {
-  notice_id  String    @id @default(uuid())
-  // 안내 대상: 제거된 멤버 (다음 로그인 시 모달 표시)
-  mber_id    String
-  prjct_id   String
-  // 제거 시점의 프로젝트명 스냅샷 (프로젝트 삭제 후에도 표시 가능)
-  prjct_nm   String
-  // 'N': 미확인, 'Y': 확인 완료
-  cnfrm_yn   String    @default("N")
-  cnfrm_dt   DateTime?
-  creat_dt   DateTime  @default(now())
-
-  member TbCmMember @relation(fields: [mber_id], references: [mber_id])
+  notice_id String     @id @default(uuid())
+  mber_id   String
+  prjct_id  String
+  prjct_nm  String
+  cnfrm_yn  String     @default("N")
+  cnfrm_dt  DateTime?
+  creat_dt  DateTime   @default(now())
+  member    TbCmMember @relation(fields: [mber_id], references: [mber_id])
 
   @@map("tb_pj_member_removal_notice")
 }
-
-
-// ==========================================
-// [ds] 설계 — 레이아웃 상태바에서 참조
-// ==========================================
 
 model TbDsDesignChange {
   chg_id        String   @id @default(uuid())
@@ -300,7 +239,6 @@ model TbDsDesignChange {
   ref_id        String
   chg_rsn_cn    String?
   snapshot_data Json
-  // ai_req_yn = 'N' 인 건수 → 상태바 "미반영 설계 변경" 배지에 사용
   ai_req_yn     String   @default("N")
   ai_task_id    String?
   chg_mber_id   String?
@@ -309,382 +247,358 @@ model TbDsDesignChange {
   @@map("tb_ds_design_change")
 }
 
-
-// ==========================================
-// [ds] 단위업무 / 화면
-// ==========================================
-
 model TbDsUnitWork {
-  unit_work_id         String    @id @default(uuid())
+  unit_work_id         String          @id @default(uuid())
   prjct_id             String
   req_id               String
-  // 표시 ID — 프로젝트 내 순번 (UW-NNNNN 형식)
   unit_work_display_id String
-  unit_work_nm         String    @default("")
+  unit_work_nm         String          @default("")
   unit_work_dc         String?
-  // 담당 멤버 ID (미지정 허용)
   asign_mber_id        String?
   bgng_de              String?
   end_de               String?
-  // 진행률 0~100
-  progrs_rt            Int       @default(0)
-  sort_ordr            Int       @default(0)
-  creat_dt             DateTime  @default(now())
+  progrs_rt            Int             @default(0)
+  sort_ordr            Int             @default(0)
+  creat_dt             DateTime        @default(now())
   mdfcn_dt             DateTime?
-
-  requirement TbRqRequirement @relation(fields: [req_id], references: [req_id])
-  screens     TbDsScreen[]
+  screens              TbDsScreen[]
+  requirement          TbRqRequirement @relation(fields: [req_id], references: [req_id])
 
   @@map("tb_ds_unit_work")
 }
 
 model TbDsScreen {
-  scrn_id         String    @id @default(uuid())
+  scrn_id         String                  @id @default(uuid())
   prjct_id        String
   unit_work_id    String?
-  // 표시 ID — 프로젝트 내 순번 (SCR-NNNNN 형식)
   scrn_display_id String
-  scrn_nm         String    @default("")
+  scrn_nm         String                  @default("")
   scrn_dc         String?
-  // 레이아웃 데이터 (JSON 문자열, LayoutRow[] 구조)
-  layer_data_dc   String?
-  // 개발자 참조 코드 (예: MBR_LIST)
-  dsply_code      String?
-  // LIST / DETAIL / INPUT / POPUP / TAB / REPORT
-  scrn_ty_code    String    @default("LIST")
-  // 메뉴 분류 (대/중/소)
+  scrn_ty_code    String                  @default("LIST")
+  url_path        String?
+  sort_ordr       Int                     @default(0)
+  creat_dt        DateTime                @default(now())
+  mdfcn_dt        DateTime?
   ctgry_l_nm      String?
   ctgry_m_nm      String?
   ctgry_s_nm      String?
-  url_path        String?
-  sort_ordr       Int       @default(0)
-  creat_dt        DateTime  @default(now())
-  mdfcn_dt        DateTime?
-
-  unitWork    TbDsUnitWork?          @relation(fields: [unit_work_id], references: [unit_work_id])
-  areas       TbDsArea[]
-  descHistory TbDsScreenDescHistory[]
+  dsply_code      String?
+  layer_data_dc   String?
+  areas           TbDsArea[]
+  unitWork        TbDsUnitWork?           @relation(fields: [unit_work_id], references: [unit_work_id])
+  descHistory     TbDsScreenDescHistory[]
 
   @@map("tb_ds_screen")
 }
 
-// ==========================================
-// [ds] 화면 설명 변경 이력 — 저장할 때마다 자동 기록
-// ==========================================
-
 model TbDsScreenDescHistory {
-  hist_id     String   @id @default(uuid())
+  hist_id     String     @id @default(uuid())
   scrn_id     String
   prjct_id    String
-  // 변경 전 설명 (최초 저장 시 NULL)
   bfr_dc      String?
-  // 변경 후 설명
   aftr_dc     String?
   chg_mber_id String
-  creat_dt    DateTime @default(now())
-
-  screen TbDsScreen @relation(fields: [scrn_id], references: [scrn_id], onDelete: Cascade)
+  creat_dt    DateTime   @default(now())
+  screen      TbDsScreen @relation(fields: [scrn_id], references: [scrn_id], onDelete: Cascade)
 
   @@map("tb_ds_screen_desc_history")
 }
 
 model TbDsArea {
-  area_id         String    @id @default(uuid())
+  area_id         String         @id @default(uuid())
   prjct_id        String
   scrn_id         String?
-  // 표시 ID — 프로젝트 내 순번 (AR-NNNNN 형식)
   area_display_id String
-  area_nm         String    @default("")
+  area_nm         String         @default("")
   area_dc         String?
-  // SEARCH / GRID / FORM / INFO_CARD / TAB / FULL_SCREEN
-  area_ty_code    String    @default("GRID")
-  // 레이아웃 구성 데이터 (JSON 문자열, LayoutRow[] 구조)
-  layer_data_dc   String?
-  // AI 요청 코멘트
-  coment_cn       String?
-  // Excalidraw 캔버스 JSON 데이터 (FID-00165)
-  excaldw_data    Json?
-  sort_ordr       Int       @default(0)
-  creat_dt        DateTime  @default(now())
+  area_ty_code    String         @default("GRID")
+  sort_ordr       Int            @default(0)
+  creat_dt        DateTime       @default(now())
   mdfcn_dt        DateTime?
-
-  screen    TbDsScreen?    @relation(fields: [scrn_id], references: [scrn_id])
-  functions TbDsFunction[]
+  excaldw_data    Json?
+  layer_data_dc   String?
+  coment_cn       String?
+  screen          TbDsScreen?    @relation(fields: [scrn_id], references: [scrn_id])
+  functions       TbDsFunction[]
 
   @@map("tb_ds_area")
 }
 
 model TbDsFunction {
-  func_id         String    @id @default(uuid())
-  prjct_id        String
-  area_id         String?
-  // 표시 ID — 프로젝트 내 순번 (FN-NNNNN 형식)
-  func_display_id String
-  func_nm         String    @default("")
-  func_dc         String?
-  // SEARCH / SAVE / DELETE / DOWNLOAD / UPLOAD / NAVIGATE / VALIDATE / OTHER
-  func_ty_code    String    @default("OTHER")
-  // NONE / DESIGN_DONE / IMPL_DONE
-  func_sttus_code String    @default("NONE")
-  // HIGH / MEDIUM / LOW
-  priort_code     String    @default("MEDIUM")
-  // HIGH / MEDIUM / LOW
-  cmplx_code      String    @default("MEDIUM")
-  // 예상 공수 (예: "2h", "1d" 등 자유 형식)
-  efrt_val        String?
-  // 담당 멤버 ID
-  asign_mber_id   String?
-  // 구현 시작/종료일 (YYYY-MM-DD 문자열)
-  impl_bgng_de    String?
-  impl_end_de     String?
-  // 기능 명세 (마크다운)
-  spec_cn         String?
-  sort_ordr       Int       @default(0)
-  // AI 요청 코멘트
-  coment_cn       String?
-  // BEFORE / IN_PROGRESS / DONE
-  assign_work_sttus_code String @default("BEFORE")
-  // BEFORE / IN_REVIEW / FEEDBACK / DONE
-  review_sttus_code      String @default("BEFORE")
-  // 진척률 (0, 10, 20, ... 100)
-  progress_rate          Int    @default(0)
-  creat_dt        DateTime  @default(now())
-  mdfcn_dt        DateTime?
-
-  area TbDsArea? @relation(fields: [area_id], references: [area_id])
+  func_id                String    @id @default(uuid())
+  prjct_id               String
+  area_id                String?
+  func_display_id        String
+  func_nm                String    @default("")
+  func_dc                String?
+  func_sttus_code        String    @default("NONE")
+  priort_code            String    @default("MEDIUM")
+  sort_ordr              Int       @default(0)
+  creat_dt               DateTime  @default(now())
+  mdfcn_dt               DateTime?
+  asign_mber_id          String?
+  cmplx_code             String    @default("MEDIUM")
+  efrt_val               String?
+  func_ty_code           String    @default("OTHER")
+  impl_bgng_de           String?
+  impl_end_de            String?
+  coment_cn              String?
+  assign_work_sttus_code String    @default("BEFORE") @db.VarChar(20)
+  review_sttus_code      String    @default("BEFORE") @db.VarChar(20)
+  progress_rate          Int       @default(0) @db.SmallInt
+  spec_cn                String?
+  area                   TbDsArea? @relation(fields: [area_id], references: [area_id])
 
   @@map("tb_ds_function")
 }
 
 model TbDsDbTable {
-  tbl_id        String   @id @default(uuid())
+  tbl_id        String            @id @default(uuid())
   prjct_id      String
   tbl_physcl_nm String
   tbl_lgcl_nm   String?
   tbl_dc        String?
-  creat_dt      DateTime @default(now())
-
-  columns TbDsTableColumn[]
+  creat_dt      DateTime          @default(now())
+  columns       TbDsTableColumn[]
 
   @@map("tb_ds_db_table")
 }
 
 model TbDsTableColumn {
-  col_id        String   @id @default(uuid())
+  col_id        String      @id @default(uuid())
   tbl_id        String
   col_physcl_nm String
   col_lgcl_nm   String?
   data_ty_nm    String?
   col_dc        String?
-  sort_ordr     Int      @default(0)
-  creat_dt      DateTime @default(now())
-
-  table       TbDsDbTable      @relation(fields: [tbl_id], references: [tbl_id])
-  colMappings TbDsColMapping[]
+  sort_ordr     Int         @default(0)
+  creat_dt      DateTime    @default(now())
+  table         TbDsDbTable @relation(fields: [tbl_id], references: [tbl_id])
 
   @@map("tb_ds_table_column")
 }
 
 model TbDsColMapping {
-  mapping_id   String   @id @default(uuid())
-  // 참조 엔티티 유형: FUNCTION | AREA | SCREEN ...
-  ref_ty_code  String
-  // 참조 엔티티 ID (func_id, area_id 등)
-  ref_id       String
-  col_id       String
-  // INPUT | OUTPUT | INOUT
-  io_se_code   String?
-  // TEXT | TEXTAREA | SELECT | RADIO | CHECKBOX | DATE | FILE | NUMBER | HIDDEN
-  ui_ty_code   String?
-  // 항목명 (화면에서 부르는 이름)
-  use_purps_cn String?
-  // 설명
+  mapping_id   String    @id @default(uuid()) @db.VarChar(36)
+  ref_ty_code  String    @db.VarChar(20)
+  ref_id       String    @db.VarChar(36)
+  col_id       String?   @db.VarChar(36)
+  io_se_code   String?   @db.VarChar(10)
+  ui_ty_code   String?   @db.VarChar(20)
+  use_purps_cn String?   @db.VarChar(200)
   col_dc       String?
-  sort_ordr    Int      @default(0)
-  creat_dt     DateTime @default(now())
-
-  column TbDsTableColumn @relation(fields: [col_id], references: [col_id])
+  sort_ordr    Int?      @default(0)
+  creat_dt     DateTime? @default(now()) @db.Timestamp(6)
 
   @@map("tb_ds_col_mapping")
 }
 
+/// 공통 단계별 진척률 — 분석·설계·구현·테스트
+/// ref_tbl_nm + ref_id 로 다형 참조 (단위업무, 기능, 영역 등 어디서든 사용)
+model TbCmProgress {
+  progrs_id     String   @id(map: "pk_cm_progress") @default(uuid()) @db.VarChar(36)
+  prjct_id      String   @db.VarChar(36)
+  ref_tbl_nm    String   @db.VarChar(50)
+  ref_id        String   @db.VarChar(36)
+  analy_rt      Int      @default(0)
+  design_rt     Int      @default(0)
+  impl_rt       Int      @default(0)
+  test_rt       Int      @default(0)
+  mdfcn_mber_id String?  @db.VarChar(36)
+  mdfcn_dt      DateTime @default(now()) @db.Timestamp(6)
 
-// ==========================================
-// [ai] AI 태스크 — 레이아웃 상태바 AI 지표
-// ==========================================
+  @@unique([ref_tbl_nm, ref_id], map: "uk_cm_progress_ref")
+  @@map("tb_cm_progress")
+}
 
 model TbAiTask {
-  ai_task_id      String    @id @default(uuid())
-  prjct_id        String
-  ref_ty_code     String
-  ref_id          String
-  task_ty_code    String
-  req_cn          String?
-  coment_cn       String?
-  result_cn       String?
-  // PENDING / IN_PROGRESS / DONE / FAILED / TIMEOUT
-  task_sttus_code String    @default("PENDING")
-  reject_rsn_cn   String?
+  ai_task_id        String    @id @default(uuid())
+  prjct_id          String
+  ref_ty_code       String
+  ref_id            String
+  task_ty_code      String
+  req_cn            String?
+  coment_cn         String?
+  result_cn         String?
+  task_sttus_code   String    @default("PENDING")
+  reject_rsn_cn     String?
   req_snapshot_data Json?
-  parent_task_id  String?
-  retry_cnt       Int       @default(3)
-  exec_avlbl_dt   DateTime?
-  req_mber_id     String?
-  req_dt          DateTime  @default(now())
-  compl_dt        DateTime?
-  apply_dt        DateTime?
+  parent_task_id    String?
+  retry_cnt         Int       @default(3)
+  exec_avlbl_dt     DateTime?
+  req_mber_id       String?
+  req_dt            DateTime  @default(now())
+  compl_dt          DateTime?
+  apply_dt          DateTime?
 
   @@map("tb_ai_task")
 }
 
-
-// ==========================================
-// [rq] 과업 / 요구사항 / 사용자스토리 / 인수기준
-// ==========================================
-
 model TbRqTask {
-  task_id         String    @id @default(uuid())
+  task_id         String            @id @default(uuid())
   prjct_id        String
-  // 표시 ID — 프로젝트 내 순번 (SFR-00001 형식)
   task_display_id String
   task_nm         String
-  // NEW_DEV / IMPROVE / MAINTAIN
-  ctgry_code      String    @default("NEW_DEV")
+  ctgry_code      String            @default("NEW_DEV")
   defn_cn         String?
   dtl_cn          String?
   output_info_cn  String?
   rfp_page_no     String?
-  sort_ordr       Int       @default(0)
-  creat_dt        DateTime  @default(now())
+  sort_ordr       Int               @default(0)
+  creat_dt        DateTime          @default(now())
   mdfcn_dt        DateTime?
-
-  requirements TbRqRequirement[]
+  requirements    TbRqRequirement[]
 
   @@map("tb_rq_task")
 }
 
 model TbRqRequirement {
-  req_id          String    @id @default(uuid())
-  prjct_id        String
-  task_id         String?
-  req_display_id  String
-  req_nm          String    @default("")
-  // HIGH / MEDIUM / LOW
-  priort_code     String    @default("MEDIUM")
-  // RFP / ADD / CHANGE
-  src_code        String    @default("RFP")
-  rfp_page_no     String?
-  orgnl_cn        String?
-  curncy_cn       String?
-  analy_cn        String?
-  spec_cn         String?
-  sort_ordr       Int       @default(0)
-  creat_dt        DateTime  @default(now())
-  mdfcn_dt        DateTime?
-
-  task        TbRqTask?        @relation(fields: [task_id], references: [task_id])
-  userStories TbRqUserStory[]
-  unitWorks   TbDsUnitWork[]
+  req_id         String          @id @default(uuid())
+  prjct_id       String
+  task_id        String?
+  req_display_id String
+  req_nm         String          @default("")
+  priort_code    String          @default("MEDIUM")
+  src_code       String          @default("RFP")
+  rfp_page_no    String?
+  orgnl_cn       String?
+  curncy_cn      String?
+  analy_cn       String?
+  spec_cn        String?
+  sort_ordr      Int             @default(0)
+  creat_dt       DateTime        @default(now())
+  mdfcn_dt       DateTime?
+  unitWorks      TbDsUnitWork[]
+  task           TbRqTask?       @relation(fields: [task_id], references: [task_id])
+  userStories    TbRqUserStory[]
 
   @@map("tb_rq_requirement")
 }
 
 model TbRqUserStory {
-  story_id         String    @id @default(uuid())
-  req_id           String
-  // 표시 ID — 프로젝트 내 순번 (STR-NNNNN 형식)
-  story_display_id String
-  story_nm         String    @default("")
-  persona_cn       String?
-  scenario_cn      String?
-  sort_ordr        Int       @default(0)
-  creat_dt         DateTime  @default(now())
-  mdfcn_dt         DateTime?
-
-  requirement         TbRqRequirement           @relation(fields: [req_id], references: [req_id])
-  acceptanceCriteria  TbRqAcceptanceCriteria[]
+  story_id           String                   @id @default(uuid())
+  req_id             String
+  story_display_id   String
+  story_nm           String                   @default("")
+  persona_cn         String?
+  scenario_cn        String?
+  sort_ordr          Int                      @default(0)
+  creat_dt           DateTime                 @default(now())
+  mdfcn_dt           DateTime?
+  acceptanceCriteria TbRqAcceptanceCriteria[]
+  requirement        TbRqRequirement          @relation(fields: [req_id], references: [req_id])
 
   @@map("tb_rq_user_story")
 }
 
 model TbRqAcceptanceCriteria {
-  ac_id    String   @id @default(uuid())
-  story_id String
-  given_cn String?
-  when_cn  String?
-  then_cn  String?
-  sort_ordr Int     @default(0)
-  creat_dt DateTime @default(now())
-
+  ac_id     String        @id @default(uuid())
+  story_id  String
+  given_cn  String?
+  when_cn   String?
+  then_cn   String?
+  sort_ordr Int           @default(0)
+  creat_dt  DateTime      @default(now())
   userStory TbRqUserStory @relation(fields: [story_id], references: [story_id])
 
   @@map("tb_rq_acceptance_criteria")
 }
 
-
-// ==========================================
-// [cm] 공통 첨부파일
-// ==========================================
-
 model TbCmAttachFile {
   attach_file_id String   @id @default(uuid())
   prjct_id       String
-  // 참조 테이블명 (e.g. 'tb_rq_requirement', 'tb_ds_area')
   ref_tbl_nm     String
-  // 참조 레코드 ID (다형성 — FK 제약 없음)
   ref_id         String
-  // FILE / IMAGE
   file_ty_code   String   @default("FILE")
   orgnl_file_nm  String
   stor_file_nm   String
   file_path_nm   String
   file_sz        Int
   file_extsn_nm  String
-  // AI 요청 참조 여부 (Y/N)
-  req_ref_yn     String?
   creat_dt       DateTime @default(now())
+  req_ref_yn     String?
 
   @@map("tb_cm_attach_file")
 }
-
-
-// ==========================================
-// [rq] 요구사항 이력 — 레이아웃 이벤트 피드
-// ==========================================
 
 model TbRqRequirementHistory {
   req_hist_id    String   @id @default(uuid())
   req_id         String
   vrsn_no        String
-  // INTERNAL: 저장 시 자동 생성 / CONFIRMED: 명시적 확정
   vrsn_ty_code   String   @default("INTERNAL")
   orgnl_cn       String?
   curncy_cn      String?
   spec_cn        String?
   vrsn_coment_cn String?
   chg_mber_id    String?
-  // creat_dt: 전역 생략 컬럼이지만 이벤트 피드 정렬에 필요
   creat_dt       DateTime @default(now())
 
   @@map("tb_rq_requirement_history")
 }
 
-
-// ==========================================
-// [rq] 기준선 스냅샷 — 프로젝트 전체 요구사항 일괄 확정
-// ==========================================
-
 model TbRqBaselineSnapshot {
-  basln_id       String   @id @default(uuid())
-  prjct_id       String
-  basln_nm       String
-  coment_cn      String?
-  // 스냅샷 시점 요구사항 수
-  req_cnt        Int      @default(0)
-  // 전체 요구사항 JSONB 스냅샷 (prjct_id·req_display_id·req_nm·priort_code·orgnl_cn·curncy_cn·spec_cn)
-  snapshot_data  Json
-  cnfrm_mber_id  String?
-  cnfrm_dt       DateTime @default(now())
+  basln_id      String   @id @default(uuid())
+  prjct_id      String
+  basln_nm      String
+  coment_cn     String?
+  req_cnt       Int      @default(0)
+  snapshot_data Json
+  cnfrm_mber_id String?
+  cnfrm_dt      DateTime @default(now())
 
   @@map("tb_rq_baseline_snapshot")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model tb_ai_prompt_template {
+  tmpl_id        String   @id(map: "pk_ai_prompt_template") @db.VarChar(36)
+  prjct_id       String?  @db.VarChar(36)
+  tmpl_nm        String   @db.VarChar(200)
+  task_ty_code   String   @db.VarChar(20)
+  ref_ty_code    String?  @db.VarChar(20)
+  sys_prompt_cn  String?
+  user_prompt_cn String
+  tmpl_dc        String?
+  use_yn         String   @default("Y") @db.Char(1)
+  sort_ordr      Int      @default(0)
+  creat_mber_id  String   @db.VarChar(36)
+  creat_dt       DateTime @default(now()) @db.Timestamp(6)
+  mdfcn_dt       DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([prjct_id, task_ty_code, use_yn], map: "idx_ai_tmpl_prjct")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model tb_ds_review_comment {
+  coment_id     String   @id(map: "pk_ds_review_comment") @db.VarChar(36)
+  review_id     String   @db.VarChar(36)
+  coment_cn     String
+  write_mber_id String   @db.VarChar(36)
+  creat_dt      DateTime @default(now()) @db.Timestamp(6)
+  mdfcn_dt      DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([review_id, creat_dt], map: "idx_ds_review_coment")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model tb_ds_review_request {
+  review_id         String    @id(map: "pk_ds_review_request") @db.VarChar(36)
+  prjct_id          String    @db.VarChar(36)
+  ref_tbl_nm        String    @db.VarChar(50)
+  ref_id            String    @db.VarChar(36)
+  review_title_nm   String    @db.VarChar(300)
+  review_cn         String
+  result_cn         String?
+  req_mber_id       String    @db.VarChar(36)
+  revwr_mber_id     String    @db.VarChar(36)
+  review_sttus_code String    @default("REQUESTED") @db.VarChar(30)
+  creat_dt          DateTime  @default(now()) @db.Timestamp(6)
+  compl_dt          DateTime? @db.Timestamp(6)
+  cnfrm_dt          DateTime? @db.Timestamp(6)
+  mdfcn_dt          DateTime  @default(now()) @db.Timestamp(6)
+
+  @@index([prjct_id, creat_dt(sort: Desc)], map: "idx_ds_review_prjct")
+  @@index([ref_tbl_nm, ref_id], map: "idx_ds_review_ref")
+  @@index([req_mber_id, review_sttus_code], map: "idx_ds_review_req_mber")
+  @@index([revwr_mber_id, review_sttus_code], map: "idx_ds_review_revwr")
 }
