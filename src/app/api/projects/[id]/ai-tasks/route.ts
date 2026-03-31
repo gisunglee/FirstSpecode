@@ -70,6 +70,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const now = Date.now();
     const FIVE_MIN_MS = 5 * 60 * 1000;
 
+    // 요청자 이름 조회 (TbAiTask 에 reqMber 관계가 정의되지 않은 경우를 대비해 수동 조회)
+    const mberIds = Array.from(new Set(tasks.map(t => t.req_mber_id).filter(Boolean))) as string[];
+    const members = mberIds.length 
+      ? await prisma.tbCmMember.findMany({
+          where: { mber_id: { in: mberIds } },
+          select: { mber_id: true, mber_nm: true },
+        })
+      : [];
+    const memberMap = new Map(members.map(m => [m.mber_id, m.mber_nm]));
+
     const items = tasks.map((t) => {
       const refInfo = t.ref_ty_code === "AREA"
         ? areaMap.get(t.ref_id)
@@ -93,7 +103,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         requestedAt: t.req_dt.toISOString(),
         completedAt: t.compl_dt?.toISOString() ?? null,
         isZombie,         // 5분 초과 IN_PROGRESS
-        elapsedMs: now - t.req_dt.getTime(),
+        elapsedMs:   t.compl_dt ? (t.compl_dt.getTime() - t.req_dt.getTime()) : (now - t.req_dt.getTime()),
+        reqMberName: t.req_mber_id ? (memberMap.get(t.req_mber_id) ?? "—") : "—",
+        retryCnt:    t.retry_cnt ?? 0,
+        execAvlblDt: t.exec_avlbl_dt?.toISOString() ?? null,
       };
     });
 
@@ -157,7 +170,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       if (!fn || fn.prjct_id !== projectId) {
         return apiError("NOT_FOUND", "대상 기능을 찾을 수 없습니다.", 404);
       }
-      snapshotData = { funcId: fn.func_id, funcName: fn.func_nm, funcType: fn.func_ty_code, spec: fn.spec_cn };
+      snapshotData = { funcId: fn.func_id, funcName: fn.func_nm, funcType: fn.func_ty_code, spec: (fn as any).spec_cn };
     }
 
     // 현재 버전은 PENDING 상태로 생성 (AI 파이프라인 미연동)

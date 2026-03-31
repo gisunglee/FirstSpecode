@@ -54,6 +54,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       refDisplayId = fn?.func_display_id ?? "";
     }
 
+    // 요청자 이름 조회
+    let reqMberName = "시스템";
+    if (task.req_mber_id) {
+      const mber = await prisma.tbCmMember.findUnique({
+        where:  { mber_id: task.req_mber_id },
+        select: { mber_nm: true },
+      });
+      reqMberName = mber?.mber_nm ?? "알 수 없음";
+    }
+
     const now = Date.now();
     const FIVE_MIN_MS = 5 * 60 * 1000;
 
@@ -66,11 +76,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       refDisplayId,
       status:       task.task_sttus_code,
       comment:      task.coment_cn      ?? "",
+      reqCn:        task.req_cn         ?? "",
       resultCn:     task.result_cn      ?? "",
       rejectReason: task.reject_rsn_cn  ?? "",
       requestedAt:  task.req_dt.toISOString(),
       completedAt:  task.compl_dt?.toISOString() ?? null,
       appliedAt:    task.apply_dt?.toISOString()  ?? null,
+      reqMberId:    task.req_mber_id,
+      reqMberName,
+      execAvlblDt:  task.exec_avlbl_dt?.toISOString() ?? null,
+      retryCnt:     task.retry_cnt,
+      parentTaskId: task.parent_task_id,
       isZombie:
         task.task_sttus_code === "IN_PROGRESS" &&
         now - task.req_dt.getTime() > FIVE_MIN_MS,

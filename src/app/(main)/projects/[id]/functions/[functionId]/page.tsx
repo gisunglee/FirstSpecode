@@ -286,7 +286,12 @@ function FunctionDetailPageInner() {
     mutationFn: ({ taskType }: { taskType: string }) =>
       authFetch(`/api/projects/${projectId}/functions/${functionId}/ai`, {
         method: "POST",
-        body: JSON.stringify({ taskType, comment: commentCn.trim() || undefined }),
+        body: JSON.stringify({ 
+          taskType, 
+          coment_cn: commentCn.trim(), 
+          req_cn: description.trim(),
+          comment: commentCn.trim() // 유지 (하위 호환성)
+        }),
       }),
     onSuccess: (_res, vars) => {
       const labels: Record<string, string> = {
