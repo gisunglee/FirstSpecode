@@ -20,7 +20,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
-import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
+import MarkdownEditor from "@/components/ui/MarkdownEditor";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -70,16 +70,6 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   TIMEOUT:     "시간초과",
 };
 
-const STATUS_COLORS: Record<TaskStatus, string> = {
-  PENDING:     "sp-badge sp-badge--neutral",
-  IN_PROGRESS: "sp-badge sp-badge--info",
-  DONE:        "sp-badge sp-badge--success",
-  APPLIED:     "sp-badge sp-badge--primary",
-  REJECTED:    "sp-badge sp-badge--warning",
-  FAILED:      "sp-badge sp-badge--danger",
-  TIMEOUT:     "sp-badge sp-badge--warning",
-};
-
 const TASK_TYPE_LABELS: Record<TaskType, string> = {
   INSPECT:   "명세 검토",
   DESIGN:    "설계",
@@ -89,14 +79,65 @@ const TASK_TYPE_LABELS: Record<TaskType, string> = {
   CUSTOM:    "자유 요청",
 };
 
-const TASK_TYPE_COLORS: Record<TaskType, string> = {
-  INSPECT:   "sp-badge sp-badge--neutral",
-  DESIGN:    "sp-badge sp-badge--primary",
-  IMPLEMENT: "sp-badge sp-badge--info",
-  MOCKUP:    "sp-badge sp-badge--success",
-  IMPACT:    "sp-badge sp-badge--warning",
-  CUSTOM:    "sp-badge sp-badge--neutral",
-};
+// ── 배지 스타일 함수 ─────────────────────────────────────────────────────────
+
+function statusBadgeStyle(status: TaskStatus): React.CSSProperties {
+  const colors: Record<TaskStatus, { bg: string; color: string }> = {
+    PENDING:     { bg: "#f5f5f5", color: "#666666" },
+    IN_PROGRESS: { bg: "#e3f2fd", color: "#1565c0" },
+    DONE:        { bg: "#e8f5e9", color: "#2e7d32" },
+    APPLIED:     { bg: "#e8eaf6", color: "#283593" },
+    REJECTED:    { bg: "#fff3e0", color: "#e65100" },
+    FAILED:      { bg: "#ffebee", color: "#c62828" },
+    TIMEOUT:     { bg: "#fff3e0", color: "#e65100" },
+  };
+  const c = colors[status] ?? { bg: "#f5f5f5", color: "#555" };
+  return {
+    display:      "inline-block",
+    padding:      "2px 8px",
+    borderRadius: 4,
+    fontSize:     11,
+    fontWeight:   700,
+    background:   c.bg,
+    color:        c.color,
+    border:       `1px solid ${c.color}20`,
+  };
+}
+
+function taskTypeBadgeStyle(type: TaskType): React.CSSProperties {
+  const colors: Record<TaskType, { bg: string; color: string }> = {
+    INSPECT:   { bg: "#f5f5f5", color: "#616161" },
+    DESIGN:    { bg: "#e8eaf6", color: "#3f51b5" },
+    IMPLEMENT: { bg: "#e1f5fe", color: "#0288d1" },
+    MOCKUP:    { bg: "#f1f8e9", color: "#558b2f" },
+    IMPACT:    { bg: "#fff3e0", color: "#ef6c00" },
+    CUSTOM:    { bg: "#f5f5f5", color: "#757575" },
+  };
+  const c = colors[type] ?? { bg: "#f5f5f5", color: "#555" };
+  return {
+    display:      "inline-block",
+    padding:      "2px 8px",
+    borderRadius: 4,
+    fontSize:     11,
+    fontWeight:   700,
+    background:   c.bg,
+    color:        c.color,
+  };
+}
+
+function refTypeBadgeStyle(type: RefType): React.CSSProperties {
+  const isArea = type === "AREA";
+  return {
+    display:      "inline-block",
+    padding:      "2px 6px",
+    borderRadius: 4,
+    fontSize:     11,
+    fontWeight:   700,
+    backgroundColor: isArea ? "#f5f5f5" : "#f3e5f5",
+    color:           isArea ? "#666666" : "#7b1fa2",
+    border:          "1px solid var(--color-border)",
+  };
+}
 
 // ── 유틸 ──────────────────────────────────────────────────────────────────────
 
@@ -210,7 +251,7 @@ function AiTasksPageInner() {
   }
 
   // ── 10컬럼 그리드 템플릿 (1115px) ──────────────────────────────────────────
-  const GRID_CONFIG = "70px 70px 200px 80px 160px 160px 80px 50px 85px 160px";
+  const GRID_CONFIG = "70px 70px minmax(150px, 1fr) 80px 144px 144px 80px 50px 85px 140px";
 
   return (
     <div style={{ padding: 0 }}>
@@ -291,12 +332,12 @@ function AiTasksPageInner() {
                   }}
                 >
                   <div style={{ textAlign: "center" }}>
-                    <span style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, backgroundColor: row.refType === "AREA" ? "var(--color-bg-muted)" : "#f3e5f5", color: row.refType === "AREA" ? "var(--color-text-secondary)" : "#7b1fa2", fontWeight: 700, border: "1px solid var(--color-border)" }}>
+                    <span style={refTypeBadgeStyle(row.refType)}>
                       {row.refType === "AREA" ? "영역" : "기능"}
                     </span>
                   </div>
                   <div style={{ textAlign: "center" }}>
-                    <span className={TASK_TYPE_COLORS[row.taskType]} style={{ fontSize: 12, fontWeight: 700 }}>
+                    <span style={taskTypeBadgeStyle(row.taskType)}>
                       {TASK_TYPE_LABELS[row.taskType]}
                     </span>
                   </div>
@@ -314,7 +355,7 @@ function AiTasksPageInner() {
                   </div>
                   <div style={{ textAlign: "center", fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>{row.retryCnt}회</div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                    <span className={STATUS_COLORS[row.status]} style={{ padding: "3px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>{STATUS_LABELS[row.status]}</span>
+                    <span style={statusBadgeStyle(row.status)}>{STATUS_LABELS[row.status]}</span>
                     {["FAILED", "REJECTED", "TIMEOUT"].includes(row.status) && (
                       <button title="재요청" style={{ ...actionBtnStyle, padding: "2px 5px", fontSize: 14 }} onClick={(e) => { e.stopPropagation(); if (window.confirm("재요청 하시겠습니까?")) retryMutation.mutate(row.taskId); }} disabled={retryMutation.isPending} type="button">↺</button>
                     )}
@@ -393,6 +434,7 @@ function TaskDetailPanel({
   // ── 좌/우 패널 탭 상태 ─────────────────────────────────────────────────────
   const [reqTab,    setReqTab]    = useState<"edit" | "preview">("preview");
   const [resultTab, setResultTab] = useState<"edit" | "preview">("preview");
+  const [rejectTab, setResultRejectTab] = useState<"edit" | "preview">("preview");
 
   // ── 반영 뮤테이션 ──────────────────────────────────────────────────────────
   const applyMutation = useMutation({
@@ -435,6 +477,40 @@ function TaskDetailPanel({
     rejectMutation.mutate(rejectReason.trim());
   }
 
+  // 로컬 탭 버튼 컴포넌트 (디자인 통일을 위해 로컬 정의)
+  function LocalTabButtons({ tab, onTabChange }: { tab: "edit" | "preview", onTabChange: (t: "edit" | "preview") => void }) {
+    return (
+      <div style={{ display: "flex", gap: 2, background: "var(--color-bg-muted)", padding: "3px", borderRadius: 7 }}>
+        <button
+          type="button"
+          onClick={() => onTabChange("preview")}
+          style={{
+            padding: "4px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+            borderRadius: 5, border: "none",
+            transition: "all 0.15s",
+            background: tab === "preview" ? "var(--color-primary, #1976d2)" : "transparent",
+            color: tab === "preview" ? "#fff" : "var(--color-text-secondary)",
+          }}
+        >
+          미리보기
+        </button>
+        <button
+          type="button"
+          onClick={() => onTabChange("edit")}
+          style={{
+            padding: "4px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+            borderRadius: 5, border: "none",
+            transition: "all 0.15s",
+            background: tab === "edit" ? "var(--color-primary, #1976d2)" : "transparent",
+            color: tab === "edit" ? "#fff" : "var(--color-text-secondary)",
+          }}
+        >
+          원문
+        </button>
+      </div>
+    );
+  }
+
   return (
     // 오버레이 — 클릭 시 닫기
     <div
@@ -454,7 +530,7 @@ function TaskDetailPanel({
         onClick={(e) => e.stopPropagation()}
         style={{
           width:        "min(1340px, 95vw)",
-          height:       "83vh",
+          height:       "85vh",
           display:      "flex",
           flexDirection:"column",
           border:       "1px solid var(--color-border)",
@@ -538,18 +614,10 @@ function TaskDetailPanel({
             >
               {/* 왼쪽: 구분/유형/상태 + 대상 */}
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ 
-                  padding: "2px 8px", 
-                  borderRadius: 4, 
-                  fontSize: 11, 
-                  fontWeight: 700,
-                  backgroundColor: "var(--color-bg-muted)",
-                  color: "var(--color-text-secondary)",
-                  border: "1px solid var(--color-border)"
-                }}>
+                <span style={taskTypeBadgeStyle(data.taskType)}>
                   {TASK_TYPE_LABELS[data.taskType]}
                 </span>
-                <span className={STATUS_COLORS[data.status]} style={{ padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                <span style={statusBadgeStyle(data.status)}>
                   {STATUS_LABELS[data.status]}
                 </span>
                 
@@ -588,6 +656,91 @@ function TaskDetailPanel({
                   </div>
                 )}
               </div>
+
+              {/* 액션 버튼 그룹 (상단 우측으로 이동) */}
+              <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+                {/* 결과 반영/반려 버튼 (DONE 상태일 때 노출) */}
+                {data.status === "DONE" && (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {!rejectMode ? (
+                      <>
+                        <button onClick={() => setRejectMode(true)} style={{ ...secondaryBtnStyle, padding: "5px 12px", fontSize: 12 }}>
+                          반려
+                        </button>
+                        <button
+                          onClick={() => applyMutation.mutate()}
+                          disabled={applyMutation.isPending}
+                          style={{ ...primaryBtnStyle, padding: "5px 14px", fontSize: 12 }}
+                        >
+                          {applyMutation.isPending ? "반영 중..." : "결과 반영"}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => { setRejectMode(false); setRejectReason(""); }} style={{ ...secondaryBtnStyle, padding: "5px 12px", fontSize: 12 }}>
+                          취소
+                        </button>
+                        <button
+                          onClick={handleReject}
+                          disabled={rejectMutation.isPending}
+                          style={{ ...primaryBtnStyle, padding: "5px 14px", fontSize: 12, background: "var(--color-warning, #f59e0b)" }}
+                        >
+                          {rejectMutation.isPending ? "반려 처리 중..." : "반려 확인"}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* 상태 콤보박스 (반려 모드 아닐 때 노출) */}
+                {!rejectMode && data.status !== "DONE" && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>상태 변경</span>
+                    <select
+                      value={data.status}
+                      disabled={statusMutation.isPending}
+                      onChange={(e) => statusMutation.mutate(e.target.value)}
+                      style={{
+                        padding:      "4px 28px 4px 10px",
+                        borderRadius: 6,
+                        border:       "1px solid var(--color-border)",
+                        background:   "var(--color-bg-card)",
+                        color:        "var(--color-text-primary)",
+                        fontSize:     12,
+                        cursor:       "pointer",
+                        appearance:   "none",
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+                        backgroundRepeat:   "no-repeat",
+                        backgroundPosition: "right 8px center",
+                      }}
+                    >
+                      <option value="PENDING">대기</option>
+                      <option value="IN_PROGRESS">처리중</option>
+                      <option value="DONE">완료</option>
+                      <option value="APPLIED">반영됨</option>
+                      <option value="REJECTED">반려</option>
+                      <option value="FAILED">실패</option>
+                      <option value="TIMEOUT">시간초과</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* 삭제 버튼 (반려 모드 아닐 때 노출, 가장 오른쪽에 배치) */}
+                {!rejectMode && (
+                  <button
+                    type="button"
+                    disabled={deleteMutation.isPending}
+                    onClick={() => {
+                      if (window.confirm("이 AI 태스크를 삭제하시겠습니까?")) {
+                        deleteMutation.mutate();
+                      }
+                    }}
+                    style={{ ...dangerBtnStyle, fontSize: 12, padding: "5px 14px" }}
+                  >
+                    삭제
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* 좌: 요청 Spec / 우: 응답 피드백 */}
@@ -606,7 +759,7 @@ function TaskDetailPanel({
                   <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>
                     요청 SPEC
                   </span>
-                  <MarkdownTabButtons tab={reqTab} onTabChange={setReqTab} />
+                  <LocalTabButtons tab={reqTab} onTabChange={setReqTab} />
                 </div>
                 <div style={{ flex: 1, overflow: "hidden" }}>
                   <MarkdownEditor
@@ -615,6 +768,7 @@ function TaskDetailPanel({
                     readOnly={true}
                     tab={reqTab}
                     onTabChange={setReqTab}
+                    fullHeight={true}
                   />
                 </div>
               </div>
@@ -632,7 +786,7 @@ function TaskDetailPanel({
                   <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>
                     응답 피드백
                   </span>
-                  <MarkdownTabButtons tab={resultTab} onTabChange={setResultTab} />
+                  <LocalTabButtons tab={resultTab} onTabChange={setResultTab} />
                 </div>
                 <div style={{ flex: 1, overflow: "hidden" }}>
                   <MarkdownEditor
@@ -641,6 +795,7 @@ function TaskDetailPanel({
                     readOnly={true}
                     tab={resultTab}
                     onTabChange={setResultTab}
+                    fullHeight={true}
                     placeholder="결과 데이터가 없습니다."
                   />
                 </div>
@@ -667,117 +822,24 @@ function TaskDetailPanel({
                   flexShrink:  0,
                 }}
               >
-                <div style={panelLabelStyle}>반려 사유</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span style={panelLabelStyle}>반려 사유</span>
+                  <LocalTabButtons tab={rejectTab} onTabChange={setResultRejectTab} />
+                </div>
                 <div style={{ flex: 1, overflow: "hidden", marginTop: 4 }}>
                    <MarkdownEditor
                      value={data.rejectReason}
                      onChange={() => {}}
                      readOnly={true}
-                     initialTab="preview"
+                     tab={rejectTab}
+                     onTabChange={setResultRejectTab}
                      rows={3}
                    />
                 </div>
               </div>
             )}
 
-            {/* 하단 액션 바 */}
-            <div
-              style={{
-                display:        "flex",
-                alignItems:     "center",
-                justifyContent: "space-between",
-                padding:        "12px 20px",
-                borderTop:      "1px solid var(--color-border)",
-                background:     "var(--color-bg-muted)",
-                flexShrink:     0,
-                gap:            12,
-              }}
-            >
-              {/* 왼쪽: 삭제 버튼 (반려 모드 아닐 때만) */}
-              {!rejectMode && (
-                <button
-                  type="button"
-                  disabled={deleteMutation.isPending}
-                  onClick={() => {
-                    if (window.confirm("이 AI 태스크를 삭제하시겠습니까?")) {
-                      deleteMutation.mutate();
-                    }
-                  }}
-                  style={{ ...dangerBtnStyle, fontSize: 13, padding: "6px 16px" }}
-                >
-                  삭제
-                </button>
-              )}
-
-              {/* 오른쪽: 결과 반영/반려 버튼 (DONE 상태일 때 노출) */}
-              {data.status === "DONE" && (
-                <div style={{ display: "flex", gap: 8 }}>
-                  {!rejectMode ? (
-                    <>
-                      <button
-                        onClick={() => setRejectMode(true)}
-                        style={secondaryBtnStyle}
-                      >
-                        반려
-                      </button>
-                      <button
-                        onClick={() => applyMutation.mutate()}
-                        disabled={applyMutation.isPending}
-                        style={primaryBtnStyle}
-                      >
-                        {applyMutation.isPending ? "반영 중..." : "결과 반영"}
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button onClick={() => { setRejectMode(false); setRejectReason(""); }} style={secondaryBtnStyle}>
-                        취소
-                      </button>
-                      <button
-                        onClick={handleReject}
-                        disabled={rejectMutation.isPending}
-                        style={{ ...primaryBtnStyle, background: "var(--color-warning, #f59e0b)" }}
-                      >
-                        {rejectMutation.isPending ? "반려 처리 중..." : "반려 확인"}
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* 오른쪽: 상태 콤보박스 (반려 모드 아닐 때 노출) */}
-              {!rejectMode && data.status !== "DONE" && (
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>상태 변경</span>
-                  <select
-                    value={data.status}
-                    disabled={statusMutation.isPending}
-                    onChange={(e) => statusMutation.mutate(e.target.value)}
-                    style={{
-                      padding:      "6px 28px 6px 10px",
-                      borderRadius: 6,
-                      border:       "1px solid var(--color-border)",
-                      background:   "var(--color-bg-card)",
-                      color:        "var(--color-text-primary)",
-                      fontSize:     13,
-                      cursor:       "pointer",
-                      appearance:   "none",
-                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
-                      backgroundRepeat:   "no-repeat",
-                      backgroundPosition: "right 8px center",
-                    }}
-                  >
-                    <option value="PENDING">대기</option>
-                    <option value="IN_PROGRESS">처리중</option>
-                    <option value="DONE">완료</option>
-                    <option value="APPLIED">반영됨</option>
-                    <option value="REJECTED">반려</option>
-                    <option value="FAILED">실패</option>
-                    <option value="TIMEOUT">시간초과</option>
-                  </select>
-                </div>
-              )}
-            </div>
+            <div style={{ height: 10 }} />
           </div>
         )}
       </div>

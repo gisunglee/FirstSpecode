@@ -21,11 +21,13 @@ type Props = {
   /** 외부에서 탭 제어 시 전달. 없으면 내부 state 사용 */
   tab?:           "edit" | "preview";
   onTabChange?:   (tab: "edit" | "preview") => void;
+  fullHeight?:    boolean;
 };
 
 export default function MarkdownEditor({
   value, onChange, placeholder, rows = 14, readOnly = false,
   tab: externalTab, onTabChange,
+  fullHeight = false,
 }: Props) {
   // 외부 탭이 없으면 내부 state로 fallback
   const [internalTab, setInternalTab] = useState<"edit" | "preview">("edit");
@@ -33,7 +35,7 @@ export default function MarkdownEditor({
   const handleTab  = onTabChange ?? setInternalTab;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: fullHeight ? "100%" : "auto", flex: fullHeight ? 1 : "none" }}>
       {tab === "edit" ? (
         <textarea
           value={value}
@@ -54,6 +56,8 @@ export default function MarkdownEditor({
             fontFamily:  "var(--font-mono, monospace)",
             fontSize:    12,
             lineHeight:  1.5,
+            flex:        fullHeight ? 1 : "none",
+            height:      fullHeight ? "100%" : "auto",
           }}
         />
       ) : (
@@ -66,9 +70,10 @@ export default function MarkdownEditor({
             background:   "var(--color-bg-card)",
             color:        "var(--color-text-primary)",
             boxSizing:    "border-box",
-            minHeight:    rows * 21,
+            minHeight:    fullHeight ? "100%" : (rows * 21),
             borderRadius: 6,
             overflowY:    "auto",
+            flex:         fullHeight ? 1 : "none",
           }}
           dangerouslySetInnerHTML={{ __html: renderMarkdown(value) || "<p style='color:#aaa;font-size:13px'>내용 없음</p>" }}
         />

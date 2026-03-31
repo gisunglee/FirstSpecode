@@ -36,7 +36,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         ...(unitWorkId ? { unit_work_id: unitWorkId } : {}),
       },
       include: {
-        unitWork: { select: { unit_work_id: true, unit_work_nm: true } },
+        unitWork: {
+          select: {
+            unit_work_id: true,
+            unit_work_nm: true,
+            requirement: {
+              select: {
+                req_id: true,
+                req_nm: true,
+                req_display_id: true,
+              },
+            },
+          },
+        },
         // 하위 영역 수 집계
         _count: { select: { areas: true } },
       },
@@ -44,17 +56,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     });
 
     const items = screens.map((s) => ({
-      screenId:     s.scrn_id,
-      displayId:    s.scrn_display_id,
-      name:         s.scrn_nm,
-      type:         s.scrn_ty_code,
-      categoryL:    s.ctgry_l_nm ?? "",
-      categoryM:    s.ctgry_m_nm ?? "",
-      categoryS:    s.ctgry_s_nm ?? "",
-      unitWorkId:   s.unit_work_id ?? null,
-      unitWorkName: s.unitWork?.unit_work_nm ?? "미분류",
-      areaCount:    s._count.areas,
-      sortOrder:    s.sort_ordr,
+      screenId:        s.scrn_id,
+      displayId:       s.scrn_display_id,
+      name:            s.scrn_nm,
+      type:            s.scrn_ty_code,
+      categoryL:       s.ctgry_l_nm ?? "",
+      categoryM:       s.ctgry_m_nm ?? "",
+      categoryS:       s.ctgry_s_nm ?? "",
+      unitWorkId:      s.unit_work_id ?? null,
+      unitWorkName:    s.unitWork?.unit_work_nm ?? "미분류",
+      requirementId:   s.unitWork?.requirement?.req_id ?? null,
+      requirementName: s.unitWork?.requirement
+        ? `[${s.unitWork.requirement.req_display_id}] ${s.unitWork.requirement.req_nm}`
+        : "미분류",
+      areaCount:       s._count.areas,
+      sortOrder:       s.sort_ordr,
     }));
 
     return apiSuccess({ items, totalCount: items.length });

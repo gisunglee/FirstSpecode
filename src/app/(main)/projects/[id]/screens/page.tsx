@@ -33,6 +33,8 @@ type ScreenRow = {
   categoryS: string;
   unitWorkId: string | null;
   unitWorkName: string;
+  requirementId: string | null;
+  requirementName: string;
   areaCount: number;
   sortOrder: number;
 };
@@ -155,6 +157,7 @@ function ScreensPageInner() {
           {/* 헤더 행 */}
           <div style={gridHeaderStyle}>
             <div />
+            <div>요구사항</div>
             <div>단위업무</div>
             <div>화면명</div>
             <div>화면유형</div>
@@ -165,99 +168,120 @@ function ScreensPageInner() {
             <div />
           </div>
 
-          {/* 데이터 행 */}
-          {items.map((screen, idx) => (
-            <div
-              key={screen.screenId}
-              draggable
-              onDragStart={() => handleDragStart(idx)}
-              onDragEnter={() => handleDragEnter(idx)}
-              onDragEnd={handleDragEnd}
-              onDragOver={(e) => e.preventDefault()}
-              onClick={() => router.push(`/projects/${projectId}/screens/${screen.screenId}`)}
-              style={{
-                ...gridRowStyle,
-                borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-              }}
-            >
-              {/* 드래그 핸들 */}
-              <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
+          {items.map((screen, idx) => {
+            const isFirstReq = idx === 0 || items[idx - 1].requirementId !== screen.requirementId;
+            const isLastOfReq = idx === items.length - 1 || items[idx + 1].requirementId !== screen.requirementId;
 
-              {/* 단위업무명 (클릭 → 단위업무 상세, 행 클릭과 분리) */}
-              <div onClick={(e) => e.stopPropagation()}>
-                {screen.unitWorkId ? (
+            return (
+              <div
+                key={screen.screenId}
+                draggable
+                onDragStart={() => handleDragStart(idx)}
+                onDragEnter={() => handleDragEnter(idx)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => e.preventDefault()}
+                onClick={() => router.push(`/projects/${projectId}/screens/${screen.screenId}`)}
+                style={{
+                  ...gridRowStyle,
+                  borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+                  borderBottom: isLastOfReq ? "1px solid var(--color-border)" : "none",
+                }}
+              >
+                {/* 드래그 핸들 */}
+                <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
+
+                {/* 요구사항 (첫 행에만 표시) */}
+                <div onClick={(e) => e.stopPropagation()}>
+                  {isFirstReq ? (
+                    screen.requirementId ? (
+                      <button
+                        onClick={() => router.push(`/projects/${projectId}/requirements/${screen.requirementId}`)}
+                        style={linkBtnStyle}
+                      >
+                        {screen.requirementName}
+                      </button>
+                    ) : (
+                      <span style={{ color: "#aaa", fontSize: 13 }}>미분류</span>
+                    )
+                  ) : null}
+                </div>
+
+                {/* 단위업무명 (클릭 → 단위업무 상세, 행 클릭과 분리) */}
+                <div onClick={(e) => e.stopPropagation()}>
+                  {screen.unitWorkId ? (
+                    <button
+                      onClick={() => router.push(`/projects/${projectId}/unit-works/${screen.unitWorkId}`)}
+                      style={linkBtnStyle}
+                    >
+                      {screen.unitWorkName}
+                    </button>
+                  ) : (
+                    <span style={{ color: "#aaa", fontSize: 13 }}>미분류</span>
+                  )}
+                </div>
+
+                {/* 화면명 */}
+                <div style={{ fontSize: 14, fontWeight: 500 }}>
+                  <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
+                    {screen.displayId}
+                  </span>
+                  {screen.name}
+                </div>
+
+                {/* 화면유형 배지 */}
+                <div>
+                  <span style={typeBadgeStyle(screen.type)}>
+                    {screen.type}
+                  </span>
+                </div>
+
+                {/* 영역 수 */}
+                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
+                  {screen.areaCount}
+                </div>
+
+                {/* 대분류 */}
+                <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {screen.categoryL || "-"}
+                </div>
+
+                {/* 중분류 */}
+                <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {screen.categoryM || "-"}
+                </div>
+
+                {/* 소분류 */}
+                <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {screen.categoryS || "-"}
+                </div>
+
+                {/* 바로가기(→) + 삭제 (FID-00143) */}
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
                   <button
-                    onClick={() => router.push(`/projects/${projectId}/unit-works/${screen.unitWorkId}`)}
-                    style={linkBtnStyle}
+                    onClick={() => router.push(`/projects/${projectId}/areas?screenId=${screen.screenId}`)}
+                    title="영역 목록으로 이동"
+                    style={{
+                      background: "none",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: 4,
+                      cursor: "pointer",
+                      fontSize: 13,
+                      padding: "3px 8px",
+                      color: "var(--color-text-secondary)",
+                    }}
                   >
-                    {screen.unitWorkName}
+                    →
                   </button>
-                ) : (
-                  <span style={{ color: "#aaa", fontSize: 13 }}>미분류</span>
-                )}
+                  <button
+                    onClick={() => setDeleteTarget(screen)}
+                    style={dangerBtnStyle}
+                  >
+                    삭제
+                  </button>
+                </div>
               </div>
-
-              {/* 화면명 */}
-              <div style={{ fontSize: 14, fontWeight: 500 }}>
-                <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
-                  {screen.displayId}
-                </span>
-                {screen.name}
-              </div>
-
-              {/* 화면유형 배지 */}
-              <div>
-                <span style={typeBadgeStyle(screen.type)}>
-                  {screen.type}
-                </span>
-              </div>
-
-              {/* 영역 수 */}
-              <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
-                {screen.areaCount}
-              </div>
-
-              {/* 대분류 */}
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {screen.categoryL || "-"}
-              </div>
-
-              {/* 중분류 */}
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {screen.categoryM || "-"}
-              </div>
-
-              {/* 소분류 */}
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {screen.categoryS || "-"}
-              </div>
-
-              {/* 바로가기(→) + 삭제 (FID-00143) */}
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
-                <button
-                  onClick={() => router.push(`/projects/${projectId}/areas?screenId=${screen.screenId}`)}
-                  title="영역 목록으로 이동"
-                  style={{
-                    background: "none",
-                    border: "1px solid var(--color-border)",
-                    borderRadius: 4,
-                    cursor: "pointer",
-                    fontSize: 13,
-                    padding: "3px 8px",
-                    color: "var(--color-text-secondary)",
-                  }}
-                >
-                  →
-                </button>
-                <button
-                  onClick={() => setDeleteTarget(screen)}
-                  style={dangerBtnStyle}
-                >
-                  삭제
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
       </div>
@@ -394,7 +418,7 @@ function typeBadgeStyle(type: string): React.CSSProperties {
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-const GRID_TEMPLATE = "32px minmax(100px, 160px) 1fr 72px 52px 90px 90px 90px 100px";
+const GRID_TEMPLATE = "32px minmax(120px, 200px) minmax(100px, 160px) 1fr 72px 52px 90px 90px 90px 100px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid",
