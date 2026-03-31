@@ -110,12 +110,10 @@ export default function ProgressTracker({
   return (
     <div style={{
       display:      "flex",
-      alignItems:   "center",
-      alignSelf:    "center",    // 콘텐츠 크기 기준으로 카드 높이 결정
-      border:       "1px solid var(--color-border)",
-      borderRadius: 12,
-      background:   "var(--color-bg-card)",
-      boxShadow:    "0 1px 3px rgba(0,0,0,0.06)",
+      alignItems:   "stretch",
+      alignSelf:    "stretch",   // 헤더 전체 높이를 채움 (테두리 없이 배경으로 구분)
+      borderRadius: 10,
+      background:   "rgba(0,0,0,0.05)",
       overflow:     "hidden",
     }}>
       {phases.map((phase, idx) => (
@@ -125,8 +123,8 @@ export default function ProgressTracker({
             display:        "flex",
             alignItems:     "center",
             justifyContent: "center",
-            borderLeft:     idx === 0 ? "none" : "1px solid var(--color-border)",
-            padding:        "4px 10px",
+            borderLeft:     idx === 0 ? "none" : "1px solid rgba(0,0,0,0.08)",
+            padding:        "0 10px",
           }}
         >
           <PhaseItem
