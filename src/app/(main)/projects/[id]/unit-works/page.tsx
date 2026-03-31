@@ -238,6 +238,7 @@ function UnitWorksPageInner() {
               onDragEnter={() => handleDragEnter(idx)}
               onDragEnd={handleDragEnd}
               onDragOver={(e) => e.preventDefault()}
+              onClick={() => router.push(`/projects/${projectId}/unit-works/${uw.unitWorkId}`)}
               style={{
                 ...gridRowStyle,
                 borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
@@ -248,8 +249,8 @@ function UnitWorksPageInner() {
                 ☰
               </div>
 
-              {/* 요구사항 */}
-              <div>
+              {/* 요구사항 (클릭 → 요구사항 상세, 행 클릭과 분리) */}
+              <div onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => router.push(`/projects/${projectId}/requirements/${uw.reqId}`)}
                   style={linkBtnStyle}
@@ -261,17 +262,12 @@ function UnitWorksPageInner() {
                 </button>
               </div>
 
-              {/* 단위업무명 (클릭 → 상세) */}
-              <div>
-                <button
-                  onClick={() => router.push(`/projects/${projectId}/unit-works/${uw.unitWorkId}`)}
-                  style={linkBtnStyle}
-                >
-                  <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
-                    {uw.displayId}
-                  </span>
-                  {uw.name}
-                </button>
+              {/* 단위업무명 */}
+              <div style={{ fontSize: 14, fontWeight: 500 }}>
+                <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
+                  {uw.displayId}
+                </span>
+                {uw.name}
               </div>
 
               {/* 기간 */}
@@ -284,7 +280,7 @@ function UnitWorksPageInner() {
               </div>
 
               {/* 진행률 인라인 수정 (FID-00133) */}
-              <div style={{ textAlign: "center" }}>
+              <div style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                 <ProgressCell
                   unitWorkId={uw.unitWorkId}
                   progress={uw.progress}
@@ -299,7 +295,7 @@ function UnitWorksPageInner() {
               </div>
 
               {/* 삭제 버튼 */}
-              <div>
+              <div onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => setDeleteTarget(uw)}
                   style={dangerBtnStyle}
@@ -512,6 +508,7 @@ const gridRowStyle: React.CSSProperties = {
   alignItems:          "center",
   background:          "var(--color-bg-card)",
   transition:          "background 0.1s",
+  cursor:              "pointer",
 };
 
 const inputStyle: React.CSSProperties = {

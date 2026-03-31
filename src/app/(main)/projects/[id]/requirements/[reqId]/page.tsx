@@ -11,13 +11,96 @@
  */
 
 import { Suspense, useState, useRef, useEffect } from "react";
+import { marked } from "marked";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
-import { renderMarkdown } from "@/lib/renderMarkdown";
 import RichEditor from "@/components/ui/RichEditor";
+import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
+
+// ── 상세 명세 예시 / 템플릿 상수 ────────────────────────────────────────────
+
+const SPEC_EXAMPLE = `## 기능 개요
+다양한 유형의 게시판(공지, 자료실, 묻고답하기 등)을 단일 구조로 통합 관리하며,
+관리자가 게시판 유형과 속성을 직접 설정할 수 있는 기능을 제공한다.
+
+## 메뉴 위치
+- 사용자: 정보마당 > 게시판
+- 관리자: 시스템관리 > 게시판관리
+
+## 사용 대상 / 권한
+| 구분 | 대상 | 접근 범위 |
+|------|------|-----------|
+| 일반사용자 | 로그인 사용자 전체 | 조회, 글쓰기, 댓글 |
+| 비로그인 | 일반 방문자 | 조회만 가능 (게시판별 설정) |
+| 게시판 관리자 | 지정된 담당자 | 글 관리, 공지 지정, 첨부 삭제 |
+| 시스템 관리자 | 관리자 | 게시판 생성/수정/삭제, 권한 설정 |
+
+## 제공 화면 목록
+| 화면명 | 설명 |
+|--------|------|
+| 게시판 목록 | 게시글 목록 조회, 검색, 페이징 |
+| 게시글 상세 | 본문, 첨부파일, 댓글 표시 |
+| 게시글 등록/수정 | 에디터 포함, 첨부파일 업로드 |
+| 게시판 관리 | 관리자용 게시판 유형/속성 설정 |
+| 게시글 관리 | 관리자용 전체 글 목록, 일괄 처리 |
+
+## 기능 상세
+| 기능명 | 설명 | 비고 |
+|--------|------|------|
+| 게시판 유형 설정 | 공지/자료실/QnA 등 유형별 속성 ON/OFF | 관리자 전용 |
+| 게시글 CRUD | 등록, 수정, 삭제, 조회 | 권한별 차등 |
+| 공지 고정 | 상단 고정 공지 지정 | 게시판관리자 이상 |
+| 첨부파일 | 다중 파일 업로드, 확장자/용량 제한 설정 | 게시판별 설정 |
+| 댓글 | 댓글 등록/삭제, 대댓글 1단계 지원 | 게시판별 ON/OFF |
+| 검색 | 제목, 내용, 작성자 검색 | |
+| 조회수 | 게시글 조회 시 자동 카운트 | 관리자 조회 제외 |
+| 답글 (QnA) | 원글에 대한 답변 글 연결 표시 | QnA 유형만 해당 |
+
+## 업무 처리 순서
+1. 관리자가 게시판 유형/속성 생성 (댓글 허용 여부, 첨부 허용 여부 등 설정)
+2. 사용자가 게시글 등록 (에디터 작성 + 첨부파일 업로드)
+3. 게시판 관리자가 필요 시 공지 지정 또는 글 숨김 처리
+4. 일반 사용자 목록 조회 → 상세 조회 → 댓글 작성
+5. QnA 유형의 경우 담당자가 답글 등록 → 작성자에게 알림 (알림 연계 시)
+
+## 제외 범위 / 제약 사항 / 협의 사항
+- (제외) 이메일 알림 연계는 본 범위 제외
+- (제약) 첨부파일 확장자는 보안지침상 exe, sh 등 실행파일 불가
+- (협의) 익명 게시 기능은 추후 결정`;
+
+// 내용은 비우고 구조(헤딩·표 컬럼)만 유지한 템플릿
+const SPEC_TEMPLATE = `## 기능 개요
+
+
+## 메뉴 위치
+- 사용자:
+- 관리자:
+
+## 사용 대상 / 권한
+| 구분 | 대상 | 접근 범위 |
+|------|------|-----------|
+| | | |
+
+## 제공 화면 목록
+| 화면명 | 설명 |
+|--------|------|
+| | |
+
+## 기능 상세
+| 기능명 | 설명 | 비고 |
+|--------|------|------|
+| | | |
+
+## 업무 처리 순서
+1.
+
+## 제외 범위 / 제약 사항 / 협의 사항
+- (제외)
+- (제약)
+- (협의)`;
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -61,6 +144,7 @@ type RequirementDetail = {
   analysisMemo:    string;
   detailSpec:      string;
   taskId:          string | null;
+  sortOrder:       number;
 };
 
 type AttachedFile = {
@@ -73,6 +157,8 @@ type AttachedFile = {
 
 type SaveBody = {
   taskId?:          string;
+  reqDisplayId:     string;
+  sortOrder:        number;
   name:             string;
   priority:         string;
   source:           string;
@@ -106,6 +192,8 @@ function RequirementDetailPageInner() {
   // ── 폼 상태 ────────────────────────────────────────────────────────────────
   const [form, setForm] = useState<SaveBody>({
     taskId:          undefined,
+    reqDisplayId:    "",
+    sortOrder:       0,
     name:            "",
     priority:        "MEDIUM",
     source:          "RFP",
@@ -122,6 +210,9 @@ function RequirementDetailPageInner() {
   // 마크다운 탭 상태 (분석메모 / 상세명세 각각)
   const [analyzeTab, setAnalyzeTab] = useState<"edit" | "preview">("edit");
   const [specTab,    setSpecTab]    = useState<"edit" | "preview">("edit");
+
+  // 상세 명세 예시 팝업 상태
+  const [specExampleOpen, setSpecExampleOpen] = useState(false);
 
   // 변경 이력 팝업 상태
   const [historyOpen,    setHistoryOpen]    = useState(false);
@@ -154,6 +245,8 @@ function RequirementDetailPageInner() {
         const d = r.data;
         setForm({
           taskId:          d.taskId ?? undefined,
+          reqDisplayId:    d.displayId ?? "",
+          sortOrder:       d.sortOrder ?? 0,
           name:            d.name,
           priority:        d.priority,
           source:          d.source,
@@ -186,7 +279,7 @@ function RequirementDetailPageInner() {
   const saveMutation = useMutation({
     mutationFn: (body: SaveBody) =>
       isNew
-        ? authFetch(`/api/projects/${projectId}/requirements`, {
+        ? authFetch<{ data: { requirementId: string } }>(`/api/projects/${projectId}/requirements`, {
             method: "POST",
             body:   JSON.stringify(body),
           })
@@ -194,10 +287,17 @@ function RequirementDetailPageInner() {
             method: "PUT",
             body:   JSON.stringify(body),
           }),
-    onSuccess: () => {
+    onSuccess: (res) => {
       toast.success(isNew ? "요구사항이 등록되었습니다." : "저장되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["requirements", projectId] });
-      router.push(`/projects/${projectId}/requirements`);
+      if (isNew) {
+        // 신규 등록 후 → 생성된 상세 페이지로 이동
+        const newId = (res as { data: { requirementId: string } }).data.requirementId;
+        router.push(`/projects/${projectId}/requirements/${newId}`);
+      } else {
+        // 수정 후 → 현재 페이지 그대로 (캐시 갱신으로 최신 데이터 반영)
+        queryClient.invalidateQueries({ queryKey: ["requirement", projectId, reqId] });
+      }
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -392,7 +492,7 @@ function RequirementDetailPageInner() {
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
           {/* ── AR-00043 기본 정보 ────────────────────────────────────────────── */}
-          <Section title="기본 정보">
+          <Section>
             {/* 상위 과업 선택 */}
             <FormField label="상위 과업">
               <select
@@ -417,6 +517,30 @@ function RequirementDetailPageInner() {
                 style={inputStyle}
               />
             </FormField>
+
+            {/* 표시 ID + 정렬 순서 */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: 16 }}>
+              <FormField label="표시 ID">
+                <input
+                  type="text"
+                  value={form.reqDisplayId}
+                  placeholder="예: RQ-00001"
+                  onChange={(e) => handleChange("reqDisplayId", e.target.value)}
+                  style={inputStyle}
+                />
+              </FormField>
+              <FormField label="정렬 순서">
+                <input
+                  type="number"
+                  min={0}
+                  // 0이면 빈 문자열로 표시해 삭제 후 바로 입력 가능
+                  value={form.sortOrder || ""}
+                  onChange={(e) => setForm((prev) => ({ ...prev, sortOrder: parseInt(e.target.value) || 0 }))}
+                  placeholder="0"
+                  style={inputStyle}
+                />
+              </FormField>
+            </div>
 
             {/* 우선순위 + 출처 */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
@@ -455,7 +579,7 @@ function RequirementDetailPageInner() {
           </Section>
 
           {/* ── AR-00044 원문·현행화 ──────────────────────────────────────────── */}
-          <Section title="원문·현행화">
+          <Section label="요구사항 내용">
             {/* 탭 헤더 */}
             <div style={{ display: "flex", gap: 16, borderBottom: "1px solid var(--color-border)", marginBottom: 12 }}>
               {(["original", "current"] as const).map((tab) => (
@@ -503,7 +627,7 @@ function RequirementDetailPageInner() {
 
           {/* ── AR-00046 첨부파일 (수정 모드에서만) ────────────────────────── */}
           {!isNew && (
-            <Section title="근거 파일">
+            <Section title="첨부파일">
               {files.length === 0 ? (
                 <p style={{ fontSize: 13, color: "#aaa", margin: 0 }}>첨부파일이 없습니다.</p>
               ) : (
@@ -571,9 +695,13 @@ function RequirementDetailPageInner() {
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
           {/* ── AR-00045 분석메모·상세명세 ──────────────────────────────────── */}
-          <Section title="분석 메모 · 상세 명세">
+          <Section>
             {/* 분석 메모 */}
-            <FormField label="분석 메모">
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>분석 메모</span>
+                <MarkdownTabButtons tab={analyzeTab} onTabChange={setAnalyzeTab} />
+              </div>
               <MarkdownEditor
                 value={form.analysisMemo}
                 tab={analyzeTab}
@@ -582,10 +710,30 @@ function RequirementDetailPageInner() {
                 placeholder={`## 분석 내용\n\n- 항목1\n- 항목2`}
                 rows={14}
               />
-            </FormField>
+            </div>
 
             {/* 상세 명세 */}
-            <FormField label="상세 명세">
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>상세 명세</span>
+                <MarkdownTabButtons tab={specTab} onTabChange={setSpecTab} />
+                <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => setSpecExampleOpen(true)}
+                    style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: "pointer" }}
+                  >
+                    예시
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleChange("detailSpec", SPEC_TEMPLATE)}
+                    style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: "pointer" }}
+                  >
+                    템플릿 적용
+                  </button>
+                </div>
+              </div>
               <MarkdownEditor
                 value={form.detailSpec}
                 tab={specTab}
@@ -594,11 +742,16 @@ function RequirementDetailPageInner() {
                 placeholder={`## 기능 상세\n\n- 항목1\n- 항목2`}
                 rows={18}
               />
-            </FormField>
+            </div>
           </Section>
         </div>
       </div>
       </div>
+
+      {/* ── 상세 명세 예시 팝업 ─────────────────────────────────────────────── */}
+      {specExampleOpen && (
+        <SpecExamplePopup onClose={() => setSpecExampleOpen(false)} />
+      )}
 
       {/* ── 변경 이력 팝업 ──────────────────────────────────────────────────── */}
       {historyOpen && (
@@ -704,22 +857,39 @@ function RequirementDetailPageInner() {
 
 // ── 공통 컴포넌트 ─────────────────────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  label,
+  children,
+}: {
+  title?: string;
+  label?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div
       style={{
-        border:       "1px solid var(--color-border)",
-        borderRadius: 8,
-        padding:      "20px 24px",
-        background:   "var(--color-bg-card)",
-        display:      "flex",
+        border:        "1px solid var(--color-border)",
+        borderRadius:  8,
+        padding:       "20px 24px",
+        background:    "var(--color-bg-card)",
+        display:       "flex",
         flexDirection: "column",
-        gap:          16,
+        gap:           16,
       }}
     >
-      <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
-        {title}
-      </h2>
+      {/* 큰 헤더 — title 있을 때만 표시 */}
+      {title && (
+        <h2 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+          {title}
+        </h2>
+      )}
+      {/* 작은 레이블 — label 있을 때만 표시 */}
+      {label && (
+        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+          {label}
+        </span>
+      )}
       {children}
     </div>
   );
@@ -743,77 +913,98 @@ function FormField({
   );
 }
 
-// ── 마크다운 에디터 (편집/미리보기 탭) ──────────────────────────────────────
+// ── 상세 명세 예시 팝업 CSS ──────────────────────────────────────────────────
 
-function MarkdownEditor({
-  value, tab, onTabChange, onChange, placeholder, rows,
-}: {
-  value:        string;
-  tab:          "edit" | "preview";
-  onTabChange:  (t: "edit" | "preview") => void;
-  onChange:     (v: string) => void;
-  placeholder:  string;
-  rows:         number;
-}) {
+const SPEC_EXAMPLE_CSS = [
+  ".sp-example h2,.sp-example h3{font-size:14px;font-weight:700;margin:16px 0 8px}",
+  ".sp-example table{border-collapse:collapse;width:100%;margin-bottom:12px}",
+  ".sp-example th,.sp-example td{border:1px solid #e0e0e0;padding:5px 10px;font-size:12px}",
+  ".sp-example th{background:#f5f5f5;font-weight:600}",
+  ".sp-example p{margin:4px 0;font-size:13px}",
+  ".sp-example ul,.sp-example ol{padding-left:18px;margin:4px 0}",
+  ".sp-example li{font-size:13px}",
+].join(" ");
+
+// ── 상세 명세 예시 팝업 컴포넌트 ─────────────────────────────────────────────
+
+function SpecExamplePopup({ onClose }: { onClose: () => void }) {
+  const [tab, setTab] = useState<"raw" | "preview">("preview");
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(SPEC_EXAMPLE).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    });
+  }
+
+  const tabBtn = (t: "raw" | "preview", label: string) => (
+    <button
+      onClick={() => setTab(t)}
+      style={{
+        padding: "4px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+        borderRadius: 5, border: "none",
+        background: tab === t ? "var(--color-primary, #1976d2)" : "transparent",
+        color: tab === t ? "#fff" : "var(--color-text-secondary)",
+      }}
+    >
+      {label}
+    </button>
+  );
+
   return (
-    <div>
-      {/* 탭 */}
-      <div style={{ display: "flex", gap: 16, borderBottom: "1px solid var(--color-border)", marginBottom: 12 }}>
-        {(["edit", "preview"] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => onTabChange(t)}
-            style={{
-              padding:      "6px 4px",
-              border:       "none",
-              borderBottom: tab === t ? "2px solid var(--color-primary, #1976d2)" : "2px solid transparent",
-              background:   "transparent",
-              color:        tab === t ? "var(--color-primary, #1976d2)" : "var(--color-text-secondary)",
-              fontSize:     13,
-              fontWeight:   tab === t ? 600 : 500,
-              cursor:       "pointer",
-              transition:   "all 0.2s ease",
-              marginBottom: -1,
-            }}
-          >
-            {t === "edit" ? "편집" : "미리보기"}
-          </button>
-        ))}
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: "var(--color-bg-card)", borderRadius: 10, width: "min(780px, 92vw)", maxHeight: "84vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 헤더 */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "1px solid var(--color-border)", gap: 12 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, flexShrink: 0 }}>상세 명세 예시</span>
+          <div style={{ display: "flex", gap: 2, background: "var(--color-bg-muted)", padding: "3px", borderRadius: 7 }}>
+            {tabBtn("preview", "미리보기")}
+            {tabBtn("raw", "원문")}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+            <button
+              onClick={handleCopy}
+              style={{
+                padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                borderRadius: 5, border: "1px solid var(--color-border)",
+                background: copied ? "#e8f5e9" : "var(--color-bg-base)",
+                color: copied ? "#2e7d32" : "var(--color-text-secondary)",
+                transition: "all 0.2s",
+              }}
+            >
+              {copied ? "✓ 복사됨" : "복사"}
+            </button>
+            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--color-text-secondary)", lineHeight: 1 }}>×</button>
+          </div>
+        </div>
+        {/* 본문 */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+          {tab === "raw" ? (
+            <pre style={{ margin: 0, fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", color: "var(--color-text-primary)", fontFamily: "monospace" }}>
+              {SPEC_EXAMPLE}
+            </pre>
+          ) : (
+            <>
+              <style dangerouslySetInnerHTML={{ __html: SPEC_EXAMPLE_CSS }} />
+              <div
+                className="sp-example"
+                style={{ fontSize: 13, lineHeight: 1.8, color: "var(--color-text-primary)" }}
+                dangerouslySetInnerHTML={{ __html: (() => { const r = marked.parse(SPEC_EXAMPLE, { async: false }); return typeof r === "string" ? r : ""; })() }}
+              />
+            </>
+          )}
+        </div>
       </div>
-
-      {tab === "edit" ? (
-        <textarea
-          value={value}
-          placeholder={placeholder}
-          rows={rows}
-          onChange={(e) => onChange(e.target.value)}
-          style={{
-            ...inputStyle,
-            resize:      "vertical",
-            fontFamily:  "monospace",
-            fontSize:    13,
-            borderRadius: 6,
-          }}
-        />
-      ) : (
-        <div
-          className="sp-markdown"
-          style={{
-            ...inputStyle,
-            minHeight:    rows * 24,
-            maxHeight:    600,
-            borderRadius: 6,
-            padding:      "12px 16px",
-            overflowY:    "auto",
-          }}
-          dangerouslySetInnerHTML={{ __html: renderMarkdown(value) || "<p style='color:#aaa;font-size:13px'>내용 없음</p>" }}
-        />
-      )}
     </div>
   );
 }
-
 
 // ── 파일 크기 포맷 ───────────────────────────────────────────────────────────
 

@@ -222,6 +222,7 @@ function TaskListPageInner() {
                 onDragEnter={() => handleDragEnter(idx)}
                 onDragEnd={handleDragEnd}
                 onDragOver={(e) => e.preventDefault()}
+                onClick={() => router.push(`/projects/${projectId}/tasks/${task.taskId}`)}
                 style={{
                   display: "grid",
                   gridTemplateColumns: "32px 1fr 100px 70px 90px 110px 120px",
@@ -229,28 +230,24 @@ function TaskListPageInner() {
                   borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
                   alignItems: "center",
                   gap: 12,
-                  cursor: "grab",
+                  cursor: "pointer",
                   background: "var(--color-bg-card)",
                   transition: "background 0.1s",
                 }}
               >
                 {/* 드래그 핸들 */}
-                <span style={{ color: "#bbb", fontSize: 16, cursor: "grab", userSelect: "none" }}>
+                <span
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ color: "#bbb", fontSize: 16, cursor: "grab", userSelect: "none" }}
+                >
                   ≡
                 </span>
 
                 {/* 과업명 */}
                 <div>
-                  <button
-                    onClick={() => router.push(`/projects/${projectId}/tasks/${task.taskId}`)}
-                    style={{
-                      background: "none", border: "none", cursor: "pointer",
-                      fontSize: 14, fontWeight: 600, color: "var(--color-text-primary)",
-                      textAlign: "left", padding: 0,
-                    }}
-                  >
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "var(--color-text-primary)" }}>
                     {task.name}
-                  </button>
+                  </p>
                   <p style={{ margin: "2px 0 0", fontSize: 11, color: "#aaa" }}>
                     {task.displayId}
                   </p>
@@ -299,7 +296,7 @@ function TaskListPageInner() {
                 </div>
 
                 {/* 액션 */}
-                <div style={{ display: "flex", gap: 4 }}>
+                <div style={{ display: "flex", gap: 4 }} onClick={(e) => e.stopPropagation()}>
                   <button
                     onClick={() => copyMutation.mutate(task.taskId)}
                     disabled={copyMutation.isPending}

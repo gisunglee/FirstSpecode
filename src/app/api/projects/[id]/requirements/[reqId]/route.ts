@@ -50,6 +50,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       detailSpec:      req.spec_cn ?? "",
       taskId:          req.task_id ?? null,
       taskName:        req.task?.task_nm ?? "미분류",
+      sortOrder:       req.sort_ordr ?? 0,
     });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/requirements/${reqId}] DB 오류:`, err);
@@ -81,10 +82,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   const {
     taskId, name, priority, source, rfpPage,
     originalContent, currentContent, analysisMemo, detailSpec,
+    reqDisplayId, sortOrder,
   } = body as {
     taskId?: string; name?: string; priority?: string; source?: string;
     rfpPage?: string; originalContent?: string; currentContent?: string;
-    analysisMemo?: string; detailSpec?: string;
+    analysisMemo?: string; detailSpec?: string; reqDisplayId?: string;
+    sortOrder?: number;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "요구사항명을 입력해 주세요.", 400);
@@ -122,16 +125,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       prisma.tbRqRequirement.update({
         where: { req_id: reqId },
         data:  {
-          task_id:     taskId || null,
-          req_nm:      name.trim(),
-          priort_code: priority,
-          src_code:    source,
-          rfp_page_no: rfpPage?.trim() || null,
-          orgnl_cn:    originalContent?.trim() || null,
-          curncy_cn:   currentContent?.trim() || null,
-          analy_cn:    analysisMemo?.trim() || null,
-          spec_cn:     detailSpec?.trim() || null,
-          mdfcn_dt:    new Date(),
+          task_id:        taskId || null,
+          req_display_id: reqDisplayId?.trim() || existing.req_display_id,
+          req_nm:         name.trim(),
+          priort_code:    priority,
+          src_code:       source,
+          rfp_page_no:    rfpPage?.trim() || null,
+          orgnl_cn:       originalContent?.trim() || null,
+          curncy_cn:      currentContent?.trim() || null,
+          analy_cn:       analysisMemo?.trim() || null,
+          spec_cn:        detailSpec?.trim() || null,
+          sort_ordr:      typeof sortOrder === "number" ? sortOrder : existing.sort_ordr,
+          mdfcn_dt:       new Date(),
         },
       }),
       prisma.tbRqRequirementHistory.create({

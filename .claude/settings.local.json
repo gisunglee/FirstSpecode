@@ -104,7 +104,13 @@
       "Bash(wc -l \"d:/source/FirstSpecode/src/app/\\(main\\)/projects/[id]/functions/[functionId]/page.tsx\")",
       "Bash(find d:/source/FirstSpecode/src/app/api/projects/[id] -name route.ts -o -name route.js)",
       "Bash(ls d:/source/FirstSpecode/src/app/api/projects/[id]/)",
-      "Bash(find \"d:/source/FirstSpecode/src/app/\\(main\\)/projects\" -name \"page.tsx\")"
+      "Bash(find \"d:/source/FirstSpecode/src/app/\\(main\\)/projects\" -name \"page.tsx\")",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Bash(do)",
+      "Bash(echo \"=== $f ===\")",
+      "Read(//Users/igiseong/dev/specode/FirstSpecode/src/app/\\(main\\)/projects/[id]/$f/**)",
+      "Bash(done)"
     ]
   }
 }

@@ -33,6 +33,7 @@ import LNB from "./LNB";
 import StatusBar from "./StatusBar";
 import { useAppStore } from "@/store/appStore";
 import { authFetch } from "@/lib/authFetch";
+import { useTripleClickSidebarToggle } from "@/hooks/useTripleClickSidebarToggle";
 
 type RemovalNotice = {
   noticeId:    string;
@@ -48,6 +49,9 @@ export default function MainLayout({
   const { theme } = useAppStore();
   const queryClient = useQueryClient();
   const router = useRouter();
+
+  // 어디서든 빠르게 3연타 클릭하면 사이드바 접기/펼치기
+  useTripleClickSidebarToggle();
 
   // 인증 상태 — 토큰 확인 전까지 화면 미표시 (레이아웃 flash 방지)
   const [authChecked, setAuthChecked] = useState(false);

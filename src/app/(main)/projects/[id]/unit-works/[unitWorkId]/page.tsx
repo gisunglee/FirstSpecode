@@ -27,7 +27,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
-import MarkdownEditor from "@/components/ui/MarkdownEditor";
+import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import ProgressTracker from "@/components/ui/ProgressTracker";
 import { useAppStore } from "@/store/appStore";
@@ -120,6 +120,7 @@ function UnitWorkDetailPageInner() {
 
   // 예시 팝업 상태
   const [exampleOpen, setExampleOpen] = useState(false);
+  const [descTab, setDescTab] = useState<"edit" | "preview">("edit");
 
   // ── 요구사항 목록 조회 (reqId 선택용) ───────────────────────────────────────
   const { data: reqData } = useQuery({
@@ -482,11 +483,14 @@ function UnitWorkDetailPageInner() {
             padding:      "24px 28px",
           }}
         >
-          {/* 라벨 + 버튼 행 */}
+          {/* 라벨 + 탭 버튼 + 기타 버튼 행 */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-            <label style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
-              설명 (마크다운)
-            </label>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                설명
+              </label>
+              <MarkdownTabButtons tab={descTab} onTabChange={setDescTab} />
+            </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               {/* 예시 버튼 */}
               <button
@@ -523,6 +527,8 @@ function UnitWorkDetailPageInner() {
             onChange={(md) => handleChange("description", md)}
             placeholder="단위업무 설명 (선택)"
             rows={23}
+            tab={descTab}
+            onTabChange={setDescTab}
           />
         </div>
 

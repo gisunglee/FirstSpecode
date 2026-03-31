@@ -213,6 +213,7 @@ function FunctionsPageInner() {
                 onDragEnter={() => handleDragEnter(idx)}
                 onDragEnd={handleDragEnd}
                 onDragOver={(e) => e.preventDefault()}
+                onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
                 style={{
                   ...gridRowStyle,
                   borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
@@ -230,8 +231,8 @@ function FunctionsPageInner() {
                   {showScreen ? (fn.screenId ? fn.screenName : <span style={{ color: "#ccc" }}>-</span>) : ""}
                 </div>
 
-                {/* 영역명 (클릭 → 영역 상세) */}
-                <div>
+                {/* 영역명 (클릭 → 영역 상세, 행 클릭과 분리) */}
+                <div onClick={(e) => e.stopPropagation()}>
                   {showArea ? (
                     fn.areaId ? (
                       <button
@@ -246,17 +247,12 @@ function FunctionsPageInner() {
                   ) : ""}
                 </div>
 
-                {/* 기능명 (클릭 → 기능 상세) */}
-                <div>
-                  <button
-                    onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
-                    style={linkBtnStyle}
-                  >
-                    <span style={{ color: "var(--color-text-secondary)", fontSize: 11, marginRight: 3 }}>
-                      {fn.displayId}
-                    </span>
-                    {fn.name}
-                  </button>
+                {/* 기능명 */}
+                <div style={{ fontSize: 14, fontWeight: 500 }}>
+                  <span style={{ color: "var(--color-text-secondary)", fontSize: 11, marginRight: 3 }}>
+                    {fn.displayId}
+                  </span>
+                  {fn.name}
                 </div>
 
                 {/* 유형 배지 */}
@@ -265,7 +261,7 @@ function FunctionsPageInner() {
                 </div>
 
                 {/* 복잡도 인라인 편집 (FID-00168) */}
-                <div>
+                <div onClick={(e) => e.stopPropagation()}>
                   {editingCell?.funcId === fn.funcId && editingCell.field === "complexity" ? (
                     <select
                       autoFocus
@@ -290,7 +286,7 @@ function FunctionsPageInner() {
                 </div>
 
                 {/* 공수 인라인 편집 (FID-00169) */}
-                <div>
+                <div onClick={(e) => e.stopPropagation()}>
                   {editingCell?.funcId === fn.funcId && editingCell.field === "effort" ? (
                     <input
                       autoFocus
@@ -324,7 +320,7 @@ function FunctionsPageInner() {
                 </div>
 
                 {/* 액션 버튼 */}
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
                   <button
                     onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
                     title="기능 상세"
@@ -459,6 +455,7 @@ const gridRowStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID_TEMPLATE, gap: 8,
   padding: "10px 16px", alignItems: "center",
   background: "var(--color-bg-card)", transition: "background 0.1s",
+  cursor: "pointer",
 };
 const linkBtnStyle: React.CSSProperties = {
   background: "none", border: "none", cursor: "pointer",

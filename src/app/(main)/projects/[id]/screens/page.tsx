@@ -174,6 +174,7 @@ function ScreensPageInner() {
               onDragEnter={() => handleDragEnter(idx)}
               onDragEnd={handleDragEnd}
               onDragOver={(e) => e.preventDefault()}
+              onClick={() => router.push(`/projects/${projectId}/screens/${screen.screenId}`)}
               style={{
                 ...gridRowStyle,
                 borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
@@ -182,8 +183,8 @@ function ScreensPageInner() {
               {/* 드래그 핸들 */}
               <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
 
-              {/* 단위업무명 (클릭 → 단위업무 상세, FID-00144) */}
-              <div>
+              {/* 단위업무명 (클릭 → 단위업무 상세, 행 클릭과 분리) */}
+              <div onClick={(e) => e.stopPropagation()}>
                 {screen.unitWorkId ? (
                   <button
                     onClick={() => router.push(`/projects/${projectId}/unit-works/${screen.unitWorkId}`)}
@@ -196,17 +197,12 @@ function ScreensPageInner() {
                 )}
               </div>
 
-              {/* 화면명 (클릭 → 화면 상세·편집) */}
-              <div>
-                <button
-                  onClick={() => router.push(`/projects/${projectId}/screens/${screen.screenId}`)}
-                  style={linkBtnStyle}
-                >
-                  <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
-                    {screen.displayId}
-                  </span>
-                  {screen.name}
-                </button>
+              {/* 화면명 */}
+              <div style={{ fontSize: 14, fontWeight: 500 }}>
+                <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
+                  {screen.displayId}
+                </span>
+                {screen.name}
               </div>
 
               {/* 화면유형 배지 */}
@@ -237,7 +233,7 @@ function ScreensPageInner() {
               </div>
 
               {/* 바로가기(→) + 삭제 (FID-00143) */}
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => router.push(`/projects/${projectId}/areas?screenId=${screen.screenId}`)}
                   title="영역 목록으로 이동"
@@ -421,6 +417,7 @@ const gridRowStyle: React.CSSProperties = {
   alignItems: "center",
   background: "var(--color-bg-card)",
   transition: "background 0.1s",
+  cursor: "pointer",
 };
 
 const linkBtnStyle: React.CSSProperties = {

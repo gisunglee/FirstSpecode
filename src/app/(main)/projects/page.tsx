@@ -290,6 +290,10 @@ function ProjectsPageInner() {
           {items.map((item, i) => (
             <div
               key={item.projectId}
+              onClick={() => {
+                setCurrentProjectId(item.projectId);
+                router.push(`/projects/${item.projectId}/settings`);
+              }}
               style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 140px 200px 80px 36px",
@@ -298,20 +302,16 @@ function ProjectsPageInner() {
                 alignItems: "center",
                 gap: 12,
                 background: "var(--color-bg-card)",
+                cursor: "pointer",
               }}
             >
-              {/* 프로젝트명 (클릭 시 진입) */}
-              <button
-                onClick={() => handleProjectClick(item.projectId)}
-                style={{
-                  background: "none", border: "none", padding: 0, cursor: "pointer",
-                  textAlign: "left", fontWeight: 600,
-                  fontSize: "var(--text-md)", color: "var(--color-brand)",
-                  textDecoration: "underline",
-                }}
-              >
+              {/* 프로젝트명 */}
+              <span style={{
+                fontWeight: 600,
+                fontSize: "var(--text-md)", color: "var(--color-brand)",
+              }}>
                 {item.name}
-              </button>
+              </span>
 
               <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
                 {item.clientName ?? "-"}
@@ -327,7 +327,7 @@ function ProjectsPageInner() {
 
               {/* 설정 아이콘 */}
               <button
-                onClick={() => router.push(`/projects/${item.projectId}/settings`)}
+                onClick={(e) => e.stopPropagation()}
                 title="프로젝트 설정"
                 style={{
                   background: "none", border: "none", cursor: "pointer",

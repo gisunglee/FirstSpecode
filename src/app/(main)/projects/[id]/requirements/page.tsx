@@ -155,6 +155,7 @@ function RequirementsPageInner() {
             <div>우선순위</div>
             <div>출처</div>
             <div style={{ textAlign: "center" }}>단위업무</div>
+            <div style={{ textAlign: "center" }}>정렬</div>
             <div />
           </div>
 
@@ -167,6 +168,7 @@ function RequirementsPageInner() {
               onDragEnter={() => handleDragEnter(idx)}
               onDragEnd={handleDragEnd}
               onDragOver={(e) => e.preventDefault()}
+              onClick={() => router.push(`/projects/${projectId}/requirements/${req.requirementId}`)}
               style={{
                 ...gridRowStyle,
                 borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
@@ -177,8 +179,8 @@ function RequirementsPageInner() {
                 ☰
               </div>
 
-              {/* 과업명 (클릭 → 과업 상세) */}
-              <div>
+              {/* 과업명 (클릭 → 과업 상세, 행 클릭과 분리) */}
+              <div onClick={(e) => e.stopPropagation()}>
                 {req.taskId ? (
                   <button
                     onClick={() => router.push(`/projects/${projectId}/tasks/${req.taskId}`)}
@@ -191,17 +193,12 @@ function RequirementsPageInner() {
                 )}
               </div>
 
-              {/* 요구사항명 (클릭 → 상세) */}
-              <div>
-                <button
-                  onClick={() => router.push(`/projects/${projectId}/requirements/${req.requirementId}`)}
-                  style={linkBtnStyle}
-                >
-                  <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
-                    {req.displayId}
-                  </span>
-                  {req.name}
-                </button>
+              {/* 요구사항명 */}
+              <div style={{ fontSize: 14, fontWeight: 500 }}>
+                <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
+                  {req.displayId}
+                </span>
+                {req.name}
               </div>
 
               {/* 우선순위 배지 */}
@@ -223,8 +220,13 @@ function RequirementsPageInner() {
                 {req.unitWorkCount}
               </div>
 
+              {/* 정렬 순서 */}
+              <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
+                {req.sortOrder || "-"}
+              </div>
+
               {/* 삭제 버튼 */}
-              <div>
+              <div onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => setDeleteTarget(req)}
                   style={dangerBtnStyle}
@@ -394,7 +396,7 @@ function sourceBadgeStyle(source: string): React.CSSProperties {
 
 // ── 스타일 상수 ──────────────────────────────────────────────────────────────
 
-const GRID_TEMPLATE = "32px minmax(120px, 200px) 1fr 90px 80px 80px 60px";
+const GRID_TEMPLATE = "32px minmax(120px, 200px) 1fr 90px 80px 80px 60px 60px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",
@@ -417,6 +419,7 @@ const gridRowStyle: React.CSSProperties = {
   alignItems:          "center",
   background:          "var(--color-bg-card)",
   transition:          "background 0.1s",
+  cursor:              "pointer",
 };
 
 const linkBtnStyle: React.CSSProperties = {

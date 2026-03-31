@@ -20,7 +20,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
-import MarkdownEditor from "@/components/ui/MarkdownEditor";
+import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -390,6 +390,10 @@ function TaskDetailPanel({
     onError: (err: Error) => toast.error(err.message),
   });
 
+  // ── 좌/우 패널 탭 상태 ─────────────────────────────────────────────────────
+  const [reqTab,    setReqTab]    = useState<"edit" | "preview">("preview");
+  const [resultTab, setResultTab] = useState<"edit" | "preview">("preview");
+
   // ── 반영 뮤테이션 ──────────────────────────────────────────────────────────
   const applyMutation = useMutation({
     mutationFn: () =>
@@ -591,20 +595,26 @@ function TaskDetailPanel({
               {/* 요청 Spec */}
               <div
                 style={{
-                  padding:     "12px 20px",
-                  borderRight: "1px solid var(--color-border)",
+                  padding:      "12px 20px",
+                  borderRight:  "1px solid var(--color-border)",
                   display:      "flex",
                   flexDirection:"column",
-                  overflow:    "hidden",
+                  overflow:     "hidden",
                 }}
               >
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>
+                    요청 SPEC
+                  </span>
+                  <MarkdownTabButtons tab={reqTab} onTabChange={setReqTab} />
+                </div>
                 <div style={{ flex: 1, overflow: "hidden" }}>
                   <MarkdownEditor
-                    title="요청 SPEC"
                     value={[data.comment, data.reqCn ? `\n\n---\n\n${data.reqCn}` : ""].filter(Boolean).join("")}
                     onChange={() => {}}
                     readOnly={true}
-                    initialTab="preview"
+                    tab={reqTab}
+                    onTabChange={setReqTab}
                   />
                 </div>
               </div>
@@ -612,19 +622,25 @@ function TaskDetailPanel({
               {/* 응답 피드백 */}
               <div
                 style={{
-                  padding:     "12px 20px",
+                  padding:      "12px 20px",
                   display:      "flex",
                   flexDirection:"column",
-                  overflow:    "hidden",
+                  overflow:     "hidden",
                 }}
               >
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>
+                    응답 피드백
+                  </span>
+                  <MarkdownTabButtons tab={resultTab} onTabChange={setResultTab} />
+                </div>
                 <div style={{ flex: 1, overflow: "hidden" }}>
                   <MarkdownEditor
-                    title="응답 피드백"
                     value={data.resultCn || ""}
                     onChange={() => {}}
                     readOnly={true}
-                    initialTab="preview"
+                    tab={resultTab}
+                    onTabChange={setResultTab}
                     placeholder="결과 데이터가 없습니다."
                   />
                 </div>

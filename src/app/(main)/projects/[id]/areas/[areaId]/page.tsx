@@ -29,7 +29,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
-import MarkdownEditor from "@/components/ui/MarkdownEditor";
+import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import { ScreenLayoutEditor, type LayoutRow } from "@/components/ui/ScreenLayoutEditor";
 import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
@@ -99,6 +99,7 @@ function AreaDetailPageInner() {
   const [name,        setName]        = useState("");
   const [type,        setType]        = useState("GRID");
   const [description, setDescription] = useState("");
+  const [descTab, setDescTab] = useState<"edit" | "preview">("edit");
   const [sortOrder,   setSortOrder]   = useState<number>(0);
   const [screenId,    setScreenId]    = useState(presetScreenId);
 
@@ -517,7 +518,10 @@ function AreaDetailPageInner() {
         <div>
           <section style={sectionStyle}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <label style={{ ...labelStyle, marginBottom: 0 }}>설명 (마크다운)</label>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <label style={{ ...labelStyle, marginBottom: 0 }}>설명</label>
+                <MarkdownTabButtons tab={descTab} onTabChange={setDescTab} />
+              </div>
               <div style={{ display: "flex", gap: 6 }}>
                 <button type="button" onClick={() => setDescExampleOpen(true)} style={ghostSmBtnStyle}>
                   예시
@@ -548,6 +552,8 @@ function AreaDetailPageInner() {
               onChange={setDescription}
               placeholder="영역 역할·설명"
               rows={28}
+              tab={descTab}
+              onTabChange={setDescTab}
             />
           </section>
         </div>

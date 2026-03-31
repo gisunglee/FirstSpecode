@@ -27,7 +27,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
-import MarkdownEditor from "@/components/ui/MarkdownEditor";
+import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import ColMappingDialog from "@/components/ui/ColMappingDialog";
 import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
@@ -108,6 +108,7 @@ function FunctionDetailPageInner() {
   const [name,           setName]           = useState("");
   const [type,           setType]           = useState("OTHER");
   const [description,    setDescription]    = useState("");
+  const [descTab,        setDescTab]        = useState<"edit" | "preview">("edit");
   const [priority,       setPriority]       = useState("MEDIUM");
   const [complexity,     setComplexity]     = useState("MEDIUM");
   const [effort,         setEffort]         = useState("");
@@ -606,7 +607,10 @@ function FunctionDetailPageInner() {
           {/* 설명 (func_dc) — MarkdownEditor */}
           <section style={sectionStyle}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <label style={{ ...labelStyle, marginBottom: 0 }}>설명 (마크다운)</label>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <label style={{ ...labelStyle, marginBottom: 0 }}>설명</label>
+                <MarkdownTabButtons tab={descTab} onTabChange={setDescTab} />
+              </div>
               <div style={{ display: "flex", gap: 6 }}>
                 <button type="button" onClick={() => setDescExampleOpen(true)} style={ghostSmBtnStyle}>
                   예시
@@ -630,6 +634,8 @@ function FunctionDetailPageInner() {
               onChange={setDescription}
               placeholder="기능 설명을 마크다운으로 작성하세요."
               rows={21}
+              tab={descTab}
+              onTabChange={setDescTab}
             />
           </section>
 

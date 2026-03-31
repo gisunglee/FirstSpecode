@@ -187,6 +187,7 @@ function AreasPageInner() {
               onDragEnter={() => handleDragEnter(idx)}
               onDragEnd={handleDragEnd}
               onDragOver={(e) => e.preventDefault()}
+              onClick={() => router.push(`/projects/${projectId}/areas/${area.areaId}`)}
               style={{
                 ...gridRowStyle,
                 borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
@@ -195,8 +196,8 @@ function AreasPageInner() {
               {/* 드래그 핸들 */}
               <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
 
-              {/* 화면명 (클릭 → 화면 상세·편집) */}
-              <div>
+              {/* 화면명 (클릭 → 화면 상세·편집, 행 클릭과 분리) */}
+              <div onClick={(e) => e.stopPropagation()}>
                 {area.screenId ? (
                   <button
                     onClick={() => router.push(`/projects/${projectId}/screens/${area.screenId}`)}
@@ -212,17 +213,12 @@ function AreasPageInner() {
                 )}
               </div>
 
-              {/* 영역명 (클릭 → 영역 상세·편집) */}
-              <div>
-                <button
-                  onClick={() => router.push(`/projects/${projectId}/areas/${area.areaId}`)}
-                  style={linkBtnStyle}
-                >
-                  <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
-                    {area.displayId}
-                  </span>
-                  {area.name}
-                </button>
+              {/* 영역명 */}
+              <div style={{ fontSize: 14, fontWeight: 500 }}>
+                <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
+                  {area.displayId}
+                </span>
+                {area.name}
               </div>
 
               {/* 유형 배지 */}
@@ -238,7 +234,7 @@ function AreasPageInner() {
               </div>
 
               {/* 바로가기(→) + 삭제 */}
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => router.push(`/projects/${projectId}/functions?areaId=${area.areaId}`)}
                   title="기능 목록으로 이동"
@@ -422,6 +418,7 @@ const gridRowStyle: React.CSSProperties = {
   alignItems:          "center",
   background:          "var(--color-bg-card)",
   transition:          "background 0.1s",
+  cursor:              "pointer",
 };
 
 const linkBtnStyle: React.CSSProperties = {

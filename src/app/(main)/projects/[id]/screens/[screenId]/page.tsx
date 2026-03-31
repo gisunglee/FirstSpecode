@@ -25,7 +25,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
-import MarkdownEditor from "@/components/ui/MarkdownEditor";
+import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import { ScreenLayoutEditor, type LayoutRow } from "@/components/ui/ScreenLayoutEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import { useAppStore } from "@/store/appStore";
@@ -120,6 +120,7 @@ function ScreenDetailPageInner() {
 
   // 화면 설명 예시 팝업
   const [descExampleOpen, setDescExampleOpen] = useState(false);
+  const [descTab, setDescTab] = useState<"edit" | "preview">("edit");
 
   // 설명 변경 이력 저장 여부 확인 다이얼로그
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
@@ -421,8 +422,9 @@ function ScreenDetailPageInner() {
         <Section
           title="화면 설명"
           small
+          headerLeft={<MarkdownTabButtons tab={descTab} onTabChange={setDescTab} />}
           headerRight={
-            <div style={{ display: "flex", gap: 5 }}>
+            <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
               <button
                 type="button"
                 onClick={() => setDescExampleOpen(true)}
@@ -459,6 +461,8 @@ function ScreenDetailPageInner() {
             onChange={(md) => handleChange("description", md)}
             placeholder="화면 내용 및 세부 설계를 작성하세요."
             rows={26}
+            tab={descTab}
+            onTabChange={setDescTab}
           />
         </Section>
 
@@ -600,15 +604,16 @@ function AreaListSection({
 // ── 공통 컴포넌트 ─────────────────────────────────────────────────────────────
 
 function Section({
-  title, headerRight, children, small = false, hideTitle = false,
+  title, headerLeft, headerRight, children, small = false, hideTitle = false,
 }: {
-  title:        string;
-  headerRight?: React.ReactNode;
-  children:     React.ReactNode;
+  title:         string;
+  headerLeft?:   React.ReactNode;
+  headerRight?:  React.ReactNode;
+  children:      React.ReactNode;
   /** 타이틀을 작은 uppercase 레이블로 표시 */
-  small?:       boolean;
+  small?:        boolean;
   /** 타이틀 행 자체를 숨김 */
-  hideTitle?:   boolean;
+  hideTitle?:    boolean;
 }) {
   return (
     <div
@@ -624,15 +629,19 @@ function Section({
     >
       {!hideTitle && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          {small ? (
-            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-              {title}
-            </span>
-          ) : (
-            <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
-              {title}
-            </h2>
-          )}
+          {/* 타이틀 + 타이틀 옆 왼쪽 요소 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {small ? (
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                {title}
+              </span>
+            ) : (
+              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                {title}
+              </h2>
+            )}
+            {headerLeft}
+          </div>
           {headerRight}
         </div>
       )}
