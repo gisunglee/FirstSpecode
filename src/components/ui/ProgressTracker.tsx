@@ -111,7 +111,7 @@ export default function ProgressTracker({
     <div style={{
       display:      "flex",
       alignItems:   "stretch",
-      alignSelf:    "stretch",   // 헤더 전체 높이를 채움 (테두리 없이 배경으로 구분)
+      alignSelf:    "center",
       borderRadius: 10,
       background:   "rgba(0,0,0,0.05)",
       overflow:     "hidden",
@@ -124,7 +124,7 @@ export default function ProgressTracker({
             alignItems:     "center",
             justifyContent: "center",
             borderLeft:     idx === 0 ? "none" : "1px solid rgba(0,0,0,0.08)",
-            padding:        "0 10px",
+            padding:        "6px 10px",
           }}
         >
           <PhaseItem
