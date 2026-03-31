@@ -51,6 +51,22 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return apiError("VALIDATION_ERROR", "설명(description)을 먼저 작성해 주세요.", 400);
     }
 
+    // req_cn: comment 먼저, 그다음 기능 정보 기반 요청 내용
+    const TASK_LABEL: Record<string, string> = {
+      INSPECT: "AI 명세 누락 검토",
+      IMPACT:  "AI 영향도 분석",
+      DESIGN:  "AI 컬럼 매핑 초안 생성",
+    };
+    const reqParts: string[] = [];
+    if (comment?.trim()) reqParts.push(comment.trim());
+    reqParts.push(
+      `[${TASK_LABEL[taskType]}]`,
+      `기능명: ${fn.func_nm ?? ""}`,
+      `유형: ${fn.func_ty_code ?? ""}`,
+      fn.func_dc?.trim() ? `\n[설명]\n${fn.func_dc.trim()}` : "",
+    );
+    const reqCn = reqParts.filter(Boolean).join("\n");
+
     const task = await prisma.tbAiTask.create({
       data: {
         prjct_id:        projectId,
@@ -58,6 +74,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         ref_id:          functionId,
         task_ty_code:    taskType,
         coment_cn:       comment?.trim() || null,
+        req_cn:          reqCn,
         req_snapshot_data: {
           funcId:      functionId,
           funcName:    fn.func_nm,

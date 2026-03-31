@@ -153,6 +153,7 @@ export default function ColMappingDialog({
     if (rows.some((r) => r.colId === col.colId)) {
       toast.error("이미 추가된 컬럼입니다.");
       return;
+
     }
     setRows((prev) => [...prev, {
       _key:       nextKey(),
@@ -162,7 +163,7 @@ export default function ColMappingDialog({
       _tableId:   tbl.tableId,
       ioSeCode:   "",
       uiTyCode:   "",
-      usePurpsCn: "",
+      usePurpsCn: col.colLogicalNm || col.colName,
       colDc:      "",
     }]);
   }
@@ -190,17 +191,22 @@ export default function ColMappingDialog({
   }
 
   // 테이블.컬럼 콤보박스 선택 시 값 갱신
-  function setRowColumn(key: string, tableId: string, colId: string, colName: string) {
+  function setRowColumn(key: string, tableId: string, colId: string, colName: string, colLogicalNm?: string) {
     const tbl = tables.find((t) => t.tableId === tableId);
     if (!tbl) {
-        // 테이블 선택창을 '테이블 (비우기)' 로 설정한 경우
         setRows((prev) => prev.map((r) => r._key === key ? {
             ...r, _tableId: "", colId: "", tableName: "", colName: "",
         } : r));
         return;
     }
     setRows((prev) => prev.map((r) => r._key === key ? {
-      ...r, _tableId: tableId, colId, tableName: tbl.tableName, colName,
+      ...r,
+      _tableId:   tableId,
+      colId,
+      tableName:  tbl.tableName,
+      colName,
+      // 항목명이 비어있을 때만 논리명으로 자동 채움 (이미 입력한 값 보존)
+      usePurpsCn: r.usePurpsCn || colLogicalNm || colName,
     } : r));
   }
   // ── 상태: 필터링 및 논리명 보기 설정 ───────────────────────────────────
@@ -481,7 +487,7 @@ export default function ColMappingDialog({
                     initialColId={row.colId}
                     filterTableIds={filterTableIds}
                     showLogical={showLogicalAll || showLogicalGrid}
-                    onSelect={(tableId, colId, colName) => setRowColumn(row._key, tableId, colId, colName)}
+                    onSelect={(tableId, colId, colName, colLogicalNm) => setRowColumn(row._key, tableId, colId, colName, colLogicalNm)}
                   />
                 </div>
 
@@ -541,7 +547,7 @@ function ColumnPicker({
   initialColId?:   string;
   filterTableIds?: string[];
   showLogical?:   boolean;
-  onSelect:       (tableId: string, colId: string, colName: string) => void;
+  onSelect:       (tableId: string, colId: string, colName: string, colLogicalNm?: string) => void;
 }) {
   const [tblId, setTblId] = useState(initialTableId);
 
@@ -586,7 +592,7 @@ function ColumnPicker({
         onChange={(e) => {
           if (e.target.value) {
             const col = cols.find((c) => c.colId === e.target.value);
-            onSelect(tblId, e.target.value, col?.colName ?? "");
+            onSelect(tblId, e.target.value, col?.colName ?? "", col?.colLogicalNm);
           } else {
             onSelect(tblId, "", "");
           }

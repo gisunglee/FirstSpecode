@@ -99,7 +99,9 @@
       "Bash(grep -n \"columnMappings\\\\|col_mapping\\\\|colMapping\" /Users/igiseong/dev/specode/FirstSpecode/src/app/api/projects/[id]/functions/[functionId]/route.ts)",
       "Bash(ls /Users/igiseong/dev/specode/FirstSpecode/src/app/api/projects/[id]/areas/[areaId]/files/)",
       "Bash(ls /Users/igiseong/dev/specode/FirstSpecode/src/app/api/projects/[id]/areas/[areaId]/files/[fileId]/)",
-      "Bash(grep -n \"AreaAttachFiles\" /Users/igiseong/dev/specode/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/areas/[areaId]/page.tsx)"
+      "Bash(grep -n \"AreaAttachFiles\" /Users/igiseong/dev/specode/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/areas/[areaId]/page.tsx)",
+      "Bash(wc -l \"d:/source/FirstSpecode/src/app/\\(main\\)/projects/[id]/areas/[areaId]/page.tsx\")",
+      "Bash(wc -l \"d:/source/FirstSpecode/src/app/\\(main\\)/projects/[id]/functions/[functionId]/page.tsx\")"
     ]
   }
 }

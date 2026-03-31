@@ -19,6 +19,12 @@
  */
 
 import { Suspense, useState, useEffect } from "react";
+import { marked } from "marked";
+
+function markedParse(md: string): string {
+  const result = marked.parse(md, { async: false });
+  return typeof result === "string" ? result : "";
+}
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -551,23 +557,7 @@ function AreaDetailPageInner() {
 
       {/* 설명 예시 팝업 */}
       {descExampleOpen && (
-        <div
-          style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={() => setDescExampleOpen(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: "100%", maxWidth: 816, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.2)", padding: "20px 24px", maxHeight: "80vh", display: "flex", flexDirection: "column" }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>설명 예시</span>
-              <button type="button" onClick={() => setDescExampleOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#888" }}>×</button>
-            </div>
-            <pre style={{ flex: 1, overflowY: "auto", background: "var(--color-bg-elevated)", border: "1px solid var(--color-border)", borderRadius: 6, padding: "14px 16px", fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", color: "var(--color-text-primary)", margin: 0 }}>
-              {DESCRIPTION_EXAMPLE}
-            </pre>
-          </div>
-        </div>
+        <AreaExamplePopup onClose={() => setDescExampleOpen(false)} />
       )}
 
       {/* ── PID-00048 Excalidraw 팝업 ─────────────────────────────────────── */}
@@ -871,52 +861,144 @@ const DESCRIPTION_EXAMPLE = `### 영역: [AR-00003] 상세 영역
 **유형:** DETAIL_VIEW
 
 **UI 구조**
-\`\`\`
-+─────────────────────────────────────────────────────────────────+
-│ [공지] 시스템 점검 안내                                         │
-│ 작성자: 관리자  │  등록일: 2026-03-15 14:30  │  조회: 121       │
-│─────────────────────────────────────────────────────────────────│
-│                                                                 │
-│  (마크다운 렌더링된 본문 내용)                                   │
-│                                                                 │
-│─────────────────────────────────────────────────────────────────│
-│ 📎 첨부파일                                                     │
-│   점검안내서.pdf (2.1MB)  [다운로드]                             │
-│   일정표.xlsx (340KB)     [다운로드]                             │
-│─────────────────────────────────────────────────────────────────│
-│                                    [목록]  [수정]  [삭제]       │
-+─────────────────────────────────────────────────────────────────+
+
+\`\`\`text
++───────────────────────────────────────────────────+
+│ [공지] 시스템 점검 안내                              │
+│ 작성자: 관리자 │ 등록일: 2026-03-15 14:30 │ 조회: 121 │
+│───────────────────────────────────────────────────│
+│                                                   │
+│ (마크다운 렌더링된 본문 내용)                         │
+│                                                   │
+│───────────────────────────────────────────────────│
+│ 📎 첨부파일                                        │
+│   점검안내서.pdf (2.1MB)  [다운로드]                 │
+│   일정표.xlsx (340KB)     [다운로드]                │
+│───────────────────────────────────────────────────│
+│                              [목록]  [수정]  [삭제] │
++───────────────────────────────────────────────────+
 \`\`\`
 
 **구성 항목**
 
-| 항목명 | UI 타입 | DB 매핑 | 비고 |
-|:-------|:--------|:--------|:-----|
-| 유형 배지 | badge | board_type_cd | NOTICE(빨강) / NORMAL(회색) |
-| 제목 | heading (h2) | board_title_nm | |
-| 작성자 | text | reg_user_id → 사용자명 | |
-| 등록일 | datetime | reg_dt | yyyy-MM-dd HH:mm |
-| 조회수 | number | view_cnt | |
-| 본문 | markdown render | board_cn | 마크다운 → HTML 렌더링 |
-| 첨부파일 목록 | file list | tb_cm_attach_file | 파일명(크기) + 다운로드 버튼 |
-| 목록 버튼 | button (default) | - | → PID-00001 (검색조건 유지) |
-| 수정 버튼 | button (primary) | - | → PID-00003, 작성자/관리자만 표시 |
-| 삭제 버튼 | button (danger) | - | 확인 후 논리삭제, 작성자/관리자만 표시 |`;
+| 항목명 | UI 타입 | 비고 |
+|:-------|:--------|:-----|
+| 유형 배지 | badge | NOTICE(빨강) / NORMAL(회색) |
+| 제목 | heading (h2) | |
+| 작성자 | text | |
+| 등록일 | datetime | yyyy-MM-dd HH:mm |
+| 조회수 | number | |
+| 본문 | markdown render | 마크다운 → HTML 렌더링 |
+| 첨부파일 목록 | file list | 파일명(크기) + 다운로드 버튼 |
+| 목록 버튼 | button (default) | → PID-00001 (검색조건 유지) |
+| 수정 버튼 | button (primary) | → PID-00003, 작성자/관리자만 표시 |
+| 삭제 버튼 | button (danger) | 확인 후 논리삭제, 작성자/관리자만 표시 |`;
 
 const DESCRIPTION_TEMPLATE = (displayId: string, name: string) =>
-`### 영역: [${displayId}] ${name}
+`### 영역: [${displayId}] ${name} | 테이블명 그룹코드 | cm/pj/rq/ds
 
 **유형:**
 
 **UI 구조**
 \`\`\`
-+─────────────────────────────────────────────────────────────────+
-│                                                                 │
-+─────────────────────────────────────────────────────────────────+
++─────────────────────────────────+
+│                                 │
++─────────────────────────────────+
 \`\`\`
 
 **구성 항목**
 
-| 항목명 | UI 타입 | DB 매핑 | 비고 |
-|:-------|:--------|:--------|:-----|
-|  |  |  |  |`;
+| 항목명 | UI 타입 | 비고 |
+|:-------|:--------|:-----|
+|  |  |  |`;
+
+// ── 예시 팝업 CSS ─────────────────────────────────────────────────────────────
+
+const AREA_EXAMPLE_CSS = [
+  ".ar-example h2,.ar-example h3{font-size:14px;font-weight:700;margin:16px 0 8px}",
+  ".ar-example table{border-collapse:collapse;width:100%;margin-bottom:12px}",
+  ".ar-example th,.ar-example td{border:1px solid #e0e0e0;padding:5px 10px;font-size:12px}",
+  ".ar-example th{background:#f5f5f5;font-weight:600}",
+  ".ar-example pre{background:#f5f5f5;padding:10px 14px;border-radius:6px;font-size:12px;overflow-x:auto}",
+  ".ar-example code{font-family:monospace}",
+  ".ar-example ul{padding-left:18px;margin:4px 0}",
+].join(" ");
+
+// ── 예시 팝업 컴포넌트 ────────────────────────────────────────────────────────
+
+function AreaExamplePopup({ onClose }: { onClose: () => void }) {
+  const [tab, setTab] = useState<"raw" | "preview">("preview");
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(DESCRIPTION_EXAMPLE).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    });
+  }
+
+  const tabBtn = (t: "raw" | "preview", label: string) => (
+    <button
+      onClick={() => setTab(t)}
+      style={{
+        padding: "4px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+        borderRadius: 5, border: "none",
+        background: tab === t ? "var(--color-primary, #1976d2)" : "transparent",
+        color: tab === t ? "#fff" : "var(--color-text-secondary)",
+      }}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: "var(--color-bg-card)", borderRadius: 10, width: "min(780px, 92vw)", maxHeight: "84vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "1px solid var(--color-border)", gap: 12 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, flexShrink: 0 }}>영역 설명 예시</span>
+          <div style={{ display: "flex", gap: 2, background: "var(--color-bg-muted)", padding: "3px", borderRadius: 7 }}>
+            {tabBtn("preview", "미리보기")}
+            {tabBtn("raw", "원문")}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+            <button
+              onClick={handleCopy}
+              style={{
+                padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                borderRadius: 5, border: "1px solid var(--color-border)",
+                background: copied ? "#e8f5e9" : "var(--color-bg-base)",
+                color: copied ? "#2e7d32" : "var(--color-text-secondary)",
+                transition: "all 0.2s",
+              }}
+            >
+              {copied ? "✓ 복사됨" : "복사"}
+            </button>
+            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--color-text-secondary)", lineHeight: 1 }}>×</button>
+          </div>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+          {tab === "raw" ? (
+            <pre style={{ margin: 0, fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", color: "var(--color-text-primary)", fontFamily: "monospace" }}>
+              {DESCRIPTION_EXAMPLE}
+            </pre>
+          ) : (
+            <>
+              <style dangerouslySetInnerHTML={{ __html: AREA_EXAMPLE_CSS }} />
+              <div
+                className="ar-example"
+                style={{ fontSize: 13, lineHeight: 1.8, color: "var(--color-text-primary)" }}
+                dangerouslySetInnerHTML={{ __html: markedParse(DESCRIPTION_EXAMPLE) }}
+              />
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

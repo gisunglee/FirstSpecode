@@ -17,6 +17,12 @@
  */
 
 import { Suspense, useState, useEffect, useRef } from "react";
+import { marked } from "marked";
+
+function markedParse(md: string): string {
+  const result = marked.parse(md, { async: false });
+  return typeof result === "string" ? result : "";
+}
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -162,7 +168,8 @@ function FunctionDetailPageInner() {
   }, [assignWorkStatus, progressRate, reviewStatus]);
 
   // ── 컬럼 매핑 팝업 ─────────────────────────────────────────────────────────
-  const [mappingPopupOpen, setMappingPopupOpen] = useState(false);
+  const [mappingPopupOpen,   setMappingPopupOpen]   = useState(false);
+  const [mappingMdOpen,      setMappingMdOpen]      = useState(false);
 
   // ── 컬럼 매핑 목록 조회 (기존 저장 데이터 표시용) ──────────────────────────
   const { data: colMappingsData, refetch: refetchMappings } = useQuery({
@@ -321,90 +328,77 @@ function FunctionDetailPageInner() {
           </span>
         </div>
 
-        {/* 중: 현황 패널 (작업상태 · 진척률 · 검토상태) */}
+        {/* 중: 현황 패널 — 한 줄 인라인 */}
         {!isNew && (
           <div style={{
-            display: "flex", alignItems: "center", gap: 10,
-            padding: "5px 12px",
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "3px 10px",
             background: "linear-gradient(135deg, rgba(var(--color-primary-rgb, 25,118,210), 0.06) 0%, transparent 100%)",
             border: "1px solid rgba(var(--color-primary-rgb, 25,118,210), 0.18)",
             borderLeft: "3px solid var(--color-primary, #1976d2)",
             borderRadius: 8,
           }}>
-            {/* 작업 상태 */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              <span style={{ fontSize: 9, color: "var(--color-text-secondary)", fontWeight: 600, letterSpacing: "0.05em" }}>작업상태</span>
-              <select
-                value={assignWorkStatus}
-                onChange={(e) => handleWorkStatusChange(e.target.value)}
-                style={{
-                  ...statusSelectStyle,
-                  ...(assignWorkStatus === "DONE"        ? { borderColor: "#2e7d32", color: "#2e7d32" }
-                    : assignWorkStatus === "IN_PROGRESS" ? { borderColor: "var(--color-primary, #1976d2)", color: "var(--color-primary, #1976d2)" }
-                    : {}),
-                }}
-              >
-                <option value="BEFORE">작업 전</option>
-                <option value="IN_PROGRESS">작업 중</option>
-                <option value="DONE">작업 완료</option>
-              </select>
-            </div>
+            {/* 작업상태 */}
+            <span style={{ fontSize: 10, color: "var(--color-text-secondary)", fontWeight: 600, whiteSpace: "nowrap" }}>작업상태</span>
+            <select
+              value={assignWorkStatus}
+              onChange={(e) => handleWorkStatusChange(e.target.value)}
+              style={{
+                ...statusSelectStyle,
+                ...(assignWorkStatus === "DONE"        ? { borderColor: "#2e7d32", color: "#2e7d32" }
+                  : assignWorkStatus === "IN_PROGRESS" ? { borderColor: "var(--color-primary, #1976d2)", color: "var(--color-primary, #1976d2)" }
+                  : {}),
+              }}
+            >
+              <option value="BEFORE">작업 전</option>
+              <option value="IN_PROGRESS">작업 중</option>
+              <option value="DONE">작업 완료</option>
+            </select>
 
-            <div style={{ width: 1, height: 28, background: "var(--color-border)" }} />
+            <div style={{ width: 1, height: 16, background: "var(--color-border)" }} />
 
             {/* 진척률 */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 130 }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 9, color: "var(--color-text-secondary)", fontWeight: 600, letterSpacing: "0.05em" }}>진척률</span>
-                <span style={{ fontSize: 9, fontWeight: 700, color: "var(--color-primary, #1976d2)" }}>
-                  {assignWorkStatus === "DONE" ? 100 : progressRate}%
-                </span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{ flex: 1, height: 4, background: "var(--color-border)", borderRadius: 2, overflow: "hidden" }}>
-                  <div style={{
-                    height: "100%",
-                    width: `${assignWorkStatus === "DONE" ? 100 : progressRate}%`,
-                    background: assignWorkStatus === "DONE" ? "#2e7d32" : "var(--color-primary, #1976d2)",
-                    borderRadius: 2,
-                    transition: "width 0.3s ease",
-                  }} />
-                </div>
-                <select
-                  value={assignWorkStatus === "DONE" ? 100 : progressRate}
-                  onChange={(e) => setProgressRate(Number(e.target.value))}
-                  disabled={assignWorkStatus === "DONE"}
-                  style={{ ...statusSelectStyle, minWidth: 56, opacity: assignWorkStatus === "DONE" ? 0.5 : 1 }}
-                >
-                  {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((v) => (
-                    <option key={v} value={v}>{v}%</option>
-                  ))}
-                </select>
-              </div>
+            <span style={{ fontSize: 10, color: "var(--color-text-secondary)", fontWeight: 600, whiteSpace: "nowrap" }}>진척률</span>
+            <div style={{ width: 80, height: 4, background: "var(--color-border)", borderRadius: 2, overflow: "hidden" }}>
+              <div style={{
+                height: "100%",
+                width: `${assignWorkStatus === "DONE" ? 100 : progressRate}%`,
+                background: assignWorkStatus === "DONE" ? "#2e7d32" : "var(--color-primary, #1976d2)",
+                borderRadius: 2,
+                transition: "width 0.3s ease",
+              }} />
             </div>
+            <select
+              value={assignWorkStatus === "DONE" ? 100 : progressRate}
+              onChange={(e) => setProgressRate(Number(e.target.value))}
+              disabled={assignWorkStatus === "DONE"}
+              style={{ ...statusSelectStyle, minWidth: 56, opacity: assignWorkStatus === "DONE" ? 0.5 : 1 }}
+            >
+              {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((v) => (
+                <option key={v} value={v}>{v}%</option>
+              ))}
+            </select>
 
-            <div style={{ width: 1, height: 28, background: "var(--color-border)" }} />
+            <div style={{ width: 1, height: 16, background: "var(--color-border)" }} />
 
-            {/* 검토 상태 */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              <span style={{ fontSize: 9, color: "var(--color-text-secondary)", fontWeight: 600, letterSpacing: "0.05em" }}>검토상태</span>
-              <select
-                value={reviewStatus}
-                onChange={(e) => setReviewStatus(e.target.value)}
-                style={{
-                  ...statusSelectStyle,
-                  ...(reviewStatus === "DONE"      ? { borderColor: "#2e7d32", color: "#2e7d32" }
-                    : reviewStatus === "IN_REVIEW" ? { borderColor: "var(--color-primary, #1976d2)", color: "var(--color-primary, #1976d2)" }
-                    : reviewStatus === "FEEDBACK"  ? { borderColor: "#e65100", color: "#e65100" }
-                    : {}),
-                }}
-              >
-                <option value="BEFORE">검토 전</option>
-                <option value="IN_REVIEW">검토 중</option>
-                <option value="FEEDBACK">피드백 필요</option>
-                <option value="DONE">검토 완료</option>
-              </select>
-            </div>
+            {/* 검토상태 */}
+            <span style={{ fontSize: 10, color: "var(--color-text-secondary)", fontWeight: 600, whiteSpace: "nowrap" }}>검토상태</span>
+            <select
+              value={reviewStatus}
+              onChange={(e) => setReviewStatus(e.target.value)}
+              style={{
+                ...statusSelectStyle,
+                ...(reviewStatus === "DONE"      ? { borderColor: "#2e7d32", color: "#2e7d32" }
+                  : reviewStatus === "IN_REVIEW" ? { borderColor: "var(--color-primary, #1976d2)", color: "var(--color-primary, #1976d2)" }
+                  : reviewStatus === "FEEDBACK"  ? { borderColor: "#e65100", color: "#e65100" }
+                  : {}),
+              }}
+            >
+              <option value="BEFORE">검토 전</option>
+              <option value="IN_REVIEW">검토 중</option>
+              <option value="FEEDBACK">피드백 필요</option>
+              <option value="DONE">검토 완료</option>
+            </select>
           </div>
         )}
 
@@ -581,7 +575,18 @@ function FunctionDetailPageInner() {
 
         </section>
 
-        {/* ── 왼쪽 하단: 첨부파일 ── */}
+        {/* ── 왼쪽 하단: AI 요청 코멘트 + 첨부파일 ── */}
+        <section style={sectionStyle}>
+          <label style={{ ...labelStyle, marginBottom: 6 }}>AI 요청 코멘트</label>
+          <textarea
+            value={commentCn}
+            onChange={(e) => setCommentCn(e.target.value)}
+            placeholder="AI 요청 시 참고할 추가 지시사항 (저장 시 함께 저장됩니다)"
+            rows={3}
+            style={{ ...inputStyle, resize: "vertical" }}
+          />
+        </section>
+
         {!isNew && (
           <section style={sectionStyle}>
             <h3 style={sectionTitleStyle}>첨부파일</h3>
@@ -593,22 +598,10 @@ function FunctionDetailPageInner() {
         {/* ── 오른쪽: 설명 + 컬럼 매핑 + AI 지원 ── */}
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-          {/* AI 요청 코멘트 */}
-          <section style={sectionStyle}>
-            <label style={{ ...labelStyle, marginBottom: 6 }}>AI 요청 코멘트</label>
-            <textarea
-              value={commentCn}
-              onChange={(e) => setCommentCn(e.target.value)}
-              placeholder="AI 요청 시 참고할 추가 지시사항 (저장 시 함께 저장됩니다)"
-              rows={3}
-              style={{ ...inputStyle, resize: "vertical" }}
-            />
-          </section>
-
           {/* 설명 (func_dc) — MarkdownEditor */}
           <section style={sectionStyle}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <label style={{ ...labelStyle, marginBottom: 0 }}>설명</label>
+              <label style={{ ...labelStyle, marginBottom: 0 }}>설명 (마크다운)</label>
               <div style={{ display: "flex", gap: 6 }}>
                 <button type="button" onClick={() => setDescExampleOpen(true)} style={ghostSmBtnStyle}>
                   예시
@@ -631,29 +624,13 @@ function FunctionDetailPageInner() {
               value={description}
               onChange={setDescription}
               placeholder="기능 설명을 마크다운으로 작성하세요."
-              rows={14}
+              rows={21}
             />
           </section>
 
           {/* 설명 예시 팝업 */}
           {descExampleOpen && (
-            <div
-              style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
-              onClick={() => setDescExampleOpen(false)}
-            >
-              <div
-                onClick={(e) => e.stopPropagation()}
-                style={{ width: "100%", maxWidth: 816, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.2)", padding: "20px 24px", maxHeight: "80vh", display: "flex", flexDirection: "column" }}
-              >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                  <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>설명 예시</span>
-                  <button type="button" onClick={() => setDescExampleOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#888" }}>×</button>
-                </div>
-                <pre style={{ flex: 1, overflowY: "auto", background: "var(--color-bg-elevated)", border: "1px solid var(--color-border)", borderRadius: 6, padding: "14px 16px", fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", color: "var(--color-text-primary)", margin: 0 }}>
-                  {DESCRIPTION_EXAMPLE}
-                </pre>
-              </div>
-            </div>
+            <FuncExamplePopup onClose={() => setDescExampleOpen(false)} />
           )}
 
           {/* 설명 변경 이력 저장 여부 확인 다이얼로그 */}
@@ -716,14 +693,24 @@ function FunctionDetailPageInner() {
           <section style={sectionStyle}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: colMappings.length > 0 ? 12 : 0 }}>
               <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>컬럼 매핑</h3>
-              <button
-                onClick={() => setMappingPopupOpen(true)}
-                disabled={isNew}
-                title={isNew ? "저장 후 사용할 수 있습니다" : undefined}
-                style={{ ...primaryBtnStyle, fontSize: 13, padding: "6px 14px", opacity: isNew ? 0.4 : 1, cursor: isNew ? "not-allowed" : "pointer" }}
-              >
-                매핑 관리
-              </button>
+              <div style={{ display: "flex", gap: 6 }}>
+                {colMappings.length > 0 && (
+                  <button
+                    onClick={() => setMappingMdOpen(true)}
+                    style={{ ...ghostSmBtnStyle, fontSize: 13, padding: "6px 12px" }}
+                  >
+                    MD 복사
+                  </button>
+                )}
+                <button
+                  onClick={() => setMappingPopupOpen(true)}
+                  disabled={isNew}
+                  title={isNew ? "저장 후 사용할 수 있습니다" : undefined}
+                  style={{ ...primaryBtnStyle, fontSize: 13, padding: "6px 14px", opacity: isNew ? 0.4 : 1, cursor: isNew ? "not-allowed" : "pointer" }}
+                >
+                  매핑 관리
+                </button>
+              </div>
             </div>
 
             {/* 저장된 매핑 목록 테이블 */}
@@ -813,6 +800,14 @@ function FunctionDetailPageInner() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── 컬럼 매핑 마크다운 팝업 ──────────────────────────────────────── */}
+      {mappingMdOpen && (
+        <ColMappingMdPopup
+          mappings={colMappings}
+          onClose={() => setMappingMdOpen(false)}
+        />
       )}
 
       {/* ── PID-00053 컬럼 매핑 관리 팝업 ────────────────────────────────── */}
@@ -1028,9 +1023,11 @@ const aiReqBtnStyle: React.CSSProperties = {
 };
 
 const statusSelectStyle: React.CSSProperties = {
-  padding:         "3px 24px 3px 8px",
+  padding:         "1px 20px 1px 6px",
   borderRadius:    5,
-  border:          "1px solid var(--color-border)",
+  borderWidth:     1,
+  borderStyle:     "solid",
+  borderColor:     "var(--color-border)",
   fontSize:        12,
   fontWeight:      600,
   background:      "transparent",
@@ -1043,6 +1040,118 @@ const statusSelectStyle: React.CSSProperties = {
   transition:      "border-color 0.15s, color 0.15s",
 };
 
+// ── 컬럼 매핑 → 마크다운 변환 ────────────────────────────────────────────────
+
+function buildMappingMarkdown(mappings: ColMappingItem[]): string {
+  const IO_LABEL: Record<string, string> = { IN: "IN", OUT: "OUT", IO: "IN/OUT" };
+  const UI_LABEL: Record<string, string> = {
+    TEXT: "텍스트", TEXTAREA: "텍스트에어리어", SELECT: "콤보박스",
+    RADIO: "라디오", CHECKBOX: "체크박스", DATE: "날짜", NUMBER: "숫자",
+    FILE: "파일", HIDDEN: "히든",
+  };
+
+  const header = "| NO | 항목명 | IO구분 | UI유형 | 테이블.컬럼 | 설명 |";
+  const sep    = "|:---|:-------|:-------|:-------|:-----------|:-----|";
+  const rows   = mappings.map((m, i) => {
+    const no      = i + 1;
+    const name    = m.usePurpsCn  || "-";
+    const io      = IO_LABEL[m.ioSeCode]  || m.ioSeCode  || "-";
+    const ui      = UI_LABEL[m.uiTyCode]  || m.uiTyCode  || "-";
+    const col     = m.tableName && m.colName ? `${m.tableName}.${m.colName}` : "-";
+    return `| ${no} | ${name} | ${io} | ${ui} | ${col} | - |`;
+  });
+
+  return ["**컬럼 매핑**", "", header, sep, ...rows].join("\n");
+}
+
+// ── 컬럼 매핑 MD 팝업 ────────────────────────────────────────────────────────
+
+function ColMappingMdPopup({
+  mappings,
+  onClose,
+}: {
+  mappings: ColMappingItem[];
+  onClose:  () => void;
+}) {
+  const md = buildMappingMarkdown(mappings);
+  const [copied, setCopied] = useState(false);
+  const [tab, setTab]       = useState<"raw" | "preview">("preview");
+
+  function handleCopy() {
+    navigator.clipboard.writeText(md).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    });
+  }
+
+  const tabBtn = (t: "raw" | "preview", label: string) => (
+    <button
+      onClick={() => setTab(t)}
+      style={{
+        padding: "4px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+        borderRadius: 5, border: "none",
+        background: tab === t ? "var(--color-primary, #1976d2)" : "transparent",
+        color: tab === t ? "#fff" : "var(--color-text-secondary)",
+      }}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: "var(--color-bg-card)", borderRadius: 10, width: "min(760px, 92vw)", maxHeight: "80vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 헤더 */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "1px solid var(--color-border)", gap: 12 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, flexShrink: 0 }}>컬럼 매핑 마크다운</span>
+          <div style={{ display: "flex", gap: 2, background: "var(--color-bg-muted)", padding: "3px", borderRadius: 7 }}>
+            {tabBtn("preview", "미리보기")}
+            {tabBtn("raw", "원문")}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+            <button
+              onClick={handleCopy}
+              style={{
+                padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                borderRadius: 5, border: "1px solid var(--color-border)",
+                background: copied ? "#e8f5e9" : "var(--color-bg-base)",
+                color: copied ? "#2e7d32" : "var(--color-text-secondary)",
+                transition: "all 0.2s",
+              }}
+            >
+              {copied ? "✓ 복사됨" : "복사"}
+            </button>
+            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--color-text-secondary)", lineHeight: 1 }}>×</button>
+          </div>
+        </div>
+        {/* 본문 */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+          {tab === "raw" ? (
+            <pre style={{ margin: 0, fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", color: "var(--color-text-primary)", fontFamily: "monospace" }}>
+              {md}
+            </pre>
+          ) : (
+            <>
+              <style dangerouslySetInnerHTML={{ __html: ".cm-md table{border-collapse:collapse;width:100%}.cm-md th,.cm-md td{border:1px solid #e0e0e0;padding:5px 10px;font-size:13px}.cm-md th{background:#f5f5f5;font-weight:600}.cm-md h2{font-size:14px;font-weight:700;margin:0 0 12px}" }} />
+              <div
+                className="cm-md"
+                style={{ fontSize: 13, lineHeight: 1.8, color: "var(--color-text-primary)" }}
+                dangerouslySetInnerHTML={{ __html: markedParse(md) }}
+              />
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const ghostSmBtnStyle: React.CSSProperties = {
   padding:      "3px 9px",
   borderRadius: 5,
@@ -1052,3 +1161,94 @@ const ghostSmBtnStyle: React.CSSProperties = {
   fontSize:     12,
   cursor:       "pointer",
 };
+
+// ── 예시 팝업 CSS ─────────────────────────────────────────────────────────────
+
+const FUNC_EXAMPLE_CSS = [
+  ".fn-example h3,.fn-example h4{font-size:14px;font-weight:700;margin:16px 0 8px}",
+  ".fn-example table{border-collapse:collapse;width:100%;margin-bottom:12px}",
+  ".fn-example th,.fn-example td{border:1px solid #e0e0e0;padding:5px 10px;font-size:12px}",
+  ".fn-example th{background:#f5f5f5;font-weight:600}",
+  ".fn-example pre{background:#f5f5f5;padding:10px 14px;border-radius:6px;font-size:12px;overflow-x:auto}",
+  ".fn-example code{font-family:monospace}",
+  ".fn-example ul{padding-left:18px;margin:4px 0}",
+].join(" ");
+
+// ── 예시 팝업 컴포넌트 ────────────────────────────────────────────────────────
+
+function FuncExamplePopup({ onClose }: { onClose: () => void }) {
+  const [tab, setTab] = useState<"raw" | "preview">("preview");
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(DESCRIPTION_EXAMPLE).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    });
+  }
+
+  const tabBtn = (t: "raw" | "preview", label: string) => (
+    <button
+      onClick={() => setTab(t)}
+      style={{
+        padding: "4px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+        borderRadius: 5, border: "none",
+        background: tab === t ? "var(--color-primary, #1976d2)" : "transparent",
+        color: tab === t ? "#fff" : "var(--color-text-secondary)",
+      }}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: "var(--color-bg-card)", borderRadius: 10, width: "min(780px, 92vw)", maxHeight: "84vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "1px solid var(--color-border)", gap: 12 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, flexShrink: 0 }}>기능 설명 예시</span>
+          <div style={{ display: "flex", gap: 2, background: "var(--color-bg-muted)", padding: "3px", borderRadius: 7 }}>
+            {tabBtn("preview", "미리보기")}
+            {tabBtn("raw", "원문")}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+            <button
+              onClick={handleCopy}
+              style={{
+                padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                borderRadius: 5, border: "1px solid var(--color-border)",
+                background: copied ? "#e8f5e9" : "var(--color-bg-base)",
+                color: copied ? "#2e7d32" : "var(--color-text-secondary)",
+                transition: "all 0.2s",
+              }}
+            >
+              {copied ? "✓ 복사됨" : "복사"}
+            </button>
+            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--color-text-secondary)", lineHeight: 1 }}>×</button>
+          </div>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+          {tab === "raw" ? (
+            <pre style={{ margin: 0, fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", color: "var(--color-text-primary)", fontFamily: "monospace" }}>
+              {DESCRIPTION_EXAMPLE}
+            </pre>
+          ) : (
+            <>
+              <style dangerouslySetInnerHTML={{ __html: FUNC_EXAMPLE_CSS }} />
+              <div
+                className="fn-example"
+                style={{ fontSize: 13, lineHeight: 1.8, color: "var(--color-text-primary)" }}
+                dangerouslySetInnerHTML={{ __html: markedParse(DESCRIPTION_EXAMPLE) }}
+              />
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

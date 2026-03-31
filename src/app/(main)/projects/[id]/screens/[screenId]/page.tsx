@@ -15,6 +15,12 @@
  */
 
 import { Suspense, useState, useEffect } from "react";
+import { marked } from "marked";
+
+function markedParse(md: string): string {
+  const result = marked.parse(md, { async: false });
+  return typeof result === "string" ? result : "";
+}
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -458,58 +464,7 @@ function ScreenDetailPageInner() {
 
         {/* 화면 설명 예시 팝업 */}
         {descExampleOpen && (
-          <div
-            style={{
-              position: "fixed", inset: 0, zIndex: 300,
-              background: "rgba(0,0,0,0.45)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-            onClick={() => setDescExampleOpen(false)}
-          >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                width: "100%", maxWidth: 620,
-                background: "var(--color-bg-card)",
-                border: "1px solid var(--color-border)",
-                borderRadius: 10,
-                boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
-                padding: "20px 24px",
-                maxHeight: "80vh",
-                display: "flex", flexDirection: "column",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
-                  화면 설명 예시
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setDescExampleOpen(false)}
-                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#888" }}
-                >
-                  ×
-                </button>
-              </div>
-              <pre
-                style={{
-                  flex: 1,
-                  overflowY: "auto",
-                  background: "var(--color-bg-elevated)",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: 6,
-                  padding: "14px 16px",
-                  fontSize: 13,
-                  lineHeight: 1.7,
-                  whiteSpace: "pre-wrap",
-                  color: "var(--color-text-primary)",
-                  margin: 0,
-                }}
-              >
-                {DESCRIPTION_EXAMPLE}
-              </pre>
-            </div>
-          </div>
+          <ScreenExamplePopup onClose={() => setDescExampleOpen(false)} />
         )}
 
       {/* 설명 변경 이력 저장 여부 확인 다이얼로그 */}
@@ -856,3 +811,96 @@ const DESCRIPTION_TEMPLATE = (displayId: string, name: string) =>
 ### 영역 간 흐름
 
 - `;
+
+// ── 예시 팝업 CSS ─────────────────────────────────────────────────────────────
+
+const SCREEN_EXAMPLE_CSS = [
+  ".sc-example h2,.sc-example h3{font-size:14px;font-weight:700;margin:16px 0 8px}",
+  ".sc-example table{border-collapse:collapse;width:100%;margin-bottom:12px}",
+  ".sc-example th,.sc-example td{border:1px solid #e0e0e0;padding:5px 10px;font-size:12px}",
+  ".sc-example th{background:#f5f5f5;font-weight:600}",
+  ".sc-example pre{background:#f5f5f5;padding:10px 14px;border-radius:6px;font-size:12px;overflow-x:auto}",
+  ".sc-example code{font-family:monospace}",
+  ".sc-example ul{padding-left:18px;margin:4px 0}",
+].join(" ");
+
+// ── 예시 팝업 컴포넌트 ────────────────────────────────────────────────────────
+
+function ScreenExamplePopup({ onClose }: { onClose: () => void }) {
+  const [tab, setTab] = useState<"raw" | "preview">("preview");
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(DESCRIPTION_EXAMPLE).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    });
+  }
+
+  const tabBtn = (t: "raw" | "preview", label: string) => (
+    <button
+      onClick={() => setTab(t)}
+      style={{
+        padding: "4px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+        borderRadius: 5, border: "none",
+        background: tab === t ? "var(--color-primary, #1976d2)" : "transparent",
+        color: tab === t ? "#fff" : "var(--color-text-secondary)",
+      }}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: "var(--color-bg-card)", borderRadius: 10, width: "min(780px, 92vw)", maxHeight: "84vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 헤더 */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "1px solid var(--color-border)", gap: 12 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, flexShrink: 0 }}>화면 설명 예시</span>
+          <div style={{ display: "flex", gap: 2, background: "var(--color-bg-muted)", padding: "3px", borderRadius: 7 }}>
+            {tabBtn("preview", "미리보기")}
+            {tabBtn("raw", "원문")}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+            <button
+              onClick={handleCopy}
+              style={{
+                padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                borderRadius: 5, border: "1px solid var(--color-border)",
+                background: copied ? "#e8f5e9" : "var(--color-bg-base)",
+                color: copied ? "#2e7d32" : "var(--color-text-secondary)",
+                transition: "all 0.2s",
+              }}
+            >
+              {copied ? "✓ 복사됨" : "복사"}
+            </button>
+            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--color-text-secondary)", lineHeight: 1 }}>×</button>
+          </div>
+        </div>
+        {/* 본문 */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+          {tab === "raw" ? (
+            <pre style={{ margin: 0, fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", color: "var(--color-text-primary)", fontFamily: "monospace" }}>
+              {DESCRIPTION_EXAMPLE}
+            </pre>
+          ) : (
+            <>
+              <style dangerouslySetInnerHTML={{ __html: SCREEN_EXAMPLE_CSS }} />
+              <div
+                className="sc-example"
+                style={{ fontSize: 13, lineHeight: 1.8, color: "var(--color-text-primary)" }}
+                dangerouslySetInnerHTML={{ __html: markedParse(DESCRIPTION_EXAMPLE) }}
+              />
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
