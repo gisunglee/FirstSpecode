@@ -73,6 +73,15 @@ function FunctionsPageInner() {
   // 정렬순서 직접 입력 상태: { funcId → sortOrder }
   const [sortEdits, setSortEdits] = useState<Record<string, number>>({});
 
+  // 검색 필터
+  const [unitWorkFilter, setUnitWorkFilter] = useState("");
+  const [screenFilter,   setScreenFilter]   = useState("");
+
+  function handleUnitWorkChange(val: string) {
+    setUnitWorkFilter(val);
+    setScreenFilter(""); // 단위업무 바뀌면 화면 필터 초기화
+  }
+
   const dragItem     = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
@@ -92,6 +101,27 @@ function FunctionsPageInner() {
   });
 
   const items = data?.items ?? [];
+
+  // 단위업무 셀렉트 옵션 (중복 제거)
+  const unitWorkOptions = Array.from(
+    new Map(items.filter((f) => f.unitWorkId).map((f) => [f.unitWorkId, f.unitWorkName])).entries()
+  ).map(([id, name]) => ({ id: id!, name }));
+
+  // 화면 셀렉트 옵션 — 선택된 단위업무 기준으로 좁힘
+  const screenOptions = Array.from(
+    new Map(
+      items
+        .filter((f) => f.screenId && (!unitWorkFilter || f.unitWorkId === unitWorkFilter))
+        .map((f) => [f.screenId, `${f.screenDisplayId ?? ""} ${f.screenName}`.trim()])
+    ).entries()
+  ).map(([id, name]) => ({ id: id!, name }));
+
+  // 클라이언트 필터링
+  const filteredItems = items.filter(
+    (f) =>
+      (!unitWorkFilter || f.unitWorkId === unitWorkFilter) &&
+      (!screenFilter   || f.screenId   === screenFilter)
+  );
 
   // ── 순서 변경 ──────────────────────────────────────────────────────────────
   const sortMutation = useMutation({
@@ -120,12 +150,12 @@ function FunctionsPageInner() {
     if (from === null || to === null || from === to) return;
 
     // 영역이 다르면 이동 불가
-    if (items[from]?.areaId !== items[to]?.areaId) {
+    if (filteredItems[from]?.areaId !== filteredItems[to]?.areaId) {
       toast.error("같은 영역 안에서만 순서를 변경할 수 있습니다.");
       return;
     }
 
-    const reordered = [...items];
+    const reordered = [...filteredItems];
     const [moved] = reordered.splice(from, 1);
     if (!moved) return;
     reordered.splice(to, 0, moved);
@@ -162,20 +192,35 @@ function FunctionsPageInner() {
 
   return (
     <div style={{ padding: 0 }}>
-      {/* 헤더 타이틀 — full-width 배경 */}
+      {/* 헤더 타이틀 — full-width 배경, 좌: 타이틀 | 우: 버튼 */}
       <div style={{
+        display: "flex", alignItems: "center", gap: 12,
+        padding: "10px 24px",
         background: "var(--color-bg-card)",
         borderBottom: "1px solid var(--color-border)",
         marginBottom: 16,
       }}>
-        {/* 1행: 타이틀 */}
-        <div style={{ padding: "10px 24px 8px" }}>
-          <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
-            기능 정의 목록
-          </div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
+          기능 정의 목록
         </div>
-        {/* 2행: 버튼 */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 24px 10px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            onClick={() => queryClient.invalidateQueries({ queryKey })}
+            style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
+          >
+            조회
+          </button>
+          <button
+            onClick={() => {
+              const orders = Object.entries(sortEdits).map(([funcId, sortOrder]) => ({ funcId, sortOrder }));
+              if (orders.length === 0) { toast.info("변경된 정렬 순서가 없습니다."); return; }
+              sortMutation.mutate(orders);
+            }}
+            disabled={sortMutation.isPending}
+            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
+          >
+            저장
+          </button>
           <button
             onClick={() => {
               const url = areaIdFilter
@@ -187,32 +232,47 @@ function FunctionsPageInner() {
           >
             + 신규 등록
           </button>
-          <button
-            onClick={() => {
-              const orders = Object.entries(sortEdits).map(([funcId, sortOrder]) => ({ funcId, sortOrder }));
-              if (orders.length === 0) { toast.info("변경된 정렬 순서가 없습니다."); return; }
-              sortMutation.mutate(orders);
-            }}
-            disabled={sortMutation.isPending}
-            style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
-          >
-            저장
-          </button>
-          <button
-            onClick={() => queryClient.invalidateQueries({ queryKey })}
-            style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
-          >
-            조회
-          </button>
         </div>
+      </div>
+
+      {/* 검색 필터 바 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 24px 14px" }}>
+        <select
+          value={unitWorkFilter}
+          onChange={(e) => handleUnitWorkChange(e.target.value)}
+          style={filterSelectStyle}
+        >
+          <option value="">단위업무 전체</option>
+          {unitWorkOptions.map((o) => (
+            <option key={o.id} value={o.id}>{o.name}</option>
+          ))}
+        </select>
+        <select
+          value={screenFilter}
+          onChange={(e) => setScreenFilter(e.target.value)}
+          style={filterSelectStyle}
+        >
+          <option value="">화면 전체</option>
+          {screenOptions.map((o) => (
+            <option key={o.id} value={o.id}>{o.name}</option>
+          ))}
+        </select>
+        {(unitWorkFilter || screenFilter) && (
+          <button
+            onClick={() => { setUnitWorkFilter(""); setScreenFilter(""); }}
+            style={{ fontSize: 12, padding: "5px 10px", borderRadius: 5, border: "1px solid var(--color-border)", background: "none", cursor: "pointer", color: "var(--color-text-secondary)" }}
+          >
+            초기화
+          </button>
+        )}
       </div>
 
       {/* 총 건수 */}
       <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)", padding: "0 24px" }}>
-        총 {items.length}건
+        총 {filteredItems.length}건{filteredItems.length !== items.length && ` (전체 ${items.length}건)`}
       </div>
 
-      {items.length === 0 ? (
+      {filteredItems.length === 0 ? (
         <div style={{ padding: "60px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
           등록된 기능이 없습니다.
         </div>
@@ -233,8 +293,8 @@ function FunctionsPageInner() {
             <div />
           </div>
 
-          {items.map((fn, idx) => {
-            const prev = items[idx - 1];
+          {filteredItems.map((fn, idx) => {
+            const prev = filteredItems[idx - 1];
             // 이전 행과 같은 값이면 셀 숨김 (계층 그룹핑 효과)
             const showUnitWork = idx === 0 || fn.unitWorkId !== prev.unitWorkId;
             const showScreen   = idx === 0 || fn.screenId   !== prev.screenId;
@@ -529,6 +589,21 @@ const secondaryBtnStyle: React.CSSProperties = {
   border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
   color: "var(--color-text-primary)", fontSize: 14, cursor: "pointer",
 };
+const filterSelectStyle: React.CSSProperties = {
+  padding:         "5px 28px 5px 10px",
+  borderRadius:    6,
+  border:          "1px solid var(--color-border)",
+  fontSize:        13,
+  background:      "var(--color-bg-card)",
+  color:           "var(--color-text-primary)",
+  cursor:          "pointer",
+  appearance:      "none",
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+  backgroundRepeat:   "no-repeat",
+  backgroundPosition: "right 8px center",
+  minWidth: 160,
+};
+
 const dangerBtnStyle: React.CSSProperties = {
   padding: "4px 12px", borderRadius: 4,
   border: "1px solid #e53935", background: "transparent",

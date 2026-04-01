@@ -170,7 +170,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       if (!fn || fn.prjct_id !== projectId) {
         return apiError("NOT_FOUND", "대상 기능을 찾을 수 없습니다.", 404);
       }
-      snapshotData = { funcId: fn.func_id, funcName: fn.func_nm, funcType: fn.func_ty_code, spec: (fn as any).spec_cn };
+      snapshotData = { funcId: fn.func_id, funcName: fn.func_nm, funcType: fn.func_ty_code, funcDesc: fn.func_dc };
     }
 
     // 현재 버전은 PENDING 상태로 생성 (AI 파이프라인 미연동)

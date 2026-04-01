@@ -42,11 +42,12 @@ export async function POST(request: NextRequest) {
     return apiError("VALIDATION_ERROR", "인증 요청이 유효하지 않습니다.", 400);
   }
 
-  // state 형식: "provider:nonce" 또는 "provider:nonce:add"
-  const parts    = state.split(":");
-  const provider = parts[0];
-  const nonce    = parts[1];
-  const action   = parts[2] ?? null; // "add" 또는 undefined
+  // state 형식: "provider:nonce:action:redirect"
+  const parts      = state.split(":");
+  const provider   = parts[0];
+  const nonce      = parts[1];
+  const action     = parts[2] || null; // "add", "withdraw" 등
+  const redirectTo = parts[3] || null; // 예: "/invite/accept?token=..."
 
   if (!provider || !nonce || !["google", "github"].includes(provider)) {
     return apiError("VALIDATION_ERROR", "인증 요청이 유효하지 않습니다.", 400);
@@ -157,7 +158,7 @@ export async function POST(request: NextRequest) {
     if (action === "withdraw") {
       const socialToken = signSocialToken({ provdrCode, provdrUserId, email: provdrEmail! });
       const res = NextResponse.json({
-        data: { resultType: "WITHDRAW_SOCIAL", socialToken },
+        data: { resultType: "WITHDRAW_SOCIAL", socialToken, redirectTo },
       });
       res.cookies.delete("oauth_state");
       return res;
@@ -182,7 +183,7 @@ export async function POST(request: NextRequest) {
 
       const socialToken = signSocialToken({ provdrCode, provdrUserId, email: provdrEmail! });
       const res = NextResponse.json({
-        data: { resultType: "ADD_SOCIAL", socialToken, provider: provdrCode.toLowerCase() },
+        data: { resultType: "ADD_SOCIAL", socialToken, provider: provdrCode.toLowerCase(), redirectTo },
       });
       res.cookies.delete("oauth_state");
       return res;
@@ -212,7 +213,7 @@ export async function POST(request: NextRequest) {
       });
 
       const at  = signAccessToken({ mberId: existingSocial.mber_id, email: existingSocial.member.email_addr ?? "" });
-      const res = NextResponse.json({ data: { resultType: "EXISTING", accessToken: at, refreshToken: rt } });
+      const res = NextResponse.json({ data: { resultType: "EXISTING", accessToken: at, refreshToken: rt, redirectTo } });
       res.cookies.delete("oauth_state");
       return res;
     }
@@ -263,7 +264,7 @@ export async function POST(request: NextRequest) {
     });
 
     const at  = signAccessToken({ mberId: newMember.mber_id, email: provdrEmail! });
-    const res = NextResponse.json({ data: { resultType: "NEW", accessToken: at, refreshToken: rt } });
+    const res = NextResponse.json({ data: { resultType: "NEW", accessToken: at, refreshToken: rt, redirectTo } });
     res.cookies.delete("oauth_state");
     return res;
 

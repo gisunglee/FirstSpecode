@@ -206,7 +206,7 @@ function ProjectsPageInner() {
   const { data, isLoading } = useQuery<ProjectsResponse>({
     queryKey: ["projects"],
     queryFn: () => authFetch<ProjectsResponse>("/api/projects"),
-    staleTime: 2 * 60 * 1000,
+    staleTime: 60 * 1000, // 1분
   });
 
   const items = data?.data?.items ?? [];

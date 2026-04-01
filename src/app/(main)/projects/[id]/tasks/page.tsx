@@ -143,14 +143,13 @@ function TaskListPageInner() {
 
   // ── 렌더링 ─────────────────────────────────────────────────────────────────
   if (isLoading) {
-    return <div style={{ padding: "40px 32px", color: "#888" }}>과업 목록을 불러오는 중...</div>;
+    return <div style={{ padding: "40px 32px", color: "#888" }}>로딩 중...</div>;
   }
-  if (error) {
-    return <div style={{ padding: "40px 32px", color: "#e53935" }}>{(error as Error).message}</div>;
-  }
-  if (!data) return null;
-
-  const tasks = orderedTasks.length > 0 ? orderedTasks : data.tasks;
+  
+  // 에러 발생 시 빈 목록처럼 처리하되 안내 문구만 다르게 (사용자 요청: 심플하게)
+  const isError = !!error;
+  const tasks = isError ? [] : (orderedTasks.length > 0 ? orderedTasks : data?.tasks ?? []);
+  const totalCount = isError ? 0 : data?.totalCount ?? 0;
 
   return (
     <div style={{ padding: 0 }}>
@@ -170,7 +169,7 @@ function TaskListPageInner() {
       <div style={{ padding: "0 24px 24px" }}>
       {/* 총 건수 */}
       <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
-        총 <strong>{data.totalCount}</strong>건
+        총 <strong>{totalCount}</strong>건
       </div>
 
       {/* 테이블 */}
@@ -202,14 +201,8 @@ function TaskListPageInner() {
 
         {/* 바디 */}
         {tasks.length === 0 ? (
-          <div style={{ padding: "48px", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-            과업이 없습니다.{" "}
-            <button
-              onClick={() => router.push(`/projects/${projectId}/tasks/new`)}
-              style={{ background: "none", border: "none", color: "#1976d2", cursor: "pointer", fontSize: 14 }}
-            >
-              첫 번째 과업 추가하기 →
-            </button>
+          <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+            {isError ? "접근 권한이 없거나 프로젝트 정보를 찾을 수 없습니다." : "등록된 과업이 없습니다."}
           </div>
         ) : (
           tasks.map((task, idx) => {

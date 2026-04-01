@@ -44,7 +44,7 @@ export default function GNB() {
       authFetch<{ data: { items: ProjectOption[] } }>("/api/projects/my").then(
         (res) => res.data.items ?? []
       ),
-    staleTime: 5 * 60 * 1000, // 5분
+    staleTime: 60 * 1000, // 1분
   });
 
   // 현재 선택된 프로젝트 이름 계산
@@ -52,9 +52,9 @@ export default function GNB() {
     (p) => p.prjct_id === currentProjectId
   );
 
-  // 프로젝트가 1개뿐이고 선택된 게 없으면 자동 선택
+  // 프로젝트가 있고 현재 선택된 게 없으면 첫 번째 프로젝트를 자동 선택
   useEffect(() => {
-    if (!currentProjectId && projects.length === 1) {
+    if (!currentProjectId && projects.length > 0) {
       setCurrentProjectId(projects[0]!.prjct_id);
     }
   }, [projects, currentProjectId, setCurrentProjectId]);

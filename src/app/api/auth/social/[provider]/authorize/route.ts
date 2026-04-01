@@ -31,16 +31,18 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
   // action=add:      이미 로그인한 회원이 소셜 계정을 추가 연동할 때
   // action=withdraw: 회원 탈퇴 시 소셜 계정으로 본인 재인증할 때
-  const action = req.nextUrl.searchParams.get("action");
+  const action   = req.nextUrl.searchParams.get("action")   || "";
+  const redirectTo = req.nextUrl.searchParams.get("redirect") || "";
 
   const appUrl   = process.env.APP_URL ?? "http://localhost:3001";
   const redirect = `${appUrl}/auth/social/callback`;
 
   // CSRF 방지 nonce — 쿠키에 저장, state 파라미터에 포함
   const nonce = crypto.randomBytes(16).toString("hex");
-  const state = (action === "add" || action === "withdraw")
-    ? `${provider}:${nonce}:${action}`
-    : `${provider}:${nonce}`;
+  
+  // state 형식: "provider:nonce:action:redirect"
+  // 인코딩하여 전체를 전달 (Base64 등은 복잡하므로 : 구분자 사용)
+  const state = `${provider}:${nonce}:${action}:${redirectTo}`;
 
   let authUrl: string;
 

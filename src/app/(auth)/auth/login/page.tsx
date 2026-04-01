@@ -13,9 +13,9 @@
  * URL: /auth/login
  */
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/apiFetch";
 
 const LS_SAVED_EMAIL    = "lc_saved_email";
@@ -38,7 +38,17 @@ const card: React.CSSProperties = {
 };
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginInner />
+    </Suspense>
+  );
+}
+
+function LoginInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirect") || "/dashboard";
 
   const [email,         setEmail]         = useState("");
   const [password,      setPassword]      = useState("");
@@ -75,7 +85,7 @@ export default function LoginPage() {
         const body = await res.json();
         sessionStorage.setItem("access_token", body.data.accessToken);
         localStorage.setItem(LS_REFRESH_TOKEN, body.data.refreshToken);
-        router.replace("/dashboard");
+        router.replace(redirectTo);
       })
       .catch(() => { localStorage.removeItem(LS_REFRESH_TOKEN); })
       .finally(() => { setIsAutoLogging(false); });
@@ -106,7 +116,7 @@ export default function LoginPage() {
         }
         if (rememberEmail) { localStorage.setItem(LS_SAVED_EMAIL, email); }
         else               { localStorage.removeItem(LS_SAVED_EMAIL); }
-        router.replace("/dashboard");
+        router.replace(redirectTo);
 
       } else if (res.status === 423) {
         setIsLocked(true);
@@ -131,7 +141,10 @@ export default function LoginPage() {
     if (socialLoading) return;
     setSocialLoading(provider);
     try {
-      const res  = await fetch(`/api/auth/social/${provider}/authorize`);
+      const qs = new URLSearchParams({ 
+        redirect: redirectTo
+      });
+      const res  = await fetch(`/api/auth/social/${provider}/authorize?${qs}`);
       const body = await res.json();
       if (!res.ok) { setSubmitError(body.message ?? "소셜 로그인 초기화에 실패했습니다."); return; }
       window.location.href = body.data.url;

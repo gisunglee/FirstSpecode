@@ -41,7 +41,7 @@ export function useMyRole(projectId: string | null) {
         `/api/projects/${projectId}/my-role`
       ).then((r) => r.data.myRole),
     enabled: !!projectId,
-    staleTime: 5 * 60 * 1000, // 5분 캐싱 — 역할은 자주 바뀌지 않음
+    staleTime: 60 * 1000, // 1분 캐싱 — 역할은 자주 바뀌지 않음
   });
 
   const myRole = data ?? null;

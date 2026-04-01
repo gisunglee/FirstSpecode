@@ -375,16 +375,24 @@ function AreaDetailPageInner() {
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           <style>{`@keyframes _spin{to{transform:rotate(360deg)}}`}</style>
 
-          {/* AI 요청 버튼들 (신규 모드 제외) */}
+          {/* AI 버튼 그룹 (신규 모드 제외) — pill 형태로 묶어 통일감 부여 */}
           {!isNew && (
             <>
-              {AREA_AI_TASK_CONFIGS.map(({ taskType, label }) => {
-                const info = data?.aiTasks?.[taskType];
-                const isSpinning = (aiMutation.isPending && aiMutation.variables?.taskType === taskType)
-                  || (info && ["PENDING", "IN_PROGRESS"].includes(info.status));
-                return (
-                  <div key={taskType} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div style={{
+                display: "flex", alignItems: "stretch",
+                border: "1px solid rgba(103,80,164,0.3)",
+                borderRadius: 7,
+                overflow: "hidden",
+              }}>
+                {AREA_AI_TASK_CONFIGS.map(({ taskType, label }, idx) => {
+                  const info = data?.aiTasks?.[taskType];
+                  const isSpinning = (aiMutation.isPending && aiMutation.variables?.taskType === taskType)
+                    || (info && ["PENDING", "IN_PROGRESS"].includes(info.status));
+                  const dotColor = AREA_AI_STATUS_CONFIG[info?.status ?? ""]?.color ?? null;
+                  const statusTip = info ? (AREA_AI_STATUS_LABEL[info.status] ?? info.status) : "";
+                  return (
                     <button
+                      key={taskType}
                       onClick={() => {
                         if (!description.trim()) {
                           toast.error("설명을 먼저 입력해 주세요.");
@@ -393,18 +401,35 @@ function AreaDetailPageInner() {
                         setAiConfirm({ taskType, label });
                       }}
                       disabled={aiMutation.isPending}
-                      style={areaAiReqBtnStyle}
+                      title={statusTip || label}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 5,
+                        padding: "5px 12px",
+                        border: "none",
+                        borderLeft: idx > 0 ? "1px solid rgba(103,80,164,0.2)" : "none",
+                        background: "transparent",
+                        color: "rgba(103,80,164,0.9)",
+                        fontSize: 12, fontWeight: 600,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
                     >
-                      <span style={isSpinning ? { display: "inline-block", animation: "_spin 1s linear infinite", marginRight: 4 } : { marginRight: 4 }}>
-                        ↻
+                      <span style={isSpinning ? { display: "inline-block", animation: "_spin 1s linear infinite" } : {}}>
+                        ✦
                       </span>
                       {label}
+                      {/* 상태 도트 — 버튼 내부에 통합 */}
+                      {dotColor && (
+                        <span style={{
+                          width: 6, height: 6, borderRadius: "50%",
+                          background: dotColor, flexShrink: 0,
+                        }} />
+                      )}
                     </button>
-                    {info && <AreaAiStatusBadge status={info.status} />}
-                  </div>
-                );
-              })}
-              <div style={{ width: 1, height: 20, background: "var(--color-border)", margin: "0 4px" }} />
+                  );
+                })}
+              </div>
+              <div style={{ width: 1, height: 20, background: "var(--color-border)" }} />
             </>
           )}
 
@@ -961,11 +986,12 @@ const areaAiReqBtnStyle: React.CSSProperties = {
 };
 
 const AREA_AI_TASK_CONFIGS = [
-  { taskType: "DESIGN",  label: "AI 설계 요청" },
-  { taskType: "INSPECT", label: "AI 점검 요청" },
-  { taskType: "IMPACT",  label: "AI 영향도 분석" },
+  { taskType: "DESIGN",  label: "AI 설계" },
+  { taskType: "INSPECT", label: "AI 점검" },
+  { taskType: "IMPACT",  label: "AI 영향도" },
 ] as const;
 
+// 상태별 도트 색상 — 버튼 내부에 인라인으로 표시
 const AREA_AI_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   PENDING:     { label: "대기 중",   color: "#f59e0b" },
   IN_PROGRESS: { label: "처리 중",   color: "#3b82f6" },
@@ -976,18 +1002,16 @@ const AREA_AI_STATUS_CONFIG: Record<string, { label: string; color: string }> = 
   TIMEOUT:     { label: "시간초과",  color: "#6b7280" },
 };
 
-function AreaAiStatusBadge({ status }: { status: string }) {
-  const c = AREA_AI_STATUS_CONFIG[status] ?? { label: status, color: "#6b7280" };
-  return (
-    <span style={{
-      fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 10,
-      color: c.color, background: `${c.color}18`,
-      border: `1px solid ${c.color}40`, whiteSpace: "nowrap",
-    }}>
-      {c.label}
-    </span>
-  );
-}
+// 상태별 tooltip 레이블
+const AREA_AI_STATUS_LABEL: Record<string, string> = {
+  PENDING:     "대기 중",
+  IN_PROGRESS: "처리 중",
+  DONE:        "완료 — 클릭하여 재요청",
+  APPLIED:     "적용됨 — 클릭하여 재요청",
+  REJECTED:    "반려",
+  FAILED:      "실패 — 클릭하여 재요청",
+  TIMEOUT:     "시간 초과 — 클릭하여 재요청",
+};
 
 const overlayStyle: React.CSSProperties = {
   position:       "fixed",

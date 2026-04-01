@@ -182,10 +182,22 @@ function ProjectSettingsInner() {
       {activeTab === "basic" && <BasicInfoTab  projectId={projectId} project={project} isOwner={isOwner} queryClient={queryClient} />}
       {activeTab === "ai"    && <AiSettingsTab projectId={projectId} />}
 
-      {/* 멤버 관리 바로가기 */}
-      <div style={{ display: "flex", gap: 8, marginTop: 24, marginBottom: 16 }}>
-        <button onClick={() => router.push(`/projects/${projectId}/members`)} className="sp-btn sp-btn-secondary" style={{ flex: 1 }}>멤버 목록 →</button>
-        <button onClick={() => router.push(`/projects/${projectId}/members/invitations`)} className="sp-btn sp-btn-secondary" style={{ flex: 1 }}>멤버 초대 / 초대 현황 →</button>
+      {/* 멤버 관리 및 초대 바로가기 — 프리미엄 카드 타입 내비게이터 (FID-00074) */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 28, marginBottom: 20 }}>
+        <NavCard
+          title="멤버 관리"
+          description="참여 인원 목록 및 역할을 관리합니다"
+          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
+          onClick={() => router.push(`/projects/${projectId}/members`)}
+          color="var(--color-brand)"
+        />
+        <NavCard
+          title="초대 및 현황"
+          description="새 멤버 초대 및 승인 대기를 확인합니다"
+          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>}
+          onClick={() => router.push(`/projects/${projectId}/members/invitations`)}
+          color="var(--color-success, #22c55e)"
+        />
       </div>
 
       {/* 액션 영역 */}
@@ -453,6 +465,71 @@ function AiSettingsTab({ projectId }: { projectId: string }) {
             {saveMethodMutation.isPending ? "저장 중..." : "저장"}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * NavCard — 프로젝트 설정 내 이동용 카드 컴포넌트
+ */
+function NavCard({
+  title,
+  description,
+  icon,
+  onClick,
+  color,
+}: {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+  color?: string;
+}) {
+  const [isHover, setIsHover] = useState(false);
+
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setIsHover(true)}
+      onMouseLeave={() => setIsHover(false)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 16,
+        padding: "20px 24px",
+        background: isHover ? "var(--color-bg-elevated)" : "var(--color-bg-card)",
+        border: "1px solid",
+        borderColor: isHover ? color ?? "var(--color-brand)" : "var(--color-border)",
+        borderRadius: "var(--radius-lg)",
+        cursor: "pointer",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        boxShadow: isHover ? "var(--shadow-md)" : "none",
+        transform: isHover ? "translateY(-1px)" : "none",
+      }}
+    >
+      <div
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 12,
+          background: isHover ? (color ?? "var(--color-brand)") : "var(--color-bg-muted)",
+          color: isHover ? "#fff" : (color ?? "var(--color-brand)"),
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "all 0.2s",
+          flexShrink: 0,
+        }}
+      >
+        {icon}
+      </div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 2 }}>{title}</div>
+        <div style={{ fontSize: 13, color: "var(--color-text-tertiary)", letterSpacing: "-0.01em" }}>{description}</div>
+      </div>
+      <div style={{ color: "var(--color-text-tertiary)", fontSize: 18, opacity: isHover ? 1 : 0.3, transition: "opacity 0.2s", paddingLeft: 4 }}>
+        ›
       </div>
     </div>
   );

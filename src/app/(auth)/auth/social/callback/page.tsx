@@ -49,13 +49,14 @@ function SocialCallbackInner() {
           return;
         }
 
-        const { resultType, accessToken, refreshToken, socialToken, email, provider } = body.data;
+        const { resultType, accessToken, refreshToken, socialToken, email, provider, redirectTo } = body.data;
+        const finalUrl = redirectTo || "/dashboard";
 
         if (resultType === "NEW" || resultType === "EXISTING") {
-          // 토큰 저장 후 대시보드 이동
+          // 토큰 저장 후 리다렉트
           sessionStorage.setItem("access_token", accessToken);
           sessionStorage.setItem("refresh_token", refreshToken);
-          router.replace("/dashboard");
+          router.replace(finalUrl);
 
         } else if (resultType === "LINK_REQUIRED") {
           // 연동 확인 화면으로 이동 (email + socialToken 전달)

@@ -278,14 +278,19 @@ function MembersPageInner() {
                         }
                       }}
                       style={{
-                        padding: "5px 8px",
+                        padding: "5px 24px 5px 8px",
                         borderRadius: 6,
                         border: "1px solid var(--color-border)",
                         fontSize: 13,
                         background: "var(--color-bg-card)",
                         color: "var(--color-text-primary)",
                         cursor: "pointer",
-                        width: "100%",
+                        width: 128,
+                        appearance: "none",
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                        backgroundRepeat: "no-repeat",
+                        backgroundPosition: "right 8px center",
+                        backgroundSize: "14px",
                       }}
                     >
                       {roleOptions.map((opt) => (

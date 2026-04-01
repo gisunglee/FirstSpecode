@@ -16,6 +16,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/apiFetch";
 import { authFetch } from "@/lib/authFetch";
+import { useQueryClient } from "@tanstack/react-query";
 
 type InvitationInfo = {
   projectId:    string;
@@ -32,6 +33,7 @@ export default function InviteAcceptPage() {
 }
 
 function InviteAcceptInner() {
+  const queryClient  = useQueryClient();
   const searchParams = useSearchParams();
   const router       = useRouter();
   const token        = searchParams.get("token") ?? "";
@@ -51,10 +53,23 @@ function InviteAcceptInner() {
 
     // 초대 정보 조회 (인증 불필요)
     apiFetch<{ data: InvitationInfo }>(`/api/invitations/${token}`)
-      .then((res) => setInfo(res.data))
+      .then((res) => {
+        setInfo(res.data);
+        // 로그인 상태면 차후 자동 수락 시도 가능
+      })
       .catch((err: Error) => setErrorMsg(err.message))
       .finally(() => setLoading(false));
   }, [token]);
+
+  // 자동 수락 로직 (로그인 상태고 정보 로드 완료 시)
+  useEffect(() => {
+    if (isLoggedIn && info && !accepting && !errorMsg) {
+      const timer = setTimeout(() => {
+        handleAccept();
+      }, 1500); // 1.5초 후 자동 수락 (정보 확인 시간 부여)
+      return () => clearTimeout(timer);
+    }
+  }, [isLoggedIn, info]);
 
   async function handleAccept() {
     setAccepting(true);
@@ -64,6 +79,12 @@ function InviteAcceptInner() {
         { method: "POST" }
       );
       toast.success("프로젝트에 합류했습니다!");
+      
+      // 프로젝트 목록 캐시 무효화
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["projects", "my"] });
+      queryClient.invalidateQueries({ queryKey: ["my-role"] });
+      
       router.push("/dashboard");
       // 합류한 프로젝트를 현재 프로젝트로 설정하면 더 좋지만 여기선 단순 이동
       void res;
@@ -158,20 +179,25 @@ function InviteAcceptInner() {
 
       {/* 로그인 상태에 따라 분기 */}
       {isLoggedIn ? (
-        <button
-          onClick={handleAccept}
-          disabled={accepting}
-          style={{
-            width: "100%", padding: "14px",
-            background: "linear-gradient(135deg, #4a56d4 0%, #6366f1 100%)",
-            color: "#fff", border: "none", borderRadius: 10,
-            fontSize: 15, fontWeight: 700, cursor: "pointer",
-            boxShadow: "0 4px 12px rgba(74,86,212,0.35)",
-            opacity: accepting ? 0.7 : 1,
-          }}
-        >
-          {accepting ? "처리 중..." : "수락하기"}
-        </button>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <button
+            onClick={handleAccept}
+            disabled={accepting}
+            style={{
+              width: "100%", padding: "14px",
+              background: "linear-gradient(135deg, #4a56d4 0%, #6366f1 100%)",
+              color: "#fff", border: "none", borderRadius: 10,
+              fontSize: 15, fontWeight: 700, cursor: "pointer",
+              boxShadow: "0 4px 12px rgba(74,86,212,0.35)",
+              opacity: accepting ? 0.7 : 1,
+            }}
+          >
+            {accepting ? "수락 처리 중..." : "지금 수락하기"}
+          </button>
+          {!accepting && (
+             <p style={{ fontSize: 13, color: "var(--color-primary)", fontWeight: 600 }}>잠시 후 자동으로 수락됩니다...</p>
+          )}
+        </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <p style={{ margin: "0 0 8px", fontSize: 14, color: "#666" }}>

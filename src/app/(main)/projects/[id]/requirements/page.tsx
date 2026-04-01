@@ -56,15 +56,17 @@ function RequirementsPageInner() {
   const dragOverItem = useRef<number | null>(null);
 
   // ── 데이터 조회 ────────────────────────────────────────────────────────────
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["requirements", projectId],
     queryFn:  () =>
       authFetch<{ data: { items: RequirementRow[]; totalCount: number } }>(
         `/api/projects/${projectId}/requirements`
       ).then((r) => r.data),
   });
-
-  const items = data?.items ?? [];
+  
+  const isError = !!error;
+  const items = isError ? [] : (data?.items ?? []);
+  const totalCount = isError ? 0 : (data?.totalCount ?? 0);
 
   // ── 순서 변경 뮤테이션 ──────────────────────────────────────────────────────
   const sortMutation = useMutation({
@@ -137,13 +139,13 @@ function RequirementsPageInner() {
       <div style={{ padding: "0 24px 24px" }}>
       {/* 총 건수 */}
       <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
-        총 {items.length}건
+        총 {totalCount}건
       </div>
 
       {/* 목록 */}
       {items.length === 0 ? (
-        <div style={{ padding: "60px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-          등록된 요구사항이 없습니다.
+        <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+          {isError ? "접근 권한이 없거나 프로젝트 정보를 찾을 수 없습니다." : "등록된 요구사항이 없습니다."}
         </div>
       ) : (
         <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>

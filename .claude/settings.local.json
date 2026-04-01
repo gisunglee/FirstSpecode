@@ -113,9 +113,18 @@
       "Bash(done)",
       "Bash(wc -l \"D:/source/FirstSpecode/src/app/\\(main\\)/projects/[id]/areas/[areaId]/page.tsx\")",
       "Bash(find d:/source/FirstSpecode/src -path *unit-work* -name *.tsx -o -path *unit-work* -name *.ts)",
-      "Bash(python scripts/run_ai_tasks.py*)",
-      "Bash(python scripts/task_complete.py*)",
-      "Bash(python -c *)"
+      "Bash(python .claude/commands/run_ai_tasks.py*)",
+      "Bash(python .claude/commands/task_complete.py*)",
+      "Bash(python -c *)",
+      "Bash(where claude:*)",
+      "Bash(where claude.exe)",
+      "Bash(C:UsersUSERAppDataRoamingnpmclaude.cmd -p --output-format text @C:/temp/test_prompt.txt)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(\"C:\\\\Users\\\\USER\\\\AppData\\\\Roaming\\\\npm\\\\claude.cmd\" -p --output-format text)",
+      "Bash(node -r dotenv/config -e \":*)",
+      "Bash(curl -s \"http://localhost:3000/api/worker/tasks?limit=10\" -H \"X-Worker-Key: specode-worker-dev-key\")",
+      "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/b46b9fdd-7e73-41dd-97c6-05288c5ccda8/start\" -H \"X-Worker-Key: specode-worker-dev-key\")",
+      "Bash(set DOTENV_CONFIG_PATH=.env.local)"
     ]
   }
 }

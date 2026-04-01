@@ -411,42 +411,69 @@ function FunctionDetailPageInner() {
         {/* 우측 밀어내기 스페이서 */}
         <div style={{ flex: 1 }} />
 
-        {/* 우: AI 버튼 + 구분선 + 취소·저장 */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+        {/* 우: AI 버튼 그룹 + 구분선 + 취소·저장 */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <style>{`@keyframes _spin{to{transform:rotate(360deg)}}`}</style>
 
-          {/* AI 요청 버튼들 — 신규 모드에서는 disabled */}
-          <>
-            {AI_TASK_CONFIGS.map(({ taskType, label }) => {
+          {/* AI 버튼 그룹 — 하나의 pill로 묶어 통일감 부여, 신규 모드에서는 disabled */}
+          <div style={{
+            display: "flex", alignItems: "stretch",
+            border: "1px solid rgba(103,80,164,0.3)",
+            borderRadius: 7,
+            overflow: "hidden",
+            opacity: isNew ? 0.45 : 1,
+          }}>
+            {AI_TASK_CONFIGS.map(({ taskType, label }, idx) => {
               const info = data?.aiTasks?.[taskType];
-              const isSpinning = !isNew && (aiMutation.isPending && aiMutation.variables?.taskType === taskType)
-                || !isNew && (info && ["PENDING", "IN_PROGRESS"].includes(info.status));
+              const isSpinning = !isNew && (
+                (aiMutation.isPending && aiMutation.variables?.taskType === taskType)
+                || (info && ["PENDING", "IN_PROGRESS"].includes(info.status))
+              );
+              const dotColor = AI_STATUS_DOT[info?.status ?? ""] ?? null;
+              const statusTip = info ? (AI_STATUS_LABEL[info.status] ?? info.status) : "";
               return (
-                <div key={taskType} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <button
-                    onClick={() => {
-                      if (!description.trim()) {
-                        toast.error("설명을 먼저 입력해 주세요.");
-                        return;
-                      }
-                      setAiConfirm({ taskType, label });
-                    }}
-                    disabled={isNew || aiMutation.isPending}
-                    title={isNew ? "저장 후 사용할 수 있습니다" : undefined}
-                    style={{ ...aiReqBtnStyle, opacity: isNew ? 0.4 : 1, cursor: isNew ? "not-allowed" : "pointer" }}
-                    >
-                      <span style={isSpinning ? { display: "inline-block", animation: "_spin 1s linear infinite", marginRight: 4 } : { marginRight: 4 }}>
-                        ↻
-                      </span>
-                      {label}
-                    </button>
-                    {!isNew && info && <AiStatusBadge status={info.status} />}
-                  </div>
-                );
-              })}
-              {/* 구분선 */}
-              <div style={{ width: 1, height: 20, background: "var(--color-border)", margin: "0 4px" }} />
-            </>
+                <button
+                  key={taskType}
+                  onClick={() => {
+                    if (!description.trim()) {
+                      toast.error("설명을 먼저 입력해 주세요.");
+                      return;
+                    }
+                    setAiConfirm({ taskType, label });
+                  }}
+                  disabled={isNew || aiMutation.isPending}
+                  title={isNew ? "저장 후 사용할 수 있습니다" : statusTip || label}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 5,
+                    padding: "5px 12px",
+                    border: "none",
+                    borderLeft: idx > 0 ? "1px solid rgba(103,80,164,0.2)" : "none",
+                    background: "transparent",
+                    color: "rgba(103,80,164,0.9)",
+                    fontSize: 12, fontWeight: 600,
+                    cursor: isNew ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {/* 스파클 아이콘 — 처리 중이면 회전 */}
+                  <span style={isSpinning ? { display: "inline-block", animation: "_spin 1s linear infinite" } : {}}>
+                    ✦
+                  </span>
+                  {label}
+                  {/* 상태 도트 — 버튼 내부에 통합해 뱃지 분리 제거 */}
+                  {!isNew && dotColor && (
+                    <span style={{
+                      width: 6, height: 6, borderRadius: "50%",
+                      background: dotColor, flexShrink: 0,
+                    }} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* 구분선 */}
+          <div style={{ width: 1, height: 20, background: "var(--color-border)" }} />
 
           {/* 취소·저장 */}
           <button
@@ -840,32 +867,32 @@ function FunctionDetailPageInner() {
 // ── AI 태스크 설정 ────────────────────────────────────────────────────────────
 
 const AI_TASK_CONFIGS = [
-  { taskType: "DESIGN",  label: "AI 설계 요청" },
-  { taskType: "INSPECT", label: "AI 점검 요청" },
-  { taskType: "IMPACT",  label: "AI 영향도 분석" },
+  { taskType: "DESIGN",  label: "AI 설계" },
+  { taskType: "INSPECT", label: "AI 점검" },
+  { taskType: "IMPACT",  label: "AI 영향도" },
 ];
 
-function AiStatusBadge({ status }: { status: string }) {
-  const cfg: Record<string, { label: string; color: string; bg: string }> = {
-    PENDING:     { label: "대기 중",  color: "#f57c00", bg: "#fff8e1" },
-    IN_PROGRESS: { label: "처리 중",  color: "#1565c0", bg: "#e3f2fd" },
-    DONE:        { label: "완료",     color: "#2e7d32", bg: "#e8f5e9" },
-    APPLIED:     { label: "적용됨",   color: "#6a1b9a", bg: "#f3e5f5" },
-    REJECTED:    { label: "반려",     color: "#c62828", bg: "#ffebee" },
-    FAILED:      { label: "실패",     color: "#c62828", bg: "#ffebee" },
-    TIMEOUT:     { label: "시간초과", color: "#757575", bg: "#f5f5f5" },
-  };
-  const c = cfg[status] ?? { label: status, color: "#555", bg: "#f5f5f5" };
-  return (
-    <span style={{
-      fontSize: 10, fontWeight: 700, padding: "2px 6px",
-      borderRadius: 4, color: c.color, background: c.bg,
-      border: `1px solid ${c.color}40`, whiteSpace: "nowrap",
-    }}>
-      {c.label}
-    </span>
-  );
-}
+// 상태별 도트 색상 — 버튼 내부에 인라인으로 표시
+const AI_STATUS_DOT: Record<string, string> = {
+  PENDING:     "#f57c00",
+  IN_PROGRESS: "#1565c0",
+  DONE:        "#2e7d32",
+  APPLIED:     "#6a1b9a",
+  REJECTED:    "#c62828",
+  FAILED:      "#c62828",
+  TIMEOUT:     "#757575",
+};
+
+// 상태별 한글 레이블 — 버튼 tooltip에 표시
+const AI_STATUS_LABEL: Record<string, string> = {
+  PENDING:     "대기 중",
+  IN_PROGRESS: "처리 중",
+  DONE:        "완료 — 클릭하여 재요청",
+  APPLIED:     "적용됨 — 클릭하여 재요청",
+  REJECTED:    "반려",
+  FAILED:      "실패 — 클릭하여 재요청",
+  TIMEOUT:     "시간 초과 — 클릭하여 재요청",
+};
 
 // ── 설명 예시 / 템플릿 ────────────────────────────────────────────────────────
 
@@ -1021,17 +1048,6 @@ const secondaryBtnStyle: React.CSSProperties = {
   color: "var(--color-text-primary)", fontSize: 14, cursor: "pointer",
 };
 
-const aiReqBtnStyle: React.CSSProperties = {
-  padding:      "4px 10px",
-  borderRadius: 5,
-  border:       "1px solid var(--color-primary, #1976d2)",
-  background:   "none",
-  color:        "var(--color-primary, #1976d2)",
-  fontSize:     12,
-  fontWeight:   600,
-  cursor:       "pointer",
-  whiteSpace:   "nowrap",
-};
 
 const statusSelectStyle: React.CSSProperties = {
   padding:         "1px 20px 1px 6px",

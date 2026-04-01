@@ -60,9 +60,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       });
 
       // ② task_ty_code에 따라 대상 엔티티 업데이트
-      //    DESIGN  → 영역 설명(area_dc) 또는 기능 명세(spec_cn)에 결과 반영
+      //    DESIGN  → 영역 설명(area_dc) 또는 기능 설명(func_dc)에 결과 반영
       //    INSPECT / IMPACT / CUSTOM → 정보성, 엔티티 직접 수정 없음
-      //    IMPLEMENT / MOCKUP → 명세에 결과 병합 (현재 버전은 spec_cn 추가)
+      //    IMPLEMENT / MOCKUP → 설명에 결과 병합
       if (["DESIGN", "IMPLEMENT"].includes(task.task_ty_code)) {
         if (task.ref_ty_code === "AREA") {
           await tx.tbDsArea.update({
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         } else if (task.ref_ty_code === "FUNCTION") {
           await tx.tbDsFunction.update({
             where: { func_id: task.ref_id },
-            data:  { spec_cn: resultCn },
+            data:  { func_dc: resultCn },
           });
         }
       }

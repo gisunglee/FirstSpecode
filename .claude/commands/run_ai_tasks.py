@@ -9,10 +9,10 @@ run_ai_tasks.py — SPECODE AI 태스크 자동 처리 워커
   4. Claude의 응답을 result_cn으로 저장
 
 사용법:
-  python scripts/run_ai_tasks.py
-  python scripts/run_ai_tasks.py --limit 5
-  python scripts/run_ai_tasks.py --task-type DESIGN
-  python scripts/run_ai_tasks.py --ref-type FUNCTION
+  python .claude/commands/run_ai_tasks.py
+  python .claude/commands/run_ai_tasks.py --limit 5
+  python .claude/commands/run_ai_tasks.py --task-type DESIGN
+  python .claude/commands/run_ai_tasks.py --ref-type FUNCTION
 
 환경변수 (.env 또는 .env.local):
   SPECODE_URL     — 서버 주소 (기본값: http://localhost:3000)
@@ -24,7 +24,6 @@ import os
 import sys
 import json
 import subprocess
-import tempfile
 import argparse
 from pathlib import Path
 
@@ -32,8 +31,9 @@ from pathlib import Path
 
 def load_env():
     """프로젝트 루트의 .env.local 또는 .env 파일에서 환경변수를 로드합니다."""
-    script_dir  = Path(__file__).parent
-    project_root = script_dir.parent
+    # 이 파일 위치: {project}/.claude/commands/run_ai_tasks.py
+    # 프로젝트 루트: .parent(commands) → .parent(.claude) → .parent(project root)
+    project_root = Path(__file__).parent.parent.parent
 
     for env_file in [".env.local", ".env"]:
         env_path = project_root / env_file
@@ -56,8 +56,8 @@ SPECODE_URL    = os.environ.get("SPECODE_URL",    "http://localhost:3000")
 WORKER_API_KEY = os.environ.get("WORKER_API_KEY", "dev-worker-key")
 TASK_LIMIT     = int(os.environ.get("TASK_LIMIT", "10"))
 
-# 프로젝트 루트 경로 (스크립트 위치 기준 상위 디렉토리)
-PROJECT_ROOT = Path(__file__).parent.parent
+# 프로젝트 루트 경로
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 # ─── HTTP 헬퍼 ────────────────────────────────────────────────────────────────
 
@@ -184,17 +184,14 @@ def load_prompt(ref_type: str, task_type: str) -> str:
     """
     key = f"{ref_type}-{task_type}"
 
-    # 1. 특화 프롬프트 파일
     specific = PROMPTS_DIR / f"{ref_type}-{task_type}.md"
     if specific.exists():
         return specific.read_text(encoding="utf-8").strip()
 
-    # 2. 태스크 유형만 있는 공통 프롬프트 파일
     generic = PROMPTS_DIR / f"{task_type}.md"
     if generic.exists():
         return generic.read_text(encoding="utf-8").strip()
 
-    # 3. 내장 기본 프롬프트
     if key in DEFAULT_PROMPTS:
         return DEFAULT_PROMPTS[key]
 
@@ -203,92 +200,76 @@ def load_prompt(ref_type: str, task_type: str) -> str:
 
 # ─── Claude Code 호출 ─────────────────────────────────────────────────────────
 
+def find_claude_cmd() -> list[str]:
+    """
+    플랫폼에 따라 claude CLI 실행 명령어를 반환합니다.
+    Windows: npm 전역 설치 시 claude.cmd로 등록됨
+    Unix:    claude 직접 실행
+    """
+    import shutil
+    import platform
+
+    if platform.system() == "Windows":
+        for candidate in ["claude.cmd", "claude.ps1", "claude"]:
+            path = shutil.which(candidate)
+            if path:
+                return [path]
+        return ["claude"]
+    else:
+        return ["claude"]
+
+
 def call_claude(prompt: str) -> str:
     """
     Claude Code CLI를 호출하여 응답을 반환합니다.
-    한글 인코딩 문제를 피하기 위해 임시 파일을 경유합니다.
+    한글 인코딩 문제를 피하기 위해 프롬프트를 stdin으로 전달합니다.
+    (@file 방식은 Windows subprocess에서 경로 처리 문제가 있어 stdin 방식 사용)
     """
-    # 프롬프트를 임시 파일에 저장
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".txt", encoding="utf-8", delete=False
-    ) as prompt_file:
-        prompt_file.write(prompt)
-        prompt_path = prompt_file.name
+    claude_cmd = find_claude_cmd()
+    cmd = claude_cmd + ["-p", "--output-format", "text"]
 
-    # 결과를 저장할 임시 파일
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".md", encoding="utf-8", delete=False
-    ) as result_file:
-        result_path = result_file.name
+    # Popen + communicate 방식으로 stdin을 명시적으로 닫아 EOF를 보장
+    proc = subprocess.Popen(
+        cmd,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        encoding="utf-8",
+        errors="replace",
+    )
 
     try:
-        # Claude Code CLI 호출
-        # --output-format text: 순수 텍스트 출력 (JSON 래퍼 없음)
-        cmd = [
-            "claude", "-p",
-            "--output-format", "text",
-            f"@{prompt_path}",
-        ]
+        stdout, stderr = proc.communicate(input=prompt, timeout=300)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        raise RuntimeError("Claude 호출 타임아웃 (300초 초과)")
 
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=300,  # 5분 타임아웃
-        )
+    if proc.returncode != 0:
+        err_msg = (stderr or stdout or "")[:300]
+        raise RuntimeError(f"Claude 호출 실패 (exit {proc.returncode}): {err_msg}")
 
-        if result.returncode != 0:
-            raise RuntimeError(f"Claude 호출 실패 (exit {result.returncode}): {result.stderr}")
+    output = stdout.strip()
+    if not output:
+        raise RuntimeError("Claude 응답이 비어 있습니다.")
 
-        output = result.stdout.strip()
-        if not output:
-            raise RuntimeError("Claude 응답이 비어 있습니다.")
-
-        # 결과를 파일에 저장 (task_complete.py와 동일한 방식)
-        with open(result_path, "w", encoding="utf-8") as f:
-            f.write(output)
-
-        return output
-
-    finally:
-        # 프롬프트 임시 파일 정리
-        try:
-            os.unlink(prompt_path)
-        except OSError:
-            pass
-
-    return ""
+    return output
 
 
 # ─── 태스크 처리 ──────────────────────────────────────────────────────────────
 
 def build_final_prompt(task: dict) -> str:
     """태스크 정보와 프롬프트 파일을 조합하여 최종 프롬프트를 구성합니다."""
-    ref_type  = task["refType"]
-    task_type = task["taskType"]
-    req_cn    = task["reqCn"]
-
-    prompt_template = load_prompt(ref_type, task_type)
-
-    return f"""{prompt_template}
-
----
-
-{req_cn}
-"""
+    prompt_template = load_prompt(task["refType"], task["taskType"])
+    return f"{prompt_template}\n\n---\n\n{task['reqCn']}\n"
 
 
 def process_task(task: dict) -> bool:
-    """
-    단일 태스크를 처리합니다.
-    반환값: True=성공, False=실패
-    """
+    """단일 태스크를 처리합니다. 반환값: True=성공, False=실패"""
     task_id   = task["taskId"]
     ref_type  = task["refType"]
     task_type = task["taskType"]
 
-    print(f"\n[태스크 처리 시작] {task_id} | {ref_type}-{task_type}")
+    print(f"\n[태스크] {task_id} | {ref_type}-{task_type}")
     print(f"  요청일시: {task['requestedAt']}")
 
     # 1. 시작 마킹 (PENDING → IN_PROGRESS)
@@ -299,20 +280,20 @@ def process_task(task: dict) -> bool:
         print(f"  [오류] 시작 마킹 실패: {e}")
         return False
 
-    # 2. 프롬프트 조합 및 Claude 호출
+    # 2. Claude 호출
     try:
         final_prompt = build_final_prompt(task)
-        print(f"  [Claude 호출] 프롬프트 길이: {len(final_prompt)} 자")
+        print(f"  [Claude 호출] 프롬프트 {len(final_prompt)}자")
         result_text = call_claude(final_prompt)
-        print(f"  [Claude 완료] 결과 길이: {len(result_text)} 자")
+        print(f"  [Claude 완료] 결과 {len(result_text)}자")
     except Exception as e:
-        print(f"  [오류] Claude 처리 실패: {e}")
-        # 실패 마킹
+        print(f"  [오류] Claude 실패: {e}")
         try:
             worker_request("POST", f"/api/worker/tasks/{task_id}/complete", {
                 "status":   "FAILED",
-                "resultCn": f"처리 중 오류가 발생했습니다: {str(e)}",
+                "resultCn": f"처리 중 오류: {str(e)[:500]}",
             })
+            print(f"  [실패 마킹] → FAILED")
         except RuntimeError as ce:
             print(f"  [오류] 실패 마킹도 실패: {ce}")
         return False
@@ -334,23 +315,13 @@ def process_task(task: dict) -> bool:
 
 def main():
     parser = argparse.ArgumentParser(description="SPECODE AI 태스크 워커")
-    parser.add_argument("--limit",     type=int, default=TASK_LIMIT,
-                        help="처리할 최대 태스크 수 (기본값: TASK_LIMIT 환경변수)")
-    parser.add_argument("--task-type", type=str, default=None,
-                        help="태스크 유형 필터 (DESIGN|INSPECT|IMPACT|IMPLEMENT|MOCKUP|CUSTOM)")
-    parser.add_argument("--ref-type",  type=str, default=None,
-                        help="참조 유형 필터 (AREA|FUNCTION)")
+    parser.add_argument("--limit",     type=int, default=TASK_LIMIT)
+    parser.add_argument("--task-type", type=str, default=None)
+    parser.add_argument("--ref-type",  type=str, default=None)
     args = parser.parse_args()
 
-    print(f"[SPECODE AI 워커] 시작")
-    print(f"  서버: {SPECODE_URL}")
-    print(f"  최대 처리: {args.limit}건")
-    if args.task_type:
-        print(f"  태스크 유형 필터: {args.task_type}")
-    if args.ref_type:
-        print(f"  참조 유형 필터: {args.ref_type}")
+    print(f"[SPECODE AI 워커] 시작 | 서버: {SPECODE_URL} | 최대: {args.limit}건")
 
-    # PENDING 태스크 조회
     params = f"limit={args.limit}"
     if args.task_type:
         params += f"&taskType={args.task_type}"
@@ -365,25 +336,21 @@ def main():
 
     tasks = resp.get("data", {}).get("tasks", [])
     count = resp.get("data", {}).get("count", 0)
-
-    print(f"\n[조회 완료] PENDING 태스크 {count}건")
+    print(f"[조회] PENDING {count}건")
 
     if not tasks:
         print("처리할 태스크가 없습니다.")
         return
 
-    # 순차 처리
     success_count = 0
     fail_count    = 0
-
     for task in tasks:
-        ok = process_task(task)
-        if ok:
+        if process_task(task):
             success_count += 1
         else:
             fail_count += 1
 
-    print(f"\n[워커 완료] 성공: {success_count}건, 실패: {fail_count}건")
+    print(f"\n[완료] 성공: {success_count}건, 실패: {fail_count}건")
 
 
 if __name__ == "__main__":
