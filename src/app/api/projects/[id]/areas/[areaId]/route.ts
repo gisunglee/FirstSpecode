@@ -31,27 +31,47 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const area = await prisma.tbDsArea.findUnique({
-      where:   { area_id: areaId },
-      include: {
-        screen: { select: { scrn_id: true, scrn_nm: true, scrn_display_id: true } },
-        // 하단 기능 목록 (AR-00074, FID-00163) — sort_ordr 오름차순
-        functions: {
-          orderBy: { sort_ordr: "asc" },
-          select: {
-            func_id:         true,
-            func_display_id: true,
-            func_nm:         true,
-            func_sttus_code: true,
-            priort_code:     true,
-            sort_ordr:       true,
+    const [area, aiTaskRows] = await Promise.all([
+      prisma.tbDsArea.findUnique({
+        where:   { area_id: areaId },
+        include: {
+          screen: { select: { scrn_id: true, scrn_nm: true, scrn_display_id: true } },
+          // 하단 기능 목록 (AR-00074, FID-00163) — sort_ordr 오름차순
+          functions: {
+            orderBy: { sort_ordr: "asc" },
+            select: {
+              func_id:         true,
+              func_display_id: true,
+              func_nm:         true,
+              func_sttus_code: true,
+              priort_code:     true,
+              sort_ordr:       true,
+            },
           },
         },
-      },
-    });
+      }),
+      // 영역용 AI 태스크 최신 상태 조회 (타입별 최신 1건)
+      prisma.tbAiTask.findMany({
+        where: {
+          prjct_id:    projectId,
+          ref_ty_code: "AREA",
+          ref_id:      areaId,
+        },
+        orderBy: { req_dt: "desc" },
+        select: { ai_task_id: true, task_ty_code: true, task_sttus_code: true },
+      }),
+    ]);
 
     if (!area || area.prjct_id !== projectId) {
       return apiError("NOT_FOUND", "영역을 찾을 수 없습니다.", 404);
+    }
+
+    // 타입별 최신 1건만 추출
+    const aiTasks: Record<string, { aiTaskId: string; status: string }> = {};
+    for (const t of aiTaskRows) {
+      if (!aiTasks[t.task_ty_code]) {
+        aiTasks[t.task_ty_code] = { aiTaskId: t.ai_task_id, status: t.task_sttus_code };
+      }
     }
 
     // 설계율(DESIGN_DONE 기준), 구현율(IMPL_DONE 기준) 계산 (AR-00073 요약)
@@ -72,6 +92,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       screenName:  area.screen?.scrn_nm ?? "미분류",
       screenDisplayId: area.screen?.scrn_display_id ?? null,
       excalidrawData:  area.excaldw_data ?? null,
+      aiTasks,
       // 요약 정보 (AR-00073)
       summary: {
         functionCount: total,

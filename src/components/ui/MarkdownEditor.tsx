@@ -9,7 +9,7 @@
  *   - 내부 헤더 행 없음 — 세로 공간 낭비 방지
  */
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { renderMarkdown } from "@/lib/renderMarkdown";
 
 type Props = {
@@ -26,38 +26,44 @@ type Props = {
 
 export default function MarkdownEditor({
   value, onChange, placeholder, rows = 14, readOnly = false,
-  tab: externalTab, onTabChange,
+  tab: externalTab, onTabChange: _onTabChange,
   fullHeight = false,
 }: Props) {
-  // 외부 탭이 없으면 내부 state로 fallback
-  const [internalTab, setInternalTab] = useState<"edit" | "preview">("edit");
-  const tab        = externalTab ?? internalTab;
-  const handleTab  = onTabChange ?? setInternalTab;
+  // 외부 탭이 없으면 내부 state로 fallback (탭 버튼은 외부 MarkdownTabButtons에서 제어)
+  const [internalTab] = useState<"edit" | "preview">("edit");
+  const tab = externalTab ?? internalTab;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: fullHeight ? "100%" : "auto", flex: fullHeight ? 1 : "none" }}>
+    <div style={{
+      display:       "flex",
+      flexDirection: "column",
+      flex:          fullHeight ? 1 : "none",
+      minHeight:     0,
+      height:        fullHeight ? "100%" : undefined,
+    }}>
       {tab === "edit" ? (
         <textarea
           value={value}
           placeholder={placeholder}
-          rows={rows}
+          rows={fullHeight ? undefined : rows}
           readOnly={readOnly}
           onChange={(e) => onChange(e.target.value)}
           style={{
-            width:       "100%",
-            padding:     "8px 12px",
+            width:        "100%",
+            height:       fullHeight ? "100%" : undefined,
+            padding:      "8px 12px",
             borderRadius: 6,
-            border:      "1px solid var(--color-border)",
-            background:  readOnly ? "var(--color-bg-muted)" : "var(--color-bg-card)",
-            color:       "var(--color-text-primary)",
-            boxSizing:   "border-box",
-            outline:     "none",
-            resize:      "none",
-            fontFamily:  "var(--font-mono, monospace)",
-            fontSize:    12,
-            lineHeight:  1.5,
-            flex:        fullHeight ? 1 : "none",
-            height:      fullHeight ? "100%" : "auto",
+            border:       "1px solid var(--color-border)",
+            background:   readOnly ? "var(--color-bg-muted)" : "var(--color-bg-card)",
+            color:        "var(--color-text-primary)",
+            boxSizing:    "border-box",
+            outline:      "none",
+            resize:       "none",
+            fontFamily:   "var(--font-mono, monospace)",
+            fontSize:     12,
+            lineHeight:   1.5,
+            flex:         fullHeight ? 1 : "none",
+            minHeight:    0,
           }}
         />
       ) : (
@@ -65,12 +71,14 @@ export default function MarkdownEditor({
           className="sp-markdown"
           style={{
             width:        "100%",
+            height:       fullHeight ? "100%" : undefined,
             padding:      "12px 16px",
             border:       "1px solid var(--color-border)",
             background:   "var(--color-bg-card)",
             color:        "var(--color-text-primary)",
             boxSizing:    "border-box",
-            minHeight:    fullHeight ? "100%" : (rows * 21),
+            minHeight:    fullHeight ? 0 : (rows * 21),
+            maxHeight:    fullHeight ? "none" : (rows * 21),
             borderRadius: 6,
             overflowY:    "auto",
             flex:         fullHeight ? 1 : "none",
@@ -100,29 +108,29 @@ export function MarkdownTabButtons({
   tab:          "edit" | "preview";
   onTabChange:  (tab: "edit" | "preview") => void;
 }) {
+  const btn = (t: "edit" | "preview", label: string) => (
+    <button
+      key={t}
+      type="button"
+      onClick={() => onTabChange(t)}
+      style={{
+        padding:      "4px 14px",
+        borderRadius: 5,
+        border:       "none",
+        background:   tab === t ? "var(--color-primary, #1976d2)" : "transparent",
+        color:        tab === t ? "#fff" : "var(--color-text-secondary)",
+        fontSize:     12,
+        fontWeight:   600,
+        cursor:       "pointer",
+      }}
+    >
+      {label}
+    </button>
+  );
   return (
-    <div style={{ display: "flex", gap: 2, background: "var(--color-bg-muted)", borderRadius: 6, padding: 2 }}>
-      {(["edit", "preview"] as const).map((t) => (
-        <button
-          key={t}
-          type="button"
-          onClick={() => onTabChange(t)}
-          style={{
-            padding:      "2px 10px",
-            borderRadius: 4,
-            border:       "none",
-            background:   tab === t ? "var(--color-bg-card)" : "transparent",
-            color:        tab === t ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-            fontSize:     11,
-            fontWeight:   tab === t ? 700 : 400,
-            cursor:       "pointer",
-            boxShadow:    tab === t ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-            transition:   "all 0.15s",
-          }}
-        >
-          {t === "edit" ? "마크다운" : "미리보기"}
-        </button>
-      ))}
+    <div style={{ display: "flex", gap: 2, background: "var(--color-bg-muted)", borderRadius: 7, padding: 3 }}>
+      {btn("edit",    "원문")}
+      {btn("preview", "마크다운")}
     </div>
   );
 }

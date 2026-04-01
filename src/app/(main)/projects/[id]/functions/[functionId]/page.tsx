@@ -633,7 +633,7 @@ function FunctionDetailPageInner() {
               value={description}
               onChange={setDescription}
               placeholder="기능 설명을 마크다운으로 작성하세요."
-              rows={21}
+              rows={25}
               tab={descTab}
               onTabChange={setDescTab}
             />

@@ -40,7 +40,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         requirement: { select: { req_id: true, req_display_id: true, req_nm: true } },
         screens:     { select: { scrn_id: true } },
       },
-      orderBy: { sort_ordr: "asc" },
+      orderBy: [
+        { requirement: { sort_ordr: "asc" } },  // 요구사항 정렬순서 우선
+        { sort_ordr: "asc" },                    // 단위업무 정렬순서
+      ],
     });
 
     const items = unitWorks.map((uw) => ({

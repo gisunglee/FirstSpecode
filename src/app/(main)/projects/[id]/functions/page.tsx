@@ -70,6 +70,8 @@ function FunctionsPageInner() {
   // 인라인 편집 상태: { funcId, field } or null
   const [editingCell, setEditingCell] = useState<{ funcId: string; field: "complexity" | "effort" } | null>(null);
   const [editValue,   setEditValue]   = useState("");
+  // 정렬순서 직접 입력 상태: { funcId → sortOrder }
+  const [sortEdits, setSortEdits] = useState<Record<string, number>>({});
 
   const dragItem     = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
@@ -98,6 +100,10 @@ function FunctionsPageInner() {
         method: "PUT",
         body:   JSON.stringify({ orders }),
       }),
+    onSuccess: () => {
+      setSortEdits({});
+      queryClient.invalidateQueries({ queryKey });
+    },
     onError: () => {
       toast.error("순서 변경에 실패했습니다.");
       queryClient.invalidateQueries({ queryKey });
@@ -109,15 +115,22 @@ function FunctionsPageInner() {
   function handleDragEnd() {
     const from = dragItem.current;
     const to   = dragOverItem.current;
+    dragItem.current = null;
+    dragOverItem.current = null;
     if (from === null || to === null || from === to) return;
+
+    // 영역이 다르면 이동 불가
+    if (items[from]?.areaId !== items[to]?.areaId) {
+      toast.error("같은 영역 안에서만 순서를 변경할 수 있습니다.");
+      return;
+    }
+
     const reordered = [...items];
     const [moved] = reordered.splice(from, 1);
     if (!moved) return;
     reordered.splice(to, 0, moved);
     queryClient.setQueryData(queryKey, { items: reordered });
-    sortMutation.mutate(reordered.map((f, idx) => ({ funcId: f.funcId, sortOrder: idx + 1 })));
-    dragItem.current = null;
-    dragOverItem.current = null;
+    sortMutation.mutate(reordered.map((f, i) => ({ funcId: f.funcId, sortOrder: i + 1 })));
   }
 
   // ── 인라인 편집 뮤테이션 ──────────────────────────────────────────────────
@@ -151,26 +164,47 @@ function FunctionsPageInner() {
     <div style={{ padding: 0 }}>
       {/* 헤더 타이틀 — full-width 배경 */}
       <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "10px 24px",
         background: "var(--color-bg-card)",
         borderBottom: "1px solid var(--color-border)",
         marginBottom: 16,
       }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
-          기능 정의 목록
+        {/* 1행: 타이틀 */}
+        <div style={{ padding: "10px 24px 8px" }}>
+          <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+            기능 정의 목록
+          </div>
         </div>
-        <button
-          onClick={() => {
-            const url = areaIdFilter
-              ? `/projects/${projectId}/functions/new?areaId=${areaIdFilter}`
-              : `/projects/${projectId}/functions/new`;
-            router.push(url);
-          }}
-          style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
-        >
-          + 신규 등록
-        </button>
+        {/* 2행: 버튼 */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 24px 10px" }}>
+          <button
+            onClick={() => {
+              const url = areaIdFilter
+                ? `/projects/${projectId}/functions/new?areaId=${areaIdFilter}`
+                : `/projects/${projectId}/functions/new`;
+              router.push(url);
+            }}
+            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
+          >
+            + 신규 등록
+          </button>
+          <button
+            onClick={() => {
+              const orders = Object.entries(sortEdits).map(([funcId, sortOrder]) => ({ funcId, sortOrder }));
+              if (orders.length === 0) { toast.info("변경된 정렬 순서가 없습니다."); return; }
+              sortMutation.mutate(orders);
+            }}
+            disabled={sortMutation.isPending}
+            style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
+          >
+            저장
+          </button>
+          <button
+            onClick={() => queryClient.invalidateQueries({ queryKey })}
+            style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
+          >
+            조회
+          </button>
+        </div>
       </div>
 
       {/* 총 건수 */}
@@ -191,6 +225,7 @@ function FunctionsPageInner() {
             <div>화면</div>
             <div>영역</div>
             <div>기능명</div>
+            <div style={{ textAlign: "center" }}>정렬</div>
             <div>유형</div>
             <div>복잡도</div>
             <div>공수</div>
@@ -253,6 +288,28 @@ function FunctionsPageInner() {
                     {fn.displayId}
                   </span>
                   {fn.name}
+                </div>
+
+                {/* 정렬순서 — 직접 입력 가능 */}
+                <div onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="number"
+                    value={sortEdits[fn.funcId] ?? fn.sortOrder}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value);
+                      if (!isNaN(v)) setSortEdits((prev) => ({ ...prev, [fn.funcId]: v }));
+                    }}
+                    style={{
+                      width: 44, textAlign: "center", fontSize: 12,
+                      padding: "2px 4px", borderRadius: 4,
+                      border: "1px solid var(--color-border)",
+                      background: sortEdits[fn.funcId] !== undefined
+                        ? "var(--color-bg-muted)"
+                        : "var(--color-bg-card)",
+                      color: "var(--color-text-primary)",
+                      outline: "none",
+                    }}
+                  />
                 </div>
 
                 {/* 유형 배지 */}
@@ -443,7 +500,7 @@ function statusBadgeStyle(status: string): React.CSSProperties {
   return { display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, ...s };
 }
 
-const GRID_TEMPLATE = "32px 150px 170px 160px 1fr 70px 80px 60px 80px 100px";
+const GRID_TEMPLATE = "32px 150px 187px 208px 1fr 50px 70px 80px 60px 80px 100px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID_TEMPLATE, gap: 8,

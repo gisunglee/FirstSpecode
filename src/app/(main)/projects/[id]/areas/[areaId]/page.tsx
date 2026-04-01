@@ -37,6 +37,8 @@ import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
+type AiTaskInfo = { aiTaskId: string; status: string };
+
 type AreaDetail = {
   areaId:      string;
   displayId:   string;
@@ -49,6 +51,7 @@ type AreaDetail = {
   layoutData:     string | null;
   commentCn:      string;
   excalidrawData: object | null;
+  aiTasks:        Record<string, AiTaskInfo>;
   summary: {
     functionCount: number;
     designRate:    number;
@@ -118,6 +121,9 @@ function AreaDetailPageInner() {
 
   // ── 설명 예시 팝업 상태 ────────────────────────────────────────────────────
   const [descExampleOpen, setDescExampleOpen] = useState(false);
+
+  // ── AI 컨펌 상태 ──────────────────────────────────────────────────────────
+  const [aiConfirm, setAiConfirm] = useState<{ taskType: string; label: string } | null>(null);
 
   // ── Excalidraw 팝업 상태 ───────────────────────────────────────────────────
   const [excalidrawOpen,  setExcalidrawOpen]  = useState(false);
@@ -243,6 +249,26 @@ function AreaDetailPageInner() {
 
 
 
+  // ── 영역 AI 요청 뮤테이션 ─────────────────────────────────────────────────
+  const aiMutation = useMutation({
+    mutationFn: ({ taskType }: { taskType: string }) =>
+      authFetch(`/api/projects/${projectId}/areas/${areaId}/ai`, {
+        method: "POST",
+        body: JSON.stringify({ taskType }),
+      }),
+    onSuccess: (_res, vars) => {
+      const labels: Record<string, string> = {
+        DESIGN:  "AI 설계 요청이 접수되었습니다.",
+        INSPECT: "AI 점검 요청이 접수되었습니다.",
+        IMPACT:  "AI 영향도 분석 요청이 접수되었습니다.",
+      };
+      toast.success(labels[vars.taskType] ?? "AI 요청이 접수되었습니다.");
+      // 상태 갱신을 위해 상세 재조회
+      queryClient.invalidateQueries({ queryKey: ["area", projectId, areaId] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   // ── 로딩 ───────────────────────────────────────────────────────
   if (!isNew && isLoading) {
     return <div style={{ padding: "40px 32px", color: "#888" }}>로딩 중...</div>;
@@ -290,7 +316,38 @@ function AreaDetailPageInner() {
         title="버전 이력 비교"
       />
 
-      {/* 타이틀 행 — full-width 배경, 좌: ← 타이틀 | 우: Excalidraw·취소·저장 */}
+      {/* AI 요청 확인 다이얼로그 */}
+      {aiConfirm !== null && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setAiConfirm(null)}
+        >
+          <div
+            style={{ background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 10, padding: "28px 32px", width: 380, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>AI 요청 확인</div>
+            <div style={{ fontSize: 14, color: "var(--color-text-secondary)", marginBottom: 24 }}>
+              <strong>{aiConfirm.label}</strong>을 요청하시겠습니까?<br />
+              영역 설명과 AI 요청 코멘트가 함께 전달됩니다.
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button onClick={() => setAiConfirm(null)} style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}>취소</button>
+              <button
+                onClick={() => {
+                  aiMutation.mutate({ taskType: aiConfirm.taskType });
+                  setAiConfirm(null);
+                }}
+                style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 20px" }}
+              >
+                요청
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 타이틀 행 — full-width 배경, 좌: ← 타이틀 | 우: AI버튼·Excalidraw·취소·저장 */}
       <div style={{
         display: "flex", alignItems: "center", gap: 16,
         padding: "10px 24px",
@@ -299,7 +356,7 @@ function AreaDetailPageInner() {
         marginBottom: 16,
       }}>
         {/* 좌: 뒤로 + 타이틀 */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <button
             onClick={() => router.push(`/projects/${projectId}/areas`)}
             style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}
@@ -310,8 +367,47 @@ function AreaDetailPageInner() {
             {isNew ? "영역 신규 등록" : `${data?.displayId ?? ""} 영역 편집`}
           </span>
         </div>
-        {/* 우: 버튼 그룹 */}
-        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+
+        {/* 스페이서 */}
+        <div style={{ flex: 1 }} />
+
+        {/* 우: AI 버튼 + 구분선 + Excalidraw + 취소·저장 */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <style>{`@keyframes _spin{to{transform:rotate(360deg)}}`}</style>
+
+          {/* AI 요청 버튼들 (신규 모드 제외) */}
+          {!isNew && (
+            <>
+              {AREA_AI_TASK_CONFIGS.map(({ taskType, label }) => {
+                const info = data?.aiTasks?.[taskType];
+                const isSpinning = (aiMutation.isPending && aiMutation.variables?.taskType === taskType)
+                  || (info && ["PENDING", "IN_PROGRESS"].includes(info.status));
+                return (
+                  <div key={taskType} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <button
+                      onClick={() => {
+                        if (!description.trim()) {
+                          toast.error("설명을 먼저 입력해 주세요.");
+                          return;
+                        }
+                        setAiConfirm({ taskType, label });
+                      }}
+                      disabled={aiMutation.isPending}
+                      style={areaAiReqBtnStyle}
+                    >
+                      <span style={isSpinning ? { display: "inline-block", animation: "_spin 1s linear infinite", marginRight: 4 } : { marginRight: 4 }}>
+                        ↻
+                      </span>
+                      {label}
+                    </button>
+                    {info && <AreaAiStatusBadge status={info.status} />}
+                  </div>
+                );
+              })}
+              <div style={{ width: 1, height: 20, background: "var(--color-border)", margin: "0 4px" }} />
+            </>
+          )}
+
           {!isNew && (
             <button
               onClick={() => setExcalidrawOpen(true)}
@@ -849,6 +945,49 @@ const ghostSmBtnStyle: React.CSSProperties = {
   fontSize:     12,
   cursor:       "pointer",
 };
+
+// ── 영역 AI 요청 버튼 스타일 및 설정 ─────────────────────────────────────────
+
+const areaAiReqBtnStyle: React.CSSProperties = {
+  padding:      "4px 10px",
+  borderRadius: 5,
+  border:       "1px solid var(--color-primary, #1976d2)",
+  background:   "none",
+  color:        "var(--color-primary, #1976d2)",
+  fontSize:     12,
+  fontWeight:   600,
+  cursor:       "pointer",
+  whiteSpace:   "nowrap",
+};
+
+const AREA_AI_TASK_CONFIGS = [
+  { taskType: "DESIGN",  label: "AI 설계 요청" },
+  { taskType: "INSPECT", label: "AI 점검 요청" },
+  { taskType: "IMPACT",  label: "AI 영향도 분석" },
+] as const;
+
+const AREA_AI_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
+  PENDING:     { label: "대기 중",   color: "#f59e0b" },
+  IN_PROGRESS: { label: "처리 중",   color: "#3b82f6" },
+  DONE:        { label: "완료",      color: "#22c55e" },
+  APPLIED:     { label: "적용됨",    color: "#8b5cf6" },
+  REJECTED:    { label: "반려",      color: "#ef4444" },
+  FAILED:      { label: "실패",      color: "#ef4444" },
+  TIMEOUT:     { label: "시간초과",  color: "#6b7280" },
+};
+
+function AreaAiStatusBadge({ status }: { status: string }) {
+  const c = AREA_AI_STATUS_CONFIG[status] ?? { label: status, color: "#6b7280" };
+  return (
+    <span style={{
+      fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 10,
+      color: c.color, background: `${c.color}18`,
+      border: `1px solid ${c.color}40`, whiteSpace: "nowrap",
+    }}>
+      {c.label}
+    </span>
+  );
+}
 
 const overlayStyle: React.CSSProperties = {
   position:       "fixed",

@@ -32,6 +32,7 @@ type AreaRow = {
   screenId:        string | null;
   screenName:      string;
   screenDisplayId: string | null;
+  unitWorkName:    string | null;
   functionCount:   number;
 };
 
@@ -171,9 +172,11 @@ function AreasPageInner() {
           {/* 헤더 행 */}
           <div style={gridHeaderStyle}>
             <div />
+            <div>단위업무명</div>
             <div>화면명</div>
             <div>영역명</div>
             <div>유형</div>
+            <div style={{ textAlign: "center" }}>정렬</div>
             <div style={{ textAlign: "center" }}>기능수</div>
             <div />
           </div>
@@ -195,6 +198,11 @@ function AreasPageInner() {
             >
               {/* 드래그 핸들 */}
               <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
+
+              {/* 단위업무명 — 같은 단위업무면 첫 행에만 표시 */}
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {items[idx - 1]?.unitWorkName === area.unitWorkName ? "" : (area.unitWorkName ?? "-")}
+              </div>
 
               {/* 화면명 (클릭 → 화면 상세·편집, 행 클릭과 분리) */}
               <div onClick={(e) => e.stopPropagation()}>
@@ -226,6 +234,11 @@ function AreasPageInner() {
                 <span style={typeBadgeStyle(area.type)}>
                   {area.type}
                 </span>
+              </div>
+
+              {/* 정렬순서 */}
+              <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
+                {area.sortOrder}
               </div>
 
               {/* 기능 수 */}
@@ -395,7 +408,7 @@ function typeBadgeStyle(type: string): React.CSSProperties {
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-const GRID_TEMPLATE = "32px minmax(120px, 200px) 1fr 100px 70px 100px";
+const GRID_TEMPLATE = "32px minmax(100px, 160px) minmax(120px, 200px) 1fr 100px 60px 70px 100px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",

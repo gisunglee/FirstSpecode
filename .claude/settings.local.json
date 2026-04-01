@@ -110,7 +110,12 @@
       "Bash(do)",
       "Bash(echo \"=== $f ===\")",
       "Read(//Users/igiseong/dev/specode/FirstSpecode/src/app/\\(main\\)/projects/[id]/$f/**)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(wc -l \"D:/source/FirstSpecode/src/app/\\(main\\)/projects/[id]/areas/[areaId]/page.tsx\")",
+      "Bash(find d:/source/FirstSpecode/src -path *unit-work* -name *.tsx -o -path *unit-work* -name *.ts)",
+      "Bash(python scripts/run_ai_tasks.py*)",
+      "Bash(python scripts/task_complete.py*)",
+      "Bash(python -c *)"
     ]
   }
 }

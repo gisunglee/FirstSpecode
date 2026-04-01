@@ -251,7 +251,7 @@ function AiTasksPageInner() {
   }
 
   // ── 10컬럼 그리드 템플릿 (1115px) ──────────────────────────────────────────
-  const GRID_CONFIG = "70px 70px minmax(150px, 1fr) 80px 144px 144px 80px 50px 85px 140px";
+  const GRID_CONFIG = "70px 100px minmax(150px, 1fr) 80px 144px 144px 80px 50px 85px 140px";
 
   return (
     <div style={{ padding: 0 }}>
@@ -753,15 +753,16 @@ function TaskDetailPanel({
                   display:      "flex",
                   flexDirection:"column",
                   overflow:     "hidden",
+                  minHeight:    0,
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexShrink: 0 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>
                     요청 SPEC
                   </span>
                   <LocalTabButtons tab={reqTab} onTabChange={setReqTab} />
                 </div>
-                <div style={{ flex: 1, overflow: "hidden" }}>
+                <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
                   <MarkdownEditor
                     value={[data.comment, data.reqCn ? `\n\n---\n\n${data.reqCn}` : ""].filter(Boolean).join("")}
                     onChange={() => {}}
@@ -780,15 +781,16 @@ function TaskDetailPanel({
                   display:      "flex",
                   flexDirection:"column",
                   overflow:     "hidden",
+                  minHeight:    0,
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexShrink: 0 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>
                     응답 피드백
                   </span>
                   <LocalTabButtons tab={resultTab} onTabChange={setResultTab} />
                 </div>
-                <div style={{ flex: 1, overflow: "hidden" }}>
+                <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
                   <MarkdownEditor
                     value={data.resultCn || ""}
                     onChange={() => {}}

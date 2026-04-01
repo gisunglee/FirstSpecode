@@ -477,10 +477,14 @@ function UnitWorkDetailPageInner() {
         {/* ── 오른쪽 카드: 설명 ── */}
         <div
           style={{
-            border:       "1px solid var(--color-border)",
-            borderRadius: 8,
-            background:   "var(--color-bg-card)",
-            padding:      "24px 28px",
+            border:        "1px solid var(--color-border)",
+            borderRadius:  8,
+            background:    "var(--color-bg-card)",
+            padding:       "24px 28px",
+            display:       "flex",
+            flexDirection: "column",
+            height:        "calc(100vh - 161px)",  // 뷰포트 - (상단바40 + 브레드크럼40 + 타이틀57 + 하단패딩24)
+            boxSizing:     "border-box",
           }}
         >
           {/* 라벨 + 탭 버튼 + 기타 버튼 행 */}
@@ -526,9 +530,9 @@ function UnitWorkDetailPageInner() {
             value={form.description}
             onChange={(md) => handleChange("description", md)}
             placeholder="단위업무 설명 (선택)"
-            rows={23}
             tab={descTab}
             onTabChange={setDescTab}
+            fullHeight
           />
         </div>
 

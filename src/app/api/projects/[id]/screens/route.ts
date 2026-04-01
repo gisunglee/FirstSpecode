@@ -52,7 +52,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         // 하위 영역 수 집계
         _count: { select: { areas: true } },
       },
-      orderBy: { sort_ordr: "asc" },
+      orderBy: [
+        { unitWork: { requirement: { sort_ordr: "asc" } } },  // 요구사항 정렬순서
+        { unitWork: { sort_ordr: "asc" } },                    // 단위업무 정렬순서
+        { sort_ordr: "asc" },                                  // 화면 정렬순서
+      ],
     });
 
     const items = screens.map((s) => ({

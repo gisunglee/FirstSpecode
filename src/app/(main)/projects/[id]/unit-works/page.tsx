@@ -39,6 +39,12 @@ type UnitWorkRow = {
   screenCount:   number;
 };
 
+type EditDraft = {
+  name:      string;
+  startDate: string;
+  endDate:   string;
+};
+
 type RequirementOption = {
   requirementId: string;
   displayId:     string;
@@ -68,6 +74,10 @@ function UnitWorksPageInner() {
 
   // 삭제 다이얼로그 상태
   const [deleteTarget, setDeleteTarget] = useState<UnitWorkRow | null>(null);
+
+  // 인라인 수정 상태
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<EditDraft>({ name: "", startDate: "", endDate: "" });
 
   // ── 드래그 상태 ────────────────────────────────────────────────────────────
   const dragItem     = useRef<number | null>(null);
@@ -107,6 +117,25 @@ function UnitWorksPageInner() {
       toast.error("순서 변경에 실패했습니다.");
       queryClient.invalidateQueries({ queryKey: ["unit-works", projectId] });
     },
+  });
+
+  // ── 인라인 수정 뮤테이션 (PUT) ──────────────────────────────────────────────
+  const updateMutation = useMutation({
+    mutationFn: ({ unitWorkId, draft }: { unitWorkId: string; draft: EditDraft }) =>
+      authFetch(`/api/projects/${projectId}/unit-works/${unitWorkId}`, {
+        method: "PUT",
+        body:   JSON.stringify({
+          name:      draft.name.trim(),
+          startDate: draft.startDate || null,
+          endDate:   draft.endDate   || null,
+        }),
+      }),
+    onSuccess: () => {
+      toast.success("저장되었습니다.");
+      setEditingId(null);
+      queryClient.invalidateQueries({ queryKey: ["unit-works", projectId] });
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 
   // ── 진행률 인라인 수정 뮤테이션 ─────────────────────────────────────────────
@@ -155,6 +184,25 @@ function UnitWorksPageInner() {
 
     dragItem.current     = null;
     dragOverItem.current = null;
+  }
+
+  // ── 인라인 수정 시작 ───────────────────────────────────────────────────────
+  function startEdit(uw: UnitWorkRow) {
+    setEditingId(uw.unitWorkId);
+    setEditDraft({
+      name:      uw.name,
+      startDate: uw.startDate ?? "",
+      endDate:   uw.endDate   ?? "",
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+  }
+
+  function saveEdit(unitWorkId: string) {
+    if (!editDraft.name.trim()) { toast.error("단위업무명을 입력해 주세요."); return; }
+    updateMutation.mutate({ unitWorkId, draft: editDraft });
   }
 
   // ── 진행률 변경 ────────────────────────────────────────────────────────────
@@ -221,32 +269,42 @@ function UnitWorksPageInner() {
           {/* 헤더 행 */}
           <div style={gridHeaderStyle}>
             <div />
+            <div style={{ textAlign: "center" }}>순서</div>
             <div>요구사항</div>
             <div>단위업무명</div>
             <div>기간</div>
             <div style={{ textAlign: "center" }}>진행률</div>
             <div style={{ textAlign: "center" }}>화면수</div>
             <div />
+            <div />
           </div>
 
           {/* 데이터 행 */}
-          {items.map((uw, idx) => (
+          {items.map((uw, idx) => {
+            const isEditing = editingId === uw.unitWorkId;
+            return (
             <div
               key={uw.unitWorkId}
-              draggable
-              onDragStart={() => handleDragStart(idx)}
-              onDragEnter={() => handleDragEnter(idx)}
-              onDragEnd={handleDragEnd}
+              draggable={!isEditing}
+              onDragStart={() => !isEditing && handleDragStart(idx)}
+              onDragEnter={() => !isEditing && handleDragEnter(idx)}
+              onDragEnd={() => !isEditing && handleDragEnd()}
               onDragOver={(e) => e.preventDefault()}
-              onClick={() => router.push(`/projects/${projectId}/unit-works/${uw.unitWorkId}`)}
+              onClick={() => !isEditing && router.push(`/projects/${projectId}/unit-works/${uw.unitWorkId}`)}
               style={{
                 ...gridRowStyle,
                 borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+                cursor: isEditing ? "default" : "pointer",
               }}
             >
               {/* 드래그 핸들 */}
-              <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>
+              <div style={{ cursor: isEditing ? "default" : "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>
                 ☰
+              </div>
+
+              {/* 순서 */}
+              <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)", fontWeight: 500 }}>
+                {uw.sortOrder}
               </div>
 
               {/* 요구사항 (클릭 → 요구사항 상세, 행 클릭과 분리) */}
@@ -262,21 +320,52 @@ function UnitWorksPageInner() {
                 </button>
               </div>
 
-              {/* 단위업무명 */}
-              <div style={{ fontSize: 14, fontWeight: 500 }}>
-                <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
-                  {uw.displayId}
-                </span>
-                {uw.name}
+              {/* 단위업무명 — 수정 모드에서는 input */}
+              <div style={{ fontSize: 14, fontWeight: 500 }} onClick={(e) => isEditing && e.stopPropagation()}>
+                {isEditing ? (
+                  <input
+                    value={editDraft.name}
+                    onChange={(e) => setEditDraft((p) => ({ ...p, name: e.target.value }))}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ ...inlineInputStyle, width: "100%" }}
+                    autoFocus
+                  />
+                ) : (
+                  <>
+                    <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
+                      {uw.displayId}
+                    </span>
+                    {uw.name}
+                  </>
+                )}
               </div>
 
-              {/* 기간 */}
-              <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
-                {uw.startDate && uw.endDate
-                  ? `${uw.startDate} ~ ${uw.endDate}`
-                  : uw.startDate
-                  ? `${uw.startDate} ~`
-                  : "미정"}
+              {/* 기간 — 수정 모드에서는 date input */}
+              <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }} onClick={(e) => isEditing && e.stopPropagation()}>
+                {isEditing ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <input
+                      type="date"
+                      value={editDraft.startDate}
+                      onChange={(e) => setEditDraft((p) => ({ ...p, startDate: e.target.value }))}
+                      onClick={(e) => e.stopPropagation()}
+                      style={inlineInputStyle}
+                    />
+                    <input
+                      type="date"
+                      value={editDraft.endDate}
+                      onChange={(e) => setEditDraft((p) => ({ ...p, endDate: e.target.value }))}
+                      onClick={(e) => e.stopPropagation()}
+                      style={inlineInputStyle}
+                    />
+                  </div>
+                ) : (
+                  uw.startDate && uw.endDate
+                    ? `${uw.startDate} ~ ${uw.endDate}`
+                    : uw.startDate
+                    ? `${uw.startDate} ~`
+                    : "미정"
+                )}
               </div>
 
               {/* 진행률 인라인 수정 (FID-00133) */}
@@ -294,17 +383,48 @@ function UnitWorksPageInner() {
                 {uw.screenCount}
               </div>
 
+              {/* 수정/저장·취소 버튼 */}
+              <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                {isEditing ? (
+                  <>
+                    <button
+                      onClick={() => saveEdit(uw.unitWorkId)}
+                      disabled={updateMutation.isPending}
+                      style={{ ...saveBtnStyle }}
+                    >
+                      저장
+                    </button>
+                    <button
+                      onClick={cancelEdit}
+                      disabled={updateMutation.isPending}
+                      style={{ ...cancelBtnStyle }}
+                    >
+                      취소
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => startEdit(uw)}
+                    style={editBtnStyle}
+                  >
+                    수정
+                  </button>
+                )}
+              </div>
+
               {/* 삭제 버튼 */}
               <div onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => setDeleteTarget(uw)}
-                  style={dangerBtnStyle}
+                  disabled={isEditing}
+                  style={{ ...dangerBtnStyle, opacity: isEditing ? 0.4 : 1 }}
                 >
                   삭제
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
       </div>
@@ -485,7 +605,7 @@ function DeleteConfirmDialog({
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-const GRID_TEMPLATE = "32px minmax(140px, 220px) 1fr 130px 90px 70px 60px";
+const GRID_TEMPLATE = "32px 44px minmax(130px, 200px) 1fr 150px 90px 60px 100px 60px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",
@@ -563,6 +683,48 @@ const secondaryBtnStyle: React.CSSProperties = {
   background:   "var(--color-bg-card)",
   color:        "var(--color-text-primary)",
   fontSize:     14,
+  cursor:       "pointer",
+};
+
+const inlineInputStyle: React.CSSProperties = {
+  padding:      "3px 6px",
+  borderRadius: 4,
+  border:       "1px solid var(--color-border)",
+  background:   "var(--color-bg-card)",
+  color:        "var(--color-text-primary)",
+  fontSize:     13,
+  outline:      "none",
+  boxSizing:    "border-box",
+};
+
+const editBtnStyle: React.CSSProperties = {
+  padding:      "3px 10px",
+  borderRadius: 4,
+  border:       "1px solid var(--color-border)",
+  background:   "var(--color-bg-card)",
+  color:        "var(--color-text-primary)",
+  fontSize:     12,
+  cursor:       "pointer",
+};
+
+const saveBtnStyle: React.CSSProperties = {
+  padding:      "3px 8px",
+  borderRadius: 4,
+  border:       "none",
+  background:   "var(--color-primary, #1976d2)",
+  color:        "#fff",
+  fontSize:     12,
+  cursor:       "pointer",
+  fontWeight:   600,
+};
+
+const cancelBtnStyle: React.CSSProperties = {
+  padding:      "3px 6px",
+  borderRadius: 4,
+  border:       "1px solid var(--color-border)",
+  background:   "transparent",
+  color:        "var(--color-text-secondary)",
+  fontSize:     12,
   cursor:       "pointer",
 };
 

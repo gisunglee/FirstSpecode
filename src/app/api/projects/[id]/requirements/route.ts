@@ -33,7 +33,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         // 단위업무 수 집계 — 목록에 배지로 표시
         _count: { select: { unitWorks: true } },
       },
-      orderBy: { sort_ordr: "asc" },
+      orderBy: [
+        { task: { sort_ordr: "asc" } },  // 과업 정렬순서 우선
+        { sort_ordr: "asc" },             // 요구사항 정렬순서
+      ],
     });
 
     const items = requirements.map((r) => ({

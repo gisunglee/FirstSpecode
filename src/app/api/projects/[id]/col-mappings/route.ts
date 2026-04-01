@@ -41,30 +41,36 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const mappings = await prisma.tbDsColMapping.findMany({
       where:   { ref_ty_code: refType, ref_id: refId },
       orderBy: { sort_ordr: "asc" },
-      include: {
-        column: {
-          include: {
-            table: { select: { tbl_id: true, tbl_physcl_nm: true, tbl_lgcl_nm: true } },
-          },
-        },
-      },
     });
 
+    // col_id 목록으로 컬럼+테이블 정보 별도 조회 (TbDsColMapping에 relation 없음)
+    const colIds = mappings.map((m) => m.col_id).filter(Boolean) as string[];
+    const columns = colIds.length > 0
+      ? await prisma.tbDsTableColumn.findMany({
+          where:   { col_id: { in: colIds } },
+          include: { table: { select: { tbl_id: true, tbl_physcl_nm: true, tbl_lgcl_nm: true } } },
+        })
+      : [];
+    const colMap = new Map(columns.map((c) => [c.col_id, c]));
+
     return apiSuccess({
-      items: mappings.map((m) => ({
-        mappingId:      m.mapping_id,
-        colId:          m.col_id,
-        colName:        m.column.col_physcl_nm,
-        colLogicalNm:   m.column.col_lgcl_nm ?? "",
-        tableId:        m.column.table.tbl_id,
-        tableName:      m.column.table.tbl_physcl_nm,
-        tableLogicalNm: m.column.table.tbl_lgcl_nm ?? "",
-        ioSeCode:       m.io_se_code ?? "",
-        uiTyCode:       m.ui_ty_code ?? "",
-        usePurpsCn:     m.use_purps_cn ?? "",
-        colDc:          m.col_dc ?? "",
-        sortOrder:      m.sort_ordr,
-      })),
+      items: mappings.map((m) => {
+        const col = m.col_id ? colMap.get(m.col_id) : undefined;
+        return {
+          mappingId:      m.mapping_id,
+          colId:          m.col_id ?? "",
+          colName:        col?.col_physcl_nm ?? "",
+          colLogicalNm:   col?.col_lgcl_nm ?? "",
+          tableId:        col?.table.tbl_id ?? "",
+          tableName:      col?.table.tbl_physcl_nm ?? "",
+          tableLogicalNm: col?.table.tbl_lgcl_nm ?? "",
+          ioSeCode:       m.io_se_code ?? "",
+          uiTyCode:       m.ui_ty_code ?? "",
+          usePurpsCn:     m.use_purps_cn ?? "",
+          colDc:          m.col_dc ?? "",
+          sortOrder:      m.sort_ordr,
+        };
+      }),
     });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/col-mappings] DB 오류:`, err);

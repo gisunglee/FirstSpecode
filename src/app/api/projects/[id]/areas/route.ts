@@ -36,23 +36,42 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         // screenId가 지정되면 해당 화면 영역만, 아니면 전체
         ...(screenId ? { scrn_id: screenId } : {}),
       },
-      orderBy: { sort_ordr: "asc" },
+      orderBy: [
+        { screen: { unitWork: { sort_ordr: "asc" } } },  // 단위업무 정렬순서
+        { screen: { sort_ordr: "asc" } },                  // 화면 정렬순서
+        { sort_ordr: "asc" },                              // 영역 정렬순서
+      ],
       include: {
-        screen: { select: { scrn_id: true, scrn_nm: true, scrn_display_id: true } },
+        screen: {
+          select: {
+            scrn_id:         true,
+            scrn_nm:         true,
+            scrn_display_id: true,
+            sort_ordr:       true,
+            unitWork: {
+              select: {
+                unit_work_id:  true,
+                unit_work_nm:  true,
+                sort_ordr:     true,
+              },
+            },
+          },
+        },
         _count: { select: { functions: true } },
       },
     });
 
     const items = areas.map((a) => ({
-      areaId:        a.area_id,
-      displayId:     a.area_display_id,
-      name:          a.area_nm,
-      type:          a.area_ty_code,
-      sortOrder:     a.sort_ordr,
-      screenId:      a.scrn_id ?? null,
-      screenName:    a.screen?.scrn_nm ?? "미분류",
+      areaId:          a.area_id,
+      displayId:       a.area_display_id,
+      name:            a.area_nm,
+      type:            a.area_ty_code,
+      sortOrder:       a.sort_ordr,
+      screenId:        a.scrn_id ?? null,
+      screenName:      a.screen?.scrn_nm ?? "미분류",
       screenDisplayId: a.screen?.scrn_display_id ?? null,
-      functionCount: a._count.functions,
+      unitWorkName:    a.screen?.unitWork?.unit_work_nm ?? null,
+      functionCount:   a._count.functions,
     }));
 
     return apiSuccess({ items, totalCount: items.length });
