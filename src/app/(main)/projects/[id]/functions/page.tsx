@@ -590,18 +590,20 @@ const secondaryBtnStyle: React.CSSProperties = {
   color: "var(--color-text-primary)", fontSize: 14, cursor: "pointer",
 };
 const filterSelectStyle: React.CSSProperties = {
-  padding:         "5px 28px 5px 10px",
-  borderRadius:    6,
-  border:          "1px solid var(--color-border)",
-  fontSize:        13,
-  background:      "var(--color-bg-card)",
-  color:           "var(--color-text-primary)",
-  cursor:          "pointer",
-  appearance:      "none",
-  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+  padding:            "7px 32px 7px 12px",
+  borderRadius:       6,
+  border:             "1px solid var(--color-border)",
+  fontSize:           13,
+  background:         "var(--color-bg-card)",
+  color:              "var(--color-text-primary)",
+  cursor:             "pointer",
+  outline:            "none",
+  appearance:         "none",
+  WebkitAppearance:   "none",
+  backgroundImage:    `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
   backgroundRepeat:   "no-repeat",
-  backgroundPosition: "right 8px center",
-  minWidth: 160,
+  backgroundPosition: "right 10px center",
+  minWidth:           160,
 };
 
 const dangerBtnStyle: React.CSSProperties = {

@@ -255,7 +255,7 @@ function AiTasksPageInner() {
 
   return (
     <div style={{ padding: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", minHeight: 52, background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           AI 태스크 목록
         </div>
@@ -923,13 +923,18 @@ const gridRowStyle: React.CSSProperties = {
 };
 
 const filterSelectStyle: React.CSSProperties = {
-  padding:      "7px 12px",
-  borderRadius: 6,
-  border:       "1px solid var(--color-border)",
-  background:   "var(--color-bg-card)",
-  color:        "var(--color-text-primary)",
-  fontSize:     13,
-  outline:      "none",
+  padding:            "7px 32px 7px 12px",
+  borderRadius:       6,
+  border:             "1px solid var(--color-border)",
+  background:         "var(--color-bg-card)",
+  color:              "var(--color-text-primary)",
+  fontSize:           13,
+  outline:            "none",
+  appearance:         "none",
+  WebkitAppearance:   "none",
+  backgroundImage:    `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+  backgroundRepeat:   "no-repeat",
+  backgroundPosition: "right 10px center",
 };
 
 const linkBtnStyle: React.CSSProperties = {
@@ -973,13 +978,6 @@ const panelLabelStyle: React.CSSProperties = {
   marginBottom:  6,
 };
 
-const panelBodyStyle: React.CSSProperties = {
-  fontSize:   12,
-  lineHeight: 1.6,
-  color:      "var(--color-text-primary)",
-  whiteSpace: "pre-wrap",
-  wordBreak:  "break-word",
-};
 
 
 const actionBtnStyle: React.CSSProperties = {
@@ -1002,13 +1000,4 @@ const dangerBtnStyle: React.CSSProperties = {
   cursor:       "pointer",
 };
 
-const cellInputStyle: React.CSSProperties = {
-  padding:      "6px 10px",
-  borderRadius: 4,
-  border:       "1px solid var(--color-border)",
-  fontSize:     12,
-  outline:      "none",
-  background:   "var(--color-bg-card)",
-  color:        "var(--color-text-primary)",
-};
 

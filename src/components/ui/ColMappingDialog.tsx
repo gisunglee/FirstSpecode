@@ -19,6 +19,7 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -53,13 +54,15 @@ type ApiMappingItem = {
 };
 
 export interface ColMappingDialogProps {
-  open:       boolean;
-  onClose:    () => void;
-  onSaved:    () => void;
-  projectId:  string;
-  refType:    string;
-  refId:      string;
-  title?:     string;
+  open:        boolean;
+  onClose:     () => void;
+  onSaved:     () => void;
+  projectId:   string;
+  refType:     string;
+  refId:       string;
+  title?:      string;
+  // 단위업무 설명 — TABLE_SCRIPT:xxx> 패턴 파싱 후 테이블 자동 선택에 사용
+  unitWorkDc?: string;
 }
 
 // ── 상수 ──────────────────────────────────────────────────────────────────────
@@ -90,7 +93,7 @@ function nextKey() { return `row-${++keyCounter}`; }
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 
 export default function ColMappingDialog({
-  open, onClose, onSaved, projectId, refType, refId, title = "컬럼 매핑 관리",
+  open, onClose, onSaved, projectId, refType, refId, title = "컬럼 매핑 관리", unitWorkDc = "",
 }: ColMappingDialogProps) {
   const queryClient     = useQueryClient();
   const [rows, setRows] = useState<MappingRow[]>([]);
@@ -106,7 +109,17 @@ export default function ColMappingDialog({
     enabled: open && !!refId,
   });
 
-  // open 될 때 rows 초기화
+  // ── DB 테이블 목록 (effect보다 앞에 선언해야 effect에서 참조 가능) ──────────
+  const { data: tablesData } = useQuery({
+    queryKey: ["db-schema", projectId, "tables"],
+    queryFn:  () =>
+      authFetch<{ data: { tables: DbTable[] } }>(`/api/projects/${projectId}/db-schema`)
+        .then((r) => r.data),
+    enabled: open,
+  });
+  const tables = tablesData?.tables ?? [];
+
+  // open 될 때 rows 초기화 + TABLE_SCRIPT 기반 테이블 자동 선택
   useEffect(() => {
     if (!open) return;
     const items = mappingData?.items ?? [];
@@ -121,18 +134,26 @@ export default function ColMappingDialog({
       usePurpsCn: m.usePurpsCn,
       colDc:      m.colDc,
     })));
-    setSelectedTableId("");
-  }, [open, mappingData]);
 
-  // ── DB 테이블 목록 ─────────────────────────────────────────────────────────
-  const { data: tablesData } = useQuery({
-    queryKey: ["db-schema", projectId, "tables"],
-    queryFn:  () =>
-      authFetch<{ data: { tables: DbTable[] } }>(`/api/projects/${projectId}/db-schema`)
-        .then((r) => r.data),
-    enabled: open,
-  });
-  const tables = tablesData?.tables ?? [];
+    // 단위업무 설명에서 TABLE_SCRIPT:xxx> 패턴 파싱 후 자동 선택
+    // tables가 아직 로드되지 않은 경우 스킵 (tables 로드 후 재실행됨)
+    if (unitWorkDc && tables.length > 0) {
+      const matches = [...unitWorkDc.matchAll(/TABLE_SCRIPT:([^>]+)>/g)];
+      const tableNames = matches.map((m) => m[1].trim());
+      const matchedIds = tables
+        .filter((t) => tableNames.includes(t.tableName))
+        .map((t) => t.tableId);
+
+      if (matchedIds.length > 0) {
+        setFilterTableIds(matchedIds);
+        setSelectedTableId(matchedIds[0]);
+        return;
+      }
+    }
+
+    setSelectedTableId("");
+    setFilterTableIds([]);
+  }, [open, mappingData, tables, unitWorkDc]);
 
   // ── 선택 테이블의 컬럼 목록 ────────────────────────────────────────────────
   const { data: colsData } = useQuery({
@@ -214,6 +235,26 @@ export default function ColMappingDialog({
   const [showLogicalAll, setShowLogicalAll] = useState(false);
   const [showLogicalGrid, setShowLogicalGrid] = useState(false);
 
+  // ── 드래그 상태 (_key 기반 — 필터가 걸려도 rows 원본 인덱스로 정확히 재정렬) ──
+  const dragKey     = useRef<string | null>(null);
+  const dragOverKey = useRef<string | null>(null);
+
+  function handleDragStart(key: string) { dragKey.current = key; }
+  function handleDragEnter(key: string) { dragOverKey.current = key; }
+  function handleDragEnd() {
+    const from = rows.findIndex((r) => r._key === dragKey.current);
+    const to   = rows.findIndex((r) => r._key === dragOverKey.current);
+    dragKey.current     = null;
+    dragOverKey.current = null;
+    if (from < 0 || to < 0 || from === to) return;
+
+    const reordered = [...rows];
+    const [moved]   = reordered.splice(from, 1);
+    if (!moved) return;
+    reordered.splice(to, 0, moved);
+    setRows(reordered);
+  }
+
   // ── 저장 ──────────────────────────────────────────────────────────────────
   const saveMutation = useMutation({
     mutationFn: () => {
@@ -240,6 +281,9 @@ export default function ColMappingDialog({
     },
     onError: (err: Error) => toast.error(err.message),
   });
+
+  // ESC 키로 팝업 닫기
+  useEscapeKey(onClose, open);
 
   if (!open) return null;
 
@@ -382,6 +426,7 @@ export default function ColMappingDialog({
 
           {/* 그리드 헤더 — 고정 */}
           <div style={gridHeaderStyle}>
+            <div style={{ width: 20 }} />
             <div style={{ width: 32, textAlign: "center" }}>NO</div>
             <div style={{ flex: "0 0 156px" }}>항목명</div>
             <div style={{ flex: "0 0 108px" }}>IO구분</div>
@@ -414,7 +459,20 @@ export default function ColMappingDialog({
               }
 
               return visibleRows.map((row, idx) => (
-                <div key={row._key} style={{ ...gridRowStyle, borderTop: idx === 0 ? "none" : "1px solid var(--color-border)" }}>
+                <div
+                  key={row._key}
+                  draggable
+                  onDragStart={() => handleDragStart(row._key)}
+                  onDragEnter={() => handleDragEnter(row._key)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(e) => e.preventDefault()}
+                  style={{ ...gridRowStyle, borderTop: idx === 0 ? "none" : "1px solid var(--color-border)" }}
+                >
+                  {/* 드래그 핸들 */}
+                  <div style={{ width: 20, color: "#bbb", cursor: "grab", userSelect: "none", textAlign: "center", fontSize: 14, flexShrink: 0 }}>
+                    ☰
+                  </div>
+
                   {/* NO */}
                   <div style={{ width: 32, textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>
                     {rows.findIndex(r => r._key === row._key) + 1}

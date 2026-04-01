@@ -157,13 +157,27 @@ function UnitWorksPageInner() {
   }
 
   function handleDragEnter(index: number) {
+    // 다른 요구사항 그룹으로는 이동 불가 — 같은 reqId 내에서만 순서 변경 허용
+    if (dragItem.current === null) return;
+    if (items[dragItem.current]?.reqId !== items[index]?.reqId) return;
     dragOverItem.current = index;
   }
 
   function handleDragEnd() {
     const from = dragItem.current;
     const to   = dragOverItem.current;
-    if (from === null || to === null || from === to) return;
+    if (from === null || to === null || from === to) {
+      dragItem.current     = null;
+      dragOverItem.current = null;
+      return;
+    }
+
+    // 안전 체크: 다른 요구사항 그룹이면 취소
+    if (items[from]?.reqId !== items[to]?.reqId) {
+      dragItem.current     = null;
+      dragOverItem.current = null;
+      return;
+    }
 
     const reordered = [...items];
     const [moved]   = reordered.splice(from, 1);

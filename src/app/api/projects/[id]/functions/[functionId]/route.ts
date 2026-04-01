@@ -32,7 +32,23 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const [fn, aiTaskRows] = await Promise.all([
       prisma.tbDsFunction.findUnique({
         where:   { func_id: functionId },
-        include: { area: { select: { area_id: true, area_nm: true, area_display_id: true } } },
+        include: {
+          area: {
+            select: {
+              area_id:         true,
+              area_nm:         true,
+              area_display_id: true,
+              screen: {
+                select: {
+                  scrn_id: true,
+                  unitWork: {
+                    select: { unit_work_id: true, unit_work_dc: true },
+                  },
+                },
+              },
+            },
+          },
+        },
       }),
       prisma.tbAiTask.findMany({
         where: {
@@ -62,10 +78,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       displayId:      fn.func_display_id,
       name:           fn.func_nm,
       description:    fn.func_dc ?? "",
-      commentCn:        fn.coment_cn               ?? "",
-      assignWorkStatus: fn.assign_work_sttus_code  ?? "BEFORE",
-      reviewStatus:     fn.review_sttus_code        ?? "BEFORE",
-      progressRate:     fn.progress_rate            ?? 0,
+      commentCn:        fn.coment_cn ?? "",
       type:           fn.func_ty_code,
       status:         fn.func_sttus_code,
       priority:       fn.priort_code,
@@ -78,6 +91,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       areaId:         fn.area_id ?? null,
       areaName:       fn.area?.area_nm ?? "미분류",
       areaDisplayId:  fn.area?.area_display_id ?? null,
+      screenId:       fn.area?.screen?.scrn_id ?? null,
+      unitWorkId:     fn.area?.screen?.unitWork?.unit_work_id ?? null,
+      // 단위업무 설명 — 컬럼 매핑 팝업 TABLE_SCRIPT 자동 선택에 사용
+      unitWorkDc:     fn.area?.screen?.unitWork?.unit_work_dc ?? "",
       aiTasks,
     });
   } catch (err) {
@@ -109,7 +126,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
   const {
     areaId, name, type, description, commentCn,
-    assignWorkStatus, reviewStatus, progressRate,
     priority, complexity, effort,
     assignMemberId, implStartDate, implEndDate, sortOrder, saveHistory,
   } = body as {
@@ -118,9 +134,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     type?:             string;
     description?:      string;
     commentCn?:        string;
-    assignWorkStatus?: string;
-    reviewStatus?:     string;
-    progressRate?:     number;
     priority?:         string;
     complexity?:       string;
     effort?:           string;
@@ -157,14 +170,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           func_nm:       name.trim(),
           func_ty_code:  type || "OTHER",
           func_dc:       newDescription,
-          coment_cn:             commentCn        !== undefined ? (commentCn.trim() || null) : existing.coment_cn,
-          assign_work_sttus_code: assignWorkStatus !== undefined ? assignWorkStatus          : existing.assign_work_sttus_code,
-          review_sttus_code:      reviewStatus     !== undefined ? reviewStatus              : existing.review_sttus_code,
-          // 작업 완료 시 진척률 강제 100%
-          progress_rate:          progressRate     !== undefined
-            ? (assignWorkStatus === "DONE" ? 100 : progressRate)
-            : existing.progress_rate,
-          priort_code:   priority || "MEDIUM",
+          coment_cn:   commentCn !== undefined ? (commentCn.trim() || null) : existing.coment_cn,
+          priort_code: priority || "MEDIUM",
           cmplx_code:    complexity || "MEDIUM",
           efrt_val:      effort?.trim() || null,
           asign_mber_id: assignMemberId || null,

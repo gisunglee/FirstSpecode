@@ -62,8 +62,10 @@ function AreasPageInner() {
   const [deleteTarget, setDeleteTarget] = useState<AreaRow | null>(null);
 
   // ── 드래그 상태 ────────────────────────────────────────────────────────────
-  const dragItem     = useRef<number | null>(null);
-  const dragOverItem = useRef<number | null>(null);
+  const dragItem         = useRef<number | null>(null);
+  const dragOverItem     = useRef<number | null>(null);
+  // 드래그 중인 아이템의 screenId — 동일 화면 내에서만 순서 변경 허용
+  const dragItemScreenId = useRef<string | null>(null);
 
   // ── 데이터 조회 ────────────────────────────────────────────────────────────
   const queryKey = screenIdFilter
@@ -97,13 +99,34 @@ function AreasPageInner() {
   });
 
   // ── 드래그 핸들러 ──────────────────────────────────────────────────────────
-  function handleDragStart(index: number) { dragItem.current = index; }
-  function handleDragEnter(index: number) { dragOverItem.current = index; }
+  function handleDragStart(index: number) {
+    dragItem.current         = index;
+    dragItemScreenId.current = items[index]?.screenId ?? null;
+  }
+
+  function handleDragEnter(index: number) {
+    // 드래그 중인 아이템과 다른 화면의 영역 위에 올라오면 무시
+    // (같은 screenId 내에서만 순서 변경 허용)
+    if (items[index]?.screenId !== dragItemScreenId.current) return;
+    dragOverItem.current = index;
+  }
 
   function handleDragEnd() {
     const from = dragItem.current;
     const to   = dragOverItem.current;
+
+    // 초기화는 항상
+    dragItem.current         = null;
+    dragOverItem.current     = null;
+    dragItemScreenId.current = null;
+
     if (from === null || to === null || from === to) return;
+
+    // 방어: 서로 다른 화면으로 떨어진 경우 (handleDragEnter에서 막혔어도 이중 검증)
+    if (items[from]?.screenId !== items[to]?.screenId) {
+      toast.error("같은 화면(Screen) 내에서만 순서를 변경할 수 있습니다.");
+      return;
+    }
 
     const reordered = [...items];
     const [moved]   = reordered.splice(from, 1);
@@ -115,9 +138,6 @@ function AreasPageInner() {
 
     const orders = reordered.map((a, idx) => ({ areaId: a.areaId, sortOrder: idx + 1 }));
     sortMutation.mutate(orders);
-
-    dragItem.current     = null;
-    dragOverItem.current = null;
   }
 
   // ── 로딩 ───────────────────────────────────────────────────────────────────

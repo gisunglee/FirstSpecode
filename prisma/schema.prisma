@@ -343,9 +343,6 @@ model TbDsFunction {
   impl_bgng_de           String?
   impl_end_de            String?
   coment_cn              String?
-  assign_work_sttus_code String    @default("BEFORE") @db.VarChar(20)
-  review_sttus_code      String    @default("BEFORE") @db.VarChar(20)
-  progress_rate          Int       @default(0) @db.SmallInt
   area                   TbDsArea? @relation(fields: [area_id], references: [area_id])
 
   @@map("tb_ds_function")

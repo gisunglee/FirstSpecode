@@ -16,7 +16,7 @@
  *   - functionId === "new"이면 신규 모드
  */
 
-import { Suspense, useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { marked } from "marked";
 
 function markedParse(md: string): string {
@@ -30,6 +30,7 @@ import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import ColMappingDialog from "@/components/ui/ColMappingDialog";
+import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
 import { useAppStore } from "@/store/appStore";
 
@@ -54,11 +55,11 @@ type FuncDetail = {
   sortOrder:           number;
   areaId:              string | null;
   areaName:            string;
+  screenId:            string | null;
+  unitWorkId:          string | null;
+  // 단위업무 설명 — TABLE_SCRIPT 파싱용
+  unitWorkDc:          string;
   aiTasks:             Record<string, AiTaskInfo>;
-  // migration 후 활성화
-  assignWorkStatus:    string;
-  reviewStatus:        string;
-  progressRate:        number;
 };
 
 type AreaOption = { areaId: string; displayId: string; name: string };
@@ -121,52 +122,9 @@ function FunctionDetailPageInner() {
   // ── AI 요청 코멘트 상태 ────────────────────────────────────────────────────
   const [commentCn,        setCommentCn]        = useState("");
 
-  // ── 작업/검토 상태·진척률 ─────────────────────────────────────────────────
-  const [assignWorkStatus, setAssignWorkStatus] = useState("BEFORE");
-  const [reviewStatus,     setReviewStatus]     = useState("BEFORE");
-  const [progressRate,     setProgressRate]     = useState(0);
 
-  // 담당자 작업 상태 변경 시 완료면 진척률 자동 100%
-  function handleWorkStatusChange(val: string) {
-    setAssignWorkStatus(val);
-    if (val === "DONE") setProgressRate(100);
-  }
-
-  // ── 상태 즉시 저장 (작업상태·진척률·검토상태 변경 시) ─────────────────────
-  // 데이터 로드 후에만 동작하도록 초기화 플래그 사용
-  const statusInitialized = useRef(false);
-
-  const statusMutation = useMutation({
-    mutationFn: (vals: { assignWorkStatus: string; progressRate: number; reviewStatus: string }) =>
-      authFetch(`/api/projects/${projectId}/functions/${functionId}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          areaId: areaId || null,
-          name: name.trim() || "미입력",
-          type, description: description.trim(),
-          commentCn: commentCn.trim(),
-          assignWorkStatus: vals.assignWorkStatus,
-          reviewStatus:     vals.reviewStatus,
-          progressRate:     vals.assignWorkStatus === "DONE" ? 100 : vals.progressRate,
-          priority, complexity, effort: effort.trim(),
-          assignMemberId: assignMemberId || null,
-          implStartDate: implStartDate || null,
-          implEndDate:   implEndDate || null,
-          sortOrder,
-        }),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["function", projectId, functionId] });
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  useEffect(() => {
-    if (isNew || !statusInitialized.current) return;
-    statusMutation.mutate({ assignWorkStatus, progressRate, reviewStatus });
-  // statusMutation 은 의존성에서 제외 (stale closure 안전 — 값만 전달하므로)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assignWorkStatus, progressRate, reviewStatus]);
+  // ── PRD 다운로드 팝업 ────────────────────────────────────────────────────────
+  const [prdOpen, setPrdOpen] = useState(false);
 
   // ── 컬럼 매핑 팝업 ─────────────────────────────────────────────────────────
   const [mappingPopupOpen,   setMappingPopupOpen]   = useState(false);
@@ -226,13 +184,8 @@ function FunctionDetailPageInner() {
       setAreaId(data.areaId ?? "");
       setSortOrder(data.sortOrder ?? 0);
       setCommentCn(data.commentCn ?? "");
-      setAssignWorkStatus(data.assignWorkStatus ?? "BEFORE");
-      setReviewStatus(data.reviewStatus ?? "BEFORE");
-      setProgressRate(data.progressRate ?? 0);
       // 설명 변경 감지를 위해 원본 값 보관
       setOriginalDescription(data.description ?? "");
-      // 초기 로드 완료 — 이후 상태 변경은 즉시 저장
-      statusInitialized.current = true;
     }
   }, [data]);
 
@@ -243,10 +196,6 @@ function FunctionDetailPageInner() {
         areaId: areaId || null,
         name: name.trim(), type, description: description.trim(),
         commentCn: commentCn.trim(),
-        assignWorkStatus,
-        reviewStatus,
-        // 작업 완료 시 진척률 강제 100%
-        progressRate: assignWorkStatus === "DONE" ? 100 : progressRate,
         priority, complexity, effort: effort.trim(),
         assignMemberId: assignMemberId || null,
         implStartDate: implStartDate || null,
@@ -334,79 +283,6 @@ function FunctionDetailPageInner() {
           </span>
         </div>
 
-        {/* 중: 현황 패널 — 한 줄 인라인 */}
-        {!isNew && (
-          <div style={{
-            display: "flex", alignItems: "center", gap: 8,
-            padding: "3px 10px",
-            background: "linear-gradient(135deg, rgba(var(--color-primary-rgb, 25,118,210), 0.06) 0%, transparent 100%)",
-            border: "1px solid rgba(var(--color-primary-rgb, 25,118,210), 0.18)",
-            borderLeft: "3px solid var(--color-primary, #1976d2)",
-            borderRadius: 8,
-          }}>
-            {/* 작업상태 */}
-            <span style={{ fontSize: 10, color: "var(--color-text-secondary)", fontWeight: 600, whiteSpace: "nowrap" }}>작업상태</span>
-            <select
-              value={assignWorkStatus}
-              onChange={(e) => handleWorkStatusChange(e.target.value)}
-              style={{
-                ...statusSelectStyle,
-                ...(assignWorkStatus === "DONE"        ? { borderColor: "#2e7d32", color: "#2e7d32" }
-                  : assignWorkStatus === "IN_PROGRESS" ? { borderColor: "var(--color-primary, #1976d2)", color: "var(--color-primary, #1976d2)" }
-                  : {}),
-              }}
-            >
-              <option value="BEFORE">작업 전</option>
-              <option value="IN_PROGRESS">작업 중</option>
-              <option value="DONE">작업 완료</option>
-            </select>
-
-            <div style={{ width: 1, height: 16, background: "var(--color-border)" }} />
-
-            {/* 진척률 */}
-            <span style={{ fontSize: 10, color: "var(--color-text-secondary)", fontWeight: 600, whiteSpace: "nowrap" }}>진척률</span>
-            <div style={{ width: 80, height: 4, background: "var(--color-border)", borderRadius: 2, overflow: "hidden" }}>
-              <div style={{
-                height: "100%",
-                width: `${assignWorkStatus === "DONE" ? 100 : progressRate}%`,
-                background: assignWorkStatus === "DONE" ? "#2e7d32" : "var(--color-primary, #1976d2)",
-                borderRadius: 2,
-                transition: "width 0.3s ease",
-              }} />
-            </div>
-            <select
-              value={assignWorkStatus === "DONE" ? 100 : progressRate}
-              onChange={(e) => setProgressRate(Number(e.target.value))}
-              disabled={assignWorkStatus === "DONE"}
-              style={{ ...statusSelectStyle, minWidth: 56, opacity: assignWorkStatus === "DONE" ? 0.5 : 1 }}
-            >
-              {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((v) => (
-                <option key={v} value={v}>{v}%</option>
-              ))}
-            </select>
-
-            <div style={{ width: 1, height: 16, background: "var(--color-border)" }} />
-
-            {/* 검토상태 */}
-            <span style={{ fontSize: 10, color: "var(--color-text-secondary)", fontWeight: 600, whiteSpace: "nowrap" }}>검토상태</span>
-            <select
-              value={reviewStatus}
-              onChange={(e) => setReviewStatus(e.target.value)}
-              style={{
-                ...statusSelectStyle,
-                ...(reviewStatus === "DONE"      ? { borderColor: "#2e7d32", color: "#2e7d32" }
-                  : reviewStatus === "IN_REVIEW" ? { borderColor: "var(--color-primary, #1976d2)", color: "var(--color-primary, #1976d2)" }
-                  : reviewStatus === "FEEDBACK"  ? { borderColor: "#e65100", color: "#e65100" }
-                  : {}),
-              }}
-            >
-              <option value="BEFORE">검토 전</option>
-              <option value="IN_REVIEW">검토 중</option>
-              <option value="FEEDBACK">피드백 필요</option>
-              <option value="DONE">검토 완료</option>
-            </select>
-          </div>
-        )}
 
         {/* 우측 밀어내기 스페이서 */}
         <div style={{ flex: 1 }} />
@@ -414,6 +290,16 @@ function FunctionDetailPageInner() {
         {/* 우: AI 버튼 그룹 + 구분선 + 취소·저장 */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <style>{`@keyframes _spin{to{transform:rotate(360deg)}}`}</style>
+
+          {/* PRD 다운로드 버튼 */}
+          {!isNew && (
+            <button
+              onClick={() => setPrdOpen(true)}
+              style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 12px" }}
+            >
+              PRD 다운로드
+            </button>
+          )}
 
           {/* AI 버튼 그룹 — 하나의 pill로 묶어 통일감 부여, 신규 모드에서는 disabled */}
           <div style={{
@@ -848,6 +734,19 @@ function FunctionDetailPageInner() {
         />
       )}
 
+      {/* ── PRD 다운로드 팝업 ─────────────────────────────────────────── */}
+      <PrdDownloadDialog
+        open={prdOpen}
+        onClose={() => setPrdOpen(false)}
+        projectId={projectId}
+        availableLevels={["UNIT_WORK", "SCREEN", "AREA", "FUNCTION"]}
+        defaultLevel="FUNCTION"
+        unitWorkId={data?.unitWorkId}
+        screenId={data?.screenId}
+        areaId={data?.areaId}
+        functionId={functionId}
+      />
+
       {/* ── PID-00053 컬럼 매핑 관리 팝업 ────────────────────────────────── */}
       <ColMappingDialog
         open={mappingPopupOpen}
@@ -857,6 +756,7 @@ function FunctionDetailPageInner() {
         refType="FUNCTION"
         refId={functionId}
         title="컬럼 매핑 관리"
+        unitWorkDc={data?.unitWorkDc ?? ""}
       />
     </div>
   );
@@ -1049,23 +949,6 @@ const secondaryBtnStyle: React.CSSProperties = {
 };
 
 
-const statusSelectStyle: React.CSSProperties = {
-  padding:         "1px 20px 1px 6px",
-  borderRadius:    5,
-  borderWidth:     1,
-  borderStyle:     "solid",
-  borderColor:     "var(--color-border)",
-  fontSize:        12,
-  fontWeight:      600,
-  background:      "transparent",
-  color:           "var(--color-text-primary)",
-  cursor:          "pointer",
-  appearance:      "none",
-  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
-  backgroundRepeat:   "no-repeat",
-  backgroundPosition: "right 7px center",
-  transition:      "border-color 0.15s, color 0.15s",
-};
 
 // ── 컬럼 매핑 → 마크다운 변환 ────────────────────────────────────────────────
 
