@@ -28,6 +28,7 @@ import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import { ScreenLayoutEditor, type LayoutRow } from "@/components/ui/ScreenLayoutEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
+import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
@@ -123,6 +124,7 @@ function ScreenDetailPageInner() {
   const [descTab, setDescTab] = useState<"edit" | "preview">("edit");
 
   // 설명 변경 이력 저장 여부 확인 다이얼로그
+  const [prdOpen,           setPrdOpen]           = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
 
   // 이력 조회 팝업 (SettingsHistoryDialog)
@@ -268,8 +270,16 @@ function ScreenDetailPageInner() {
             {isNew ? "화면 신규 등록" : `${detail?.displayId ?? ""} 화면 편집`}
           </span>
         </div>
-        {/* 우: 취소·저장 */}
+        {/* 우: PRD 다운로드 + 취소·저장 */}
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          {!isNew && (
+            <button
+              onClick={() => setPrdOpen(true)}
+              style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 12px" }}
+            >
+              PRD 다운로드
+            </button>
+          )}
           <button
             onClick={() => router.push(`/projects/${projectId}/screens`)}
             disabled={saveMutation.isPending}
@@ -516,6 +526,17 @@ function ScreenDetailPageInner() {
           </div>
         </div>
       )}
+
+      {/* PRD 다운로드 팝업 */}
+      <PrdDownloadDialog
+        open={prdOpen}
+        onClose={() => setPrdOpen(false)}
+        projectId={projectId}
+        availableLevels={["UNIT_WORK", "SCREEN"]}
+        defaultLevel="SCREEN"
+        unitWorkId={detail?.unitWorkId}
+        screenId={screenId}
+      />
 
       {/* 설명 변경 이력 조회 팝업 */}
       <SettingsHistoryDialog

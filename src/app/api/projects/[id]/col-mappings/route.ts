@@ -46,7 +46,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // col_id 목록으로 컬럼+테이블 정보 별도 조회 (TbDsColMapping에 relation 없음)
     const colIds = mappings.map((m) => m.col_id).filter(Boolean) as string[];
     const columns = colIds.length > 0
-      ? await prisma.tbDsTableColumn.findMany({
+      ? await prisma.tbDsDbTableColumn.findMany({
           where:   { col_id: { in: colIds } },
           include: { table: { select: { tbl_id: true, tbl_physcl_nm: true, tbl_lgcl_nm: true } } },
         })

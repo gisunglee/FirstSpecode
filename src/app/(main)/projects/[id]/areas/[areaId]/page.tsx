@@ -33,6 +33,8 @@ import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEdit
 import { ScreenLayoutEditor, type LayoutRow } from "@/components/ui/ScreenLayoutEditor";
 import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
+import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
+import ExcalidrawDialog from "@/components/ui/ExcalidrawDialog";
 import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
@@ -48,6 +50,7 @@ type AreaDetail = {
   sortOrder:   number;
   screenId:    string | null;
   screenName:  string;
+  unitWorkId:  string | null;
   layoutData:     string | null;
   commentCn:      string;
   excalidrawData: object | null;
@@ -116,6 +119,7 @@ function AreaDetailPageInner() {
   const [originalDescription, setOriginalDescription] = useState("");
 
   // 이력 저장 다이얼로그 / 이력 조회 팝업 상태
+  const [prdOpen,           setPrdOpen]           = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [historyViewOpen,   setHistoryViewOpen]   = useState(false);
 
@@ -125,9 +129,8 @@ function AreaDetailPageInner() {
   // ── AI 컨펌 상태 ──────────────────────────────────────────────────────────
   const [aiConfirm, setAiConfirm] = useState<{ taskType: string; label: string } | null>(null);
 
-  // ── Excalidraw 팝업 상태 ───────────────────────────────────────────────────
-  const [excalidrawOpen,  setExcalidrawOpen]  = useState(false);
-  const [excalidrawData,  setExcalidrawData]  = useState<object | null>(null);
+  // ── Excalidraw 데이터 상태 ─────────────────────────────────────────────────
+  const [excalidrawData, setExcalidrawData] = useState<object | null>(null);
 
   // ── 화면 목록 조회 (screenId 선택용) ──────────────────────────────────────
   const { data: screensData } = useQuery({
@@ -241,7 +244,6 @@ function AreaDetailPageInner() {
       }),
     onSuccess: () => {
       toast.success("Excalidraw 설계가 저장되었습니다.");
-      setExcalidrawOpen(false);
       queryClient.invalidateQueries({ queryKey: ["area", projectId, areaId] });
     },
     onError: (err: Error) => toast.error(err.message),
@@ -305,6 +307,18 @@ function AreaDetailPageInner() {
           </div>
         </div>
       )}
+
+      {/* ── PRD 다운로드 팝업 ── */}
+      <PrdDownloadDialog
+        open={prdOpen}
+        onClose={() => setPrdOpen(false)}
+        projectId={projectId}
+        availableLevels={["UNIT_WORK", "SCREEN", "AREA"]}
+        defaultLevel="AREA"
+        unitWorkId={data?.unitWorkId}
+        screenId={data?.screenId}
+        areaId={areaId}
+      />
 
       {/* ── 이력 조회 팝업 ── */}
       <SettingsHistoryDialog
@@ -435,11 +449,18 @@ function AreaDetailPageInner() {
 
           {!isNew && (
             <button
-              onClick={() => setExcalidrawOpen(true)}
-              style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 12px" }}
+              onClick={() => setPrdOpen(true)}
+              style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 12px" }}
             >
-              Excalidraw ↗
+              PRD 다운로드
             </button>
+          )}
+          {!isNew && (
+            <ExcalidrawDialog
+              value={excalidrawData}
+              onSave={(d) => excalidrawSaveMutation.mutate(d)}
+              saving={excalidrawSaveMutation.isPending}
+            />
           )}
           <button
             onClick={() => router.push(`/projects/${projectId}/areas`)}
@@ -687,101 +708,10 @@ function AreaDetailPageInner() {
         <AreaExamplePopup onClose={() => setDescExampleOpen(false)} />
       )}
 
-      {/* ── PID-00048 Excalidraw 팝업 ─────────────────────────────────────── */}
-      {excalidrawOpen && (
-        <ExcalidrawPopup
-          initialData={excalidrawData}
-          onSave={(d) => excalidrawSaveMutation.mutate(d)}
-          onClose={() => setExcalidrawOpen(false)}
-          isSaving={excalidrawSaveMutation.isPending}
-        />
-      )}
     </div>
   );
 }
 
-// ── PID-00048 Excalidraw 팝업 ────────────────────────────────────────────────
-
-function ExcalidrawPopup({
-  initialData, onSave, onClose, isSaving,
-}: {
-  initialData: object | null;
-  onSave:      (data: object) => void;
-  onClose:     () => void;
-  isSaving:    boolean;
-}) {
-  // Excalidraw 패키지가 미설치 상태이므로 JSON 직접 편집 방식으로 stub 구현
-  // 실제 서비스에서는 @excalidraw/excalidraw 패키지 동적 import로 교체 예정
-  const [jsonText, setJsonText] = useState(
-    initialData ? JSON.stringify(initialData, null, 2) : ""
-  );
-  const [parseError, setParseError] = useState("");
-
-  function handleSave() {
-    // 빈 캔버스 저장도 허용 (빈 문자열이면 빈 객체 저장)
-    const text = jsonText.trim();
-    if (!text) {
-      onSave({});
-      return;
-    }
-    try {
-      const parsed = JSON.parse(text);
-      setParseError("");
-      onSave(parsed);
-    } catch {
-      setParseError("올바른 JSON 형식이 아닙니다.");
-    }
-  }
-
-  return (
-    <div style={{ ...overlayStyle, zIndex: 2000 }} onClick={onClose}>
-      <div
-        style={{
-          background:   "var(--color-bg-card)",
-          borderRadius: 10,
-          padding:      "28px 32px",
-          width:        "min(700px, 90vw)",
-          boxShadow:    "0 8px 32px rgba(0,0,0,0.28)",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Excalidraw 설계</h3>
-          <button onClick={onClose} style={{ ...secondaryBtnStyle, fontSize: 13 }}>닫기</button>
-        </div>
-
-        <p style={{ fontSize: 13, color: "var(--color-text-secondary)", marginBottom: 16 }}>
-          Excalidraw 패키지 연동 전 임시 JSON 편집 화면입니다.
-          <br />
-          Excalidraw 라이브러리 설치 후 실제 캔버스로 교체될 예정입니다.
-        </p>
-
-        <textarea
-          value={jsonText}
-          onChange={(e) => setJsonText(e.target.value)}
-          placeholder={"Excalidraw JSON 데이터를 붙여넣거나 직접 입력하세요.\n비워두면 빈 캔버스로 저장됩니다."}
-          rows={14}
-          style={{ ...inputStyle, fontFamily: "monospace", fontSize: 12, resize: "vertical" }}
-        />
-
-        {parseError && (
-          <p style={{ color: "#e53935", fontSize: 13, margin: "8px 0 0" }}>{parseError}</p>
-        )}
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
-          <button onClick={onClose} style={secondaryBtnStyle} disabled={isSaving}>취소</button>
-          <button
-            onClick={handleSave}
-            style={primaryBtnStyle}
-            disabled={isSaving}
-          >
-            {isSaving ? "저장 중..." : "저장"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -969,20 +899,6 @@ const ghostSmBtnStyle: React.CSSProperties = {
   color:        "var(--color-text-secondary)",
   fontSize:     12,
   cursor:       "pointer",
-};
-
-// ── 영역 AI 요청 버튼 스타일 및 설정 ─────────────────────────────────────────
-
-const areaAiReqBtnStyle: React.CSSProperties = {
-  padding:      "4px 10px",
-  borderRadius: 5,
-  border:       "1px solid var(--color-primary, #1976d2)",
-  background:   "none",
-  color:        "var(--color-primary, #1976d2)",
-  fontSize:     12,
-  fontWeight:   600,
-  cursor:       "pointer",
-  whiteSpace:   "nowrap",
 };
 
 const AREA_AI_TASK_CONFIGS = [

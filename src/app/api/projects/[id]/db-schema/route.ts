@@ -30,7 +30,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     if (tableId) {
       // 특정 테이블의 컬럼 목록
-      const columns = await prisma.tbDsTableColumn.findMany({
+      const columns = await prisma.tbDsDbTableColumn.findMany({
         where:   { tbl_id: tableId },
         orderBy: { sort_ordr: "asc" },
       });

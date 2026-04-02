@@ -46,7 +46,11 @@ export default function LNB() {
   const screensHref      = pBase ? `${pBase}/screens`       : "#";
   const areasHref        = pBase ? `${pBase}/areas`         : "#";
   const functionsHref    = pBase ? `${pBase}/functions`     : "#";
-  const aiTasksHref      = pBase ? `${pBase}/ai-tasks`      : "#";
+  const dbTablesHref        = pBase ? `${pBase}/db-tables`        : "#";
+  const designChangesHref   = pBase ? `${pBase}/design-changes`   : "#";
+  const aiTasksHref         = pBase ? `${pBase}/ai-tasks`         : "#";
+  const promptTemplatesHref = pBase ? `${pBase}/prompt-templates` : "#";
+  const reviewsHref         = pBase ? `${pBase}/reviews`          : "#";
   const planningHref     = pBase ? `${pBase}/planning`      : "#";
   const settingsHref     = pBase ? `${pBase}/settings`      : "#";
   const membersHref      = pBase ? `${pBase}/members`       : "#";
@@ -67,7 +71,11 @@ export default function LNB() {
     { label: "영역 관리",   href: areasHref,        icon: "📦", isActive: !!pBase && pathname.startsWith(`${pBase}/areas`) },
     { label: "기능 정의",   href: functionsHref,    icon: "⚙",  isActive: !!pBase && pathname.startsWith(`${pBase}/functions`) },
     { isSeparator: true },
-    { label: "AI 태스크",   href: aiTasksHref,      icon: "✨", isActive: !!pBase && pathname.startsWith(`${pBase}/ai-tasks`) },
+    { label: "AI 태스크",    href: aiTasksHref,         icon: "✨", isActive: !!pBase && pathname.startsWith(`${pBase}/ai-tasks`) },
+    { label: "프롬프트 관리", href: promptTemplatesHref, icon: "📝", isActive: !!pBase && pathname.startsWith(`${pBase}/prompt-templates`) },
+    { label: "리뷰 요청",   href: reviewsHref,          icon: "💬", isActive: !!pBase && pathname.startsWith(`${pBase}/reviews`) },
+    { label: "DB 테이블",   href: dbTablesHref,          icon: "🗄",  isActive: !!pBase && pathname.startsWith(`${pBase}/db-tables`) },
+    { label: "설계 변경 이력", href: designChangesHref,   icon: "📜", isActive: !!pBase && pathname.startsWith(`${pBase}/design-changes`) },
   ];
 
   // SYSTEM 섹션 항목 — 역할에 따라 동적 구성

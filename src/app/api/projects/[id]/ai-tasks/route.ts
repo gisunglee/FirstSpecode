@@ -26,6 +26,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const status   = url.searchParams.get("status")   ?? undefined;
   const taskType = url.searchParams.get("taskType") ?? undefined;
   const refType  = url.searchParams.get("refType")  ?? undefined;
+  const refId    = url.searchParams.get("refId")    ?? undefined;
 
   const membership = await prisma.tbPjProjectMember.findUnique({
     where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
@@ -41,6 +42,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         ...(status   ? { task_sttus_code: status }   : {}),
         ...(taskType ? { task_ty_code:    taskType }  : {}),
         ...(refType  ? { ref_ty_code:     refType }   : {}),
+        ...(refId    ? { ref_id:          refId }     : {}),
       },
       orderBy: { req_dt: "desc" },
     });

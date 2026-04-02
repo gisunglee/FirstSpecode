@@ -355,12 +355,12 @@ model TbDsDbTable {
   tbl_lgcl_nm   String?
   tbl_dc        String?
   creat_dt      DateTime          @default(now())
-  columns       TbDsTableColumn[]
+  columns       TbDsDbTableColumn[]
 
   @@map("tb_ds_db_table")
 }
 
-model TbDsTableColumn {
+model TbDsDbTableColumn {
   col_id        String      @id @default(uuid())
   tbl_id        String
   col_physcl_nm String
@@ -371,7 +371,7 @@ model TbDsTableColumn {
   creat_dt      DateTime    @default(now())
   table         TbDsDbTable @relation(fields: [tbl_id], references: [tbl_id])
 
-  @@map("tb_ds_table_column")
+  @@map("tb_ds_db_table_column")
 }
 
 model TbDsColMapping {
@@ -545,23 +545,24 @@ model TbRqBaselineSnapshot {
   @@map("tb_rq_baseline_snapshot")
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model tb_ai_prompt_template {
+model TbAiPromptTemplate {
   tmpl_id        String   @id(map: "pk_ai_prompt_template") @db.VarChar(36)
   prjct_id       String?  @db.VarChar(36)
   tmpl_nm        String   @db.VarChar(200)
   task_ty_code   String   @db.VarChar(20)
   ref_ty_code    String?  @db.VarChar(20)
   sys_prompt_cn  String?
-  user_prompt_cn String
   tmpl_dc        String?
   use_yn         String   @default("Y") @db.Char(1)
+  default_yn     String   @default("N") @db.Char(1)
   sort_ordr      Int      @default(0)
-  creat_mber_id  String   @db.VarChar(36)
+  use_cnt        Int      @default(0)
+  creat_mber_id  String?  @db.VarChar(36)
   creat_dt       DateTime @default(now()) @db.Timestamp(6)
   mdfcn_dt       DateTime @default(now()) @db.Timestamp(6)
 
   @@index([prjct_id, task_ty_code, use_yn], map: "idx_ai_tmpl_prjct")
+  @@map("tb_ai_prompt_template")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -588,9 +589,10 @@ model tb_ds_review_request {
   req_mber_id       String    @db.VarChar(36)
   revwr_mber_id     String    @db.VarChar(36)
   review_sttus_code String    @default("REQUESTED") @db.VarChar(30)
+  stsf_scr          Int?      // 답변 만족도 점수 (1~5, 요청자 입력)
+  fdbk_code         String?   @db.VarChar(20) // 피드백 코드 (GOOD / WELL / NEEDS_IMPROVEMENT)
   creat_dt          DateTime  @default(now()) @db.Timestamp(6)
   compl_dt          DateTime? @db.Timestamp(6)
-  cnfrm_dt          DateTime? @db.Timestamp(6)
   mdfcn_dt          DateTime  @default(now()) @db.Timestamp(6)
 
   @@index([prjct_id, creat_dt(sort: Desc)], map: "idx_ds_review_prjct")

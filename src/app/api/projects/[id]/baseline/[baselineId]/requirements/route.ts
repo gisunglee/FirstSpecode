@@ -27,7 +27,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const baseline = await prisma.tbRqBaselineSnapshot.findUnique({
       where:  { basln_id: baselineId },
-      select: { basln_id: true, prjct_id: true, basln_nm: true, cnfrm_dt: true, req_cnt: true, snapshot_data: true },
+      select: { basln_id: true, prjct_id: true, basln_nm: true, coment_cn: true, cnfrm_dt: true, req_cnt: true, snapshot_data: true },
     });
 
     if (!baseline || baseline.prjct_id !== projectId) {
@@ -40,6 +40,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return apiSuccess({
       baselineId:   baseline.basln_id,
       name:         baseline.basln_nm,
+      comment:      baseline.coment_cn ?? "",
       confirmedAt:  baseline.cnfrm_dt.toISOString(),
       items,
       totalCount:   items.length,

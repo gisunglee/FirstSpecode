@@ -16,7 +16,7 @@
  *   - functionId === "new"이면 신규 모드
  */
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import { marked } from "marked";
 
 function markedParse(md: string): string {
@@ -32,6 +32,8 @@ import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import ColMappingDialog from "@/components/ui/ColMappingDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
+import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
+import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
 import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
@@ -126,6 +128,14 @@ function FunctionDetailPageInner() {
   // ── PRD 다운로드 팝업 ────────────────────────────────────────────────────────
   const [prdOpen, setPrdOpen] = useState(false);
 
+  // ── AI 작업 드롭다운 패널 ────────────────────────────────────────────────────
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const aiPanelRef = useRef<HTMLDivElement>(null);
+
+  // ── AI 패널 팝업 상태 ────────────────────────────────────────────────────────
+  const [aiDetailTaskId,   setAiDetailTaskId]   = useState<string | null>(null);
+  const [aiHistoryTaskType, setAiHistoryTaskType] = useState<string | null>(null);
+
   // ── 컬럼 매핑 팝업 ─────────────────────────────────────────────────────────
   const [mappingPopupOpen,   setMappingPopupOpen]   = useState(false);
   const [mappingMdOpen,      setMappingMdOpen]      = useState(false);
@@ -169,6 +179,17 @@ function FunctionDetailPageInner() {
     setBreadcrumb(items);
     return () => setBreadcrumb([]);
   }, [projectId, isNew, data?.areaName, data?.displayId, setBreadcrumb]);
+
+  // AI 작업 패널 외부 클릭 시 닫기
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (aiPanelRef.current && !aiPanelRef.current.contains(e.target as Node)) {
+        setAiPanelOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   useEffect(() => {
     if (data) {
@@ -230,6 +251,26 @@ function FunctionDetailPageInner() {
 
   // ── AI 컨펌 상태 ──────────────────────────────────────────────────────────
   const [aiConfirm, setAiConfirm] = useState<{ taskType: string; label: string } | null>(null);
+
+  // DESIGN 전용: 프롬프트 템플릿 조회 결과 (버튼 클릭 시 fetch → 컨펌 창에 표시)
+  const [designPrompt, setDesignPrompt] = useState<{ tmplId: string; tmplNm: string } | null | "loading" | "none">(null);
+
+  async function openDesignConfirm() {
+    if (!description.trim()) { toast.error("설명을 먼저 입력해 주세요."); return; }
+    setDesignPrompt("loading");
+    setAiConfirm({ taskType: "DESIGN", label: "AI 설계" });
+    try {
+      const res = await authFetch<{ data: Array<{ tmplId: string; tmplNm: string }> }>(
+        `/api/projects/${projectId}/prompt-templates?taskType=DESIGN&refType=FUNCTION&useYn=Y`
+      );
+      const list = res.data ?? [];
+      // 마지막에 추가된 것 사용 (API 응답은 sort_ordr ASC이므로 배열 마지막)
+      const last = list[list.length - 1] ?? null;
+      setDesignPrompt(last ? { tmplId: last.tmplId, tmplNm: last.tmplNm } : "none");
+    } catch {
+      setDesignPrompt("none");
+    }
+  }
 
   // ── AI 요청 뮤테이션 ──────────────────────────────────────────────────────
   const aiMutation = useMutation({
@@ -301,62 +342,138 @@ function FunctionDetailPageInner() {
             </button>
           )}
 
-          {/* AI 버튼 그룹 — 하나의 pill로 묶어 통일감 부여, 신규 모드에서는 disabled */}
-          <div style={{
-            display: "flex", alignItems: "stretch",
-            border: "1px solid rgba(103,80,164,0.3)",
-            borderRadius: 7,
-            overflow: "hidden",
-            opacity: isNew ? 0.45 : 1,
-          }}>
-            {AI_TASK_CONFIGS.map(({ taskType, label }, idx) => {
-              const info = data?.aiTasks?.[taskType];
-              const isSpinning = !isNew && (
-                (aiMutation.isPending && aiMutation.variables?.taskType === taskType)
-                || (info && ["PENDING", "IN_PROGRESS"].includes(info.status))
-              );
-              const dotColor = AI_STATUS_DOT[info?.status ?? ""] ?? null;
-              const statusTip = info ? (AI_STATUS_LABEL[info.status] ?? info.status) : "";
-              return (
-                <button
-                  key={taskType}
-                  onClick={() => {
-                    if (!description.trim()) {
-                      toast.error("설명을 먼저 입력해 주세요.");
-                      return;
-                    }
-                    setAiConfirm({ taskType, label });
-                  }}
-                  disabled={isNew || aiMutation.isPending}
-                  title={isNew ? "저장 후 사용할 수 있습니다" : statusTip || label}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 5,
-                    padding: "5px 12px",
-                    border: "none",
-                    borderLeft: idx > 0 ? "1px solid rgba(103,80,164,0.2)" : "none",
-                    background: "transparent",
-                    color: "rgba(103,80,164,0.9)",
-                    fontSize: 12, fontWeight: 600,
-                    cursor: isNew ? "not-allowed" : "pointer",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {/* 스파클 아이콘 — 처리 중이면 회전 */}
-                  <span style={isSpinning ? { display: "inline-block", animation: "_spin 1s linear infinite" } : {}}>
-                    ✦
-                  </span>
-                  {label}
-                  {/* 상태 도트 — 버튼 내부에 통합해 뱃지 분리 제거 */}
-                  {!isNew && dotColor && (
-                    <span style={{
-                      width: 6, height: 6, borderRadius: "50%",
-                      background: dotColor, flexShrink: 0,
-                    }} />
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          {/* ★ AI 작업 드롭다운 버튼 */}
+          {!isNew && (
+            <div ref={aiPanelRef} style={{ position: "relative" }}>
+              <button
+                onClick={() => setAiPanelOpen((v) => !v)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "6px 14px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(103,80,164,0.35)",
+                  background: aiPanelOpen ? "rgba(103,80,164,0.1)" : "rgba(103,80,164,0.06)",
+                  color: "rgba(103,80,164,1)",
+                  fontSize: 13, fontWeight: 700,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <span>★</span>
+                AI 작업
+                <span style={{ fontSize: 10, opacity: 0.7 }}>▾</span>
+              </button>
+
+              {/* 드롭다운 패널 */}
+              {aiPanelOpen && (
+                <div style={{
+                  position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 300,
+                  background: "var(--color-bg-card)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: 12,
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.16)",
+                  padding: "14px 16px",
+                  minWidth: 280,
+                }}>
+                  {/* 패널 헤더 */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)" }}>AI 작업 현황</span>
+                    <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{data?.displayId ?? ""}</span>
+                  </div>
+
+                  {/* AI 작업 카드 목록 */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {AI_TASK_CONFIGS.map(({ taskType, label, desc, icon }) => {
+                      const info        = data?.aiTasks?.[taskType];
+                      const isSpinning  = (aiMutation.isPending && aiMutation.variables?.taskType === taskType)
+                                       || !!(info && ["PENDING", "IN_PROGRESS"].includes(info.status));
+                      const hasDone     = !!(info && ["DONE", "APPLIED", "REJECTED", "FAILED"].includes(info.status));
+                      const dotColor    = AI_STATUS_DOT[info?.status ?? ""] ?? "#ccc";
+                      const statusLabel = info ? (AI_STATUS_LABEL[info.status] ?? info.status) : "대기";
+
+                      function handleRun() {
+                        if (taskType === "DESIGN") { openDesignConfirm(); return; }
+                        if (!description.trim()) { toast.error("설명을 먼저 입력해 주세요."); return; }
+                        setAiConfirm({ taskType, label });
+                      }
+
+                      return (
+                        <div key={taskType} style={{
+                          display: "flex", alignItems: "center", gap: 12,
+                          padding: "10px 12px",
+                          borderRadius: 8,
+                          border: "1px solid var(--color-border)",
+                          background: "var(--color-bg-muted)",
+                        }}>
+                          {/* 아이콘 */}
+                          <div style={{
+                            width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            background: icon.bg, fontSize: 18,
+                          }}>
+                            {icon.emoji}
+                          </div>
+
+                          {/* 레이블 + 설명 */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                              {label}
+                            </div>
+                            <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 1, lineHeight: 1.4 }}>
+                              {desc}
+                            </div>
+                          </div>
+
+                          {/* 상태 + 버튼 */}
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, flexShrink: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              <span style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
+                              <span style={{ fontSize: 11, color: dotColor, fontWeight: 600, whiteSpace: "nowrap" }}>
+                                {isSpinning ? "처리 중..." : statusLabel}
+                              </span>
+                            </div>
+                            <div style={{ display: "flex", gap: 4 }}>
+                              {hasDone && (
+                                <button
+                                  onClick={() => setAiDetailTaskId(info!.aiTaskId)}
+                                  style={aiMiniBtn}
+                                >
+                                  결과보기
+                                </button>
+                              )}
+                              <button
+                                onClick={handleRun}
+                                disabled={isSpinning || aiMutation.isPending}
+                                style={{
+                                  ...aiMiniBtn,
+                                  background: "rgba(103,80,164,0.1)",
+                                  color: "rgba(103,80,164,0.95)",
+                                  border: "1px solid rgba(103,80,164,0.3)",
+                                  fontWeight: 700,
+                                  cursor: isSpinning ? "not-allowed" : "pointer",
+                                  opacity: isSpinning ? 0.5 : 1,
+                                }}
+                              >
+                                {info ? "재 요청" : "실행"}
+                              </button>
+                              {info && (
+                                <button
+                                  onClick={() => setAiHistoryTaskType(taskType)}
+                                  style={aiMiniBtn}
+                                >
+                                  이력
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 구분선 */}
           <div style={{ width: 1, height: 20, background: "var(--color-border)" }} />
@@ -690,34 +807,133 @@ function FunctionDetailPageInner() {
       {/* ── AI 요청 컨펌 다이얼로그 ──────────────────────────────────────── */}
       {aiConfirm && (
         <div
-          style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={() => setAiConfirm(null)}
+          style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => { setAiConfirm(null); setDesignPrompt(null); }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{ width: "100%", maxWidth: 400, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.2)", padding: "24px 28px" }}
+            style={{ width: "100%", maxWidth: aiConfirm.taskType === "DESIGN" ? 520 : 420, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 12, boxShadow: "0 12px 48px rgba(0,0,0,0.25)", padding: "32px 36px" }}
           >
-            <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
-              AI 요청 확인
-            </p>
-            <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-              <strong>{aiConfirm.label}</strong>을 요청하시겠습니까?<br />
-              AI 요청 코멘트가 있으면 함께 전달됩니다.
-            </p>
+
+            {aiConfirm.taskType === "DESIGN" ? (
+              <>
+                {/* DESIGN 전용 헤더 */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                  <span style={{ fontSize: 24 }}>✦</span>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                      AI 설계 요청
+                    </p>
+                    <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--color-text-secondary)" }}>
+                      작성하신 설명 내용을 기반으로 AI에게 설계를 요청합니다.
+                    </p>
+                  </div>
+                </div>
+
+                {/* 프롬프트 템플릿 조회 결과 */}
+                <div style={{ marginBottom: 20, padding: "14px 16px", background: "rgba(103,80,164,0.06)", border: "1px solid rgba(103,80,164,0.18)", borderRadius: 8 }}>
+                  {designPrompt === "loading" ? (
+                    <p style={{ margin: 0, fontSize: 13, color: "var(--color-text-secondary)" }}>
+                      프롬프트 템플릿 조회 중...
+                    </p>
+                  ) : designPrompt === "none" || designPrompt === null ? (
+                    <div>
+                      <p style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 700, color: "#c62828" }}>
+                        ⚠ 프롬프트 템플릿을 찾지 못했습니다.
+                      </p>
+                      <p style={{ margin: 0, fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.7 }}>
+                        <strong>AI 요청 코멘트를 직접 작성하신 후</strong><br />
+                        AI에게 검토를 요청하시겠습니까?
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <p style={{ margin: "0 0 6px", fontSize: 12, color: "var(--color-text-secondary)", fontWeight: 600 }}>
+                        ✅ 프롬프트 템플릿 찾았습니다
+                      </p>
+                      <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 700, color: "rgba(103,80,164,1)" }}>
+                        {designPrompt.tmplNm}
+                      </p>
+                      <p style={{ margin: 0, fontSize: 12, color: "var(--color-text-secondary)" }}>
+                        해당 프롬프트와 함께 전달하도록 하겠습니다.
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                {/* 전달 내용 미리보기 */}
+                <div style={{ marginBottom: 24, fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.7 }}>
+                  <p style={{ margin: "0 0 6px", fontWeight: 600, color: "var(--color-text-primary)" }}>전달되는 내용</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                      <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>시스템 프롬프트</span>
+                      <span>기능 설계 지침</span>
+                    </div>
+                    {commentCn.trim() && (
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                        <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>코멘트</span>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 320 }}>{commentCn.trim()}</span>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                      <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>설명</span>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 320 }}>{description.trim().slice(0, 80)}{description.trim().length > 80 ? "…" : ""}</span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                  AI 요청 확인
+                </p>
+                <p style={{ margin: "0 0 24px", fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+                  <strong>{aiConfirm.label}</strong>을 요청하시겠습니까?<br />
+                  AI 요청 코멘트가 있으면 함께 전달됩니다.
+                </p>
+              </>
+            )}
+
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button
-                onClick={() => setAiConfirm(null)}
-                style={{ ...secondaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
+                onClick={() => { setAiConfirm(null); setDesignPrompt(null); }}
+                style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 18px" }}
               >
                 취소
               </button>
+              {/* 프롬프트 못 찾은 경우 — "AI 요청 코멘트로 처리" 버튼 (코멘트 있어야 활성) */}
+              {designPrompt === "none" && (
+                <button
+                  onClick={() => {
+                    aiMutation.mutate({ taskType: aiConfirm.taskType });
+                    setAiConfirm(null);
+                    setDesignPrompt(null);
+                  }}
+                  disabled={aiMutation.isPending || !commentCn.trim()}
+                  style={{
+                    ...primaryBtnStyle, fontSize: 13, padding: "7px 18px",
+                    background: commentCn.trim() ? "#e65100" : "#ccc",
+                    cursor: commentCn.trim() ? "pointer" : "not-allowed",
+                  }}
+                  title={!commentCn.trim() ? "AI 요청 코멘트를 먼저 입력해 주세요." : ""}
+                >
+                  AI 요청 코멘트로 처리
+                </button>
+              )}
+              {/* 프롬프트 찾은 경우만 활성화 */}
               <button
                 onClick={() => {
                   aiMutation.mutate({ taskType: aiConfirm.taskType });
                   setAiConfirm(null);
+                  setDesignPrompt(null);
                 }}
-                disabled={aiMutation.isPending}
-                style={{ ...primaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
+                disabled={aiMutation.isPending || designPrompt === "loading" || designPrompt === "none" || designPrompt === null}
+                style={{
+                  ...primaryBtnStyle, fontSize: 13, padding: "7px 18px",
+                  background: "rgba(103,80,164,1)",
+                  opacity: (designPrompt === "none" || designPrompt === null || designPrompt === "loading") ? 0.3 : 1,
+                  cursor: (designPrompt === "none" || designPrompt === null || designPrompt === "loading") ? "not-allowed" : "pointer",
+                }}
               >
                 요청
               </button>
@@ -758,6 +974,28 @@ function FunctionDetailPageInner() {
         title="컬럼 매핑 관리"
         unitWorkDc={data?.unitWorkDc ?? ""}
       />
+
+      {/* ── AI 태스크 결과 상세 팝업 ────────────────────────────────────── */}
+      {aiDetailTaskId && (
+        <AiTaskDetailDialog
+          projectId={projectId}
+          taskId={aiDetailTaskId}
+          onClose={() => setAiDetailTaskId(null)}
+          onApplied={() => { setAiDetailTaskId(null); queryClient.invalidateQueries({ queryKey: ["function", projectId, functionId] }); }}
+          onRejected={() => { setAiDetailTaskId(null); queryClient.invalidateQueries({ queryKey: ["function", projectId, functionId] }); }}
+        />
+      )}
+
+      {/* ── AI 태스크 이력 팝업 ─────────────────────────────────────────── */}
+      {aiHistoryTaskType && !isNew && (
+        <AiTaskHistoryDialog
+          projectId={projectId}
+          refType="FUNCTION"
+          refId={functionId}
+          taskType={aiHistoryTaskType as "DESIGN" | "INSPECT" | "IMPACT"}
+          onClose={() => setAiHistoryTaskType(null)}
+        />
+      )}
     </div>
   );
 }
@@ -767,9 +1005,9 @@ function FunctionDetailPageInner() {
 // ── AI 태스크 설정 ────────────────────────────────────────────────────────────
 
 const AI_TASK_CONFIGS = [
-  { taskType: "DESIGN",  label: "AI 설계" },
-  { taskType: "INSPECT", label: "AI 점검" },
-  { taskType: "IMPACT",  label: "AI 영향도" },
+  { taskType: "DESIGN",  label: "AI 설계",   desc: "기능 명세 자동 생성",             icon: { bg: "#e8eaf6", emoji: "⊞" } },
+  { taskType: "INSPECT", label: "AI 점검",   desc: "일관성·누락·충돌 분석\n(단위업무 전체 기준)", icon: { bg: "#e8f5e9", emoji: "✓" } },
+  { taskType: "IMPACT",  label: "AI 영향도", desc: "현 설계가 타 기능에\n미치는 영향 분석",   icon: { bg: "#fff8e1", emoji: "+" } },
 ];
 
 // 상태별 도트 색상 — 버튼 내부에 인라인으로 표시
@@ -946,6 +1184,13 @@ const secondaryBtnStyle: React.CSSProperties = {
   padding: "8px 16px", borderRadius: 6,
   border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
   color: "var(--color-text-primary)", fontSize: 14, cursor: "pointer",
+};
+
+// AI 패널 내부 미니 버튼 스타일
+const aiMiniBtn: React.CSSProperties = {
+  padding: "2px 7px", borderRadius: 4, fontSize: 10, fontWeight: 600,
+  border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
+  color: "var(--color-text-secondary)", cursor: "pointer", whiteSpace: "nowrap",
 };
 
 

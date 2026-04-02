@@ -15,7 +15,7 @@
  *   - PATCH progress: 인라인 진행률 수정
  */
 
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -74,6 +74,29 @@ function UnitWorksPageInner() {
 
   // 삭제 다이얼로그 상태
   const [deleteTarget, setDeleteTarget] = useState<UnitWorkRow | null>(null);
+
+  // ── 단위업무 다운로드 드롭다운 ────────────────────────────────────────────────
+  const [uwDownOpen, setUwDownOpen] = useState(false);
+  const uwDownRef   = useRef<HTMLDivElement>(null);
+
+  // ── PRD(설계) 다운로드 드롭다운 + 범위 선택 모달 ──────────────────────────────
+  const [prdDownOpen,       setPrdDownOpen]       = useState(false);
+  const prdDownRef          = useRef<HTMLDivElement>(null);
+  const [prdInclude, setPrdInclude] = useState({ screens: true, areas: true, functions: true });
+  const [prdRangeOpen,      setPrdRangeOpen]      = useState(false);
+  const [prdRangeMode,      setPrdRangeMode]      = useState<"title_only" | "with_content">("title_only");
+  const [selectedUwIds,     setSelectedUwIds]     = useState<Set<string>>(new Set());
+  const [prdLoading,        setPrdLoading]        = useState(false);
+
+  // 드롭다운 외부 클릭 시 닫기
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (uwDownRef.current && !uwDownRef.current.contains(e.target as Node)) setUwDownOpen(false);
+      if (prdDownRef.current && !prdDownRef.current.contains(e.target as Node)) setPrdDownOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   // 인라인 수정 상태
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -200,6 +223,80 @@ function UnitWorksPageInner() {
     dragOverItem.current = null;
   }
 
+  // ── 단위업무 목록 MD 다운로드 (클라이언트 사이드) ────────────────────────────
+  function downloadUnitWorksMd(mode: "name_only" | "name_desc") {
+    const lines: string[] = ["# 단위업무 목록", ""];
+    for (const uw of items) {
+      if (mode === "name_only") {
+        lines.push(`- **${uw.displayId}** ${uw.name}`);
+      } else {
+        lines.push(`## ${uw.displayId} ${uw.name}`);
+        if (uw.description?.trim()) {
+          lines.push("");
+          lines.push(uw.description.trim());
+        }
+        lines.push("");
+      }
+    }
+    // 파일명: 단위업무_목록_이름만.md / 단위업무_목록_이름+설명.md
+    const suffix = mode === "name_only" ? "이름만" : "이름+설명";
+    triggerDownload(lines.join("\n"), `단위업무_목록_${suffix}.md`);
+    setUwDownOpen(false);
+  }
+
+  // ── PRD 다운로드 파일명 생성 ──────────────────────────────────────────────
+  // 예: 설계_전체_화면영역기능_제목만.md / 설계_3건_화면영역_내용포함.md
+  function buildPrdFilename(unitWorkIds: string[], contentMode: "title_only" | "with_content") {
+    const scopePart   = unitWorkIds.length === 0 ? "전체" : `${unitWorkIds.length}건`;
+    const levelParts  = [
+      prdInclude.screens   ? "화면" : null,
+      prdInclude.areas     ? "영역" : null,
+      prdInclude.functions ? "기능" : null,
+    ].filter(Boolean).join("");
+    const contentPart = contentMode === "title_only" ? "제목만" : "내용포함";
+    const levelSuffix = levelParts ? `_${levelParts}` : "";
+    return `설계_${scopePart}${levelSuffix}_${contentPart}.md`;
+  }
+
+  // ── PRD 다운로드 (API 호출) ───────────────────────────────────────────────
+  async function downloadPrd(unitWorkIds: string[], contentMode: "title_only" | "with_content") {
+    setPrdLoading(true);
+    try {
+      const res = await authFetch<{ data: { markdown: string; filename: string } }>(
+        `/api/projects/${projectId}/prd/bulk`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            unitWorkIds,
+            includeScreens:   prdInclude.screens,
+            includeAreas:     prdInclude.areas,
+            includeFunctions: prdInclude.functions,
+            contentMode,
+          }),
+        }
+      );
+      // API가 반환한 기본 파일명 대신 포함 레벨·범위·콘텐츠 모드가 담긴 이름 사용
+      const filename = buildPrdFilename(unitWorkIds, contentMode);
+      triggerDownload(res.data.markdown, filename);
+      setPrdDownOpen(false);
+      setPrdRangeOpen(false);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "다운로드에 실패했습니다.");
+    } finally {
+      setPrdLoading(false);
+    }
+  }
+
+  function triggerDownload(content: string, filename: string) {
+    const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // ── 인라인 수정 시작 ───────────────────────────────────────────────────────
   function startEdit(uw: UnitWorkRow) {
     setEditingId(uw.unitWorkId);
@@ -240,12 +337,105 @@ function UnitWorksPageInner() {
             단위업무 목록
           </div>
         </div>
-        <button
-          onClick={() => router.push(`/projects/${projectId}/unit-works/new`)}
-          style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
-        >
-          + 신규 등록
-        </button>
+
+        {/* 우측 버튼 그룹 */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+
+          {/* ── 단위업무 다운로드 드롭다운 ───────────────────────── */}
+          <div ref={uwDownRef} style={{ position: "relative" }}>
+            <button
+              onClick={() => { setUwDownOpen((v) => !v); setPrdDownOpen(false); }}
+              style={{ ...outlineBtnStyle, fontSize: 12, padding: "5px 12px" }}
+            >
+              단위업무 다운로드 ▾
+            </button>
+            {uwDownOpen && (
+              <div style={dropdownPanelStyle}>
+                <button
+                  style={dropdownItemStyle}
+                  onClick={() => downloadUnitWorksMd("name_only")}
+                >
+                  이름만
+                </button>
+                <button
+                  style={dropdownItemStyle}
+                  onClick={() => downloadUnitWorksMd("name_desc")}
+                >
+                  이름 + 설명
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* ── 설계 다운로드 드롭다운 ───────────────────────────── */}
+          <div ref={prdDownRef} style={{ position: "relative" }}>
+            <button
+              onClick={() => { setPrdDownOpen((v) => !v); setUwDownOpen(false); }}
+              style={{ ...outlineBtnStyle, fontSize: 12, padding: "5px 12px" }}
+            >
+              설계 다운로드 ▾
+            </button>
+            {prdDownOpen && (
+              <div style={{ ...dropdownPanelStyle, width: 220, right: 0, left: "auto" }}>
+                {/* 포함 레벨 체크박스 */}
+                <div style={{ padding: "10px 14px 6px", borderBottom: "1px solid var(--color-border)" }}>
+                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 8, fontWeight: 600 }}>포함 레벨</div>
+                  {([ ["screens", "화면"], ["areas", "영역"], ["functions", "기능"] ] as const).map(([key, label]) => (
+                    <label key={key} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13, marginBottom: 6, cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={prdInclude[key]}
+                        onChange={(e) => setPrdInclude((p) => ({ ...p, [key]: e.target.checked }))}
+                      />
+                      {label} 포함
+                    </label>
+                  ))}
+                </div>
+                {/* 전체 다운로드 */}
+                <div style={{ padding: "8px 14px", borderBottom: "1px solid var(--color-border)" }}>
+                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 6, fontWeight: 600 }}>전체 다운로드</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      disabled={prdLoading}
+                      style={{ ...dropdownItemStyle, flex: 1, textAlign: "center", border: "1px solid var(--color-border)", borderRadius: 5, padding: "5px 0" }}
+                      onClick={() => downloadPrd([], "title_only")}
+                    >
+                      제목만
+                    </button>
+                    <button
+                      disabled={prdLoading}
+                      style={{ ...dropdownItemStyle, flex: 1, textAlign: "center", border: "1px solid var(--color-border)", borderRadius: 5, padding: "5px 0" }}
+                      onClick={() => downloadPrd([], "with_content")}
+                    >
+                      내용까지
+                    </button>
+                  </div>
+                </div>
+                {/* 범위 선택 */}
+                <div style={{ padding: "8px 14px" }}>
+                  <button
+                    style={{ ...dropdownItemStyle, width: "100%", textAlign: "center", border: "1px solid var(--color-border)", borderRadius: 5, padding: "6px 0" }}
+                    onClick={() => {
+                      setSelectedUwIds(new Set(items.map((u) => u.unitWorkId)));
+                      setPrdRangeMode("title_only");
+                      setPrdRangeOpen(true);
+                      setPrdDownOpen(false);
+                    }}
+                  >
+                    범위 선택...
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={() => router.push(`/projects/${projectId}/unit-works/new`)}
+            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
+          >
+            + 신규 등록
+          </button>
+        </div>
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
@@ -442,6 +632,95 @@ function UnitWorksPageInner() {
         </div>
       )}
       </div>
+
+      {/* ── PRD 범위 선택 모달 ─────────────────────────────────────────────── */}
+      {prdRangeOpen && (
+        <div style={overlayStyle} onClick={() => setPrdRangeOpen(false)}>
+          <div style={{ ...dialogStyle, minWidth: 420, maxWidth: 520, maxHeight: "80vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700 }}>설계 다운로드 — 범위 선택</h3>
+            <p style={{ margin: "0 0 14px", fontSize: 13, color: "var(--color-text-secondary)" }}>
+              다운로드할 단위업무를 선택하세요.
+            </p>
+
+            {/* 콘텐츠 모드 */}
+            <div style={{ display: "flex", gap: 20, marginBottom: 14 }}>
+              {([ ["title_only", "제목만"], ["with_content", "내용까지"] ] as const).map(([val, label]) => (
+                <label key={val} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                  <input
+                    type="radio"
+                    name="prdRangeMode"
+                    checked={prdRangeMode === val}
+                    onChange={() => setPrdRangeMode(val)}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+
+            {/* 전체 선택 토글 */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                {selectedUwIds.size}개 선택됨
+              </span>
+              <button
+                style={{ ...secondaryBtnStyle, fontSize: 12, padding: "3px 10px" }}
+                onClick={() => {
+                  if (selectedUwIds.size === items.length) {
+                    setSelectedUwIds(new Set());
+                  } else {
+                    setSelectedUwIds(new Set(items.map((u) => u.unitWorkId)));
+                  }
+                }}
+              >
+                {selectedUwIds.size === items.length ? "전체 해제" : "전체 선택"}
+              </button>
+            </div>
+
+            {/* 단위업무 체크리스트 */}
+            <div style={{ flex: 1, overflowY: "auto", border: "1px solid var(--color-border)", borderRadius: 6, padding: "4px 0" }}>
+              {items.map((uw) => (
+                <label
+                  key={uw.unitWorkId}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", cursor: "pointer", borderBottom: "1px solid var(--color-border)", fontSize: 13 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedUwIds.has(uw.unitWorkId)}
+                    onChange={(e) => {
+                      setSelectedUwIds((prev) => {
+                        const next = new Set(prev);
+                        if (e.target.checked) next.add(uw.unitWorkId);
+                        else next.delete(uw.unitWorkId);
+                        return next;
+                      });
+                    }}
+                  />
+                  <span style={{ color: "var(--color-text-secondary)", fontSize: 11, flexShrink: 0 }}>{uw.displayId}</span>
+                  <span style={{ flex: 1 }}>{uw.name}</span>
+                </label>
+              ))}
+            </div>
+
+            {/* 하단 버튼 */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+              <button
+                style={secondaryBtnStyle}
+                onClick={() => setPrdRangeOpen(false)}
+                disabled={prdLoading}
+              >
+                취소
+              </button>
+              <button
+                style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 18px" }}
+                disabled={selectedUwIds.size === 0 || prdLoading}
+                onClick={() => downloadPrd(Array.from(selectedUwIds), prdRangeMode)}
+              >
+                {prdLoading ? "생성 중..." : `${selectedUwIds.size}개 다운로드`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PID-00042 삭제 확인 팝업 */}
       {deleteTarget && (
@@ -740,6 +1019,41 @@ const cancelBtnStyle: React.CSSProperties = {
   color:        "var(--color-text-secondary)",
   fontSize:     12,
   cursor:       "pointer",
+};
+
+const outlineBtnStyle: React.CSSProperties = {
+  padding:      "8px 16px",
+  borderRadius: 6,
+  border:       "1px solid var(--color-border)",
+  background:   "var(--color-bg-card)",
+  color:        "var(--color-text-primary)",
+  fontSize:     14,
+  cursor:       "pointer",
+};
+
+const dropdownPanelStyle: React.CSSProperties = {
+  position:     "absolute",
+  top:          "calc(100% + 4px)",
+  left:         0,
+  zIndex:       200,
+  background:   "var(--color-bg-card)",
+  border:       "1px solid var(--color-border)",
+  borderRadius: 8,
+  boxShadow:    "0 4px 16px rgba(0,0,0,0.13)",
+  minWidth:     140,
+  overflow:     "hidden",
+};
+
+const dropdownItemStyle: React.CSSProperties = {
+  display:    "block",
+  width:      "100%",
+  padding:    "9px 16px",
+  background: "none",
+  border:     "none",
+  cursor:     "pointer",
+  fontSize:   13,
+  color:      "var(--color-text-primary)",
+  textAlign:  "left",
 };
 
 const dangerBtnStyle: React.CSSProperties = {

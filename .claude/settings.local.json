@@ -124,7 +124,21 @@
       "Bash(node -r dotenv/config -e \":*)",
       "Bash(curl -s \"http://localhost:3000/api/worker/tasks?limit=10\" -H \"X-Worker-Key: specode-worker-dev-key\")",
       "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/b46b9fdd-7e73-41dd-97c6-05288c5ccda8/start\" -H \"X-Worker-Key: specode-worker-dev-key\")",
-      "Bash(set DOTENV_CONFIG_PATH=.env.local)"
+      "Bash(set DOTENV_CONFIG_PATH=.env.local)",
+      "Bash(find \"D:\\\\source\\\\FirstSpecode\\\\src\\\\app\\\\\\(main\\)\\\\projects\\\\[id]\" -type f -name \"*.tsx\")",
+      "Bash(ls D:/source/FirstSpecode/src/app/api/projects/[id]/)",
+      "Bash(ls \"D:/source/FirstSpecode/src/app/\\(main\\)/projects/[id]/\")",
+      "Bash(grep -n \"mbr_nm\\\\|mber_nm\\\\|mber_nm\\\\|TbMember\\\\|tbMember\" d:/source/FirstSpecode/src/app/api/projects/[id]/areas/route.ts)",
+      "Bash(ls d:/source/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/prompt-templates/)",
+      "Bash(find d:/source/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/tasks -name \"*.tsx\")",
+      "Bash(node -e \"const { PrismaClient } = require\\(''D:/source/FirstSpecode/node_modules/@prisma/client''\\); const p = new PrismaClient\\(\\); console.log\\(Object.keys\\(p\\).filter\\(k => k.includes\\(''review''\\) || k.includes\\(''Review''\\)\\)\\)\")",
+      "Bash(tail -60 d:/source/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/unit-works/page.tsx)",
+      "Bash(ls d:/source/FirstSpecode/src/app/api/projects/[id]/prd/)",
+      "Bash(DATABASE_URL=\"postgresql://x:x@x/x\" DIRECT_URL=\"postgresql://x:x@x/x\" npx prisma generate)",
+      "Bash(ls \"d:/source/FirstSpecode/src/app/\\(main\\)/projects/[id]/\")",
+      "Bash(wc -l \"D:\\\\source\\\\FirstSpecode\\\\src\\\\app\\\\\\(main\\)\\\\projects\\\\[id]\\\\ai-tasks\\\\page.tsx\")",
+      "Bash(wc -l \"D:/source/FirstSpecode/src/app/\\(main\\)/projects/[id]/ai-tasks/page.tsx\")",
+      "Bash(du -sh /d/tmp/*)"
     ]
   }
 }

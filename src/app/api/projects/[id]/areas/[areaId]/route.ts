@@ -35,7 +35,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       prisma.tbDsArea.findUnique({
         where:   { area_id: areaId },
         include: {
-          screen: { select: { scrn_id: true, scrn_nm: true, scrn_display_id: true } },
+          screen: { select: { scrn_id: true, scrn_nm: true, scrn_display_id: true, unit_work_id: true } },
           // 하단 기능 목록 (AR-00074, FID-00163) — sort_ordr 오름차순
           functions: {
             orderBy: { sort_ordr: "asc" },
@@ -91,6 +91,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       screenId:    area.scrn_id ?? null,
       screenName:  area.screen?.scrn_nm ?? "미분류",
       screenDisplayId: area.screen?.scrn_display_id ?? null,
+      unitWorkId:  area.screen?.unit_work_id ?? null,
       excalidrawData:  area.excaldw_data ?? null,
       aiTasks,
       // 요약 정보 (AR-00073)

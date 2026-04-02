@@ -325,9 +325,13 @@ function ProjectsPageInner() {
 
               <RoleBadge role={item.myRole} />
 
-              {/* 설정 아이콘 */}
+              {/* 설정 아이콘 — 클릭 시 프로젝트 설정 이동 (FID-00055) */}
               <button
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentProjectId(item.projectId);
+                  router.push(`/projects/${item.projectId}/settings`);
+                }}
                 title="프로젝트 설정"
                 style={{
                   background: "none", border: "none", cursor: "pointer",

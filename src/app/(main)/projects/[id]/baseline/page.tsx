@@ -10,7 +10,7 @@
  */
 
 import { Suspense, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
@@ -24,17 +24,6 @@ type BaselineItem = {
   requirementCount: number;
   confirmedAt:      string;
   confirmerEmail:   string;
-};
-
-type SnapshotReq = {
-  reqId:     string;
-  displayId: string;
-  name:      string;
-  priority:  string | null;
-  source:    string | null;
-  orgnlCn:   string;
-  curncyCn:  string;
-  specCn:    string;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -51,11 +40,11 @@ export default function BaselinePage() {
 
 function BaselinePageInner() {
   const params      = useParams<{ id: string }>();
+  const router      = useRouter();
   const queryClient = useQueryClient();
   const projectId   = params.id;
 
-  const [createOpen,     setCreateOpen]     = useState(false);
-  const [selectedBaseline, setSelectedBaseline] = useState<BaselineItem | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   // ── 기준선 목록 ────────────────────────────────────────────────────────────
   const { data, isLoading } = useQuery({
@@ -118,21 +107,20 @@ function BaselinePageInner() {
           {items.map((item, idx) => (
             <div
               key={item.baselineId}
+              onClick={() => router.push(`/projects/${projectId}/baseline/${item.baselineId}`)}
               style={{
                 ...gridRowStyle,
                 borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+                cursor: "pointer",
               }}
             >
               <div style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>{idx + 1}</div>
 
-              {/* 기준선명 — 클릭 시 스냅샷 조회 */}
+              {/* 기준선명 */}
               <div>
-                <button
-                  onClick={() => setSelectedBaseline(item)}
-                  style={linkBtnStyle}
-                >
+                <span style={{ fontSize: 14, fontWeight: 600, color: "var(--color-primary, #1976d2)" }}>
                   {item.name}
-                </button>
+                </span>
                 {item.comment && (
                   <span style={{ fontSize: 12, color: "#888", marginLeft: 8 }}>{item.comment}</span>
                 )}
@@ -177,14 +165,6 @@ function BaselinePageInner() {
         />
       )}
 
-      {/* 스냅샷 요구사항 목록 팝업 (FID-00125) */}
-      {selectedBaseline && (
-        <SnapshotViewPopup
-          projectId={projectId}
-          baseline={selectedBaseline}
-          onClose={() => setSelectedBaseline(null)}
-        />
-      )}
     </div>
   );
 }
@@ -269,135 +249,6 @@ function CreateBaselinePopup({
   );
 }
 
-// ── 스냅샷 요구사항 목록 팝업 (FID-00125) ────────────────────────────────────
-
-function SnapshotViewPopup({
-  projectId,
-  baseline,
-  onClose,
-}: {
-  projectId: string;
-  baseline:  BaselineItem;
-  onClose:   () => void;
-}) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  const { data, isLoading } = useQuery({
-    queryKey: ["baseline-requirements", projectId, baseline.baselineId],
-    queryFn:  () =>
-      authFetch<{ data: { items: SnapshotReq[]; totalCount: number; name: string; confirmedAt: string } }>(
-        `/api/projects/${projectId}/baseline/${baseline.baselineId}/requirements`
-      ).then((r) => r.data),
-  });
-
-  const items = data?.items ?? [];
-
-  return (
-    <div style={{ ...overlayStyle, alignItems: "flex-start", overflowY: "auto" }} onClick={onClose}>
-      <div
-        style={{
-          background:   "var(--color-bg-card)",
-          borderRadius: 10,
-          padding:      "28px 32px",
-          width:        "90vw",
-          maxWidth:     900,
-          margin:       "40px auto",
-          boxShadow:    "0 8px 32px rgba(0,0,0,0.18)",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>{baseline.name}</div>
-            <div style={{ fontSize: 13, color: "var(--color-text-secondary)", marginTop: 4 }}>
-              확정일: {new Date(baseline.confirmedAt).toLocaleString("ko-KR", {
-                year: "numeric", month: "2-digit", day: "2-digit",
-                hour: "2-digit", minute: "2-digit",
-              })} · 요구사항 {baseline.requirementCount}건
-            </div>
-          </div>
-          <button onClick={onClose} style={secondaryBtnStyle}>닫기</button>
-        </div>
-
-        {isLoading && (
-          <div style={{ padding: "40px 0", textAlign: "center", color: "#888" }}>로딩 중...</div>
-        )}
-
-        {!isLoading && items.length === 0 && (
-          <div style={{ padding: "40px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-            스냅샷 데이터가 없습니다.
-          </div>
-        )}
-
-        {!isLoading && items.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {items.map((req: SnapshotReq) => (
-              <div
-                key={req.reqId}
-                style={{
-                  border:       "1px solid var(--color-border)",
-                  borderRadius: 6,
-                  overflow:     "hidden",
-                }}
-              >
-                {/* 헤더 행 */}
-                <div
-                  style={{
-                    display:      "flex",
-                    alignItems:   "center",
-                    padding:      "10px 14px",
-                    cursor:       "pointer",
-                    background:   "var(--color-bg-muted)",
-                    gap:          10,
-                  }}
-                  onClick={() => setExpandedId((prev) => (prev === req.reqId ? null : req.reqId))}
-                >
-                  <span style={{ fontSize: 11, color: "#aaa", minWidth: 80 }}>{req.displayId}</span>
-                  <span style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>{req.name}</span>
-                  {req.priority && (
-                    <span style={{
-                      fontSize: 11, padding: "1px 6px", borderRadius: 4,
-                      background: req.priority === "HIGH" ? "#ffebee" : req.priority === "MEDIUM" ? "#fff8e1" : "#e8f5e9",
-                      color:      req.priority === "HIGH" ? "#c62828" : req.priority === "MEDIUM" ? "#f57f17" : "#2e7d32",
-                    }}>
-                      {req.priority === "HIGH" ? "높음" : req.priority === "MEDIUM" ? "중간" : "낮음"}
-                    </span>
-                  )}
-                  <span style={{ fontSize: 13, color: "#888" }}>
-                    {expandedId === req.reqId ? "▲" : "▼"}
-                  </span>
-                </div>
-
-                {/* 상세 내용 펼침 */}
-                {expandedId === req.reqId && (
-                  <div style={{ padding: "14px 16px", borderTop: "1px solid var(--color-border)", fontSize: 13 }}>
-                    {[
-                      { label: "원문",      value: req.orgnlCn },
-                      { label: "현행화",    value: req.curncyCn },
-                      { label: "상세 명세", value: req.specCn },
-                    ].map(({ label, value }) =>
-                      value ? (
-                        <div key={label} style={{ marginBottom: 12 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 4 }}>
-                            {label}
-                          </div>
-                          <pre style={{ margin: 0, fontFamily: "inherit", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "var(--color-text-primary)", lineHeight: 1.6 }}>
-                            {value}
-                          </pre>
-                        </div>
-                      ) : null
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
 const GRID_TEMPLATE = "50px 1fr 180px 200px 100px";
@@ -422,18 +273,6 @@ const gridRowStyle: React.CSSProperties = {
   padding:             "12px 16px",
   alignItems:          "center",
   background:          "var(--color-bg-card)",
-};
-
-const linkBtnStyle: React.CSSProperties = {
-  background:     "none",
-  border:         "none",
-  cursor:         "pointer",
-  color:          "var(--color-primary, #1976d2)",
-  fontSize:       14,
-  fontWeight:     600,
-  padding:        0,
-  textAlign:      "left",
-  textDecoration: "underline",
 };
 
 const primaryBtnStyle: React.CSSProperties = {

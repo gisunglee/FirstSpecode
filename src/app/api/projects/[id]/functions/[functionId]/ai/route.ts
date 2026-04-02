@@ -57,23 +57,65 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return apiError("VALIDATION_ERROR", "설명(description)을 먼저 작성해 주세요.", 400);
     }
 
-    // req_cn: 요청 바디에 있으면 그대로 사용, 없으면 기존처럼 생성
-    let finalReqCn = req_cn?.trim();
-    if (!finalReqCn) {
-      const TASK_LABEL: Record<string, string> = {
-        INSPECT: "AI 명세 누락 검토",
-        IMPACT:  "AI 영향도 분석",
-        DESIGN:  "AI 컬럼 매핑 초안 생성",
-      };
-      const reqParts: string[] = [];
-      if ((coment_cn || comment)?.trim()) reqParts.push((coment_cn || comment)!.trim());
-      reqParts.push(
-        `[${TASK_LABEL[taskType]}]`,
-        `기능명: ${fn.func_nm ?? ""}`,
-        `유형: ${fn.func_ty_code ?? ""}`,
-        fn.func_dc?.trim() ? `\n[설명]\n${fn.func_dc.trim()}` : "",
-      );
-      finalReqCn = reqParts.filter(Boolean).join("\n");
+    let finalReqCn: string;
+
+    if (taskType === "DESIGN") {
+      // DESIGN: 프롬프트 템플릿(task_ty_code=DESIGN, ref_ty_code=FUNCTION, use_yn=Y) 조회
+      // 프로젝트 전용 템플릿 우선, 없으면 시스템 공통 템플릿(prjct_id=null) 사용
+      // 여러 개일 경우 마지막에 추가된 것 사용 (creat_dt desc)
+      // 프로젝트 전용 템플릿이 있으면 시스템 공통보다 우선
+      const promptTmpl = await prisma.tbAiPromptTemplate.findFirst({
+        where: {
+          OR: [{ prjct_id: projectId }, { prjct_id: null }],
+          task_ty_code: "DESIGN",
+          ref_ty_code:  "FUNCTION",
+          use_yn:       "Y",
+        },
+        orderBy: [
+          { prjct_id: { sort: "desc", nulls: "last" } },
+          { creat_dt:  "desc" },
+        ],
+      });
+
+      const sysPrompt   = promptTmpl?.sys_prompt_cn?.trim() ?? "";
+      const commentPart = (coment_cn || comment)?.trim() ?? "";
+      const descPart    = (req_cn || fn.func_dc)?.trim() ?? "";
+
+      // 시스템 프롬프트 뒤에 <COMMENT>와 <점검 대상> 태그로 내용 추가
+      const parts: string[] = [];
+      if (sysPrompt)    parts.push(sysPrompt);
+      if (commentPart)  parts.push(`<COMMENT>\n${commentPart}\n</COMMENT>`);
+      if (descPart)     parts.push(`<점검 대상>\n${descPart}\n</점검 대상>`);
+      finalReqCn = parts.join("\n\n");
+
+      // 사용 횟수 증가
+      if (promptTmpl) {
+        await prisma.tbAiPromptTemplate.update({
+          where: { tmpl_id: promptTmpl.tmpl_id },
+          data:  { use_cnt: { increment: 1 } },
+        });
+      }
+    } else {
+      // INSPECT / IMPACT: 기존 방식 유지
+      // req_cn이 바디에 포함되어 있으면 그대로 사용, 없으면 레거시 형식으로 생성
+      const rawReqCn = req_cn?.trim();
+      if (rawReqCn) {
+        finalReqCn = rawReqCn;
+      } else {
+        const TASK_LABEL: Record<string, string> = {
+          INSPECT: "AI 명세 누락 검토",
+          IMPACT:  "AI 영향도 분석",
+        };
+        const reqParts: string[] = [];
+        if ((coment_cn || comment)?.trim()) reqParts.push((coment_cn || comment)!.trim());
+        reqParts.push(
+          `[${TASK_LABEL[taskType] ?? taskType}]`,
+          `기능명: ${fn.func_nm ?? ""}`,
+          `유형: ${fn.func_ty_code ?? ""}`,
+          fn.func_dc?.trim() ? `\n[설명]\n${fn.func_dc.trim()}` : "",
+        );
+        finalReqCn = reqParts.filter(Boolean).join("\n");
+      }
     }
 
     const task = await prisma.tbAiTask.create({
