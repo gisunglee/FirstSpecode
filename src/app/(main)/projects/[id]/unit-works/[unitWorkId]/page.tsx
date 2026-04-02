@@ -361,9 +361,9 @@ function UnitWorkDetailPageInner() {
           <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)", flexShrink: 0 }}>
             {isNew ? "단위업무 신규 등록" : `${detail?.displayId ?? ""} 단위업무 편집`}
           </span>
-          {/* 타이틀과 70px 띄워서 진척률 표시 — 수정 모드에서만 */}
+          {/* 타이틀과 40px 띄워서 진척률 표시 — 수정 모드에서만 */}
           {!isNew && detail && (
-            <div style={{ marginLeft: 70 }}>
+            <div style={{ marginLeft: 40 }}>
               <ProgressTracker
                 projectId={projectId}
                 refTable="tb_ds_unit_work"
@@ -379,9 +379,10 @@ function UnitWorkDetailPageInner() {
           {!isNew && (
             <button
               onClick={() => setPrdOpen(true)}
+              title="PRD 다운로드"
               style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 12px" }}
             >
-              PRD 다운로드
+              PRD ↓
             </button>
           )}
           <button

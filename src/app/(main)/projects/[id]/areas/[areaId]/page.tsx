@@ -450,9 +450,10 @@ function AreaDetailPageInner() {
           {!isNew && (
             <button
               onClick={() => setPrdOpen(true)}
+              title="PRD 다운로드"
               style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 12px" }}
             >
-              PRD 다운로드
+              PRD ↓
             </button>
           )}
           {!isNew && (

@@ -258,187 +258,191 @@ function ReviewDetailPageInner() {
         </div>
       </div>
 
-      <div style={{ padding: "4px 24px 48px", maxWidth: 960 }}>
+      {/* 2-column grid: 좌(요청+답변) 70% / 우(코멘트) 30% */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: "0 20px", padding: "4px 24px 48px", alignItems: "start" }}>
 
-        {/* ── 메타 카드 ─────────────────────────────────────────── */}
-        <div style={titleCardStyle}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            {/* 상태 배지 */}
-            <span style={{ display: "inline-flex", alignItems: "center", padding: "3px 11px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: st.bg, color: st.color }}>
-              {st.label}
-            </span>
-            {/* 피드백 코드 배지 */}
-            {data.fdbkCode && FDBK_MAP[data.fdbkCode] && (
-              <span style={{ display: "inline-flex", alignItems: "center", padding: "3px 11px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: FDBK_MAP[data.fdbkCode].bg, color: FDBK_MAP[data.fdbkCode].color }}>
-                {FDBK_MAP[data.fdbkCode].label}
+        {/* ── 왼쪽 컬럼: 메타·요청·답변 ──────────────────────────── */}
+        <div>
+          {/* ── 메타 카드 ─────────────────────────────────────────── */}
+          <div style={titleCardStyle}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              {/* 상태 배지 */}
+              <span style={{ display: "inline-flex", alignItems: "center", padding: "3px 11px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: st.bg, color: st.color }}>
+                {st.label}
               </span>
-            )}
-            {/* 별점 수치 */}
-            {data.stsfScr != null && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "#fffbeb", color: "#b45309" }}>
-                <span style={{ fontSize: 13 }}>★</span> {data.stsfScr}/5
-              </span>
-            )}
-            <span style={metaSepStyle}>·</span>
-            <span style={metaItemStyle}>요청자 <strong style={metaValueStyle}>{data.reqMemberNm}</strong></span>
-            <span style={metaSepStyle}>·</span>
-            {editMode ? (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>답변자</span>
-                <select
-                  value={revwrMemberId}
-                  onChange={(e) => setRevwrMemberId(e.target.value)}
-                  style={{ padding: "3px 8px", borderRadius: 5, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-primary)", fontSize: 12, cursor: "pointer", outline: "none" }}
-                >
-                  {memberOptions.map((m) => (
-                    <option key={m.memberId} value={m.memberId}>
-                      {m.name ?? m.email}
-                    </option>
-                  ))}
-                </select>
-              </span>
-            ) : (
-              <span style={metaItemStyle}>답변자 <strong style={metaValueStyle}>{data.revwrMemberNm}</strong></span>
-            )}
-            <span style={metaSepStyle}>·</span>
-            <span style={metaItemStyle}>{new Date(data.createdAt).toLocaleDateString("ko-KR")} 요청</span>
-            {data.completedAt && (
-              <>
-                <span style={metaSepStyle}>·</span>
-                <span style={metaItemStyle}>{new Date(data.completedAt).toLocaleDateString("ko-KR")} 완료</span>
-              </>
-            )}
+              {/* 피드백 코드 배지 */}
+              {data.fdbkCode && FDBK_MAP[data.fdbkCode] && (
+                <span style={{ display: "inline-flex", alignItems: "center", padding: "3px 11px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: FDBK_MAP[data.fdbkCode].bg, color: FDBK_MAP[data.fdbkCode].color }}>
+                  {FDBK_MAP[data.fdbkCode].label}
+                </span>
+              )}
+              {/* 별점 수치 */}
+              {data.stsfScr != null && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "#fffbeb", color: "#b45309" }}>
+                  <span style={{ fontSize: 13 }}>★</span> {data.stsfScr}/5
+                </span>
+              )}
+              <span style={metaSepStyle}>·</span>
+              <span style={metaItemStyle}>요청자 <strong style={metaValueStyle}>{data.reqMemberNm}</strong></span>
+              <span style={metaSepStyle}>·</span>
+              {editMode ? (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>답변자</span>
+                  <select
+                    value={revwrMemberId}
+                    onChange={(e) => setRevwrMemberId(e.target.value)}
+                    style={{ padding: "3px 8px", borderRadius: 5, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-primary)", fontSize: 12, cursor: "pointer", outline: "none" }}
+                  >
+                    {memberOptions.map((m) => (
+                      <option key={m.memberId} value={m.memberId}>
+                        {m.name ?? m.email}
+                      </option>
+                    ))}
+                  </select>
+                </span>
+              ) : (
+                <span style={metaItemStyle}>답변자 <strong style={metaValueStyle}>{data.revwrMemberNm}</strong></span>
+              )}
+              <span style={metaSepStyle}>·</span>
+              <span style={metaItemStyle}>{new Date(data.createdAt).toLocaleDateString("ko-KR")} 요청</span>
+              {data.completedAt && (
+                <>
+                  <span style={metaSepStyle}>·</span>
+                  <span style={metaItemStyle}>{new Date(data.completedAt).toLocaleDateString("ko-KR")} 완료</span>
+                </>
+              )}
 
-            {/* 답변 평가 별점 (완료 상태, 요청자) */}
-            {canRate && (
-              <div style={{ display: "flex", alignItems: "center", gap: 6, borderLeft: "1px solid var(--color-border)", paddingLeft: 10, marginLeft: 4 }}>
-                <span style={{ fontSize: 12, color: "var(--color-text-secondary)", fontWeight: 500, flexShrink: 0 }}>평가</span>
-                <div style={{ display: "flex", gap: 1 }}>
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      onClick={() => stsfMutation.mutate(star)}
-                      disabled={stsfMutation.isPending}
-                      title={`${star}점`}
-                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "0 1px", color: star <= (data.stsfScr ?? 0) ? "#f59e0b" : "#d1d5db" }}
-                    >★</button>
-                  ))}
+              {/* 답변 평가 별점 (완료 상태, 요청자) */}
+              {canRate && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, borderLeft: "1px solid var(--color-border)", paddingLeft: 10, marginLeft: 4 }}>
+                  <span style={{ fontSize: 12, color: "var(--color-text-secondary)", fontWeight: 500, flexShrink: 0 }}>평가</span>
+                  <div style={{ display: "flex", gap: 1 }}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        onClick={() => stsfMutation.mutate(star)}
+                        disabled={stsfMutation.isPending}
+                        title={`${star}점`}
+                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "0 1px", color: star <= (data.stsfScr ?? 0) ? "#f59e0b" : "#d1d5db" }}
+                      >★</button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* 수정/삭제/저장 버튼 */}
-            <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-              {canEditRequest && !editMode && (
-                <>
-                  <button onClick={() => setEditMode(true)} style={{ ...ghostBtnStyle }}>수정</button>
-                  <button onClick={() => { if (!confirm("삭제하시겠습니까?")) return; deleteMutation.mutate(); }} style={{ ...ghostBtnStyle, color: "#e53935", borderColor: "#e5393550" }}>삭제</button>
-                </>
-              )}
-              {editMode && (
-                <>
-                  <button onClick={() => editMutation.mutate()} disabled={editMutation.isPending} style={{ ...solidBtnStyle }}>
-                    {editMutation.isPending ? "저장 중..." : "저장"}
-                  </button>
-                  <button onClick={() => { setEditMode(false); setTitleNm(data.titleNm); setReviewCn(data.reviewCn); setRevwrMemberId(data.revwrMemberId); }} style={{ ...ghostBtnStyle }}>취소</button>
-                </>
-              )}
+              {/* 수정/삭제/저장 버튼 */}
+              <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                {canEditRequest && !editMode && (
+                  <>
+                    <button onClick={() => setEditMode(true)} style={{ ...ghostBtnStyle }}>수정</button>
+                    <button onClick={() => { if (!confirm("삭제하시겠습니까?")) return; deleteMutation.mutate(); }} style={{ ...ghostBtnStyle, color: "#e53935", borderColor: "#e5393550" }}>삭제</button>
+                  </>
+                )}
+                {editMode && (
+                  <>
+                    <button onClick={() => editMutation.mutate()} disabled={editMutation.isPending} style={{ ...solidBtnStyle }}>
+                      {editMutation.isPending ? "저장 중..." : "저장"}
+                    </button>
+                    <button onClick={() => { setEditMode(false); setTitleNm(data.titleNm); setReviewCn(data.reviewCn); setRevwrMemberId(data.revwrMemberId); }} style={{ ...ghostBtnStyle }}>취소</button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* ── 요청 내용 카드 ────────────────────────────────────── */}
-        <div style={contentCardStyle}>
-          {/* 제목 */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={cardLabelStyle}>제목</div>
+          {/* ── 요청 내용 카드 ────────────────────────────────────── */}
+          <div style={contentCardStyle}>
+            {/* 제목 */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={cardLabelStyle}>제목</div>
+              {editMode ? (
+                <input
+                  value={titleNm}
+                  onChange={(e) => setTitleNm(e.target.value)}
+                  style={inputStyle}
+                  placeholder="리뷰 제목을 입력하세요"
+                  autoFocus
+                />
+              ) : (
+                <div style={{ padding: "14px 16px", borderRadius: 6, background: "var(--color-bg-muted)", fontSize: 14, fontWeight: 500, color: "var(--color-text-primary)" }}>
+                  {data.titleNm}
+                </div>
+              )}
+            </div>
+
+            <div style={cardLabelStyle}>요청 내용</div>
             {editMode ? (
-              <input
-                value={titleNm}
-                onChange={(e) => setTitleNm(e.target.value)}
-                style={inputStyle}
-                placeholder="리뷰 제목을 입력하세요"
-                autoFocus
+              <>
+                {getHtmlByteSize(reviewCn) > WARN_SIZE && (
+                  <div style={warnBannerStyle}>⚠ 내용이 큽니다. 이미지를 줄이거나 내용을 나눠 작성해 주세요.</div>
+                )}
+                <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
+                  <RichEditor value={reviewCn} onChange={setReviewCn} minHeight={200} />
+                </div>
+              </>
+            ) : (
+              <div
+                className="sp-markdown"
+                style={{ padding: "14px 16px", background: "var(--color-bg-muted)", borderRadius: 6, minHeight: 80, lineHeight: 1.7 }}
+                dangerouslySetInnerHTML={{ __html: data.reviewCn || "<p style='color:#aaa'>내용 없음</p>" }}
+              />
+            )}
+          </div>
+
+          {/* ── 답변 내용 카드 ────────────────────────────────────── */}
+          <div style={contentCardStyle}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <span style={cardLabelStyle}>답변 내용</span>
+              {canReply && !resultMode && (
+                <button onClick={() => setResultMode(true)} style={{ ...ghostBtnStyle }}>
+                  답변 {data.resultCn ? "수정" : "작성"}
+                </button>
+              )}
+              {resultMode && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 12, color: "var(--color-text-secondary)", flexShrink: 0 }}>저장 후 상태:</span>
+                  <select
+                    value={resultStatus}
+                    onChange={(e) => setResultStatus(e.target.value)}
+                    style={{ padding: "4px 10px", borderRadius: 6, fontSize: 12, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-primary)", cursor: "pointer", outline: "none" }}
+                  >
+                    {REVIEWER_STATUSES.map((code) => (
+                      <option key={code} value={code}>{STATUS_MAP[code]?.label ?? code}</option>
+                    ))}
+                  </select>
+                  <button onClick={() => { setResultMode(false); setResultCn(data.resultCn ?? ""); }} style={{ ...ghostBtnStyle }}>취소</button>
+                  <button onClick={() => resultMutation.mutate()} disabled={resultMutation.isPending} style={{ ...solidBtnStyle }}>
+                    {resultMutation.isPending ? "저장 중..." : "답변 저장"}
+                  </button>
+                </div>
+              )}
+            </div>
+            {resultMode ? (
+              <>
+                {getHtmlByteSize(resultCn) > WARN_SIZE && (
+                  <div style={warnBannerStyle}>⚠ 내용이 큽니다. 이미지를 줄이거나 내용을 나눠 작성해 주세요.</div>
+                )}
+                <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
+                  <RichEditor value={resultCn} onChange={setResultCn} placeholder="답변 내용을 작성하세요. 이미지는 Ctrl+V로 붙여넣기 가능합니다." minHeight={320} />
+                </div>
+              </>
+            ) : data.resultCn ? (
+              <div
+                className="sp-markdown"
+                style={{ padding: "14px 16px", background: "var(--color-bg-muted)", borderRadius: 6, minHeight: 60, lineHeight: 1.7 }}
+                dangerouslySetInnerHTML={{ __html: data.resultCn }}
               />
             ) : (
-              <div style={{ padding: "14px 16px", borderRadius: 6, background: "var(--color-bg-muted)", fontSize: 14, fontWeight: 500, color: "var(--color-text-primary)" }}>
-                {data.titleNm}
+              <div style={{ padding: "32px 0", textAlign: "center", color: "#bbb", fontSize: 13 }}>
+                아직 답변이 없습니다.
               </div>
             )}
           </div>
-
-          <div style={cardLabelStyle}>요청 내용</div>
-          {editMode ? (
-            <>
-              {getHtmlByteSize(reviewCn) > WARN_SIZE && (
-                <div style={warnBannerStyle}>⚠ 내용이 큽니다. 이미지를 줄이거나 내용을 나눠 작성해 주세요.</div>
-              )}
-              <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
-                <RichEditor value={reviewCn} onChange={setReviewCn} minHeight={200} />
-              </div>
-            </>
-          ) : (
-            <div
-              className="sp-markdown"
-              style={{ padding: "14px 16px", background: "var(--color-bg-muted)", borderRadius: 6, minHeight: 80, lineHeight: 1.7 }}
-              dangerouslySetInnerHTML={{ __html: data.reviewCn || "<p style='color:#aaa'>내용 없음</p>" }}
-            />
-          )}
         </div>
 
-        {/* ── 답변 내용 카드 ────────────────────────────────────── */}
-        <div style={contentCardStyle}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-            <span style={cardLabelStyle}>답변 내용</span>
-            {canReply && !resultMode && (
-              <button onClick={() => setResultMode(true)} style={{ ...ghostBtnStyle }}>
-                답변 {data.resultCn ? "수정" : "작성"}
-              </button>
-            )}
-            {resultMode && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 12, color: "var(--color-text-secondary)", flexShrink: 0 }}>저장 후 상태:</span>
-                <select
-                  value={resultStatus}
-                  onChange={(e) => setResultStatus(e.target.value)}
-                  style={{ padding: "4px 10px", borderRadius: 6, fontSize: 12, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-primary)", cursor: "pointer", outline: "none" }}
-                >
-                  {REVIEWER_STATUSES.map((code) => (
-                    <option key={code} value={code}>{STATUS_MAP[code]?.label ?? code}</option>
-                  ))}
-                </select>
-                <button onClick={() => { setResultMode(false); setResultCn(data.resultCn ?? ""); }} style={{ ...ghostBtnStyle }}>취소</button>
-                <button onClick={() => resultMutation.mutate()} disabled={resultMutation.isPending} style={{ ...solidBtnStyle }}>
-                  {resultMutation.isPending ? "저장 중..." : "답변 저장"}
-                </button>
-              </div>
-            )}
-          </div>
-          {resultMode ? (
-            <>
-              {getHtmlByteSize(resultCn) > WARN_SIZE && (
-                <div style={warnBannerStyle}>⚠ 내용이 큽니다. 이미지를 줄이거나 내용을 나눠 작성해 주세요.</div>
-              )}
-              <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
-                <RichEditor value={resultCn} onChange={setResultCn} placeholder="답변 내용을 작성하세요. 이미지는 Ctrl+V로 붙여넣기 가능합니다." minHeight={320} />
-              </div>
-            </>
-          ) : data.resultCn ? (
-            <div
-              className="sp-markdown"
-              style={{ padding: "14px 16px", background: "var(--color-bg-muted)", borderRadius: 6, minHeight: 60, lineHeight: 1.7 }}
-              dangerouslySetInnerHTML={{ __html: data.resultCn }}
-            />
-          ) : (
-            <div style={{ padding: "32px 0", textAlign: "center", color: "#bbb", fontSize: 13 }}>
-              아직 답변이 없습니다.
-            </div>
-          )}
-        </div>
-
-        {/* ── 코멘트 스레드 ─────────────────────────────────────── */}
-        <div style={{ marginTop: 32 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: 14 }}>
+        {/* ── 오른쪽 컬럼: 코멘트 스레드 ─────────────────────────── */}
+        <div style={{ paddingTop: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: 14, marginTop: 4 }}>
             코멘트{comments.length > 0 && <span style={{ color: "var(--color-primary, #1976d2)", marginLeft: 6 }}>({comments.length})</span>}
           </div>
 

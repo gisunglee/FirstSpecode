@@ -347,7 +347,7 @@ function UnitWorksPageInner() {
               onClick={() => { setUwDownOpen((v) => !v); setPrdDownOpen(false); }}
               style={{ ...outlineBtnStyle, fontSize: 12, padding: "5px 12px" }}
             >
-              단위업무 다운로드 ▾
+              단위업무 ↓
             </button>
             {uwDownOpen && (
               <div style={dropdownPanelStyle}>
@@ -373,7 +373,7 @@ function UnitWorksPageInner() {
               onClick={() => { setPrdDownOpen((v) => !v); setUwDownOpen(false); }}
               style={{ ...outlineBtnStyle, fontSize: 12, padding: "5px 12px" }}
             >
-              설계 다운로드 ▾
+              설계 ↓
             </button>
             {prdDownOpen && (
               <div style={{ ...dropdownPanelStyle, width: 220, right: 0, left: "auto" }}>

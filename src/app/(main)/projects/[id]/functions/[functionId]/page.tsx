@@ -336,9 +336,10 @@ function FunctionDetailPageInner() {
           {!isNew && (
             <button
               onClick={() => setPrdOpen(true)}
+              title="PRD 다운로드"
               style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 12px" }}
             >
-              PRD 다운로드
+              PRD ↓
             </button>
           )}
 
@@ -373,8 +374,28 @@ function FunctionDetailPageInner() {
                   borderRadius: 12,
                   boxShadow: "0 8px 32px rgba(0,0,0,0.16)",
                   padding: "14px 16px",
-                  minWidth: 280,
+                  minWidth: 340,
                 }}>
+                  <style>{`
+                    .ai-task-card {
+                      transition: background 0.15s, border-color 0.15s;
+                    }
+                    .ai-task-card:hover {
+                      background: rgba(103,80,164,0.07) !important;
+                      border-color: rgba(103,80,164,0.3) !important;
+                    }
+                    .ai-mini-btn {
+                      transition: background 0.12s, color 0.12s, border-color 0.12s;
+                    }
+                    .ai-mini-btn:hover:not(:disabled) {
+                      background: var(--color-bg-muted) !important;
+                      color: var(--color-text-primary) !important;
+                      border-color: rgba(103,80,164,0.35) !important;
+                    }
+                    .ai-mini-btn-run:hover:not(:disabled) {
+                      background: rgba(103,80,164,0.18) !important;
+                    }
+                  `}</style>
                   {/* 패널 헤더 */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                     <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)" }}>AI 작업 현황</span>
@@ -384,12 +405,24 @@ function FunctionDetailPageInner() {
                   {/* AI 작업 카드 목록 */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {AI_TASK_CONFIGS.map(({ taskType, label, desc, icon }) => {
-                      const info        = data?.aiTasks?.[taskType];
-                      const isSpinning  = (aiMutation.isPending && aiMutation.variables?.taskType === taskType)
-                                       || !!(info && ["PENDING", "IN_PROGRESS"].includes(info.status));
-                      const hasDone     = !!(info && ["DONE", "APPLIED", "REJECTED", "FAILED"].includes(info.status));
-                      const dotColor    = AI_STATUS_DOT[info?.status ?? ""] ?? "#ccc";
-                      const statusLabel = info ? (AI_STATUS_LABEL[info.status] ?? info.status) : "대기";
+                      const info             = data?.aiTasks?.[taskType];
+                      // API 요청이 전송 중인지 (뮤테이션 in-flight)
+                      const isMutationPending = aiMutation.isPending && aiMutation.variables?.taskType === taskType;
+                      // 버튼 비활성 조건: API 전송 중이거나 PENDING/IN_PROGRESS 상태
+                      const isSpinning       = isMutationPending
+                                             || !!(info && ["PENDING", "IN_PROGRESS"].includes(info.status));
+                      const hasDone          = !!(info && ["DONE", "APPLIED", "REJECTED", "FAILED"].includes(info.status));
+                      // 도트 색상: 미호출이면 회색
+                      const dotColor         = info ? (AI_STATUS_DOT[info.status] ?? "#ccc") : "#ccc";
+                      // 표시 레이블 결정
+                      // - 미호출 + 요청 전송 중: "대기 중..."
+                      // - 미호출: "-"
+                      // - 상태 있음: AI_STATUS_LABEL 매핑
+                      const statusLabel      = isMutationPending && !info
+                                             ? "대기 중..."
+                                             : info
+                                             ? (AI_STATUS_LABEL[info.status] ?? info.status)
+                                             : "-";
 
                       function handleRun() {
                         if (taskType === "DESIGN") { openDesignConfirm(); return; }
@@ -398,9 +431,9 @@ function FunctionDetailPageInner() {
                       }
 
                       return (
-                        <div key={taskType} style={{
+                        <div key={taskType} className="ai-task-card" style={{
                           display: "flex", alignItems: "center", gap: 12,
-                          padding: "10px 12px",
+                          padding: "10px 14px",
                           borderRadius: 8,
                           border: "1px solid var(--color-border)",
                           background: "var(--color-bg-muted)",
@@ -419,29 +452,32 @@ function FunctionDetailPageInner() {
                             <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)" }}>
                               {label}
                             </div>
-                            <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 1, lineHeight: 1.4 }}>
+                            <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 2, lineHeight: 1.4 }}>
                               {desc}
                             </div>
                           </div>
 
-                          {/* 상태 + 버튼 */}
-                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, flexShrink: 0 }}>
+                          {/* 상태 + 버튼 (우측 고정, 수직 배치) */}
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                               <span style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
                               <span style={{ fontSize: 11, color: dotColor, fontWeight: 600, whiteSpace: "nowrap" }}>
-                                {isSpinning ? "처리 중..." : statusLabel}
+                                {statusLabel}
                               </span>
                             </div>
                             <div style={{ display: "flex", gap: 4 }}>
                               {hasDone && (
                                 <button
+                                  className="ai-mini-btn"
                                   onClick={() => setAiDetailTaskId(info!.aiTaskId)}
+                                  title="결과 보기"
                                   style={aiMiniBtn}
                                 >
-                                  결과보기
+                                  결과
                                 </button>
                               )}
                               <button
+                                className="ai-mini-btn ai-mini-btn-run"
                                 onClick={handleRun}
                                 disabled={isSpinning || aiMutation.isPending}
                                 style={{
@@ -458,10 +494,12 @@ function FunctionDetailPageInner() {
                               </button>
                               {info && (
                                 <button
+                                  className="ai-mini-btn"
                                   onClick={() => setAiHistoryTaskType(taskType)}
-                                  style={aiMiniBtn}
+                                  title="이력 목록"
+                                  style={{ ...aiMiniBtn, fontSize: 13, padding: "2px 6px", lineHeight: 1 }}
                                 >
-                                  이력
+                                  ☰
                                 </button>
                               )}
                             </div>
@@ -1025,11 +1063,11 @@ const AI_STATUS_DOT: Record<string, string> = {
 const AI_STATUS_LABEL: Record<string, string> = {
   PENDING:     "대기 중",
   IN_PROGRESS: "처리 중",
-  DONE:        "완료 — 클릭하여 재요청",
-  APPLIED:     "적용됨 — 클릭하여 재요청",
+  DONE:        "완료",
+  APPLIED:     "적용됨",
   REJECTED:    "반려",
-  FAILED:      "실패 — 클릭하여 재요청",
-  TIMEOUT:     "시간 초과 — 클릭하여 재요청",
+  FAILED:      "실패",
+  TIMEOUT:     "시간 초과",
 };
 
 // ── 설명 예시 / 템플릿 ────────────────────────────────────────────────────────

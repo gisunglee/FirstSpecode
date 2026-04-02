@@ -7,7 +7,8 @@
     "start": "next start",
     "db:push": "dotenv -e .env.local -- prisma db push",
     "db:studio": "dotenv -e .env.local -- prisma studio",
-    "db:generate": "dotenv -e .env.local -- prisma generate"
+    "db:generate": "dotenv -e .env.local -- prisma generate",
+    "postinstall": "node -e \"const fs=require('fs'),f='node_modules/@excalidraw/excalidraw/dist/dev/index.css';if(fs.existsSync(f)){const c=fs.readFileSync(f,'utf8');fs.writeFileSync(f,c.replace(/\\/\\*#\\s*sourceMappingURL=[^*]*\\*\\//g,''));}\""
   },
   "keywords": [],
   "author": "",

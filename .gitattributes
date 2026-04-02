@@ -1,0 +1,23 @@
+# 텍스트 파일 줄바꿈 자동 변환 (Windows CRLF ↔ macOS LF)
+* text=auto
+
+# 명시적으로 LF 강제 (스크립트, 설정 파일)
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.js   text eol=lf
+*.jsx  text eol=lf
+*.json text eol=lf
+*.css  text eol=lf
+*.md   text eol=lf
+*.prisma text eol=lf
+*.env* text eol=lf
+
+# 바이너리 파일 — 변환 없음
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
