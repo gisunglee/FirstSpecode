@@ -750,18 +750,16 @@ const selectStyle: React.CSSProperties = {
 };
 
 const gridHeaderStyle: React.CSSProperties = {
-  display:       "flex",
-  alignItems:    "center",
-  gap:           8,
-  padding:       "7px 10px",
-  marginTop:     10,
-  fontSize:      12,
-  fontWeight:    700,
-  color:         "#444",
-  background:    "#f5f5f5",
-  borderTop:     "1px solid #e0e0e0",
-  borderBottom:  "1px solid #e0e0e0",
-  borderRadius:  "4px 4px 0 0",
+  display:    "flex",
+  alignItems: "center",
+  gap:        8,
+  padding:    "7px 10px",
+  marginTop:  10,
+  fontSize:   12,
+  fontWeight: 700,
+  color:      "#444",
+  background: "#f5f5f5",
+  borderTop:  "1px solid #e0e0e0",
 };
 
 const gridRowStyle: React.CSSProperties = {
