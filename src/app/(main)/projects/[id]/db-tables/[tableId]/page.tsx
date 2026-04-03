@@ -46,47 +46,96 @@ let _keySeq = 0;
 function nextKey() { return `col_${++_keySeq}`; }
 
 // ── DDL 파서 (Oracle / MySQL / PostgreSQL 공통) ────────────────────────────────
+// 지원 형식:
+//   1. 인라인 주석: col_name text NOT NULL, -- 논리명
+//   2. COMMENT ON COLUMN table.col IS '논리명';
+//   3. 일반 CREATE TABLE (논리명 없음)
 
-type ParsedCol = { colPhysclNm: string; dataTyNm: string };
+type ParsedCol = { colPhysclNm: string; dataTyNm: string; colLgclNm: string };
 
 function parseDdl(ddl: string): ParsedCol[] {
   const results: ParsedCol[] = [];
 
-  // CREATE TABLE ... ( ... ) 안의 내용 추출
-  const bodyMatch = ddl.match(/CREATE\s+TABLE\s+[^\s(]+\s*\((.+)\)/is);
-  if (!bodyMatch) return results;
+  // ── 1단계: COMMENT ON COLUMN 파싱 (논리명 맵) ───────────────────────────────
+  // COMMENT ON COLUMN schema.table.col IS '논리명'; 형식
+  const commentMap: Record<string, string> = {};
+  const commentRegex = /COMMENT\s+ON\s+COLUMN\s+[\w."]*\.(\w+)\s+IS\s+'([^']+)'/gi;
+  let cm: RegExpExecArray | null;
+  while ((cm = commentRegex.exec(ddl)) !== null) {
+    commentMap[cm[1].toLowerCase()] = cm[2];
+  }
 
-  const body = bodyMatch[1];
+  // ── 2단계: 줄 단위 인라인 주석 맵 구성 ─────────────────────────────────────
+  // PostgreSQL DDL은 col_def, -- 논리명 형식으로 쉼표 뒤에 주석이 옴.
+  // 쉼표로 분리하면 주석이 다음 파트로 넘어가므로, 미리 줄 단위로 스캔한다.
+  const lineCommentMap: Record<string, string> = {};
+  for (const rawLine of ddl.split("\n")) {
+    const dashPos = rawLine.indexOf("--");
+    if (dashPos === -1) continue;
+    // -- 이전 부분에서 컬럼명 추출 (쉼표 제거 후 첫 단어)
+    const beforeDash = rawLine.slice(0, dashPos).replace(/,\s*$/, "").trim();
+    const colNameMatch = beforeDash.match(/^[`"\[]?(\w+)[`"\]]?\s+\S/);
+    if (colNameMatch) {
+      const comment = rawLine.slice(dashPos + 2).trim();
+      lineCommentMap[colNameMatch[1].toLowerCase()] = comment;
+    }
+  }
 
-  // 괄호 깊이 고려하며 쉼표로 분리
+  // ── 3단계: CREATE TABLE 본문 추출 (괄호 깊이 추적) ──────────────────────────
+  // 정규식으로 테이블 선언의 첫 ( 위치를 찾고, 직접 문자열을 순회해 짝 ) 를 찾는다.
+  // 이렇게 해야 CONSTRAINT/PRIMARY KEY 등 내부 괄호에서 멈추지 않는다.
+  const createMatch = ddl.match(/CREATE\s+TABLE\s+[\w."]+\s*\(/i);
+  if (!createMatch || createMatch.index === undefined) return results;
+
+  const openIdx = createMatch.index + createMatch[0].length - 1; // 첫 ( 위치
+  let depth = 0, bodyStart = -1, bodyEnd = -1;
+  for (let i = openIdx; i < ddl.length; i++) {
+    if (ddl[i] === "(") {
+      if (depth === 0) bodyStart = i + 1;
+      depth++;
+    } else if (ddl[i] === ")") {
+      depth--;
+      if (depth === 0) { bodyEnd = i; break; }
+    }
+  }
+  if (bodyStart === -1 || bodyEnd === -1) return results;
+  const body = ddl.slice(bodyStart, bodyEnd);
+
+  // ── 4단계: 괄호 깊이 고려하여 쉼표로 분리 ──────────────────────────────────
   const parts: string[] = [];
-  let depth = 0, cur = "";
+  let splitDepth = 0, cur = "";
   for (const ch of body) {
-    if (ch === "(") { depth++; cur += ch; }
-    else if (ch === ")") { depth--; cur += ch; }
-    else if (ch === "," && depth === 0) { parts.push(cur.trim()); cur = ""; }
+    if (ch === "(") { splitDepth++; cur += ch; }
+    else if (ch === ")") { splitDepth--; cur += ch; }
+    else if (ch === "," && splitDepth === 0) { parts.push(cur); cur = ""; }
     else { cur += ch; }
   }
-  if (cur.trim()) parts.push(cur.trim());
+  if (cur.trim()) parts.push(cur);
 
-  // 제약조건 라인 제외, 컬럼 파싱
-  const constraintKeywords = /^(CONSTRAINT|PRIMARY\s+KEY|UNIQUE|INDEX|KEY|CHECK|FOREIGN\s+KEY)/i;
+  // ── 5단계: 각 파트 파싱 ────────────────────────────────────────────────────
+  const constraintKeywords = /^\s*(CONSTRAINT|PRIMARY\s+KEY|UNIQUE|INDEX|KEY|CHECK|FOREIGN\s+KEY)/i;
 
   for (const part of parts) {
-    const line = part.replace(/\s+/g, " ").trim();
+    // 주석 제거 후 정리
+    const line = part.replace(/--.*$/m, "").replace(/\s+/g, " ").trim();
     if (!line || constraintKeywords.test(line)) continue;
 
-    // 컬럼명 (백틱, 큰따옴표, 대괄호 처리)
+    // 컬럼명 추출 (백틱, 큰따옴표, 대괄호 처리)
     const colMatch = line.match(/^[`"\[]?(\w+)[`"\]]?\s+(.+)/);
     if (!colMatch) continue;
 
-    const colName = colMatch[1];
-    // 데이터 타입: 첫 번째 단어(괄호 포함) + NOT NULL / NULL 제외
+    const colPhysclNm = colMatch[1];
+
+    // 데이터 타입 추출 (괄호 포함, DEFAULT 이전까지)
     const typeRaw = colMatch[2].trim();
     const typeMatch = typeRaw.match(/^(\w+(?:\s*\([^)]*\))?)/i);
-    const dataType = typeMatch ? typeMatch[1].trim() : typeRaw.split(" ")[0];
+    const dataTyNm = typeMatch ? typeMatch[1].trim() : typeRaw.split(" ")[0];
 
-    results.push({ colPhysclNm: colName, dataTyNm: dataType });
+    // 논리명 우선순위: COMMENT ON COLUMN > 줄 단위 인라인 주석 > 없음
+    const key = colPhysclNm.toLowerCase();
+    const colLgclNm = commentMap[key] ?? lineCommentMap[key] ?? "";
+
+    results.push({ colPhysclNm, dataTyNm, colLgclNm });
   }
 
   return results;
@@ -254,9 +303,9 @@ function DbTableDetailPageInner() {
   function handleDdlApply() {
     if (!ddlParsed) return;
     const newCols: ColDraft[] = ddlParsed.map((p) => ({
-      _key: nextKey(),
+      _key:        nextKey(),
       colPhysclNm: p.colPhysclNm,
-      colLgclNm:   "",
+      colLgclNm:   p.colLgclNm,
       dataTyNm:    p.dataTyNm,
       colDc:       "",
     }));
@@ -502,13 +551,15 @@ function DbTableDetailPageInner() {
                     {ddlParsed.length}개 컬럼을 파싱했습니다. 등록하시겠습니까?
                   </div>
                   <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", padding: "6px 12px", background: "var(--color-bg-muted)", fontSize: 11, fontWeight: 700, color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "6px 12px", background: "var(--color-bg-muted)", fontSize: 11, fontWeight: 700, color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }}>
                       <div>물리 컬럼명</div>
+                      <div>논리 컬럼명</div>
                       <div>데이터 타입</div>
                     </div>
                     {ddlParsed.map((p, i) => (
-                      <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", padding: "5px 12px", borderTop: i === 0 ? "none" : "1px solid var(--color-border)", fontSize: 12 }}>
+                      <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "5px 12px", borderTop: i === 0 ? "none" : "1px solid var(--color-border)", fontSize: 12 }}>
                         <span style={{ fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace", fontWeight: 600, color: "var(--color-text-primary)" }}>{p.colPhysclNm}</span>
+                        <span style={{ color: p.colLgclNm ? "var(--color-text-primary)" : "#bbb" }}>{p.colLgclNm || "—"}</span>
                         <span style={{ fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace", color: "var(--color-text-secondary)" }}>{p.dataTyNm}</span>
                       </div>
                     ))}
