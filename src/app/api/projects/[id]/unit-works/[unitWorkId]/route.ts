@@ -140,13 +140,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             mdfcn_dt:      new Date(),
           },
         }),
-        prisma.tbPjSettingsHistory.create({
+        // 설명 변경 이력 — tb_ds_design_change에 before/after JSON으로 저장
+        prisma.tbDsDesignChange.create({
           data: {
-            prjct_id:    projectId,
+            prjct_id:      projectId,
+            ref_tbl_nm:    "tb_ds_unit_work",
+            ref_id:        unitWorkId,
+            chg_rsn_cn:    "단위업무 설명",
+            snapshot_data: {
+              before: existing.unit_work_dc ?? null,
+              after:  newDescription,
+            },
             chg_mber_id: auth.mberId,
-            chg_item_nm: "단위업무 설명",
-            bfr_val_cn:  existing.unit_work_dc ?? null,
-            aftr_val_cn: newDescription,
           },
         }),
       ]);

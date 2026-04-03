@@ -163,15 +163,19 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           chg_mber_id: auth.mberId,
         },
       }),
-      // 사용자가 명시적으로 이력 저장을 선택한 경우에만 설명 변경 이력 기록
+      // 설명 변경 이력 — tb_ds_design_change에 before/after JSON으로 저장
       ...(saveHistory ? [
-        prisma.tbPjSettingsHistory.create({
+        prisma.tbDsDesignChange.create({
           data: {
-            prjct_id:    projectId,
+            prjct_id:      projectId,
+            ref_tbl_nm:    "tb_ds_screen",
+            ref_id:        screenId,
+            chg_rsn_cn:    "화면 설명",
+            snapshot_data: {
+              before: oldDescription,
+              after:  newDescription,
+            },
             chg_mber_id: auth.mberId,
-            chg_item_nm: "화면 설명",
-            bfr_val_cn:  oldDescription,
-            aftr_val_cn: newDescription,
           },
         }),
       ] : []),

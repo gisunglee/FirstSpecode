@@ -1,9 +1,9 @@
 /**
  * GET /api/projects/[id]/unit-works/[unitWorkId]/history — 단위업무 설명 변경 이력 조회
  *
- * tb_pj_settings_history에서 해당 프로젝트의 "단위업무 설명" 이력을 최신순으로 반환
- * unitWorkId 기준 필터 없이 프로젝트 전체 단위업무 설명 이력이 저장되므로
- * chg_item_nm = "단위업무 설명" AND prjct_id로 필터링
+ * tb_ds_design_change에서 ref_tbl_nm="tb_ds_unit_work", ref_id=unitWorkId,
+ * chg_rsn_cn="단위업무 설명" 조건으로 이력을 최신순 조회
+ * snapshot_data.before / snapshot_data.after 로 이전/이후 값 반환
  *
  * Query:
  *   limit  — 조회 건수 (기본 20, 최대 100)
@@ -43,25 +43,38 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "단위업무를 찾을 수 없습니다.", 404);
     }
 
-    // 이력 조회 — 변경자 정보 함께 조회
-    const histories = await prisma.tbPjSettingsHistory.findMany({
-      where:   { prjct_id: projectId, chg_item_nm: "단위업무 설명" },
+    // 이력 조회 — tb_ds_design_change에서 해당 단위업무의 설명 변경 이력만
+    const changes = await prisma.tbDsDesignChange.findMany({
+      where: {
+        prjct_id:   projectId,
+        ref_tbl_nm: "tb_ds_unit_work",
+        ref_id:     unitWorkId,
+        chg_rsn_cn: "단위업무 설명",
+      },
       orderBy: { chg_dt: "desc" },
       take:    limit,
-      include: {
-        member: { select: { mber_nm: true } },
-      },
     });
+
+    // 변경자 이름 일괄 조회 (N+1 방지)
+    const memberIds = [...new Set(changes.map((c) => c.chg_mber_id))];
+    const members   = await prisma.tbMbMember.findMany({
+      where:  { mber_id: { in: memberIds } },
+      select: { mber_id: true, mber_nm: true },
+    });
+    const memberMap = Object.fromEntries(members.map((m) => [m.mber_id, m.mber_nm]));
 
     return apiSuccess({
       unitWorkName: uw.unit_work_nm,
-      items: histories.map((h) => ({
-        histId:     h.hist_id,
-        changedBy:  h.member.mber_nm,
-        changedAt:  h.chg_dt.toISOString(),
-        beforeVal:  h.bfr_val_cn ?? "",
-        afterVal:   h.aftr_val_cn ?? "",
-      })),
+      items: changes.map((c) => {
+        const snap = c.snapshot_data as { before?: string | null; after?: string | null } | null;
+        return {
+          histId:    c.chg_id,
+          changedBy: memberMap[c.chg_mber_id] ?? "알 수 없음",
+          changedAt: c.chg_dt.toISOString(),
+          beforeVal: snap?.before ?? "",
+          afterVal:  snap?.after  ?? "",
+        };
+      }),
     });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/unit-works/${unitWorkId}/history] DB 오류:`, err);

@@ -128,6 +128,9 @@ function FunctionDetailPageInner() {
   // ── PRD 다운로드 팝업 ────────────────────────────────────────────────────────
   const [prdOpen, setPrdOpen] = useState(false);
 
+  // ── 삭제 확인 다이얼로그 ─────────────────────────────────────────────────────
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
   // ── AI 작업 드롭다운 패널 ────────────────────────────────────────────────────
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const aiPanelRef = useRef<HTMLDivElement>(null);
@@ -249,26 +252,39 @@ function FunctionDetailPageInner() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  // ── 삭제 뮤테이션 ──────────────────────────────────────────────────────────
+  const deleteMutation = useMutation({
+    mutationFn: () =>
+      authFetch(`/api/projects/${projectId}/functions/${functionId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      toast.success("기능이 삭제되었습니다.");
+      queryClient.invalidateQueries({ queryKey: ["functions", projectId] });
+      router.push(`/projects/${projectId}/functions`);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   // ── AI 컨펌 상태 ──────────────────────────────────────────────────────────
   const [aiConfirm, setAiConfirm] = useState<{ taskType: string; label: string } | null>(null);
 
-  // DESIGN 전용: 프롬프트 템플릿 조회 결과 (버튼 클릭 시 fetch → 컨펌 창에 표시)
-  const [designPrompt, setDesignPrompt] = useState<{ tmplId: string; tmplNm: string } | null | "loading" | "none">(null);
+  // DESIGN/INSPECT 공통: 프롬프트 템플릿 조회 결과 (버튼 클릭 시 fetch → 컨펌 창에 표시)
+  const [taskPrompt, setTaskPrompt] = useState<{ tmplId: string; tmplNm: string } | null | "loading" | "none">(null);
 
-  async function openDesignConfirm() {
+  async function openPromptConfirm(taskType: string, label: string) {
     if (!description.trim()) { toast.error("설명을 먼저 입력해 주세요."); return; }
-    setDesignPrompt("loading");
-    setAiConfirm({ taskType: "DESIGN", label: "AI 설계" });
+    setTaskPrompt("loading");
+    setAiConfirm({ taskType, label });
     try {
-      const res = await authFetch<{ data: Array<{ tmplId: string; tmplNm: string }> }>(
-        `/api/projects/${projectId}/prompt-templates?taskType=DESIGN&refType=FUNCTION&useYn=Y`
+      const res = await authFetch<{ data: Array<{ tmplId: string; tmplNm: string; defaultYn: string }> }>(
+        // refType 필터 없이 조회 — 프로젝트/시스템 공통 템플릿 중 해당 taskType 전부 검색
+        `/api/projects/${projectId}/prompt-templates?taskType=${taskType}&useYn=Y`
       );
       const list = res.data ?? [];
-      // 마지막에 추가된 것 사용 (API 응답은 sort_ordr ASC이므로 배열 마지막)
-      const last = list[list.length - 1] ?? null;
-      setDesignPrompt(last ? { tmplId: last.tmplId, tmplNm: last.tmplNm } : "none");
+      // defaultYn='Y' 우선, 없으면 첫 번째 (sort_ordr ASC 정렬이므로 첫 번째가 최우선)
+      const preferred = list.find((t) => t.defaultYn === "Y") ?? list[0] ?? null;
+      setTaskPrompt(preferred ? { tmplId: preferred.tmplId, tmplNm: preferred.tmplNm } : "none");
     } catch {
-      setDesignPrompt("none");
+      setTaskPrompt("none");
     }
   }
 
@@ -425,7 +441,8 @@ function FunctionDetailPageInner() {
                                              : "-";
 
                       function handleRun() {
-                        if (taskType === "DESIGN") { openDesignConfirm(); return; }
+                        // DESIGN·INSPECT는 프롬프트 템플릿 조회 후 상세 컨펌 팝업
+                        if (taskType === "DESIGN" || taskType === "INSPECT") { openPromptConfirm(taskType, label); return; }
                         if (!description.trim()) { toast.error("설명을 먼저 입력해 주세요."); return; }
                         setAiConfirm({ taskType, label });
                       }
@@ -515,6 +532,17 @@ function FunctionDetailPageInner() {
 
           {/* 구분선 */}
           <div style={{ width: 1, height: 20, background: "var(--color-border)" }} />
+
+          {/* 삭제 버튼 (신규 등록 모드에서는 숨김) */}
+          {!isNew && (
+            <button
+              onClick={() => setDeleteConfirmOpen(true)}
+              disabled={saveMutation.isPending || deleteMutation.isPending}
+              style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60, color: "#e53935", borderColor: "#e53935" }}
+            >
+              삭제
+            </button>
+          )}
 
           {/* 취소·저장 */}
           <button
@@ -766,6 +794,8 @@ function FunctionDetailPageInner() {
             itemName="기능 설명"
             currentValue={description}
             title="기능 설명 변경 이력"
+            refTblNm="tb_ds_function"
+            refId={functionId}
           />
 
           {/* ── AR-00082 컬럼 매핑 — 신규 모드에서는 버튼 disabled */}
@@ -776,7 +806,7 @@ function FunctionDetailPageInner() {
                 {colMappings.length > 0 && (
                   <button
                     onClick={() => setMappingMdOpen(true)}
-                    style={{ ...ghostSmBtnStyle, fontSize: 13, padding: "6px 12px" }}
+                    style={{ ...ghostSmBtnStyle, fontSize: 11, padding: "3px 9px" }}
                   >
                     MD 복사
                   </button>
@@ -785,7 +815,7 @@ function FunctionDetailPageInner() {
                   onClick={() => setMappingPopupOpen(true)}
                   disabled={isNew}
                   title={isNew ? "저장 후 사용할 수 있습니다" : undefined}
-                  style={{ ...primaryBtnStyle, fontSize: 13, padding: "6px 14px", opacity: isNew ? 0.4 : 1, cursor: isNew ? "not-allowed" : "pointer" }}
+                  style={{ ...primaryBtnStyle, fontSize: 11, padding: "3px 10px", opacity: isNew ? 0.4 : 1, cursor: isNew ? "not-allowed" : "pointer" }}
                 >
                   매핑 관리
                 </button>
@@ -825,8 +855,8 @@ function FunctionDetailPageInner() {
                       ) : <span style={{ color: "var(--color-text-disabled)", fontSize: 12 }}>—</span>}
                     </div>
                     <div style={{ flex: "0 0 90px", fontSize: 12, color: "var(--color-text-secondary)" }}>{m.uiTyCode || "—"}</div>
-                    <div style={{ flex: "1 1 0", fontSize: 12, fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.tableName || "—"}</div>
-                    <div style={{ flex: "1 1 0", fontSize: 12, fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.colName || "—"}</div>
+                    <div style={{ flex: "1 1 0", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.tableName || "—"}</div>
+                    <div style={{ flex: "1 1 0", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.colName || "—"}</div>
                   </div>
                 ))}
               </div>
@@ -846,42 +876,42 @@ function FunctionDetailPageInner() {
       {aiConfirm && (
         <div
           style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={() => { setAiConfirm(null); setDesignPrompt(null); }}
+          onClick={() => { setAiConfirm(null); setTaskPrompt(null); }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{ width: "100%", maxWidth: aiConfirm.taskType === "DESIGN" ? 520 : 420, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 12, boxShadow: "0 12px 48px rgba(0,0,0,0.25)", padding: "32px 36px" }}
+            style={{ width: "100%", maxWidth: (aiConfirm.taskType === "DESIGN" || aiConfirm.taskType === "INSPECT") ? 520 : 420, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 12, boxShadow: "0 12px 48px rgba(0,0,0,0.25)", padding: "32px 36px" }}
           >
 
-            {aiConfirm.taskType === "DESIGN" ? (
+            {(aiConfirm.taskType === "DESIGN" || aiConfirm.taskType === "INSPECT") ? (
               <>
-                {/* DESIGN 전용 헤더 */}
+                {/* DESIGN/INSPECT 공통 헤더 */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
                   <span style={{ fontSize: 24 }}>✦</span>
                   <div>
                     <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
-                      AI 설계 요청
+                      {aiConfirm.label} 요청
                     </p>
                     <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--color-text-secondary)" }}>
-                      작성하신 설명 내용을 기반으로 AI에게 설계를 요청합니다.
+                      작성하신 설명 내용을 기반으로 AI에게 {aiConfirm.taskType === "DESIGN" ? "설계를" : "점검을"} 요청합니다.
                     </p>
                   </div>
                 </div>
 
                 {/* 프롬프트 템플릿 조회 결과 */}
                 <div style={{ marginBottom: 20, padding: "14px 16px", background: "rgba(103,80,164,0.06)", border: "1px solid rgba(103,80,164,0.18)", borderRadius: 8 }}>
-                  {designPrompt === "loading" ? (
+                  {taskPrompt === "loading" ? (
                     <p style={{ margin: 0, fontSize: 13, color: "var(--color-text-secondary)" }}>
                       프롬프트 템플릿 조회 중...
                     </p>
-                  ) : designPrompt === "none" || designPrompt === null ? (
+                  ) : taskPrompt === "none" || taskPrompt === null ? (
                     <div>
                       <p style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 700, color: "#c62828" }}>
                         ⚠ 프롬프트 템플릿을 찾지 못했습니다.
                       </p>
                       <p style={{ margin: 0, fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.7 }}>
                         <strong>AI 요청 코멘트를 직접 작성하신 후</strong><br />
-                        AI에게 검토를 요청하시겠습니까?
+                        AI에게 요청하시겠습니까?
                       </p>
                     </div>
                   ) : (
@@ -890,7 +920,7 @@ function FunctionDetailPageInner() {
                         ✅ 프롬프트 템플릿 찾았습니다
                       </p>
                       <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 700, color: "rgba(103,80,164,1)" }}>
-                        {designPrompt.tmplNm}
+                        {taskPrompt.tmplNm}
                       </p>
                       <p style={{ margin: 0, fontSize: 12, color: "var(--color-text-secondary)" }}>
                         해당 프롬프트와 함께 전달하도록 하겠습니다.
@@ -903,10 +933,12 @@ function FunctionDetailPageInner() {
                 <div style={{ marginBottom: 24, fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.7 }}>
                   <p style={{ margin: "0 0 6px", fontWeight: 600, color: "var(--color-text-primary)" }}>전달되는 내용</p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                      <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>시스템 프롬프트</span>
-                      <span>기능 설계 지침</span>
-                    </div>
+                    {taskPrompt && taskPrompt !== "loading" && taskPrompt !== "none" && (
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                        <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>시스템 프롬프트</span>
+                        <span>{taskPrompt.tmplNm}</span>
+                      </div>
+                    )}
                     {commentCn.trim() && (
                       <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                         <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>코멘트</span>
@@ -934,18 +966,18 @@ function FunctionDetailPageInner() {
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button
-                onClick={() => { setAiConfirm(null); setDesignPrompt(null); }}
+                onClick={() => { setAiConfirm(null); setTaskPrompt(null); }}
                 style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 18px" }}
               >
                 취소
               </button>
               {/* 프롬프트 못 찾은 경우 — "AI 요청 코멘트로 처리" 버튼 (코멘트 있어야 활성) */}
-              {designPrompt === "none" && (
+              {(aiConfirm.taskType === "DESIGN" || aiConfirm.taskType === "INSPECT") && taskPrompt === "none" && (
                 <button
                   onClick={() => {
                     aiMutation.mutate({ taskType: aiConfirm.taskType });
                     setAiConfirm(null);
-                    setDesignPrompt(null);
+                    setTaskPrompt(null);
                   }}
                   disabled={aiMutation.isPending || !commentCn.trim()}
                   style={{
@@ -958,19 +990,25 @@ function FunctionDetailPageInner() {
                   AI 요청 코멘트로 처리
                 </button>
               )}
-              {/* 프롬프트 찾은 경우만 활성화 */}
+              {/* DESIGN/INSPECT: 프롬프트 찾은 경우만 활성 / 나머지: 항상 활성 */}
               <button
                 onClick={() => {
                   aiMutation.mutate({ taskType: aiConfirm.taskType });
                   setAiConfirm(null);
-                  setDesignPrompt(null);
+                  setTaskPrompt(null);
                 }}
-                disabled={aiMutation.isPending || designPrompt === "loading" || designPrompt === "none" || designPrompt === null}
+                disabled={
+                  aiMutation.isPending ||
+                  ((aiConfirm.taskType === "DESIGN" || aiConfirm.taskType === "INSPECT") &&
+                    (taskPrompt === "loading" || taskPrompt === "none" || taskPrompt === null))
+                }
                 style={{
                   ...primaryBtnStyle, fontSize: 13, padding: "7px 18px",
                   background: "rgba(103,80,164,1)",
-                  opacity: (designPrompt === "none" || designPrompt === null || designPrompt === "loading") ? 0.3 : 1,
-                  cursor: (designPrompt === "none" || designPrompt === null || designPrompt === "loading") ? "not-allowed" : "pointer",
+                  opacity: ((aiConfirm.taskType === "DESIGN" || aiConfirm.taskType === "INSPECT") &&
+                    (taskPrompt === "none" || taskPrompt === null || taskPrompt === "loading")) ? 0.3 : 1,
+                  cursor: ((aiConfirm.taskType === "DESIGN" || aiConfirm.taskType === "INSPECT") &&
+                    (taskPrompt === "none" || taskPrompt === null || taskPrompt === "loading")) ? "not-allowed" : "pointer",
                 }}
               >
                 요청
@@ -1033,6 +1071,42 @@ function FunctionDetailPageInner() {
           taskType={aiHistoryTaskType as "DESIGN" | "INSPECT" | "IMPACT"}
           onClose={() => setAiHistoryTaskType(null)}
         />
+      )}
+      {/* ── 삭제 확인 다이얼로그 ─────────────────────────────────────────── */}
+      {deleteConfirmOpen && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
+          onClick={() => setDeleteConfirmOpen(false)}
+        >
+          <div
+            style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "28px 32px", minWidth: 380, maxWidth: 480, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700 }}>기능을 삭제하시겠습니까?</h3>
+            <p style={{ margin: "0 0 12px", fontSize: 14, color: "var(--color-text-secondary)" }}>
+              &lsquo;{data?.name}&rsquo;
+            </p>
+            <p style={{ margin: "0 0 24px", fontSize: 13, color: "#e53935" }}>
+              연결된 AI 태스크·이력이 함께 삭제되며 복구할 수 없습니다.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                onClick={() => setDeleteConfirmOpen(false)}
+                disabled={deleteMutation.isPending}
+                style={{ ...secondaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
+              >
+                취소
+              </button>
+              <button
+                onClick={() => deleteMutation.mutate()}
+                disabled={deleteMutation.isPending}
+                style={{ ...primaryBtnStyle, fontSize: 13, padding: "6px 16px", background: "#e53935" }}
+              >
+                {deleteMutation.isPending ? "삭제 중..." : "삭제"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1183,13 +1257,14 @@ const sectionStyle: React.CSSProperties = {
   border: "1px solid var(--color-border)", borderRadius: 8,
   background: "var(--color-bg-card)",
 };
-const sectionTitleStyle: React.CSSProperties = { margin: "0 0 8px", fontSize: 15, fontWeight: 700 };
+const sectionTitleStyle: React.CSSProperties = { margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)" };
 const colMappingHeaderStyle: React.CSSProperties = {
   display: "flex", alignItems: "center", gap: 8,
-  padding: "7px 12px",
-  background: "var(--color-bg-muted)",
-  borderBottom: "1px solid var(--color-border)",
-  fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)",
+  padding: "9px 12px",
+  background: "#f5f5f5",
+  borderBottom: "1px solid #e0e0e0",
+  fontSize: 12, fontWeight: 700, color: "#444",
+  letterSpacing: "0.02em",
 };
 const colMappingRowStyle: React.CSSProperties = {
   display: "flex", alignItems: "center", gap: 8,

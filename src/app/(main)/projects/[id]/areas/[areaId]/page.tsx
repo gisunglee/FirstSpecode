@@ -328,6 +328,8 @@ function AreaDetailPageInner() {
         itemName="영역 설명"
         currentValue={description}
         title="버전 이력 비교"
+        refTblNm="tb_ds_area"
+        refId={areaId}
       />
 
       {/* AI 요청 확인 다이얼로그 */}

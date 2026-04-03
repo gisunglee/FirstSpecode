@@ -3,18 +3,21 @@
 /**
  * SettingsHistoryDialog — 버전 이력 비교 다이얼로그 (공통)
  *
- * tb_pj_settings_history 테이블의 이력을 좌측 버전 목록 + 우측 side-by-side diff로 표시.
- * 2개 버전을 선택하면 라인 단위 diff가 표시됨.
+ * 2가지 소스를 지원:
+ *   1. 프로젝트 설정 이력 (tb_pj_settings_history)
+ *      → refTblNm/refId 없이 사용. API: /settings-history?itemName=xxx
+ *
+ *   2. 설계 내용 이력 (tb_ds_design_change)
+ *      → refTblNm + refId 전달. API: /design-history?refTblNm=xxx&refId=xxx&itemName=xxx
+ *      → 삭제: DELETE /design-changes/[changeId]
  *
  * 사용법:
- *   <SettingsHistoryDialog
- *     open={open}
- *     onClose={onClose}
- *     projectId={projectId}
- *     itemName="단위업무 설명"        ← chg_item_nm 필터
- *     currentValue={form.description} ← 현재 편집 중인 값 (선택적)
- *     title="버전 이력 비교"
- *   />
+ *   // 프로젝트 설정
+ *   <SettingsHistoryDialog projectId={...} itemName="AI 호출 방식" ... />
+ *
+ *   // 설계 내용 (영역·기능·화면·단위업무 설명)
+ *   <SettingsHistoryDialog projectId={...} itemName="기능 설명"
+ *     refTblNm="tb_ds_function" refId={functionId} ... />
  */
 
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -50,6 +53,9 @@ export type SettingsHistoryDialogProps = {
   itemName:      string;
   currentValue?: string;
   title?:        string;
+  // 설계 내용 이력 모드 — 제공 시 tb_ds_design_change 기반 API 사용
+  refTblNm?:     string;   // e.g. "tb_ds_function"
+  refId?:        string;   // e.g. functionId
 };
 
 // ── 공통 컴포넌트 ─────────────────────────────────────────────────────────────
@@ -61,8 +67,13 @@ export default function SettingsHistoryDialog({
   itemName,
   currentValue = "",
   title = "버전 이력 비교",
+  refTblNm,
+  refId,
 }: SettingsHistoryDialogProps) {
   const queryClient = useQueryClient();
+
+  // 설계 내용 모드 여부 (refTblNm + refId 모두 있을 때)
+  const isDesignMode = !!refTblNm && !!refId;
 
   // 선택된 버전 IDs (최대 2개)
   // "current"는 현재 편집 중인 값을 의미하는 특수 ID
@@ -72,13 +83,20 @@ export default function SettingsHistoryDialog({
   const autoSelectedRef = useRef(false);
 
   // ── 이력 조회 ──────────────────────────────────────────────────────────────
-  const queryKey = ["settings-history", projectId, itemName];
+  // 설계 모드: /design-history?refTblNm=...&refId=...&itemName=...
+  // 설정 모드: /settings-history?itemName=...
+  const queryKey = isDesignMode
+    ? ["design-history", projectId, refTblNm, refId, itemName]
+    : ["settings-history", projectId, itemName];
+
+  const apiUrl = isDesignMode
+    ? `/api/projects/${projectId}/design-history?refTblNm=${encodeURIComponent(refTblNm!)}&refId=${encodeURIComponent(refId!)}&itemName=${encodeURIComponent(itemName)}`
+    : `/api/projects/${projectId}/settings-history?itemName=${encodeURIComponent(itemName)}`;
+
   const { data, isLoading } = useQuery({
     queryKey,
     queryFn: () =>
-      authFetch<{ data: { items: HistoryItem[] } }>(
-        `/api/projects/${projectId}/settings-history?itemName=${encodeURIComponent(itemName)}`
-      ).then((r) => r.data.items),
+      authFetch<{ data: { items: HistoryItem[] } }>(apiUrl).then((r) => r.data.items),
     enabled: open,
   });
   const items = data ?? [];
@@ -100,9 +118,15 @@ export default function SettingsHistoryDialog({
   }, [open, items]);
 
   // ── 삭제 뮤테이션 ──────────────────────────────────────────────────────────
+  // 설계 모드: DELETE /design-changes/[changeId]
+  // 설정 모드: DELETE /settings-history/[histId]
   const deleteMutation = useMutation({
-    mutationFn: (histId: string) =>
-      authFetch(`/api/projects/${projectId}/settings-history/${histId}`, { method: "DELETE" }),
+    mutationFn: (histId: string) => {
+      const deleteUrl = isDesignMode
+        ? `/api/projects/${projectId}/design-changes/${histId}`
+        : `/api/projects/${projectId}/settings-history/${histId}`;
+      return authFetch(deleteUrl, { method: "DELETE" });
+    },
     onSuccess: (_, histId) => {
       toast.success("이력이 삭제되었습니다.");
       // 삭제된 항목이 선택돼 있었으면 선택 해제

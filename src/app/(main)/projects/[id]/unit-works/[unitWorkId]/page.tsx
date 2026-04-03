@@ -338,6 +338,8 @@ function UnitWorkDetailPageInner() {
         itemName="단위업무 설명"
         currentValue={form.description}
         title="버전 이력 비교"
+        refTblNm="tb_ds_unit_work"
+        refId={unitWorkId}
       />
 
       {/* 타이틀 행 — full-width 배경 */}

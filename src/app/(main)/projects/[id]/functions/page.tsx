@@ -66,7 +66,6 @@ function FunctionsPageInner() {
   const projectId    = params.id;
   const areaIdFilter = searchParams.get("areaId") ?? undefined;
 
-  const [deleteTarget,  setDeleteTarget]  = useState<FuncRow | null>(null);
   // 인라인 편집 상태: { funcId, field } or null
   const [editingCell, setEditingCell] = useState<{ funcId: string; field: "complexity" | "effort" } | null>(null);
   const [editValue,   setEditValue]   = useState("");
@@ -441,16 +440,9 @@ function FunctionsPageInner() {
                   <button
                     onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
                     title="기능 상세"
-                    style={{
-                      background: "none", border: "1px solid var(--color-border)",
-                      borderRadius: 4, cursor: "pointer", fontSize: 13, padding: "3px 8px",
-                      color: "var(--color-text-secondary)",
-                    }}
+                    style={detailBtnStyle}
                   >
-                    →
-                  </button>
-                  <button onClick={() => setDeleteTarget(fn)} style={dangerBtnStyle}>
-                    삭제
+                    상세
                   </button>
                 </div>
               </div>
@@ -460,67 +452,6 @@ function FunctionsPageInner() {
         </div>
       )}
 
-      {/* PID-00052 삭제 확인 팝업 */}
-      {deleteTarget && (
-        <DeleteConfirmDialog
-          func={deleteTarget}
-          projectId={projectId}
-          onClose={() => setDeleteTarget(null)}
-          onDeleted={() => {
-            setDeleteTarget(null);
-            queryClient.invalidateQueries({ queryKey });
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-// ── PID-00052 삭제 확인 다이얼로그 ───────────────────────────────────────────
-
-function DeleteConfirmDialog({
-  func, projectId, onClose, onDeleted,
-}: {
-  func:      FuncRow;
-  projectId: string;
-  onClose:   () => void;
-  onDeleted: () => void;
-}) {
-  const deleteMutation = useMutation({
-    mutationFn: () =>
-      authFetch(`/api/projects/${projectId}/functions/${func.funcId}`, { method: "DELETE" }),
-    onSuccess: () => {
-      toast.success("기능이 삭제되었습니다.");
-      onDeleted();
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  return (
-    <div style={overlayStyle} onClick={onClose}>
-      <div style={dialogStyle} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700 }}>
-          기능을 삭제하시겠습니까?
-        </h3>
-        <p style={{ margin: "0 0 12px", fontSize: 14, color: "var(--color-text-secondary)" }}>
-          &lsquo;{func.name}&rsquo;
-        </p>
-        <p style={{ margin: "0 0 24px", fontSize: 13, color: "#e53935" }}>
-          연결된 AI 태스크·이력이 함께 삭제되며 복구할 수 없습니다.
-        </p>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button onClick={onClose} style={secondaryBtnStyle} disabled={deleteMutation.isPending}>
-            취소
-          </button>
-          <button
-            onClick={() => deleteMutation.mutate()}
-            style={{ ...primaryBtnStyle, background: "#e53935" }}
-            disabled={deleteMutation.isPending}
-          >
-            {deleteMutation.isPending ? "삭제 중..." : "삭제"}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -606,17 +537,8 @@ const filterSelectStyle: React.CSSProperties = {
   minWidth:           160,
 };
 
-const dangerBtnStyle: React.CSSProperties = {
+const detailBtnStyle: React.CSSProperties = {
   padding: "4px 12px", borderRadius: 4,
-  border: "1px solid #e53935", background: "transparent",
-  color: "#e53935", fontSize: 12, cursor: "pointer",
-};
-const overlayStyle: React.CSSProperties = {
-  position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
-  display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
-};
-const dialogStyle: React.CSSProperties = {
-  background: "var(--color-bg-card)", borderRadius: 10,
-  padding: "28px 32px", minWidth: 380, maxWidth: 480,
-  boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+  border: "1px solid var(--color-border)", background: "transparent",
+  color: "var(--color-text-secondary)", fontSize: 12, cursor: "pointer",
 };

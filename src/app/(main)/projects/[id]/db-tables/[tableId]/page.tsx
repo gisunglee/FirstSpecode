@@ -505,7 +505,7 @@ function DbTableDetailPageInner() {
           onClick={() => { setDdlOpen(false); setDdlParsed(null); }}
         >
           <div
-            style={{ width: 500, height: 400, background: "var(--color-bg-card)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", overflow: "hidden" }}
+            style={{ width: 560, maxHeight: "80vh", background: "var(--color-bg-card)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", overflow: "hidden" }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* 팝업 헤더 */}
@@ -546,16 +546,17 @@ function DbTableDetailPageInner() {
             ) : (
               /* 확인 단계 */
               <>
-                <div style={{ flex: 1, padding: "14px 20px", display: "flex", flexDirection: "column", gap: 8, minHeight: 0, overflowY: "auto" }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 4 }}>
+                <div style={{ flex: 1, padding: "14px 20px", display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 4, flexShrink: 0 }}>
                     {ddlParsed.length}개 컬럼을 파싱했습니다. 등록하시겠습니까?
                   </div>
-                  <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "6px 12px", background: "var(--color-bg-muted)", fontSize: 11, fontWeight: 700, color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }}>
+                  <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "6px 12px", background: "var(--color-bg-muted)", fontSize: 11, fontWeight: 700, color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
                       <div>물리 컬럼명</div>
                       <div>논리 컬럼명</div>
                       <div>데이터 타입</div>
                     </div>
+                    <div style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
                     {ddlParsed.map((p, i) => (
                       <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "5px 12px", borderTop: i === 0 ? "none" : "1px solid var(--color-border)", fontSize: 12 }}>
                         <span style={{ fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace", fontWeight: 600, color: "var(--color-text-primary)" }}>{p.colPhysclNm}</span>
@@ -563,6 +564,7 @@ function DbTableDetailPageInner() {
                         <span style={{ fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace", color: "var(--color-text-secondary)" }}>{p.dataTyNm}</span>
                       </div>
                     ))}
+                    </div>
                   </div>
                 </div>
                 <div style={{ padding: "12px 20px", borderTop: "1px solid var(--color-border)", display: "flex", justifyContent: "flex-end", gap: 8, flexShrink: 0 }}>

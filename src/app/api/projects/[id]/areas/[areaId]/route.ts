@@ -188,15 +188,19 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           chg_mber_id: auth.mberId,
         },
       }),
-      // 설명 변경 이력 저장 요청 시 tb_pj_settings_history에 추가 기록
+      // 설명 변경 이력 — tb_ds_design_change에 before/after JSON으로 저장
       ...(saveHistory ? [
-        prisma.tbPjSettingsHistory.create({
+        prisma.tbDsDesignChange.create({
           data: {
-            prjct_id:    projectId,
+            prjct_id:      projectId,
+            ref_tbl_nm:    "tb_ds_area",
+            ref_id:        areaId,
+            chg_rsn_cn:    "영역 설명",
+            snapshot_data: {
+              before: existing.area_dc ?? null,
+              after:  newDescription,
+            },
             chg_mber_id: auth.mberId,
-            chg_item_nm: "영역 설명",
-            bfr_val_cn:  existing.area_dc ?? null,
-            aftr_val_cn: newDescription,
           },
         }),
       ] : []),

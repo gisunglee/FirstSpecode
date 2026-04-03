@@ -547,6 +547,8 @@ function ScreenDetailPageInner() {
         itemName="화면 설명"
         currentValue={form.description}
         title="화면 설명 변경 이력"
+        refTblNm="tb_ds_screen"
+        refId={screenId}
       />
 
       </div>

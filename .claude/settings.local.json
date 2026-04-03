@@ -142,7 +142,9 @@
       "Bash(grep -r \"lucide\\\\|heroicon\\\\|phosphor\\\\|tabler\\\\|feather\" /Users/igiseong/dev/specode/FirstSpecode/src --include=*.tsx -l)",
       "Bash(find node_modules/@excalidraw/excalidraw -name *.css)",
       "Bash(curl -s \"http://localhost:3000/api/worker/tasks?limit=10\" -H \"X-Worker-Key: dev-worker-key\")",
-      "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/955946e1-4062-4cbb-92d3-b5eeb5668dfd/start\" -H \"X-Worker-Key: dev-worker-key\")"
+      "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/955946e1-4062-4cbb-92d3-b5eeb5668dfd/start\" -H \"X-Worker-Key: dev-worker-key\")",
+      "Bash(curl -s \"http://localhost:3001/api/worker/tasks?limit=10\" -H \"X-Worker-Key: specode-worker-dev-key\")",
+      "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/9848f17a-3b64-415a-9c79-3d5350d8173a/start\" -H \"X-Worker-Key: specode-worker-dev-key\")"
     ]
   }
 }

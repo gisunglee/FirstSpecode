@@ -296,7 +296,10 @@ export default function ColMappingDialog({
 
           {/* 헤더 */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{title}</h3>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 3, height: 18, borderRadius: 2, background: "var(--color-primary, #1976d2)", flexShrink: 0 }} />
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{title}</h3>
+            </div>
             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12, color: "var(--color-text-secondary)" }}>
                 <span style={{ fontWeight: 600 }}>논리명 보기:</span>
@@ -466,7 +469,11 @@ export default function ColMappingDialog({
                   onDragEnter={() => handleDragEnter(row._key)}
                   onDragEnd={handleDragEnd}
                   onDragOver={(e) => e.preventDefault()}
-                  style={{ ...gridRowStyle, borderTop: idx === 0 ? "none" : "1px solid var(--color-border)" }}
+                  style={{
+                    ...gridRowStyle,
+                    borderTop: idx === 0 ? "none" : "1px solid #f0f0f0",
+                    background: idx % 2 === 1 ? "#fafafa" : "var(--color-bg-card)",
+                  }}
                 >
                   {/* 드래그 핸들 */}
                   <div style={{ width: 20, color: "#bbb", cursor: "grab", userSelect: "none", textAlign: "center", fontSize: 14, flexShrink: 0 }}>
@@ -743,22 +750,25 @@ const selectStyle: React.CSSProperties = {
 };
 
 const gridHeaderStyle: React.CSSProperties = {
-  display:    "flex",
-  alignItems: "center",
-  gap:        8,
-  padding:    "8px 0 8px 0",
-  marginTop:  10,
-  fontSize:   12,
-  fontWeight: 600,
-  color:      "var(--color-text-secondary)",
-  borderTop:  "1px solid var(--color-border)",
+  display:       "flex",
+  alignItems:    "center",
+  gap:           8,
+  padding:       "7px 10px",
+  marginTop:     10,
+  fontSize:      12,
+  fontWeight:    700,
+  color:         "#444",
+  background:    "#f5f5f5",
+  borderTop:     "1px solid #e0e0e0",
+  borderBottom:  "1px solid #e0e0e0",
+  borderRadius:  "4px 4px 0 0",
 };
 
 const gridRowStyle: React.CSSProperties = {
   display:    "flex",
   alignItems: "center",
   gap:        8,
-  padding:    "6px 0",
+  padding:    "6px 10px",
 };
 
 const cellInputStyle: React.CSSProperties = {
