@@ -51,7 +51,9 @@ export default function LNB() {
   const aiTasksHref         = pBase ? `${pBase}/ai-tasks`         : "#";
   const promptTemplatesHref = pBase ? `${pBase}/prompt-templates` : "#";
   const reviewsHref         = pBase ? `${pBase}/reviews`          : "#";
-  const planningHref     = pBase ? `${pBase}/planning`      : "#";
+  const planningHref        = pBase ? `${pBase}/planning`           : "#";
+  const aiImportHref        = pBase ? `${pBase}/planning/ai-import` : "#";
+  const designImportHref    = pBase ? `${pBase}/design-import`      : "#";
   const settingsHref     = pBase ? `${pBase}/settings`      : "#";
   const membersHref      = pBase ? `${pBase}/members`       : "#";
 
@@ -64,8 +66,10 @@ export default function LNB() {
     { label: "요구사항",    href: requirementsHref, icon: "📋", isActive: !!pBase && pathname.startsWith(`${pBase}/requirements`) },
     { label: "사용자스토리", href: userStoriesHref, icon: "📖", isActive: !!pBase && pathname.startsWith(`${pBase}/user-stories`) },
     { label: "기준선",       href: baselineHref,    icon: "🏁", isActive: !!pBase && pathname.startsWith(`${pBase}/baseline`) },
-    { label: "요구분석 일괄 편집", href: planningHref, icon: "📅", isActive: !!pBase && pathname.startsWith(`${pBase}/planning`) },
+    { label: "요구분석 일괄 편집", href: planningHref, icon: "📅", isActive: !!pBase && pathname.startsWith(`${pBase}/planning`) && !pathname.startsWith(`${pBase}/planning/ai-import`) },
+    { label: "기획 가져오기", href: aiImportHref, icon: "📥", isActive: !!pBase && pathname.startsWith(`${pBase}/planning/ai-import`) },
     { isSeparator: true },
+    { label: "설계 가져오기", href: designImportHref, icon: "🏗",  isActive: !!pBase && pathname.startsWith(`${pBase}/design-import`) },
     { label: "단위업무",    href: unitWorksHref,    icon: "🧱", isActive: !!pBase && pathname.startsWith(`${pBase}/unit-works`) },
     { label: "화면 설계",   href: screensHref,      icon: "🖼",  isActive: !!pBase && pathname.startsWith(`${pBase}/screens`) },
     { label: "영역 관리",   href: areasHref,        icon: "📦", isActive: !!pBase && pathname.startsWith(`${pBase}/areas`) },

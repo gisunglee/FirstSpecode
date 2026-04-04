@@ -51,9 +51,19 @@ type TreeData = {
 };
 
 type SelectedNode =
-  | { type: "task";        id: string }
-  | { type: "requirement"; id: string }
-  | { type: "story";       id: string };
+  | { type: "task";        id: string; displayId: string }
+  | { type: "requirement"; id: string; displayId: string }
+  | { type: "story";       id: string; displayId: string };
+
+// ── displayId 축약 (SFR-00002 → T-2, REQ-00024 → R-24, STR-00002 → S-2) ──
+function shortId(displayId: string) {
+  const prefixMap: Record<string, string> = { SFR: "T", REQ: "R", STR: "S" };
+  const match = displayId.match(/^([A-Z]+)-(\d+)$/);
+  if (!match) return displayId;
+  const prefix = prefixMap[match[1]] ?? match[1][0];
+  const num    = parseInt(match[2], 10); // 앞의 0 제거
+  return `${prefix}-${num}`;
+}
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
 
@@ -126,7 +136,7 @@ function PlanningTreePageInner() {
       }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["planning-tree", projectId] });
-      setSelected({ type: "task", id: res.data.taskId });
+      setSelected({ type: "task", id: res.data.taskId, displayId: "" });
       toast.success("과업이 추가되었습니다.");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -147,7 +157,7 @@ function PlanningTreePageInner() {
       }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["planning-tree", projectId] });
-      setSelected({ type: "requirement", id: res.data.requirementId });
+      setSelected({ type: "requirement", id: res.data.requirementId, displayId: "" });
       toast.success("요구사항이 추가되었습니다.");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -169,7 +179,7 @@ function PlanningTreePageInner() {
       }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["planning-tree", projectId] });
-      setSelected({ type: "story", id: res.data.storyId });
+      setSelected({ type: "story", id: res.data.storyId, displayId: "" });
       toast.success("사용자스토리가 추가되었습니다.");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -509,7 +519,7 @@ function TaskTreeNode({
       <TreeRow
         depth={0}
         icon="📁"
-        displayId={task.displayId}
+        displayId={shortId(task.displayId)}
         name={task.name}
         highlight={highlight}
         badge={
@@ -526,7 +536,7 @@ function TaskTreeNode({
         }
         isActive={isActive}
         isOpen={isOpen}
-        onClick={() => onSelect({ type: "task", id: task.taskId })}
+        onClick={() => onSelect({ type: "task", id: task.taskId, displayId: task.displayId })}
         onToggle={() => onToggle(task.taskId)}
         onAdd={() => onAddReq(task.taskId)}
         onDelete={() => onDelete({ type: "task", id: task.taskId, name: task.name })}
@@ -617,14 +627,14 @@ function ReqTreeNode({
       <TreeRow
         depth={depth}
         icon="📝"
-        displayId={req.displayId}
+        displayId={shortId(req.displayId)}
         name={req.name}
         highlight={highlight}
         badge={<span style={{ width: 8, height: 8, borderRadius: "50%", background: priorityColor, display: "inline-block" }} />}
         isActive={isActive}
         isOpen={isOpen}
         hasChildren={req.storyCount > 0}
-        onClick={() => onSelect({ type: "requirement", id: req.reqId })}
+        onClick={() => onSelect({ type: "requirement", id: req.reqId, displayId: req.displayId })}
         onToggle={req.storyCount > 0 ? () => onToggle(req.reqId) : undefined}
         onAdd={() => onAddStory(req.reqId)}
         onDelete={() => onDelete({ type: "requirement", id: req.reqId, name: req.name })}
@@ -674,13 +684,13 @@ function StoryTreeNode({
     <TreeRow
       depth={depth}
       icon="👤"
-      displayId={story.displayId}
+      displayId={shortId(story.displayId)}
       name={story.name}
       highlight={highlight}
       isActive={isActive}
       isOpen={false}
       hasChildren={false}
-      onClick={() => onSelect({ type: "story", id: story.storyId })}
+      onClick={() => onSelect({ type: "story", id: story.storyId, displayId: story.displayId })}
       onDelete={() => onDelete({ type: "story", id: story.storyId, name: story.name })}
       addTitle=""
     />
@@ -717,7 +727,7 @@ function TreeRow({
         display:         "flex",
         alignItems:      "center",
         paddingLeft:     `${depth * 14 + 8}px`,
-        paddingRight:    10,
+        paddingRight:    16,
         paddingTop:      5,
         paddingBottom:   5,
         cursor:          "pointer",
@@ -804,17 +814,17 @@ function DetailPanel({
   onSaved:   () => void;
 }) {
   if (selected.type === "task") {
-    return <TaskDetailPanel projectId={projectId} taskId={selected.id} onSaved={onSaved} />;
+    return <TaskDetailPanel projectId={projectId} taskId={selected.id} displayId={selected.displayId} onSaved={onSaved} />;
   }
   if (selected.type === "requirement") {
-    return <ReqDetailPanel projectId={projectId} reqId={selected.id} onSaved={onSaved} />;
+    return <ReqDetailPanel projectId={projectId} reqId={selected.id} displayId={selected.displayId} onSaved={onSaved} />;
   }
-  return <StoryDetailPanel projectId={projectId} storyId={selected.id} onSaved={onSaved} />;
+  return <StoryDetailPanel projectId={projectId} storyId={selected.id} displayId={selected.displayId} onSaved={onSaved} />;
 }
 
 // ── 과업 상세 패널 ────────────────────────────────────────────────────────────
 
-function TaskDetailPanel({ projectId, taskId, onSaved }: { projectId: string; taskId: string; onSaved: () => void }) {
+function TaskDetailPanel({ projectId, taskId, displayId, onSaved }: { projectId: string; taskId: string; displayId: string; onSaved: () => void }) {
   const [name,       setName]       = useState("");
   const [category,   setCategory]   = useState("NEW_DEV");
   const [rfpPage,    setRfpPage]    = useState("");
@@ -855,7 +865,7 @@ function TaskDetailPanel({ projectId, taskId, onSaved }: { projectId: string; ta
 
   return (
     <div style={panelStyle}>
-      <PanelHeader icon="📁" displayType="과업" name={name} onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
+      <PanelHeader icon="📁" displayType="과업" displayId={displayId} name={name} onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <PanelField label="과업명 *">
           <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
@@ -888,7 +898,7 @@ function TaskDetailPanel({ projectId, taskId, onSaved }: { projectId: string; ta
 
 // ── 요구사항 상세 패널 ────────────────────────────────────────────────────────
 
-function ReqDetailPanel({ projectId, reqId, onSaved }: { projectId: string; reqId: string; onSaved: () => void }) {
+function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: string; reqId: string; displayId: string; onSaved: () => void }) {
   const [name,        setName]        = useState("");
   const [priority,    setPriority]    = useState("MEDIUM");
   const [source,      setSource]      = useState("RFP");
@@ -950,7 +960,7 @@ function ReqDetailPanel({ projectId, reqId, onSaved }: { projectId: string; reqI
 
   return (
     <div style={panelStyle}>
-      <PanelHeader icon="📝" displayType="요구사항" name={name} onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
+      <PanelHeader icon="📝" displayType="요구사항" displayId={displayId} name={name} onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
         {/* 기본 정보 — 기본 접힘 */}
@@ -1093,7 +1103,7 @@ function ReqDetailPanel({ projectId, reqId, onSaved }: { projectId: string; reqI
 
 type AcRow = { acId?: string; given: string; when: string; then: string };
 
-function StoryDetailPanel({ projectId, storyId, onSaved }: { projectId: string; storyId: string; onSaved: () => void }) {
+function StoryDetailPanel({ projectId, storyId, displayId, onSaved }: { projectId: string; storyId: string; displayId: string; onSaved: () => void }) {
   const [reqId,    setReqId]    = useState("");
   const [name,     setName]     = useState("");
   const [persona,  setPersona]  = useState("");
@@ -1132,7 +1142,7 @@ function StoryDetailPanel({ projectId, storyId, onSaved }: { projectId: string; 
 
   return (
     <div style={panelStyle}>
-      <PanelHeader icon="👤" displayType="사용자스토리" name={name} onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
+      <PanelHeader icon="👤" displayType="사용자스토리" displayId={displayId} name={name} onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <PanelField label="스토리명 *">
           <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
@@ -1154,21 +1164,16 @@ function StoryDetailPanel({ projectId, storyId, onSaved }: { projectId: string; 
               <div key={idx} style={{
                 border:       "1px solid var(--color-border)",
                 borderRadius: 8,
-                padding:      "14px 14px 10px",
+                padding:      "12px 14px 10px",
                 background:   "var(--color-bg-muted)",
                 position:     "relative",
               }}>
-                {/* 순번 + 삭제 */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "var(--color-text-secondary)" }}>
-                    AC-{idx + 1}
-                  </span>
-                  <button
-                    onClick={() => setAcRows(acRows.filter((_, i) => i !== idx))}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "#e53935", fontSize: 18, lineHeight: 1, padding: "0 2px" }}
-                    title="삭제"
-                  >×</button>
-                </div>
+                {/* 삭제 — 절대 위치로 카드 우상단에 붙임 */}
+                <button
+                  onClick={() => setAcRows(acRows.filter((_, i) => i !== idx))}
+                  style={{ position: "absolute", top: 6, right: 8, background: "none", border: "none", cursor: "pointer", color: "#e53935", fontSize: 16, lineHeight: 1, padding: "2px 4px" }}
+                  title="삭제"
+                >×</button>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
                   {(["given", "when", "then"] as const).map((field, fi) => {
                     const colors = ["#1565c0", "#2e7d32", "#6a1b9a"];
@@ -1213,9 +1218,10 @@ function PanelLoading() {
   return <div style={{ padding: 32, color: "#888" }}>로딩 중...</div>;
 }
 
-function PanelHeader({ icon, displayType, name, onSave, isPending }: {
+function PanelHeader({ icon, displayType, displayId, name, onSave, isPending }: {
   icon:        string;
   displayType: string;
+  displayId:   string;
   name:        string;
   onSave?:     () => void;
   isPending?:  boolean;
@@ -1223,7 +1229,10 @@ function PanelHeader({ icon, displayType, name, onSave, isPending }: {
   return (
     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
       <div>
-        <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>{icon} {displayType}</div>
+        <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+          <span>{icon} {displayType}</span>
+          {displayId && <span style={{ fontFamily: "monospace", color: "var(--color-text-secondary)", opacity: 0.7 }}>{displayId}</span>}
+        </div>
         <div style={{ fontSize: 20, fontWeight: 700, color: "var(--color-text-primary)" }}>{name || "(이름 없음)"}</div>
       </div>
       {onSave && (

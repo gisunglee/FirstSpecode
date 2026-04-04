@@ -147,7 +147,15 @@
       "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/9848f17a-3b64-415a-9c79-3d5350d8173a/start\" -H \"X-Worker-Key: specode-worker-dev-key\")",
       "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/6120b787-b8fd-4caf-9fe3-a30169dfb558/start\" -H \"X-Worker-Key: specode-worker-dev-key\")",
       "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/fc7e7539-a345-4a78-881d-dbeb96093ccf/start\" -H \"X-Worker-Key: specode-worker-dev-key\")",
-      "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/99232eba-0ae7-4846-940c-e368e3d98335/start\" -H \"X-Worker-Key: specode-worker-dev-key\")"
+      "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/99232eba-0ae7-4846-940c-e368e3d98335/start\" -H \"X-Worker-Key: specode-worker-dev-key\")",
+      "Bash(find /Users/igiseong/dev/specode/FirstSpecode/src/app/api/projects/[id] -name \"route.ts\")",
+      "Bash(ls -la /Users/igiseong/dev/specode/FirstSpecode/src/app/api/projects/[id]/prd/bulk/)",
+      "Bash(wc -l /Users/igiseong/dev/specode/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/planning/page.tsx)",
+      "Bash(find /Users/igiseong/dev/specode/FirstSpecode/src/app/api/projects/[id]/planning -type f -name \"*.ts\")",
+      "Bash(find /Users/igiseong/dev/specode/FirstSpecode/src/app/api/projects/[id]/prd -type f -name \"*.ts\")",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(grep -A 20 \"const.*Status.*=\" /Users/igiseong/dev/specode/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/areas/[areaId]/page.tsx)",
+      "Bash(grep -B 5 -A 10 \"DESIGN_DONE\\\\|NONE\\\\|func_sttus\\\\|statusLabel\" /Users/igiseong/dev/specode/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/areas/[areaId]/page.tsx)"
     ]
   }
 }
