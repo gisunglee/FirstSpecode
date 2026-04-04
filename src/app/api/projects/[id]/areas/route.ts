@@ -70,6 +70,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       screenId:        a.scrn_id ?? null,
       screenName:      a.screen?.scrn_nm ?? "미분류",
       screenDisplayId: a.screen?.scrn_display_id ?? null,
+      unitWorkId:      a.screen?.unitWork?.unit_work_id ?? null,
       unitWorkName:    a.screen?.unitWork?.unit_work_nm ?? null,
       functionCount:   a._count.functions,
     }));

@@ -5,7 +5,7 @@
  * GET Query:
  *   status?   — PENDING|IN_PROGRESS|DONE|APPLIED|REJECTED|FAILED|TIMEOUT
  *   taskType? — INSPECT|DESIGN|IMPLEMENT|MOCKUP|IMPACT|CUSTOM
- *   refType?  — AREA|FUNCTION
+ *   refType?  — UNIT_WORK|AREA|FUNCTION
  */
 
 import { NextRequest } from "next/server";
@@ -23,10 +23,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
   const { id: projectId } = await params;
   const url      = new URL(request.url);
-  const status   = url.searchParams.get("status")   ?? undefined;
-  const taskType = url.searchParams.get("taskType") ?? undefined;
-  const refType  = url.searchParams.get("refType")  ?? undefined;
-  const refId    = url.searchParams.get("refId")    ?? undefined;
+  const status     = url.searchParams.get("status")     ?? undefined;
+  const taskType   = url.searchParams.get("taskType")   ?? undefined;
+  const refType    = url.searchParams.get("refType")    ?? undefined;
+  const refId      = url.searchParams.get("refId")      ?? undefined;
+  const reqMberId  = url.searchParams.get("reqMberId")  ?? undefined;
+  const page     = Math.max(1, parseInt(url.searchParams.get("page")     ?? "1",  10));
+  const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get("pageSize") ?? "20", 10)));
 
   const membership = await prisma.tbPjProjectMember.findUnique({
     where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
@@ -36,38 +39,99 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const tasks = await prisma.tbAiTask.findMany({
-      where: {
-        prjct_id: projectId,
-        ...(status   ? { task_sttus_code: status }   : {}),
-        ...(taskType ? { task_ty_code:    taskType }  : {}),
-        ...(refType  ? { ref_ty_code:     refType }   : {}),
-        ...(refId    ? { ref_id:          refId }     : {}),
-      },
-      orderBy: { req_dt: "desc" },
-    });
+    const where = {
+      prjct_id: projectId,
+      ...(status    ? { task_sttus_code: status }    : {}),
+      ...(taskType  ? { task_ty_code:    taskType }   : {}),
+      ...(refType   ? { ref_ty_code:     refType }    : {}),
+      ...(refId     ? { ref_id:          refId }      : {}),
+      ...(reqMberId ? { req_mber_id:     reqMberId }  : {}),
+    };
 
-    // 대상 이름 조인 — ref_ty_code 에 따라 Area 또는 Function 조회
-    const areaIds    = tasks.filter((t) => t.ref_ty_code === "AREA")    .map((t) => t.ref_id);
-    const functionIds = tasks.filter((t) => t.ref_ty_code === "FUNCTION").map((t) => t.ref_id);
+    const [totalCount, tasks] = await Promise.all([
+      prisma.tbAiTask.count({ where }),
+      prisma.tbAiTask.findMany({
+        where,
+        orderBy: { req_dt: "desc" },
+        skip:    (page - 1) * pageSize,
+        take:    pageSize,
+      }),
+    ]);
 
-    const [areas, functions] = await Promise.all([
+    // 대상 이름 조인 — ref_ty_code 에 따라 UnitWork / Area / Function 조회
+    const unitWorkIds = tasks.filter((t) => t.ref_ty_code === "UNIT_WORK").map((t) => t.ref_id);
+    const areaIds     = tasks.filter((t) => t.ref_ty_code === "AREA")     .map((t) => t.ref_id);
+    const functionIds = tasks.filter((t) => t.ref_ty_code === "FUNCTION") .map((t) => t.ref_id);
+
+    const [unitWorks, areas, functions] = await Promise.all([
+      unitWorkIds.length
+        ? prisma.tbDsUnitWork.findMany({
+            where:  { unit_work_id: { in: unitWorkIds } },
+            select: { unit_work_id: true, unit_work_nm: true, unit_work_display_id: true },
+          })
+        : [],
       areaIds.length
         ? prisma.tbDsArea.findMany({
             where:  { area_id: { in: areaIds } },
-            select: { area_id: true, area_nm: true, area_display_id: true },
+            select: {
+              area_id: true, area_nm: true, area_display_id: true,
+              screen: {
+                select: {
+                  scrn_nm: true,
+                  unitWork: { select: { unit_work_nm: true } },
+                },
+              },
+            },
           })
         : [],
       functionIds.length
         ? prisma.tbDsFunction.findMany({
             where:  { func_id: { in: functionIds } },
-            select: { func_id: true, func_nm: true, func_display_id: true },
+            select: {
+              func_id: true, func_nm: true, func_display_id: true,
+              area: {
+                select: {
+                  area_nm: true,
+                  screen: {
+                    select: {
+                      scrn_nm: true,
+                      unitWork: { select: { unit_work_nm: true } },
+                    },
+                  },
+                },
+              },
+            },
           })
         : [],
     ]);
 
-    const areaMap    = new Map(areas.map((a) => [a.area_id,     { name: a.area_nm,     displayId: a.area_display_id }]));
-    const functionMap = new Map(functions.map((f) => [f.func_id, { name: f.func_nm,     displayId: f.func_display_id }]));
+    const unitWorkMap = new Map(
+      unitWorks.map((u) => [u.unit_work_id, {
+        name:         u.unit_work_nm,
+        displayId:    u.unit_work_display_id,
+        unitWorkName: null as string | null,
+        screenName:   null as string | null,
+        areaName:     null as string | null,
+      }])
+    );
+    const areaMap = new Map(
+      areas.map((a) => [a.area_id, {
+        name:         a.area_nm,
+        displayId:    a.area_display_id,
+        unitWorkName: a.screen?.unitWork?.unit_work_nm ?? null,
+        screenName:   a.screen?.scrn_nm ?? null,
+        areaName:     null as string | null,
+      }])
+    );
+    const functionMap = new Map(
+      functions.map((f) => [f.func_id, {
+        name:         f.func_nm,
+        displayId:    f.func_display_id,
+        unitWorkName: f.area?.screen?.unitWork?.unit_work_nm ?? null,
+        screenName:   f.area?.screen?.scrn_nm ?? null,
+        areaName:     f.area?.area_nm ?? null,
+      }])
+    );
 
     const now = Date.now();
     const FIVE_MIN_MS = 5 * 60 * 1000;
@@ -83,7 +147,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const memberMap = new Map(members.map(m => [m.mber_id, m.mber_nm]));
 
     const items = tasks.map((t) => {
-      const refInfo = t.ref_ty_code === "AREA"
+      const refInfo = t.ref_ty_code === "UNIT_WORK"
+        ? unitWorkMap.get(t.ref_id)
+        : t.ref_ty_code === "AREA"
         ? areaMap.get(t.ref_id)
         : functionMap.get(t.ref_id);
 
@@ -93,13 +159,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         now - t.req_dt.getTime() > FIVE_MIN_MS;
 
       return {
-        taskId:      t.ai_task_id,
-        taskType:    t.task_ty_code,
-        refType:     t.ref_ty_code,
-        refId:       t.ref_id,
-        refName:     refInfo?.name     ?? "알 수 없음",
+        taskId:       t.ai_task_id,
+        taskType:     t.task_ty_code,
+        refType:      t.ref_ty_code,
+        refId:        t.ref_id,
+        refName:      refInfo?.name      ?? "알 수 없음",
         refDisplayId: refInfo?.displayId ?? "",
-        status:      t.task_sttus_code,
+        unitWorkName: refInfo?.unitWorkName ?? null,
+        screenName:   refInfo?.screenName   ?? null,
+        areaName:     refInfo?.areaName     ?? null,
+        status:       t.task_sttus_code,
         comment:     t.coment_cn ?? "",
         resultCn:    t.result_cn ?? "",
         requestedAt: t.req_dt.toISOString(),
@@ -112,7 +181,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       };
     });
 
-    return apiSuccess({ items, totalCount: items.length });
+    return apiSuccess({
+      items,
+      totalCount,
+      page,
+      pageSize,
+      pageCount: Math.ceil(totalCount / pageSize),
+    });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/ai-tasks] DB 오류:`, err);
     return apiError("DB_ERROR", "AI 태스크 목록 조회에 실패했습니다.", 500);
@@ -186,7 +261,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         req_snapshot_data: snapshotData,
         req_mber_id:      auth.mberId,
         task_sttus_code:  "PENDING",
-        retry_cnt:        3,
+        retry_cnt:        0,
       },
     });
 

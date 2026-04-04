@@ -32,6 +32,7 @@ type AreaRow = {
   screenId:        string | null;
   screenName:      string;
   screenDisplayId: string | null;
+  unitWorkId:      string | null;
   unitWorkName:    string | null;
   functionCount:   number;
 };
@@ -60,6 +61,7 @@ function AreasPageInner() {
 
   // 삭제 다이얼로그 상태
   const [deleteTarget, setDeleteTarget] = useState<AreaRow | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   // ── 드래그 상태 ────────────────────────────────────────────────────────────
   const dragItem         = useRef<number | null>(null);
@@ -211,34 +213,54 @@ function AreasPageInner() {
               onDragEnd={handleDragEnd}
               onDragOver={(e) => e.preventDefault()}
               onClick={() => router.push(`/projects/${projectId}/areas/${area.areaId}`)}
+              onMouseEnter={() => setHoveredId(area.areaId)}
+              onMouseLeave={() => setHoveredId(null)}
               style={{
                 ...gridRowStyle,
                 borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+                background: hoveredId === area.areaId ? "var(--color-bg-hover, rgba(99,102,241,0.06))" : "var(--color-bg-card)",
+                borderLeft: hoveredId === area.areaId ? "3px solid var(--color-primary, #6366f1)" : "3px solid transparent",
+                paddingLeft: 13,
               }}
             >
               {/* 드래그 핸들 */}
               <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
 
-              {/* 단위업무명 — 같은 단위업무면 첫 행에만 표시 */}
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {items[idx - 1]?.unitWorkName === area.unitWorkName ? "" : (area.unitWorkName ?? "-")}
+              {/* 단위업무명 — 같은 화면(screenId)이면 첫 행에만 표시, 클릭 시 단위업무 상세로 이동 */}
+              <div onClick={(e) => e.stopPropagation()}>
+                {items[idx - 1]?.screenId === area.screenId && area.screenId
+                  ? null
+                  : area.unitWorkId ? (
+                    <button
+                      onClick={() => router.push(`/projects/${projectId}/unit-works/${area.unitWorkId}`)}
+                      style={{ ...linkBtnStyle, fontSize: 13 }}
+                    >
+                      {area.unitWorkName}
+                    </button>
+                  ) : (
+                    <span style={{ color: "#aaa", fontSize: 13 }}>-</span>
+                  )
+                }
               </div>
 
-              {/* 화면명 (클릭 → 화면 상세·편집, 행 클릭과 분리) */}
+              {/* 화면명 — 같은 화면(screenId)이면 첫 행에만 표시 */}
               <div onClick={(e) => e.stopPropagation()}>
-                {area.screenId ? (
-                  <button
-                    onClick={() => router.push(`/projects/${projectId}/screens/${area.screenId}`)}
-                    style={linkBtnStyle}
-                  >
-                    <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
-                      {area.screenDisplayId}
-                    </span>
-                    {area.screenName}
-                  </button>
-                ) : (
-                  <span style={{ color: "#aaa", fontSize: 13 }}>미분류</span>
-                )}
+                {items[idx - 1]?.screenId === area.screenId && area.screenId
+                  ? null
+                  : area.screenId ? (
+                    <button
+                      onClick={() => router.push(`/projects/${projectId}/screens/${area.screenId}`)}
+                      style={linkBtnStyle}
+                    >
+                      <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
+                        {area.screenDisplayId}
+                      </span>
+                      {area.screenName}
+                    </button>
+                  ) : (
+                    <span style={{ color: "#aaa", fontSize: 13 }}>미분류</span>
+                  )
+                }
               </div>
 
               {/* 영역명 */}
@@ -266,28 +288,21 @@ function AreasPageInner() {
                 {area.functionCount}
               </div>
 
-              {/* 바로가기(→) + 삭제 */}
+              {/* 상세 버튼 */}
               <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
                 <button
-                  onClick={() => router.push(`/projects/${projectId}/functions?areaId=${area.areaId}`)}
-                  title="기능 목록으로 이동"
+                  onClick={() => router.push(`/projects/${projectId}/areas/${area.areaId}`)}
                   style={{
-                    background:   "none",
+                    background:   "var(--color-bg-card)",
                     border:       "1px solid var(--color-border)",
                     borderRadius: 4,
                     cursor:       "pointer",
                     fontSize:     13,
-                    padding:      "3px 8px",
-                    color:        "var(--color-text-secondary)",
+                    padding:      "3px 12px",
+                    color:        "var(--color-text-primary)",
                   }}
                 >
-                  →
-                </button>
-                <button
-                  onClick={() => setDeleteTarget(area)}
-                  style={dangerBtnStyle}
-                >
-                  삭제
+                  상세
                 </button>
               </div>
             </div>

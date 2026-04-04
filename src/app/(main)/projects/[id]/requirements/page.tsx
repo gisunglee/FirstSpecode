@@ -158,7 +158,6 @@ function RequirementsPageInner() {
             <div>출처</div>
             <div style={{ textAlign: "center" }}>단위업무</div>
             <div style={{ textAlign: "center" }}>정렬</div>
-            <div />
           </div>
 
           {/* 데이터 행 */}
@@ -227,15 +226,6 @@ function RequirementsPageInner() {
                 {req.sortOrder || "-"}
               </div>
 
-              {/* 삭제 버튼 */}
-              <div onClick={(e) => e.stopPropagation()}>
-                <button
-                  onClick={() => setDeleteTarget(req)}
-                  style={dangerBtnStyle}
-                >
-                  삭제
-                </button>
-              </div>
             </div>
           ))}
         </div>
@@ -398,7 +388,7 @@ function sourceBadgeStyle(source: string): React.CSSProperties {
 
 // ── 스타일 상수 ──────────────────────────────────────────────────────────────
 
-const GRID_TEMPLATE = "32px minmax(120px, 200px) 1fr 90px 80px 80px 60px 60px";
+const GRID_TEMPLATE = "32px 18% 1fr 8% 7% 8% 5%";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",

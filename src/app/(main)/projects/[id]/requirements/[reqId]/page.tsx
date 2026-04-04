@@ -220,6 +220,9 @@ function RequirementDetailPageInner() {
   const [confirmTarget,  setConfirmTarget]  = useState<HistoryItem | null>(null);
   const [deleteTarget,   setDeleteTarget]   = useState<HistoryItem | null>(null);
 
+  // 요구사항 삭제 팝업 상태
+  const [reqDeleteOpen, setReqDeleteOpen] = useState(false);
+
   // 파일 업로드 input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -312,6 +315,19 @@ function RequirementDetailPageInner() {
     enabled: !isNew && historyOpen,
   });
   const historyItems = historyData?.items ?? [];
+
+  // ── 요구사항 삭제 뮤테이션 ───────────────────────────────────────────────────
+  const reqDeleteMutation = useMutation({
+    mutationFn: (deleteChildren: boolean) =>
+      authFetch(`/api/projects/${projectId}/requirements/${reqId}?deleteChildren=${deleteChildren}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      toast.success("요구사항이 삭제되었습니다.");
+      router.push(`/projects/${projectId}/requirements`);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
 
   // ── 이력 삭제 뮤테이션 ──────────────────────────────────────────────────────
   const deleteHistMutation = useMutation({
@@ -465,6 +481,14 @@ function RequirementDetailPageInner() {
               style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
             >
               이력
+            </button>
+          )}
+          {!isNew && (
+            <button
+              onClick={() => setReqDeleteOpen(true)}
+              style={{ fontSize: 12, padding: "5px 14px", minWidth: 60, borderRadius: 6, border: "1px solid #e53935", background: "none", color: "#e53935", cursor: "pointer", fontWeight: 600 }}
+            >
+              삭제
             </button>
           )}
           <button
@@ -851,6 +875,61 @@ function RequirementDetailPageInner() {
         </div>
       )}
 
+      {/* 요구사항 삭제 확인 팝업 */}
+      {reqDeleteOpen && (
+        <ReqDeleteDialog
+          onClose={() => setReqDeleteOpen(false)}
+          onConfirm={(deleteChildren) => reqDeleteMutation.mutate(deleteChildren)}
+          isPending={reqDeleteMutation.isPending}
+        />
+      )}
+
+    </div>
+  );
+}
+
+// ── 요구사항 삭제 다이얼로그 ──────────────────────────────────────────────────
+
+function ReqDeleteDialog({
+  onClose,
+  onConfirm,
+  isPending,
+}: {
+  onClose:   () => void;
+  onConfirm: (deleteChildren: boolean) => void;
+  isPending: boolean;
+}) {
+  const [deleteChildren, setDeleteChildren] = useState<boolean | null>(null);
+
+  function handleDelete() {
+    if (deleteChildren === null) { toast.error("하위 데이터 처리 방법을 선택해 주세요."); return; }
+    onConfirm(deleteChildren);
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()}
+        style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "28px 32px", minWidth: 360, maxWidth: 460, width: "100%", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+        <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700 }}>요구사항을 삭제하시겠습니까?</h3>
+        <p style={{ margin: "0 0 16px", fontSize: 14, color: "var(--color-text-secondary)" }}>삭제하면 복구할 수 없습니다.</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, cursor: "pointer" }}>
+            <input type="radio" name="reqDeleteType" checked={deleteChildren === true}  onChange={() => setDeleteChildren(true)} />
+            하위 사용자스토리 전체 삭제
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, cursor: "pointer" }}>
+            <input type="radio" name="reqDeleteType" checked={deleteChildren === false} onChange={() => setDeleteChildren(false)} />
+            요구사항만 삭제 (스토리 미분류 처리)
+          </label>
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button onClick={onClose} disabled={isPending} style={{ padding: "7px 16px", borderRadius: 6, border: "1px solid var(--color-border)", background: "none", cursor: "pointer", fontSize: 13 }}>취소</button>
+          <button onClick={handleDelete} disabled={isPending} style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "#e53935", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+            {isPending ? "삭제 중..." : "삭제"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

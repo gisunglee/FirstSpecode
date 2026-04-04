@@ -52,6 +52,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       creatMberId: t.creat_mber_id ?? null,
       creatDt:     t.creat_dt.toISOString(),
       mdfcnDt:     t.mdfcn_dt.toISOString(),
+      myRole:      membership.role_code,
     });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/prompt-templates/${tmplId}] DB 오류:`, err);

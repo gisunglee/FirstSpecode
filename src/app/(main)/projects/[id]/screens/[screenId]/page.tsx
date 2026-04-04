@@ -52,6 +52,7 @@ type ScreenDetail = {
   displayId:    string;
   name:         string;
   description:  string;
+  comment:      string;
   layoutData:   string | null;
   displayCode:  string;
   type:         string;
@@ -68,6 +69,7 @@ type SaveBody = {
   unitWorkId?:  string;
   name:         string;
   description:  string;
+  comment?:     string;
   displayCode:  string;
   type:         string;
   sortOrder:    number;
@@ -108,6 +110,7 @@ function ScreenDetailPageInner() {
     unitWorkId:  presetUnitWorkId || undefined,
     name:        "",
     description: "",
+    comment:     "",
     displayCode: "",
     type:        "LIST",
     sortOrder:   0,
@@ -155,6 +158,7 @@ function ScreenDetailPageInner() {
           unitWorkId:  d.unitWorkId ?? undefined,
           name:        d.name,
           description: d.description ?? "",
+          comment:     d.comment ?? "",
           displayCode: d.displayCode,
           type:        d.type,
           sortOrder:   d.sortOrder,
@@ -171,6 +175,28 @@ function ScreenDetailPageInner() {
         return d;
       }),
     enabled: !isNew,
+  });
+
+  // ── 삭제 상태 / 뮤테이션 ─────────────────────────────────────────────────
+  const [deleteConfirmOpen,   setDeleteConfirmOpen]   = useState(false);
+  const [deleteChildren,      setDeleteChildren]      = useState<boolean | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: () => {
+      const hasAreas = (detail?.areas?.length ?? 0) > 0;
+      const childFlag = hasAreas ? deleteChildren : true;
+      if (hasAreas && childFlag === null) throw new Error("하위 데이터 처리 방법을 선택해 주세요.");
+      return authFetch(
+        `/api/projects/${projectId}/screens/${screenId}?deleteChildren=${childFlag ?? true}`,
+        { method: "DELETE" }
+      );
+    },
+    onSuccess: () => {
+      toast.success("화면이 삭제되었습니다.");
+      queryClient.invalidateQueries({ queryKey: ["screens", projectId] });
+      router.push(`/projects/${projectId}/screens`);
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 
   // ── 저장 뮤테이션 ──────────────────────────────────────────────────────────
@@ -270,7 +296,7 @@ function ScreenDetailPageInner() {
             {isNew ? "화면 신규 등록" : `${detail?.displayId ?? ""} 화면 편집`}
           </span>
         </div>
-        {/* 우: PRD 다운로드 + 취소·저장 */}
+        {/* 우: PRD 다운로드 + 삭제·취소·저장 */}
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           {!isNew && (
             <button
@@ -288,6 +314,15 @@ function ScreenDetailPageInner() {
           >
             취소
           </button>
+          {!isNew && (
+            <button
+              onClick={() => { setDeleteChildren(null); setDeleteConfirmOpen(true); }}
+              disabled={saveMutation.isPending}
+              style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60, color: "#e53935", borderColor: "#e53935" }}
+            >
+              삭제
+            </button>
+          )}
           <button
             onClick={handleSave}
             disabled={saveMutation.isPending}
@@ -401,6 +436,31 @@ function ScreenDetailPageInner() {
                   style={inputStyle}
                 />
               </FormField>
+            </div>
+          </Section>
+
+          {/* 코멘트 — 레이아웃 구성 위 */}
+          <Section title="코멘트" hideTitle small>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>
+                AI 요청 코멘트
+              </label>
+              <textarea
+                value={form.comment ?? ""}
+                onChange={(e) => setForm((prev) => ({ ...prev, comment: e.target.value }))}
+                readOnly={false}
+                placeholder="AI 요청 시 참고할 추가 지시사항을 입력해 주세요."
+                rows={4}
+                style={{
+                  width: "100%", boxSizing: "border-box",
+                  padding: "8px 10px", borderRadius: 6,
+                  border: "1px solid var(--color-border)",
+                  background: "var(--color-bg-card)",
+                  color: "var(--color-text-primary)",
+                  fontSize: 13, lineHeight: 1.6, resize: "vertical",
+                  outline: "none", fontFamily: "inherit",
+                }}
+              />
             </div>
           </Section>
 
@@ -522,6 +582,45 @@ function ScreenDetailPageInner() {
                 style={{ ...primaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
               >
                 이력과 함께 저장
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 삭제 확인 다이얼로그 */}
+      {deleteConfirmOpen && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setDeleteConfirmOpen(false)}
+        >
+          <div style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "28px 32px", minWidth: 360, maxWidth: 480, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>화면 삭제</div>
+            <p style={{ fontSize: 14, color: "var(--color-text-secondary)", marginBottom: 16 }}>
+              <strong style={{ color: "var(--color-text-primary)" }}>{detail?.displayId} {detail?.name}</strong> 화면을 삭제합니다.
+            </p>
+            {(detail?.areas?.length ?? 0) > 0 && (
+              <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+                <p style={{ fontSize: 13, color: "#e53935", marginBottom: 4 }}>이 화면에 영역이 {detail!.areas.length}개 있습니다. 처리 방법을 선택하세요.</p>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+                  <input type="radio" name="deleteChildren" checked={deleteChildren === true} onChange={() => setDeleteChildren(true)} />
+                  영역 포함 모두 삭제
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+                  <input type="radio" name="deleteChildren" checked={deleteChildren === false} onChange={() => setDeleteChildren(false)} />
+                  화면만 삭제 (영역 미분류 상태로 유지)
+                </label>
+              </div>
+            )}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button onClick={() => setDeleteConfirmOpen(false)} style={secondaryBtnStyle} disabled={deleteMutation.isPending}>취소</button>
+              <button
+                onClick={() => deleteMutation.mutate()}
+                style={{ ...secondaryBtnStyle, color: "#e53935", borderColor: "#e53935" }}
+                disabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending ? "삭제 중..." : "삭제"}
               </button>
             </div>
           </div>

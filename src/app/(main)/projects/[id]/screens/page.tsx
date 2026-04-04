@@ -59,6 +59,7 @@ function ScreensPageInner() {
 
   // 삭제 다이얼로그 상태
   const [deleteTarget, setDeleteTarget] = useState<ScreenRow | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   // ── 드래그 상태 ────────────────────────────────────────────────────────────
   const dragItem           = useRef<number | null>(null);
@@ -183,7 +184,6 @@ function ScreensPageInner() {
             <div>대분류</div>
             <div>중분류</div>
             <div>소분류</div>
-            <div />
           </div>
 
           {items.map((screen, idx) => {
@@ -199,10 +199,15 @@ function ScreensPageInner() {
                 onDragEnd={handleDragEnd}
                 onDragOver={(e) => e.preventDefault()}
                 onClick={() => router.push(`/projects/${projectId}/screens/${screen.screenId}`)}
+                onMouseEnter={() => setHoveredId(screen.screenId)}
+                onMouseLeave={() => setHoveredId(null)}
                 style={{
                   ...gridRowStyle,
                   borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
                   borderBottom: isLastOfReq ? "1px solid var(--color-border)" : "none",
+                  background: hoveredId === screen.screenId ? "var(--color-bg-hover, rgba(99,102,241,0.06))" : "var(--color-bg-card)",
+                  borderLeft: hoveredId === screen.screenId ? "3px solid var(--color-primary, #6366f1)" : "3px solid transparent",
+                  paddingLeft: 13,
                 }}
               >
                 {/* 드래그 핸들 */}
@@ -273,30 +278,6 @@ function ScreensPageInner() {
                   {screen.categoryS || "-"}
                 </div>
 
-                {/* 바로가기(→) + 삭제 (FID-00143) */}
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() => router.push(`/projects/${projectId}/areas?screenId=${screen.screenId}`)}
-                    title="영역 목록으로 이동"
-                    style={{
-                      background: "none",
-                      border: "1px solid var(--color-border)",
-                      borderRadius: 4,
-                      cursor: "pointer",
-                      fontSize: 13,
-                      padding: "3px 8px",
-                      color: "var(--color-text-secondary)",
-                    }}
-                  >
-                    →
-                  </button>
-                  <button
-                    onClick={() => setDeleteTarget(screen)}
-                    style={dangerBtnStyle}
-                  >
-                    삭제
-                  </button>
-                </div>
               </div>
             );
           })}
@@ -436,7 +417,8 @@ function typeBadgeStyle(type: string): React.CSSProperties {
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-const GRID_TEMPLATE = "32px minmax(120px, 200px) minmax(100px, 160px) 1fr 72px 52px 90px 90px 90px 100px";
+// 요구사항·단위업무·화면명·분류는 fr 비율, 소형 컬럼은 고정
+const GRID_TEMPLATE = "32px 1.5fr 1.5fr 3fr 70px 48px 1fr 1fr 1fr";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid",

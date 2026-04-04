@@ -15,7 +15,7 @@
  *   - 30초 자동 폴링: IN_PROGRESS 상태 태스크가 있을 때만 활성화
  */
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -26,7 +26,7 @@ import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 
 type TaskStatus = "PENDING" | "IN_PROGRESS" | "DONE" | "APPLIED" | "REJECTED" | "FAILED" | "TIMEOUT";
 type TaskType   = "INSPECT" | "DESIGN" | "IMPLEMENT" | "MOCKUP" | "IMPACT" | "CUSTOM";
-type RefType    = "AREA" | "FUNCTION";
+type RefType    = "AREA" | "FUNCTION" | "UNIT_WORK";
 
 type TaskRow = {
   taskId:       string;
@@ -35,6 +35,9 @@ type TaskRow = {
   refId:        string;
   refName:      string;
   refDisplayId: string;
+  unitWorkName: string | null;
+  screenName:   string | null;
+  areaName:     string | null;
   status:       TaskStatus;
   comment:      string;
   reqCn:        string;
@@ -116,15 +119,20 @@ function taskTypeBadgeStyle(type: TaskType): React.CSSProperties {
 }
 
 function refTypeBadgeStyle(type: RefType): React.CSSProperties {
-  const isArea = type === "AREA";
+  const colors: Record<RefType, { bg: string; color: string }> = {
+    AREA:      { bg: "#f5f5f5", color: "#666666" },
+    FUNCTION:  { bg: "#f3e5f5", color: "#7b1fa2" },
+    UNIT_WORK: { bg: "#e3f2fd", color: "#1565c0" },
+  };
+  const c = colors[type] ?? { bg: "#f5f5f5", color: "#555" };
   return {
     display:      "inline-block",
     padding:      "2px 6px",
     borderRadius: 4,
     fontSize:     11,
     fontWeight:   700,
-    backgroundColor: isArea ? "#f5f5f5" : "#f3e5f5",
-    color:           isArea ? "#666666" : "#7b1fa2",
+    backgroundColor: c.bg,
+    color:           c.color,
     border:          "1px solid var(--color-border)",
   };
 }
@@ -157,6 +165,23 @@ function formatDuration(startIso: string, endIso: string | null): string {
   return m % 60 === 0 ? `${h}시간` : `${h}시간 ${m % 60}분`;
 }
 
+// ── 창 크기 기반 pageSize 계산 훅 ────────────────────────────────────────────
+
+// 레이아웃 고정 영역: 상단바 52 + 페이지헤더 52 + 필터 60 + 총건수/페이징 40 + 테이블헤더 38 + 여백 48 = 290px
+// 행 높이: 메인텍스트(20) + breadcrumb(16) + 패딩(8) + border(1) ≈ 45px
+const LAYOUT_OVERHEAD = 290;
+const ROW_HEIGHT      = 45;
+
+function usePageSize(): number {
+  // lazy initializer — 첫 렌더 시 한 번만 실행, 이후 절대 변하지 않음
+  const [pageSize] = useState(() =>
+    typeof window === "undefined"
+      ? 15
+      : Math.max(5, Math.floor((window.innerHeight - LAYOUT_OVERHEAD) / ROW_HEIGHT) - 1)
+  );
+  return pageSize;
+}
+
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
 
 export default function AiTasksPage() {
@@ -175,10 +200,23 @@ function AiTasksPageInner() {
   const queryClient = useQueryClient();
   const projectId   = params.id;
 
-  // ── 필터 상태 ──────────────────────────────────────────────────────────────
+  // ── 필터 / 페이지 상태 ────────────────────────────────────────────────────
   const [filterStatus,   setFilterStatus]   = useState<string>("");
   const [filterTaskType, setFilterTaskType] = useState<string>("");
   const [filterRefType,  setFilterRefType]  = useState<string>("");
+  const [filterMember,   setFilterMember]   = useState<string>("");
+  const [page,           setPage]           = useState(1);
+  const PAGE_SIZE = usePageSize();
+
+  // ── 멤버 목록 (필터 셀렉트용) ─────────────────────────────────────────────
+  const { data: membersData } = useQuery({
+    queryKey: ["members", projectId],
+    queryFn:  () =>
+      authFetch<{ data: { members: { memberId: string; name: string | null; email: string }[] } }>(
+        `/api/projects/${projectId}/members`
+      ).then((r) => r.data.members),
+    staleTime: 60_000,
+  });
 
   // ── 선택된 row 상태 (상세 패널) ───────────────────────────────────────────
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -188,15 +226,17 @@ function AiTasksPageInner() {
 
   // ── 데이터 조회 ────────────────────────────────────────────────────────────
   const { data, isLoading } = useQuery({
-    queryKey: ["ai-tasks", projectId, filterStatus, filterTaskType, filterRefType],
+    queryKey: ["ai-tasks", projectId, filterStatus, filterTaskType, filterRefType, filterMember, page],
     queryFn: () => {
       const sp = new URLSearchParams();
-      if (filterStatus)   sp.set("status",   filterStatus);
-      if (filterTaskType) sp.set("taskType", filterTaskType);
-      if (filterRefType)  sp.set("refType",  filterRefType);
-      const qs = sp.toString() ? `?${sp.toString()}` : "";
-      return authFetch<{ data: { items: TaskRow[]; totalCount: number } }>(
-        `/api/projects/${projectId}/ai-tasks${qs}`
+      if (filterStatus)   sp.set("status",     filterStatus);
+      if (filterTaskType) sp.set("taskType",   filterTaskType);
+      if (filterRefType)  sp.set("refType",    filterRefType);
+      if (filterMember)   sp.set("reqMberId",  filterMember);
+      sp.set("page",     String(page));
+      sp.set("pageSize", String(PAGE_SIZE));
+      return authFetch<{ data: { items: TaskRow[]; totalCount: number; page: number; pageSize: number; pageCount: number } }>(
+        `/api/projects/${projectId}/ai-tasks?${sp.toString()}`
       ).then((r) => r.data);
     },
     refetchInterval: (query) => {
@@ -207,6 +247,24 @@ function AiTasksPageInner() {
 
   const items      = data?.items      ?? [];
   const totalCount = data?.totalCount ?? 0;
+  const pageCount  = data?.pageCount  ?? 1;
+
+  // 필터 변경 시 1페이지로 리셋
+  function handleFilterChange(setter: (v: string) => void, value: string) {
+    setter(value);
+    setPage(1);
+  }
+
+  // ── 삭제 뮤테이션 ─────────────────────────────────────────────────────────
+  const deleteMutation = useMutation<unknown, Error, string>({
+    mutationFn: (taskId) =>
+      authFetch(`/api/projects/${projectId}/ai-tasks/${taskId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      toast.success("삭제되었습니다.");
+      queryClient.invalidateQueries({ queryKey: ["ai-tasks", projectId] });
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   // ── 강제 취소 뮤테이션 ─────────────────────────────────────────────────────
   const cancelMutation = useMutation<{ data: { taskId: string } }, Error, string>({
@@ -235,13 +293,15 @@ function AiTasksPageInner() {
   function navigateToRef(row: TaskRow) {
     if (row.refType === "AREA") {
       router.push(`/projects/${projectId}/areas/${row.refId}`);
+    } else if (row.refType === "UNIT_WORK") {
+      router.push(`/projects/${projectId}/unit-works/${row.refId}`);
     } else {
       router.push(`/projects/${projectId}/functions/${row.refId}`);
     }
   }
 
   // ── 10컬럼 그리드 템플릿 (1115px) ──────────────────────────────────────────
-  const GRID_CONFIG = "70px 100px minmax(150px, 1fr) 80px 144px 144px 80px 50px 85px 140px";
+  const GRID_CONFIG = "70px 100px minmax(150px, 1fr) 80px 144px 144px 80px 50px 120px 110px 36px";
 
   return (
     <div style={{ padding: 0 }}>
@@ -253,7 +313,7 @@ function AiTasksPageInner() {
 
       <div style={{ padding: "0 24px 24px" }}>
         <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
-          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ ...filterSelectStyle, width: 140 }}>
+          <select value={filterStatus} onChange={(e) => handleFilterChange(setFilterStatus, e.target.value)} style={{ ...filterSelectStyle, width: 140 }}>
             <option value="">상태 전체</option>
             <option value="PENDING">대기</option>
             <option value="IN_PROGRESS">처리중</option>
@@ -264,7 +324,7 @@ function AiTasksPageInner() {
             <option value="TIMEOUT">시간초과</option>
           </select>
 
-          <select value={filterTaskType} onChange={(e) => setFilterTaskType(e.target.value)} style={{ ...filterSelectStyle, width: 140 }}>
+          <select value={filterTaskType} onChange={(e) => handleFilterChange(setFilterTaskType, e.target.value)} style={{ ...filterSelectStyle, width: 140 }}>
             <option value="">유형 전체</option>
             <option value="INSPECT">명세 검토</option>
             <option value="DESIGN">설계</option>
@@ -274,16 +334,29 @@ function AiTasksPageInner() {
             <option value="CUSTOM">자유 요청</option>
           </select>
 
-          <select value={filterRefType} onChange={(e) => setFilterRefType(e.target.value)} style={{ ...filterSelectStyle, width: 140 }}>
+          <select value={filterRefType} onChange={(e) => handleFilterChange(setFilterRefType, e.target.value)} style={{ ...filterSelectStyle, width: 140 }}>
             <option value="">대상 전체</option>
+            <option value="UNIT_WORK">단위업무</option>
             <option value="AREA">영역</option>
             <option value="FUNCTION">기능</option>
+          </select>
+
+          <select value={filterMember} onChange={(e) => handleFilterChange(setFilterMember, e.target.value)} style={{ ...filterSelectStyle, width: 140 }}>
+            <option value="">요청자 전체</option>
+            {(membersData ?? []).map((m) => (
+              <option key={m.memberId} value={m.memberId}>{m.name ?? m.email}</option>
+            ))}
           </select>
           <div style={{ flex: 1 }} />
         </div>
 
-        <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
-          총 {totalCount}건
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <div style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
+            총 {totalCount}건
+          </div>
+          {pageCount > 1 && (
+            <Pagination page={page} pageCount={pageCount} onChange={setPage} />
+          )}
         </div>
 
         <div>
@@ -306,6 +379,7 @@ function AiTasksPageInner() {
                 <div style={{ textAlign: "center" }}>재시도</div>
                 <div style={{ textAlign: "center" }}>상태 / 액션</div>
                 <div style={{ textAlign: "center" }}>실행 가능일</div>
+                <div />
               </div>
 
               {items.map((row, idx) => (
@@ -323,7 +397,7 @@ function AiTasksPageInner() {
                 >
                   <div style={{ textAlign: "center" }}>
                     <span style={refTypeBadgeStyle(row.refType)}>
-                      {row.refType === "AREA" ? "영역" : "기능"}
+                      {row.refType === "AREA" ? "영역" : row.refType === "UNIT_WORK" ? "단위업무" : "기능"}
                     </span>
                   </div>
                   <div style={{ textAlign: "center" }}>
@@ -331,11 +405,16 @@ function AiTasksPageInner() {
                       {TASK_TYPE_LABELS[row.taskType]}
                     </span>
                   </div>
-                  <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    <button style={{ ...linkBtnStyle, fontWeight: 500, display: "inline-flex", alignItems: "center" }} onClick={(e) => { e.stopPropagation(); navigateToRef(row); }} type="button">
-                      {row.refDisplayId && <span style={{ color: "var(--color-primary)", fontSize: 13, marginRight: 6, fontWeight: 600 }}>{row.refDisplayId}</span>}
-                      {row.refName}
+                  <div style={{ overflow: "hidden", minWidth: 0 }}>
+                    <button
+                      style={{ ...linkBtnStyle, fontWeight: 500, display: "inline-flex", alignItems: "center", maxWidth: "100%", overflow: "hidden" }}
+                      onClick={(e) => { e.stopPropagation(); navigateToRef(row); }}
+                      type="button"
+                    >
+                      {row.refDisplayId && <span style={{ color: "var(--color-primary)", fontSize: 13, marginRight: 6, fontWeight: 600, flexShrink: 0 }}>{row.refDisplayId}</span>}
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.refName}</span>
                     </button>
+                    <RefBreadcrumb row={row} />
                   </div>
                   <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>{row.reqMberName}</div>
                   <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>{formatDatetime(row.requestedAt)}</div>
@@ -343,14 +422,50 @@ function AiTasksPageInner() {
                   <div style={{ textAlign: "center", fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)" }}>
                     {row.completedAt ? formatDuration(row.requestedAt, row.completedAt) : (row.status === "IN_PROGRESS" ? formatElapsed(row.elapsedMs) : "—")}
                   </div>
-                  <div style={{ textAlign: "center", fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>{row.retryCnt}회</div>
+                  <div style={{ textAlign: "center", fontSize: 13, fontWeight: 600, color: row.retryCnt > 0 ? "#e65100" : "var(--color-text-secondary)" }}>
+                    {row.retryCnt > 0 ? `${row.retryCnt}회` : "—"}
+                  </div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
                     <span style={statusBadgeStyle(row.status)}>{STATUS_LABELS[row.status]}</span>
                     {["FAILED", "REJECTED", "TIMEOUT"].includes(row.status) && (
-                      <button title="재요청" style={{ ...actionBtnStyle, padding: "2px 5px", fontSize: 14 }} onClick={(e) => { e.stopPropagation(); if (window.confirm("재요청 하시겠습니까?")) retryMutation.mutate(row.taskId); }} disabled={retryMutation.isPending} type="button">↺</button>
+                      <button
+                        title="재요청 — 새 태스크 생성"
+                        style={{ ...actionBtnStyle, padding: "2px 5px", fontSize: 14 }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm(
+                            "동일한 내용으로 새 AI 태스크를 생성합니다.\n" +
+                            "기존 태스크는 그대로 남아 있으며, 목록에 행이 하나 추가됩니다.\n\n" +
+                            "재요청하시겠습니까?"
+                          )) {
+                            retryMutation.mutate(row.taskId);
+                          }
+                        }}
+                        disabled={retryMutation.isPending}
+                        type="button"
+                      >
+                        ↺
+                      </button>
                     )}
                   </div>
                   <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>{row.execAvlblDt ? formatDatetime(row.execAvlblDt) : "—"}</div>
+                  <div style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                    <button
+                      title="삭제"
+                      type="button"
+                      style={{ background: "none", border: "none", cursor: "pointer", color: "#bbb", fontSize: 16, lineHeight: 1, padding: "2px 4px", borderRadius: 4 }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = "#e53935")}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = "#bbb")}
+                      onClick={() => {
+                        if (window.confirm("이 AI 태스크를 삭제하시겠습니까?")) {
+                          deleteMutation.mutate(row.taskId);
+                        }
+                      }}
+                      disabled={deleteMutation.isPending}
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -365,6 +480,74 @@ function AiTasksPageInner() {
           <CancelConfirmDialog onConfirm={() => cancelMutation.mutate(cancelConfirmId)} onClose={() => setCancelConfirmId(null)} isPending={cancelMutation.isPending} />
         )}
       </div>
+    </div>
+  );
+}
+
+// ── 페이지네이션 ──────────────────────────────────────────────────────────────
+
+function Pagination({ page, pageCount, onChange }: { page: number; pageCount: number; onChange: (p: number) => void }) {
+  // 현재 페이지 기준 최대 5개 버튼 표시
+  const WINDOW = 5;
+  const half   = Math.floor(WINDOW / 2);
+  let start    = Math.max(1, page - half);
+  const end    = Math.min(pageCount, start + WINDOW - 1);
+  if (end - start + 1 < WINDOW) start = Math.max(1, end - WINDOW + 1);
+  const pages  = Array.from({ length: end - start + 1 }, (_, i) => start + i);
+
+  const btnBase: React.CSSProperties = {
+    minWidth: 30, height: 28, padding: "0 6px",
+    border: "1px solid var(--color-border)", borderRadius: 5,
+    background: "var(--color-bg-card)", color: "var(--color-text-primary)",
+    fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+  };
+  const activeBtnStyle: React.CSSProperties = {
+    ...btnBase,
+    background: "var(--color-primary, #1976d2)", color: "#fff",
+    border: "1px solid var(--color-primary, #1976d2)", fontWeight: 700,
+  };
+  const disabledStyle: React.CSSProperties = { ...btnBase, opacity: 0.35, cursor: "default" };
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      <button style={page <= 1 ? disabledStyle : btnBase} disabled={page <= 1} onClick={() => onChange(1)} type="button">«</button>
+      <button style={page <= 1 ? disabledStyle : btnBase} disabled={page <= 1} onClick={() => onChange(page - 1)} type="button">‹</button>
+      {start > 1 && <span style={{ fontSize: 12, color: "var(--color-text-secondary)", padding: "0 2px" }}>…</span>}
+      {pages.map((p) => (
+        <button key={p} style={p === page ? activeBtnStyle : btnBase} onClick={() => onChange(p)} type="button">{p}</button>
+      ))}
+      {end < pageCount && <span style={{ fontSize: 12, color: "var(--color-text-secondary)", padding: "0 2px" }}>…</span>}
+      <button style={page >= pageCount ? disabledStyle : btnBase} disabled={page >= pageCount} onClick={() => onChange(page + 1)} type="button">›</button>
+      <button style={page >= pageCount ? disabledStyle : btnBase} disabled={page >= pageCount} onClick={() => onChange(pageCount)} type="button">»</button>
+    </div>
+  );
+}
+
+// ── 계층 breadcrumb (단위업무 > 화면 > 영역) ─────────────────────────────────
+
+function RefBreadcrumb({ row }: { row: TaskRow }) {
+  // UNIT_WORK: (대상이 단위업무 자체라서 breadcrumb 불필요)
+  // AREA:      unitWork > screen
+  // FUNCTION:  unitWork > screen > area
+  const parts: string[] = [];
+  if (row.refType !== "UNIT_WORK" && row.unitWorkName) parts.push(row.unitWorkName);
+  if (row.refType !== "UNIT_WORK" && row.screenName)   parts.push(row.screenName);
+  if (row.refType === "FUNCTION" && row.areaName) parts.push(row.areaName);
+
+  if (parts.length === 0) return null;
+
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 3, marginTop: 1,
+      fontSize: 11, color: "var(--color-text-secondary)", flexWrap: "nowrap",
+      overflow: "hidden", maxWidth: "100%",
+    }}>
+      {parts.map((p, i) => (
+        <span key={i} style={{ display: "flex", alignItems: "center", gap: 3, minWidth: 0 }}>
+          {i > 0 && <span style={{ color: "#bbb", flexShrink: 0 }}>›</span>}
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p}</span>
+        </span>
+      ))}
     </div>
   );
 }
@@ -436,7 +619,8 @@ const gridRowStyle: React.CSSProperties = {
   display:             "grid",
   gridTemplateColumns: GRID_TEMPLATE,
   gap:                 12,
-  padding:             "12px 16px",
+  padding:             "4px 16px",
+  minHeight:           48,
   alignItems:          "center",
   background:          "var(--color-bg-card)",
   transition:          "background 0.1s",

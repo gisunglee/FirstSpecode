@@ -46,21 +46,39 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       ],
     });
 
-    const items = unitWorks.map((uw) => ({
-      unitWorkId:    uw.unit_work_id,
-      displayId:     uw.unit_work_display_id,
-      name:          uw.unit_work_nm,
-      description:   uw.unit_work_dc ?? "",
-      assignMemberId: uw.asign_mber_id ?? null,
-      startDate:     uw.bgng_de ?? null,
-      endDate:       uw.end_de ?? null,
-      progress:      uw.progrs_rt,
-      sortOrder:     uw.sort_ordr,
-      reqId:         uw.req_id,
-      reqDisplayId:  uw.requirement.req_display_id,
-      reqName:       uw.requirement.req_nm,
-      screenCount:   uw.screens.length,
-    }));
+    const unitWorkIds = unitWorks.map((uw) => uw.unit_work_id);
+
+    // 단계별 진척률 조회 (tb_cm_progress)
+    const progressRecords = unitWorkIds.length > 0
+      ? await prisma.tbCmProgress.findMany({
+          where:  { ref_tbl_nm: "tb_ds_unit_work", ref_id: { in: unitWorkIds } },
+          select: { ref_id: true, analy_rt: true, design_rt: true, impl_rt: true, test_rt: true },
+        })
+      : [];
+    const progressMap = new Map(progressRecords.map((p) => [p.ref_id, p]));
+
+    const items = unitWorks.map((uw) => {
+      const prog = progressMap.get(uw.unit_work_id);
+      return {
+        unitWorkId:    uw.unit_work_id,
+        displayId:     uw.unit_work_display_id,
+        name:          uw.unit_work_nm,
+        description:   uw.unit_work_dc ?? "",
+        assignMemberId: uw.asign_mber_id ?? null,
+        startDate:     uw.bgng_de ?? null,
+        endDate:       uw.end_de ?? null,
+        progress:      uw.progrs_rt,
+        sortOrder:     uw.sort_ordr,
+        reqId:         uw.req_id,
+        reqDisplayId:  uw.requirement.req_display_id,
+        reqName:       uw.requirement.req_nm,
+        screenCount:   uw.screens.length,
+        analyRt:       prog?.analy_rt  ?? 0,
+        designRt:      prog?.design_rt ?? 0,
+        implRt:        prog?.impl_rt   ?? 0,
+        testRt:        prog?.test_rt   ?? 0,
+      };
+    });
 
     return apiSuccess({ items, totalCount: items.length });
   } catch (err) {

@@ -37,12 +37,10 @@ type UnitWorkRow = {
   reqDisplayId:  string;
   reqName:       string;
   screenCount:   number;
-};
-
-type EditDraft = {
-  name:      string;
-  startDate: string;
-  endDate:   string;
+  analyRt:       number;
+  designRt:      number;
+  implRt:        number;
+  testRt:        number;
 };
 
 type RequirementOption = {
@@ -75,6 +73,9 @@ function UnitWorksPageInner() {
   // 삭제 다이얼로그 상태
   const [deleteTarget, setDeleteTarget] = useState<UnitWorkRow | null>(null);
 
+  // 행 호버 상태
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
   // ── 단위업무 다운로드 드롭다운 ────────────────────────────────────────────────
   const [uwDownOpen, setUwDownOpen] = useState(false);
   const uwDownRef   = useRef<HTMLDivElement>(null);
@@ -98,9 +99,7 @@ function UnitWorksPageInner() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  // 인라인 수정 상태
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<EditDraft>({ name: "", startDate: "", endDate: "" });
+  // (인라인 수정 제거 — 상세 페이지에서 수정)
 
   // ── 드래그 상태 ────────────────────────────────────────────────────────────
   const dragItem     = useRef<number | null>(null);
@@ -140,25 +139,6 @@ function UnitWorksPageInner() {
       toast.error("순서 변경에 실패했습니다.");
       queryClient.invalidateQueries({ queryKey: ["unit-works", projectId] });
     },
-  });
-
-  // ── 인라인 수정 뮤테이션 (PUT) ──────────────────────────────────────────────
-  const updateMutation = useMutation({
-    mutationFn: ({ unitWorkId, draft }: { unitWorkId: string; draft: EditDraft }) =>
-      authFetch(`/api/projects/${projectId}/unit-works/${unitWorkId}`, {
-        method: "PUT",
-        body:   JSON.stringify({
-          name:      draft.name.trim(),
-          startDate: draft.startDate || null,
-          endDate:   draft.endDate   || null,
-        }),
-      }),
-    onSuccess: () => {
-      toast.success("저장되었습니다.");
-      setEditingId(null);
-      queryClient.invalidateQueries({ queryKey: ["unit-works", projectId] });
-    },
-    onError: (err: Error) => toast.error(err.message),
   });
 
   // ── 진행률 인라인 수정 뮤테이션 ─────────────────────────────────────────────
@@ -295,25 +275,6 @@ function UnitWorksPageInner() {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-  }
-
-  // ── 인라인 수정 시작 ───────────────────────────────────────────────────────
-  function startEdit(uw: UnitWorkRow) {
-    setEditingId(uw.unitWorkId);
-    setEditDraft({
-      name:      uw.name,
-      startDate: uw.startDate ?? "",
-      endDate:   uw.endDate   ?? "",
-    });
-  }
-
-  function cancelEdit() {
-    setEditingId(null);
-  }
-
-  function saveEdit(unitWorkId: string) {
-    if (!editDraft.name.trim()) { toast.error("단위업무명을 입력해 주세요."); return; }
-    updateMutation.mutate({ unitWorkId, draft: editDraft });
   }
 
   // ── 진행률 변경 ────────────────────────────────────────────────────────────
@@ -479,30 +440,39 @@ function UnitWorksPageInner() {
             <div>기간</div>
             <div style={{ textAlign: "center" }}>진행률</div>
             <div style={{ textAlign: "center" }}>화면수</div>
-            <div />
-            <div />
+            <div style={{ textAlign: "center" }}>분/설/구/테</div>
           </div>
 
           {/* 데이터 행 */}
-          {items.map((uw, idx) => {
-            const isEditing = editingId === uw.unitWorkId;
-            return (
+          {items.map((uw, idx) => (
             <div
               key={uw.unitWorkId}
-              draggable={!isEditing}
-              onDragStart={() => !isEditing && handleDragStart(idx)}
-              onDragEnter={() => !isEditing && handleDragEnter(idx)}
-              onDragEnd={() => !isEditing && handleDragEnd()}
+              draggable
+              onDragStart={() => handleDragStart(idx)}
+              onDragEnter={() => handleDragEnter(idx)}
+              onDragEnd={handleDragEnd}
               onDragOver={(e) => e.preventDefault()}
-              onClick={() => !isEditing && router.push(`/projects/${projectId}/unit-works/${uw.unitWorkId}`)}
+              onClick={() => router.push(`/projects/${projectId}/unit-works/${uw.unitWorkId}`)}
+              onMouseEnter={() => setHoveredId(uw.unitWorkId)}
+              onMouseLeave={() => setHoveredId(null)}
               style={{
                 ...gridRowStyle,
                 borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-                cursor: isEditing ? "default" : "pointer",
+                background: hoveredId === uw.unitWorkId
+                  ? (uw.analyRt === 100 && uw.designRt === 100 && uw.implRt === 100 && uw.testRt === 100
+                      ? "rgba(34,197,94,0.10)"
+                      : "var(--color-bg-hover, rgba(99,102,241,0.06))")
+                  : (uw.analyRt === 100 && uw.designRt === 100 && uw.implRt === 100 && uw.testRt === 100
+                      ? "rgba(34,197,94,0.04)"
+                      : "var(--color-bg-card)"),
+                borderLeft: uw.analyRt === 100 && uw.designRt === 100 && uw.implRt === 100 && uw.testRt === 100
+                  ? "3px solid #22c55e"
+                  : hoveredId === uw.unitWorkId ? "3px solid var(--color-primary, #6366f1)" : "3px solid transparent",
+                paddingLeft: 13,
               }}
             >
               {/* 드래그 핸들 */}
-              <div style={{ cursor: isEditing ? "default" : "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>
+              <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>
                 ☰
               </div>
 
@@ -524,52 +494,32 @@ function UnitWorksPageInner() {
                 </button>
               </div>
 
-              {/* 단위업무명 — 수정 모드에서는 input */}
-              <div style={{ fontSize: 14, fontWeight: 500 }} onClick={(e) => isEditing && e.stopPropagation()}>
-                {isEditing ? (
-                  <input
-                    value={editDraft.name}
-                    onChange={(e) => setEditDraft((p) => ({ ...p, name: e.target.value }))}
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ ...inlineInputStyle, width: "100%" }}
-                    autoFocus
-                  />
-                ) : (
-                  <>
-                    <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
-                      {uw.displayId}
-                    </span>
-                    {uw.name}
-                  </>
+              {/* 단위업무명 */}
+              <div style={{ fontSize: 14, fontWeight: 500, display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ color: "var(--color-text-secondary)", fontSize: 12 }}>
+                  {uw.displayId}
+                </span>
+                <span style={uw.analyRt === 100 && uw.designRt === 100 && uw.implRt === 100 && uw.testRt === 100 ? { color: "var(--color-text-secondary)", textDecoration: "none" } : {}}>
+                  {uw.name}
+                </span>
+                {uw.analyRt === 100 && uw.designRt === 100 && uw.implRt === 100 && uw.testRt === 100 && (
+                  <span style={{
+                    fontSize: 11, fontWeight: 600, color: "#16a34a",
+                    background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)",
+                    borderRadius: 4, padding: "1px 7px", letterSpacing: "0.2px", whiteSpace: "nowrap",
+                  }}>
+                    ✓ 완료
+                  </span>
                 )}
               </div>
 
-              {/* 기간 — 수정 모드에서는 date input */}
-              <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }} onClick={(e) => isEditing && e.stopPropagation()}>
-                {isEditing ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <input
-                      type="date"
-                      value={editDraft.startDate}
-                      onChange={(e) => setEditDraft((p) => ({ ...p, startDate: e.target.value }))}
-                      onClick={(e) => e.stopPropagation()}
-                      style={inlineInputStyle}
-                    />
-                    <input
-                      type="date"
-                      value={editDraft.endDate}
-                      onChange={(e) => setEditDraft((p) => ({ ...p, endDate: e.target.value }))}
-                      onClick={(e) => e.stopPropagation()}
-                      style={inlineInputStyle}
-                    />
-                  </div>
-                ) : (
-                  uw.startDate && uw.endDate
-                    ? `${uw.startDate} ~ ${uw.endDate}`
-                    : uw.startDate
-                    ? `${uw.startDate} ~`
-                    : "미정"
-                )}
+              {/* 기간 */}
+              <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+                {uw.startDate && uw.endDate
+                  ? `${uw.startDate} ~ ${uw.endDate}`
+                  : uw.startDate
+                  ? `${uw.startDate} ~`
+                  : "미정"}
               </div>
 
               {/* 진행률 인라인 수정 (FID-00133) */}
@@ -587,48 +537,27 @@ function UnitWorksPageInner() {
                 {uw.screenCount}
               </div>
 
-              {/* 수정/저장·취소 버튼 */}
-              <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-                {isEditing ? (
-                  <>
-                    <button
-                      onClick={() => saveEdit(uw.unitWorkId)}
-                      disabled={updateMutation.isPending}
-                      style={{ ...saveBtnStyle }}
-                    >
-                      저장
-                    </button>
-                    <button
-                      onClick={cancelEdit}
-                      disabled={updateMutation.isPending}
-                      style={{ ...cancelBtnStyle }}
-                    >
-                      취소
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => startEdit(uw)}
-                    style={editBtnStyle}
-                  >
-                    수정
-                  </button>
-                )}
-              </div>
-
-              {/* 삭제 버튼 */}
-              <div onClick={(e) => e.stopPropagation()}>
-                <button
-                  onClick={() => setDeleteTarget(uw)}
-                  disabled={isEditing}
-                  style={{ ...dangerBtnStyle, opacity: isEditing ? 0.4 : 1 }}
-                >
-                  삭제
-                </button>
-              </div>
+              {/* 분석/설계/구현/테스트 진척률 */}
+              {uw.analyRt === 100 && uw.designRt === 100 && uw.implRt === 100 && uw.testRt === 100 ? (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span style={{
+                    background: "linear-gradient(90deg, #e65100, #1565c0, #2e7d32, #6a1b9a)",
+                    color: "#fff", borderRadius: 6, padding: "2px 8px",
+                    fontSize: 11, fontWeight: 800, letterSpacing: "0.5px", whiteSpace: "nowrap",
+                  }}>
+                    100점 🎉
+                  </span>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: 3, alignItems: "center", justifyContent: "center" }}>
+                  <UwRatioChip label="분" value={uw.analyRt}  color="#e65100" />
+                  <UwRatioChip label="설" value={uw.designRt} color="#1565c0" />
+                  <UwRatioChip label="구" value={uw.implRt}   color="#2e7d32" />
+                  <UwRatioChip label="테" value={uw.testRt}   color="#6a1b9a" />
+                </div>
+              )}
             </div>
-            );
-          })}
+          ))}
         </div>
       )}
       </div>
@@ -735,6 +664,25 @@ function UnitWorksPageInner() {
         />
       )}
     </div>
+  );
+}
+
+// ── 분석/설계/구현/테스트 비율 칩 ────────────────────────────────────────────
+
+function UwRatioChip({ label, value, color }: { label: string; value: number; color: string }) {
+  const fullLabel = label === "분" ? "분석" : label === "설" ? "설계" : label === "구" ? "구현" : "테스트";
+  return (
+    <span
+      title={`${fullLabel}: ${value}%`}
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        fontSize: 11, fontWeight: 700, lineHeight: 1,
+        color: value > 0 ? color : "#bbb",
+        minWidth: 24,
+      }}
+    >
+      {value}%
+    </span>
   );
 }
 
@@ -898,7 +846,8 @@ function DeleteConfirmDialog({
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-const GRID_TEMPLATE = "32px 44px minmax(130px, 200px) 1fr 150px 90px 60px 100px 60px";
+// 드래그핸들 / 순서 / 요구사항 / 단위업무명(flex) / 기간 / 진행률 / 화면수 / 분석구테
+const GRID_TEMPLATE = "28px 44px 22% 1fr 16% 80px 56px 110px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",
@@ -990,37 +939,6 @@ const inlineInputStyle: React.CSSProperties = {
   boxSizing:    "border-box",
 };
 
-const editBtnStyle: React.CSSProperties = {
-  padding:      "3px 10px",
-  borderRadius: 4,
-  border:       "1px solid var(--color-border)",
-  background:   "var(--color-bg-card)",
-  color:        "var(--color-text-primary)",
-  fontSize:     12,
-  cursor:       "pointer",
-};
-
-const saveBtnStyle: React.CSSProperties = {
-  padding:      "3px 8px",
-  borderRadius: 4,
-  border:       "none",
-  background:   "var(--color-primary, #1976d2)",
-  color:        "#fff",
-  fontSize:     12,
-  cursor:       "pointer",
-  fontWeight:   600,
-};
-
-const cancelBtnStyle: React.CSSProperties = {
-  padding:      "3px 6px",
-  borderRadius: 4,
-  border:       "1px solid var(--color-border)",
-  background:   "transparent",
-  color:        "var(--color-text-secondary)",
-  fontSize:     12,
-  cursor:       "pointer",
-};
-
 const outlineBtnStyle: React.CSSProperties = {
   padding:      "8px 16px",
   borderRadius: 6,
@@ -1054,16 +972,6 @@ const dropdownItemStyle: React.CSSProperties = {
   fontSize:   13,
   color:      "var(--color-text-primary)",
   textAlign:  "left",
-};
-
-const dangerBtnStyle: React.CSSProperties = {
-  padding:      "4px 12px",
-  borderRadius: 4,
-  border:       "1px solid #e53935",
-  background:   "transparent",
-  color:        "#e53935",
-  fontSize:     12,
-  cursor:       "pointer",
 };
 
 const overlayStyle: React.CSSProperties = {

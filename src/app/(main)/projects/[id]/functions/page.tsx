@@ -22,8 +22,11 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
+
+type AiTaskInfo = { taskId: string; status: string } | null;
 
 type FuncRow = {
   funcId:          string;
@@ -36,6 +39,7 @@ type FuncRow = {
   effort:          string;
   sortOrder:       number;
   areaId:          string | null;
+  assignMemberId:  string | null;
   areaName:        string;
   areaDisplayId:   string | null;
   areaSortOrder:   number;
@@ -44,6 +48,14 @@ type FuncRow = {
   screenDisplayId: string | null;
   unitWorkId:      string | null;
   unitWorkName:    string;
+  aiDesign:        AiTaskInfo;
+  aiInspect:       AiTaskInfo;
+  designRt:        number;
+  implRt:          number;
+  testRt:          number;
+  ctgryL:          string | null;
+  ctgryM:          string | null;
+  ctgryS:          string | null;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -66,19 +78,29 @@ function FunctionsPageInner() {
   const projectId    = params.id;
   const areaIdFilter = searchParams.get("areaId") ?? undefined;
 
+  // AI 태스크 상세 팝업
+  const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
   // 인라인 편집 상태: { funcId, field } or null
   const [editingCell, setEditingCell] = useState<{ funcId: string; field: "complexity" | "effort" } | null>(null);
   const [editValue,   setEditValue]   = useState("");
   // 정렬순서 직접 입력 상태: { funcId → sortOrder }
   const [sortEdits, setSortEdits] = useState<Record<string, number>>({});
 
+  // 뷰 모드
+  const [viewMode, setViewMode] = useState<"default" | "category">("default");
+
   // 검색 필터
   const [unitWorkFilter, setUnitWorkFilter] = useState("");
   const [screenFilter,   setScreenFilter]   = useState("");
+  const [areaFilter,     setAreaFilter]     = useState("");
+  const [memberFilter,   setMemberFilter]   = useState("");
 
   function handleUnitWorkChange(val: string) {
     setUnitWorkFilter(val);
     setScreenFilter(""); // 단위업무 바뀌면 화면 필터 초기화
+    setAreaFilter("");
   }
 
   const dragItem     = useRef<number | null>(null);
@@ -99,6 +121,16 @@ function FunctionsPageInner() {
     },
   });
 
+  const { data: membersData } = useQuery({
+    queryKey: ["members", projectId],
+    queryFn:  () =>
+      authFetch<{ data: { members: { memberId: string; name: string | null; email: string }[] } }>(
+        `/api/projects/${projectId}/members`
+      ).then((r) => r.data.members),
+    staleTime: 60_000,
+  });
+  const memberNameMap = new Map((membersData ?? []).map((m) => [m.memberId, m.name ?? m.email]));
+
   const items = data?.items ?? [];
 
   // 단위업무 셀렉트 옵션 (중복 제거)
@@ -115,11 +147,42 @@ function FunctionsPageInner() {
     ).entries()
   ).map(([id, name]) => ({ id: id!, name }));
 
+  // 영역 셀렉트 옵션 — 선택된 화면 기준으로 좁힘
+  const areaOptions = Array.from(
+    new Map(
+      items
+        .filter((f) => f.areaId && (!screenFilter || f.screenId === screenFilter))
+        .map((f) => [f.areaId, `${f.areaDisplayId ?? ""} ${f.areaName}`.trim()])
+    ).entries()
+  ).map(([id, name]) => ({ id: id!, name }));
+
+  // 담당자 셀렉트 옵션 (중복 제거)
+  const memberOptions = Array.from(
+    new Map(
+      items
+        .filter((f) => f.assignMemberId)
+        .map((f) => [f.assignMemberId, f.assignMemberId!])
+    ).entries()
+  ).map(([id]) => ({ id: id! }));
+
+  // 분류 정렬 아이템 (대→중→소→기능명 순)
+  const categorySortedItems = [...items].sort((a, b) => {
+    const lA = a.ctgryL ?? ""; const lB = b.ctgryL ?? "";
+    if (lA !== lB) return lA.localeCompare(lB, "ko");
+    const mA = a.ctgryM ?? ""; const mB = b.ctgryM ?? "";
+    if (mA !== mB) return mA.localeCompare(mB, "ko");
+    const sA = a.ctgryS ?? ""; const sB = b.ctgryS ?? "";
+    if (sA !== sB) return sA.localeCompare(sB, "ko");
+    return a.name.localeCompare(b.name, "ko");
+  });
+
   // 클라이언트 필터링
-  const filteredItems = items.filter(
+  const filteredItems = (viewMode === "category" ? categorySortedItems : items).filter(
     (f) =>
-      (!unitWorkFilter || f.unitWorkId === unitWorkFilter) &&
-      (!screenFilter   || f.screenId   === screenFilter)
+      (!unitWorkFilter || f.unitWorkId     === unitWorkFilter) &&
+      (!screenFilter   || f.screenId       === screenFilter)   &&
+      (!areaFilter     || f.areaId         === areaFilter)     &&
+      (!memberFilter   || f.assignMemberId === memberFilter)
   );
 
   // ── 순서 변경 ──────────────────────────────────────────────────────────────
@@ -203,12 +266,30 @@ function FunctionsPageInner() {
           기능 정의 목록
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button
-            onClick={() => queryClient.invalidateQueries({ queryKey })}
-            style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
-          >
-            조회
-          </button>
+          {/* 뷰 모드 토글 */}
+          <div style={{ display: "flex", border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
+            <button
+              onClick={() => setViewMode("default")}
+              style={{
+                padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none",
+                background: viewMode === "default" ? "var(--color-primary, #1976d2)" : "var(--color-bg-card)",
+                color: viewMode === "default" ? "#fff" : "var(--color-text-secondary)",
+              }}
+            >
+              조회
+            </button>
+            <button
+              onClick={() => setViewMode("category")}
+              style={{
+                padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                border: "none", borderLeft: "1px solid var(--color-border)",
+                background: viewMode === "category" ? "var(--color-primary, #1976d2)" : "var(--color-bg-card)",
+                color: viewMode === "category" ? "#fff" : "var(--color-text-secondary)",
+              }}
+            >
+              분류로 조회
+            </button>
+          </div>
           <button
             onClick={() => {
               const orders = Object.entries(sortEdits).map(([funcId, sortOrder]) => ({ funcId, sortOrder }));
@@ -248,7 +329,7 @@ function FunctionsPageInner() {
         </select>
         <select
           value={screenFilter}
-          onChange={(e) => setScreenFilter(e.target.value)}
+          onChange={(e) => { setScreenFilter(e.target.value); setAreaFilter(""); }}
           style={filterSelectStyle}
         >
           <option value="">화면 전체</option>
@@ -256,9 +337,29 @@ function FunctionsPageInner() {
             <option key={o.id} value={o.id}>{o.name}</option>
           ))}
         </select>
-        {(unitWorkFilter || screenFilter) && (
+        <select
+          value={areaFilter}
+          onChange={(e) => setAreaFilter(e.target.value)}
+          style={filterSelectStyle}
+        >
+          <option value="">영역 전체</option>
+          {areaOptions.map((o) => (
+            <option key={o.id} value={o.id}>{o.name}</option>
+          ))}
+        </select>
+        <select
+          value={memberFilter}
+          onChange={(e) => setMemberFilter(e.target.value)}
+          style={filterSelectStyle}
+        >
+          <option value="">담당자 전체</option>
+          {memberOptions.map((o) => (
+            <option key={o.id} value={o.id}>{memberNameMap.get(o.id) ?? o.id}</option>
+          ))}
+        </select>
+        {(unitWorkFilter || screenFilter || areaFilter || memberFilter) && (
           <button
-            onClick={() => { setUnitWorkFilter(""); setScreenFilter(""); }}
+            onClick={() => { setUnitWorkFilter(""); setScreenFilter(""); setAreaFilter(""); setMemberFilter(""); }}
             style={{ fontSize: 12, padding: "5px 10px", borderRadius: 5, border: "1px solid var(--color-border)", background: "none", cursor: "pointer", color: "var(--color-text-secondary)" }}
           >
             초기화
@@ -278,26 +379,37 @@ function FunctionsPageInner() {
       ) : (
         <div style={{ padding: "0 24px 24px" }}>
         <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-          <div style={gridHeaderStyle}>
+          <div style={{ ...gridHeaderStyle, gridTemplateColumns: viewMode === "category" ? GRID_TEMPLATE_CATEGORY : GRID_TEMPLATE }}>
             <div />
-            <div>단위업무</div>
-            <div>화면</div>
-            <div>영역</div>
+            {viewMode === "category" ? (
+              <>
+                <div>대분류</div>
+                <div>중분류</div>
+                <div>소분류</div>
+              </>
+            ) : (
+              <>
+                <div>단위업무</div>
+                <div>화면</div>
+                <div>영역</div>
+              </>
+            )}
             <div>기능명</div>
             <div style={{ textAlign: "center" }}>정렬</div>
             <div>유형</div>
             <div>복잡도</div>
             <div>공수</div>
             <div>상태</div>
-            <div />
+            <div style={{ textAlign: "center" }}>AI</div>
+            <div style={{ textAlign: "center", paddingLeft: 8 }}>설/구/테</div>
           </div>
 
           {filteredItems.map((fn, idx) => {
             const prev = filteredItems[idx - 1];
             // 이전 행과 같은 값이면 셀 숨김 (계층 그룹핑 효과)
-            const showUnitWork = idx === 0 || fn.unitWorkId !== prev.unitWorkId;
-            const showScreen   = idx === 0 || fn.screenId   !== prev.screenId;
-            const showArea     = idx === 0 || fn.areaId     !== prev.areaId;
+            const showUnitWork = idx === 0 || (viewMode === "category" ? fn.ctgryL !== prev.ctgryL : fn.unitWorkId !== prev.unitWorkId);
+            const showScreen   = idx === 0 || (viewMode === "category" ? (fn.ctgryL !== prev.ctgryL || fn.ctgryM !== prev.ctgryM) : fn.screenId !== prev.screenId);
+            const showArea     = idx === 0 || (viewMode === "category" ? (fn.ctgryL !== prev.ctgryL || fn.ctgryM !== prev.ctgryM || fn.ctgryS !== prev.ctgryS) : fn.areaId !== prev.areaId);
 
             return (
               <div
@@ -308,22 +420,71 @@ function FunctionsPageInner() {
                 onDragEnd={handleDragEnd}
                 onDragOver={(e) => e.preventDefault()}
                 onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
+                onMouseEnter={() => setHoveredId(fn.funcId)}
+                onMouseLeave={() => setHoveredId(null)}
                 style={{
                   ...gridRowStyle,
+                  gridTemplateColumns: viewMode === "category" ? GRID_TEMPLATE_CATEGORY : GRID_TEMPLATE,
                   borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+                  background: hoveredId === fn.funcId
+                    ? (fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100
+                        ? "rgba(34,197,94,0.10)"
+                        : "var(--color-bg-hover, rgba(99,102,241,0.06))")
+                    : (fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100
+                        ? "rgba(34,197,94,0.04)"
+                        : "var(--color-bg-card)"),
+                  borderLeft: fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100
+                    ? "3px solid #22c55e"
+                    : hoveredId === fn.funcId ? "3px solid var(--color-primary, #6366f1)" : "3px solid transparent",
+                  paddingLeft: 13,
                 }}
               >
                 <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
 
-                {/* 단위업무명 */}
-                <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-                  {showUnitWork ? (fn.unitWorkId ? fn.unitWorkName : <span style={{ color: "#ccc" }}>-</span>) : ""}
-                </div>
+                {viewMode === "category" ? (
+                  <>
+                    {/* 대분류 */}
+                    <div style={{ fontSize: 13, color: "var(--color-text-primary)", fontWeight: showUnitWork ? 600 : 400 }}>
+                      {showUnitWork ? (fn.ctgryL ?? <span style={{ color: "#ccc" }}>-</span>) : ""}
+                    </div>
+                    {/* 중분류 */}
+                    <div style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
+                      {showScreen ? (fn.ctgryM ?? <span style={{ color: "#ccc" }}>-</span>) : ""}
+                    </div>
+                    {/* 소분류 */}
+                    <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                      {showArea ? (fn.ctgryS ?? <span style={{ color: "#ccc" }}>-</span>) : ""}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* 단위업무명 (클릭 → 단위업무 상세, 행 클릭과 분리) */}
+                    <div onClick={(e) => e.stopPropagation()}>
+                      {showUnitWork ? (
+                        fn.unitWorkId ? (
+                          <button onClick={() => router.push(`/projects/${projectId}/unit-works/${fn.unitWorkId}`)} style={linkBtnStyle}>
+                            {fn.unitWorkName}
+                          </button>
+                        ) : (
+                          <span style={{ color: "#ccc", fontSize: 13 }}>-</span>
+                        )
+                      ) : ""}
+                    </div>
 
-                {/* 화면명 */}
-                <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-                  {showScreen ? (fn.screenId ? fn.screenName : <span style={{ color: "#ccc" }}>-</span>) : ""}
-                </div>
+                    {/* 화면명 (클릭 → 화면 상세, 행 클릭과 분리) */}
+                    <div onClick={(e) => e.stopPropagation()}>
+                      {showScreen ? (
+                        fn.screenId ? (
+                          <button onClick={() => router.push(`/projects/${projectId}/screens/${fn.screenId}`)} style={linkBtnStyle}>
+                            {fn.screenName}
+                          </button>
+                        ) : (
+                          <span style={{ color: "#ccc", fontSize: 13 }}>-</span>
+                        )
+                      ) : ""}
+                    </div>
+                  </>
+                )}
 
                 {/* 영역명 (클릭 → 영역 상세, 행 클릭과 분리) */}
                 <div onClick={(e) => e.stopPropagation()}>
@@ -342,11 +503,20 @@ function FunctionsPageInner() {
                 </div>
 
                 {/* 기능명 */}
-                <div style={{ fontSize: 14, fontWeight: 500 }}>
-                  <span style={{ color: "var(--color-text-secondary)", fontSize: 11, marginRight: 3 }}>
+                <div style={{ fontSize: 14, fontWeight: 500, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ color: "var(--color-text-secondary)", fontSize: 11 }}>
                     {fn.displayId}
                   </span>
                   {fn.name}
+                  {fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100 && (
+                    <span style={{
+                      fontSize: 11, fontWeight: 600, color: "#16a34a",
+                      background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)",
+                      borderRadius: 4, padding: "1px 7px", whiteSpace: "nowrap",
+                    }}>
+                      ✓ 완료
+                    </span>
+                  )}
                 </div>
 
                 {/* 정렬순서 — 직접 입력 가능 */}
@@ -435,16 +605,35 @@ function FunctionsPageInner() {
                   </span>
                 </div>
 
-                {/* 액션 버튼 */}
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
-                    title="기능 상세"
-                    style={detailBtnStyle}
-                  >
-                    상세
-                  </button>
+                {/* AI 진행 현황 인디케이터 */}
+                <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "center" }} onClick={(e) => e.stopPropagation()}>
+                  <AiDot label="설" taskInfo={fn.aiDesign}  onClick={(id) => setAiDetailTaskId(id)} />
+                  <AiDot label="검" taskInfo={fn.aiInspect} onClick={(id) => setAiDetailTaskId(id)} />
                 </div>
+
+                {/* 설계/구현/테스트 비율 */}
+                {fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100 ? (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingLeft: 8 }}>
+                    <span style={{
+                      background: "linear-gradient(90deg, #1565c0, #2e7d32, #6a1b9a)",
+                      color: "#fff",
+                      borderRadius: 6,
+                      padding: "2px 8px",
+                      fontSize: 11,
+                      fontWeight: 800,
+                      letterSpacing: "0.5px",
+                      whiteSpace: "nowrap",
+                    }}>
+                      100점 🎉
+                    </span>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: 3, alignItems: "center", justifyContent: "center", paddingLeft: 8 }}>
+                    <RatioChip label="설" value={fn.designRt} color="#1565c0" />
+                    <RatioChip label="구" value={fn.implRt}   color="#2e7d32" />
+                    <RatioChip label="테" value={fn.testRt}   color="#6a1b9a" />
+                  </div>
+                )}
               </div>
             );
           })}
@@ -452,7 +641,91 @@ function FunctionsPageInner() {
         </div>
       )}
 
+      {/* AI 태스크 상세 팝업 */}
+      {aiDetailTaskId && (
+        <AiTaskDetailDialog
+          projectId={projectId}
+          taskId={aiDetailTaskId}
+          onClose={() => setAiDetailTaskId(null)}
+          onApplied={() => { setAiDetailTaskId(null); queryClient.invalidateQueries({ queryKey }); }}
+          onRejected={() => { setAiDetailTaskId(null); queryClient.invalidateQueries({ queryKey }); }}
+        />
+      )}
+
     </div>
+  );
+}
+
+// ── 비율 칩 ──────────────────────────────────────────────────────────────────
+
+function RatioChip({ label, value, color }: { label: string; value: number; color: string }) {
+  const fullLabel = label === "설" ? "설계" : label === "구" ? "구현" : "테스트";
+  return (
+    <span
+      title={`${fullLabel}: ${value}%`}
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        fontSize: 11, fontWeight: 700, lineHeight: 1,
+        color: value > 0 ? color : "#bbb",
+        minWidth: 30,
+      }}
+    >
+      {value}%
+    </span>
+  );
+}
+
+// ── AI 인디케이터 동그라미 ─────────────────────────────────────────────────────
+
+const AI_DOT_COLORS: Record<string, { bg: string; border: string; text: string; label: string }> = {
+  DONE:        { bg: "#1976d2", border: "#1565c0", text: "#fff", label: "완료" },
+  APPLIED:     { bg: "#2e7d32", border: "#1b5e20", text: "#fff", label: "적용됨" },
+  REJECTED:    { bg: "#c62828", border: "#b71c1c", text: "#fff", label: "반려됨" },
+  FAILED:      { bg: "#e65100", border: "#bf360c", text: "#fff", label: "실패" },
+  TIMEOUT:     { bg: "#e65100", border: "#bf360c", text: "#fff", label: "타임아웃" },
+  IN_PROGRESS: { bg: "#f59e0b", border: "#d97706", text: "#fff", label: "진행중" },
+  PENDING:     { bg: "#9e9e9e", border: "#757575", text: "#fff", label: "대기중" },
+};
+
+function AiDot({ label, taskInfo, onClick }: {
+  label:    string;
+  taskInfo: AiTaskInfo;
+  onClick:  (taskId: string) => void;
+}) {
+  const active    = taskInfo !== null;
+  const colorCfg  = taskInfo ? (AI_DOT_COLORS[taskInfo.status] ?? AI_DOT_COLORS.DONE) : null;
+  const fullLabel = label === "설" ? "설계" : "점검";
+  const title     = active ? `AI ${fullLabel}: ${colorCfg?.label}` : `AI ${fullLabel} 미진행`;
+
+  return (
+    <button
+      title={title}
+      onClick={() => active && taskInfo && onClick(taskInfo.taskId)}
+      style={{
+        width: 26, height: 26, borderRadius: "50%",
+        border: active ? `2px solid ${colorCfg!.border}` : "2px solid #d0d0d0",
+        background: active ? colorCfg!.bg : "#f0f0f0",
+        cursor: active ? "pointer" : "default",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 10, fontWeight: 700, letterSpacing: "-0.3px",
+        color: active ? colorCfg!.text : "#bbb",
+        flexShrink: 0, padding: 0,
+        boxShadow: active ? `0 1px 3px ${colorCfg!.border}55` : "none",
+        transition: "transform 0.15s, box-shadow 0.15s",
+      }}
+      onMouseEnter={(e) => {
+        if (active) {
+          e.currentTarget.style.transform = "scale(1.18)";
+          e.currentTarget.style.boxShadow = `0 2px 6px ${colorCfg!.border}88`;
+        }
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = "scale(1)";
+        e.currentTarget.style.boxShadow = active ? `0 1px 3px ${colorCfg!.border}55` : "none";
+      }}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -491,7 +764,9 @@ function statusBadgeStyle(status: string): React.CSSProperties {
   return { display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, ...s };
 }
 
-const GRID_TEMPLATE = "32px 150px 187px 208px 1fr 50px 70px 80px 60px 80px 100px";
+// 단위업무·화면·영역·기능명은 fr로 비율 분배, 나머지 소형 컬럼은 고정
+const GRID_TEMPLATE          = "32px 1.5fr 2fr 2fr 4fr 44px 65px 75px 55px 75px 60px 90px";
+const GRID_TEMPLATE_CATEGORY = "32px 1.5fr 1.5fr 1.5fr 4fr 44px 65px 75px 55px 75px 60px 90px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID_TEMPLATE, gap: 8,
@@ -535,10 +810,4 @@ const filterSelectStyle: React.CSSProperties = {
   backgroundRepeat:   "no-repeat",
   backgroundPosition: "right 10px center",
   minWidth:           160,
-};
-
-const detailBtnStyle: React.CSSProperties = {
-  padding: "4px 12px", borderRadius: 4,
-  border: "1px solid var(--color-border)", background: "transparent",
-  color: "var(--color-text-secondary)", fontSize: 12, cursor: "pointer",
 };

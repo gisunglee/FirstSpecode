@@ -181,7 +181,7 @@ function TaskListPageInner() {
         {/* 헤더 */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "32px 1fr 100px 70px 120px 80px 120px",
+          gridTemplateColumns: "32px 1fr 10% 8% 12% 8%",
           padding: "10px 16px",
           background: "var(--color-bg-muted)",
           borderBottom: "1px solid var(--color-border)",
@@ -192,11 +192,10 @@ function TaskListPageInner() {
         }}>
           <span />
           <span>과업명</span>
-          <span>카테고리</span>
+          <span style={{ textAlign: "center" }}>카테고리</span>
           <span>요구사항</span>
           <span>H/M/L</span>
           <span>진행률</span>
-          <span>액션</span>
         </div>
 
         {/* 바디 */}
@@ -218,7 +217,7 @@ function TaskListPageInner() {
                 onClick={() => router.push(`/projects/${projectId}/tasks/${task.taskId}`)}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "32px 1fr 100px 70px 90px 110px 120px",
+                  gridTemplateColumns: "32px 1fr 10% 8% 12% 8%",
                   padding: "12px 16px",
                   borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
                   alignItems: "center",
@@ -237,23 +236,25 @@ function TaskListPageInner() {
                 </span>
 
                 {/* 과업명 */}
-                <div>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "var(--color-text-primary)" }}>
-                    {task.name}
-                  </p>
-                  <p style={{ margin: "2px 0 0", fontSize: 11, color: "#aaa" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 11, color: "#aaa", whiteSpace: "nowrap" }}>
                     {task.displayId}
-                  </p>
+                  </span>
+                  <span style={{ fontSize: 14, fontWeight: 500, color: "var(--color-text-primary)" }}>
+                    {task.name}
+                  </span>
                 </div>
 
                 {/* 카테고리 뱃지 */}
-                <span style={{
-                  display: "inline-block", padding: "3px 10px",
-                  borderRadius: 20, fontSize: 11, fontWeight: 600,
-                  background: cc.bg, color: cc.color,
-                }}>
-                  {CATEGORY_LABEL[task.category] ?? task.category}
-                </span>
+                <div style={{ display: "flex", justifyContent: "center" }}>
+                  <span style={{
+                    display: "inline-block", padding: "3px 10px",
+                    borderRadius: 20, fontSize: 11, fontWeight: 600,
+                    background: cc.bg, color: cc.color,
+                  }}>
+                    {CATEGORY_LABEL[task.category] ?? task.category}
+                  </span>
+                </div>
 
                 {/* 요구사항 건수 */}
                 <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
@@ -288,22 +289,6 @@ function TaskListPageInner() {
                   </span>
                 </div>
 
-                {/* 액션 */}
-                <div style={{ display: "flex", gap: 4 }} onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() => copyMutation.mutate(task.taskId)}
-                    disabled={copyMutation.isPending}
-                    style={secondarySmallBtnStyle}
-                  >
-                    복사
-                  </button>
-                  <button
-                    onClick={() => setDeletingTask(task)}
-                    style={dangerSmallBtnStyle}
-                  >
-                    삭제
-                  </button>
-                </div>
               </div>
             );
           })

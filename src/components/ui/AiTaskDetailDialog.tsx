@@ -45,6 +45,8 @@ type TaskDetail = {
   appliedAt:    string | null;
   reqMberId?:   string;
   reqMberName?: string;
+  myMberId?:    string;
+  myRole?:      string;
   retryCnt?:    number;
   execAvlblDt?: string | null;
   parentTaskId?: string | null;
@@ -201,6 +203,13 @@ export default function AiTaskDetailDialog({
     rejectMutation.mutate(rejectReason.trim());
   }
 
+  // ── 권한: 요청자 본인 또는 OWNER/ADMIN만 조작 가능 ───────────────────────────
+  const canControl =
+    data
+      ? ["OWNER", "ADMIN"].includes(data.myRole ?? "") ||
+        (!!data.myMberId && data.myMberId === data.reqMberId)
+      : false;
+
   // ── 로컬 탭 버튼 ─────────────────────────────────────────────────────────
   function LocalTabButtons({ tab, onTabChange }: { tab: "edit" | "preview"; onTabChange: (t: "edit" | "preview") => void }) {
     return (
@@ -322,78 +331,80 @@ export default function AiTaskDetailDialog({
                 )}
               </div>
 
-              {/* 액션 버튼 */}
-              <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-                {data.status === "DONE" && (
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {!rejectMode ? (
-                      <>
-                        <button onClick={() => setRejectMode(true)} style={{ ...secondaryBtnStyle, padding: "5px 12px", fontSize: 12 }}>반려</button>
-                        <button
-                          onClick={() => applyMutation.mutate()}
-                          disabled={applyMutation.isPending}
-                          style={{ ...primaryBtnStyle, padding: "5px 14px", fontSize: 12 }}
-                        >
-                          {applyMutation.isPending ? "반영 중..." : "결과 반영"}
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button onClick={() => { setRejectMode(false); setRejectReason(""); }} style={{ ...secondaryBtnStyle, padding: "5px 12px", fontSize: 12 }}>취소</button>
-                        <button
-                          onClick={handleReject}
-                          disabled={rejectMutation.isPending}
-                          style={{ ...primaryBtnStyle, padding: "5px 14px", fontSize: 12, background: "var(--color-warning, #f59e0b)" }}
-                        >
-                          {rejectMutation.isPending ? "반려 처리 중..." : "반려 확인"}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
+              {/* 액션 버튼 — 본인·OWNER·ADMIN만 표시 */}
+              {canControl && (
+                <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+                  {data.status === "DONE" && (
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {!rejectMode ? (
+                        <>
+                          <button onClick={() => setRejectMode(true)} style={{ ...secondaryBtnStyle, padding: "5px 12px", fontSize: 12 }}>반려</button>
+                          <button
+                            onClick={() => applyMutation.mutate()}
+                            disabled={applyMutation.isPending}
+                            style={{ ...primaryBtnStyle, padding: "5px 14px", fontSize: 12 }}
+                          >
+                            {applyMutation.isPending ? "반영 중..." : "결과 반영"}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => { setRejectMode(false); setRejectReason(""); }} style={{ ...secondaryBtnStyle, padding: "5px 12px", fontSize: 12 }}>취소</button>
+                          <button
+                            onClick={handleReject}
+                            disabled={rejectMutation.isPending}
+                            style={{ ...primaryBtnStyle, padding: "5px 14px", fontSize: 12, background: "var(--color-warning, #f59e0b)" }}
+                          >
+                            {rejectMutation.isPending ? "반려 처리 중..." : "반려 확인"}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
 
-                {!rejectMode && data.status !== "DONE" && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>상태 변경</span>
-                    <select
-                      value={data.status}
-                      disabled={statusMutation.isPending}
-                      onChange={(e) => statusMutation.mutate(e.target.value)}
-                      style={{
-                        padding: "4px 28px 4px 10px", borderRadius: 6,
-                        border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
-                        color: "var(--color-text-primary)", fontSize: 12, cursor: "pointer",
-                        appearance: "none",
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
-                        backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center",
+                  {!rejectMode && data.status !== "DONE" && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>상태 변경</span>
+                      <select
+                        value={data.status}
+                        disabled={statusMutation.isPending}
+                        onChange={(e) => statusMutation.mutate(e.target.value)}
+                        style={{
+                          padding: "4px 28px 4px 10px", borderRadius: 6,
+                          border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
+                          color: "var(--color-text-primary)", fontSize: 12, cursor: "pointer",
+                          appearance: "none",
+                          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+                          backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center",
+                        }}
+                      >
+                        <option value="PENDING">대기</option>
+                        <option value="IN_PROGRESS">처리중</option>
+                        <option value="DONE">완료</option>
+                        <option value="APPLIED">반영됨</option>
+                        <option value="REJECTED">반려</option>
+                        <option value="FAILED">실패</option>
+                        <option value="TIMEOUT">시간초과</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {!rejectMode && (
+                    <button
+                      type="button"
+                      disabled={deleteMutation.isPending}
+                      onClick={() => {
+                        if (window.confirm("이 AI 태스크를 삭제하시겠습니까?")) {
+                          deleteMutation.mutate();
+                        }
                       }}
+                      style={{ ...dangerBtnStyle, fontSize: 12, padding: "5px 14px" }}
                     >
-                      <option value="PENDING">대기</option>
-                      <option value="IN_PROGRESS">처리중</option>
-                      <option value="DONE">완료</option>
-                      <option value="APPLIED">반영됨</option>
-                      <option value="REJECTED">반려</option>
-                      <option value="FAILED">실패</option>
-                      <option value="TIMEOUT">시간초과</option>
-                    </select>
-                  </div>
-                )}
-
-                {!rejectMode && (
-                  <button
-                    type="button"
-                    disabled={deleteMutation.isPending}
-                    onClick={() => {
-                      if (window.confirm("이 AI 태스크를 삭제하시겠습니까?")) {
-                        deleteMutation.mutate();
-                      }
-                    }}
-                    style={{ ...dangerBtnStyle, fontSize: 12, padding: "5px 14px" }}
-                  >
-                    삭제
-                  </button>
-                )}
-              </div>
+                      삭제
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* 요청 SPEC / 응답 피드백 */}

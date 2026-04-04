@@ -34,6 +34,7 @@ import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
+import ProgressTracker from "@/components/ui/ProgressTracker";
 import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
@@ -341,6 +342,18 @@ function FunctionDetailPageInner() {
         </div>
 
 
+        {/* 설계·구현·테스트 진척률 — 수정 모드에서만 */}
+        {!isNew && data && (
+          <div style={{ marginLeft: 24 }}>
+            <ProgressTracker
+              projectId={projectId}
+              refTable="tb_ds_function"
+              refId={functionId}
+              phases={["design", "impl", "test"]}
+            />
+          </div>
+        )}
+
         {/* 우측 밀어내기 스페이서 */}
         <div style={{ flex: 1 }} />
 
@@ -576,7 +589,7 @@ function FunctionDetailPageInner() {
         <section style={sectionStyle}>
 
           {/* 행1: 소속 영역 | 유형 */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "0 16px" }}>
             <div style={formGroupStyle}>
               <label style={labelStyle}>소속 영역</label>
               <select value={areaId} onChange={(e) => setAreaId(e.target.value)} style={selectStyle}>
@@ -595,19 +608,20 @@ function FunctionDetailPageInner() {
             </div>
           </div>
 
-          {/* 행2: 기능명 | 우선순위 (우선순위 width 고정) */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: "0 16px" }}>
-            <div style={formGroupStyle}>
-              <label style={labelStyle}>기능명 <span style={{ color: "#e53935" }}>*</span></label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="기능명을 입력하세요"
-                style={inputStyle}
-              />
-            </div>
+          {/* 행2: 기능명 단독 */}
+          <div style={formGroupStyle}>
+            <label style={labelStyle}>기능명 <span style={{ color: "#e53935" }}>*</span></label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="기능명을 입력하세요"
+              style={inputStyle}
+            />
+          </div>
 
+          {/* 행3: 우선순위 | 복잡도 | 예상 공수 */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 16px" }}>
             <div style={formGroupStyle}>
               <label style={labelStyle}>우선순위</label>
               <select value={priority} onChange={(e) => setPriority(e.target.value)} style={selectStyle}>
@@ -616,10 +630,7 @@ function FunctionDetailPageInner() {
                 <option value="LOW">낮음</option>
               </select>
             </div>
-          </div>
 
-          {/* 행3: 복잡도 | 예상 공수 */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
             <div style={formGroupStyle}>
               <label style={labelStyle}>복잡도</label>
               <select value={complexity} onChange={(e) => setComplexity(e.target.value)} style={selectStyle}>
@@ -630,12 +641,17 @@ function FunctionDetailPageInner() {
             </div>
 
             <div style={formGroupStyle}>
-              <label style={labelStyle}>예상 공수</label>
+              <label style={labelStyle}>
+                예상 공수
+                <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: "var(--color-text-secondary)" }}>숫자로 입력 (단위: 시간)</span>
+              </label>
               <input
-                type="text"
+                type="number"
+                min="0"
+                step="0.5"
                 value={effort}
                 onChange={(e) => setEffort(e.target.value)}
-                placeholder="예: 2h, 0.5d"
+                placeholder="시간 (예: 2, 0.5)"
                 style={inputStyle}
               />
             </div>
@@ -683,7 +699,7 @@ function FunctionDetailPageInner() {
           <textarea
             value={commentCn}
             onChange={(e) => setCommentCn(e.target.value)}
-            placeholder="AI 요청 시 참고할 추가 지시사항 (저장 시 함께 저장됩니다)"
+            placeholder="AI 요청 시 참고할 추가 지시사항을 입력해 주세요."
             rows={3}
             style={{ ...inputStyle, resize: "vertical" }}
           />
@@ -1087,7 +1103,7 @@ function FunctionDetailPageInner() {
               &lsquo;{data?.name}&rsquo;
             </p>
             <p style={{ margin: "0 0 24px", fontSize: 13, color: "#e53935" }}>
-              연결된 AI 태스크·이력이 함께 삭제되며 복구할 수 없습니다.
+              삭제 후 복구할 수 없습니다.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button

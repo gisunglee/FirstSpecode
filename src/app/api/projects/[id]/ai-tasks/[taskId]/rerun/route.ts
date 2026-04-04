@@ -52,7 +52,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         coment_cn:         task.coment_cn,
         req_snapshot_data: task.req_snapshot_data ?? {},
         parent_task_id:    taskId,
-        retry_cnt:         3,
+        retry_cnt:         (task.retry_cnt ?? 0) + 1,  // 재시도할 때마다 +1
         req_mber_id:       auth.mberId,
         task_sttus_code:   "PENDING",
       },

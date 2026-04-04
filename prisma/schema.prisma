@@ -254,6 +254,7 @@ model TbDsUnitWork {
   unit_work_display_id String
   unit_work_nm         String          @default("")
   unit_work_dc         String?
+  coment_cn            String?
   asign_mber_id        String?
   bgng_de              String?
   end_de               String?
@@ -284,6 +285,7 @@ model TbDsScreen {
   ctgry_s_nm      String?
   dsply_code      String?
   layer_data_dc   String?
+  coment_cn       String?
   areas           TbDsArea[]
   unitWork        TbDsUnitWork?           @relation(fields: [unit_work_id], references: [unit_work_id])
   descHistory     TbDsScreenDescHistory[]
@@ -420,7 +422,7 @@ model TbAiTask {
   reject_rsn_cn     String?
   req_snapshot_data Json?
   parent_task_id    String?
-  retry_cnt         Int       @default(3)
+  retry_cnt         Int       @default(0)
   exec_avlbl_dt     DateTime?
   req_mber_id       String?
   req_dt            DateTime  @default(now())

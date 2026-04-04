@@ -127,7 +127,24 @@ function AreaDetailPageInner() {
   const [descExampleOpen, setDescExampleOpen] = useState(false);
 
   // ── AI 컨펌 상태 ──────────────────────────────────────────────────────────
-  const [aiConfirm, setAiConfirm] = useState<{ taskType: string; label: string } | null>(null);
+  const [aiConfirm,  setAiConfirm]  = useState<{ taskType: string; label: string } | null>(null);
+  const [taskPrompt, setTaskPrompt] = useState<{ tmplId: string; tmplNm: string } | null | "loading" | "none">(null);
+
+  async function openPromptConfirm(taskType: string, label: string) {
+    if (!description.trim()) { toast.error("설명을 먼저 입력해 주세요."); return; }
+    setTaskPrompt("loading");
+    setAiConfirm({ taskType, label });
+    try {
+      const res = await authFetch<{ data: Array<{ tmplId: string; tmplNm: string; defaultYn: string }> }>(
+        `/api/projects/${projectId}/prompt-templates?taskType=${taskType}&useYn=Y`
+      );
+      const list = res.data ?? [];
+      const preferred = list.find((t) => t.defaultYn === "Y") ?? list[0] ?? null;
+      setTaskPrompt(preferred ? { tmplId: preferred.tmplId, tmplNm: preferred.tmplNm } : "none");
+    } catch {
+      setTaskPrompt("none");
+    }
+  }
 
   // ── Excalidraw 데이터 상태 ─────────────────────────────────────────────────
   const [excalidrawData, setExcalidrawData] = useState<object | null>(null);
@@ -235,6 +252,18 @@ function AreaDetailPageInner() {
     saveMutation.mutate({});
   }
 
+  // ── 삭제 뮤테이션 ─────────────────────────────────────────────────────────
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const deleteMutation = useMutation({
+    mutationFn: () =>
+      authFetch(`/api/projects/${projectId}/areas/${areaId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      toast.success("영역이 삭제되었습니다.");
+      router.push(`/projects/${projectId}/areas`);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   // ── Excalidraw 저장 뮤테이션 ──────────────────────────────────────────────
   const excalidrawSaveMutation = useMutation({
     mutationFn: (excData: object) =>
@@ -256,7 +285,7 @@ function AreaDetailPageInner() {
     mutationFn: ({ taskType }: { taskType: string }) =>
       authFetch(`/api/projects/${projectId}/areas/${areaId}/ai`, {
         method: "POST",
-        body: JSON.stringify({ taskType }),
+        body: JSON.stringify({ taskType, coment_cn: asciiComment.trim() }),
       }),
     onSuccess: (_res, vars) => {
       const labels: Record<string, string> = {
@@ -332,29 +361,143 @@ function AreaDetailPageInner() {
         refId={areaId}
       />
 
-      {/* AI 요청 확인 다이얼로그 */}
-      {aiConfirm !== null && (
+      {/* 삭제 확인 다이얼로그 */}
+      {deleteConfirmOpen && (
         <div
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={() => setAiConfirm(null)}
+          onClick={() => setDeleteConfirmOpen(false)}
         >
           <div
             style={{ background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 10, padding: "28px 32px", width: 380, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>AI 요청 확인</div>
-            <div style={{ fontSize: 14, color: "var(--color-text-secondary)", marginBottom: 24 }}>
-              <strong>{aiConfirm.label}</strong>을 요청하시겠습니까?<br />
-              영역 설명과 AI 요청 코멘트가 함께 전달됩니다.
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>영역 삭제</div>
+            <div style={{ fontSize: 14, color: "var(--color-text-secondary)", marginBottom: 24, lineHeight: 1.6 }}>
+              <strong>{data?.name}</strong> 영역을 삭제하시겠습니까?<br />
+              하위 기능도 함께 삭제될 수 있습니다.
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button onClick={() => setAiConfirm(null)} style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}>취소</button>
+              <button onClick={() => setDeleteConfirmOpen(false)} style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}>취소</button>
               <button
-                onClick={() => {
-                  aiMutation.mutate({ taskType: aiConfirm.taskType });
-                  setAiConfirm(null);
+                onClick={() => { deleteMutation.mutate(); setDeleteConfirmOpen(false); }}
+                disabled={deleteMutation.isPending}
+                style={{ ...dangerBtnStyle, fontSize: 13, padding: "7px 20px" }}
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI 요청 확인 다이얼로그 */}
+      {aiConfirm !== null && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => { setAiConfirm(null); setTaskPrompt(null); }}
+        >
+          <div
+            style={{ width: "100%", maxWidth: (aiConfirm.taskType === "INSPECT" || aiConfirm.taskType === "DESIGN") ? 520 : 420, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 12, boxShadow: "0 12px 48px rgba(0,0,0,0.25)", padding: "32px 36px" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {(aiConfirm.taskType === "INSPECT" || aiConfirm.taskType === "DESIGN") ? (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                  <span style={{ fontSize: 24 }}>✦</span>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                      {aiConfirm.label} 요청
+                    </p>
+                    <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--color-text-secondary)" }}>
+                      작성하신 설명 내용을 기반으로 AI에게 {aiConfirm.taskType === "DESIGN" ? "설계를" : "점검을"} 요청합니다.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 20, padding: "14px 16px", background: "rgba(103,80,164,0.06)", border: "1px solid rgba(103,80,164,0.18)", borderRadius: 8 }}>
+                  {taskPrompt === "loading" ? (
+                    <p style={{ margin: 0, fontSize: 13, color: "var(--color-text-secondary)" }}>프롬프트 템플릿 조회 중...</p>
+                  ) : taskPrompt === "none" || taskPrompt === null ? (
+                    <div>
+                      <p style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 700, color: "#c62828" }}>⚠ 프롬프트 템플릿을 찾지 못했습니다.</p>
+                      <p style={{ margin: 0, fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.7 }}>
+                        <strong>AI 요청 코멘트를 직접 작성하신 후</strong><br />AI에게 요청하시겠습니까?
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <p style={{ margin: "0 0 6px", fontSize: 12, color: "var(--color-text-secondary)", fontWeight: 600 }}>✅ 프롬프트 템플릿 찾았습니다</p>
+                      <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 700, color: "rgba(103,80,164,1)" }}>{taskPrompt.tmplNm}</p>
+                      <p style={{ margin: 0, fontSize: 12, color: "var(--color-text-secondary)" }}>해당 프롬프트와 함께 전달하도록 하겠습니다.</p>
+                    </>
+                  )}
+                </div>
+
+                <div style={{ marginBottom: 24, fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.7 }}>
+                  <p style={{ margin: "0 0 6px", fontWeight: 600, color: "var(--color-text-primary)" }}>전달되는 내용</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {taskPrompt && taskPrompt !== "loading" && taskPrompt !== "none" && (
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                        <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>시스템 프롬프트</span>
+                        <span>{taskPrompt.tmplNm}</span>
+                      </div>
+                    )}
+                    {/* INSPECT: 전체 설계서(영역 내 기능 포함) 포함 안내 */}
+                    {aiConfirm.taskType === "INSPECT" && (
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                        <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>전체 설계서</span>
+                        <span>단위업무 · 화면 · 영역 · 기능 전체</span>
+                      </div>
+                    )}
+                    {asciiComment.trim() && (
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                        <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>코멘트</span>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 320 }}>{asciiComment.trim()}</span>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                      <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>점검 대상</span>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 320 }}>{description.trim().slice(0, 80)}{description.trim().length > 80 ? "…" : ""}</span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>AI 요청 확인</p>
+                <p style={{ margin: "0 0 24px", fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+                  <strong>{aiConfirm.label}</strong>을 요청하시겠습니까?<br />
+                  영역 설명과 AI 요청 코멘트가 함께 전달됩니다.
+                </p>
+              </>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button onClick={() => { setAiConfirm(null); setTaskPrompt(null); }} style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 18px" }}>취소</button>
+              {(aiConfirm.taskType === "INSPECT" || aiConfirm.taskType === "DESIGN") && taskPrompt === "none" && (
+                <button
+                  onClick={() => { aiMutation.mutate({ taskType: aiConfirm.taskType }); setAiConfirm(null); setTaskPrompt(null); }}
+                  disabled={aiMutation.isPending || !asciiComment.trim()}
+                  style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 18px", background: asciiComment.trim() ? "#e65100" : "#ccc", cursor: asciiComment.trim() ? "pointer" : "not-allowed" }}
+                  title={!asciiComment.trim() ? "AI 요청 코멘트를 먼저 입력해 주세요." : ""}
+                >
+                  AI 요청 코멘트로 처리
+                </button>
+              )}
+              <button
+                onClick={() => { aiMutation.mutate({ taskType: aiConfirm.taskType }); setAiConfirm(null); setTaskPrompt(null); }}
+                disabled={
+                  aiMutation.isPending ||
+                  ((aiConfirm.taskType === "INSPECT" || aiConfirm.taskType === "DESIGN") &&
+                    (taskPrompt === "loading" || taskPrompt === "none" || taskPrompt === null))
+                }
+                style={{
+                  ...primaryBtnStyle, fontSize: 13, padding: "7px 20px",
+                  opacity: ((aiConfirm.taskType === "INSPECT" || aiConfirm.taskType === "DESIGN") &&
+                    (taskPrompt === "none" || taskPrompt === null || taskPrompt === "loading")) ? 0.3 : 1,
+                  cursor: ((aiConfirm.taskType === "INSPECT" || aiConfirm.taskType === "DESIGN") &&
+                    (taskPrompt === "none" || taskPrompt === null || taskPrompt === "loading")) ? "not-allowed" : "pointer",
                 }}
-                style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 20px" }}
               >
                 요청
               </button>
@@ -410,10 +553,12 @@ function AreaDetailPageInner() {
                     <button
                       key={taskType}
                       onClick={() => {
-                        if (!description.trim()) {
-                          toast.error("설명을 먼저 입력해 주세요.");
+                        // INSPECT·DESIGN: 프롬프트 템플릿 조회 후 상세 컨펌
+                        if (taskType === "INSPECT" || taskType === "DESIGN") {
+                          openPromptConfirm(taskType, label);
                           return;
                         }
+                        if (!description.trim()) { toast.error("설명을 먼저 입력해 주세요."); return; }
                         setAiConfirm({ taskType, label });
                       }}
                       disabled={aiMutation.isPending}
@@ -465,6 +610,14 @@ function AreaDetailPageInner() {
               saving={excalidrawSaveMutation.isPending}
             />
           )}
+          {!isNew && (
+            <button
+              onClick={() => setDeleteConfirmOpen(true)}
+              style={{ ...dangerBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
+            >
+              삭제
+            </button>
+          )}
           <button
             onClick={() => router.push(`/projects/${projectId}/areas`)}
             style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
@@ -492,7 +645,7 @@ function AreaDetailPageInner() {
           <section style={sectionStyle}>
 
             {/* 소속 화면 + 유형 */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 140px", gap: 16 }}>
               <div style={formGroupStyle}>
                 <label style={labelStyle}>소속 화면</label>
                 <select
@@ -555,7 +708,7 @@ function AreaDetailPageInner() {
                 <textarea
                   value={asciiComment}
                   onChange={(e) => setAsciiComment(e.target.value)}
-                  placeholder="AI에게 추가 지시사항을 입력하세요"
+                  placeholder="AI 요청 시 참고할 추가 지시사항을 입력해 주세요."
                   rows={6}
                   style={{ ...inputStyle, resize: "vertical" }}
                 />
@@ -890,6 +1043,16 @@ const secondaryBtnStyle: React.CSSProperties = {
   border:       "1px solid var(--color-border)",
   background:   "var(--color-bg-card)",
   color:        "var(--color-text-primary)",
+  fontSize:     14,
+  cursor:       "pointer",
+};
+
+const dangerBtnStyle: React.CSSProperties = {
+  padding:      "8px 16px",
+  borderRadius: 6,
+  border:       "1px solid #f5c6cb",
+  background:   "var(--color-bg-card)",
+  color:        "#c62828",
   fontSize:     14,
   cursor:       "pointer",
 };

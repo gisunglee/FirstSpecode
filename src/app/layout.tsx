@@ -29,7 +29,7 @@ export default function RootLayout({ children }: Props) {
         <QueryProvider>
           {children}
           {/* Toast 알림 — API 성공/실패 시 toast.success() / toast.error() 사용 */}
-          <Toaster position="top-right" richColors />
+          <Toaster position="bottom-center" richColors />
         </QueryProvider>
       </body>
     </html>

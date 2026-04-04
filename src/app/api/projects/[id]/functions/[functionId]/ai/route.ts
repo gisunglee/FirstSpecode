@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { checkRole } from "@/lib/checkRole";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { buildDesignContext } from "@/lib/buildDesignContext";
 
 type RouteParams = { params: Promise<{ id: string; functionId: string }> };
 
@@ -81,12 +82,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const sysPrompt = promptTmpl?.sys_prompt_cn?.trim() ?? "";
 
+    // ── 전체 설계서 컨텍스트 수집 (INSPECT만) ───────────────────────────────
+    // 기능 → 영역 → 화면 → 단위업무 bottom-up 수집
+    let designContextXml = "";
+    if (taskType === "INSPECT") {
+      const ctx = await buildDesignContext("FUNCTION", functionId);
+      designContextXml = ctx.xml;
+    }
+
     // ── 프롬프트 조립 ────────────────────────────────────────────────────────
-    // 시스템프롬프트 + 코멘트 + 설명 을 XML 태그로 감싸서 순서대로 연결
+    // 순서: 시스템프롬프트 → 전체 설계서 → 코멘트 → 점검 대상(설명)
     const parts: string[] = [];
 
     if (sysPrompt) {
       parts.push(`<시스템프롬프트>\n${sysPrompt}\n</시스템프롬프트>`);
+    }
+
+    if (designContextXml) {
+      parts.push(designContextXml);
     }
 
     if (commentPart) {
@@ -94,7 +107,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     if (effectiveDesc) {
-      parts.push(effectiveDesc);
+      parts.push(`<점검 대상>\n${effectiveDesc}\n</점검 대상>`);
     }
 
     const finalReqCn = parts.join("\n\n");
@@ -126,6 +139,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         },
         req_mber_id:       auth.mberId,
         task_sttus_code:   "PENDING",
+        retry_cnt:         0,
       },
     });
 

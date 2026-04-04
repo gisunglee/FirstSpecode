@@ -84,6 +84,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       appliedAt:    task.apply_dt?.toISOString()  ?? null,
       reqMberId:    task.req_mber_id,
       reqMberName,
+      myMberId:     auth.mberId,
+      myRole:       membership.role_code,
       execAvlblDt:  task.exec_avlbl_dt?.toISOString() ?? null,
       retryCnt:     task.retry_cnt,
       parentTaskId: task.parent_task_id,

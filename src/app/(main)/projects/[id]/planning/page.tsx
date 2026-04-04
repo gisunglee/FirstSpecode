@@ -269,20 +269,23 @@ function PlanningTreePageInner() {
   }
 
   return (
-    <div style={{ display: "flex", height: "calc(100vh - 48px)", overflow: "hidden" }}>
+    <div style={{ display: "flex", height: "calc(100vh - 48px)", overflow: "hidden", padding: "12px 16px 12px 16px", boxSizing: "border-box", background: "var(--color-bg-base, #f0f2f5)" }}>
 
       {/* ── 좌측 트리 패널 (AR-00057) ──────────────────────────────────────── */}
       <div style={{
-        width:        320,
-        minWidth:     240,
+        width:        340,
+        minWidth:     260,
         borderRight:  "1px solid var(--color-border)",
+        borderTop:    "1px solid var(--color-border)",
+        borderLeft:   "1px solid var(--color-border)",
+        borderRadius: "8px 0 0 8px",
         display:      "flex",
         flexDirection: "column",
         overflow:     "hidden",
         background:   "var(--color-bg-card)",
       }}>
         {/* 검색 + 과업 추가 */}
-        <div style={{ padding: "12px", borderBottom: "1px solid var(--color-border)", display: "flex", gap: 8 }}>
+        <div style={{ padding: "12px 12px 10px", borderBottom: "1px solid var(--color-border)", display: "flex", gap: 8 }}>
           <input
             type="text"
             placeholder="🔍 검색..."
@@ -365,7 +368,17 @@ function PlanningTreePageInner() {
               >
                 <span>{collapsed.has("__unclassified__") ? "▶" : "▼"}</span>
                 <span>📁 미분류</span>
-                <span style={{ fontSize: 11, color: "#888", marginLeft: "auto" }}>[{tree.unclassifiedReqs.length}]</span>
+                <span style={{
+                  background:   "var(--color-brand-subtle, rgba(25,118,210,0.1))",
+                  color:        "var(--color-primary, #1976d2)",
+                  borderRadius: 10,
+                  padding:      "1px 7px",
+                  fontSize:     10,
+                  fontWeight:   600,
+                  marginLeft:   "auto",
+                }}>
+                  {tree.unclassifiedReqs.length}
+                </span>
                 <button
                   style={iconBtnStyle}
                   onClick={(e) => { e.stopPropagation(); addReqMutation.mutate(null); }}
@@ -402,7 +415,7 @@ function PlanningTreePageInner() {
       </div>
 
       {/* ── 우측 상세 패널 (AR-00058) ──────────────────────────────────────── */}
-      <div style={{ flex: 1, overflow: "auto" }}>
+      <div style={{ flex: 1, overflow: "auto", borderTop: "1px solid var(--color-border)", borderRight: "1px solid var(--color-border)", borderRadius: "0 8px 8px 0", background: "var(--color-bg-muted, #f5f6f8)" }}>
         {selected ? (
           <DetailPanel
             key={`${selected.type}-${selected.id}`}
@@ -499,7 +512,18 @@ function TaskTreeNode({
         displayId={task.displayId}
         name={task.name}
         highlight={highlight}
-        badge={`[${task.reqCount}]`}
+        badge={
+          <span style={{
+            background:   "var(--color-brand-subtle, rgba(25,118,210,0.1))",
+            color:        "var(--color-primary, #1976d2)",
+            borderRadius: 10,
+            padding:      "1px 7px",
+            fontSize:     10,
+            fontWeight:   600,
+          }}>
+            {task.reqCount}
+          </span>
+        }
         isActive={isActive}
         isOpen={isOpen}
         onClick={() => onSelect({ type: "task", id: task.taskId })}
@@ -692,8 +716,8 @@ function TreeRow({
       style={{
         display:         "flex",
         alignItems:      "center",
-        paddingLeft:     `${depth * 10}px`,
-        paddingRight:    8,
+        paddingLeft:     `${depth * 14 + 8}px`,
+        paddingRight:    10,
         paddingTop:      5,
         paddingBottom:   5,
         cursor:          "pointer",
@@ -732,22 +756,30 @@ function TreeRow({
       {/* 아이콘 */}
       <span style={{ fontSize: 13, flexShrink: 0 }}>{icon}</span>
 
-      {/* displayId + 명칭 */}
+      {/* displayId + 명칭 + 배지 (이름 영역 안에 묶음) */}
       <span style={{ fontSize: 11, color: "#aaa", flexShrink: 0 }}>{displayId}</span>
       <span style={{
-        fontSize:     13,
-        color:        "var(--color-text-primary)",
-        flex:         1,
-        overflow:     "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace:   "nowrap",
-        fontWeight:   isActive ? 600 : 400,
+        flex:        1,
+        display:     "flex",
+        alignItems:  "center",
+        gap:         5,
+        overflow:    "hidden",
+        minWidth:    0,
       }}>
-        {highlight(name)}
+        <span style={{
+          fontSize:     13,
+          color:        "var(--color-text-primary)",
+          flex:         1,
+          overflow:     "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace:   "nowrap",
+          fontWeight:   isActive ? 600 : 400,
+        }}>
+          {highlight(name)}
+        </span>
+        {/* 배지 — 이름 바로 옆, 우측 끝이 아닌 콘텐츠 영역 안 */}
+        {badge && <span style={{ flexShrink: 0 }}>{badge}</span>}
       </span>
-
-      {/* 배지 */}
-      {badge && <span style={{ flexShrink: 0, fontSize: 11, color: "#888" }}>{badge}</span>}
 
       {/* 호버 시 버튼 */}
       {(hovered || isActive) && (
@@ -785,18 +817,24 @@ function DetailPanel({
 function TaskDetailPanel({ projectId, taskId, onSaved }: { projectId: string; taskId: string; onSaved: () => void }) {
   const [name,       setName]       = useState("");
   const [category,   setCategory]   = useState("NEW_DEV");
+  const [rfpPage,    setRfpPage]    = useState("");
   const [definition, setDefinition] = useState("");
+  const [content,    setContent]    = useState("");
+  const [outputInfo, setOutputInfo] = useState("");
   const [loaded,     setLoaded]     = useState(false);
 
   const { isLoading } = useQuery({
     queryKey: ["task-detail", projectId, taskId],
     queryFn:  () =>
-      authFetch<{ data: { name: string; category: string; definition: string | null } }>(
+      authFetch<{ data: { name: string; category: string; definition: string | null; content: string | null; outputInfo: string | null; rfpPage: string | null } }>(
         `/api/projects/${projectId}/tasks/${taskId}`
       ).then((r) => {
         setName(r.data.name);
         setCategory(r.data.category);
+        setRfpPage(r.data.rfpPage ?? "");
         setDefinition(r.data.definition ?? "");
+        setContent(r.data.content ?? "");
+        setOutputInfo(r.data.outputInfo ?? "");
         setLoaded(true);
         return r.data;
       }),
@@ -807,7 +845,7 @@ function TaskDetailPanel({ projectId, taskId, onSaved }: { projectId: string; ta
       authFetch(`/api/projects/${projectId}/tasks/${taskId}`, {
         method:  "PUT",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ name, category, definition }),
+        body:    JSON.stringify({ name, category, rfpPage, definition, content, outputInfo }),
       }),
     onSuccess: () => { toast.success("저장되었습니다."); onSaved(); },
     onError:   (err: Error) => toast.error(err.message),
@@ -822,15 +860,26 @@ function TaskDetailPanel({ projectId, taskId, onSaved }: { projectId: string; ta
         <PanelField label="과업명 *">
           <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
         </PanelField>
-        <PanelField label="카테고리">
-          <select value={category} onChange={(e) => setCategory(e.target.value)} style={inputStyle}>
-            <option value="NEW_DEV">신규 개발</option>
-            <option value="IMPROVE">기능 개선</option>
-            <option value="MAINTAIN">유지 보수</option>
-          </select>
-        </PanelField>
+        <div style={{ display: "flex", gap: 16 }}>
+          <PanelField label="카테고리 *" style={{ flex: 1 }}>
+            <select value={category} onChange={(e) => setCategory(e.target.value)} style={inputStyle}>
+              <option value="NEW_DEV">신규개발</option>
+              <option value="IMPROVE">기능 개선</option>
+              <option value="MAINTAIN">유지 보수</option>
+            </select>
+          </PanelField>
+          <PanelField label="RFP 페이지 번호" style={{ flex: 1 }}>
+            <input value={rfpPage} onChange={(e) => setRfpPage(e.target.value)} placeholder="예: p.23" style={inputStyle} />
+          </PanelField>
+        </div>
         <PanelField label="정의">
           <textarea value={definition} onChange={(e) => setDefinition(e.target.value)} rows={4} style={{ ...inputStyle, resize: "vertical" }} />
+        </PanelField>
+        <PanelField label="세부내용">
+          <RichEditor key={`task-content-${taskId}`} value={content} onChange={setContent} placeholder="세부 내용을 입력하세요." minHeight={200} />
+        </PanelField>
+        <PanelField label="산출물">
+          <textarea value={outputInfo} onChange={(e) => setOutputInfo(e.target.value)} rows={4} style={{ ...inputStyle, resize: "vertical" }} />
         </PanelField>
       </div>
     </div>
@@ -851,6 +900,9 @@ function ReqDetailPanel({ projectId, reqId, onSaved }: { projectId: string; reqI
   const [loaded,      setLoaded]      = useState(false);
   // 원문/현행화 탭 — 현행화가 기본 활성
   const [contentTab,  setContentTab]  = useState<"current" | "original">("current");
+  // 분석 메모 / 상세 명세 마크다운 탭
+  const [analysisTab, setAnalysisTab] = useState<"edit" | "preview">("edit");
+  const [specTab,     setSpecTab]     = useState<"edit" | "preview">("edit");
   // 기본 정보 섹션 접힘 — 기본적으로 접혀 있음
   const [basicOpen,   setBasicOpen]   = useState(false);
 
@@ -902,21 +954,41 @@ function ReqDetailPanel({ projectId, reqId, onSaved }: { projectId: string; reqI
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
         {/* 기본 정보 — 기본 접힘 */}
-        <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
+        <div>
           <button
             type="button"
             onClick={() => setBasicOpen((v) => !v)}
             style={{
-              width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "8px 12px", background: "var(--color-bg-muted)", border: "none",
-              cursor: "pointer", fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)",
+              width: "100%", display: "flex", alignItems: "center", gap: 10,
+              padding: "10px 0", background: "none", border: "none",
+              borderBottom: "1px solid var(--color-border)",
+              cursor: "pointer",
             }}
           >
-            <span>기본 정보 (요구사항명 · 우선순위 · 출처 · 요구사항 내용)</span>
-            <span style={{ fontSize: 10 }}>{basicOpen ? "▲" : "▼"}</span>
+            {/* 햄버거 아이콘 */}
+            <span style={{ display: "flex", flexDirection: "column", gap: 3, flexShrink: 0, opacity: 0.5 }}>
+              <span style={{ width: 14, height: 1.5, background: "var(--color-text-primary)", borderRadius: 2, display: "block" }} />
+              <span style={{ width: 10, height: 1.5, background: "var(--color-text-primary)", borderRadius: 2, display: "block" }} />
+              <span style={{ width: 12, height: 1.5, background: "var(--color-text-primary)", borderRadius: 2, display: "block" }} />
+            </span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", flex: 1, textAlign: "left" }}>
+              기본 정보
+            </span>
+            <span style={{ fontSize: 12, color: "var(--color-text-secondary)", marginRight: 6 }}>
+              요구사항명 · 우선순위 · 출처 · 내용
+            </span>
+            {/* 회전 chevron */}
+            <span style={{
+              fontSize:   18,
+              color:      "var(--color-text-secondary)",
+              transform:  basicOpen ? "rotate(90deg)" : "rotate(0deg)",
+              transition: "transform 0.18s ease",
+              display:    "inline-block",
+              lineHeight: 1,
+            }}>›</span>
           </button>
           {basicOpen && (
-            <div style={{ padding: "16px 12px", display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ padding: "16px 0", display: "flex", flexDirection: "column", gap: 16 }}>
               <PanelField label="요구사항명 *">
                 <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
               </PanelField>
@@ -971,12 +1043,47 @@ function ReqDetailPanel({ projectId, reqId, onSaved }: { projectId: string; reqI
           )}
         </div>
 
-        <PanelField label="분석 메모">
-          <MarkdownEditor value={analysisCn} onChange={setAnalysisCn} rows={15} placeholder="분석 메모를 입력하세요." />
-        </PanelField>
-        <PanelField label="상세 명세">
-          <MarkdownEditor value={specCn} onChange={setSpecCn} rows={15} placeholder="상세 명세를 입력하세요." />
-        </PanelField>
+        {/* 분석 메모 — 원문/마크다운 탭 */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+            <label style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)" }}>분석 메모</label>
+            <div style={{ display: "flex", gap: 2 }}>
+              {(["edit", "preview"] as const).map((t) => (
+                <button key={t} type="button" onClick={() => setAnalysisTab(t)} style={{
+                  padding: "3px 10px", fontSize: 12, borderRadius: 4, cursor: "pointer",
+                  background: analysisTab === t ? "var(--color-primary, #1976d2)" : "var(--color-bg-muted)",
+                  color:      analysisTab === t ? "#fff" : "var(--color-text-secondary)",
+                  border:     "1px solid var(--color-border)",
+                  fontWeight: analysisTab === t ? 600 : 400,
+                }}>
+                  {t === "edit" ? "원문" : "마크다운"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <MarkdownEditor value={analysisCn} onChange={setAnalysisCn} rows={15} placeholder="분석 메모를 입력하세요." tab={analysisTab} onTabChange={setAnalysisTab} />
+        </div>
+
+        {/* 상세 명세 — 원문/마크다운 탭 */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+            <label style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)" }}>상세 명세</label>
+            <div style={{ display: "flex", gap: 2 }}>
+              {(["edit", "preview"] as const).map((t) => (
+                <button key={t} type="button" onClick={() => setSpecTab(t)} style={{
+                  padding: "3px 10px", fontSize: 12, borderRadius: 4, cursor: "pointer",
+                  background: specTab === t ? "var(--color-primary, #1976d2)" : "var(--color-bg-muted)",
+                  color:      specTab === t ? "#fff" : "var(--color-text-secondary)",
+                  border:     "1px solid var(--color-border)",
+                  fontWeight: specTab === t ? 600 : 400,
+                }}>
+                  {t === "edit" ? "원문" : "마크다운"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <MarkdownEditor value={specCn} onChange={setSpecCn} rows={15} placeholder="상세 명세를 입력하세요." tab={specTab} onTabChange={setSpecTab} />
+        </div>
       </div>
     </div>
   );
@@ -1039,37 +1146,58 @@ function StoryDetailPanel({ projectId, storyId, onSaved }: { projectId: string; 
 
         {/* 인수기준 */}
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: "var(--color-text-secondary)" }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: "var(--color-text-secondary)" }}>
             인수기준 (Given / When / Then)
           </div>
-          {acRows.map((row, idx) => (
-            <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 8, marginBottom: 8, alignItems: "start" }}>
-              {(["given", "when", "then"] as const).map((field, fi) => (
-                <div key={field}>
-                  <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 3, color: fi === 0 ? "#1565c0" : fi === 1 ? "#2e7d32" : "#6a1b9a" }}>
-                    {field === "given" ? "Given" : field === "when" ? "When" : "Then"}
-                  </div>
-                  <textarea
-                    value={row[field]}
-                    onChange={(e) => {
-                      const updated = [...acRows];
-                      updated[idx] = { ...updated[idx], [field]: e.target.value };
-                      setAcRows(updated);
-                    }}
-                    rows={2}
-                    style={{ ...inputStyle, resize: "vertical", fontSize: 12 }}
-                  />
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {acRows.map((row, idx) => (
+              <div key={idx} style={{
+                border:       "1px solid var(--color-border)",
+                borderRadius: 8,
+                padding:      "14px 14px 10px",
+                background:   "var(--color-bg-muted)",
+                position:     "relative",
+              }}>
+                {/* 순번 + 삭제 */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "var(--color-text-secondary)" }}>
+                    AC-{idx + 1}
+                  </span>
+                  <button
+                    onClick={() => setAcRows(acRows.filter((_, i) => i !== idx))}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#e53935", fontSize: 18, lineHeight: 1, padding: "0 2px" }}
+                    title="삭제"
+                  >×</button>
                 </div>
-              ))}
-              <button
-                onClick={() => setAcRows(acRows.filter((_, i) => i !== idx))}
-                style={{ marginTop: 18, background: "none", border: "none", cursor: "pointer", color: "#e53935", fontSize: 16 }}
-              >×</button>
-            </div>
-          ))}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                  {(["given", "when", "then"] as const).map((field, fi) => {
+                    const colors = ["#1565c0", "#2e7d32", "#6a1b9a"];
+                    const labels = ["Given", "When", "Then"];
+                    return (
+                      <div key={field}>
+                        <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 5, color: colors[fi] }}>
+                          {labels[fi]}
+                        </div>
+                        <textarea
+                          value={row[field]}
+                          onChange={(e) => {
+                            const updated = [...acRows];
+                            updated[idx] = { ...updated[idx], [field]: e.target.value };
+                            setAcRows(updated);
+                          }}
+                          rows={4}
+                          style={{ ...inputStyle, resize: "vertical", fontSize: 13, lineHeight: 1.6 }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
           <button
             onClick={() => setAcRows([...acRows, { given: "", when: "", then: "" }])}
-            style={{ ...secondaryBtnStyle, fontSize: 12, padding: "4px 12px" }}
+            style={{ ...secondaryBtnStyle, fontSize: 12, padding: "6px 14px", marginTop: 10 }}
           >
             + 인수기준 추가
           </button>
@@ -1129,10 +1257,8 @@ function SaveBar({ onSave, isPending }: { onSave: () => void; isPending: boolean
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
 const panelStyle: React.CSSProperties = {
-  padding:    "28px 32px",
-  maxWidth:   720,
-  background: "var(--color-bg-card)",
-  minHeight:  "100%",
+  padding:   "28px 32px",
+  maxWidth:  720,
 };
 
 const inputStyle: React.CSSProperties = {
@@ -1147,12 +1273,12 @@ const inputStyle: React.CSSProperties = {
 };
 
 const primaryBtnStyle: React.CSSProperties = {
-  padding:      "8px 24px",
+  padding:      "5px 14px",
   borderRadius: 6,
   border:       "none",
   background:   "var(--color-primary, #1976d2)",
   color:        "#fff",
-  fontSize:     14,
+  fontSize:     13,
   fontWeight:   600,
   cursor:       "pointer",
 };

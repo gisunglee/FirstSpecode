@@ -57,8 +57,9 @@ const TASK_TYPE_LABELS: Record<TaskType, string> = {
 };
 
 const REF_TYPE_LABELS: Record<string, string> = {
-  AREA:     "영역 설계",
-  FUNCTION: "기능 설계",
+  AREA:      "영역 설계",
+  FUNCTION:  "기능 설계",
+  UNIT_WORK: "단위업무",
 };
 
 const taskTypeBadgeColors: Record<TaskType, { bg: string; color: string }> = {
@@ -171,6 +172,7 @@ function PromptTemplatesPageInner() {
             <option value="">전체 사용처</option>
             <option value="AREA">영역 설계 (AREA)</option>
             <option value="FUNCTION">기능 설계 (FUNCTION)</option>
+            <option value="UNIT_WORK">단위업무 (UNIT_WORK)</option>
           </select>
 
           <select
@@ -243,16 +245,17 @@ function PromptTemplatesPageInner() {
                     display: "grid",
                     gridTemplateColumns: "28% 11% 8% 5% 5% 7% 10% 9%",
                     padding: "12px 16px",
+                    paddingLeft: active ? 16 : 13,
                     borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+                    borderLeft: active ? "3px solid transparent" : "3px solid #bdbdbd",
                     alignItems: "center",
                     gap: 8,
                     cursor: "pointer",
-                    background: active ? "var(--color-bg-card)" : "var(--color-bg-muted)",
-                    opacity: active ? 1 : 0.65,
+                    background: active ? "var(--color-bg-card)" : "#fafafa",
                     transition: "background 0.1s",
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-hover, #f0f4ff)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = active ? "var(--color-bg-card)" : "var(--color-bg-muted)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = active ? "var(--color-bg-card)" : "#fafafa")}
                 >
                   {/* 템플릿 명 */}
                   <div style={{ overflow: "hidden" }}>
@@ -334,8 +337,9 @@ function PromptTemplatesPageInner() {
                     <span style={{
                       display: "inline-block", padding: "2px 8px",
                       borderRadius: 4, fontSize: 11, fontWeight: 600,
-                      background: active ? "#e8f5e9" : "#f5f5f5",
+                      background: active ? "#e8f5e9" : "transparent",
                       color:      active ? "#2e7d32" : "#9e9e9e",
+                      border:     active ? "none" : "1px dashed #bdbdbd",
                     }}>
                       {active ? "사용" : "미사용"}
                     </span>

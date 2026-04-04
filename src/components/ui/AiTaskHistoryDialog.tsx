@@ -107,7 +107,7 @@ export default function AiTaskHistoryDialog({
   onClose,
 }: {
   projectId: string;
-  refType:   "AREA" | "FUNCTION";
+  refType:   "AREA" | "FUNCTION" | "UNIT_WORK";
   refId:     string;
   taskType:  TaskType;
   onClose:   () => void;

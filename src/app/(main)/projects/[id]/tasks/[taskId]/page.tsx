@@ -95,6 +95,36 @@ function TaskDetailPageInner() {
     enabled: !isNew,
   });
 
+  // ── 복사 뮤테이션 ──────────────────────────────────────────────────────────
+  const copyMutation = useMutation({
+    mutationFn: () =>
+      authFetch(`/api/projects/${projectId}/tasks/${taskId}/copy`, { method: "POST" }),
+    onSuccess: () => {
+      toast.success("복사되었습니다.");
+      queryClient.invalidateQueries({ queryKey: ["tasks", projectId] });
+      router.push(`/projects/${projectId}/tasks`);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // ── 삭제 상태 + 뮤테이션 ──────────────────────────────────────────────────
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteType, setDeleteType] = useState<"ALL" | "TASK_ONLY">("ALL");
+
+  const deleteMutation = useMutation({
+    mutationFn: () =>
+      authFetch(
+        `/api/projects/${projectId}/tasks/${taskId}?deleteType=${deleteType}`,
+        { method: "DELETE" }
+      ),
+    onSuccess: () => {
+      toast.success("삭제되었습니다.");
+      queryClient.invalidateQueries({ queryKey: ["tasks", projectId] });
+      router.push(`/projects/${projectId}/tasks`);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   // ── 저장 뮤테이션 ──────────────────────────────────────────────────────────
   const saveMutation = useMutation({
     mutationFn: (body: SaveBody) =>
@@ -174,6 +204,24 @@ function TaskDetailPageInner() {
           >
             취소
           </button>
+          {!isNew && (
+            <button
+              onClick={() => copyMutation.mutate()}
+              disabled={copyMutation.isPending || saveMutation.isPending}
+              style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
+            >
+              {copyMutation.isPending ? "복사 중..." : "복사"}
+            </button>
+          )}
+          {!isNew && (
+            <button
+              onClick={() => { setDeleteType("ALL"); setDeleteDialogOpen(true); }}
+              disabled={saveMutation.isPending}
+              style={{ fontSize: 12, padding: "5px 14px", borderRadius: 6, border: "1px solid #e53935", background: "transparent", color: "#e53935", cursor: "pointer" }}
+            >
+              삭제
+            </button>
+          )}
           <button
             onClick={handleSave}
             disabled={saveMutation.isPending}
@@ -267,6 +315,53 @@ function TaskDetailPageInner() {
 
       </div>
       </div>
+
+      {/* 삭제 확인 다이얼로그 */}
+      {deleteDialogOpen && (
+        <div
+          onClick={() => setDeleteDialogOpen(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "28px 32px", minWidth: 340, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+          >
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, color: "var(--color-text-primary)" }}>과업 삭제</div>
+            <div style={{ fontSize: 13, color: "var(--color-text-secondary)", marginBottom: 20 }}>
+              <strong>{form.name}</strong> 과업을 삭제합니다.
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+              {(["ALL", "TASK_ONLY"] as const).map((type) => (
+                <label key={type} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
+                  <input
+                    type="radio"
+                    name="deleteType"
+                    value={type}
+                    checked={deleteType === type}
+                    onChange={() => setDeleteType(type)}
+                  />
+                  {type === "ALL" ? "전체 삭제 (연결된 요구사항 포함)" : "과업만 삭제"}
+                </label>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setDeleteDialogOpen(false)}
+                style={{ ...secondaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
+              >
+                취소
+              </button>
+              <button
+                onClick={() => { setDeleteDialogOpen(false); deleteMutation.mutate(); }}
+                disabled={deleteMutation.isPending}
+                style={{ fontSize: 13, padding: "6px 16px", borderRadius: 6, border: "none", background: "#e53935", color: "#fff", cursor: "pointer", fontWeight: 600 }}
+              >
+                {deleteMutation.isPending ? "삭제 중..." : "삭제"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

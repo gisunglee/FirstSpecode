@@ -52,11 +52,25 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "단위업무를 찾을 수 없습니다.", 404);
     }
 
+    // AI 태스크 최신 상태 조회 (taskType별 최신 1건)
+    const aiTasks = await prisma.tbAiTask.findMany({
+      where:   { ref_ty_code: "UNIT_WORK", ref_id: unitWorkId },
+      orderBy: { req_dt: "desc" },
+    });
+    // taskType별 최신 1건만 유지
+    const aiTaskMap: Record<string, { aiTaskId: string; status: string }> = {};
+    for (const t of aiTasks) {
+      if (!aiTaskMap[t.task_ty_code]) {
+        aiTaskMap[t.task_ty_code] = { aiTaskId: t.ai_task_id, status: t.task_sttus_code };
+      }
+    }
+
     return apiSuccess({
       unitWorkId:     uw.unit_work_id,
       displayId:      uw.unit_work_display_id,
       name:           uw.unit_work_nm,
       description:    uw.unit_work_dc ?? "",
+      comment:        (uw as unknown as Record<string, unknown>).coment_cn as string ?? "",
       assignMemberId: uw.asign_mber_id ?? null,
       startDate:      uw.bgng_de ?? null,
       endDate:        uw.end_de ?? null,
@@ -65,6 +79,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       reqId:          uw.req_id,
       reqDisplayId:   uw.requirement.req_display_id,
       reqName:        uw.requirement.req_nm,
+      aiTasks:        aiTaskMap,
       screens: uw.screens.map((s) => ({
         screenId:    s.scrn_id,
         displayId:   s.scrn_display_id,
@@ -100,9 +115,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { name, description, assignMemberId, startDate, endDate, progress, sortOrder, saveHistory } = body as {
+  const { name, description, comment, assignMemberId, startDate, endDate, progress, sortOrder, saveHistory } = body as {
     name?:           string;
     description?:    string;
+    comment?:        string;
     assignMemberId?: string;
     startDate?:      string;
     endDate?:        string;
@@ -127,11 +143,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (saveHistory) {
       // 설명 변경 이력 저장과 단위업무 수정을 트랜잭션으로 처리
       await prisma.$transaction([
-        prisma.tbDsUnitWork.update({
+        (prisma.tbDsUnitWork.update as any)({
           where: { unit_work_id: unitWorkId },
           data:  {
             unit_work_nm:  name.trim(),
             unit_work_dc:  newDescription,
+            coment_cn:     comment?.trim() || null,
             asign_mber_id: assignMemberId || null,
             bgng_de:       startDate?.trim() || null,
             end_de:        endDate?.trim() || null,
@@ -156,11 +173,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         }),
       ]);
     } else {
-      await prisma.tbDsUnitWork.update({
+      await (prisma.tbDsUnitWork.update as any)({
         where: { unit_work_id: unitWorkId },
         data:  {
           unit_work_nm:  name.trim(),
           unit_work_dc:  newDescription,
+          coment_cn:     comment?.trim() || null,
           asign_mber_id: assignMemberId || null,
           bgng_de:       startDate?.trim() || null,
           end_de:        endDate?.trim() || null,

@@ -25,7 +25,7 @@ import { useAppStore } from "@/store/appStore";
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
 type TaskType = "INSPECT" | "DESIGN" | "IMPLEMENT" | "MOCKUP" | "IMPACT" | "CUSTOM";
-type RefType = "AREA" | "FUNCTION";
+type RefType = "AREA" | "FUNCTION" | "UNIT_WORK" | "SCREEN";
 
 type TemplateDetail = {
   tmplId: string;
@@ -42,6 +42,7 @@ type TemplateDetail = {
   useCnt: number;
   creatDt: string;
   mdfcnDt: string;
+  myRole: string;
 };
 
 // ── 상수 ──────────────────────────────────────────────────────────────────────
@@ -123,9 +124,12 @@ function PromptTemplateDetailPageInner() {
     return () => setBreadcrumb([]);
   }, [setBreadcrumb, projectId, isNew, detail?.tmplNm]);
 
-  // DEFAULT(defaultYn=Y) 또는 시스템 공통 템플릿은 편집 불가
   const isDefault = !isNew && (detail?.defaultYn === "Y");
-  const readOnly = !isNew && ((detail?.isSystem ?? false) || isDefault);
+  const isAdminOrOwner = ["OWNER", "ADMIN"].includes(detail?.myRole ?? "");
+
+  // 시스템 공통 템플릿은 항상 읽기 전용
+  // DEFAULT 템플릿은 OWNER/ADMIN만 편집 가능, 나머지는 읽기 전용
+  const readOnly = !isNew && ((detail?.isSystem ?? false) || (isDefault && !isAdminOrOwner));
 
   // ── 저장 뮤테이션 ──────────────────────────────────────────────────────────────
   const saveMutation = useMutation({
@@ -150,10 +154,18 @@ function PromptTemplateDetailPageInner() {
         body: JSON.stringify(body),
       });
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["prompt-templates", projectId] });
-      toast.success(isNew ? "템플릿이 등록되었습니다." : "템플릿이 저장되었습니다.");
-      router.push(`/projects/${projectId}/prompt-templates`);
+      if (isNew) {
+        toast.success("템플릿이 등록되었습니다.");
+        // 신규 등록 후에는 생성된 상세 페이지로 이동
+        const newId = (res as { data?: { tmplId?: string } })?.data?.tmplId;
+        if (newId) router.replace(`/projects/${projectId}/prompt-templates/${newId}`);
+        else router.push(`/projects/${projectId}/prompt-templates`);
+      } else {
+        toast.success("템플릿이 저장되었습니다.");
+        qc.invalidateQueries({ queryKey: ["prompt-templates", projectId, tmplId] });
+      }
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -247,33 +259,51 @@ function PromptTemplateDetailPageInner() {
           flex: 1, minHeight: 0, overflow: "hidden",
         }}>
 
-          {/* 카드 상단: DEFAULT 배지 or 복사 버튼 */}
+          {/* 카드 상단: DEFAULT 배지 + 경고 / 복사 버튼 */}
           {!isNew && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: -8 }}>
-              {readOnly ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{
-                    fontSize: 11, fontWeight: 700, padding: "3px 9px",
-                    borderRadius: 4, background: "#212121", color: "#fff",
-                    letterSpacing: "0.06em",
-                  }}>
-                    DEFAULT
-                  </span>
-                  <span style={{
-                    fontSize: 12, fontWeight: 600,
-                    color: "#d32f2f",
-                  }}>
-                    수정/삭제 불가
-                  </span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: -8 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                {isDefault ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, padding: "3px 9px",
+                      borderRadius: 4, background: "#212121", color: "#fff",
+                      letterSpacing: "0.06em",
+                    }}>
+                      DEFAULT
+                    </span>
+                    {readOnly ? (
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#d32f2f" }}>
+                        수정/삭제 불가
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#e65100" }}>
+                        관리자 편집 모드
+                      </span>
+                    )}
+                  </div>
+                ) : <div />}
+                <button
+                  onClick={() => setCopyConfirm(true)}
+                  disabled={copyMutation.isPending}
+                  style={secondaryBtnStyle}
+                >
+                  이 템플릿 복사
+                </button>
+              </div>
+
+              {/* OWNER/ADMIN의 DEFAULT 편집 시 경고 배너 */}
+              {isDefault && !readOnly && (
+                <div style={{
+                  padding: "10px 14px", borderRadius: 6,
+                  background: "#fff3e0", border: "1px solid #ffb74d",
+                  fontSize: 13, color: "#e65100", lineHeight: 1.6,
+                }}>
+                  ⚠️ <strong>기본 제공 템플릿</strong>을 수정하고 있습니다.
+                  변경 내용은 이 프로젝트의 모든 AI 요청에 즉시 적용됩니다.
+                  신중하게 수정해 주세요. 문제가 생기면 <strong>이 템플릿 복사</strong> 후 원본을 복원하세요.
                 </div>
-              ) : <div />}
-              <button
-                onClick={() => setCopyConfirm(true)}
-                disabled={copyMutation.isPending}
-                style={secondaryBtnStyle}
-              >
-                이 템플릿 복사
-              </button>
+              )}
             </div>
           )}
 
@@ -312,8 +342,8 @@ function PromptTemplateDetailPageInner() {
             />
           </FormField>
 
-          {/* 작업 유형 / 대상 범위 / 정렬 순서 / 사용 여부 — 4열 */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16 }}>
+          {/* 작업 유형 / 대상 사용처 / 정렬 순서 / 사용 여부 — 비율 조정: 사용처 넓게, 정렬·여부 좁게 */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr 0.7fr 0.7fr", gap: 16 }}>
             <FormField label="작업 유형" required>
               <select
                 value={taskTyCode}
@@ -341,6 +371,8 @@ function PromptTemplateDetailPageInner() {
                 style={selectStyle}
               >
                 <option value="">범용</option>
+                <option value="UNIT_WORK">단위업무 (UNIT_WORK)</option>
+                <option value="SCREEN">화면 (SCREEN)</option>
                 <option value="AREA">영역 설계 (AREA)</option>
                 <option value="FUNCTION">기능 설계 (FUNCTION)</option>
               </select>

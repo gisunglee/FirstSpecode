@@ -232,22 +232,22 @@ function UserStoryDetailPageInner() {
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
-      {/* AR-00050 브레드크럼 */}
-      <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 12, paddingLeft: 4 }}>
-        기획 레이어
-        <span style={{ margin: "0 4px" }}>›</span>
-        {detail?.taskName ?? selectedReq?.taskName ?? "과업"}
-        <span style={{ margin: "0 4px" }}>›</span>
-        {detail?.requirementName ?? selectedReq?.name ?? "요구사항"}
-        <span style={{ margin: "0 4px" }}>›</span>
-        사용자스토리
-      </div>
-
       {/* 2-컬럼 레이아웃: 기본 정보 | 인수기준 */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 28, alignItems: "start" }}>
 
-        {/* 왼쪽: 기본 정보 */}
-        <Card title="기본 정보">
+        {/* 왼쪽: 기본 정보 (타이틀 없음) */}
+        <Card title="">
+          {/* 과업명 — FormField와 동일한 스타일, input 없이 값만 표시 */}
+          {(detail?.taskName || selectedReq?.taskName) && (
+            <div>
+              <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                과업
+              </label>
+              <div style={{ fontSize: 14, color: "var(--color-text-primary)", padding: "8px 12px" }}>
+                {detail?.taskName ?? selectedReq?.taskName}
+              </div>
+            </div>
+          )}
           <FormField label="요구사항" required>
             <select
               value={form.requirementId}
@@ -295,7 +295,7 @@ function UserStoryDetailPageInner() {
         </Card>
 
         {/* 오른쪽: 인수기준 */}
-        <Card title="인수기준 (Given / When / Then)" action={
+        <Card title="인수기준 (Given / When / Then)" titleSize={13} action={
           <button onClick={addAcRow} style={{ ...secondaryBtnStyle, fontSize: 12, padding: "4px 12px" }}>
             + 추가
           </button>
@@ -310,22 +310,10 @@ function UserStoryDetailPageInner() {
                   style={{
                     border: "1px solid var(--color-border)",
                     borderRadius: 6,
-                    padding: "36px 14px 12px",
+                    padding: "12px 14px",
                     background: "var(--color-bg-muted)",
-                    position: "relative",
                   }}
                 >
-                  <button
-                    onClick={() => removeAcRow(idx)}
-                    style={{
-                      position: "absolute", top: 8, right: 10,
-                      background: "none", border: "none", cursor: "pointer",
-                      fontSize: 16, color: "#aaa", lineHeight: 1,
-                    }}
-                    title="이 인수기준 삭제"
-                  >
-                    ×
-                  </button>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {(["given", "when", "then"] as const).map((field) => (
                       <div key={field} style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -339,6 +327,16 @@ function UserStoryDetailPageInner() {
                           onChange={(e) => updateAcRow(idx, field, e.target.value)}
                           style={{ ...inputStyle, fontSize: 13 }}
                         />
+                        {/* X 버튼 — Given 행 오른쪽에만 표시 */}
+                        {field === "given" && (
+                          <button
+                            onClick={() => removeAcRow(idx)}
+                            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 32, color: "#aaa", lineHeight: 1, flexShrink: 0, padding: "0 2px" }}
+                            title="이 인수기준 삭제"
+                          >
+                            ×
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -372,8 +370,9 @@ function FormField({ label, required, children }: {
   );
 }
 
-function Card({ title, action, children }: {
+function Card({ title, titleSize = 15, action, children }: {
   title: string;
+  titleSize?: number;
   action?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -387,10 +386,12 @@ function Card({ title, action, children }: {
       flexDirection: "column",
       gap: 16,
     }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>{title}</h2>
-        {action}
-      </div>
+      {(title || action) && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          {title && <h2 style={{ margin: 0, fontSize: titleSize, fontWeight: 600, color: "var(--color-text-secondary)" }}>{title}</h2>}
+          {action}
+        </div>
+      )}
       {children}
     </div>
   );

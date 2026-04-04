@@ -64,6 +64,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       categoryL:    screen.ctgry_l_nm ?? "",
       categoryM:    screen.ctgry_m_nm ?? "",
       categoryS:    screen.ctgry_s_nm ?? "",
+      comment:      screen.coment_cn ?? "",
       urlPath:      screen.url_path ?? "",
       sortOrder:    screen.sort_ordr,
       unitWorkId:   screen.unit_work_id ?? null,
@@ -103,10 +104,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { unitWorkId, name, description, displayCode, type, sortOrder, categoryL, categoryM, categoryS, layoutData, saveHistory } = body as {
+  const { unitWorkId, name, description, comment, displayCode, type, sortOrder, categoryL, categoryM, categoryS, layoutData, saveHistory } = body as {
     unitWorkId?:   string;
     name?:         string;
     description?:  string;
+    comment?:      string;
     displayCode?:  string;
     type?:         string;
     sortOrder?:    number;
@@ -135,6 +137,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           unit_work_id:  unitWorkId || null,
           scrn_nm:       name.trim(),
           scrn_dc:       newDescription,
+          coment_cn:     comment?.trim() || null,
           layer_data_dc: layoutData ?? null,
           dsply_code:    displayCode?.trim() || null,
           scrn_ty_code:  type || "LIST",

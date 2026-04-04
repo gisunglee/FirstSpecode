@@ -181,80 +181,65 @@ function UserStoriesPageInner() {
         총 {data?.totalCount ?? 0}건
       </div>
 
-      {/* ── 카드 목록 (AR-00049) ─────────────────────────────────────────────── */}
+      {/* ── 테이블 목록 ──────────────────────────────────────────────────────── */}
       {stories.length === 0 ? (
         <div style={{ padding: "60px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
           등록된 사용자스토리가 없습니다.
         </div>
       ) : (
-        <div
-          style={{
-            display:             "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-            gap:                 16,
-          }}
-        >
-          {stories.map((s) => (
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+          {/* 헤더 */}
+          <div style={gridHeaderStyle}>
+            <div>과업 › 요구사항</div>
+            <div>스토리명</div>
+            <div>페르소나</div>
+            <div style={{ textAlign: "center" }}>인수기준</div>
+            <div />
+          </div>
+
+          {/* 행 */}
+          {stories.map((s, idx) => (
             <div
               key={s.storyId}
-              style={{
-                border:       "1px solid var(--color-border)",
-                borderRadius: 8,
-                padding:      "16px 18px",
-                background:   "var(--color-bg-card)",
-                display:      "flex",
-                flexDirection: "column",
-                gap:          10,
-                cursor:       "pointer",
-                transition:   "box-shadow 0.15s",
-              }}
               onClick={() => router.push(`/projects/${projectId}/user-stories/${s.storyId}`)}
+              style={{
+                ...gridRowStyle,
+                borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+              }}
             >
-              {/* 브레드크럼: 과업 > 요구사항 */}
-              <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
-                <span>{s.taskName}</span>
-                <span style={{ margin: "0 4px" }}>›</span>
-                <span>{s.requirementName}</span>
+              {/* 과업 › 요구사항 */}
+              <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.4 }}>
+                {s.taskName && <span>{s.taskName}</span>}
+                {s.taskName && s.requirementName && <span style={{ margin: "0 4px", color: "#ccc" }}>›</span>}
+                {s.requirementName && <span>{s.requirementName}</span>}
               </div>
 
-              {/* 스토리 표시 ID + 명 */}
-              <div>
-                <span style={{ fontSize: 11, color: "#aaa", marginRight: 6 }}>{s.displayId}</span>
-                <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
-                  {s.name}
+              {/* 스토리명 */}
+              <div style={{ fontSize: 14, fontWeight: 500 }}>
+                <span style={{ color: "var(--color-text-secondary)", fontSize: 11, marginRight: 6 }}>
+                  {s.displayId}
                 </span>
+                {s.name}
               </div>
 
               {/* 페르소나 */}
-              {s.persona && (
-                <div style={{ fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.4 }}>
-                  {s.persona.length > 80 ? `${s.persona.slice(0, 80)}…` : s.persona}
-                </div>
-              )}
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {s.persona || <span style={{ color: "#ccc" }}>—</span>}
+              </div>
 
-              {/* 푸터: 인수기준 수 + 삭제 버튼 */}
-              <div
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}
-                onClick={(e) => e.stopPropagation()} // 카드 클릭과 분리
-              >
-                <span
-                  style={{
-                    display:      "inline-block",
-                    padding:      "2px 8px",
-                    borderRadius: 4,
-                    fontSize:     12,
-                    background:   "var(--color-bg-muted)",
-                    color:        "var(--color-text-secondary)",
-                  }}
-                >
-                  인수기준 {s.acceptanceCriteriaCount}개
+              {/* 인수기준 수 */}
+              <div style={{ textAlign: "center" }}>
+                <span style={{
+                  display: "inline-block", padding: "2px 8px", borderRadius: 4,
+                  fontSize: 12, background: "var(--color-bg-muted)", color: "var(--color-text-secondary)",
+                }}>
+                  {s.acceptanceCriteriaCount}개
                 </span>
-                <button
-                  onClick={() => setDeleteTarget(s)}
-                  style={dangerBtnStyle}
-                >
-                  삭제
-                </button>
+              </div>
+
+              {/* 삭제 버튼 */}
+              <div style={{ display: "flex", justifyContent: "center" }} onClick={(e) => e.stopPropagation()}>
+                <button onClick={() => setDeleteTarget(s)} style={dangerBtnStyle}>삭제</button>
               </div>
             </div>
           ))}
@@ -316,6 +301,27 @@ function DeleteConfirmModal({
 }
 
 // ── 스타일 ───────────────────────────────────────────────────────────────────
+
+const gridHeaderStyle: React.CSSProperties = {
+  display:               "grid",
+  gridTemplateColumns:   "2fr 3fr 3fr 80px 60px",
+  padding:               "8px 14px",
+  background:            "var(--color-bg-muted)",
+  fontSize:              12,
+  fontWeight:            600,
+  color:                 "var(--color-text-secondary)",
+  gap:                   8,
+};
+
+const gridRowStyle: React.CSSProperties = {
+  display:               "grid",
+  gridTemplateColumns:   "2fr 3fr 3fr 80px 60px",
+  padding:               "10px 14px",
+  alignItems:            "center",
+  cursor:                "pointer",
+  gap:                   8,
+  background:            "var(--color-bg-card)",
+};
 
 const filterSelectStyle: React.CSSProperties = {
   padding:            "7px 12px",

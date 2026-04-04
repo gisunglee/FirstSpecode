@@ -51,8 +51,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         task_ty_code:      task.task_ty_code,
         coment_cn:         task.coment_cn,
         req_snapshot_data: task.req_snapshot_data ?? {},
-        parent_task_id:    taskId,   // 이력 연결
-        retry_cnt:         3,        // 재시도 횟수 초기화
+        parent_task_id:    taskId,
+        retry_cnt:         (task.retry_cnt ?? 0) + 1,  // 재시도할 때마다 +1
         req_mber_id:       auth.mberId,
         task_sttus_code:   "PENDING",
       },

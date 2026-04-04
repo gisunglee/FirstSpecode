@@ -144,7 +144,10 @@
       "Bash(curl -s \"http://localhost:3000/api/worker/tasks?limit=10\" -H \"X-Worker-Key: dev-worker-key\")",
       "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/955946e1-4062-4cbb-92d3-b5eeb5668dfd/start\" -H \"X-Worker-Key: dev-worker-key\")",
       "Bash(curl -s \"http://localhost:3001/api/worker/tasks?limit=10\" -H \"X-Worker-Key: specode-worker-dev-key\")",
-      "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/9848f17a-3b64-415a-9c79-3d5350d8173a/start\" -H \"X-Worker-Key: specode-worker-dev-key\")"
+      "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/9848f17a-3b64-415a-9c79-3d5350d8173a/start\" -H \"X-Worker-Key: specode-worker-dev-key\")",
+      "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/6120b787-b8fd-4caf-9fe3-a30169dfb558/start\" -H \"X-Worker-Key: specode-worker-dev-key\")",
+      "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/fc7e7539-a345-4a78-881d-dbeb96093ccf/start\" -H \"X-Worker-Key: specode-worker-dev-key\")",
+      "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/99232eba-0ae7-4846-940c-e368e3d98335/start\" -H \"X-Worker-Key: specode-worker-dev-key\")"
     ]
   }
 }
