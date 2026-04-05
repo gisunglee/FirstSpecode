@@ -258,8 +258,8 @@ function ReviewDetailPageInner() {
         </div>
       </div>
 
-      {/* 2-column grid: 좌(요청+답변) 70% / 우(코멘트) 30% */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: "0 20px", padding: "4px 24px 48px", alignItems: "start" }}>
+      {/* 2-column grid: 좌(요청+답변) 7 / 우(코멘트) 3 — 사이드바 너비에 비례하여 함께 조정됨 */}
+      <div style={{ display: "grid", gridTemplateColumns: "6fr 4fr", gap: "0 20px", padding: "4px 24px 48px", alignItems: "start" }}>
 
         {/* ── 왼쪽 컬럼: 메타·요청·답변 ──────────────────────────── */}
         <div>
@@ -304,11 +304,11 @@ function ReviewDetailPageInner() {
                 <span style={metaItemStyle}>답변자 <strong style={metaValueStyle}>{data.revwrMemberNm}</strong></span>
               )}
               <span style={metaSepStyle}>·</span>
-              <span style={metaItemStyle}>{new Date(data.createdAt).toLocaleDateString("ko-KR")} 요청</span>
+              <span style={metaItemStyle}>{new Date(data.createdAt).toLocaleString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })} 요청</span>
               {data.completedAt && (
                 <>
                   <span style={metaSepStyle}>·</span>
-                  <span style={metaItemStyle}>{new Date(data.completedAt).toLocaleDateString("ko-KR")} 완료</span>
+                  <span style={metaItemStyle}>{new Date(data.completedAt).toLocaleString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })} 완료</span>
                 </>
               )}
 

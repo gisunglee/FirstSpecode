@@ -158,6 +158,12 @@ export default function AiTaskDetailDialog({
       toast.success("상태가 수정되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["ai-task-detail", projectId, taskId] });
       queryClient.invalidateQueries({ queryKey: ["ai-tasks", projectId] });
+      // 상태 변경 시에도 상세 페이지 도트 색상·레이블이 즉시 반영되도록 무효화
+      if (data?.refType === "AREA") {
+        queryClient.invalidateQueries({ queryKey: ["area", projectId, data.refId] });
+      } else if (data?.refType === "FUNCTION") {
+        queryClient.invalidateQueries({ queryKey: ["function", projectId, data.refId] });
+      }
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -167,7 +173,15 @@ export default function AiTaskDetailDialog({
       authFetch(`/api/projects/${projectId}/ai-tasks/${taskId}`, { method: "DELETE" }),
     onSuccess: () => {
       toast.success("삭제되었습니다.");
+      // AI 태스크 목록 캐시 무효화
       queryClient.invalidateQueries({ queryKey: ["ai-tasks", projectId] });
+      // 삭제한 태스크가 속한 엔티티(영역/기능) 상세 캐시도 무효화
+      // — 무효화하지 않으면 상세 페이지에 '내용·재요청·☰' 버튼이 잔류함
+      if (data?.refType === "AREA") {
+        queryClient.invalidateQueries({ queryKey: ["area", projectId, data.refId] });
+      } else if (data?.refType === "FUNCTION") {
+        queryClient.invalidateQueries({ queryKey: ["function", projectId, data.refId] });
+      }
       onClose();
     },
     onError: (err: Error) => toast.error(err.message),

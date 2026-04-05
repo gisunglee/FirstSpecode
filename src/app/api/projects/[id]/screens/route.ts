@@ -165,6 +165,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         prjct_id:      projectId,
         ref_tbl_nm:    "tb_ds_screen",
         ref_id:        screen.scrn_id,
+        chg_type_code: "CREATE",
         chg_rsn_cn:    "화면 신규 생성",
         snapshot_data: {
           screenId:  screen.scrn_id,

@@ -57,11 +57,19 @@ type ChangeItem = {
   chgId:        string;
   refTblNm:     string;
   refId:        string;
+  chgTypeCode:  string;
   chgRsnCn:     string | null;
   aiReqYn:      string;
   aiTaskId:     string | null;
   chgMberEmail: string | null;
   chgDt:        string;
+};
+
+// 액션 타입 뱃지 스타일 매핑
+const ACTION_STYLE: Record<string, { label: string; bg: string; text: string }> = {
+  CREATE: { label: "등록", bg: "#e8f5e9", text: "#2e7d32" },
+  UPDATE: { label: "수정", bg: "#fff8e1", text: "#f57f17" },
+  DELETE: { label: "삭제", bg: "#fce4ec", text: "#c62828" },
 };
 
 // ── 유틸 ──────────────────────────────────────────────────────────────────────
@@ -182,8 +190,8 @@ function DesignChangesPageInner() {
           {/* 헤더 행 */}
           <div style={headerRowStyle}>
             <span style={{ textAlign: "right" }}>No</span>
+            <span>액션</span>
             <span>대상 테이블</span>
-            <span>대상 ID</span>
             <span>변경 사유</span>
             <span>변경자</span>
             <span>변경 일시</span>
@@ -220,6 +228,22 @@ function DesignChangesPageInner() {
                     {no}
                   </span>
 
+                  {/* 액션 타입 */}
+                  <span>
+                    {(() => {
+                      const a = ACTION_STYLE[item.chgTypeCode] ?? { label: item.chgTypeCode, bg: "#f0f0f0", text: "#616161" };
+                      return (
+                        <span style={{
+                          display: "inline-block", padding: "2px 8px", borderRadius: 12,
+                          background: a.bg, color: a.text,
+                          fontSize: 11, fontWeight: 700,
+                        }}>
+                          {a.label}
+                        </span>
+                      );
+                    })()}
+                  </span>
+
                   {/* 대상 테이블 */}
                   <span>
                     <span style={{
@@ -229,11 +253,6 @@ function DesignChangesPageInner() {
                     }}>
                       {tblLabel(item.refTblNm)}
                     </span>
-                  </span>
-
-                  {/* 대상 ID */}
-                  <span style={{ fontSize: 11, fontFamily: "monospace", color: "var(--color-text-secondary)" }}>
-                    {item.refId.slice(0, 8)}…
                   </span>
 
                   {/* 변경 사유 */}
@@ -348,7 +367,7 @@ function Pagination({
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-const GRID = "48px 140px 90px 1fr minmax(140px,200px) 150px";
+const GRID = "48px 70px 130px 1fr minmax(140px,200px) 150px";
 
 const headerRowStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID,

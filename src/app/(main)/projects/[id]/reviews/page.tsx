@@ -63,6 +63,12 @@ export default function ReviewsPage() {
   );
 }
 
+// 연도 생략 — MM-DD HH:mm 형식으로 컬럼 너비 절약
+function formatDateShort(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 
 function ReviewsPageInner() {
@@ -145,11 +151,15 @@ function ReviewsPageInner() {
                     {item.titleNm}
                   </div>
 
-                  {/* 요청자 */}
-                  <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{item.reqMemberNm}</div>
+                  {/* 요청자 — 이메일 주소일 때 말줄임 */}
+                  <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.reqMemberNm}>
+                    {item.reqMemberNm}
+                  </div>
 
-                  {/* 답변자 */}
-                  <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{item.revwrMemberNm}</div>
+                  {/* 답변자 — 이메일 주소일 때 말줄임 */}
+                  <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.revwrMemberNm}>
+                    {item.revwrMemberNm}
+                  </div>
 
                   {/* 상태 배지 + 피드백 + 별점 (가로 배치) */}
                   <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 5 }}>
@@ -176,16 +186,14 @@ function ReviewsPageInner() {
                     {item.commentCount > 0 ? `💬 ${item.commentCount}` : "—"}
                   </div>
 
-                  {/* 요청 일시 */}
+                  {/* 요청 일시 — MM-DD HH:mm 단축 포맷 */}
                   <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
-                    {new Date(item.createdAt).toLocaleString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })}
+                    {formatDateShort(item.createdAt)}
                   </div>
 
-                  {/* 답변 일시 */}
+                  {/* 답변 일시 — MM-DD HH:mm 단축 포맷 */}
                   <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
-                    {item.completedAt
-                      ? new Date(item.completedAt).toLocaleString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })
-                      : "—"}
+                    {item.completedAt ? formatDateShort(item.completedAt) : "—"}
                   </div>
                 </div>
               );
@@ -335,7 +343,10 @@ function NewReviewModal({
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-const GRID_TEMPLATE = "26% 11% 11% 10% 8% 17% 17%";
+// 제목(가변) | 요청자 | 답변자 | 상태 | 코멘트 | 요청일시 | 답변일시
+// 제목(가변) | 요청자 | 답변자 | 상태 | 코멘트 | 요청일시 | 답변일시
+// 제목(가변) | 요청자 | 답변자 | 상태 | 코멘트 | 요청일시 | 답변일시
+const GRID_TEMPLATE = "1fr 101px 101px 161px 83px 101px 101px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID_TEMPLATE, gap: 8,

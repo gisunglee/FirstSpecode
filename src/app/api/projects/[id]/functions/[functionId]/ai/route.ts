@@ -64,19 +64,22 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // ── 프롬프트 템플릿 조회 ─────────────────────────────────────────────────
-    // default_yn='Y' 우선, 없으면 가장 최근 것 (프로젝트 전용 > 시스템 공통)
+    // default_yn='Y' 우선, FUNCTION 전용 → 공용(ref_ty_code=null) 순
+    // ref_ty_code 미지정 시 UNIT_WORK/AREA 등 다른 용도 템플릿이 걸리는 문제 방지
     const promptTmpl = await prisma.tbAiPromptTemplate.findFirst({
       where: {
-        OR:           [{ prjct_id: projectId }, { prjct_id: null }],
+        AND: [
+          { OR: [{ prjct_id: projectId }, { prjct_id: null }] },
+          { OR: [{ ref_ty_code: "FUNCTION" }, { ref_ty_code: null }] },
+        ],
         task_ty_code: taskType,
         use_yn:       "Y",
       },
       orderBy: [
-        // default_yn 'Y' 먼저 (Y > N 알파벳 역순)
         { default_yn: "desc" },
-        // 프로젝트 전용 우선 (null이 last)
-        { prjct_id:   { sort: "desc", nulls: "last" } },
-        { creat_dt:   "desc" },
+        { ref_ty_code: { sort: "desc", nulls: "last" } },
+        { prjct_id:    { sort: "desc", nulls: "last" } },
+        { creat_dt:    "desc" },
       ],
     });
 

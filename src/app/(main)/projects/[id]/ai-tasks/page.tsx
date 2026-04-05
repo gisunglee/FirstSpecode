@@ -141,7 +141,8 @@ function refTypeBadgeStyle(type: RefType): React.CSSProperties {
 
 function formatDatetime(iso: string): string {
   const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  // 연도 생략 — MM-DD HH:mm 형식으로 컬럼 너비 절약
+  return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 function formatElapsed(ms: number): string {
@@ -301,7 +302,8 @@ function AiTasksPageInner() {
   }
 
   // ── 10컬럼 그리드 템플릿 (1115px) ──────────────────────────────────────────
-  const GRID_CONFIG = "70px 100px minmax(150px, 1fr) 80px 144px 144px 80px 50px 120px 110px 36px";
+  // 요청구분 | 작업유형 | 대상(가변) | 요청자 | 요청일시 | 완료일시 | 소요 | 재시도 | 상태/액션 | 실행가능일 | 삭제
+  const GRID_CONFIG = "64px 90px minmax(200px, 1fr) 70px 96px 96px 64px 44px 110px 88px 36px";
 
   return (
     <div style={{ padding: 0 }}>

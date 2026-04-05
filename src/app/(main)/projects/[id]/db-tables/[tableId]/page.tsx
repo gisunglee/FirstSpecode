@@ -323,6 +323,20 @@ function DbTableDetailPageInner() {
     saveMutation.mutate();
   }
 
+  // ── 삭제 ────────────────────────────────────────────────────────────────────
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+
+  const deleteMutation = useMutation({
+    mutationFn: () =>
+      authFetch(`/api/projects/${projectId}/db-tables/${tableId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["db-tables", projectId] });
+      toast.success("테이블이 삭제되었습니다.");
+      router.push(`/projects/${projectId}/db-tables`);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   if (!isNew && isLoading) {
     return <div style={{ padding: "40px 32px", color: "#888" }}>로딩 중...</div>;
   }
@@ -348,6 +362,15 @@ function DbTableDetailPageInner() {
           {isNew ? "DB 테이블 신규 등록" : "DB 테이블 상세"}
         </span>
         <div style={{ flex: 1 }} />
+        {/* 삭제 버튼 — 신규 등록 중에는 표시하지 않음 */}
+        {!isNew && (
+          <button
+            onClick={() => setDeleteConfirm(true)}
+            style={{ padding: "5px 14px", borderRadius: 6, border: "none", background: "#fdecea", color: "#e53935", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+          >
+            삭제
+          </button>
+        )}
         <button onClick={() => router.push(`/projects/${projectId}/db-tables`)} style={secondaryBtnStyle}>
           취소
         </button>
@@ -573,6 +596,44 @@ function DbTableDetailPageInner() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── 삭제 확인 다이얼로그 ── */}
+      {deleteConfirm && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
+          onClick={() => setDeleteConfirm(false)}
+        >
+          <div style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "28px 32px", minWidth: 360, maxWidth: 440, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }} onClick={(e) => e.stopPropagation()}>
+            <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700 }}>테이블을 삭제하시겠습니까?</p>
+            <p style={{ margin: "0 0 6px", fontSize: 14, color: "var(--color-text-secondary)" }}>
+              <code style={{ fontFamily: "monospace", background: "var(--color-bg-muted)", padding: "1px 6px", borderRadius: 4 }}>
+                {physNm}
+              </code>
+            </p>
+            {cols.length > 0 && (
+              <p style={{ margin: "0 0 0", fontSize: 12, color: "#e57373" }}>
+                ⚠ 하위 컬럼 {cols.length}개도 함께 삭제됩니다.
+              </p>
+            )}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>
+              <button
+                style={{ padding: "6px 16px", borderRadius: 6, border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: 13, cursor: "pointer" }}
+                onClick={() => setDeleteConfirm(false)}
+                disabled={deleteMutation.isPending}
+              >
+                취소
+              </button>
+              <button
+                style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "#e53935", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                onClick={() => deleteMutation.mutate()}
+                disabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending ? "삭제 중..." : "삭제"}
+              </button>
+            </div>
           </div>
         </div>
       )}

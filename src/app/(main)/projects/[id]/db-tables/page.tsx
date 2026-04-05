@@ -50,8 +50,7 @@ function DbTablesPageInner() {
     return () => setBreadcrumb([]);
   }, [setBreadcrumb]);
 
-  const [search,       setSearch]       = useState("");
-  const [deleteTarget, setDeleteTarget] = useState<DbTableRow | null>(null);
+  const [search, setSearch] = useState("");
 
   // ── 신규 등록 인라인 폼 ──────────────────────────────────────────────────────
   const [creating,     setCreating]     = useState(false);
@@ -81,18 +80,6 @@ function DbTablesPageInner() {
       setNewPhysNm(""); setNewLgclNm(""); setNewDc("");
       // 생성 즉시 상세 페이지로 이동
       router.push(`/projects/${projectId}/db-tables/${res.data.tblId}`);
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  // ── 삭제 뮤테이션 ────────────────────────────────────────────────────────────
-  const deleteMutation = useMutation({
-    mutationFn: (tblId: string) =>
-      authFetch(`/api/projects/${projectId}/db-tables/${tblId}`, { method: "DELETE" }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["db-tables", projectId] });
-      toast.success("테이블이 삭제되었습니다.");
-      setDeleteTarget(null);
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -155,7 +142,6 @@ function DbTablesPageInner() {
             <span>설명</span>
             <span style={{ textAlign: "center" }}>컬럼 수</span>
             <span>등록일</span>
-            <span>액션</span>
           </div>
 
           {/* 신규 등록 인라인 폼 */}
@@ -244,71 +230,19 @@ function DbTablesPageInner() {
                 <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
                   {row.creatDt.slice(0, 10)}
                 </span>
-
-                {/* 액션 */}
-                <div style={{ display: "flex", gap: 4 }} onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() => router.push(`/projects/${projectId}/db-tables/${row.tblId}`)}
-                    style={editBtnStyle}
-                  >
-                    편집
-                  </button>
-                  <button
-                    onClick={() => setDeleteTarget(row)}
-                    style={dangerBtnStyle}
-                  >
-                    삭제
-                  </button>
-                </div>
               </div>
             ))
           )}
         </div>
       </div>
 
-      {/* ── 삭제 확인 다이얼로그 ── */}
-      {deleteTarget && (
-        <div style={overlayStyle} onClick={() => setDeleteTarget(null)}>
-          <div style={dialogStyle} onClick={(e) => e.stopPropagation()}>
-            <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 700 }}>
-              테이블을 삭제하시겠습니까?
-            </p>
-            <p style={{ margin: "0 0 6px", fontSize: 14, color: "var(--color-text-secondary)" }}>
-              <code style={{ fontFamily: "monospace", background: "var(--color-bg-muted)", padding: "1px 6px", borderRadius: 4 }}>
-                {deleteTarget.tblPhysclNm}
-              </code>
-            </p>
-            {deleteTarget.columnCount > 0 && (
-              <p style={{ margin: "0 0 20px", fontSize: 12, color: "#e57373" }}>
-                ⚠ 하위 컬럼 {deleteTarget.columnCount}개도 함께 삭제됩니다.
-              </p>
-            )}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>
-              <button
-                style={{ ...cancelBtnStyle, padding: "6px 16px", fontSize: 13 }}
-                onClick={() => setDeleteTarget(null)}
-                disabled={deleteMutation.isPending}
-              >
-                취소
-              </button>
-              <button
-                style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "#e53935", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-                onClick={() => deleteMutation.mutate(deleteTarget.tblId)}
-                disabled={deleteMutation.isPending}
-              >
-                {deleteMutation.isPending ? "삭제 중..." : "삭제"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-const GRID = "minmax(160px,220px) minmax(120px,180px) 1fr 80px 100px 110px";
+const GRID = "minmax(160px,220px) minmax(120px,180px) 1fr 80px 100px";
 
 const headerRowStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID,
@@ -364,30 +298,3 @@ const cancelBtnStyle: React.CSSProperties = {
   fontSize: 11, cursor: "pointer",
 };
 
-const editBtnStyle: React.CSSProperties = {
-  padding: "3px 10px", borderRadius: 4,
-  border: "1px solid var(--color-border)",
-  background: "var(--color-bg-card)", color: "var(--color-text-primary)",
-  fontSize: 11, cursor: "pointer",
-};
-
-const dangerBtnStyle: React.CSSProperties = {
-  padding: "3px 10px", borderRadius: 4,
-  border: "none",
-  background: "#fdecea", color: "#e53935",
-  fontSize: 11, fontWeight: 600, cursor: "pointer",
-};
-
-const overlayStyle: React.CSSProperties = {
-  position: "fixed", inset: 0,
-  background: "rgba(0,0,0,0.45)",
-  display: "flex", alignItems: "center", justifyContent: "center",
-  zIndex: 1000,
-};
-
-const dialogStyle: React.CSSProperties = {
-  background: "var(--color-bg-card)",
-  borderRadius: 10, padding: "28px 32px",
-  minWidth: 360, maxWidth: 440,
-  boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-};

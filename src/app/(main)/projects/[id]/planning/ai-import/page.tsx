@@ -638,14 +638,14 @@ function AiImportPageInner() {
                 </span>
               </div>
               <div className="sp-group-body">
-                <ol style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", paddingLeft: "var(--space-4)", color: "var(--color-text-secondary)", fontSize: "var(--text-base)", lineHeight: 1.7 }}>
+                <ol style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", paddingLeft: 0, color: "var(--color-text-secondary)", fontSize: "var(--text-base)", lineHeight: 1.7 }}>
                   {[
                     "Claude 프로젝트를 만들고 아래 시스템 프롬프트를 프로젝트 지침에 붙여넣습니다.",
                     "신규 등록: Claude와 3단계로 설계 (과업 → 요구사항 → 사용자스토리). '요약해줘'로 현황 확인, 완료 후 \"JSON 줘\" 요청.",
                     "기존 데이터 수정: ② 탭에서 과업 내보내기 → JSON 복사 → Claude에 붙여넣고 수정 → JSON 받기.",
                     "JSON을 ② 탭에 붙여넣고 가져오기 실행. systemId 있는 항목은 수정, 없는 항목은 신규 등록됩니다.",
                   ].map((step, i) => (
-                    <li key={i} style={{ display: "flex", gap: "var(--space-2)", listStyle: "none", marginLeft: "-var(--space-4)" }}>
+                    <li key={i} style={{ display: "flex", gap: "var(--space-2)", listStyle: "none" }}>
                       <span style={{
                         minWidth: 22, height: 22, borderRadius: "var(--radius-full)",
                         background: "var(--color-brand-subtle)", border: "1px solid var(--color-brand-border)",

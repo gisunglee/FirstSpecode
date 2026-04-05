@@ -42,39 +42,39 @@ import { useAppStore } from "@/store/appStore";
 type AiTaskInfo = { aiTaskId: string; status: string };
 
 type FuncDetail = {
-  funcId:              string;
-  displayId:           string;
-  name:                string;
-  description:         string;
-  commentCn:           string;
-  type:                string;
-  status:              string;
-  priority:            string;
-  complexity:          string;
-  effort:              string;
-  assignMemberId:      string | null;
-  implStartDate:       string;
-  implEndDate:         string;
-  sortOrder:           number;
-  areaId:              string | null;
-  areaName:            string;
-  screenId:            string | null;
-  unitWorkId:          string | null;
+  funcId: string;
+  displayId: string;
+  name: string;
+  description: string;
+  commentCn: string;
+  type: string;
+  status: string;
+  priority: string;
+  complexity: string;
+  effort: string;
+  assignMemberId: string | null;
+  implStartDate: string;
+  implEndDate: string;
+  sortOrder: number;
+  areaId: string | null;
+  areaName: string;
+  screenId: string | null;
+  unitWorkId: string | null;
   // 단위업무 설명 — TABLE_SCRIPT 파싱용
-  unitWorkDc:          string;
-  aiTasks:             Record<string, AiTaskInfo>;
+  unitWorkDc: string;
+  aiTasks: Record<string, AiTaskInfo>;
 };
 
 type AreaOption = { areaId: string; displayId: string; name: string };
 
 type ColMappingItem = {
-  mappingId:    string;
-  usePurpsCn:  string;
-  ioSeCode:    string;
-  uiTyCode:    string;
-  tableName:   string;
-  colName:     string;
-  sortOrder:   number;
+  mappingId: string;
+  usePurpsCn: string;
+  ioSeCode: string;
+  uiTyCode: string;
+  tableName: string;
+  colName: string;
+  sortOrder: number;
 };;
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -90,14 +90,14 @@ export default function FunctionDetailPage() {
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 
 function FunctionDetailPageInner() {
-  const params         = useParams<{ id: string; functionId: string }>();
-  const router         = useRouter();
-  const searchParams   = useSearchParams();
-  const queryClient    = useQueryClient();
+  const params = useParams<{ id: string; functionId: string }>();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const { setBreadcrumb } = useAppStore();
-  const projectId      = params.id;
-  const functionId     = params.functionId;
-  const isNew        = functionId === "new";
+  const projectId = params.id;
+  const functionId = params.functionId;
+  const isNew = functionId === "new";
   const presetAreaId = searchParams.get("areaId") ?? "";
 
   // ── 설명 예시 팝업 상태 ────────────────────────────────────────────────────
@@ -105,25 +105,25 @@ function FunctionDetailPageInner() {
 
   // ── 변경 이력 관련 상태 ────────────────────────────────────────────────────
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
-  const [historyViewOpen,   setHistoryViewOpen]   = useState(false);
+  const [historyViewOpen, setHistoryViewOpen] = useState(false);
   const [originalDescription, setOriginalDescription] = useState("");
 
   // ── 폼 상태 ────────────────────────────────────────────────────────────────
-  const [name,           setName]           = useState("");
-  const [type,           setType]           = useState("OTHER");
-  const [description,    setDescription]    = useState("");
-  const [descTab,        setDescTab]        = useState<"edit" | "preview">("edit");
-  const [priority,       setPriority]       = useState("MEDIUM");
-  const [complexity,     setComplexity]     = useState("MEDIUM");
-  const [effort,         setEffort]         = useState("");
+  const [name, setName] = useState("");
+  const [type, setType] = useState("OTHER");
+  const [description, setDescription] = useState("");
+  const [descTab, setDescTab] = useState<"edit" | "preview">("edit");
+  const [priority, setPriority] = useState("MEDIUM");
+  const [complexity, setComplexity] = useState("MEDIUM");
+  const [effort, setEffort] = useState("");
   const [assignMemberId, setAssignMemberId] = useState("");
-  const [implStartDate,  setImplStartDate]  = useState("");
-  const [implEndDate,    setImplEndDate]    = useState("");
-  const [areaId,         setAreaId]         = useState(presetAreaId);
-  const [sortOrder,      setSortOrder]      = useState(0);
+  const [implStartDate, setImplStartDate] = useState("");
+  const [implEndDate, setImplEndDate] = useState("");
+  const [areaId, setAreaId] = useState(presetAreaId);
+  const [sortOrder, setSortOrder] = useState(0);
 
   // ── AI 요청 코멘트 상태 ────────────────────────────────────────────────────
-  const [commentCn,        setCommentCn]        = useState("");
+  const [commentCn, setCommentCn] = useState("");
 
 
   // ── PRD 다운로드 팝업 ────────────────────────────────────────────────────────
@@ -137,17 +137,20 @@ function FunctionDetailPageInner() {
   const aiPanelRef = useRef<HTMLDivElement>(null);
 
   // ── AI 패널 팝업 상태 ────────────────────────────────────────────────────────
-  const [aiDetailTaskId,   setAiDetailTaskId]   = useState<string | null>(null);
+  const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
   const [aiHistoryTaskType, setAiHistoryTaskType] = useState<string | null>(null);
 
+  // ── AI 도움말 팝업 상태 ──────────────────────────────────────────────────────
+  const [helpOpen, setHelpOpen] = useState<string | null>(null);
+
   // ── 컬럼 매핑 팝업 ─────────────────────────────────────────────────────────
-  const [mappingPopupOpen,   setMappingPopupOpen]   = useState(false);
-  const [mappingMdOpen,      setMappingMdOpen]      = useState(false);
+  const [mappingPopupOpen, setMappingPopupOpen] = useState(false);
+  const [mappingMdOpen, setMappingMdOpen] = useState(false);
 
   // ── 컬럼 매핑 목록 조회 (기존 저장 데이터 표시용) ──────────────────────────
   const { data: colMappingsData, refetch: refetchMappings } = useQuery({
     queryKey: ["col-mappings", projectId, "FUNCTION", functionId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: { items: ColMappingItem[] } }>(
         `/api/projects/${projectId}/col-mappings?refType=FUNCTION&refId=${functionId}`
       ).then((r) => r.data),
@@ -158,7 +161,7 @@ function FunctionDetailPageInner() {
   // ── 영역 목록 (areaId 선택용) ──────────────────────────────────────────────
   const { data: areasData } = useQuery({
     queryKey: ["areas", projectId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: { items: AreaOption[] } }>(`/api/projects/${projectId}/areas`)
         .then((r) => r.data),
   });
@@ -167,7 +170,7 @@ function FunctionDetailPageInner() {
   // ── 기능 상세 조회 ────────────────────────────────────────────────────────
   const { data, isLoading } = useQuery({
     queryKey: ["function", projectId, functionId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: FuncDetail }>(`/api/projects/${projectId}/functions/${functionId}`)
         .then((r) => r.data),
     enabled: !isNew,
@@ -224,9 +227,9 @@ function FunctionDetailPageInner() {
         priority, complexity, effort: effort.trim(),
         assignMemberId: assignMemberId || null,
         implStartDate: implStartDate || null,
-        implEndDate:   implEndDate || null,
+        implEndDate: implEndDate || null,
         sortOrder,
-        saveHistory:   saveHistory || undefined,
+        saveHistory: saveHistory || undefined,
       };
       if (isNew) {
         return authFetch<{ data: { funcId?: string } }>(`/api/projects/${projectId}/functions`, {
@@ -278,7 +281,7 @@ function FunctionDetailPageInner() {
     try {
       const res = await authFetch<{ data: Array<{ tmplId: string; tmplNm: string; defaultYn: string }> }>(
         // refType 필터 없이 조회 — 프로젝트/시스템 공통 템플릿 중 해당 taskType 전부 검색
-        `/api/projects/${projectId}/prompt-templates?taskType=${taskType}&useYn=Y`
+        `/api/projects/${projectId}/prompt-templates?taskType=${taskType}&refType=FUNCTION&useYn=Y`
       );
       const list = res.data ?? [];
       // defaultYn='Y' 우선, 없으면 첫 번째 (sort_ordr ASC 정렬이므로 첫 번째가 최우선)
@@ -294,18 +297,18 @@ function FunctionDetailPageInner() {
     mutationFn: ({ taskType }: { taskType: string }) =>
       authFetch(`/api/projects/${projectId}/functions/${functionId}/ai`, {
         method: "POST",
-        body: JSON.stringify({ 
-          taskType, 
-          coment_cn: commentCn.trim(), 
+        body: JSON.stringify({
+          taskType,
+          coment_cn: commentCn.trim(),
           req_cn: description.trim(),
           comment: commentCn.trim() // 유지 (하위 호환성)
         }),
       }),
     onSuccess: (_res, vars) => {
       const labels: Record<string, string> = {
-        DESIGN:  "AI 설계 요청이 접수되었습니다.",
+        DESIGN: "AI 설계 요청이 접수되었습니다.",
         INSPECT: "AI 점검 요청이 접수되었습니다.",
-        IMPACT:  "AI 영향도 분석 요청이 접수되었습니다.",
+        IMPACT: "AI 영향도 분석 요청이 접수되었습니다.",
       };
       toast.success(labels[vars.taskType] ?? "AI 요청이 접수되었습니다.");
       // 상태 갱신을 위해 상세 재조회
@@ -433,25 +436,24 @@ function FunctionDetailPageInner() {
 
                   {/* AI 작업 카드 목록 */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {AI_TASK_CONFIGS.map(({ taskType, label, desc, icon }) => {
-                      const info             = data?.aiTasks?.[taskType];
+                    {AI_TASK_CONFIGS.map(({ taskType, label, desc, icon, hasHelp }) => {
+                      const info = data?.aiTasks?.[taskType];
                       // API 요청이 전송 중인지 (뮤테이션 in-flight)
                       const isMutationPending = aiMutation.isPending && aiMutation.variables?.taskType === taskType;
                       // 버튼 비활성 조건: API 전송 중이거나 PENDING/IN_PROGRESS 상태
-                      const isSpinning       = isMutationPending
-                                             || !!(info && ["PENDING", "IN_PROGRESS"].includes(info.status));
-                      const hasDone          = !!(info && ["DONE", "APPLIED", "REJECTED", "FAILED"].includes(info.status));
+                      const isSpinning = isMutationPending
+                        || !!(info && ["PENDING", "IN_PROGRESS"].includes(info.status));
                       // 도트 색상: 미호출이면 회색
-                      const dotColor         = info ? (AI_STATUS_DOT[info.status] ?? "#ccc") : "#ccc";
+                      const dotColor = info ? (AI_STATUS_DOT[info.status] ?? "#ccc") : "#ccc";
                       // 표시 레이블 결정
                       // - 미호출 + 요청 전송 중: "대기 중..."
                       // - 미호출: "-"
                       // - 상태 있음: AI_STATUS_LABEL 매핑
-                      const statusLabel      = isMutationPending && !info
-                                             ? "대기 중..."
-                                             : info
-                                             ? (AI_STATUS_LABEL[info.status] ?? info.status)
-                                             : "-";
+                      const statusLabel = isMutationPending && !info
+                        ? "대기 중..."
+                        : info
+                          ? (AI_STATUS_LABEL[info.status] ?? info.status)
+                          : "-";
 
                       function handleRun() {
                         // DESIGN·INSPECT는 프롬프트 템플릿 조회 후 상세 컨펌 팝업
@@ -479,8 +481,28 @@ function FunctionDetailPageInner() {
 
                           {/* 레이블 + 설명 */}
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)" }}>
-                              {label}
+                            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                                {label}
+                              </span>
+                              {hasHelp && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setHelpOpen(taskType); }}
+                                  title="도움말"
+                                  style={{
+                                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                    width: 16, height: 16, borderRadius: "50%",
+                                    border: "1px solid var(--color-border)",
+                                    background: "var(--color-bg-card)",
+                                    color: "var(--color-text-secondary)",
+                                    fontSize: 10, fontWeight: 700,
+                                    cursor: "pointer", flexShrink: 0,
+                                    lineHeight: 1, padding: 0,
+                                  }}
+                                >
+                                  ?
+                                </button>
+                              )}
                             </div>
                             <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 2, lineHeight: 1.4 }}>
                               {desc}
@@ -496,14 +518,14 @@ function FunctionDetailPageInner() {
                               </span>
                             </div>
                             <div style={{ display: "flex", gap: 4 }}>
-                              {hasDone && (
+                              {info && (
                                 <button
                                   className="ai-mini-btn"
-                                  onClick={() => setAiDetailTaskId(info!.aiTaskId)}
-                                  title="결과 보기"
+                                  onClick={() => setAiDetailTaskId(info.aiTaskId)}
+                                  title="내용 보기"
                                   style={aiMiniBtn}
                                 >
-                                  결과
+                                  내용
                                 </button>
                               )}
                               <button
@@ -582,310 +604,310 @@ function FunctionDetailPageInner() {
 
       {/* ── 2컬럼 레이아웃: 왼쪽 기본 정보, 오른쪽 설명 + 컬럼 매핑 + AI 지원 */}
       <div style={{ padding: "0 24px 24px" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr", gap: 20, alignItems: "start" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr", gap: 20, alignItems: "start" }}>
 
-        {/* ── 왼쪽: 기본 정보 + 첨부파일 ── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        <section style={sectionStyle}>
+          {/* ── 왼쪽: 기본 정보 + 첨부파일 ── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <section style={sectionStyle}>
 
-          {/* 행1: 소속 영역 | 유형 */}
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "0 16px" }}>
-            <div style={formGroupStyle}>
-              <label style={labelStyle}>소속 영역</label>
-              <select value={areaId} onChange={(e) => setAreaId(e.target.value)} style={selectStyle}>
-                <option value="">미분류 (영역 없음)</option>
-                {areaOptions.map((a) => (
-                  <option key={a.areaId} value={a.areaId}>{a.displayId} {a.name}</option>
-                ))}
-              </select>
-            </div>
+              {/* 행1: 소속 영역 | 유형 */}
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "0 16px" }}>
+                <div style={formGroupStyle}>
+                  <label style={labelStyle}>소속 영역</label>
+                  <select value={areaId} onChange={(e) => setAreaId(e.target.value)} style={selectStyle}>
+                    <option value="">미분류 (영역 없음)</option>
+                    {areaOptions.map((a) => (
+                      <option key={a.areaId} value={a.areaId}>{a.displayId} {a.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-            <div style={formGroupStyle}>
-              <label style={labelStyle}>유형</label>
-              <select value={type} onChange={(e) => setType(e.target.value)} style={selectStyle}>
-                {FUNC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* 행2: 기능명 단독 */}
-          <div style={formGroupStyle}>
-            <label style={labelStyle}>기능명 <span style={{ color: "#e53935" }}>*</span></label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="기능명을 입력하세요"
-              style={inputStyle}
-            />
-          </div>
-
-          {/* 행3: 우선순위 | 복잡도 | 예상 공수 */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 16px" }}>
-            <div style={formGroupStyle}>
-              <label style={labelStyle}>우선순위</label>
-              <select value={priority} onChange={(e) => setPriority(e.target.value)} style={selectStyle}>
-                <option value="HIGH">높음</option>
-                <option value="MEDIUM">중간</option>
-                <option value="LOW">낮음</option>
-              </select>
-            </div>
-
-            <div style={formGroupStyle}>
-              <label style={labelStyle}>복잡도</label>
-              <select value={complexity} onChange={(e) => setComplexity(e.target.value)} style={selectStyle}>
-                <option value="HIGH">높음</option>
-                <option value="MEDIUM">중간</option>
-                <option value="LOW">낮음</option>
-              </select>
-            </div>
-
-            <div style={formGroupStyle}>
-              <label style={labelStyle}>
-                예상 공수
-                <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: "var(--color-text-secondary)" }}>숫자로 입력 (단위: 시간)</span>
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="0.5"
-                value={effort}
-                onChange={(e) => setEffort(e.target.value)}
-                placeholder="시간 (예: 2, 0.5)"
-                style={inputStyle}
-              />
-            </div>
-          </div>
-
-          {/* 행4: 구현 시작일 | 구현 종료일 | 정렬 순서 */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 80px", gap: "0 16px" }}>
-            <div style={formGroupStyle}>
-              <label style={labelStyle}>구현 시작일</label>
-              <input
-                type="date"
-                value={implStartDate}
-                onChange={(e) => setImplStartDate(e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-
-            <div style={formGroupStyle}>
-              <label style={labelStyle}>구현 종료일</label>
-              <input
-                type="date"
-                value={implEndDate}
-                onChange={(e) => setImplEndDate(e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-
-            <div style={formGroupStyle}>
-              <label style={labelStyle}>정렬</label>
-              <input
-                type="number"
-                min={0}
-                value={sortOrder}
-                onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
-                style={inputStyle}
-              />
-            </div>
-          </div>
-
-        </section>
-
-        {/* ── 왼쪽 하단: AI 요청 코멘트 + 첨부파일 ── */}
-        <section style={sectionStyle}>
-          <label style={{ ...labelStyle, marginBottom: 6 }}>AI 요청 코멘트</label>
-          <textarea
-            value={commentCn}
-            onChange={(e) => setCommentCn(e.target.value)}
-            placeholder="AI 요청 시 참고할 추가 지시사항을 입력해 주세요."
-            rows={3}
-            style={{ ...inputStyle, resize: "vertical" }}
-          />
-        </section>
-
-        {!isNew && (
-          <section style={sectionStyle}>
-            <h3 style={sectionTitleStyle}>첨부파일</h3>
-            <AreaAttachFiles basePath={`/api/projects/${projectId}/functions/${functionId}`} />
-          </section>
-        )}
-        </div>
-
-        {/* ── 오른쪽: 설명 + 컬럼 매핑 + AI 지원 ── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-
-          {/* 설명 (func_dc) — MarkdownEditor */}
-          <section style={sectionStyle}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <label style={{ ...labelStyle, marginBottom: 0 }}>설명</label>
-                <MarkdownTabButtons tab={descTab} onTabChange={setDescTab} />
-              </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button type="button" onClick={() => setDescExampleOpen(true)} style={ghostSmBtnStyle}>
-                  예시
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDescription(DESCRIPTION_TEMPLATE(data?.displayId ?? "FN-XXXXX", name))}
-                  style={ghostSmBtnStyle}
-                >
-                  템플릿 삽입
-                </button>
-                {!isNew && (
-                  <button type="button" onClick={() => setHistoryViewOpen(true)} style={ghostSmBtnStyle}>
-                    🕐 변경 이력
-                  </button>
-                )}
-              </div>
-            </div>
-            <MarkdownEditor
-              value={description}
-              onChange={setDescription}
-              placeholder="기능 설명을 마크다운으로 작성하세요."
-              rows={25}
-              tab={descTab}
-              onTabChange={setDescTab}
-            />
-          </section>
-
-          {/* 설명 예시 팝업 */}
-          {descExampleOpen && (
-            <FuncExamplePopup onClose={() => setDescExampleOpen(false)} />
-          )}
-
-          {/* 설명 변경 이력 저장 여부 확인 다이얼로그 */}
-          {historyDialogOpen && (
-            <div
-              style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
-              onClick={() => setHistoryDialogOpen(false)}
-            >
-              <div
-                onClick={(e) => e.stopPropagation()}
-                style={{ width: "100%", maxWidth: 420, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.2)", padding: "24px 28px" }}
-              >
-                <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
-                  변경 이력 저장
-                </p>
-                <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-                  기능 설명이 변경되었습니다.<br />
-                  변경 이력을 함께 저장하시겠습니까?
-                </p>
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                  <button
-                    type="button"
-                    onClick={() => setHistoryDialogOpen(false)}
-                    style={{ ...secondaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
-                  >
-                    취소
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setHistoryDialogOpen(false); saveMutation.mutate({}); }}
-                    disabled={saveMutation.isPending}
-                    style={{ ...secondaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
-                  >
-                    이력 없이 저장
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setHistoryDialogOpen(false); saveMutation.mutate({ saveHistory: true }); }}
-                    disabled={saveMutation.isPending}
-                    style={{ ...primaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
-                  >
-                    이력과 함께 저장
-                  </button>
+                <div style={formGroupStyle}>
+                  <label style={labelStyle}>유형</label>
+                  <select value={type} onChange={(e) => setType(e.target.value)} style={selectStyle}>
+                    {FUNC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* 설명 변경 이력 조회 팝업 */}
-          <SettingsHistoryDialog
-            open={historyViewOpen}
-            onClose={() => setHistoryViewOpen(false)}
-            projectId={projectId}
-            itemName="기능 설명"
-            currentValue={description}
-            title="기능 설명 변경 이력"
-            refTblNm="tb_ds_function"
-            refId={functionId}
-          />
-
-          {/* ── AR-00082 컬럼 매핑 — 신규 모드에서는 버튼 disabled */}
-          <section style={sectionStyle}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: colMappings.length > 0 ? 12 : 0 }}>
-              <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>컬럼 매핑</h3>
-              <div style={{ display: "flex", gap: 6 }}>
-                {colMappings.length > 0 && (
-                  <button
-                    onClick={() => setMappingMdOpen(true)}
-                    style={{ ...ghostSmBtnStyle, fontSize: 11, padding: "3px 9px" }}
-                  >
-                    MD 복사
-                  </button>
-                )}
-                <button
-                  onClick={() => setMappingPopupOpen(true)}
-                  disabled={isNew}
-                  title={isNew ? "저장 후 사용할 수 있습니다" : undefined}
-                  style={{ ...primaryBtnStyle, fontSize: 11, padding: "3px 10px", opacity: isNew ? 0.4 : 1, cursor: isNew ? "not-allowed" : "pointer" }}
-                >
-                  매핑 관리
-                </button>
+              {/* 행2: 기능명 단독 */}
+              <div style={formGroupStyle}>
+                <label style={labelStyle}>기능명 <span style={{ color: "#e53935" }}>*</span></label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="기능명을 입력하세요"
+                  style={inputStyle}
+                />
               </div>
-            </div>
 
-            {/* 저장된 매핑 목록 테이블 */}
-            {colMappings.length > 0 ? (
-              <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
-                {/* 헤더 */}
-                <div style={colMappingHeaderStyle}>
-                  <div style={{ flex: "0 0 120px" }}>항목명</div>
-                  <div style={{ flex: "0 0 72px",  textAlign: "center" }}>IO구분</div>
-                  <div style={{ flex: "0 0 90px" }}>UI유형</div>
-                  <div style={{ flex: "1 1 0" }}>테이블</div>
-                  <div style={{ flex: "1 1 0" }}>컬럼</div>
+              {/* 행3: 우선순위 | 복잡도 | 예상 공수 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 16px" }}>
+                <div style={formGroupStyle}>
+                  <label style={labelStyle}>우선순위</label>
+                  <select value={priority} onChange={(e) => setPriority(e.target.value)} style={selectStyle}>
+                    <option value="HIGH">높음</option>
+                    <option value="MEDIUM">중간</option>
+                    <option value="LOW">낮음</option>
+                  </select>
                 </div>
-                {/* 행 */}
-                {colMappings.map((m, idx) => (
-                  <div
-                    key={m.mappingId}
-                    style={{
-                      ...colMappingRowStyle,
-                      borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-                      background: idx % 2 === 0 ? "var(--color-bg-card)" : "var(--color-bg-muted)",
-                    }}
-                  >
-                    <div style={{ flex: "0 0 120px", fontSize: 12 }}>{m.usePurpsCn || <span style={{ color: "var(--color-text-disabled)" }}>—</span>}</div>
-                    <div style={{ flex: "0 0 72px",  textAlign: "center" }}>
-                      {m.ioSeCode ? (
-                        <span style={{
-                          display: "inline-block", padding: "1px 7px", borderRadius: 4, fontSize: 11, fontWeight: 700,
-                          background: "var(--color-primary, #1976d2)", color: "#fff",
-                        }}>
-                          {m.ioSeCode === "INPUT" ? "IN" : m.ioSeCode === "OUTPUT" ? "OUT" : "IO"}
-                        </span>
-                      ) : <span style={{ color: "var(--color-text-disabled)", fontSize: 12 }}>—</span>}
-                    </div>
-                    <div style={{ flex: "0 0 90px", fontSize: 12, color: "var(--color-text-secondary)" }}>{m.uiTyCode || "—"}</div>
-                    <div style={{ flex: "1 1 0", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.tableName || "—"}</div>
-                    <div style={{ flex: "1 1 0", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.colName || "—"}</div>
-                  </div>
-                ))}
+
+                <div style={formGroupStyle}>
+                  <label style={labelStyle}>복잡도</label>
+                  <select value={complexity} onChange={(e) => setComplexity(e.target.value)} style={selectStyle}>
+                    <option value="HIGH">높음</option>
+                    <option value="MEDIUM">중간</option>
+                    <option value="LOW">낮음</option>
+                  </select>
+                </div>
+
+                <div style={formGroupStyle}>
+                  <label style={labelStyle}>
+                    예상 공수
+                    <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: "var(--color-text-secondary)" }}>(단위: 시간)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={effort}
+                    onChange={(e) => setEffort(e.target.value)}
+                    placeholder="시간 (예: 2, 0.5)"
+                    style={inputStyle}
+                  />
+                </div>
               </div>
-            ) : (
-              !isNew && (
-                <div style={{ padding: "16px 0 4px", textAlign: "center", fontSize: 13, color: "var(--color-text-disabled)" }}>
-                  등록된 컬럼 매핑이 없습니다.
+
+              {/* 행4: 구현 시작일 | 구현 종료일 | 정렬 순서 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 80px", gap: "0 16px" }}>
+                <div style={formGroupStyle}>
+                  <label style={labelStyle}>구현 시작일</label>
+                  <input
+                    type="date"
+                    value={implStartDate}
+                    onChange={(e) => setImplStartDate(e.target.value)}
+                    style={inputStyle}
+                  />
                 </div>
-              )
+
+                <div style={formGroupStyle}>
+                  <label style={labelStyle}>구현 종료일</label>
+                  <input
+                    type="date"
+                    value={implEndDate}
+                    onChange={(e) => setImplEndDate(e.target.value)}
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div style={formGroupStyle}>
+                  <label style={labelStyle}>정렬</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+
+            </section>
+
+            {/* ── 왼쪽 하단: AI 요청 코멘트 + 첨부파일 ── */}
+            <section style={sectionStyle}>
+              <label style={{ ...labelStyle, marginBottom: 6 }}>AI 요청 코멘트</label>
+              <textarea
+                value={commentCn}
+                onChange={(e) => setCommentCn(e.target.value)}
+                placeholder="AI 요청 시 참고할 추가 지시사항을 입력해 주세요."
+                rows={3}
+                style={{ ...inputStyle, resize: "vertical" }}
+              />
+            </section>
+
+            {!isNew && (
+              <section style={sectionStyle}>
+                <h3 style={sectionTitleStyle}>첨부파일</h3>
+                <AreaAttachFiles basePath={`/api/projects/${projectId}/functions/${functionId}`} />
+              </section>
             )}
-          </section>
+          </div>
+
+          {/* ── 오른쪽: 설명 + 컬럼 매핑 + AI 지원 ── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+            {/* 설명 (func_dc) — MarkdownEditor */}
+            <section style={sectionStyle}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <label style={{ ...labelStyle, marginBottom: 0 }}>설명</label>
+                  <MarkdownTabButtons tab={descTab} onTabChange={setDescTab} />
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button type="button" onClick={() => setDescExampleOpen(true)} style={ghostSmBtnStyle}>
+                    예시
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDescription(DESCRIPTION_TEMPLATE(data?.displayId ?? "FN-XXXXX", name))}
+                    style={ghostSmBtnStyle}
+                  >
+                    템플릿 삽입
+                  </button>
+                  {!isNew && (
+                    <button type="button" onClick={() => setHistoryViewOpen(true)} style={ghostSmBtnStyle}>
+                      🕐 변경 이력
+                    </button>
+                  )}
+                </div>
+              </div>
+              <MarkdownEditor
+                value={description}
+                onChange={setDescription}
+                placeholder="기능 설명을 마크다운으로 작성하세요."
+                rows={25}
+                tab={descTab}
+                onTabChange={setDescTab}
+              />
+            </section>
+
+            {/* 설명 예시 팝업 */}
+            {descExampleOpen && (
+              <FuncExamplePopup onClose={() => setDescExampleOpen(false)} />
+            )}
+
+            {/* 설명 변경 이력 저장 여부 확인 다이얼로그 */}
+            {historyDialogOpen && (
+              <div
+                style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
+                onClick={() => setHistoryDialogOpen(false)}
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ width: "100%", maxWidth: 420, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.2)", padding: "24px 28px" }}
+                >
+                  <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                    변경 이력 저장
+                  </p>
+                  <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+                    기능 설명이 변경되었습니다.<br />
+                    변경 이력을 함께 저장하시겠습니까?
+                  </p>
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setHistoryDialogOpen(false)}
+                      style={{ ...secondaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
+                    >
+                      취소
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setHistoryDialogOpen(false); saveMutation.mutate({}); }}
+                      disabled={saveMutation.isPending}
+                      style={{ ...secondaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
+                    >
+                      이력 없이 저장
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setHistoryDialogOpen(false); saveMutation.mutate({ saveHistory: true }); }}
+                      disabled={saveMutation.isPending}
+                      style={{ ...primaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
+                    >
+                      이력과 함께 저장
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 설명 변경 이력 조회 팝업 */}
+            <SettingsHistoryDialog
+              open={historyViewOpen}
+              onClose={() => setHistoryViewOpen(false)}
+              projectId={projectId}
+              itemName="기능 설명"
+              currentValue={description}
+              title="기능 설명 변경 이력"
+              refTblNm="tb_ds_function"
+              refId={functionId}
+            />
+
+            {/* ── AR-00082 컬럼 매핑 — 신규 모드에서는 버튼 disabled */}
+            <section style={sectionStyle}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: colMappings.length > 0 ? 12 : 0 }}>
+                <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>컬럼 매핑</h3>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {colMappings.length > 0 && (
+                    <button
+                      onClick={() => setMappingMdOpen(true)}
+                      style={{ ...ghostSmBtnStyle, fontSize: 11, padding: "3px 9px" }}
+                    >
+                      MD 복사
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setMappingPopupOpen(true)}
+                    disabled={isNew}
+                    title={isNew ? "저장 후 사용할 수 있습니다" : undefined}
+                    style={{ ...primaryBtnStyle, fontSize: 11, padding: "3px 10px", opacity: isNew ? 0.4 : 1, cursor: isNew ? "not-allowed" : "pointer" }}
+                  >
+                    매핑 관리
+                  </button>
+                </div>
+              </div>
+
+              {/* 저장된 매핑 목록 테이블 */}
+              {colMappings.length > 0 ? (
+                <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
+                  {/* 헤더 */}
+                  <div style={colMappingHeaderStyle}>
+                    <div style={{ flex: "0 0 120px" }}>항목명</div>
+                    <div style={{ flex: "0 0 72px", textAlign: "center" }}>IO구분</div>
+                    <div style={{ flex: "0 0 90px" }}>UI유형</div>
+                    <div style={{ flex: "1 1 0" }}>테이블</div>
+                    <div style={{ flex: "1 1 0" }}>컬럼</div>
+                  </div>
+                  {/* 행 */}
+                  {colMappings.map((m, idx) => (
+                    <div
+                      key={m.mappingId}
+                      style={{
+                        ...colMappingRowStyle,
+                        borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+                        background: idx % 2 === 0 ? "var(--color-bg-card)" : "var(--color-bg-muted)",
+                      }}
+                    >
+                      <div style={{ flex: "0 0 120px", fontSize: 12 }}>{m.usePurpsCn || <span style={{ color: "var(--color-text-disabled)" }}>—</span>}</div>
+                      <div style={{ flex: "0 0 72px", textAlign: "center" }}>
+                        {m.ioSeCode ? (
+                          <span style={{
+                            display: "inline-block", padding: "1px 7px", borderRadius: 4, fontSize: 11, fontWeight: 700,
+                            background: "var(--color-primary, #1976d2)", color: "#fff",
+                          }}>
+                            {m.ioSeCode === "INPUT" ? "IN" : m.ioSeCode === "OUTPUT" ? "OUT" : "IO"}
+                          </span>
+                        ) : <span style={{ color: "var(--color-text-disabled)", fontSize: 12 }}>—</span>}
+                      </div>
+                      <div style={{ flex: "0 0 90px", fontSize: 12, color: "var(--color-text-secondary)" }}>{m.uiTyCode || "—"}</div>
+                      <div style={{ flex: "1 1 0", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.tableName || "—"}</div>
+                      <div style={{ flex: "1 1 0", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.colName || "—"}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                !isNew && (
+                  <div style={{ padding: "16px 0 4px", textAlign: "center", fontSize: 13, color: "var(--color-text-disabled)" }}>
+                    등록된 컬럼 매핑이 없습니다.
+                  </div>
+                )
+              )}
+            </section>
+          </div>
         </div>
-      </div>
       </div>
 
       {/* ── AI 요청 컨펌 다이얼로그 ──────────────────────────────────────── */}
@@ -1078,6 +1100,53 @@ function FunctionDetailPageInner() {
         />
       )}
 
+      {/* ── AI 도움말 팝업 ──────────────────────────────────────────────── */}
+      {helpOpen && AI_HELP_CONTENT[helpOpen] && (() => {
+        const help = AI_HELP_CONTENT[helpOpen];
+        return (
+          <div
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400 }}
+            onClick={() => setHelpOpen(null)}
+          >
+            <div
+              style={{ background: "var(--color-bg-card)", borderRadius: 12, padding: "24px 28px", minWidth: 420, maxWidth: 520, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 팝업 헤더 */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                  {help.title}
+                </span>
+                <button
+                  onClick={() => setHelpOpen(null)}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1, padding: "0 2px" }}
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* 섹션 목록 */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {help.sections.map((sec) => (
+                  <div key={sec.heading}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      {sec.heading}
+                    </div>
+                    <div style={{
+                      fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.7,
+                      background: "var(--color-bg-muted)", borderRadius: 8, padding: "10px 14px",
+                      whiteSpace: "pre-line",
+                    }}>
+                      {sec.body}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── AI 태스크 이력 팝업 ─────────────────────────────────────────── */}
       {aiHistoryTaskType && !isNew && (
         <AiTaskHistoryDialog
@@ -1133,31 +1202,65 @@ function FunctionDetailPageInner() {
 // ── AI 태스크 설정 ────────────────────────────────────────────────────────────
 
 const AI_TASK_CONFIGS = [
-  { taskType: "DESIGN",  label: "AI 설계",   desc: "기능 명세 자동 생성",             icon: { bg: "#e8eaf6", emoji: "⊞" } },
-  { taskType: "INSPECT", label: "AI 점검",   desc: "일관성·누락·충돌 분석\n(단위업무 전체 기준)", icon: { bg: "#e8f5e9", emoji: "✓" } },
-  { taskType: "IMPACT",  label: "AI 영향도", desc: "현 설계가 타 기능에\n미치는 영향 분석",   icon: { bg: "#fff8e1", emoji: "+" } },
+  { taskType: "DESIGN",  label: "AI 설계",   desc: "자유 형식 설명 → 표준 양식 재구성",            icon: { bg: "#e8eaf6", emoji: "⊞" }, hasHelp: true  },
+  { taskType: "INSPECT", label: "AI 점검",   desc: "6가지 관점 설계 검토\n(같은 영역 기능 기준)",  icon: { bg: "#e8f5e9", emoji: "✓" }, hasHelp: true  },
+  { taskType: "IMPACT",  label: "AI 영향도", desc: "현 설계가 타 기능에\n미치는 영향 분석",        icon: { bg: "#fff8e1", emoji: "+"  }, hasHelp: false },
 ];
+
+// 도움말 팝업 내용 — taskType별 정의
+const AI_HELP_CONTENT: Record<string, { title: string; sections: { heading: string; body: string }[] }> = {
+  DESIGN: {
+    title: "AI 설계 — 표준 양식 재구성 + 피드백",
+    sections: [
+      {
+        heading: "무엇을 하나요?",
+        body: "설명란에 자유 형식으로 작성한 내용을 표준 설계 양식으로 재구성해 줍니다.\n빈 내용을 AI가 만들어 주는 것이 아니라, 내가 쓴 내용을 정리·재배치합니다.\n\n재구성 양식: 기능 헤더 / Input / Output / 참조 테이블 관계 / 처리 로직 / 업무 규칙\n\n함께 제공: 누락 항목, 잘못된 내용, 개선이 필요한 부분에 대한 피드백",
+      },
+      {
+        heading: "잘 쓰려면",
+        body: "설명란에 먼저 내용을 채워야 결과가 나옵니다.\nAPI 경로, Input/Output 파라미터, 처리 로직 등을 자유롭게 적어두면\nAI가 표준 양식에 맞게 정리해 줍니다.",
+      },
+      {
+        heading: "AI에 전달되는 데이터",
+        body: "설명(description) 텍스트만 전달됩니다.\n영역·화면·단위업무 정보는 전달되지 않습니다.",
+      },
+    ],
+  },
+  INSPECT: {
+    title: "AI 점검 — 6가지 관점 설계 검토",
+    sections: [
+      {
+        heading: "무엇을 하나요?",
+        body: "같은 영역의 전체 기능 설계서를 기준(Ground Truth)으로 삼아\n현재 기능 명세의 문제점을 6가지 관점에서 점검합니다.\n\n① 중복·충돌 — 같은 영역에 이미 동일·유사 기능이 있는가\n② 누락 — 이 기능이 동작하려면 필요한데 없는 연관 기능이 있는가\n③ 일관성 — API 패턴·명명 규칙이 다른 기능과 맞는가\n④ 권한 정합성 — 권한 처리가 설계서 기준과 일치하는가\n⑤ 업무 규칙 충돌 — 다른 기능의 업무 규칙과 모순되는가\n⑥ 양식 준수 — 표준 양식에서 누락된 섹션이 있는가\n\n문제 없는 항목은 출력하지 않습니다.",
+      },
+      {
+        heading: "AI에 전달되는 데이터",
+        body: "Bottom-up으로 직계 상위만 수집합니다.\n\n✔ 단위업무 (직계 상위 1개)\n✔ 화면 (직계 상위 1개)\n✔ 영역 (이 기능이 속한 영역 1개)\n✔ 기능 (같은 영역 내 전체, ★ 현재 기능 포함)\n\n✘ 다른 영역·다른 화면의 기능은 포함되지 않습니다.",
+      },
+    ],
+  },
+};
 
 // 상태별 도트 색상 — 버튼 내부에 인라인으로 표시
 const AI_STATUS_DOT: Record<string, string> = {
-  PENDING:     "#f57c00",
+  PENDING: "#f57c00",
   IN_PROGRESS: "#1565c0",
-  DONE:        "#2e7d32",
-  APPLIED:     "#6a1b9a",
-  REJECTED:    "#c62828",
-  FAILED:      "#c62828",
-  TIMEOUT:     "#757575",
+  DONE: "#2e7d32",
+  APPLIED: "#6a1b9a",
+  REJECTED: "#c62828",
+  FAILED: "#c62828",
+  TIMEOUT: "#757575",
 };
 
 // 상태별 한글 레이블 — 버튼 tooltip에 표시
 const AI_STATUS_LABEL: Record<string, string> = {
-  PENDING:     "대기 중",
+  PENDING: "대기 중",
   IN_PROGRESS: "처리 중",
-  DONE:        "완료",
-  APPLIED:     "적용됨",
-  REJECTED:    "반려",
-  FAILED:      "실패",
-  TIMEOUT:     "시간 초과",
+  DONE: "완료",
+  APPLIED: "적용됨",
+  REJECTED: "반려",
+  FAILED: "실패",
+  TIMEOUT: "시간 초과",
 };
 
 // ── 설명 예시 / 템플릿 ────────────────────────────────────────────────────────
@@ -1256,14 +1359,14 @@ const DESCRIPTION_TEMPLATE = (displayId: string, name: string) => `#### 기능: 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
 const FUNC_TYPES = [
-  { value: "SEARCH",   label: "검색/조회" },
-  { value: "SAVE",     label: "저장" },
-  { value: "DELETE",   label: "삭제" },
+  { value: "SEARCH", label: "검색/조회" },
+  { value: "SAVE", label: "저장" },
+  { value: "DELETE", label: "삭제" },
   { value: "DOWNLOAD", label: "다운로드" },
-  { value: "UPLOAD",   label: "업로드" },
+  { value: "UPLOAD", label: "업로드" },
   { value: "NAVIGATE", label: "이동" },
   { value: "VALIDATE", label: "유효성검증" },
-  { value: "OTHER",    label: "기타" },
+  { value: "OTHER", label: "기타" },
 ];
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
@@ -1286,7 +1389,7 @@ const colMappingRowStyle: React.CSSProperties = {
   display: "flex", alignItems: "center", gap: 8,
   padding: "7px 12px",
 };
-const formGroupStyle: React.CSSProperties  = { marginBottom: 16 };
+const formGroupStyle: React.CSSProperties = { marginBottom: 16 };
 const labelStyle: React.CSSProperties = {
   display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600,
   color: "var(--color-text-secondary)",
@@ -1335,13 +1438,13 @@ function buildMappingMarkdown(mappings: ColMappingItem[]): string {
   };
 
   const header = "| NO | 항목명 | IO구분 | UI유형 | 테이블.컬럼 | 설명 |";
-  const sep    = "|:---|:-------|:-------|:-------|:-----------|:-----|";
-  const rows   = mappings.map((m, i) => {
-    const no      = i + 1;
-    const name    = m.usePurpsCn  || "-";
-    const io      = IO_LABEL[m.ioSeCode]  || m.ioSeCode  || "-";
-    const ui      = UI_LABEL[m.uiTyCode]  || m.uiTyCode  || "-";
-    const col     = m.tableName && m.colName ? `${m.tableName}.${m.colName}` : "-";
+  const sep = "|:---|:-------|:-------|:-------|:-----------|:-----|";
+  const rows = mappings.map((m, i) => {
+    const no = i + 1;
+    const name = m.usePurpsCn || "-";
+    const io = IO_LABEL[m.ioSeCode] || m.ioSeCode || "-";
+    const ui = UI_LABEL[m.uiTyCode] || m.uiTyCode || "-";
+    const col = m.tableName && m.colName ? `${m.tableName}.${m.colName}` : "-";
     return `| ${no} | ${name} | ${io} | ${ui} | ${col} | - |`;
   });
 
@@ -1355,11 +1458,11 @@ function ColMappingMdPopup({
   onClose,
 }: {
   mappings: ColMappingItem[];
-  onClose:  () => void;
+  onClose: () => void;
 }) {
   const md = buildMappingMarkdown(mappings);
   const [copied, setCopied] = useState(false);
-  const [tab, setTab]       = useState<"raw" | "preview">("preview");
+  const [tab, setTab] = useState<"raw" | "preview">("preview");
 
   function handleCopy() {
     navigator.clipboard.writeText(md).then(() => {
@@ -1437,13 +1540,13 @@ function ColMappingMdPopup({
 }
 
 const ghostSmBtnStyle: React.CSSProperties = {
-  padding:      "3px 9px",
+  padding: "3px 9px",
   borderRadius: 5,
-  border:       "1px solid var(--color-border)",
-  background:   "none",
-  color:        "var(--color-text-secondary)",
-  fontSize:     12,
-  cursor:       "pointer",
+  border: "1px solid var(--color-border)",
+  background: "none",
+  color: "var(--color-text-secondary)",
+  fontSize: 12,
+  cursor: "pointer",
 };
 
 // ── 예시 팝업 CSS ─────────────────────────────────────────────────────────────

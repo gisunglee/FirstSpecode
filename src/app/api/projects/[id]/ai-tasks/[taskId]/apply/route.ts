@@ -84,6 +84,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           prjct_id:      projectId,
           ref_tbl_nm:    refTblNm,
           ref_id:        task.ref_id,
+          chg_type_code: "UPDATE",
           chg_rsn_cn:    `AI 태스크 결과 반영 (${task.task_ty_code})`,
           snapshot_data: { aiTaskId: taskId, resultCn },
           ai_req_yn:     "Y",

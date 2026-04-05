@@ -237,6 +237,7 @@ model TbDsDesignChange {
   prjct_id      String
   ref_tbl_nm    String
   ref_id        String
+  chg_type_code String   @default("UPDATE") // CREATE | UPDATE | DELETE
   chg_rsn_cn    String?
   snapshot_data Json
   ai_req_yn     String   @default("N")

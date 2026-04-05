@@ -54,6 +54,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           prjct_id:      projectId,
           ref_tbl_nm:    "tb_ds_area",
           ref_id:        areaId,
+          chg_type_code: "UPDATE",
           chg_rsn_cn:    "Excalidraw 설계 저장",
           snapshot_data: {
             areaId:    areaId,

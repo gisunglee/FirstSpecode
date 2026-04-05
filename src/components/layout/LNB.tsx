@@ -61,29 +61,31 @@ export default function LNB() {
   type NavItem = (MenuItem & { isActive: boolean }) | { isSeparator: true };
   const navItems: NavItem[] = [
     { label: "대시보드",    href: "/dashboard",    icon: "◉",  isActive: pathname.startsWith("/dashboard") },
-    { label: "프로젝트",    href: "/projects",     icon: "📂", isActive: pathname === "/projects" },
+    { isSeparator: true },
     { label: "과업",         href: tasksHref,        icon: "📌", isActive: !!pBase && pathname.startsWith(`${pBase}/tasks`) },
     { label: "요구사항",    href: requirementsHref, icon: "📋", isActive: !!pBase && pathname.startsWith(`${pBase}/requirements`) },
     { label: "사용자스토리", href: userStoriesHref, icon: "📖", isActive: !!pBase && pathname.startsWith(`${pBase}/user-stories`) },
-    { label: "기준선",       href: baselineHref,    icon: "🏁", isActive: !!pBase && pathname.startsWith(`${pBase}/baseline`) },
     { label: "요구분석 일괄 편집", href: planningHref, icon: "📅", isActive: !!pBase && pathname.startsWith(`${pBase}/planning`) && !pathname.startsWith(`${pBase}/planning/ai-import`) },
-    { label: "기획 가져오기", href: aiImportHref, icon: "📥", isActive: !!pBase && pathname.startsWith(`${pBase}/planning/ai-import`) },
+    { label: "요구사항 확정", href: baselineHref,   icon: "🏁", isActive: !!pBase && pathname.startsWith(`${pBase}/baseline`) },
     { isSeparator: true },
-    { label: "설계 가져오기", href: designImportHref, icon: "🏗",  isActive: !!pBase && pathname.startsWith(`${pBase}/design-import`) },
     { label: "단위업무",    href: unitWorksHref,    icon: "🧱", isActive: !!pBase && pathname.startsWith(`${pBase}/unit-works`) },
     { label: "화면 설계",   href: screensHref,      icon: "🖼",  isActive: !!pBase && pathname.startsWith(`${pBase}/screens`) },
     { label: "영역 관리",   href: areasHref,        icon: "📦", isActive: !!pBase && pathname.startsWith(`${pBase}/areas`) },
     { label: "기능 정의",   href: functionsHref,    icon: "⚙",  isActive: !!pBase && pathname.startsWith(`${pBase}/functions`) },
+    { label: "DB 테이블",   href: dbTablesHref,          icon: "🗄",  isActive: !!pBase && pathname.startsWith(`${pBase}/db-tables`) },
+    { isSeparator: true },
+    { label: "기획 가져오기", href: aiImportHref,    icon: "📥", isActive: !!pBase && pathname.startsWith(`${pBase}/planning/ai-import`) },
+    { label: "설계 가져오기", href: designImportHref, icon: "🏗", isActive: !!pBase && pathname.startsWith(`${pBase}/design-import`) },
     { isSeparator: true },
     { label: "AI 태스크",    href: aiTasksHref,         icon: "✨", isActive: !!pBase && pathname.startsWith(`${pBase}/ai-tasks`) },
     { label: "프롬프트 관리", href: promptTemplatesHref, icon: "📝", isActive: !!pBase && pathname.startsWith(`${pBase}/prompt-templates`) },
     { label: "리뷰 요청",   href: reviewsHref,          icon: "💬", isActive: !!pBase && pathname.startsWith(`${pBase}/reviews`) },
-    { label: "DB 테이블",   href: dbTablesHref,          icon: "🗄",  isActive: !!pBase && pathname.startsWith(`${pBase}/db-tables`) },
     { label: "설계 변경 이력", href: designChangesHref,   icon: "📜", isActive: !!pBase && pathname.startsWith(`${pBase}/design-changes`) },
   ];
 
   // SYSTEM 섹션 항목 — 역할에 따라 동적 구성
   const systemItems: (MenuItem & { isActive: boolean })[] = [
+    { label: "프로젝트", href: "/projects", icon: "📂", isActive: pathname === "/projects" },
     ...(canAccessSettings && pBase
       ? [{ label: "프로젝트 설정", href: settingsHref, icon: "⚙️", isActive: pathname.startsWith(settingsHref) }]
       : []),

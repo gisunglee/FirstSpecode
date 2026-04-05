@@ -18,7 +18,7 @@
  *   - Excalidraw 팝업은 동적 import (SSR 비활성화) — 미설치 시 stub 표시
  */
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import { marked } from "marked";
 
 function markedParse(md: string): string {
@@ -34,6 +34,8 @@ import { ScreenLayoutEditor, type LayoutRow } from "@/components/ui/ScreenLayout
 import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
+import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
+import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
 import ExcalidrawDialog from "@/components/ui/ExcalidrawDialog";
 import { useAppStore } from "@/store/appStore";
 
@@ -126,9 +128,28 @@ function AreaDetailPageInner() {
   // ── 설명 예시 팝업 상태 ────────────────────────────────────────────────────
   const [descExampleOpen, setDescExampleOpen] = useState(false);
 
+  // ── AI 작업 드롭다운 패널 ─────────────────────────────────────────────────
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const aiPanelRef = useRef<HTMLDivElement>(null);
+
+  // ── AI 태스크 상세/이력 팝업 ──────────────────────────────────────────────
+  const [aiDetailTaskId,    setAiDetailTaskId]    = useState<string | null>(null);
+  const [aiHistoryTaskType, setAiHistoryTaskType] = useState<string | null>(null);
+
   // ── AI 컨펌 상태 ──────────────────────────────────────────────────────────
   const [aiConfirm,  setAiConfirm]  = useState<{ taskType: string; label: string } | null>(null);
   const [taskPrompt, setTaskPrompt] = useState<{ tmplId: string; tmplNm: string } | null | "loading" | "none">(null);
+
+  // AI 패널 외부 클릭 시 닫기
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (aiPanelRef.current && !aiPanelRef.current.contains(e.target as Node)) {
+        setAiPanelOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   async function openPromptConfirm(taskType: string, label: string) {
     if (!description.trim()) { toast.error("설명을 먼저 입력해 주세요."); return; }
@@ -136,7 +157,7 @@ function AreaDetailPageInner() {
     setAiConfirm({ taskType, label });
     try {
       const res = await authFetch<{ data: Array<{ tmplId: string; tmplNm: string; defaultYn: string }> }>(
-        `/api/projects/${projectId}/prompt-templates?taskType=${taskType}&useYn=Y`
+        `/api/projects/${projectId}/prompt-templates?taskType=${taskType}&refType=AREA&useYn=Y`
       );
       const list = res.data ?? [];
       const preferred = list.find((t) => t.defaultYn === "Y") ?? list[0] ?? null;
@@ -289,8 +310,8 @@ function AreaDetailPageInner() {
       }),
     onSuccess: (_res, vars) => {
       const labels: Record<string, string> = {
+        INSPECT: "영역 AI 점검 요청이 접수되었습니다.",
         DESIGN:  "AI 설계 요청이 접수되었습니다.",
-        INSPECT: "AI 점검 요청이 접수되었습니다.",
         IMPACT:  "AI 영향도 분석 요청이 접수되었습니다.",
       };
       toast.success(labels[vars.taskType] ?? "AI 요청이 접수되었습니다.");
@@ -360,6 +381,26 @@ function AreaDetailPageInner() {
         refTblNm="tb_ds_area"
         refId={areaId}
       />
+
+      {/* ── AI 태스크 상세 팝업 ─────────────────────────────────────── */}
+      {aiDetailTaskId && (
+        <AiTaskDetailDialog
+          projectId={projectId}
+          taskId={aiDetailTaskId}
+          onClose={() => setAiDetailTaskId(null)}
+        />
+      )}
+
+      {/* ── AI 태스크 이력 팝업 ─────────────────────────────────────── */}
+      {aiHistoryTaskType && !isNew && (
+        <AiTaskHistoryDialog
+          projectId={projectId}
+          refType="AREA"
+          refId={areaId}
+          taskType={aiHistoryTaskType as "INSPECT"}
+          onClose={() => setAiHistoryTaskType(null)}
+        />
+      )}
 
       {/* 삭제 확인 다이얼로그 */}
       {deleteConfirmOpen && (
@@ -442,12 +483,18 @@ function AreaDetailPageInner() {
                         <span>{taskPrompt.tmplNm}</span>
                       </div>
                     )}
-                    {/* INSPECT: 전체 설계서(영역 내 기능 포함) 포함 안내 */}
+                    {/* INSPECT: 전체설계(단위업무+화면+다른영역) / 점검내용(현재영역+기능) 구분 안내 */}
                     {aiConfirm.taskType === "INSPECT" && (
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                        <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>전체 설계서</span>
-                        <span>단위업무 · 화면 · 영역 · 기능 전체</span>
-                      </div>
+                      <>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                          <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>전체설계</span>
+                          <span>단위업무 · 화면 · 같은 화면의 다른 영역 (기능 상세 제외)</span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                          <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>점검내용</span>
+                          <span>현재 영역 설명 + 영역 내 기능 전체</span>
+                        </div>
+                      </>
                     )}
                     {asciiComment.trim() && (
                       <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
@@ -455,10 +502,6 @@ function AreaDetailPageInner() {
                         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 320 }}>{asciiComment.trim()}</span>
                       </div>
                     )}
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                      <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>점검 대상</span>
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 320 }}>{description.trim().slice(0, 80)}{description.trim().length > 80 ? "…" : ""}</span>
-                    </div>
                   </div>
                 </div>
               </>
@@ -534,66 +577,153 @@ function AreaDetailPageInner() {
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           <style>{`@keyframes _spin{to{transform:rotate(360deg)}}`}</style>
 
-          {/* AI 버튼 그룹 (신규 모드 제외) — pill 형태로 묶어 통일감 부여 */}
+          {/* 디자인 설계 (Excalidraw) */}
+          {!isNew && (
+            <ExcalidrawDialog
+              value={excalidrawData}
+              onSave={(d) => excalidrawSaveMutation.mutate(d)}
+              saving={excalidrawSaveMutation.isPending}
+            />
+          )}
+
+          {/* ★ AI 작업 드롭다운 버튼 */}
           {!isNew && (
             <>
-              <div style={{
-                display: "flex", alignItems: "stretch",
-                border: "1px solid rgba(103,80,164,0.3)",
-                borderRadius: 7,
-                overflow: "hidden",
-              }}>
-                {AREA_AI_TASK_CONFIGS.map(({ taskType, label }, idx) => {
-                  const info = data?.aiTasks?.[taskType];
-                  const isSpinning = (aiMutation.isPending && aiMutation.variables?.taskType === taskType)
-                    || (info && ["PENDING", "IN_PROGRESS"].includes(info.status));
-                  const dotColor = AREA_AI_STATUS_CONFIG[info?.status ?? ""]?.color ?? null;
-                  const statusTip = info ? (AREA_AI_STATUS_LABEL[info.status] ?? info.status) : "";
+              <div ref={aiPanelRef} style={{ position: "relative" }}>
+                <button
+                  onClick={() => setAiPanelOpen((v) => !v)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    padding: "6px 14px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(103,80,164,0.35)",
+                    background: aiPanelOpen ? "rgba(103,80,164,0.1)" : "rgba(103,80,164,0.06)",
+                    color: "rgba(103,80,164,1)",
+                    fontSize: 13, fontWeight: 700,
+                    cursor: "pointer", whiteSpace: "nowrap",
+                  }}
+                >
+                  <span>★</span>
+                  AI 작업
+                  <span style={{ fontSize: 10, opacity: 0.7 }}>▾</span>
+                </button>
+
+                {/* 드롭다운 패널 — AREA_AI_INSPECT_CONFIG 단일 카드 */}
+                {aiPanelOpen && (() => {
+                  // 변수를 IIFE 내부에서 추출 — JSX return 전에 계산
+                  const { taskType, label, desc, icon } = AREA_AI_INSPECT_CONFIG;
+                  const inspectInfo   = data?.aiTasks?.[taskType];
+                  const isMutPending  = aiMutation.isPending && aiMutation.variables?.taskType === taskType;
+                  const isSpinning    = isMutPending || !!(inspectInfo && ["PENDING", "IN_PROGRESS"].includes(inspectInfo.status));
+                  const dotColor      = inspectInfo ? (AREA_AI_STATUS_DOT[inspectInfo.status] ?? "#ccc") : "#ccc";
+                  const statusLabel   = isMutPending && !inspectInfo
+                    ? "대기 중..."
+                    : inspectInfo ? (AREA_AI_STATUS_LABEL[inspectInfo.status] ?? inspectInfo.status) : "-";
+
                   return (
-                    <button
-                      key={taskType}
-                      onClick={() => {
-                        // INSPECT·DESIGN: 프롬프트 템플릿 조회 후 상세 컨펌
-                        if (taskType === "INSPECT" || taskType === "DESIGN") {
-                          openPromptConfirm(taskType, label);
-                          return;
-                        }
-                        if (!description.trim()) { toast.error("설명을 먼저 입력해 주세요."); return; }
-                        setAiConfirm({ taskType, label });
-                      }}
-                      disabled={aiMutation.isPending}
-                      title={statusTip || label}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 5,
-                        padding: "5px 12px",
-                        border: "none",
-                        borderLeft: idx > 0 ? "1px solid rgba(103,80,164,0.2)" : "none",
-                        background: "transparent",
-                        color: "rgba(103,80,164,0.9)",
-                        fontSize: 12, fontWeight: 600,
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      <span style={isSpinning ? { display: "inline-block", animation: "_spin 1s linear infinite" } : {}}>
-                        ✦
-                      </span>
-                      {label}
-                      {/* 상태 도트 — 버튼 내부에 통합 */}
-                      {dotColor && (
-                        <span style={{
-                          width: 6, height: 6, borderRadius: "50%",
-                          background: dotColor, flexShrink: 0,
-                        }} />
-                      )}
-                    </button>
+                    <div style={{
+                      position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 300,
+                      background: "var(--color-bg-card)",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: 12,
+                      boxShadow: "0 8px 32px rgba(0,0,0,0.16)",
+                      padding: "14px 16px",
+                      minWidth: 340,
+                    }}>
+                      <style>{`
+                        .ai-area-card { transition: background 0.15s, border-color 0.15s; }
+                        .ai-area-card:hover { background: rgba(103,80,164,0.07) !important; border-color: rgba(103,80,164,0.3) !important; }
+                        .ai-area-btn { transition: background 0.12s, color 0.12s, border-color 0.12s; }
+                        .ai-area-btn:hover:not(:disabled) { background: var(--color-bg-muted) !important; color: var(--color-text-primary) !important; border-color: rgba(103,80,164,0.35) !important; }
+                        .ai-area-btn-run:hover:not(:disabled) { background: rgba(103,80,164,0.18) !important; }
+                      `}</style>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)" }}>AI 작업 현황</span>
+                        <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{data?.displayId ?? ""}</span>
+                      </div>
+
+                      {/* 카드 */}
+                      <div className="ai-area-card" style={{
+                        display: "flex", alignItems: "center", gap: 12,
+                        padding: "10px 14px", borderRadius: 8,
+                        border: "1px solid var(--color-border)",
+                        background: "var(--color-bg-muted)",
+                      }}>
+                        {/* 아이콘 */}
+                        <div style={{
+                          width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          background: icon.bg, fontSize: 18,
+                        }}>
+                          {icon.emoji}
+                        </div>
+
+                        {/* 레이블 + 설명 */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                            {label}
+                          </div>
+                          <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 2, lineHeight: 1.4, whiteSpace: "pre-line" }}>
+                            {desc}
+                          </div>
+                        </div>
+
+                        {/* 상태 + 버튼 */}
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
+                            <span style={{ fontSize: 11, color: dotColor, fontWeight: 600, whiteSpace: "nowrap" }}>
+                              {statusLabel}
+                            </span>
+                          </div>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            {inspectInfo && (
+                              <button
+                                className="ai-area-btn"
+                                onClick={() => setAiDetailTaskId(inspectInfo.aiTaskId)}
+                                title="내용 보기"
+                                style={areaAiMiniBtn}
+                              >
+                                내용
+                              </button>
+                            )}
+                            <button
+                              className="ai-area-btn ai-area-btn-run"
+                              onClick={() => openPromptConfirm(taskType, label)}
+                              disabled={isSpinning || aiMutation.isPending}
+                              style={{
+                                ...areaAiMiniBtn,
+                                background: "rgba(103,80,164,0.1)",
+                                color: "rgba(103,80,164,0.95)",
+                                border: "1px solid rgba(103,80,164,0.3)",
+                                fontWeight: 700,
+                                cursor: isSpinning ? "not-allowed" : "pointer",
+                                opacity: isSpinning ? 0.5 : 1,
+                              }}
+                            >
+                              {inspectInfo ? "재 요청" : "실행"}
+                            </button>
+                            {inspectInfo && (
+                              <button
+                                className="ai-area-btn"
+                                onClick={() => setAiHistoryTaskType(taskType)}
+                                title="이력 목록"
+                                style={{ ...areaAiMiniBtn, fontSize: 13, padding: "2px 6px", lineHeight: 1 }}
+                              >
+                                ☰
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   );
-                })}
+                })()}
               </div>
-              <div style={{ width: 1, height: 20, background: "var(--color-border)" }} />
             </>
           )}
 
+          {/* PRD 다운로드 */}
           {!isNew && (
             <button
               onClick={() => setPrdOpen(true)}
@@ -603,13 +733,11 @@ function AreaDetailPageInner() {
               PRD ↓
             </button>
           )}
-          {!isNew && (
-            <ExcalidrawDialog
-              value={excalidrawData}
-              onSave={(d) => excalidrawSaveMutation.mutate(d)}
-              saving={excalidrawSaveMutation.isPending}
-            />
-          )}
+
+          {/* 구분선 */}
+          {!isNew && <div style={{ width: 1, height: 20, background: "var(--color-border)" }} />}
+
+          {/* 삭제 */}
           {!isNew && (
             <button
               onClick={() => setDeleteConfirmOpen(true)}
@@ -1067,32 +1195,44 @@ const ghostSmBtnStyle: React.CSSProperties = {
   cursor:       "pointer",
 };
 
-const AREA_AI_TASK_CONFIGS = [
-  { taskType: "DESIGN",  label: "AI 설계" },
-  { taskType: "INSPECT", label: "AI 점검" },
-  { taskType: "IMPACT",  label: "AI 영향도" },
-] as const;
-
-// 상태별 도트 색상 — 버튼 내부에 인라인으로 표시
-const AREA_AI_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  PENDING:     { label: "대기 중",   color: "#f59e0b" },
-  IN_PROGRESS: { label: "처리 중",   color: "#3b82f6" },
-  DONE:        { label: "완료",      color: "#22c55e" },
-  APPLIED:     { label: "적용됨",    color: "#8b5cf6" },
-  REJECTED:    { label: "반려",      color: "#ef4444" },
-  FAILED:      { label: "실패",      color: "#ef4444" },
-  TIMEOUT:     { label: "시간초과",  color: "#6b7280" },
+// 영역 AI 점검 카드 설정 — 드롭다운 패널에서 사용
+const AREA_AI_INSPECT_CONFIG = {
+  taskType: "INSPECT",
+  label:    "영역 AI 점검",
+  desc:     "같은 화면의 다른 영역 맥락 기반\n설계 정합성 6가지 관점 점검",
+  icon:     { bg: "#e8f5e9", emoji: "✓" },
 };
 
-// 상태별 tooltip 레이블
+// 상태별 도트 색상
+const AREA_AI_STATUS_DOT: Record<string, string> = {
+  PENDING:     "#f57c00",
+  IN_PROGRESS: "#1565c0",
+  DONE:        "#2e7d32",
+  APPLIED:     "#6a1b9a",
+  REJECTED:    "#c62828",
+  FAILED:      "#c62828",
+  TIMEOUT:     "#757575",
+};
+
+// 상태별 한글 레이블
 const AREA_AI_STATUS_LABEL: Record<string, string> = {
   PENDING:     "대기 중",
   IN_PROGRESS: "처리 중",
-  DONE:        "완료 — 클릭하여 재요청",
-  APPLIED:     "적용됨 — 클릭하여 재요청",
+  DONE:        "완료",
+  APPLIED:     "적용됨",
   REJECTED:    "반려",
-  FAILED:      "실패 — 클릭하여 재요청",
-  TIMEOUT:     "시간 초과 — 클릭하여 재요청",
+  FAILED:      "실패",
+  TIMEOUT:     "시간 초과",
+};
+
+// AI 카드 내 미니 버튼 공통 스타일
+const areaAiMiniBtn: React.CSSProperties = {
+  padding: "3px 8px", borderRadius: 5,
+  border: "1px solid var(--color-border)",
+  background: "var(--color-bg-card)",
+  color: "var(--color-text-secondary)",
+  fontSize: 11, cursor: "pointer",
+  whiteSpace: "nowrap",
 };
 
 const overlayStyle: React.CSSProperties = {

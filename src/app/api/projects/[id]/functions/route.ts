@@ -244,6 +244,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         prjct_id:      projectId,
         ref_tbl_nm:    "tb_ds_function",
         ref_id:        fn.func_id,
+        chg_type_code: "CREATE",
         chg_rsn_cn:    "기능 생성",
         snapshot_data: {
           funcId:    fn.func_id,

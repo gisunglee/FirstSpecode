@@ -54,6 +54,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       chgId:        c.chg_id,
       refTblNm:     c.ref_tbl_nm,
       refId:        c.ref_id,
+      chgTypeCode:  c.chg_type_code,
       chgRsnCn:     c.chg_rsn_cn ?? null,
       aiReqYn:      c.ai_req_yn,
       aiTaskId:     c.ai_task_id ?? null,

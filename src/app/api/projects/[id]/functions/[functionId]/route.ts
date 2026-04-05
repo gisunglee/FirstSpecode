@@ -186,6 +186,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           prjct_id:      projectId,
           ref_tbl_nm:    "tb_ds_function",
           ref_id:        functionId,
+          chg_type_code: "UPDATE",
           chg_rsn_cn:    "기능 수정",
           snapshot_data: {
             funcId:    functionId,
@@ -203,6 +204,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             prjct_id:      projectId,
             ref_tbl_nm:    "tb_ds_function",
             ref_id:        functionId,
+            chg_type_code: "UPDATE",
             chg_rsn_cn:    "기능 설명",
             snapshot_data: {
               before: oldDescription,

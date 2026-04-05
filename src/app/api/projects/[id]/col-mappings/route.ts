@@ -141,6 +141,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           prjct_id:      projectId,
           ref_tbl_nm:    "tb_ds_col_mapping",
           ref_id:        refId,
+          chg_type_code: "UPDATE",
           chg_rsn_cn:    `${refType} 컬럼 매핑 저장`,
           snapshot_data: {
             refType,

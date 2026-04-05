@@ -61,6 +61,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           prjct_id:      projectId,
           ref_tbl_nm:    "tb_ds_function",
           ref_id:        functionId,
+          chg_type_code: "UPDATE",
           chg_rsn_cn:    field === "complexity" ? "복잡도 인라인 편집" : "공수 인라인 편집",
           snapshot_data: {
             funcId:    functionId,

@@ -110,6 +110,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           prjct_id:      projectId,
           ref_tbl_nm:    "tb_ds_function_column_mapping",
           ref_id:        functionId,
+          chg_type_code: "UPDATE",
           chg_rsn_cn:    "컬럼 매핑 저장",
           snapshot_data: {
             funcId:    functionId,

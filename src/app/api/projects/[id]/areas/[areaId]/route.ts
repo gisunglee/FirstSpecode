@@ -178,6 +178,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           prjct_id:      projectId,
           ref_tbl_nm:    "tb_ds_area",
           ref_id:        areaId,
+          chg_type_code: "UPDATE",
           chg_rsn_cn:    "영역 수정",
           snapshot_data: {
             areaId:    areaId,
@@ -195,6 +196,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             prjct_id:      projectId,
             ref_tbl_nm:    "tb_ds_area",
             ref_id:        areaId,
+            chg_type_code: "UPDATE",
             chg_rsn_cn:    "영역 설명",
             snapshot_data: {
               before: existing.area_dc ?? null,
@@ -247,6 +249,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
             prjct_id:      projectId,
             ref_tbl_nm:    "tb_ds_area",
             ref_id:        areaId,
+            chg_type_code: "DELETE",
             chg_rsn_cn:    "영역 삭제",
             snapshot_data: {
               areaId:    areaId,
@@ -271,6 +274,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
             prjct_id:      projectId,
             ref_tbl_nm:    "tb_ds_area",
             ref_id:        areaId,
+            chg_type_code: "DELETE",
             chg_rsn_cn:    "영역 삭제 (기능 미분류 유지)",
             snapshot_data: {
               areaId:    areaId,

@@ -154,6 +154,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           prjct_id:      projectId,
           ref_tbl_nm:    "tb_ds_screen",
           ref_id:        screenId,
+          chg_type_code: "UPDATE",
           chg_rsn_cn:    "화면 수정",
           snapshot_data: {
             screenId:    screenId,
@@ -173,6 +174,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             prjct_id:      projectId,
             ref_tbl_nm:    "tb_ds_screen",
             ref_id:        screenId,
+            chg_type_code: "UPDATE",
             chg_rsn_cn:    "화면 설명",
             snapshot_data: {
               before: oldDescription,
@@ -225,6 +227,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
             prjct_id:      projectId,
             ref_tbl_nm:    "tb_ds_screen",
             ref_id:        screenId,
+            chg_type_code: "DELETE",
             chg_rsn_cn:    "화면 삭제",
             snapshot_data: {
               screenId:  screenId,
@@ -249,6 +252,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
             prjct_id:      projectId,
             ref_tbl_nm:    "tb_ds_screen",
             ref_id:        screenId,
+            chg_type_code: "DELETE",
             chg_rsn_cn:    "화면 삭제 (영역 미분류 유지)",
             snapshot_data: {
               screenId:  screenId,

@@ -163,6 +163,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             prjct_id:      projectId,
             ref_tbl_nm:    "tb_ds_unit_work",
             ref_id:        unitWorkId,
+            chg_type_code: "UPDATE",
             chg_rsn_cn:    "단위업무 설명",
             snapshot_data: {
               before: existing.unit_work_dc ?? null,
