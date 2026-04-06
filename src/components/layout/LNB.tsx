@@ -48,12 +48,14 @@ export default function LNB() {
   const functionsHref    = pBase ? `${pBase}/functions`     : "#";
   const dbTablesHref        = pBase ? `${pBase}/db-tables`        : "#";
   const designChangesHref   = pBase ? `${pBase}/design-changes`   : "#";
+  const referenceInfoHref   = pBase ? `${pBase}/reference-info`   : "#";
   const aiTasksHref         = pBase ? `${pBase}/ai-tasks`         : "#";
   const promptTemplatesHref = pBase ? `${pBase}/prompt-templates` : "#";
   const reviewsHref         = pBase ? `${pBase}/reviews`          : "#";
   const planningHref        = pBase ? `${pBase}/planning`           : "#";
   const aiImportHref        = pBase ? `${pBase}/planning/ai-import` : "#";
   const designImportHref    = pBase ? `${pBase}/design-import`      : "#";
+  const commonCodesHref  = pBase ? `${pBase}/common-codes`   : "#";
   const settingsHref     = pBase ? `${pBase}/settings`      : "#";
   const membersHref      = pBase ? `${pBase}/members`       : "#";
 
@@ -91,6 +93,12 @@ export default function LNB() {
       : []),
     ...(canManageMembers && pBase
       ? [{ label: "멤버 관리", href: membersHref, icon: "👥", isActive: pathname.startsWith(membersHref) }]
+      : []),
+    ...(pBase
+      ? [{ label: "공통코드", href: commonCodesHref, icon: "🏷", isActive: pathname.startsWith(commonCodesHref) }]
+      : []),
+    ...(pBase
+      ? [{ label: "기준 정보", href: referenceInfoHref, icon: "📑", isActive: pathname.startsWith(referenceInfoHref) }]
       : []),
     { label: "개인 설정", href: "/settings/profile", icon: "👤", isActive: pathname.startsWith("/settings/profile") },
   ];

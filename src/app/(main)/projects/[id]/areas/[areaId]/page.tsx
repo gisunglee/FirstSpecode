@@ -130,6 +130,7 @@ function AreaDetailPageInner() {
 
   // ── AI 작업 드롭다운 패널 ─────────────────────────────────────────────────
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [helpOpen,    setHelpOpen]    = useState(false);
   const aiPanelRef = useRef<HTMLDivElement>(null);
 
   // ── AI 태스크 상세/이력 팝업 ──────────────────────────────────────────────
@@ -381,6 +382,50 @@ function AreaDetailPageInner() {
         refTblNm="tb_ds_area"
         refId={areaId}
       />
+
+      {/* ── AI 점검 도움말 팝업 ─────────────────────────────────────── */}
+      {helpOpen && (() => {
+        const help = AREA_AI_HELP;
+        return (
+          <div
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400 }}
+            onClick={() => setHelpOpen(false)}
+          >
+            <div
+              style={{ background: "var(--color-bg-card)", borderRadius: 12, padding: "24px 28px", minWidth: 420, maxWidth: 560, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                  {help.title}
+                </span>
+                <button
+                  onClick={() => setHelpOpen(false)}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1, padding: "0 2px" }}
+                >
+                  ×
+                </button>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {help.sections.map((sec) => (
+                  <div key={sec.heading}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      {sec.heading}
+                    </div>
+                    <div style={{
+                      fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.7,
+                      background: "var(--color-bg-muted)", borderRadius: 8, padding: "10px 14px",
+                      whiteSpace: "pre-line",
+                    }}>
+                      {sec.body}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── AI 태스크 상세 팝업 ─────────────────────────────────────── */}
       {aiDetailTaskId && (
@@ -660,8 +705,24 @@ function AreaDetailPageInner() {
 
                         {/* 레이블 + 설명 */}
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: 5 }}>
                             {label}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setHelpOpen(true); }}
+                              title="도움말"
+                              style={{
+                                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                width: 16, height: 16, borderRadius: "50%",
+                                border: "1px solid var(--color-border)",
+                                background: "var(--color-bg-card)",
+                                color: "var(--color-text-secondary)",
+                                fontSize: 10, fontWeight: 700,
+                                cursor: "pointer", flexShrink: 0,
+                                lineHeight: 1, padding: 0,
+                              }}
+                            >
+                              ?
+                            </button>
                           </div>
                           <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 2, lineHeight: 1.4, whiteSpace: "pre-line" }}>
                             {desc}
@@ -837,7 +898,7 @@ function AreaDetailPageInner() {
                   value={asciiComment}
                   onChange={(e) => setAsciiComment(e.target.value)}
                   placeholder="AI 요청 시 참고할 추가 지시사항을 입력해 주세요."
-                  rows={6}
+                  rows={5}
                   style={{ ...inputStyle, resize: "vertical" }}
                 />
               </section>
@@ -903,6 +964,7 @@ function AreaDetailPageInner() {
                     <div>기능명</div>
                     <div>우선순위</div>
                     <div>상태</div>
+                    <div style={{ textAlign: "center" }}>설/구/테</div>
                   </div>
                   {data.functions.map((fn, idx) => (
                     <div
@@ -931,6 +993,11 @@ function AreaDetailPageInner() {
                       </div>
                       <div>
                         <span style={statusBadgeStyle(fn.status)}>{STATUS_LABELS[fn.status] ?? fn.status}</span>
+                      </div>
+                      <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>
+                        (<span style={{ color: "#1565c0" }}>{fn.designRt ?? 0}</span>
+                        /<span style={{ color: "#2e7d32" }}>{fn.implRt ?? 0}</span>
+                        /<span style={{ color: "#6a1b9a" }}>{fn.testRt ?? 0}</span>)
                       </div>
                     </div>
                   ))}
@@ -1119,7 +1186,7 @@ const selectStyle: React.CSSProperties = {
   backgroundPosition: "right 10px center",
 };
 
-const FUNC_GRID_TEMPLATE = "60px 1fr 100px 100px";
+const FUNC_GRID_TEMPLATE = "60px 1fr 100px 100px 100px";
 
 const funcGridHeaderStyle: React.CSSProperties = {
   display:             "grid",
@@ -1193,6 +1260,25 @@ const ghostSmBtnStyle: React.CSSProperties = {
   color:        "var(--color-text-secondary)",
   fontSize:     12,
   cursor:       "pointer",
+};
+
+// 영역 AI 점검 도움말 — 프롬프트 기반 정확한 설명
+const AREA_AI_HELP = {
+  title: "영역 AI 점검 — 6가지 관점 설계 검토",
+  sections: [
+    {
+      heading: "무엇을 하나요?",
+      body: "현재 영역과 하위 기능 전체를 대상으로 설계 품질을 6가지 관점에서 점검합니다.\n\n① 영역-기능 항목 대조 — 영역 구성 항목의 UI 요소와 FID가 1:1 대응하는지\n② 기능 명세 완전성 — API 경로, Input/Output, 처리 로직, 에러 처리 정의 여부\n③ 참조 테이블 정합성 — 처리 로직에서 사용하는 테이블이 모두 나열되었는지\n④ 권한 반영 여부 — 권한별 403 에러 처리 및 UI 숨김/비활성화 명시 여부\n⑤ 화면 흐름 연결성 — 이동 버튼과 전달 파라미터가 전체 설계와 일치하는지\n⑥ API 경로 일관성 — RESTful 컨벤션 및 동일 리소스 CRUD 경로 일관성",
+    },
+    {
+      heading: "잘 쓰려면",
+      body: "영역 설명란에 내용을 먼저 채워야 합니다.\n하위 기능들의 설명(description)도 함께 전달되므로,\n기능별 설명이 충실할수록 점검 결과가 정확합니다.",
+    },
+    {
+      heading: "AI에 전달되는 데이터",
+      body: "Top-down + Bottom-up 양방향으로 수집합니다.\n\n[점검 대상] (Bottom-up)\n✔ 현재 영역 (AR) — 영역 설명 포함\n✔ 영역 하위 기능 전체 (FID) — 각 기능의 설명 포함\n\n[맥락 참조] (Top-down)\n✔ 단위업무 (직계 상위 1개)\n✔ 화면 (직계 상위 1개)\n✔ 같은 화면의 다른 영역들 — 영역명·유형만 (기능 상세 미포함)\n\n✘ 다른 화면의 영역·기능은 포함되지 않습니다.\n✘ 다른 영역의 하위 기능 상세는 포함되지 않습니다.",
+    },
+  ],
 };
 
 // 영역 AI 점검 카드 설정 — 드롭다운 패널에서 사용

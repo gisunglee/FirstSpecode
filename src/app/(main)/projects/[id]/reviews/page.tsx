@@ -346,7 +346,7 @@ function NewReviewModal({
 // 제목(가변) | 요청자 | 답변자 | 상태 | 코멘트 | 요청일시 | 답변일시
 // 제목(가변) | 요청자 | 답변자 | 상태 | 코멘트 | 요청일시 | 답변일시
 // 제목(가변) | 요청자 | 답변자 | 상태 | 코멘트 | 요청일시 | 답변일시
-const GRID_TEMPLATE = "1fr 101px 101px 161px 83px 101px 101px";
+const GRID_TEMPLATE = "1fr 10.5% 10.5% 7.7% 8.9% 9.5% 9.5%";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID_TEMPLATE, gap: 8,

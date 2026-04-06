@@ -45,6 +45,9 @@ type AreaRow = {
   name:      string;
   type:      string;
   sortOrder: number;
+  designRt:  number;
+  implRt:    number;
+  testRt:    number;
 };
 
 type ScreenDetail = {
@@ -687,6 +690,7 @@ function AreaListSection({
           <div style={areaGridHeaderStyle}>
             <div>순서</div>
             <div>영역명</div>
+            <div style={{ textAlign: "center" }}>설/구/테</div>
             <div style={{ textAlign: "right" }}>유형</div>
           </div>
           {/* 행 */}
@@ -712,6 +716,21 @@ function AreaListSection({
                   </span>
                   {area.name}
                 </button>
+              </div>
+              <div style={{ display: "flex", gap: 3, justifyContent: "center", fontSize: 11 }}>
+                {[
+                  { val: area.designRt, color: "#1565c0" },
+                  { val: area.implRt,   color: "#2e7d32" },
+                  { val: area.testRt,   color: "#6a1b9a" },
+                ].map(({ val, color }, i) => (
+                  <span key={i} style={{
+                    color, fontWeight: 600,
+                    background: val === 100 ? `${color}14` : "transparent",
+                    borderRadius: 3, padding: "1px 3px",
+                  }}>
+                    {val}%
+                  </span>
+                ))}
               </div>
               <div style={{ textAlign: "right" }}>
                 <span style={areaTypeBadgeStyle(area.type)}>{area.type}</span>
@@ -871,7 +890,7 @@ const linkBtnStyle: React.CSSProperties = {
 
 const areaGridHeaderStyle: React.CSSProperties = {
   display:             "grid",
-  gridTemplateColumns: "44px 1fr 100px",
+  gridTemplateColumns: "44px 1fr 80px 100px",
   gap:                 12,
   padding:             "8px 14px",
   background:          "var(--color-bg-muted)",
@@ -893,7 +912,7 @@ const ghostSmBtnStyle: React.CSSProperties = {
 
 const areaGridRowStyle: React.CSSProperties = {
   display:             "grid",
-  gridTemplateColumns: "44px 1fr 100px",
+  gridTemplateColumns: "44px 1fr 80px 100px",
   gap:                 12,
   padding:             "10px 14px",
   alignItems:          "center",

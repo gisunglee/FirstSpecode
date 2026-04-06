@@ -34,7 +34,13 @@ type AreaRow = {
   screenDisplayId: string | null;
   unitWorkId:      string | null;
   unitWorkName:    string | null;
-  functionCount:   number;
+  functionCount:      number;
+  totalEffortHours:   number;
+  implStart:          string | null;
+  implEnd:            string | null;
+  avgDesignRt:        number;
+  avgImplRt:          number;
+  avgTestRt:          number;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -200,7 +206,9 @@ function AreasPageInner() {
             <div>유형</div>
             <div style={{ textAlign: "center" }}>정렬</div>
             <div style={{ textAlign: "center" }}>기능수</div>
-            <div />
+            <div style={{ textAlign: "center" }}>구현기간</div>
+            <div style={{ textAlign: "center" }}>예상공수</div>
+            <div style={{ textAlign: "center" }}>설/구/테</div>
           </div>
 
           {/* 데이터 행 */}
@@ -288,23 +296,55 @@ function AreasPageInner() {
                 {area.functionCount}
               </div>
 
-              {/* 상세 버튼 */}
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
-                <button
-                  onClick={() => router.push(`/projects/${projectId}/areas/${area.areaId}`)}
-                  style={{
-                    background:   "var(--color-bg-card)",
-                    border:       "1px solid var(--color-border)",
-                    borderRadius: 4,
-                    cursor:       "pointer",
-                    fontSize:     13,
-                    padding:      "3px 12px",
-                    color:        "var(--color-text-primary)",
-                  }}
-                >
-                  상세
-                </button>
+              {/* 구현기간 — 가장 빠른 시작일 ~ 가장 늦은 종료일 */}
+              <div style={{ textAlign: "center", fontSize: 11, color: "var(--color-text-secondary)", lineHeight: 1.4 }}>
+                {area.implStart || area.implEnd ? (
+                  <>
+                    <div>{area.implStart ?? "-"}</div>
+                    <div>~ {area.implEnd ?? "-"}</div>
+                  </>
+                ) : (
+                  <span style={{ color: "#ccc" }}>-</span>
+                )}
               </div>
+
+              {/* 예상공수 — D/H 형식 */}
+              <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>
+                {area.totalEffortHours > 0
+                  ? (() => {
+                      const d = Math.floor(area.totalEffortHours / 8);
+                      const h = area.totalEffortHours % 8;
+                      const parts = [];
+                      if (d > 0) parts.push(`${d}d`);
+                      if (h > 0) parts.push(`${h}h`);
+                      return (
+                        <>
+                          <span style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{parts.join(" ")}</span>
+                          <span style={{ marginLeft: 4, fontSize: 11, color: "#aaa" }}>({area.totalEffortHours}h)</span>
+                        </>
+                      );
+                    })()
+                  : <span style={{ color: "#ccc" }}>-</span>
+                }
+              </div>
+
+              {/* 설/구/테 평균 진행률 */}
+              <div style={{ display: "flex", gap: 4, justifyContent: "center", fontSize: 11 }}>
+                {[
+                  { label: "설", val: area.avgDesignRt, color: "#1565c0" },
+                  { label: "구", val: area.avgImplRt,   color: "#2e7d32" },
+                  { label: "테", val: area.avgTestRt,   color: "#6a1b9a" },
+                ].map(({ label, val, color }) => (
+                  <span key={label} style={{
+                    color, fontWeight: 600,
+                    background: val === 100 ? `${color}14` : "transparent",
+                    borderRadius: 3, padding: "1px 3px",
+                  }}>
+                    {val}%
+                  </span>
+                ))}
+              </div>
+
             </div>
           ))}
         </div>
@@ -443,7 +483,7 @@ function typeBadgeStyle(type: string): React.CSSProperties {
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-const GRID_TEMPLATE = "32px minmax(100px, 160px) minmax(120px, 200px) 1fr 100px 60px 70px 100px";
+const GRID_TEMPLATE = "32px 10% 12% 1fr 7% 5% 5% 14% 8% 7%";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",

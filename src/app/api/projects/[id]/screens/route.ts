@@ -6,6 +6,7 @@
  */
 
 import { NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { checkRole } from "@/lib/checkRole";
@@ -59,23 +60,59 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       ],
     });
 
-    const items = screens.map((s) => ({
-      screenId:        s.scrn_id,
-      displayId:       s.scrn_display_id,
-      name:            s.scrn_nm,
-      type:            s.scrn_ty_code,
-      categoryL:       s.ctgry_l_nm ?? "",
-      categoryM:       s.ctgry_m_nm ?? "",
-      categoryS:       s.ctgry_s_nm ?? "",
-      unitWorkId:      s.unit_work_id ?? null,
-      unitWorkName:    s.unitWork?.unit_work_nm ?? "미분류",
-      requirementId:   s.unitWork?.requirement?.req_id ?? null,
-      requirementName: s.unitWork?.requirement
-        ? `[${s.unitWork.requirement.req_display_id}] ${s.unitWork.requirement.req_nm}`
-        : "미분류",
-      areaCount:       s._count.areas,
-      sortOrder:       s.sort_ordr,
-    }));
+    // DB 레벨에서 화면별 진척률 집계 — 화면 → 영역 → 기능 → tb_cm_progress
+    type ScreenAgg = {
+      scrn_id: string;
+      avg_design_rt: number;
+      avg_impl_rt: number;
+      avg_test_rt: number;
+    };
+    let progMap = new Map<string, { designRt: number; implRt: number; testRt: number }>();
+
+    if (screens.length > 0) {
+      const screenIds = Prisma.join(screens.map(s => s.scrn_id));
+      const aggRows = await prisma.$queryRaw<ScreenAgg[]>`
+        SELECT a.scrn_id,
+               COALESCE(AVG(p.design_rt), 0) AS avg_design_rt,
+               COALESCE(AVG(p.impl_rt),   0) AS avg_impl_rt,
+               COALESCE(AVG(p.test_rt),   0) AS avg_test_rt
+          FROM tb_ds_area a
+          JOIN tb_ds_function f ON f.area_id = a.area_id
+          LEFT JOIN tb_cm_progress p
+            ON p.ref_tbl_nm = 'tb_ds_function' AND p.ref_id = f.func_id
+         WHERE a.scrn_id IN (${screenIds})
+         GROUP BY a.scrn_id
+      `;
+      progMap = new Map(aggRows.map(r => [r.scrn_id, {
+        designRt: Math.round(Number(r.avg_design_rt)),
+        implRt:   Math.round(Number(r.avg_impl_rt)),
+        testRt:   Math.round(Number(r.avg_test_rt)),
+      }]));
+    }
+
+    const items = screens.map((s) => {
+      const prog = progMap.get(s.scrn_id);
+      return {
+        screenId:        s.scrn_id,
+        displayId:       s.scrn_display_id,
+        name:            s.scrn_nm,
+        type:            s.scrn_ty_code,
+        categoryL:       s.ctgry_l_nm ?? "",
+        categoryM:       s.ctgry_m_nm ?? "",
+        categoryS:       s.ctgry_s_nm ?? "",
+        unitWorkId:      s.unit_work_id ?? null,
+        unitWorkName:    s.unitWork?.unit_work_nm ?? "미분류",
+        requirementId:   s.unitWork?.requirement?.req_id ?? null,
+        requirementName: s.unitWork?.requirement
+          ? `[${s.unitWork.requirement.req_display_id}] ${s.unitWork.requirement.req_nm}`
+          : "미분류",
+        areaCount:       s._count.areas,
+        sortOrder:       s.sort_ordr,
+        avgDesignRt:     prog?.designRt ?? 0,
+        avgImplRt:       prog?.implRt ?? 0,
+        avgTestRt:       prog?.testRt ?? 0,
+      };
+    });
 
     return apiSuccess({ items, totalCount: items.length });
   } catch (err) {

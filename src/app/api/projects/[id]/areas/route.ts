@@ -6,6 +6,7 @@
  */
 
 import { NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { checkRole } from "@/lib/checkRole";
@@ -61,19 +62,69 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       },
     });
 
-    const items = areas.map((a) => ({
-      areaId:          a.area_id,
-      displayId:       a.area_display_id,
-      name:            a.area_nm,
-      type:            a.area_ty_code,
-      sortOrder:       a.sort_ordr,
-      screenId:        a.scrn_id ?? null,
-      screenName:      a.screen?.scrn_nm ?? "미분류",
-      screenDisplayId: a.screen?.scrn_display_id ?? null,
-      unitWorkId:      a.screen?.unitWork?.unit_work_id ?? null,
-      unitWorkName:    a.screen?.unitWork?.unit_work_nm ?? null,
-      functionCount:   a._count.functions,
-    }));
+    // DB 레벨에서 영역별 집계 — 공수 합산, 구현 시작/종료일, 평균 진행률
+    type AreaAgg = {
+      area_id: string;
+      total_hours: number;
+      impl_start: string | null;
+      impl_end: string | null;
+      avg_design_rt: number;
+      avg_impl_rt: number;
+      avg_test_rt: number;
+    };
+    let aggMap = new Map<string, AreaAgg>();
+
+    if (areas.length > 0) {
+      const areaIds = Prisma.join(areas.map(a => a.area_id));
+
+      const aggRows = await prisma.$queryRaw<AreaAgg[]>`
+        SELECT
+          f.area_id,
+          COALESCE(SUM(
+            CAST(REGEXP_REPLACE(f.efrt_val, '[^0-9.]', '', 'g') AS DECIMAL)
+          ) FILTER (WHERE f.efrt_val IS NOT NULL), 0) AS total_hours,
+          MIN(f.impl_bgng_de) AS impl_start,
+          MAX(f.impl_end_de)  AS impl_end,
+          COALESCE(AVG(p.design_rt), 0) AS avg_design_rt,
+          COALESCE(AVG(p.impl_rt),   0) AS avg_impl_rt,
+          COALESCE(AVG(p.test_rt),   0) AS avg_test_rt
+        FROM tb_ds_function f
+        LEFT JOIN tb_cm_progress p
+          ON p.ref_tbl_nm = 'tb_ds_function' AND p.ref_id = f.func_id
+        WHERE f.area_id IN (${areaIds})
+        GROUP BY f.area_id
+      `;
+      aggMap = new Map(aggRows.map(r => [r.area_id, {
+        ...r,
+        total_hours:   Number(r.total_hours),
+        avg_design_rt: Math.round(Number(r.avg_design_rt)),
+        avg_impl_rt:   Math.round(Number(r.avg_impl_rt)),
+        avg_test_rt:   Math.round(Number(r.avg_test_rt)),
+      }]));
+    }
+
+    const items = areas.map((a) => {
+      const agg = aggMap.get(a.area_id);
+      return {
+        areaId:          a.area_id,
+        displayId:       a.area_display_id,
+        name:            a.area_nm,
+        type:            a.area_ty_code,
+        sortOrder:       a.sort_ordr,
+        screenId:        a.scrn_id ?? null,
+        screenName:      a.screen?.scrn_nm ?? "미분류",
+        screenDisplayId: a.screen?.scrn_display_id ?? null,
+        unitWorkId:      a.screen?.unitWork?.unit_work_id ?? null,
+        unitWorkName:    a.screen?.unitWork?.unit_work_nm ?? null,
+        functionCount:      a._count.functions,
+        totalEffortHours:   agg?.total_hours ?? 0,
+        implStart:          agg?.impl_start ?? null,
+        implEnd:            agg?.impl_end ?? null,
+        avgDesignRt:        agg?.avg_design_rt ?? 0,
+        avgImplRt:          agg?.avg_impl_rt ?? 0,
+        avgTestRt:          agg?.avg_test_rt ?? 0,
+      };
+    });
 
     return apiSuccess({ items, totalCount: items.length });
   } catch (err) {

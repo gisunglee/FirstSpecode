@@ -83,11 +83,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     taskId, name, priority, source, rfpPage,
     originalContent, currentContent, analysisMemo, detailSpec,
     reqDisplayId, sortOrder,
+    saveHistory, versionMode, versionComment,
+    saveSpecHistory, saveAnalyHistory,
   } = body as {
     taskId?: string; name?: string; priority?: string; source?: string;
     rfpPage?: string; originalContent?: string; currentContent?: string;
     analysisMemo?: string; detailSpec?: string; reqDisplayId?: string;
     sortOrder?: number;
+    saveHistory?: boolean;
+    versionMode?: "major" | "minor";
+    versionComment?: string;
+    saveSpecHistory?: boolean;
+    saveAnalyHistory?: boolean;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "요구사항명을 입력해 주세요.", 400);
@@ -101,27 +108,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "요구사항을 찾을 수 없습니다.", 404);
     }
 
-    // 버전 채번: 최신 이력의 vrsn_no + 0.1
-    // 이력이 없으면 V1.0, 있으면 'V1.X' → 'V1.X+1'
-    const lastHistory = await prisma.tbRqRequirementHistory.findFirst({
-      where:   { req_id: reqId },
-      orderBy: { creat_dt: "desc" },
-      select:  { vrsn_no: true },
-    });
+    const newOrgnlCn   = originalContent?.trim() || null;
+    const newCurncyCn  = currentContent?.trim() || null;
+    const newAnalyCn   = analysisMemo?.trim() || null;
+    const newSpecCn    = detailSpec?.trim() || null;
+    const oldAnalyCn   = existing.analy_cn ?? null;
+    const oldSpecCn    = existing.spec_cn ?? null;
 
-    let nextVersion: string;
-    if (!lastHistory) {
-      nextVersion = "V1.0";
-    } else {
-      // "V1.X" 형식에서 major, minor 분리
-      const parts = lastHistory.vrsn_no.replace("V", "").split(".");
-      const major = parseInt(parts[0] ?? "1", 10);
-      const minor = parseInt(parts[1] ?? "0", 10);
-      nextVersion = `V${major}.${minor + 1}`;
-    }
+    // ── 트랜잭션 구성 ────────────────────────────────────────────────────
+    const ops: Parameters<typeof prisma.$transaction>[0] = [];
 
-    // 수정 + 이력 생성 (트랜잭션)
-    await prisma.$transaction([
+    // 1. 요구사항 본문 UPDATE (항상 실행)
+    ops.push(
       prisma.tbRqRequirement.update({
         where: { req_id: reqId },
         data:  {
@@ -131,26 +129,89 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           priort_code:    priority,
           src_code:       source,
           rfp_page_no:    rfpPage?.trim() || null,
-          orgnl_cn:       originalContent?.trim() || null,
-          curncy_cn:      currentContent?.trim() || null,
-          analy_cn:       analysisMemo?.trim() || null,
-          spec_cn:        detailSpec?.trim() || null,
+          orgnl_cn:       newOrgnlCn,
+          curncy_cn:      newCurncyCn,
+          analy_cn:       newAnalyCn,
+          spec_cn:        newSpecCn,
           sort_ordr:      typeof sortOrder === "number" ? sortOrder : existing.sort_ordr,
           mdfcn_dt:       new Date(),
         },
-      }),
-      prisma.tbRqRequirementHistory.create({
-        data: {
-          req_id:        reqId,
-          vrsn_no:       nextVersion,
-          vrsn_ty_code:  "INTERNAL",
-          orgnl_cn:      originalContent?.trim() || null,
-          curncy_cn:     currentContent?.trim() || null,
-          spec_cn:       detailSpec?.trim() || null,
-          chg_mber_id:   auth.mberId,
-        },
-      }),
-    ]);
+      })
+    );
+
+    // 2. 이력 저장 (saveHistory=true 일 때만)
+    let nextVersion: string | null = null;
+    if (saveHistory) {
+      const lastHistory = await prisma.tbRqRequirementHistory.findFirst({
+        where:   { req_id: reqId },
+        orderBy: { creat_dt: "desc" },
+        select:  { vrsn_no: true },
+      });
+
+      if (!lastHistory) {
+        nextVersion = "V1.0";
+      } else {
+        const parts = lastHistory.vrsn_no.replace("V", "").split(".");
+        const major = parseInt(parts[0] ?? "1", 10);
+        const minor = parseInt(parts[1] ?? "0", 10);
+
+        if (versionMode === "major") {
+          nextVersion = `V${major + 1}.0`;
+        } else {
+          // minor (기본)
+          nextVersion = `V${major}.${minor + 1}`;
+        }
+      }
+
+      ops.push(
+        prisma.tbRqRequirementHistory.create({
+          data: {
+            req_id:         reqId,
+            vrsn_no:        nextVersion,
+            orgnl_cn:       newOrgnlCn,
+            curncy_cn:      newCurncyCn,
+            vrsn_coment_cn: versionComment?.trim() || null,
+            chg_mber_id:    auth.mberId,
+          },
+        })
+      );
+    }
+
+    // 3. 분석 메모 변경 → tbDsDesignChange (saveAnalyHistory=true 일 때만)
+    if (saveAnalyHistory && newAnalyCn !== oldAnalyCn) {
+      ops.push(
+        prisma.tbDsDesignChange.create({
+          data: {
+            prjct_id:      projectId,
+            ref_tbl_nm:    "tb_rq_requirement",
+            ref_id:        reqId,
+            chg_type_code: "UPDATE",
+            chg_rsn_cn:    "분석 메모",
+            snapshot_data: { before: oldAnalyCn, after: newAnalyCn },
+            chg_mber_id:   auth.mberId,
+          },
+        })
+      );
+    }
+
+    // 4. 상세 명세 변경 → tbDsDesignChange (saveSpecHistory=true 일 때만)
+    if (saveSpecHistory && newSpecCn !== oldSpecCn) {
+      ops.push(
+        prisma.tbDsDesignChange.create({
+          data: {
+            prjct_id:      projectId,
+            ref_tbl_nm:    "tb_rq_requirement",
+            ref_id:        reqId,
+            chg_type_code: "UPDATE",
+            chg_rsn_cn:    "상세 명세",
+            snapshot_data: { before: oldSpecCn, after: newSpecCn },
+            chg_mber_id:   auth.mberId,
+          },
+        })
+      );
+    }
+
+    await prisma.$transaction(ops);
 
     return apiSuccess({ requirementId: reqId, version: nextVersion });
   } catch (err) {

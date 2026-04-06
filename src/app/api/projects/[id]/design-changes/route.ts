@@ -29,8 +29,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
+    // refTblNm, refId 쿼리 파라미터로 특정 대상 이력만 조회 가능
+    const url       = new URL(request.url);
+    const refTblNm  = url.searchParams.get("refTblNm") ?? undefined;
+    const refId     = url.searchParams.get("refId") ?? undefined;
+
     const changes = await prisma.tbDsDesignChange.findMany({
-      where:   { prjct_id: projectId },
+      where: {
+        prjct_id:   projectId,
+        ...(refTblNm ? { ref_tbl_nm: refTblNm } : {}),
+        ...(refId    ? { ref_id: refId }         : {}),
+      },
       orderBy: { chg_dt: "desc" },
     });
 
@@ -60,6 +69,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       aiTaskId:     c.ai_task_id ?? null,
       chgMberEmail: c.chg_mber_id ? (memberMap[c.chg_mber_id] ?? c.chg_mber_id) : null,
       chgDt:        c.chg_dt,
+      snapshotData: c.snapshot_data as Record<string, unknown> | null,
     }));
 
     return apiSuccess({ items, totalCount: items.length });

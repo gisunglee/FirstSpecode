@@ -245,7 +245,26 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "기능을 찾을 수 없습니다.", 404);
     }
 
-    await prisma.tbDsFunction.delete({ where: { func_id: functionId } });
+    // 삭제 + 설계 변경 이력 (트랜잭션)
+    await prisma.$transaction([
+      prisma.tbDsFunction.delete({ where: { func_id: functionId } }),
+      prisma.tbDsDesignChange.create({
+        data: {
+          prjct_id:      projectId,
+          ref_tbl_nm:    "tb_ds_function",
+          ref_id:        functionId,
+          chg_type_code: "DELETE",
+          chg_rsn_cn:    "기능 삭제",
+          snapshot_data: {
+            funcId:    functionId,
+            displayId: existing.func_display_id,
+            name:      existing.func_nm,
+            deletedAt: new Date().toISOString(),
+          },
+          chg_mber_id: auth.mberId,
+        },
+      }),
+    ]);
 
     return apiSuccess({ deleted: true });
   } catch (err) {

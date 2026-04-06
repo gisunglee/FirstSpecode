@@ -49,7 +49,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const items = histories.map((h) => ({
       historyId:     h.req_hist_id,
       versionNo:     h.vrsn_no,
-      versionType:   h.vrsn_ty_code,   // 'INTERNAL' | 'CONFIRMED'
       comment:       h.vrsn_coment_cn ?? "",
       changedAt:     h.creat_dt.toISOString(),
       changerEmail:  h.chg_mber_id ? (emailMap.get(h.chg_mber_id) ?? "") : "",

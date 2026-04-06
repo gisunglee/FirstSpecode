@@ -155,7 +155,9 @@
       "Bash(find /Users/igiseong/dev/specode/FirstSpecode/src/app/api/projects/[id]/prd -type f -name \"*.ts\")",
       "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
       "Bash(grep -A 20 \"const.*Status.*=\" /Users/igiseong/dev/specode/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/areas/[areaId]/page.tsx)",
-      "Bash(grep -B 5 -A 10 \"DESIGN_DONE\\\\|NONE\\\\|func_sttus\\\\|statusLabel\" /Users/igiseong/dev/specode/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/areas/[areaId]/page.tsx)"
+      "Bash(grep -B 5 -A 10 \"DESIGN_DONE\\\\|NONE\\\\|func_sttus\\\\|statusLabel\" /Users/igiseong/dev/specode/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/areas/[areaId]/page.tsx)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts|jsx|js\\)$\")",
+      "Bash(grep -n \"creatDt\\\\|mdfcnDt\" src/app/api/projects/*/reference-info*/route.ts)"
     ]
   }
 }

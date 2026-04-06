@@ -106,12 +106,17 @@ function DesignChangesPageInner() {
     return () => setBreadcrumb([]);
   }, [setBreadcrumb]);
 
-  const [search,  setSearch]  = useState("");
-  const [page,    setPage]    = useState(1);
+  const [search,       setSearch]       = useState("");
+  const [actionFilter, setActionFilter] = useState("");   // "" = 전체, CREATE/UPDATE/DELETE
+  const [page,         setPage]         = useState(1);
 
-  // 검색어 변경 시 첫 페이지로 리셋
+  // 검색어·필터 변경 시 첫 페이지로 리셋
   function handleSearch(v: string) {
     setSearch(v);
+    setPage(1);
+  }
+  function handleActionFilter(v: string) {
+    setActionFilter(v);
     setPage(1);
   }
 
@@ -127,12 +132,17 @@ function DesignChangesPageInner() {
   const items = data?.items ?? [];
 
   const filtered = items.filter((item) => {
+    // 액션 타입 필터 (전체가 아닌 경우 정확히 일치해야 함)
+    if (actionFilter && item.chgTypeCode !== actionFilter) return false;
+
     const q = search.toLowerCase();
+    if (!q) return true;
     return (
       tblLabel(item.refTblNm).toLowerCase().includes(q) ||
       item.refTblNm.toLowerCase().includes(q) ||
       (item.chgRsnCn ?? "").toLowerCase().includes(q) ||
-      (item.chgMberEmail ?? "").toLowerCase().includes(q)
+      (item.chgMberEmail ?? "").toLowerCase().includes(q) ||
+      (ACTION_STYLE[item.chgTypeCode]?.label ?? "").includes(q)
     );
   });
 
@@ -163,18 +173,40 @@ function DesignChangesPageInner() {
 
         {/* ── 검색 + 페이지네이션 (상단) ── */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 12, flexWrap: "wrap" }}>
-          <input
-            value={search}
-            onChange={(e) => handleSearch(e.target.value)}
-            placeholder="테이블명·변경 사유·변경자 검색..."
-            style={{
-              padding: "7px 12px", borderRadius: 7,
-              border: "1px solid var(--color-border)",
-              background: "var(--color-bg-card)",
-              color: "var(--color-text-primary)",
-              fontSize: 13, outline: "none", width: 300,
-            }}
-          />
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              value={search}
+              onChange={(e) => handleSearch(e.target.value)}
+              placeholder="대상 테이블·변경 사유·변경자 검색..."
+              style={{
+                padding: "7px 12px", borderRadius: 7,
+                border: "1px solid var(--color-border)",
+                background: "var(--color-bg-card)",
+                color: "var(--color-text-primary)",
+                fontSize: 13, outline: "none", width: 260,
+              }}
+            />
+            <select
+              value={actionFilter}
+              onChange={(e) => handleActionFilter(e.target.value)}
+              style={{
+                padding: "7px 28px 7px 10px", borderRadius: 7,
+                border: "1px solid var(--color-border)",
+                background: "var(--color-bg-card)",
+                color: "var(--color-text-primary)",
+                fontSize: 13, cursor: "pointer",
+                appearance: "none", WebkitAppearance: "none",
+                backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "right 8px center",
+              }}
+            >
+              <option value="">액션 전체</option>
+              <option value="CREATE">등록</option>
+              <option value="UPDATE">수정</option>
+              <option value="DELETE">삭제</option>
+            </select>
+          </div>
           {!isLoading && filtered.length > PAGE_SIZE && (
             <Pagination
               currentPage={safePage}

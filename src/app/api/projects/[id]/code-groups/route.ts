@@ -1,0 +1,114 @@
+/**
+ * GET  /api/projects/[id]/code-groups — 코드 그룹 목록 조회
+ * POST /api/projects/[id]/code-groups — 코드 그룹 생성
+ *
+ * 역할:
+ *   - 공통코드 그룹 목록 조회 (검색, 사용여부 필터)
+ *   - 신규 그룹 등록
+ */
+
+import { NextRequest } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/requireAuth";
+import { apiSuccess, apiError } from "@/lib/apiResponse";
+
+type RouteParams = { params: Promise<{ id: string }> };
+
+export async function GET(request: NextRequest, { params }: RouteParams) {
+  const auth = requireAuth(request);
+  if (auth instanceof Response) return auth;
+
+  const { id: projectId } = await params;
+
+  // 프로젝트 멤버십 확인
+  const membership = await prisma.tbPjProjectMember.findUnique({
+    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
+  });
+  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
+    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
+  }
+
+  const url = new URL(request.url);
+  const search = url.searchParams.get("search") ?? "";
+  const useYn = url.searchParams.get("useYn") ?? "";
+
+  try {
+    const groups = await prisma.tbCmCodeGroup.findMany({
+      where: {
+        ...(search
+          ? {
+              OR: [
+                { grp_code: { contains: search, mode: "insensitive" } },
+                { grp_code_nm: { contains: search, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+        ...(useYn ? { use_yn: useYn } : {}),
+      },
+      include: { codes: { select: { cm_code_id: true } } },
+      orderBy: { grp_code: "asc" },
+    });
+
+    return apiSuccess({
+      items: groups.map((g) => ({
+        grpCode: g.grp_code,
+        grpCodeNm: g.grp_code_nm,
+        grpCodeDc: g.grp_code_dc ?? "",
+        useYn: g.use_yn,
+        codeCount: g.codes.length,
+      })),
+    });
+  } catch (err) {
+    console.error("[GET /api/code-groups]", err);
+    return apiError("DB_ERROR", "코드 그룹 조회에 실패했습니다.", 500);
+  }
+}
+
+export async function POST(request: NextRequest, { params }: RouteParams) {
+  const auth = requireAuth(request);
+  if (auth instanceof Response) return auth;
+
+  const { id: projectId } = await params;
+
+  const membership = await prisma.tbPjProjectMember.findUnique({
+    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
+  });
+  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
+    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
+  }
+
+  let body: { grpCode?: string; grpCodeNm?: string; grpCodeDc?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
+  }
+
+  const grpCode = body.grpCode?.trim();
+  const grpCodeNm = body.grpCodeNm?.trim();
+  if (!grpCode) return apiError("VALIDATION_ERROR", "그룹 코드를 입력해 주세요.", 400);
+  if (!grpCodeNm) return apiError("VALIDATION_ERROR", "그룹 코드명을 입력해 주세요.", 400);
+
+  try {
+    // 중복 체크
+    const existing = await prisma.tbCmCodeGroup.findUnique({ where: { grp_code: grpCode } });
+    if (existing) return apiError("DUPLICATE", "이미 존재하는 그룹 코드입니다.", 409);
+
+    const created = await prisma.tbCmCodeGroup.create({
+      data: {
+        grp_code: grpCode,
+        grp_code_nm: grpCodeNm,
+        grp_code_dc: body.grpCodeDc?.trim() || null,
+        use_yn: "Y",
+      },
+    });
+
+    return apiSuccess(
+      { grpCode: created.grp_code, grpCodeNm: created.grp_code_nm },
+      201
+    );
+  } catch (err) {
+    console.error("[POST /api/code-groups]", err);
+    return apiError("DB_ERROR", "코드 그룹 생성에 실패했습니다.", 500);
+  }
+}

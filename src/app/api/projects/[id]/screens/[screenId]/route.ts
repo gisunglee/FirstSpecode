@@ -9,6 +9,7 @@
  */
 
 import { NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { checkRole } from "@/lib/checkRole";
@@ -53,6 +54,30 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "화면을 찾을 수 없습니다.", 404);
     }
 
+    // 영역별 진척률 집계 — 영역 → 기능 → tb_cm_progress
+    const areaIds = screen.areas.map(a => a.area_id);
+    let progMap = new Map<string, { designRt: number; implRt: number; testRt: number }>();
+    if (areaIds.length > 0) {
+      const aggRows = await prisma.$queryRaw<{
+        area_id: string; avg_design_rt: number; avg_impl_rt: number; avg_test_rt: number;
+      }[]>`
+        SELECT f.area_id,
+               COALESCE(AVG(p.design_rt), 0) AS avg_design_rt,
+               COALESCE(AVG(p.impl_rt),   0) AS avg_impl_rt,
+               COALESCE(AVG(p.test_rt),   0) AS avg_test_rt
+          FROM tb_ds_function f
+          LEFT JOIN tb_cm_progress p
+            ON p.ref_tbl_nm = 'tb_ds_function' AND p.ref_id = f.func_id
+         WHERE f.area_id IN (${Prisma.join(areaIds)})
+         GROUP BY f.area_id
+      `;
+      progMap = new Map(aggRows.map(r => [r.area_id, {
+        designRt: Math.round(Number(r.avg_design_rt)),
+        implRt:   Math.round(Number(r.avg_impl_rt)),
+        testRt:   Math.round(Number(r.avg_test_rt)),
+      }]));
+    }
+
     return apiSuccess({
       screenId:     screen.scrn_id,
       displayId:    screen.scrn_display_id,
@@ -69,13 +94,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       sortOrder:    screen.sort_ordr,
       unitWorkId:   screen.unit_work_id ?? null,
       unitWorkName: screen.unitWork?.unit_work_nm ?? "미분류",
-      areas: screen.areas.map((a) => ({
-        areaId:    a.area_id,
-        displayId: a.area_display_id,
-        name:      a.area_nm,
-        type:      a.area_ty_code,
-        sortOrder: a.sort_ordr,
-      })),
+      areas: screen.areas.map((a) => {
+        const prog = progMap.get(a.area_id);
+        return {
+          areaId:    a.area_id,
+          displayId: a.area_display_id,
+          name:      a.area_nm,
+          type:      a.area_ty_code,
+          sortOrder: a.sort_ordr,
+          designRt:  prog?.designRt ?? 0,
+          implRt:    prog?.implRt ?? 0,
+          testRt:    prog?.testRt ?? 0,
+        };
+      }),
     });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/screens/${screenId}] DB 오류:`, err);

@@ -19,6 +19,7 @@ import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import RichEditor from "@/components/ui/RichEditor";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
+import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 
 // ── 상세 명세 예시 / 템플릿 상수 ────────────────────────────────────────────
 
@@ -107,7 +108,6 @@ const SPEC_TEMPLATE = `## 기능 개요
 type HistoryItem = {
   historyId:    string;
   versionNo:    string;
-  versionType:  "INTERNAL" | "CONFIRMED";
   comment:      string;
   changedAt:    string;
   changerEmail: string;
@@ -118,7 +118,6 @@ type DiffContent = {
   versionNo: string;
   orgnlCn:   string;
   curncyCn:  string;
-  specCn:    string;
 };
 
 type DiffResult = {
@@ -217,8 +216,12 @@ function RequirementDetailPageInner() {
   // 변경 이력 팝업 상태
   const [historyOpen,    setHistoryOpen]    = useState(false);
   const [diffTarget,     setDiffTarget]     = useState<HistoryItem | null>(null);
-  const [confirmTarget,  setConfirmTarget]  = useState<HistoryItem | null>(null);
   const [deleteTarget,   setDeleteTarget]   = useState<HistoryItem | null>(null);
+  // 저장 다이얼로그 상태
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  // 변경이력(designChange) 팝업 — 분석메모/상세명세 각각
+  const [analyChangeHistOpen, setAnalyChangeHistOpen] = useState(false);
+  const [specChangeHistOpen,  setSpecChangeHistOpen]  = useState(false);
 
   // 요구사항 삭제 팝업 상태
   const [reqDeleteOpen, setReqDeleteOpen] = useState(false);
@@ -375,7 +378,45 @@ function RequirementDetailPageInner() {
       toast.error("출처를 선택해 주세요.");
       return;
     }
-    saveMutation.mutate(form);
+    if (isNew) {
+      saveMutation.mutate(form);
+      return;
+    }
+
+    // 어떤 영역이 변경되었는지 감지
+    const contentChanged =
+      form.originalContent !== (detail?.originalContent ?? "") ||
+      form.currentContent  !== (detail?.currentContent  ?? "");
+    const specChanged  = form.detailSpec    !== (detail?.detailSpec    ?? "");
+    const analyChanged = form.analysisMemo  !== (detail?.analysisMemo  ?? "");
+
+    // 이력 대상 변경이 하나라도 있으면 다이얼로그 표시
+    if (contentChanged || specChanged || analyChanged) {
+      setSaveDialogOpen(true);
+    } else {
+      // 기본정보만 변경 → 바로 저장
+      saveMutation.mutate(form);
+    }
+  }
+
+  // 다이얼로그에서 옵션 선택 후 실행
+  function executeSave(opts: {
+    saveHistory?: boolean; versionMode?: string; versionComment?: string;
+    saveSpecHistory?: boolean; saveAnalyHistory?: boolean;
+  }) {
+    saveMutation.mutate({ ...form, ...opts } as SaveBody & typeof opts);
+    setSaveDialogOpen(false);
+  }
+
+  // 변경 감지 (다이얼로그에 전달)
+  function getChangedFlags() {
+    return {
+      contentChanged:
+        form.originalContent !== (detail?.originalContent ?? "") ||
+        form.currentContent  !== (detail?.currentContent  ?? ""),
+      specChanged:  form.detailSpec   !== (detail?.detailSpec   ?? ""),
+      analyChanged: form.analysisMemo !== (detail?.analysisMemo ?? ""),
+    };
   }
 
   // ── GNB 브레드크럼 ─────────────────────────────────────────────────────────
@@ -474,15 +515,6 @@ function RequirementDetailPageInner() {
           </span>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          {/* 변경 이력 팝업 버튼 — 신규 모드에서는 비표시 */}
-          {!isNew && (
-            <button
-              onClick={() => setHistoryOpen(true)}
-              style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
-            >
-              이력
-            </button>
-          )}
           {!isNew && (
             <button
               onClick={() => setReqDeleteOpen(true)}
@@ -603,7 +635,20 @@ function RequirementDetailPageInner() {
           </Section>
 
           {/* ── AR-00044 원문·현행화 ──────────────────────────────────────────── */}
-          <Section label="요구사항 내용">
+          <Section label={
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+              <span>요구사항 내용</span>
+              {!isNew && (
+                <button
+                  type="button"
+                  onClick={() => setHistoryOpen(true)}
+                  style={{ padding: "3px 12px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: "pointer" }}
+                >
+                  🕐 이력
+                </button>
+              )}
+            </div>
+          }>
             {/* 탭 헤더 */}
             <div style={{ display: "flex", gap: 16, borderBottom: "1px solid var(--color-border)", marginBottom: 12 }}>
               {(["original", "current"] as const).map((tab) => (
@@ -718,25 +763,9 @@ function RequirementDetailPageInner() {
         {/* ── 오른쪽 컬럼 ───────────────────────────────────────────────────── */}
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
-          {/* ── AR-00045 분석메모·상세명세 ──────────────────────────────────── */}
+          {/* ── AR-00045 상세명세·분석메모 ──────────────────────────────────── */}
           <Section>
-            {/* 분석 메모 */}
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>분석 메모</span>
-                <MarkdownTabButtons tab={analyzeTab} onTabChange={setAnalyzeTab} />
-              </div>
-              <MarkdownEditor
-                value={form.analysisMemo}
-                tab={analyzeTab}
-                onTabChange={setAnalyzeTab}
-                onChange={(v) => handleChange("analysisMemo", v)}
-                placeholder={`## 분석 내용\n\n- 항목1\n- 항목2`}
-                rows={14}
-              />
-            </div>
-
-            {/* 상세 명세 */}
+            {/* 상세 명세 (위) */}
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>상세 명세</span>
@@ -756,6 +785,15 @@ function RequirementDetailPageInner() {
                   >
                     템플릿 적용
                   </button>
+                  {!isNew && (
+                    <button
+                      type="button"
+                      onClick={() => setSpecChangeHistOpen(true)}
+                      style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: "pointer" }}
+                    >
+                      변경이력
+                    </button>
+                  )}
                 </div>
               </div>
               <MarkdownEditor
@@ -765,6 +803,33 @@ function RequirementDetailPageInner() {
                 onChange={(v) => handleChange("detailSpec", v)}
                 placeholder={`## 기능 상세\n\n- 항목1\n- 항목2`}
                 rows={18}
+              />
+            </div>
+
+            {/* 분석 메모 (아래) */}
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>분석 메모</span>
+                <MarkdownTabButtons tab={analyzeTab} onTabChange={setAnalyzeTab} />
+                <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                  {!isNew && (
+                    <button
+                      type="button"
+                      onClick={() => setAnalyChangeHistOpen(true)}
+                      style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: "pointer" }}
+                    >
+                      변경이력
+                    </button>
+                  )}
+                </div>
+              </div>
+              <MarkdownEditor
+                value={form.analysisMemo}
+                tab={analyzeTab}
+                onTabChange={setAnalyzeTab}
+                onChange={(v) => handleChange("analysisMemo", v)}
+                placeholder={`## 분석 내용\n\n- 항목1\n- 항목2`}
+                rows={14}
               />
             </div>
           </Section>
@@ -797,17 +862,12 @@ function RequirementDetailPageInner() {
                 <p style={{ color: "#aaa", fontSize: 13 }}>변경 이력이 없습니다.</p>
               ) : (
                 <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "80px 70px 160px 1fr 1fr 190px", gap: 8, padding: "8px 14px", background: "var(--color-bg-muted)", fontSize: 11, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid var(--color-border)" }}>
-                    <div>버전</div><div>구분</div><div>변경일시</div><div>변경자</div><div>코멘트</div><div>액션</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "80px 160px 1fr 1fr 120px", gap: 8, padding: "8px 14px", background: "var(--color-bg-muted)", fontSize: 11, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid var(--color-border)" }}>
+                    <div>버전</div><div>변경일시</div><div>변경자</div><div>사유</div><div>액션</div>
                   </div>
                   {historyItems.map((item, idx) => (
-                    <div key={item.historyId} style={{ display: "grid", gridTemplateColumns: "80px 70px 160px 1fr 1fr 190px", gap: 8, padding: "10px 14px", alignItems: "center", background: "var(--color-bg-card)", borderTop: idx === 0 ? "none" : "1px solid var(--color-border)" }}>
+                    <div key={item.historyId} style={{ display: "grid", gridTemplateColumns: "80px 160px 1fr 1fr 120px", gap: 8, padding: "10px 14px", alignItems: "center", background: "var(--color-bg-card)", borderTop: idx === 0 ? "none" : "1px solid var(--color-border)" }}>
                       <div style={{ fontWeight: 700, fontSize: 13 }}>{item.versionNo}</div>
-                      <div>
-                        <span style={{ padding: "2px 7px", borderRadius: 4, fontSize: 11, fontWeight: 600, background: item.versionType === "CONFIRMED" ? "#e3f2fd" : "#f3e5f5", color: item.versionType === "CONFIRMED" ? "#1565c0" : "#6a1b9a" }}>
-                          {item.versionType === "CONFIRMED" ? "확정" : "내부"}
-                        </span>
-                      </div>
                       <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
                         {new Date(item.changedAt).toLocaleString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
                       </div>
@@ -815,12 +875,7 @@ function RequirementDetailPageInner() {
                       <div style={{ fontSize: 12, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.comment || "-"}</div>
                       <div style={{ display: "flex", gap: 4 }}>
                         <button onClick={() => setDiffTarget(item)} style={{ ...histGhostBtn }}>Diff</button>
-                        {item.versionType === "INTERNAL" && (
-                          <>
-                            <button onClick={() => setConfirmTarget(item)} style={{ ...histGhostBtn, color: "#1565c0", borderColor: "#1565c0" }}>확정</button>
-                            <button onClick={() => setDeleteTarget(item)} style={{ ...histGhostBtn, color: "#e53935", borderColor: "#e53935" }}>삭제</button>
-                          </>
-                        )}
+                        <button onClick={() => setDeleteTarget(item)} style={{ ...histGhostBtn, color: "#e53935", borderColor: "#e53935" }}>삭제</button>
                       </div>
                     </div>
                   ))}
@@ -842,20 +897,40 @@ function RequirementDetailPageInner() {
         />
       )}
 
-      {/* 확정 팝업 */}
-      {confirmTarget && (
-        <ReqConfirmPopup
-          projectId={projectId}
-          reqId={reqId}
-          item={confirmTarget}
-          items={historyItems}
-          onClose={() => setConfirmTarget(null)}
-          onSuccess={() => {
-            setConfirmTarget(null);
-            refetchHistory();
-          }}
+      {/* 저장 옵션 다이얼로그 */}
+      {saveDialogOpen && (
+        <SaveOptionDialog
+          lastVersion={historyItems[0]?.versionNo ?? null}
+          changedFlags={getChangedFlags()}
+          onClose={() => setSaveDialogOpen(false)}
+          onSave={executeSave}
+          isPending={saveMutation.isPending}
         />
       )}
+
+      {/* 상세 명세 변경이력 팝업 — 화면 설명 이력과 동일 UI */}
+      <SettingsHistoryDialog
+        open={specChangeHistOpen}
+        onClose={() => setSpecChangeHistOpen(false)}
+        projectId={projectId}
+        itemName="상세 명세"
+        currentValue={form.detailSpec}
+        title="상세 명세 변경이력"
+        refTblNm="tb_rq_requirement"
+        refId={reqId}
+      />
+
+      {/* 분석 메모 변경이력 팝업 — 화면 설명 이력과 동일 UI */}
+      <SettingsHistoryDialog
+        open={analyChangeHistOpen}
+        onClose={() => setAnalyChangeHistOpen(false)}
+        projectId={projectId}
+        itemName="분석 메모"
+        currentValue={form.analysisMemo}
+        title="분석 메모 변경이력"
+        refTblNm="tb_rq_requirement"
+        refId={reqId}
+      />
 
       {/* 삭제 확인 팝업 */}
       {deleteTarget && (
@@ -942,7 +1017,7 @@ function Section({
   children,
 }: {
   title?: string;
-  label?: string;
+  label?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -1154,7 +1229,6 @@ function ReqDiffViewerPopup({
             {([
               { label: "원문 (orgnl_cn)",     l: data.v1Content.orgnlCn,  r: data.v2Content.orgnlCn  },
               { label: "현행화 (curncy_cn)",  l: data.v1Content.curncyCn, r: data.v2Content.curncyCn },
-              { label: "상세 명세 (spec_cn)", l: data.v1Content.specCn,   r: data.v2Content.specCn   },
             ] as { label: string; l: string; r: string }[]).map(({ label, l, r }) => (
               <ReqDiffSection key={label} label={label} leftText={l} rightText={r}
                 leftVersion={data.v1Content.versionNo} rightVersion={data.v2Content.versionNo} />
@@ -1198,66 +1272,133 @@ function ReqDiffSection({ label, leftText, rightText, leftVersion, rightVersion 
   );
 }
 
-// ── 확정 팝업 ─────────────────────────────────────────────────────────────────
+// ── 저장 옵션 다이얼로그 (통합) ────────────────────────────────────────────────
 
-function ReqConfirmPopup({ projectId, reqId, item, items, onClose, onSuccess }: {
-  projectId: string; reqId: string; item: HistoryItem; items: HistoryItem[];
-  onClose: () => void; onSuccess: () => void;
+function SaveOptionDialog({ lastVersion, changedFlags, onClose, onSave, isPending }: {
+  lastVersion: string | null;
+  changedFlags: { contentChanged: boolean; specChanged: boolean; analyChanged: boolean };
+  onClose: () => void;
+  onSave: (opts: {
+    saveHistory?: boolean; versionMode?: string; versionComment?: string;
+    saveSpecHistory?: boolean; saveAnalyHistory?: boolean;
+  }) => void;
+  isPending: boolean;
 }) {
-  const [comment, setComment] = useState("");
-  const lastConfirmedVersion  = items
-    .filter((i) => i.versionType === "CONFIRMED")
-    .map((i) => parseInt(i.versionNo.replace("V", ""), 10))
-    .filter((n) => !isNaN(n))
-    .reduce((max, n) => Math.max(max, n), 1);
-  const nextVersion = `V${lastConfirmedVersion + 1}`;
+  // 요구사항 내용 이력 모드
+  type VersionMode = "none" | "minor" | "major";
+  const [versionMode, setVersionMode] = useState<VersionMode>("none");
+  const [comment, setComment]         = useState("");
 
-  const confirmMutation = useMutation({
-    mutationFn: () =>
-      authFetch(`/api/projects/${projectId}/requirements/${reqId}/history/${item.historyId}/confirm`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ comment }),
-      }),
-    onSuccess: () => {
-      toast.success(`${nextVersion}으로 확정되었습니다.`);
-      onSuccess();
-    },
-    onError: (err: Error) => toast.error(err.message),
+  // 상세명세·분석메모 이력 저장 여부
+  const [saveSpec,  setSaveSpec]  = useState(false);
+  const [saveAnaly, setSaveAnaly] = useState(false);
+
+  // 버전 미리보기
+  const parts = (lastVersion ?? "V1.0").replace("V", "").split(".");
+  const major = parseInt(parts[0] ?? "1", 10);
+  const minor = parseInt(parts[1] ?? "0", 10);
+
+  function handleSave() {
+    onSave({
+      // 요구사항 내용 이력
+      ...(changedFlags.contentChanged && versionMode !== "none"
+        ? { saveHistory: true, versionMode, versionComment: comment }
+        : {}),
+      // 상세명세 이력
+      saveSpecHistory:  changedFlags.specChanged  && saveSpec,
+      // 분석메모 이력
+      saveAnalyHistory: changedFlags.analyChanged && saveAnaly,
+    });
+  }
+
+  const checkboxStyle: React.CSSProperties = {
+    display: "flex", alignItems: "center", gap: 8, padding: "8px 12px",
+    borderRadius: 6, fontSize: 13, cursor: "pointer",
+    border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
+  };
+
+  const radioStyle = (active: boolean): React.CSSProperties => ({
+    display: "flex", alignItems: "center", gap: 8, padding: "6px 12px",
+    borderRadius: 6, cursor: "pointer", fontSize: 13,
+    border: active ? "1px solid var(--color-primary, #1976d2)" : "1px solid var(--color-border)",
+    background: active ? "var(--color-brand-subtle, rgba(25,118,210,0.06))" : "var(--color-bg-card)",
   });
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()}
-        style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "28px 32px", minWidth: 360, maxWidth: 480, width: "100%", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
-        <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700 }}>버전 확정</h3>
-        <p style={{ margin: "0 0 8px", fontSize: 14, color: "var(--color-text-secondary)" }}>
-          <strong style={{ color: "var(--color-text-primary)" }}>{item.versionNo}</strong>
-          {" → "}
-          <strong style={{ color: "#1565c0" }}>{nextVersion}</strong>
-          {" 으로 확정합니다."}
+        style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "24px 28px", minWidth: 400, maxWidth: 500, width: "100%", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+        <h3 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 700 }}>변경 이력 저장</h3>
+        <p style={{ margin: "0 0 18px", fontSize: 13, color: "var(--color-text-secondary)" }}>
+          변경된 항목의 이력 저장 여부를 선택하세요.
         </p>
-        <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6 }}>
-          확정 코멘트 <span style={{ fontWeight: 400, color: "#888" }}>(선택)</span>
-        </label>
-        <textarea
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          placeholder="확정 사유를 입력해 주세요..."
-          rows={4}
-          style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-primary)", fontSize: 13, resize: "vertical", boxSizing: "border-box" }}
-        />
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+          {/* ── 요구사항 내용 (원문/현행화) ── */}
+          {changedFlags.contentChanged && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#1976d2", display: "inline-block" }} />
+                요구사항 내용 변경됨
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 12 }}>
+                <label style={radioStyle(versionMode === "none")} onClick={() => setVersionMode("none")}>
+                  <input type="radio" name="vMode" checked={versionMode === "none"} onChange={() => setVersionMode("none")} />
+                  이력 없이 저장
+                </label>
+                <label style={radioStyle(versionMode === "minor")} onClick={() => setVersionMode("minor")}>
+                  <input type="radio" name="vMode" checked={versionMode === "minor"} onChange={() => setVersionMode("minor")} />
+                  마이너 버전 <span style={{ color: "#1976d2", fontSize: 12, fontWeight: 600 }}>V{major}.{minor + 1}</span>
+                </label>
+                <label style={radioStyle(versionMode === "major")} onClick={() => setVersionMode("major")}>
+                  <input type="radio" name="vMode" checked={versionMode === "major"} onChange={() => setVersionMode("major")} />
+                  메이저 버전 <span style={{ color: "#e65100", fontSize: 12, fontWeight: 600 }}>V{major + 1}.0</span>
+                </label>
+                {versionMode !== "none" && (
+                  <textarea
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    placeholder="사유 (선택)"
+                    rows={2}
+                    style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-primary)", fontSize: 12, resize: "vertical", boxSizing: "border-box", marginTop: 4 }}
+                  />
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── 상세 명세 ── */}
+          {changedFlags.specChanged && (
+            <label style={checkboxStyle}>
+              <input type="checkbox" checked={saveSpec} onChange={(e) => setSaveSpec(e.target.checked)} />
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2e7d32", display: "inline-block" }} />
+              <span style={{ flex: 1 }}>상세 명세 변경이력 저장</span>
+            </label>
+          )}
+
+          {/* ── 분석 메모 ── */}
+          {changedFlags.analyChanged && (
+            <label style={checkboxStyle}>
+              <input type="checkbox" checked={saveAnaly} onChange={(e) => setSaveAnaly(e.target.checked)} />
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#6a1b9a", display: "inline-block" }} />
+              <span style={{ flex: 1 }}>분석 메모 변경이력 저장</span>
+            </label>
+          )}
+        </div>
+
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>
-          <button onClick={onClose} disabled={confirmMutation.isPending} style={{ ...secondaryBtnStyle, fontSize: 13 }}>취소</button>
-          <button onClick={() => confirmMutation.mutate()} disabled={confirmMutation.isPending} style={{ ...secondaryBtnStyle, fontSize: 13, background: "var(--color-primary, #1976d2)", color: "#fff", border: "none" }}>
-            {confirmMutation.isPending ? "처리 중..." : "확정"}
+          <button onClick={onClose} disabled={isPending} style={{ ...secondaryBtnStyle, fontSize: 13 }}>취소</button>
+          <button onClick={handleSave} disabled={isPending} style={{ ...secondaryBtnStyle, fontSize: 13, background: "var(--color-primary, #1976d2)", color: "#fff", border: "none" }}>
+            {isPending ? "저장 중..." : "저장"}
           </button>
         </div>
       </div>
     </div>
   );
 }
+
 
 // ── 스타일 ───────────────────────────────────────────────────────────────────
 

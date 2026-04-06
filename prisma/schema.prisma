@@ -524,10 +524,8 @@ model TbRqRequirementHistory {
   req_hist_id    String   @id @default(uuid())
   req_id         String
   vrsn_no        String
-  vrsn_ty_code   String   @default("INTERNAL")
   orgnl_cn       String?
   curncy_cn      String?
-  spec_cn        String?
   vrsn_coment_cn String?
   chg_mber_id    String?
   creat_dt       DateTime @default(now())
@@ -602,4 +600,54 @@ model tb_ds_review_request {
   @@index([ref_tbl_nm, ref_id], map: "idx_ds_review_ref")
   @@index([req_mber_id, review_sttus_code], map: "idx_ds_review_req_mber")
   @@index([revwr_mber_id, review_sttus_code], map: "idx_ds_review_revwr")
+}
+
+model TbCmReferenceInfo {
+  ref_info_id      String    @id @default(uuid())
+  ref_info_code    String    @db.VarChar(6)
+  ref_bgng_de      String    @db.VarChar(8)
+  ref_end_de       String?   @db.VarChar(8)
+  ref_info_nm      String    @db.VarChar(200)
+  bus_div_code     String    @db.VarChar(6)
+  ref_data_ty_code String    @db.VarChar(6)
+  main_ref_val     String?   @db.VarChar(30)
+  sub_ref_val      String?   @db.VarChar(30)
+  ref_info_dc      String?
+  use_yn           String    @default("Y") @db.Char(1)
+  del_yn           String    @default("N") @db.Char(1)
+  creat_mber_id    String?
+  creat_dt         DateTime  @default(now())
+  mdfcn_mber_id    String?
+  mdfcn_dt         DateTime?
+
+  @@unique([ref_info_code, ref_bgng_de])
+  @@map("tb_cm_reference_info")
+}
+
+// ── 공통코드 그룹 ──────────────────────────────────────────────────────────────
+model TbCmCodeGroup {
+  grp_code    String   @id @db.VarChar(100)
+  grp_code_nm String   @unique @db.VarChar(100)
+  grp_code_dc String?  @db.VarChar(4000)
+  use_yn      String   @default("Y") @db.Char(1)
+  creat_dt    DateTime @default(now())
+  mdfcn_dt    DateTime @default(now())
+  codes       TbCmCode[]
+  @@map("tb_cm_code_group")
+}
+
+// ── 공통코드 ────────────────────────────────────────────────────────────────────
+model TbCmCode {
+  cm_code_id Int      @id @default(autoincrement())
+  grp_code   String   @db.VarChar(100)
+  code_nm    String   @db.VarChar(100)
+  code_dc    String?  @db.VarChar(4000)
+  use_yn     String   @default("Y") @db.Char(1)
+  sort_ordr  Int      @default(0)
+  creat_dt   DateTime @default(now())
+  mdfcn_dt   DateTime @default(now())
+  group      TbCmCodeGroup @relation(fields: [grp_code], references: [grp_code], onDelete: Cascade)
+  @@unique([grp_code, code_nm])
+  @@index([grp_code])
+  @@map("tb_cm_code")
 }

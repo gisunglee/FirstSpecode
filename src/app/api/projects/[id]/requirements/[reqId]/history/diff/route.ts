@@ -2,7 +2,7 @@
  * GET /api/projects/[id]/requirements/[reqId]/history/diff — Diff 조회 (FID-00120)
  *
  * 쿼리 파라미터: ?v1={historyId1}&v2={historyId2}
- * - 두 버전의 orgnl_cn, curncy_cn, spec_cn을 반환
+ * - 두 버전의 orgnl_cn, curncy_cn을 반환
  * - 실제 Diff 하이라이트는 클라이언트 측에서 처리
  */
 
@@ -38,15 +38,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    // 두 이력 레코드 병렬 조회
     const [h1, h2] = await Promise.all([
       prisma.tbRqRequirementHistory.findUnique({
         where:  { req_hist_id: v1Id },
-        select: { req_hist_id: true, req_id: true, vrsn_no: true, orgnl_cn: true, curncy_cn: true, spec_cn: true },
+        select: { req_hist_id: true, req_id: true, vrsn_no: true, orgnl_cn: true, curncy_cn: true },
       }),
       prisma.tbRqRequirementHistory.findUnique({
         where:  { req_hist_id: v2Id },
-        select: { req_hist_id: true, req_id: true, vrsn_no: true, orgnl_cn: true, curncy_cn: true, spec_cn: true },
+        select: { req_hist_id: true, req_id: true, vrsn_no: true, orgnl_cn: true, curncy_cn: true },
       }),
     ]);
 
@@ -59,14 +58,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         versionNo: h1.vrsn_no,
         orgnlCn:   h1.orgnl_cn   ?? "",
         curncyCn:  h1.curncy_cn  ?? "",
-        specCn:    h1.spec_cn    ?? "",
       },
       v2Content: {
         historyId: h2.req_hist_id,
         versionNo: h2.vrsn_no,
         orgnlCn:   h2.orgnl_cn   ?? "",
         curncyCn:  h2.curncy_cn  ?? "",
-        specCn:    h2.spec_cn    ?? "",
       },
     });
   } catch (err) {

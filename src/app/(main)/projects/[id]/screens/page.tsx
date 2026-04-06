@@ -37,6 +37,9 @@ type ScreenRow = {
   requirementName: string;
   areaCount: number;
   sortOrder: number;
+  avgDesignRt: number;
+  avgImplRt: number;
+  avgTestRt: number;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -184,6 +187,7 @@ function ScreensPageInner() {
             <div>대분류</div>
             <div>중분류</div>
             <div>소분류</div>
+            <div style={{ textAlign: "center" }}>설/구/테</div>
           </div>
 
           {items.map((screen, idx) => {
@@ -276,6 +280,23 @@ function ScreensPageInner() {
                 {/* 소분류 */}
                 <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {screen.categoryS || "-"}
+                </div>
+
+                {/* 설/구/테 평균 진행률 */}
+                <div style={{ display: "flex", gap: 4, justifyContent: "center", fontSize: 11 }}>
+                  {[
+                    { val: screen.avgDesignRt, color: "#1565c0" },
+                    { val: screen.avgImplRt,   color: "#2e7d32" },
+                    { val: screen.avgTestRt,   color: "#6a1b9a" },
+                  ].map(({ val, color }, i) => (
+                    <span key={i} style={{
+                      color, fontWeight: 600,
+                      background: val === 100 ? `${color}14` : "transparent",
+                      borderRadius: 3, padding: "1px 3px",
+                    }}>
+                      {val}%
+                    </span>
+                  ))}
                 </div>
 
               </div>
@@ -418,7 +439,7 @@ function typeBadgeStyle(type: string): React.CSSProperties {
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
 // 요구사항·단위업무·화면명·분류는 fr 비율, 소형 컬럼은 고정
-const GRID_TEMPLATE = "32px 1.5fr 1.5fr 3fr 70px 48px 1fr 1fr 1fr";
+const GRID_TEMPLATE = "32px 1.5fr 1.5fr 3fr 70px 48px 1fr 1fr 1fr 7%";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid",
