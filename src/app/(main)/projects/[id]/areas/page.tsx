@@ -260,9 +260,6 @@ function AreasPageInner() {
                       onClick={() => router.push(`/projects/${projectId}/screens/${area.screenId}`)}
                       style={linkBtnStyle}
                     >
-                      <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
-                        {area.screenDisplayId}
-                      </span>
                       {area.screenName}
                     </button>
                   ) : (

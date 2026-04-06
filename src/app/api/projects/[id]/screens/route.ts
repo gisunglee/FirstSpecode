@@ -104,7 +104,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         unitWorkName:    s.unitWork?.unit_work_nm ?? "미분류",
         requirementId:   s.unitWork?.requirement?.req_id ?? null,
         requirementName: s.unitWork?.requirement
-          ? `[${s.unitWork.requirement.req_display_id}] ${s.unitWork.requirement.req_nm}`
+          ? s.unitWork.requirement.req_nm
           : "미분류",
         areaCount:       s._count.areas,
         sortOrder:       s.sort_ordr,

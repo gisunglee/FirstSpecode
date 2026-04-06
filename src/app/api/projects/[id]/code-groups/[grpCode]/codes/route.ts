@@ -31,7 +31,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     return apiSuccess({
       items: codes.map((c) => ({
-        codeId: c.cm_code_id,
+        cmCode: c.cm_code,
         grpCode: c.grp_code,
         codeNm: c.code_nm,
         codeDc: c.code_dc ?? "",
@@ -58,20 +58,31 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
   }
 
-  let body: { codeNm?: string; codeDc?: string; sortOrdr?: number };
+  let body: { cmCode?: string; codeNm?: string; codeDc?: string; sortOrdr?: number };
   try {
     body = await request.json();
   } catch {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
+  const cmCode = body.cmCode?.trim();
   const codeNm = body.codeNm?.trim();
+  if (!cmCode) return apiError("VALIDATION_ERROR", "코드를 입력해 주세요.", 400);
   if (!codeNm) return apiError("VALIDATION_ERROR", "코드명을 입력해 주세요.", 400);
+
+  // 코드 형식 검증: 영문대소문자, 숫자, _, :, - 만 허용
+  if (!/^[A-Za-z0-9_:\-]+$/.test(cmCode)) {
+    return apiError("VALIDATION_ERROR", "코드는 영문, 숫자, _, :, - 만 입력 가능합니다.", 400);
+  }
 
   try {
     // 그룹 존재 확인
     const group = await prisma.tbCmCodeGroup.findUnique({ where: { grp_code: grpCode } });
     if (!group) return apiError("NOT_FOUND", "코드 그룹을 찾을 수 없습니다.", 404);
+
+    // 코드 PK 중복 체크
+    const dupPk = await prisma.tbCmCode.findUnique({ where: { cm_code: cmCode } });
+    if (dupPk) return apiError("DUPLICATE", "이미 존재하는 코드입니다.", 409);
 
     // 같은 그룹 내 코드명 중복 체크
     const dup = await prisma.tbCmCode.findUnique({
@@ -92,6 +103,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const created = await prisma.tbCmCode.create({
       data: {
+        cm_code: cmCode,
         grp_code: grpCode,
         code_nm: codeNm,
         code_dc: body.codeDc?.trim() || null,
@@ -101,7 +113,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     });
 
     return apiSuccess(
-      { codeId: created.cm_code_id, codeNm: created.code_nm },
+      { cmCode: created.cm_code, codeNm: created.code_nm },
       201
     );
   } catch (err) {

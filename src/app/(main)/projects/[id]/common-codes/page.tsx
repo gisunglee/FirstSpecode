@@ -26,13 +26,16 @@ type CodeGroup = {
 };
 
 type Code = {
-  codeId: number;
+  cmCode: string;
   grpCode: string;
   codeNm: string;
   codeDc: string;
   useYn: string;
   sortOrdr: number;
 };
+
+// 코드 PK 유효성 검증: 영문대소문자, 숫자, _, :, - 만 허용
+const CODE_PATTERN = /^[A-Za-z0-9_:\-]+$/;
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
 
@@ -71,16 +74,20 @@ function CommonCodesPageInner() {
 
   // 코드 추가 모드
   const [addingCode, setAddingCode] = useState(false);
+  const [newCmCode, setNewCmCode] = useState("");
   const [newCodeNm, setNewCodeNm] = useState("");
   const [newCodeDc, setNewCodeDc] = useState("");
   const codeNmInputRef = useRef<HTMLInputElement>(null);
 
   // 코드 인라인 편집
-  const [editingCode, setEditingCode] = useState<{ codeId: number; field: string } | null>(null);
+  const [editingCode, setEditingCode] = useState<{ cmCode: string; field: string } | null>(null);
   const [editCodeValue, setEditCodeValue] = useState("");
 
   // 삭제 확인
   const [deleteTarget, setDeleteTarget] = useState<{ type: "group" | "code"; id: string | number; name: string } | null>(null);
+
+  // 그룹 코드 변경 확인 (PK 변경이라 경고 필요)
+  const [renameConfirm, setRenameConfirm] = useState<{ grpCode: string; newValue: string } | null>(null);
 
   // ── 그룹 목록 조회 ────────────────────────────────────────────────────────
   const { data: groupsData, isLoading: groupsLoading } = useQuery({
@@ -160,8 +167,36 @@ function CommonCodesPageInner() {
 
   function commitEditGroup() {
     if (!editingGroup) return;
+
+    // 그룹 코드(PK) 변경인 경우 — 확인 다이얼로그 띄움
+    if (editingGroup.field === "grpCode" && editGroupValue.trim() !== editingGroup.grpCode) {
+      setRenameConfirm({ grpCode: editingGroup.grpCode, newValue: editGroupValue.trim() });
+      return;
+    }
+
     const body = { [editingGroup.field]: editGroupValue };
     updateGroupMut.mutate({ grpCode: editingGroup.grpCode, body });
+  }
+
+  // 그룹 코드 변경 확정
+  function confirmRenameGroup() {
+    if (!renameConfirm) return;
+    updateGroupMut.mutate(
+      { grpCode: renameConfirm.grpCode, body: { newGrpCode: renameConfirm.newValue } },
+      {
+        onSuccess: () => {
+          // 선택된 그룹 코드도 새 코드로 갱신
+          if (selectedGrpCode === renameConfirm.grpCode) {
+            setSelectedGrpCode(renameConfirm.newValue);
+          }
+          queryClient.invalidateQueries({ queryKey: ["code-groups", projectId] });
+          queryClient.invalidateQueries({ queryKey: ["codes", projectId] });
+          setRenameConfirm(null);
+          setEditingGroup(null);
+          toast.success("그룹 코드가 변경되었습니다.");
+        },
+      }
+    );
   }
 
   // 그룹 설명 저장 (blur 시)
@@ -192,7 +227,7 @@ function CommonCodesPageInner() {
 
   // ── 코드 추가 ─────────────────────────────────────────────────────────────
   const addCodeMut = useMutation({
-    mutationFn: (body: { codeNm: string; codeDc?: string }) =>
+    mutationFn: (body: { cmCode: string; codeNm: string; codeDc?: string }) =>
       authFetch(`/api/projects/${projectId}/code-groups/${selectedGrpCode}/codes`, {
         method: "POST",
         body: JSON.stringify(body),
@@ -202,6 +237,7 @@ function CommonCodesPageInner() {
       queryClient.invalidateQueries({ queryKey: ["codes", projectId, selectedGrpCode] });
       queryClient.invalidateQueries({ queryKey: ["code-groups", projectId] });
       setAddingCode(false);
+      setNewCmCode("");
       setNewCodeNm("");
       setNewCodeDc("");
     },
@@ -209,14 +245,16 @@ function CommonCodesPageInner() {
   });
 
   function commitAddCode() {
+    if (!newCmCode.trim()) { toast.error("코드를 입력해 주세요."); return; }
+    if (!CODE_PATTERN.test(newCmCode.trim())) { toast.error("코드는 영문, 숫자, _, :, - 만 입력 가능합니다."); return; }
     if (!newCodeNm.trim()) { toast.error("코드명을 입력해 주세요."); return; }
-    addCodeMut.mutate({ codeNm: newCodeNm.trim(), codeDc: newCodeDc.trim() || undefined });
+    addCodeMut.mutate({ cmCode: newCmCode.trim(), codeNm: newCodeNm.trim(), codeDc: newCodeDc.trim() || undefined });
   }
 
   // ── 코드 수정 ─────────────────────────────────────────────────────────────
   const updateCodeMut = useMutation({
-    mutationFn: ({ codeId, body }: { codeId: number; body: Record<string, unknown> }) =>
-      authFetch(`/api/projects/${projectId}/code-groups/${selectedGrpCode}/codes/${codeId}`, {
+    mutationFn: ({ cmCode, body }: { cmCode: string; body: Record<string, unknown> }) =>
+      authFetch(`/api/projects/${projectId}/code-groups/${selectedGrpCode}/codes/${cmCode}`, {
         method: "PUT",
         body: JSON.stringify(body),
       }),
@@ -227,25 +265,25 @@ function CommonCodesPageInner() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  function startEditCode(codeId: number, field: string, currentValue: string) {
-    setEditingCode({ codeId, field });
+  function startEditCode(cmCode: string, field: string, currentValue: string) {
+    setEditingCode({ cmCode, field });
     setEditCodeValue(currentValue);
   }
 
   function commitEditCode() {
     if (!editingCode) return;
     const val = editingCode.field === "sortOrdr" ? parseInt(editCodeValue) || 0 : editCodeValue;
-    updateCodeMut.mutate({ codeId: editingCode.codeId, body: { [editingCode.field]: val } });
+    updateCodeMut.mutate({ cmCode: editingCode.cmCode, body: { [editingCode.field]: val } });
   }
 
-  function toggleCodeUseYn(codeId: number, current: string) {
-    updateCodeMut.mutate({ codeId, body: { useYn: current === "Y" ? "N" : "Y" } });
+  function toggleCodeUseYn(cmCode: string, current: string) {
+    updateCodeMut.mutate({ cmCode, body: { useYn: current === "Y" ? "N" : "Y" } });
   }
 
   // ── 코드 삭제 ─────────────────────────────────────────────────────────────
   const deleteCodeMut = useMutation({
-    mutationFn: (codeId: number) =>
-      authFetch(`/api/projects/${projectId}/code-groups/${selectedGrpCode}/codes/${codeId}`, {
+    mutationFn: (cmCode: string) =>
+      authFetch(`/api/projects/${projectId}/code-groups/${selectedGrpCode}/codes/${cmCode}`, {
         method: "DELETE",
       }),
     onSuccess: () => {
@@ -351,10 +389,29 @@ function CommonCodesPageInner() {
                   }}
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    {/* 그룹 코드 (인라인 편집 가능) */}
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {g.grpCode}
-                    </div>
+                    {/* 그룹 코드 (더블클릭 인라인 편집) */}
+                    {editingGroup?.grpCode === g.grpCode && editingGroup.field === "grpCode" ? (
+                      <input
+                        autoFocus
+                        value={editGroupValue}
+                        onChange={(e) => setEditGroupValue(e.target.value)}
+                        onBlur={commitEditGroup}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") commitEditGroup();
+                          if (e.key === "Escape") { setEditingGroup(null); setEditGroupValue(""); }
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ ...inlineInputStyle, fontSize: 13, fontWeight: 600 }}
+                      />
+                    ) : (
+                      <div
+                        onDoubleClick={(e) => { e.stopPropagation(); startEditGroup(g.grpCode, "grpCode", g.grpCode); }}
+                        style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "text" }}
+                        title="더블클릭하여 그룹 코드 편집"
+                      >
+                        {g.grpCode}
+                      </div>
+                    )}
                     {/* 그룹 코드명 (인라인 편집) */}
                     {editingGroup?.grpCode === g.grpCode && editingGroup.field === "grpCodeNm" ? (
                       <input
@@ -444,7 +501,7 @@ function CommonCodesPageInner() {
                   </span>
                 </div>
                 <button
-                  onClick={() => { setAddingCode(true); setNewCodeNm(""); setNewCodeDc(""); }}
+                  onClick={() => { setAddingCode(true); setNewCmCode(""); setNewCodeNm(""); setNewCodeDc(""); }}
                   style={addBtnStyle}
                 >
                   + 코드 추가
@@ -453,6 +510,7 @@ function CommonCodesPageInner() {
 
               {/* 테이블 컬럼 헤더 */}
               <div style={codeGridHeaderStyle}>
+                <div>코드</div>
                 <div>코드명</div>
                 <div>설명</div>
                 <div style={{ textAlign: "center" }}>사용</div>
@@ -467,6 +525,16 @@ function CommonCodesPageInner() {
                   <div style={{ ...codeGridRowStyle, background: "#fffde7", borderBottom: "1px solid var(--color-border)" }}>
                     <input
                       ref={codeNmInputRef}
+                      value={newCmCode}
+                      onChange={(e) => setNewCmCode(e.target.value)}
+                      placeholder="코드 (영문,숫자,_,:,-)"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitAddCode();
+                        if (e.key === "Escape") setAddingCode(false);
+                      }}
+                      style={{ ...inlineInputStyle, fontFamily: "monospace" }}
+                    />
+                    <input
                       value={newCodeNm}
                       onChange={(e) => setNewCodeNm(e.target.value)}
                       placeholder="코드명"
@@ -502,9 +570,15 @@ function CommonCodesPageInner() {
                   <div style={{ padding: 20, color: "#aaa", fontSize: 13 }}>등록된 코드가 없습니다.</div>
                 ) : (
                   codes.map((c) => (
-                    <div key={c.codeId} style={{ ...codeGridRowStyle, borderBottom: "1px solid var(--color-border)" }}>
+                    <div key={c.cmCode} style={{ ...codeGridRowStyle, borderBottom: "1px solid var(--color-border)" }}>
+                      {/* 코드 (PK) */}
+                      <div style={{ fontSize: 12, fontFamily: "monospace", color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={c.cmCode}>
+                        {c.cmCode}
+                      </div>
+
+
                       {/* 코드명 */}
-                      {editingCode?.codeId === c.codeId && editingCode.field === "codeNm" ? (
+                      {editingCode?.cmCode === c.cmCode && editingCode.field === "codeNm" ? (
                         <input
                           autoFocus
                           value={editCodeValue}
@@ -518,7 +592,7 @@ function CommonCodesPageInner() {
                         />
                       ) : (
                         <div
-                          onClick={() => startEditCode(c.codeId, "codeNm", c.codeNm)}
+                          onClick={() => startEditCode(c.cmCode, "codeNm", c.codeNm)}
                           style={{ cursor: "pointer", fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                           title="클릭하여 편집"
                         >
@@ -527,7 +601,7 @@ function CommonCodesPageInner() {
                       )}
 
                       {/* 설명 */}
-                      {editingCode?.codeId === c.codeId && editingCode.field === "codeDc" ? (
+                      {editingCode?.cmCode === c.cmCode && editingCode.field === "codeDc" ? (
                         <input
                           autoFocus
                           value={editCodeValue}
@@ -541,7 +615,7 @@ function CommonCodesPageInner() {
                         />
                       ) : (
                         <div
-                          onClick={() => startEditCode(c.codeId, "codeDc", c.codeDc)}
+                          onClick={() => startEditCode(c.cmCode, "codeDc", c.codeDc)}
                           style={{ cursor: "pointer", fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                           title="클릭하여 편집"
                         >
@@ -552,7 +626,7 @@ function CommonCodesPageInner() {
                       {/* 사용여부 */}
                       <div style={{ textAlign: "center" }}>
                         <button
-                          onClick={() => toggleCodeUseYn(c.codeId, c.useYn)}
+                          onClick={() => toggleCodeUseYn(c.cmCode, c.useYn)}
                           style={{ ...useYnBtnStyle, color: c.useYn === "Y" ? "#2e7d32" : "#bbb" }}
                         >
                           {c.useYn === "Y" ? "Y" : "N"}
@@ -560,7 +634,7 @@ function CommonCodesPageInner() {
                       </div>
 
                       {/* 순서 */}
-                      {editingCode?.codeId === c.codeId && editingCode.field === "sortOrdr" ? (
+                      {editingCode?.cmCode === c.cmCode && editingCode.field === "sortOrdr" ? (
                         <input
                           autoFocus
                           type="number"
@@ -575,7 +649,7 @@ function CommonCodesPageInner() {
                         />
                       ) : (
                         <div
-                          onClick={() => startEditCode(c.codeId, "sortOrdr", String(c.sortOrdr))}
+                          onClick={() => startEditCode(c.cmCode, "sortOrdr", String(c.sortOrdr))}
                           style={{ textAlign: "center", cursor: "pointer", fontSize: 13, color: "#888" }}
                           title="클릭하여 편집"
                         >
@@ -586,7 +660,7 @@ function CommonCodesPageInner() {
                       {/* 삭제 */}
                       <div style={{ textAlign: "center" }}>
                         <button
-                          onClick={() => setDeleteTarget({ type: "code", id: c.codeId, name: c.codeNm })}
+                          onClick={() => setDeleteTarget({ type: "code", id: c.cmCode, name: c.codeNm })}
                           style={deleteBtnStyle}
                           title="코드 삭제"
                         >
@@ -626,11 +700,41 @@ function CommonCodesPageInner() {
               <button
                 onClick={() => {
                   if (deleteTarget.type === "group") deleteGroupMut.mutate(deleteTarget.id as string);
-                  else deleteCodeMut.mutate(deleteTarget.id as number);
+                  else deleteCodeMut.mutate(deleteTarget.id as string);
                 }}
                 style={{ ...miniSaveBtnStyle, background: "#e53935" }}
               >
                 삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 그룹 코드 변경 경고 다이얼로그 ── */}
+      {renameConfirm && (
+        <div
+          onClick={() => { setRenameConfirm(null); setEditingGroup(null); setEditGroupValue(""); }}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "24px 28px", minWidth: 380, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}
+          >
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, color: "#e65100" }}>
+              ⚠ 그룹 코드 변경
+            </div>
+            <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: "0 0 8px", lineHeight: 1.6 }}>
+              그룹 코드를 <strong>{renameConfirm.grpCode}</strong> → <strong>{renameConfirm.newValue}</strong> 로 변경합니다.
+            </p>
+            <p style={{ fontSize: 12, color: "#e53935", margin: "0 0 20px", lineHeight: 1.5 }}>
+              이 그룹에 속한 모든 코드의 참조가 함께 변경됩니다.<br />
+              이 코드를 사용하는 다른 시스템이 있다면 영향을 받을 수 있습니다.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button onClick={() => { setRenameConfirm(null); setEditingGroup(null); setEditGroupValue(""); }} style={miniCancelBtnStyle}>취소</button>
+              <button onClick={confirmRenameGroup} style={{ ...miniSaveBtnStyle, background: "#e65100" }}>
+                변경
               </button>
             </div>
           </div>
@@ -674,7 +778,7 @@ const inlineInputStyle: React.CSSProperties = {
   boxSizing: "border-box",
 };
 
-const CODE_GRID = "1.5fr 2.5fr 50px 50px 32px";
+const CODE_GRID = "1.2fr 1.5fr 2fr 50px 50px 32px";
 
 const codeGridHeaderStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: CODE_GRID, gap: 10,

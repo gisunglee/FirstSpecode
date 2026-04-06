@@ -866,7 +866,7 @@ function TaskDetailPanel({ projectId, taskId, displayId, onSaved }: { projectId:
   return (
     <div style={panelStyle}>
       <PanelHeader icon="📁" displayType="과업" displayId={displayId} name={name} onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <PanelField label="과업명 *">
           <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
         </PanelField>
@@ -961,7 +961,7 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
   return (
     <div style={panelStyle}>
       <PanelHeader icon="📝" displayType="요구사항" displayId={displayId} name={name} onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
         {/* 기본 정보 — 기본 접힘 */}
         <div>
@@ -1143,7 +1143,7 @@ function StoryDetailPanel({ projectId, storyId, displayId, onSaved }: { projectI
   return (
     <div style={panelStyle}>
       <PanelHeader icon="👤" displayType="사용자스토리" displayId={displayId} name={name} onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <PanelField label="스토리명 *">
           <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
         </PanelField>
@@ -1227,16 +1227,15 @@ function PanelHeader({ icon, displayType, displayId, name, onSave, isPending }: 
   isPending?:  boolean;
 }) {
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
-      <div>
-        <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
-          <span>{icon} {displayType}</span>
-          {displayId && <span style={{ fontFamily: "monospace", color: "var(--color-text-secondary)", opacity: 0.7 }}>{displayId}</span>}
-        </div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "var(--color-text-primary)" }}>{name || "(이름 없음)"}</div>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
+        <span style={{ fontSize: 13, flexShrink: 0 }}>{icon}</span>
+        <span style={{ fontSize: 11, color: "var(--color-text-secondary)", flexShrink: 0 }}>{displayType}</span>
+        {displayId && <span style={{ fontSize: 11, fontFamily: "monospace", color: "var(--color-text-secondary)", opacity: 0.6, flexShrink: 0 }}>{displayId}</span>}
+        <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name || "(이름 없음)"}</span>
       </div>
       {onSave && (
-        <button onClick={onSave} disabled={isPending} style={{ ...primaryBtnStyle, marginTop: 4 }}>
+        <button onClick={onSave} disabled={isPending} style={{ ...primaryBtnStyle, flexShrink: 0 }}>
           {isPending ? "저장 중..." : "저장"}
         </button>
       )}
@@ -1266,7 +1265,7 @@ function SaveBar({ onSave, isPending }: { onSave: () => void; isPending: boolean
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
 const panelStyle: React.CSSProperties = {
-  padding:   "28px 32px",
+  padding:   "16px 24px",
   maxWidth:  720,
 };
 

@@ -23,7 +23,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
   }
 
-  let body: { grpCodeNm?: string; grpCodeDc?: string; useYn?: string };
+  let body: { newGrpCode?: string; grpCodeNm?: string; grpCodeDc?: string; useYn?: string };
   try {
     body = await request.json();
   } catch {
@@ -34,6 +34,42 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const existing = await prisma.tbCmCodeGroup.findUnique({ where: { grp_code: grpCode } });
     if (!existing) return apiError("NOT_FOUND", "코드 그룹을 찾을 수 없습니다.", 404);
 
+    const newCode = body.newGrpCode?.trim();
+
+    // 그룹 코드(PK) 변경 요청인 경우 — 하위 코드 FK도 함께 업데이트
+    if (newCode && newCode !== grpCode) {
+      // 새 코드 중복 확인
+      const dup = await prisma.tbCmCodeGroup.findUnique({ where: { grp_code: newCode } });
+      if (dup) return apiError("DUPLICATE", "이미 존재하는 그룹 코드입니다.", 409);
+
+      // FK + unique(grp_code_nm) 제약 우회:
+      // ① 구 그룹 코드명을 임시값으로 변경 → ② 새 그룹 생성 → ③ 코드 이전 → ④ 구 그룹 삭제
+      const finalNm = body.grpCodeNm?.trim() ?? existing.grp_code_nm;
+      await prisma.$transaction(async (tx) => {
+        await tx.tbCmCodeGroup.update({
+          where: { grp_code: grpCode },
+          data: { grp_code_nm: `__tmp_${Date.now()}` },
+        });
+        await tx.tbCmCodeGroup.create({
+          data: {
+            grp_code: newCode,
+            grp_code_nm: finalNm,
+            grp_code_dc: body.grpCodeDc !== undefined ? (body.grpCodeDc.trim() || null) : existing.grp_code_dc,
+            use_yn: body.useYn ?? existing.use_yn,
+            creat_dt: existing.creat_dt,
+          },
+        });
+        await tx.tbCmCode.updateMany({
+          where: { grp_code: grpCode },
+          data: { grp_code: newCode },
+        });
+        await tx.tbCmCodeGroup.delete({ where: { grp_code: grpCode } });
+      });
+
+      return apiSuccess({ grpCode: newCode, grpCodeNm: body.grpCodeNm?.trim() ?? existing.grp_code_nm });
+    }
+
+    // 일반 필드만 수정
     const updated = await prisma.tbCmCodeGroup.update({
       where: { grp_code: grpCode },
       data: {

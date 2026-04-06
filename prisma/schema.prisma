@@ -638,7 +638,7 @@ model TbCmCodeGroup {
 
 // ── 공통코드 ────────────────────────────────────────────────────────────────────
 model TbCmCode {
-  cm_code_id Int      @id @default(autoincrement())
+  cm_code    String   @id @db.VarChar(100)
   grp_code   String   @db.VarChar(100)
   code_nm    String   @db.VarChar(100)
   code_dc    String?  @db.VarChar(4000)

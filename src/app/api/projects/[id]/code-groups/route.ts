@@ -45,7 +45,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           : {}),
         ...(useYn ? { use_yn: useYn } : {}),
       },
-      include: { codes: { select: { cm_code_id: true } } },
+      include: { codes: { select: { cm_code: true } } },
       orderBy: { grp_code: "asc" },
     });
 
