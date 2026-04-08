@@ -673,7 +673,7 @@ function AreaDetailPageInner() {
                       borderRadius: 12,
                       boxShadow: "0 8px 32px rgba(0,0,0,0.16)",
                       padding: "14px 16px",
-                      minWidth: 340,
+                      width: 520,
                     }}>
                       <style>{`
                         .ai-area-card { transition: background 0.15s, border-color 0.15s; }

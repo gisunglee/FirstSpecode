@@ -101,6 +101,8 @@ export default function LNB() {
       ? [{ label: "기준 정보", href: referenceInfoHref, icon: "📑", isActive: pathname.startsWith(referenceInfoHref) }]
       : []),
     { label: "개인 설정", href: "/settings/profile", icon: "👤", isActive: pathname.startsWith("/settings/profile") },
+    // 테스트 메뉴 — 프로젝트 무관
+    { label: "Diff 테스트", href: "/test/diff-prompt", icon: "🧪", isActive: pathname.startsWith("/test/diff-prompt") },
   ];
 
   return (

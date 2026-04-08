@@ -35,6 +35,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const groups = await prisma.tbCmCodeGroup.findMany({
       where: {
+        prjct_id: projectId,
         ...(search
           ? {
               OR: [
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           : {}),
         ...(useYn ? { use_yn: useYn } : {}),
       },
-      include: { codes: { select: { cm_code: true } } },
+      include: { codes: { select: { cm_code_id: true } } },
       orderBy: { grp_code: "asc" },
     });
 
@@ -90,12 +91,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (!grpCodeNm) return apiError("VALIDATION_ERROR", "그룹 코드명을 입력해 주세요.", 400);
 
   try {
-    // 중복 체크
-    const existing = await prisma.tbCmCodeGroup.findUnique({ where: { grp_code: grpCode } });
-    if (existing) return apiError("DUPLICATE", "이미 존재하는 그룹 코드입니다.", 409);
+    // 같은 프로젝트 내 중복 체크
+    const dupCode = await prisma.tbCmCodeGroup.findUnique({
+      where: { prjct_id_grp_code: { prjct_id: projectId, grp_code: grpCode } },
+    });
+    if (dupCode) return apiError("DUPLICATE", "이미 존재하는 그룹 코드입니다.", 409);
+
+    const dupNm = await prisma.tbCmCodeGroup.findUnique({
+      where: { prjct_id_grp_code_nm: { prjct_id: projectId, grp_code_nm: grpCodeNm } },
+    });
+    if (dupNm) return apiError("DUPLICATE", "이미 존재하는 그룹명입니다.", 409);
 
     const created = await prisma.tbCmCodeGroup.create({
       data: {
+        prjct_id: projectId,
         grp_code: grpCode,
         grp_code_nm: grpCodeNm,
         grp_code_dc: body.grpCodeDc?.trim() || null,

@@ -1,6 +1,15 @@
 /**
  * PUT    /api/projects/[id]/code-groups/[grpCode] — 코드 그룹 수정
  * DELETE /api/projects/[id]/code-groups/[grpCode] — 코드 그룹 삭제 (하위 코드 cascade)
+ *
+ * 역할:
+ *   - 프로젝트 스코프 — params.id(prjct_id) + params.grpCode(grp_code 문자열)로 조회
+ *   - 그룹 코드/그룹명/설명/사용여부 수정 (각각 같은 프로젝트 내 중복 검증)
+ *   - 그룹 삭제 시 하위 코드도 cascade 삭제
+ *
+ * 주요 기술:
+ *   - tb_cm_code_group은 (prjct_id, grp_code) 유니크 제약
+ *   - 내부 PK는 grp_code_id(serial)이므로 grp_code 변경도 단순 update로 처리
  */
 
 import { NextRequest } from "next/server";
@@ -31,48 +40,36 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const existing = await prisma.tbCmCodeGroup.findUnique({ where: { grp_code: grpCode } });
+    // 프로젝트 스코프로 그룹 조회
+    const existing = await prisma.tbCmCodeGroup.findUnique({
+      where: { prjct_id_grp_code: { prjct_id: projectId, grp_code: grpCode } },
+    });
     if (!existing) return apiError("NOT_FOUND", "코드 그룹을 찾을 수 없습니다.", 404);
 
+    // 그룹 코드 변경 시 같은 프로젝트 내 중복 체크
     const newCode = body.newGrpCode?.trim();
-
-    // 그룹 코드(PK) 변경 요청인 경우 — 하위 코드 FK도 함께 업데이트
     if (newCode && newCode !== grpCode) {
-      // 새 코드 중복 확인
-      const dup = await prisma.tbCmCodeGroup.findUnique({ where: { grp_code: newCode } });
-      if (dup) return apiError("DUPLICATE", "이미 존재하는 그룹 코드입니다.", 409);
-
-      // FK + unique(grp_code_nm) 제약 우회:
-      // ① 구 그룹 코드명을 임시값으로 변경 → ② 새 그룹 생성 → ③ 코드 이전 → ④ 구 그룹 삭제
-      const finalNm = body.grpCodeNm?.trim() ?? existing.grp_code_nm;
-      await prisma.$transaction(async (tx) => {
-        await tx.tbCmCodeGroup.update({
-          where: { grp_code: grpCode },
-          data: { grp_code_nm: `__tmp_${Date.now()}` },
-        });
-        await tx.tbCmCodeGroup.create({
-          data: {
-            grp_code: newCode,
-            grp_code_nm: finalNm,
-            grp_code_dc: body.grpCodeDc !== undefined ? (body.grpCodeDc.trim() || null) : existing.grp_code_dc,
-            use_yn: body.useYn ?? existing.use_yn,
-            creat_dt: existing.creat_dt,
-          },
-        });
-        await tx.tbCmCode.updateMany({
-          where: { grp_code: grpCode },
-          data: { grp_code: newCode },
-        });
-        await tx.tbCmCodeGroup.delete({ where: { grp_code: grpCode } });
+      const dup = await prisma.tbCmCodeGroup.findUnique({
+        where: { prjct_id_grp_code: { prjct_id: projectId, grp_code: newCode } },
       });
-
-      return apiSuccess({ grpCode: newCode, grpCodeNm: body.grpCodeNm?.trim() ?? existing.grp_code_nm });
+      if (dup) return apiError("DUPLICATE", "이미 존재하는 그룹 코드입니다.", 409);
     }
 
-    // 일반 필드만 수정
+    // 그룹명 변경 시 같은 프로젝트 내 중복 체크
+    if (body.grpCodeNm !== undefined && body.grpCodeNm.trim() !== existing.grp_code_nm) {
+      const dupNm = await prisma.tbCmCodeGroup.findUnique({
+        where: { prjct_id_grp_code_nm: { prjct_id: projectId, grp_code_nm: body.grpCodeNm.trim() } },
+      });
+      if (dupNm && dupNm.grp_code_id !== existing.grp_code_id) {
+        return apiError("DUPLICATE", "이미 존재하는 그룹명입니다.", 409);
+      }
+    }
+
+    // 단일 update — grp_code_id가 surrogate PK이므로 grp_code 변경도 자유
     const updated = await prisma.tbCmCodeGroup.update({
-      where: { grp_code: grpCode },
+      where: { grp_code_id: existing.grp_code_id },
       data: {
+        ...(newCode && newCode !== grpCode ? { grp_code: newCode } : {}),
         ...(body.grpCodeNm !== undefined ? { grp_code_nm: body.grpCodeNm.trim() } : {}),
         ...(body.grpCodeDc !== undefined ? { grp_code_dc: body.grpCodeDc.trim() || null } : {}),
         ...(body.useYn !== undefined ? { use_yn: body.useYn } : {}),
@@ -101,11 +98,13 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const existing = await prisma.tbCmCodeGroup.findUnique({ where: { grp_code: grpCode } });
+    const existing = await prisma.tbCmCodeGroup.findUnique({
+      where: { prjct_id_grp_code: { prjct_id: projectId, grp_code: grpCode } },
+    });
     if (!existing) return apiError("NOT_FOUND", "코드 그룹을 찾을 수 없습니다.", 404);
 
     // cascade 삭제 (Prisma relation onDelete: Cascade)
-    await prisma.tbCmCodeGroup.delete({ where: { grp_code: grpCode } });
+    await prisma.tbCmCodeGroup.delete({ where: { grp_code_id: existing.grp_code_id } });
 
     return apiSuccess({ deleted: true });
   } catch (err) {

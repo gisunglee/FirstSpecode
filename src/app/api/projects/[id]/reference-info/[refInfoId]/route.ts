@@ -28,7 +28,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
   try {
     const r = await prisma.tbCmReferenceInfo.findUnique({ where: { ref_info_id: refInfoId } });
-    if (!r || r.del_yn === "Y") return apiError("NOT_FOUND", "기준 정보를 찾을 수 없습니다.", 404);
+    if (!r || r.del_yn === "Y" || r.prjct_id !== projectId) return apiError("NOT_FOUND", "기준 정보를 찾을 수 없습니다.", 404);
 
     return apiSuccess({
       refInfoId:     r.ref_info_id,
@@ -81,7 +81,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
   try {
     const existing = await prisma.tbCmReferenceInfo.findUnique({ where: { ref_info_id: refInfoId } });
-    if (!existing || existing.del_yn === "Y") {
+    if (!existing || existing.del_yn === "Y" || existing.prjct_id !== projectId) {
       return apiError("NOT_FOUND", "기준 정보를 찾을 수 없습니다.", 404);
     }
 
@@ -139,7 +139,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   try {
     const existing = await prisma.tbCmReferenceInfo.findUnique({ where: { ref_info_id: refInfoId } });
-    if (!existing || existing.del_yn === "Y") {
+    if (!existing || existing.del_yn === "Y" || existing.prjct_id !== projectId) {
       return apiError("NOT_FOUND", "기준 정보를 찾을 수 없습니다.", 404);
     }
 

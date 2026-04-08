@@ -1,6 +1,18 @@
 /**
  * GET  /api/projects/[id]/code-groups/[grpCode]/codes — 코드 목록 조회
  * POST /api/projects/[id]/code-groups/[grpCode]/codes — 코드 생성
+ *
+ * 역할:
+ *   - 프로젝트 스코프 — params.id(prjct_id) + params.grpCode로 그룹 조회
+ *   - 특정 코드 그룹의 코드 목록 조회 (sort_ordr → creat_dt 순)
+ *   - 신규 코드 등록 (그룹 내 cm_code 중복 검증, 선택적 전역 유니크 검증)
+ *   - 정렬순서 미지정 시 마지막+1 자동 계산
+ *
+ * 주요 기술:
+ *   - cm_code_id: serial PK (내부 식별자)
+ *   - cm_code: 사용자 입력 코드값 (영문/숫자/_/:/- 만 허용)
+ *   - 같은 그룹 내 cm_code 중복 금지 (DB 제약), code_nm은 자유 입력
+ *   - globalUnique=true: 같은 프로젝트 내 모든 그룹 cm_code 중복 검증
  */
 
 import { NextRequest } from "next/server";
@@ -24,15 +36,22 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
+    // 프로젝트 스코프로 그룹 조회 → 코드 목록
+    const group = await prisma.tbCmCodeGroup.findUnique({
+      where: { prjct_id_grp_code: { prjct_id: projectId, grp_code: grpCode } },
+    });
+    if (!group) return apiError("NOT_FOUND", "코드 그룹을 찾을 수 없습니다.", 404);
+
     const codes = await prisma.tbCmCode.findMany({
-      where: { grp_code: grpCode },
+      where: { grp_code_id: group.grp_code_id },
       orderBy: [{ sort_ordr: "asc" }, { creat_dt: "asc" }],
     });
 
     return apiSuccess({
       items: codes.map((c) => ({
+        codeId: c.cm_code_id,
         cmCode: c.cm_code,
-        grpCode: c.grp_code,
+        grpCode: group.grp_code,
         codeNm: c.code_nm,
         codeDc: c.code_dc ?? "",
         useYn: c.use_yn,
@@ -58,7 +77,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
   }
 
-  let body: { cmCode?: string; codeNm?: string; codeDc?: string; sortOrdr?: number };
+  let body: { cmCode?: string; codeNm?: string; codeDc?: string; sortOrdr?: number; globalUnique?: boolean };
   try {
     body = await request.json();
   } catch {
@@ -76,25 +95,31 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    // 그룹 존재 확인
-    const group = await prisma.tbCmCodeGroup.findUnique({ where: { grp_code: grpCode } });
+    // 프로젝트 스코프로 그룹 조회
+    const group = await prisma.tbCmCodeGroup.findUnique({
+      where: { prjct_id_grp_code: { prjct_id: projectId, grp_code: grpCode } },
+    });
     if (!group) return apiError("NOT_FOUND", "코드 그룹을 찾을 수 없습니다.", 404);
 
-    // 코드 PK 중복 체크
-    const dupPk = await prisma.tbCmCode.findUnique({ where: { cm_code: cmCode } });
-    if (dupPk) return apiError("DUPLICATE", "이미 존재하는 코드입니다.", 409);
-
-    // 같은 그룹 내 코드명 중복 체크
-    const dup = await prisma.tbCmCode.findUnique({
-      where: { grp_code_code_nm: { grp_code: grpCode, code_nm: codeNm } },
+    // 같은 그룹 내 cm_code 중복 체크 (필수)
+    const dupInGroup = await prisma.tbCmCode.findFirst({
+      where: { grp_code_id: group.grp_code_id, cm_code: cmCode },
     });
-    if (dup) return apiError("DUPLICATE", "이미 존재하는 코드명입니다.", 409);
+    if (dupInGroup) return apiError("DUPLICATE", "같은 그룹 내에 이미 존재하는 코드입니다.", 409);
+
+    // globalUnique 옵션: 같은 프로젝트 내 모든 그룹에서 cm_code 중복 체크
+    if (body.globalUnique) {
+      const dupGlobal = await prisma.tbCmCode.findFirst({
+        where: { prjct_id: projectId, cm_code: cmCode },
+      });
+      if (dupGlobal) return apiError("DUPLICATE", "프로젝트 내 다른 그룹에 이미 존재하는 코드입니다.", 409);
+    }
 
     // 정렬순서 미지정 시 마지막+1
     let sortOrdr = body.sortOrdr ?? -1;
     if (sortOrdr < 0) {
       const last = await prisma.tbCmCode.findFirst({
-        where: { grp_code: grpCode },
+        where: { grp_code_id: group.grp_code_id },
         orderBy: { sort_ordr: "desc" },
         select: { sort_ordr: true },
       });
@@ -103,8 +128,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const created = await prisma.tbCmCode.create({
       data: {
+        prjct_id: projectId,
+        grp_code_id: group.grp_code_id,
         cm_code: cmCode,
-        grp_code: grpCode,
         code_nm: codeNm,
         code_dc: body.codeDc?.trim() || null,
         sort_ordr: sortOrdr,
@@ -113,7 +139,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     });
 
     return apiSuccess(
-      { cmCode: created.cm_code, codeNm: created.code_nm },
+      { codeId: created.cm_code_id, cmCode: created.cm_code, codeNm: created.code_nm },
       201
     );
   } catch (err) {

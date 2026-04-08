@@ -237,13 +237,13 @@ model TbDsDesignChange {
   prjct_id      String
   ref_tbl_nm    String
   ref_id        String
-  chg_type_code String   @default("UPDATE") // CREATE | UPDATE | DELETE
   chg_rsn_cn    String?
   snapshot_data Json
   ai_req_yn     String   @default("N")
   ai_task_id    String?
   chg_mber_id   String?
   chg_dt        DateTime @default(now())
+  chg_type_code String   @default("UPDATE")
 
   @@map("tb_ds_design_change")
 }
@@ -255,7 +255,6 @@ model TbDsUnitWork {
   unit_work_display_id String
   unit_work_nm         String          @default("")
   unit_work_dc         String?
-  coment_cn            String?
   asign_mber_id        String?
   bgng_de              String?
   end_de               String?
@@ -263,6 +262,7 @@ model TbDsUnitWork {
   sort_ordr            Int             @default(0)
   creat_dt             DateTime        @default(now())
   mdfcn_dt             DateTime?
+  coment_cn            String?
   screens              TbDsScreen[]
   requirement          TbRqRequirement @relation(fields: [req_id], references: [req_id])
 
@@ -328,36 +328,36 @@ model TbDsArea {
 }
 
 model TbDsFunction {
-  func_id                String    @id @default(uuid())
-  prjct_id               String
-  area_id                String?
-  func_display_id        String
-  func_nm                String    @default("")
-  func_dc                String?
-  func_sttus_code        String    @default("NONE")
-  priort_code            String    @default("MEDIUM")
-  sort_ordr              Int       @default(0)
-  creat_dt               DateTime  @default(now())
-  mdfcn_dt               DateTime?
-  asign_mber_id          String?
-  cmplx_code             String    @default("MEDIUM")
-  efrt_val               String?
-  func_ty_code           String    @default("OTHER")
-  impl_bgng_de           String?
-  impl_end_de            String?
-  coment_cn              String?
-  area                   TbDsArea? @relation(fields: [area_id], references: [area_id])
+  func_id         String    @id @default(uuid())
+  prjct_id        String
+  area_id         String?
+  func_display_id String
+  func_nm         String    @default("")
+  func_dc         String?
+  func_sttus_code String    @default("NONE")
+  priort_code     String    @default("MEDIUM")
+  sort_ordr       Int       @default(0)
+  creat_dt        DateTime  @default(now())
+  mdfcn_dt        DateTime?
+  asign_mber_id   String?
+  cmplx_code      String    @default("MEDIUM")
+  efrt_val        String?
+  func_ty_code    String    @default("OTHER")
+  impl_bgng_de    String?
+  impl_end_de     String?
+  coment_cn       String?
+  area            TbDsArea? @relation(fields: [area_id], references: [area_id])
 
   @@map("tb_ds_function")
 }
 
 model TbDsDbTable {
-  tbl_id        String            @id @default(uuid())
+  tbl_id        String              @id @default(uuid())
   prjct_id      String
   tbl_physcl_nm String
   tbl_lgcl_nm   String?
   tbl_dc        String?
-  creat_dt      DateTime          @default(now())
+  creat_dt      DateTime            @default(now())
   columns       TbDsDbTableColumn[]
 
   @@map("tb_ds_db_table")
@@ -547,20 +547,20 @@ model TbRqBaselineSnapshot {
 }
 
 model TbAiPromptTemplate {
-  tmpl_id        String   @id(map: "pk_ai_prompt_template") @db.VarChar(36)
-  prjct_id       String?  @db.VarChar(36)
-  tmpl_nm        String   @db.VarChar(200)
-  task_ty_code   String   @db.VarChar(20)
-  ref_ty_code    String?  @db.VarChar(20)
-  sys_prompt_cn  String?
-  tmpl_dc        String?
-  use_yn         String   @default("Y") @db.Char(1)
-  default_yn     String   @default("N") @db.Char(1)
-  sort_ordr      Int      @default(0)
-  use_cnt        Int      @default(0)
-  creat_mber_id  String?  @db.VarChar(36)
-  creat_dt       DateTime @default(now()) @db.Timestamp(6)
-  mdfcn_dt       DateTime @default(now()) @db.Timestamp(6)
+  tmpl_id       String   @id(map: "pk_ai_prompt_template") @db.VarChar(36)
+  prjct_id      String?  @db.VarChar(36)
+  tmpl_nm       String   @db.VarChar(200)
+  task_ty_code  String   @db.VarChar(20)
+  ref_ty_code   String?  @db.VarChar(20)
+  sys_prompt_cn String?
+  tmpl_dc       String?
+  use_yn        String   @default("Y") @db.Char(1)
+  sort_ordr     Int      @default(0)
+  creat_mber_id String?  @db.VarChar(36)
+  creat_dt      DateTime @default(now()) @db.Timestamp(6)
+  mdfcn_dt      DateTime @default(now()) @db.Timestamp(6)
+  use_cnt       Int      @default(0)
+  default_yn    String   @default("N") @db.Char(1)
 
   @@index([prjct_id, task_ty_code, use_yn], map: "idx_ai_tmpl_prjct")
   @@map("tb_ai_prompt_template")
@@ -590,11 +590,11 @@ model tb_ds_review_request {
   req_mber_id       String    @db.VarChar(36)
   revwr_mber_id     String    @db.VarChar(36)
   review_sttus_code String    @default("REQUESTED") @db.VarChar(30)
-  stsf_scr          Int?      // 답변 만족도 점수 (1~5, 요청자 입력)
-  fdbk_code         String?   @db.VarChar(20) // 피드백 코드 (GOOD / WELL / NEEDS_IMPROVEMENT)
   creat_dt          DateTime  @default(now()) @db.Timestamp(6)
   compl_dt          DateTime? @db.Timestamp(6)
   mdfcn_dt          DateTime  @default(now()) @db.Timestamp(6)
+  stsf_scr          Int?
+  fdbk_code         String?   @db.VarChar(20)
 
   @@index([prjct_id, creat_dt(sort: Desc)], map: "idx_ds_review_prjct")
   @@index([ref_tbl_nm, ref_id], map: "idx_ds_review_ref")
@@ -624,30 +624,88 @@ model TbCmReferenceInfo {
   @@map("tb_cm_reference_info")
 }
 
-// ── 공통코드 그룹 ──────────────────────────────────────────────────────────────
 model TbCmCodeGroup {
-  grp_code    String   @id @db.VarChar(100)
-  grp_code_nm String   @unique @db.VarChar(100)
-  grp_code_dc String?  @db.VarChar(4000)
-  use_yn      String   @default("Y") @db.Char(1)
-  creat_dt    DateTime @default(now())
-  mdfcn_dt    DateTime @default(now())
+  grp_code    String     @db.VarChar(100)
+  grp_code_nm String     @db.VarChar(100)
+  grp_code_dc String?    @db.VarChar(4000)
+  use_yn      String     @default("Y") @db.Char(1)
+  creat_dt    DateTime   @default(now())
+  mdfcn_dt    DateTime   @default(now())
+  grp_code_id Int        @id @default(autoincrement())
+  prjct_id    String     @db.VarChar(36)
   codes       TbCmCode[]
+
+  @@unique([prjct_id, grp_code])
+  @@unique([prjct_id, grp_code_nm])
+  @@index([prjct_id])
   @@map("tb_cm_code_group")
 }
 
-// ── 공통코드 ────────────────────────────────────────────────────────────────────
 model TbCmCode {
-  cm_code    String   @id @db.VarChar(100)
-  grp_code   String   @db.VarChar(100)
-  code_nm    String   @db.VarChar(100)
-  code_dc    String?  @db.VarChar(4000)
-  use_yn     String   @default("Y") @db.Char(1)
-  sort_ordr  Int      @default(0)
-  creat_dt   DateTime @default(now())
-  mdfcn_dt   DateTime @default(now())
-  group      TbCmCodeGroup @relation(fields: [grp_code], references: [grp_code], onDelete: Cascade)
-  @@unique([grp_code, code_nm])
-  @@index([grp_code])
+  code_nm     String        @db.VarChar(100)
+  code_dc     String?       @db.VarChar(4000)
+  use_yn      String        @default("Y") @db.Char(1)
+  sort_ordr   Int           @default(0)
+  creat_dt    DateTime      @default(now())
+  mdfcn_dt    DateTime      @default(now())
+  cm_code     String        @db.VarChar(100)
+  cm_code_id  Int           @id @default(autoincrement())
+  prjct_id    String        @db.VarChar(36)
+  grp_code_id Int
+  group       TbCmCodeGroup @relation(fields: [grp_code_id], references: [grp_code_id], onDelete: Cascade)
+
+  @@unique([grp_code_id, cm_code])
+  @@index([prjct_id])
+  @@index([grp_code_id])
   @@map("tb_cm_code")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+// ── Diff Prompt Test 마스터 (저장 이벤트 단위) ──────────────────────────────
+model TbSpDiffTestMaster {
+  master_id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  test_sn           BigInt   @default(autoincrement())
+  sj_nm             String?  @db.VarChar(200)
+  memo_cn           String?
+  base_master_id    String?  @db.Uuid
+  chg_node_cnt      Int?     @default(0)
+  diff_prompt_md    String?
+  diff_summary_json Json?
+  creat_dt          DateTime @default(now()) @db.Timestamp(6)
+  creat_user_id     String?  @db.VarChar(50)
+
+  baseMaster   TbSpDiffTestMaster?  @relation("DiffMasterBase", fields: [base_master_id], references: [master_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_diff_test_master_base")
+  childMasters TbSpDiffTestMaster[] @relation("DiffMasterBase")
+  nodes        TbSpDiffTestNode[]
+
+  @@index([creat_dt(sort: Desc)], map: "idx_diff_test_master_creat_dt")
+  @@index([test_sn(sort: Desc)], map: "idx_diff_test_master_test_sn")
+  @@map("tb_sp_diff_test_master")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+// ── Diff Prompt Test 노드 (UW/PID/AR/FID 스냅샷, master당 4건) ──────────────
+model TbSpDiffTestNode {
+  node_pk          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  master_id        String   @db.Uuid
+  node_type_code   String   @db.VarChar(10)
+  node_seq         Int      @db.SmallInt
+  raw_md_cn        String
+  parsed_json      Json?
+  content_hash     String   @db.Char(64)
+  is_changed_yn    String?  @default("N") @db.Char(1)
+  chg_mode_code    String?  @db.VarChar(10)
+  chg_line_ratio   Decimal? @db.Decimal(5, 4)
+  added_line_cnt   Int?     @default(0)
+  removed_line_cnt Int?     @default(0)
+  kept_line_cnt    Int?     @default(0)
+  creat_dt         DateTime @default(now()) @db.Timestamp(6)
+
+  master TbSpDiffTestMaster @relation(fields: [master_id], references: [master_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_diff_test_node_master")
+
+  @@unique([master_id, node_type_code], map: "uk_diff_test_node")
+  @@index([content_hash], map: "idx_diff_test_node_hash")
+  @@index([master_id, node_seq], map: "idx_diff_test_node_master")
+  @@map("tb_sp_diff_test_node")
 }

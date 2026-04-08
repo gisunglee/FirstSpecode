@@ -56,6 +56,16 @@ const DATA_TYPE_OPTIONS = [
   { value: "JSON",   label: "JSON" },
 ];
 
+// YYYYMMDD → YYYY-MM-DD (다른 형식이면 원본 그대로 반환)
+function formatDate(d: string | null | undefined): string {
+  if (!d) return "";
+  const s = d.replace(/-/g, "");
+  if (s.length === 8 && /^\d{8}$/.test(s)) {
+    return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+  }
+  return d;
+}
+
 const BUS_DIV_LABEL: Record<string, string> = Object.fromEntries(BUS_DIV_OPTIONS.map((o) => [o.value, o.label]));
 const DATA_TYPE_LABEL: Record<string, string> = Object.fromEntries(DATA_TYPE_OPTIONS.map((o) => [o.value, o.label]));
 
@@ -96,6 +106,7 @@ function ReferenceInfoPageInner() {
   const [modalOpen,  setModalOpen]  = useState(false);
   const [editTarget, setEditTarget] = useState<RefInfo | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RefInfo | null>(null);
+  const [viewTarget,   setViewTarget]   = useState<RefInfo | null>(null);
 
   // ── 목록 조회 ──────────────────────────────────────────────────────────────
   const { data, isLoading } = useQuery<{ items: RefInfo[]; totalCount: number }>({
@@ -209,7 +220,6 @@ function ReferenceInfoPageInner() {
             <span>보조 값</span>
             <span>기간</span>
             <span>사용</span>
-            <span style={{ textAlign: "center" }}>액션</span>
           </div>
 
           {isLoading ? (
@@ -222,13 +232,15 @@ function ReferenceInfoPageInner() {
             filtered.map((item, idx) => {
               const busColor = BUS_DIV_COLOR[item.busDivCode] ?? { bg: "#f0f0f0", text: "#616161" };
               const isActive = item.useYn === "Y";
-              const period = item.refBgngDe + (item.refEndDe ? ` ~ ${item.refEndDe}` : " ~");
+              const period = formatDate(item.refBgngDe) + (item.refEndDe ? ` ~ ${formatDate(item.refEndDe)}` : " ~");
               return (
                 <div
                   key={item.refInfoId}
+                  onClick={() => setViewTarget(item)}
                   style={{
                     ...dataRowStyle,
                     borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+                    cursor: "pointer",
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-hover, #f4f6ff)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-bg-card)")}
@@ -275,7 +287,7 @@ function ReferenceInfoPageInner() {
                   </span>
 
                   {/* 사용 여부 토글 */}
-                  <span>
+                  <span onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={() => toggleMutation.mutate({ refInfoId: item.refInfoId, useYn: isActive ? "N" : "Y" })}
                       style={{
@@ -294,11 +306,6 @@ function ReferenceInfoPageInner() {
                     </button>
                   </span>
 
-                  {/* 액션 */}
-                  <span style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-                    <button onClick={() => openEdit(item)} style={actionBtnStyle}>수정</button>
-                    <button onClick={() => setDeleteTarget(item)} style={{ ...actionBtnStyle, color: "#e53935" }}>삭제</button>
-                  </span>
                 </div>
               );
             })
@@ -318,6 +325,75 @@ function ReferenceInfoPageInner() {
           }}
         />
       )}
+
+      {/* ── 상세 조회 다이얼로그 ── */}
+      {viewTarget && (() => {
+        const v = viewTarget;
+        const busColor = BUS_DIV_COLOR[v.busDivCode] ?? { bg: "#f0f0f0", text: "#616161" };
+        const period = formatDate(v.refBgngDe) + (v.refEndDe ? ` ~ ${formatDate(v.refEndDe)}` : " ~");
+        return (
+          <div style={overlayStyle} onClick={() => setViewTarget(null)}>
+            <div style={{ ...dialogStyle, minWidth: 480, maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
+              {/* 헤더 */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{
+                    display: "inline-block", padding: "2px 8px", borderRadius: 12,
+                    background: busColor.bg, color: busColor.text,
+                    fontSize: 11, fontWeight: 700,
+                  }}>
+                    {BUS_DIV_LABEL[v.busDivCode] ?? v.busDivCode}
+                  </span>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                    {v.refInfoNm}
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setViewTarget(null)}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1, padding: "0 2px" }}
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* 상세 내용 */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+                {[
+                  { label: "코드",     value: v.refInfoCode },
+                  { label: "유형",     value: DATA_TYPE_LABEL[v.refDataTyCode] ?? v.refDataTyCode },
+                  { label: "주요 값",  value: v.mainRefVal || "—" },
+                  { label: "보조 값",  value: v.subRefVal || "—" },
+                  { label: "기간",     value: period },
+                  { label: "사용",     value: v.useYn === "Y" ? "사용" : "미사용" },
+                  { label: "설명",     value: v.refInfoDc || "—" },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{ display: "grid", gridTemplateColumns: "80px 1fr", gap: 8, alignItems: "flex-start" }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>{label}</span>
+                    <span style={{ fontSize: 13, color: "var(--color-text-primary)", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* 액션 버튼 */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button onClick={() => setViewTarget(null)} style={secondaryBtnStyle}>닫기</button>
+                <button
+                  onClick={() => { setViewTarget(null); setDeleteTarget(v); }}
+                  style={{ ...primaryBtnStyle, background: "#e53935" }}
+                >
+                  삭제
+                </button>
+                <button
+                  onClick={() => { setViewTarget(null); openEdit(v); }}
+                  style={primaryBtnStyle}
+                >
+                  수정
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── 삭제 확인 다이얼로그 ── */}
       {deleteTarget && (
@@ -483,7 +559,7 @@ function getTodayStr() {
 
 // ── 스타일 ───────────────────────────────────────────────────────────────────
 
-const GRID = "80px 70px 1fr 65px 80px 80px minmax(130px,160px) 70px 80px";
+const GRID = "80px 70px 1fr 65px 80px 80px minmax(130px,160px) 70px";
 
 const headerRowStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID,

@@ -157,7 +157,9 @@
       "Bash(grep -A 20 \"const.*Status.*=\" /Users/igiseong/dev/specode/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/areas/[areaId]/page.tsx)",
       "Bash(grep -B 5 -A 10 \"DESIGN_DONE\\\\|NONE\\\\|func_sttus\\\\|statusLabel\" /Users/igiseong/dev/specode/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id]/areas/[areaId]/page.tsx)",
       "Bash(grep -E \"\\\\.\\(tsx|ts|jsx|js\\)$\")",
-      "Bash(grep -n \"creatDt\\\\|mdfcnDt\" src/app/api/projects/*/reference-info*/route.ts)"
+      "Bash(grep -n \"creatDt\\\\|mdfcnDt\" src/app/api/projects/*/reference-info*/route.ts)",
+      "Bash(ls .env*)",
+      "Bash(grep -n \"BigInt\\\\|Decimal\" /d/source/FirstSpecode/src/app/api/diff-test/*.ts)"
     ]
   }
 }

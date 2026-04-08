@@ -2,8 +2,9 @@
 -- [SPECODE ERD v3 핵심 구조 요약 (Blueprint)]
 -- * 최상위 도메인: 모든 주요 데이터는 tb_pj_project(프로젝트)에 종속됨 (1:N)
 -- 
--- 1. [cm] 공통 (회원/인증)
+-- 1. [cm] 공통 (회원/인증/공통코드)
 --    tb_cm_member(회원) 중심으로 인증, 토큰, 세션, 첨부파일 관리
+--    tb_cm_code_group(공통코드 그룹) -> tb_cm_code(공통코드) : 시스템 공통코드 관리
 -- 
 -- 2. [pj] 프로젝트 (공간/권한)
 --    tb_pj_project(프로젝트) -> tb_pj_project_member(멤버), 설정, 초대, API키
@@ -421,4 +422,32 @@ CREATE TABLE tb_ai_task ( -- AI 태스크
     req_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- 요청 일시
     compl_dt TIMESTAMP, -- 완료 일시
     apply_dt TIMESTAMP -- 반영 일시
+);
+
+-- ============================================================
+-- 10. tb_cm_code_group — 공통코드 그룹
+-- ============================================================
+CREATE TABLE tb_cm_code_group (
+    grp_code VARCHAR(100) PRIMARY KEY, -- 그룹 코드 (PK)
+    grp_code_nm VARCHAR(100) NOT NULL UNIQUE, -- 그룹 코드명 (유니크)
+    grp_code_dc VARCHAR(4000), -- 그룹 코드 설명
+    use_yn CHAR(1) DEFAULT 'Y', -- 사용 여부
+    creat_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- 생성 일시
+    mdfcn_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- 수정 일시
+);
+
+-- ============================================================
+-- 11. tb_cm_code — 공통코드
+-- ============================================================
+CREATE TABLE tb_cm_code (
+    cm_code_id SERIAL PRIMARY KEY, -- 코드 ID (PK, 자동 증가)
+    cm_code VARCHAR(100) NOT NULL UNIQUE, -- 코드 (영문/숫자/_/:/- 허용, 유니크)
+    grp_code VARCHAR(100) NOT NULL REFERENCES tb_cm_code_group(grp_code) ON DELETE CASCADE, -- 그룹 코드 (FK)
+    code_nm VARCHAR(100) NOT NULL, -- 코드명
+    code_dc VARCHAR(4000), -- 코드 설명
+    use_yn CHAR(1) DEFAULT 'Y', -- 사용 여부
+    sort_ordr INTEGER DEFAULT 0, -- 정렬 순서
+    creat_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- 생성 일시
+    mdfcn_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- 수정 일시
+    UNIQUE(grp_code, code_nm) -- 같은 그룹 내 코드명 중복 방지
 );
