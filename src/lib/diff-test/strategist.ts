@@ -13,10 +13,11 @@
 
 import type { ChangeMode } from "./types";
 import type { LineDiffStats } from "./differ";
+import { DIFF_RATIO_THRESHOLD, REPLACE_RATIO_THRESHOLD } from "./constants";
 
 export function decideMode(stats: LineDiffStats, hashChanged: boolean): ChangeMode {
   if (!hashChanged) return "NO_CHANGE";
-  if (stats.lineRatio < 0.2) return "DIFF";
-  if (stats.lineRatio < 0.7) return "FULL";
+  if (stats.lineRatio < DIFF_RATIO_THRESHOLD) return "DIFF";
+  if (stats.lineRatio < REPLACE_RATIO_THRESHOLD) return "FULL";
   return "REPLACE";
 }

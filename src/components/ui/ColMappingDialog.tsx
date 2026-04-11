@@ -153,7 +153,9 @@ export default function ColMappingDialog({
 
     setSelectedTableId("");
     setFilterTableIds([]);
-  }, [open, mappingData, tables, unitWorkDc]);
+  // tables.length를 의존성으로 사용 — tables 배열 참조가 매번 바뀌어 무한 루프 방지
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, mappingData, tables.length, unitWorkDc]);
 
   // ── 선택 테이블의 컬럼 목록 ────────────────────────────────────────────────
   const { data: colsData } = useQuery({

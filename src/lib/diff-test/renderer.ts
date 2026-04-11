@@ -10,7 +10,7 @@
  */
 
 import type { NodeType, ChangeMode } from "./types";
-import type { LineDiffStats } from "./differ";
+import { buildUnifiedPatch, type LineDiffStats } from "./differ";
 
 export type NodeRenderInput = {
   type: NodeType;
@@ -54,6 +54,14 @@ export function render(input: RenderInput): string {
   lines.push("- 각 노드는 변경 모드(NO_CHANGE/DIFF/FULL/REPLACE)에 따라 다르게 표시됩니다.");
   lines.push("- 변경된 노드만 작업 대상으로 삼고, NO_CHANGE 노드는 컨텍스트 참고용입니다.");
   lines.push("");
+  lines.push("### diff 블록 표기 규칙");
+  lines.push("");
+  lines.push("- `- [삭제]` 로 시작하는 줄: 이전 버전에서 **삭제된** 줄");
+  lines.push("- `+ [추가]` 로 시작하는 줄: 새 버전에 **추가된** 줄");
+  lines.push("- 공백으로 시작하는 줄(라벨 없음): 변경 없는 **컨텍스트** (위아래 3줄)");
+  lines.push("- `@@ 섹션: ... @@` : 변경이 발생한 마크다운 섹션의 위치");
+  lines.push("- `@@ -X,Y +A,B @@` : git unified diff 형식의 라인 위치 정보");
+  lines.push("");
   lines.push("---");
   lines.push("");
 
@@ -84,31 +92,50 @@ function renderNode(n: NodeRenderInput): string {
     `추가 ${n.stats.added} · 삭제 ${n.stats.removed} · 유지 ${n.stats.kept}`);
   lines.push("");
 
+  // ── 1단계: 풀버전 (모든 모드 공통, raw_md_cn 그대로) ──
+  // 원본 무결성 보장 — parsed_json 재조립 금지, n.afterMd는 raw 그대로
+  lines.push("### 현재 풀버전 (변경 후)");
+  lines.push("");
+  lines.push("```markdown");
+  lines.push(n.afterMd);
+  lines.push("```");
+  lines.push("");
+
+  // ── 2단계: 변경 블록 (NO_CHANGE 제외) ──
   if (n.mode === "NO_CHANGE") {
-    lines.push("> 변경 없음 (참고용 풀버전)");
-    lines.push("");
-    lines.push("```markdown");
-    lines.push(n.afterMd);
-    lines.push("```");
-  } else if (n.mode === "DIFF") {
+    lines.push("> ✅ 변경 없음 — 위 내용은 컨텍스트 참고용입니다.");
+    return lines.join("\n");
+  }
+
+  // DIFF/FULL/REPLACE 공통 — git unified diff + 섹션 헤더 주입 + 한국어 라벨
+  const rawPatch = buildUnifiedPatch(n.type, n.beforeMd, n.afterMd);
+  const patch = addKoreanLabels(rawPatch);
+
+  if (n.mode === "DIFF") {
     lines.push("### 변경 부분 (DIFF)");
     lines.push("");
+    lines.push("아래는 직전 버전과의 차이점입니다. `@@ 섹션: ... @@` 라인은 변경이 발생한 위치를 표시합니다.");
+    lines.push("");
     lines.push("```diff");
-    lines.push(simpleDiff(n.beforeMd, n.afterMd));
+    lines.push(patch);
     lines.push("```");
   } else if (n.mode === "FULL") {
-    lines.push("### 변경 후 풀버전 (FULL)");
+    lines.push("### 변경 부분 (FULL)");
     lines.push("");
-    lines.push("```markdown");
-    lines.push(n.afterMd);
+    lines.push("변동량이 많아 변경 부분을 별도로 표시합니다. 위 풀버전을 기준으로 작업하세요.");
+    lines.push("");
+    lines.push("```diff");
+    lines.push(patch);
     lines.push("```");
   } else if (n.mode === "REPLACE") {
-    lines.push("### 완전 교체 (REPLACE)");
+    lines.push("### ⚠ 완전 교체 (REPLACE)");
     lines.push("");
-    lines.push("> 이전 버전과 70% 이상 다릅니다. 이전 버전을 무시하고 아래로 완전 대체.");
+    lines.push("> 이전 버전과 70% 이상 다릅니다. 이전 버전을 무시하고 위 풀버전으로 완전 대체합니다.");
     lines.push("");
-    lines.push("```markdown");
-    lines.push(n.afterMd);
+    lines.push("**이전 버전과의 차이 (참고용)**");
+    lines.push("");
+    lines.push("```diff");
+    lines.push(patch);
     lines.push("```");
   }
 
@@ -116,23 +143,29 @@ function renderNode(n: NodeRenderInput): string {
 }
 
 /**
- * 라인 단위 단순 diff (+, -, 공백 prefix)
- * jsdiff 도입 전 임시 구현 — 정확하지 않을 수 있으나 가독성 위주
+ * diff 텍스트의 변경 라인에 한국어 라벨을 추가한다.
+ *
+ * 변환 규칙:
+ *   - `-` 로 시작 (단, `---` 제외) → `- [삭제] 원본내용`
+ *   - `+` 로 시작 (단, `+++` 제외) → `+ [추가] 원본내용`
+ *   - 그 외 라인(컨텍스트, @@, 빈 줄)은 그대로
  */
-function simpleDiff(before: string, after: string): string {
-  const beforeLines = before.split("\n");
-  const afterLines = after.split("\n");
-  const beforeSet = new Set(beforeLines);
-  const afterSet = new Set(afterLines);
+function addKoreanLabels(patchText: string): string {
+  const lines = patchText.split("\n");
+  const result: string[] = [];
 
-  const out: string[] = [];
-  // 삭제된 라인
-  for (const l of beforeLines) {
-    if (!afterSet.has(l)) out.push(`- ${l}`);
+  for (const line of lines) {
+    // 파일 헤더 보호
+    if (line.startsWith("---") || line.startsWith("+++")) { result.push(line); continue; }
+    // hunk/섹션 헤더 보호
+    if (line.startsWith("@@")) { result.push(line); continue; }
+    // 삭제 라인
+    if (line.startsWith("-")) { result.push(`- [삭제]${line.substring(1)}`); continue; }
+    // 추가 라인
+    if (line.startsWith("+")) { result.push(`+ [추가]${line.substring(1)}`); continue; }
+    // 그 외 (컨텍스트, 빈 줄)
+    result.push(line);
   }
-  // 추가된 라인
-  for (const l of afterLines) {
-    if (!beforeSet.has(l)) out.push(`+ ${l}`);
-  }
-  return out.join("\n");
+
+  return result.join("\n");
 }

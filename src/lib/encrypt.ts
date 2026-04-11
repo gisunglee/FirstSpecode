@@ -10,7 +10,7 @@
  *                    운영 환경에서는 반드시 설정할 것
  */
 
-import { createCipheriv, randomBytes } from "crypto";
+import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 
 const ALGORITHM = "aes-256-cbc";
 
@@ -33,6 +33,22 @@ export function encryptApiKey(plaintext: string): string {
     cipher.final(),
   ]);
   return `${iv.toString("hex")}:${encrypted.toString("hex")}`;
+}
+
+/**
+ * AES-256-CBC 암호화된 API 키를 복호화
+ * @param encrypted "iv_hex:encrypted_hex" 형식 문자열
+ * @returns 원본 API 키 평문
+ */
+export function decryptApiKey(encrypted: string): string {
+  const key = getEncryptKey();
+  const [ivHex, encHex] = encrypted.split(":");
+  if (!ivHex || !encHex) throw new Error("잘못된 암호화 형식입니다.");
+  const iv = Buffer.from(ivHex, "hex");
+  const encData = Buffer.from(encHex, "hex");
+  const decipher = createDecipheriv(ALGORITHM, key, iv);
+  const decrypted = Buffer.concat([decipher.update(encData), decipher.final()]);
+  return decrypted.toString("utf8");
 }
 
 /**

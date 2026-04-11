@@ -159,7 +159,10 @@
       "Bash(grep -E \"\\\\.\\(tsx|ts|jsx|js\\)$\")",
       "Bash(grep -n \"creatDt\\\\|mdfcnDt\" src/app/api/projects/*/reference-info*/route.ts)",
       "Bash(ls .env*)",
-      "Bash(grep -n \"BigInt\\\\|Decimal\" /d/source/FirstSpecode/src/app/api/diff-test/*.ts)"
+      "Bash(grep -n \"BigInt\\\\|Decimal\" /d/source/FirstSpecode/src/app/api/diff-test/*.ts)",
+      "Bash(mkdir -p d:/source/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/\\\\[id\\\\]/plan-studio/\\\\[planStudioId\\\\])",
+      "Bash(mkdir -p d:/source/FirstSpecode/src/app/api/projects/\\\\[id\\\\]/plan-studios/\\\\[planStudioId\\\\]/generate)",
+      "Bash(mkdir -p d:/source/FirstSpecode/src/app/api/projects/\\\\[id\\\\]/plan-studios/\\\\[planStudioId\\\\]/artifacts/\\\\[artfId\\\\]/good-design)"
     ]
   }
 }

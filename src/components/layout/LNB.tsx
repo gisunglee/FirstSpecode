@@ -46,6 +46,7 @@ export default function LNB() {
   const screensHref      = pBase ? `${pBase}/screens`       : "#";
   const areasHref        = pBase ? `${pBase}/areas`         : "#";
   const functionsHref    = pBase ? `${pBase}/functions`     : "#";
+  const planStudioHref      = pBase ? `${pBase}/plan-studio`      : "#";
   const dbTablesHref        = pBase ? `${pBase}/db-tables`        : "#";
   const designChangesHref   = pBase ? `${pBase}/design-changes`   : "#";
   const referenceInfoHref   = pBase ? `${pBase}/reference-info`   : "#";
@@ -76,6 +77,7 @@ export default function LNB() {
     { label: "기능 정의",   href: functionsHref,    icon: "⚙",  isActive: !!pBase && pathname.startsWith(`${pBase}/functions`) },
     { label: "DB 테이블",   href: dbTablesHref,          icon: "🗄",  isActive: !!pBase && pathname.startsWith(`${pBase}/db-tables`) },
     { isSeparator: true },
+    { label: "기획실",       href: planStudioHref,   icon: "🎨", isActive: !!pBase && pathname.startsWith(`${pBase}/plan-studio`) },
     { label: "기획 가져오기", href: aiImportHref,    icon: "📥", isActive: !!pBase && pathname.startsWith(`${pBase}/planning/ai-import`) },
     { label: "설계 가져오기", href: designImportHref, icon: "🏗", isActive: !!pBase && pathname.startsWith(`${pBase}/design-import`) },
     { isSeparator: true },

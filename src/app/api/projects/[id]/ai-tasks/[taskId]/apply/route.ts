@@ -59,11 +59,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         },
       });
 
-      // ② task_ty_code에 따라 대상 엔티티 업데이트
-      //    DESIGN  → 영역 설명(area_dc) 또는 기능 설명(func_dc)에 결과 반영
+      // ② ref_ty_code에 따라 대상 엔티티 업데이트
+      //    AREA / FUNCTION: DESIGN·IMPLEMENT → 설명 필드에 결과 반영
+      //    PLAN_STUDIO_ARTF: 기획실 산출물 → artf_cn에 결과 반영
       //    INSPECT / IMPACT / CUSTOM → 정보성, 엔티티 직접 수정 없음
-      //    IMPLEMENT / MOCKUP → 설명에 결과 병합
-      if (["DESIGN", "IMPLEMENT"].includes(task.task_ty_code)) {
+      if (task.ref_ty_code === "PLAN_STUDIO_ARTF") {
+        // 기획실 산출물: AI 결과를 artf_cn에 반영
+        await tx.tbDsPlanStudioArtf.update({
+          where: { artf_id: task.ref_id },
+          data:  { artf_cn: resultCn, mdfcn_dt: now },
+        });
+      } else if (["DESIGN", "IMPLEMENT"].includes(task.task_ty_code)) {
         if (task.ref_ty_code === "AREA") {
           await tx.tbDsArea.update({
             where: { area_id: task.ref_id },
@@ -78,7 +84,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
 
       // ③ 설계 변경 이력 기록 (ai_req_yn = 'Y')
-      const refTblNm = task.ref_ty_code === "AREA" ? "tb_ds_area" : "tb_ds_function";
+      const refTblNm = task.ref_ty_code === "PLAN_STUDIO_ARTF"
+        ? "tb_ds_plan_studio_artf"
+        : task.ref_ty_code === "AREA" ? "tb_ds_area" : "tb_ds_function";
       await tx.tbDsDesignChange.create({
         data: {
           prjct_id:      projectId,

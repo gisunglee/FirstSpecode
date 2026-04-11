@@ -8,12 +8,13 @@
 
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { MAX_LIST_SIZE } from "@/lib/diff-test/constants";
 
 export async function GET() {
   try {
     const masters = await prisma.tbSpDiffTestMaster.findMany({
       orderBy: { creat_dt: "desc" },
-      take: 50,
+      take: MAX_LIST_SIZE,
       select: {
         master_id: true,
         test_sn: true,

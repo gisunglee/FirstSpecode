@@ -26,7 +26,7 @@ import MarkdownEditor from "@/components/ui/MarkdownEditor";
 
 type TaskStatus = "PENDING" | "IN_PROGRESS" | "DONE" | "APPLIED" | "REJECTED" | "FAILED" | "TIMEOUT";
 type TaskType   = "INSPECT" | "DESIGN" | "IMPLEMENT" | "MOCKUP" | "IMPACT" | "CUSTOM";
-type RefType    = "AREA" | "FUNCTION";
+type RefType    = "AREA" | "FUNCTION" | "PLAN_STUDIO_ARTF";
 
 type TaskDetail = {
   taskId:       string;

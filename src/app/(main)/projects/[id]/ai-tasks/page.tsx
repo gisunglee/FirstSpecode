@@ -25,8 +25,8 @@ import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
 type TaskStatus = "PENDING" | "IN_PROGRESS" | "DONE" | "APPLIED" | "REJECTED" | "FAILED" | "TIMEOUT";
-type TaskType   = "INSPECT" | "DESIGN" | "IMPLEMENT" | "MOCKUP" | "IMPACT" | "CUSTOM";
-type RefType    = "AREA" | "FUNCTION" | "UNIT_WORK";
+type TaskType   = "INSPECT" | "DESIGN" | "IMPLEMENT" | "MOCKUP" | "IMPACT" | "CUSTOM" | "IA" | "JOURNEY" | "FLOW" | "ERD" | "PROCESS";
+type RefType    = "AREA" | "FUNCTION" | "UNIT_WORK" | "PLAN_STUDIO_ARTF";
 
 type TaskRow = {
   taskId:       string;
@@ -70,6 +70,11 @@ const TASK_TYPE_LABELS: Record<TaskType, string> = {
   MOCKUP:    "목업",
   IMPACT:    "영향도 분석",
   CUSTOM:    "자유 요청",
+  IA:        "정보구조도",
+  JOURNEY:   "사용자여정",
+  FLOW:      "화면흐름",
+  ERD:       "ERD",
+  PROCESS:   "업무프로세스",
 };
 
 // ── 배지 스타일 함수 ─────────────────────────────────────────────────────────
@@ -105,6 +110,11 @@ function taskTypeBadgeStyle(type: TaskType): React.CSSProperties {
     MOCKUP:    { bg: "#f1f8e9", color: "#558b2f" },
     IMPACT:    { bg: "#fff3e0", color: "#ef6c00" },
     CUSTOM:    { bg: "#f5f5f5", color: "#757575" },
+    IA:        { bg: "#e3f2fd", color: "#1565c0" },
+    JOURNEY:   { bg: "#e8f5e9", color: "#2e7d32" },
+    FLOW:      { bg: "#fff3e0", color: "#e65100" },
+    ERD:       { bg: "#ede7f6", color: "#4527a0" },
+    PROCESS:   { bg: "#e0f2f1", color: "#00695c" },
   };
   const c = colors[type] ?? { bg: "#f5f5f5", color: "#555" };
   return {
@@ -120,9 +130,10 @@ function taskTypeBadgeStyle(type: TaskType): React.CSSProperties {
 
 function refTypeBadgeStyle(type: RefType): React.CSSProperties {
   const colors: Record<RefType, { bg: string; color: string }> = {
-    AREA:      { bg: "#f5f5f5", color: "#666666" },
-    FUNCTION:  { bg: "#f3e5f5", color: "#7b1fa2" },
-    UNIT_WORK: { bg: "#e3f2fd", color: "#1565c0" },
+    AREA:             { bg: "#f5f5f5", color: "#666666" },
+    FUNCTION:         { bg: "#f3e5f5", color: "#7b1fa2" },
+    UNIT_WORK:        { bg: "#e3f2fd", color: "#1565c0" },
+    PLAN_STUDIO_ARTF: { bg: "#fce4ec", color: "#c62828" },
   };
   const c = colors[type] ?? { bg: "#f5f5f5", color: "#555" };
   return {
@@ -341,6 +352,7 @@ function AiTasksPageInner() {
             <option value="UNIT_WORK">단위업무</option>
             <option value="AREA">영역</option>
             <option value="FUNCTION">기능</option>
+            <option value="PLAN_STUDIO_ARTF">기획실</option>
           </select>
 
           <select value={filterMember} onChange={(e) => handleFilterChange(setFilterMember, e.target.value)} style={{ ...filterSelectStyle, width: 140 }}>
@@ -399,7 +411,7 @@ function AiTasksPageInner() {
                 >
                   <div style={{ textAlign: "center" }}>
                     <span style={refTypeBadgeStyle(row.refType)}>
-                      {row.refType === "AREA" ? "영역" : row.refType === "UNIT_WORK" ? "단위업무" : "기능"}
+                      {row.refType === "AREA" ? "영역" : row.refType === "UNIT_WORK" ? "단위업무" : row.refType === "PLAN_STUDIO_ARTF" ? "기획실" : "기능"}
                     </span>
                   </div>
                   <div style={{ textAlign: "center" }}>

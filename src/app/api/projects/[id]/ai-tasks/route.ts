@@ -58,10 +58,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }),
     ]);
 
-    // 대상 이름 조인 — ref_ty_code 에 따라 UnitWork / Area / Function 조회
+    // 대상 이름 조인 — ref_ty_code 에 따라 UnitWork / Area / Function / PlanStudioArtf 조회
     const unitWorkIds = tasks.filter((t) => t.ref_ty_code === "UNIT_WORK").map((t) => t.ref_id);
     const areaIds     = tasks.filter((t) => t.ref_ty_code === "AREA")     .map((t) => t.ref_id);
     const functionIds = tasks.filter((t) => t.ref_ty_code === "FUNCTION") .map((t) => t.ref_id);
+    const artfIds     = tasks.filter((t) => t.ref_ty_code === "PLAN_STUDIO_ARTF").map((t) => t.ref_id);
 
     const [unitWorks, areas, functions] = await Promise.all([
       unitWorkIds.length
@@ -104,6 +105,26 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           })
         : [],
     ]);
+
+    // 기획실 산출물 조회
+    const planArtfs = artfIds.length
+      ? await prisma.tbDsPlanStudioArtf.findMany({
+          where: { artf_id: { in: artfIds } },
+          select: {
+            artf_id: true, artf_nm: true,
+            planStudio: { select: { plan_studio_display_id: true, plan_studio_nm: true } },
+          },
+        })
+      : [];
+    const planArtfMap = new Map(
+      planArtfs.map((a) => [a.artf_id, {
+        name:         a.artf_nm,
+        displayId:    a.planStudio.plan_studio_display_id,
+        unitWorkName: a.planStudio.plan_studio_nm,
+        screenName:   null as string | null,
+        areaName:     null as string | null,
+      }])
+    );
 
     const unitWorkMap = new Map(
       unitWorks.map((u) => [u.unit_work_id, {
@@ -151,6 +172,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         ? unitWorkMap.get(t.ref_id)
         : t.ref_ty_code === "AREA"
         ? areaMap.get(t.ref_id)
+        : t.ref_ty_code === "PLAN_STUDIO_ARTF"
+        ? planArtfMap.get(t.ref_id)
         : functionMap.get(t.ref_id);
 
       // IN_PROGRESS 상태에서 5분 초과 여부 계산 (강제 취소 버튼 노출 플래그)
