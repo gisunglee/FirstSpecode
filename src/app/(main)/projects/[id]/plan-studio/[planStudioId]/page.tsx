@@ -81,6 +81,10 @@ function DetailInner() {
   const [reqDetailTab, setReqDetailTab] = useState<"current" | "spec" | "analysis">("current");
   // AI 태스크 상세 팝업
   const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
+  // Full Size 뷰어 팝업
+  const [fullSizeOpen, setFullSizeOpen] = useState(false);
+  const [fullSizeMode, setFullSizeMode] = useState<"preview" | "edit">("preview");
+  const fullMermaidRef = useRef<HTMLDivElement>(null);
 
   // 상세 진입 시 첫 번째 산출물 자동 선택 (신규 모드가 아닐 때만)
   useEffect(() => {
@@ -157,6 +161,21 @@ function DetailInner() {
       }
     })();
   }, [artfFmtCode, viewMode, artfCn]);
+
+  // Full Size 팝업 Mermaid 렌더링
+  useEffect(() => {
+    if (!fullSizeOpen || artfFmtCode !== "MERMAID" || fullSizeMode !== "preview" || !artfCn || !fullMermaidRef.current) return;
+    (async () => {
+      try {
+        const mermaid = (await import("mermaid")).default;
+        mermaid.initialize({ startOnLoad: false, theme: "default" });
+        const { svg } = await mermaid.render(`mm-full-${Date.now()}`, artfCn);
+        if (fullMermaidRef.current) fullMermaidRef.current.innerHTML = svg;
+      } catch (err) {
+        if (fullMermaidRef.current) fullMermaidRef.current.innerHTML = `<pre style="color:#e53935">Mermaid 렌더링 오류:\n${err}</pre>`;
+      }
+    })();
+  }, [fullSizeOpen, artfFmtCode, fullSizeMode, artfCn]);
 
   // ── 저장 ──
   const saveMut = useMutation({
@@ -317,7 +336,20 @@ function DetailInner() {
           <span style={{ fontSize: 11, color: "#999" }}>({studio.planStudioDisplayId})</span>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => { if (isNew) { toast.error("먼저 저장하세요."); return; } if (!confirm("저장 후 AI 요청하시겠습니까?")) return; genMut.mutate(); }} disabled={genMut.isPending || isNew} style={primaryBtn}>
+          <button onClick={() => {
+            if (isNew) { toast.error("먼저 저장하세요."); return; }
+            // 기존 AI 태스크 상태 확인
+            const currentArtf = artfList.find((a) => a.artfId === selectedArtfId);
+            const aiStatus = currentArtf?.aiStatus;
+            if (aiStatus === "PENDING" || aiStatus === "IN_PROGRESS" || aiStatus === "PROCESSING") {
+              if (!confirm(`현재 AI 작업이 ${aiStatus === "PENDING" ? "대기 중" : "진행 중"}입니다.\n그래도 다시 요청하시겠습니까?`)) return;
+            } else if (currentArtf?.aiTaskId) {
+              if (!confirm("이미 AI 요청 이력이 있습니다.\n저장 후 다시 요청하시겠습니까?")) return;
+            } else {
+              if (!confirm("저장 후 AI 요청하시겠습니까?")) return;
+            }
+            genMut.mutate();
+          }} disabled={genMut.isPending || isNew} style={primaryBtn}>
             {genMut.isPending ? "AI 생성 중..." : "AI 생성"}
           </button>
           <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending || !artfNm.trim()} style={primaryBtn}>
@@ -343,6 +375,9 @@ function DetailInner() {
               <optgroup label="개발">
                 {Object.values(ARTF_DIV).filter((d) => d.group === "개발").map((d) => <option key={d.code} value={d.code}>{d.name}</option>)}
               </optgroup>
+            </select>
+            <select value={artfFmtCode} onChange={(e) => setArtfFmtCode(e.target.value)} style={{ ...inputStyle, width: 110, paddingRight: 28, appearance: "none", WebkitAppearance: "none", backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 10px center" }}>
+              {Object.values(ARTF_FMT).map((f) => <option key={f.code} value={f.code}>{f.name}</option>)}
             </select>
             {/* 선택 상태 → 수정 + 새 기획 | 신규 상태 → 추가 + 새 기획 */}
         {selectedArtfId ? (
@@ -370,9 +405,12 @@ function DetailInner() {
 
           {/* 산출물 그리드 — 테이블 스타일 */}
           <div style={{ marginBottom: 16, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-            <div style={{ display: "grid", gridTemplateColumns: ARTF_GRID, gap: 0, padding: "8px 12px", fontSize: 11, fontWeight: 600, color: "var(--color-text-secondary)", background: "var(--color-bg-muted)", borderBottom: "1px solid var(--color-border)" }}>
-              <div>기획명</div><div style={{ textAlign: "center" }}>구분</div><div style={{ textAlign: "center" }}>AI상태</div><div style={{ textAlign: "center" }}>액션</div><div style={{ textAlign: "center" }}>수정일시</div>
+            {/* 헤더 — 고정 */}
+            <div style={{ display: "grid", gridTemplateColumns: ARTF_GRID, gap: 0, padding: "8px 12px", fontSize: 11, fontWeight: 600, color: "var(--color-text-secondary)", background: "var(--color-bg-muted)", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
+              <div>기획명</div><div style={{ textAlign: "center" }}>구분</div><div style={{ textAlign: "center" }}>형식</div><div style={{ textAlign: "center" }}>AI상태</div><div style={{ textAlign: "center" }}>액션</div><div style={{ textAlign: "center" }}>수정일시</div>
             </div>
+            {/* 행 목록 — 5행(약 200px) 초과 시 스크롤 */}
+            <div style={{ maxHeight: 200, overflowY: "auto" }}>
             {artfList.map((a) => {
               const divBadge = DIV_BADGE_COLOR[a.artfDivCode] ?? { bg: "#eee", color: "#666" };
               const aiBadge = a.aiStatus ? AI_STATUS_BADGE[a.aiStatus] : null;
@@ -384,6 +422,7 @@ function DetailInner() {
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.artfNm || "(이름 없음)"}</span>
                   </div>
                   <div style={{ textAlign: "center" }}><span style={{ ...badge, background: divBadge.bg, color: divBadge.color }}>{ARTF_DIV[a.artfDivCode as keyof typeof ARTF_DIV]?.name ?? a.artfDivCode}</span></div>
+                  <div style={{ textAlign: "center", fontSize: 11, color: "var(--color-text-secondary)" }}>{ARTF_FMT[a.artfFmtCode as keyof typeof ARTF_FMT]?.name ?? a.artfFmtCode}</div>
                   <div style={{ textAlign: "center" }} onClick={(e) => { e.stopPropagation(); if (a.aiTaskId) setAiDetailTaskId(a.aiTaskId); }}>
                     {aiBadge ? (
                       <span style={{ ...badge, background: aiBadge.bg, color: aiBadge.color, cursor: a.aiTaskId ? "pointer" : "default" }}>{aiBadge.label}</span>
@@ -401,6 +440,7 @@ function DetailInner() {
               );
             })}
             {artfList.length === 0 && <div style={{ padding: 16, fontSize: 12, color: "#aaa", textAlign: "center" }}>산출물이 없습니다. 기획명을 입력하고 "+ 추가"를 클릭하세요.</div>}
+            </div>
           </div>
 
           {/* 컨텍스트 — 2단 구조, 버튼 우측 정렬 */}
@@ -484,6 +524,7 @@ function DetailInner() {
               {(["MD", "MERMAID", "HTML"] as const).map((f) => (
                 <button key={f} onClick={() => setArtfFmtCode(f)} style={{ ...tabBtn, fontWeight: artfFmtCode === f ? 700 : 400 }}>{ARTF_FMT[f].name}</button>
               ))}
+              <button onClick={() => { setFullSizeOpen(true); setFullSizeMode("preview"); }} style={{ ...tabBtn, fontSize: 14 }} title="Full Size">⛶</button>
             </div>
           </div>
 
@@ -498,7 +539,7 @@ function DetailInner() {
             ) : artfFmtCode === "MERMAID" ? (
               <div ref={mermaidRef} />
             ) : artfFmtCode === "HTML" ? (
-              <iframe srcDoc={artfCn} sandbox="allow-same-origin" style={{ width: "100%", height: "100%", border: "1px solid var(--color-border)", borderRadius: 6 }} />
+              <iframe srcDoc={artfCn} sandbox="allow-scripts" style={{ width: "100%", height: "100%", border: "1px solid var(--color-border)", borderRadius: 6 }} title="HTML 미리보기" />
             ) : null}
           </div>
         </div>
@@ -723,6 +764,39 @@ function DetailInner() {
         </div>
       )}
 
+      {/* ── Full Size 뷰어 팝업 ── */}
+      {fullSizeOpen && (
+        <div onClick={() => setFullSizeOpen(false)} style={overlay}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--color-bg-card)", borderRadius: 10, width: "95vw", height: "93vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 48px rgba(0,0,0,0.3)", overflow: "hidden" }}>
+            {/* 헤더 */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 20px", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button onClick={() => setFullSizeMode("preview")} style={{ ...tabBtn, fontWeight: fullSizeMode === "preview" ? 700 : 400 }}>미리보기</button>
+                <button onClick={() => setFullSizeMode("edit")} style={{ ...tabBtn, fontWeight: fullSizeMode === "edit" ? 700 : 400 }}>원문편집</button>
+                <span style={{ fontSize: 12, color: "var(--color-text-secondary)", marginLeft: 8 }}>
+                  {ARTF_FMT[artfFmtCode as keyof typeof ARTF_FMT]?.name ?? artfFmtCode}
+                </span>
+              </div>
+              <button onClick={() => setFullSizeOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#999" }}>✕</button>
+            </div>
+            {/* 본문 */}
+            <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+              {fullSizeMode === "edit" ? (
+                <textarea value={artfCn} onChange={(e) => setArtfCn(e.target.value)} style={{ ...inputStyle, width: "100%", height: "100%", fontFamily: "monospace", resize: "none", fontSize: 13 }} />
+              ) : !artfCn ? (
+                <div style={{ color: "#aaa", fontSize: 13, padding: 20 }}>아직 생성된 본문이 없습니다.</div>
+              ) : artfFmtCode === "MD" ? (
+                <div className="sp-markdown" style={{ fontSize: 15, lineHeight: 1.9, color: "var(--color-text-primary)" }} dangerouslySetInnerHTML={{ __html: renderMarkdown(artfCn) }} />
+              ) : artfFmtCode === "MERMAID" ? (
+                <div ref={fullMermaidRef} />
+              ) : artfFmtCode === "HTML" ? (
+                <iframe srcDoc={artfCn} sandbox="allow-same-origin allow-scripts" style={{ width: "100%", height: "100%", border: "1px solid var(--color-border)", borderRadius: 6 }} />
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── AI 태스크 상세 팝업 (공통 컴포넌트) ── */}
       {aiDetailTaskId && (
         <AiTaskDetailDialog
@@ -763,7 +837,7 @@ function formatShortDt(dt: string | Date): string {
 }
 
 // ── 스타일 ───────────────────────────────────────────────────────────────────
-const ARTF_GRID = "1fr 85px 95px 40px 120px";
+const ARTF_GRID = "1fr 80px 70px 80px 35px 105px";
 const actionIconBtn: React.CSSProperties = { background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "#999", padding: "2px 4px" };
 const inputStyle: React.CSSProperties = { width: "100%", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-primary)", fontSize: 13, outline: "none", boxSizing: "border-box" };
 const primaryBtn: React.CSSProperties = { padding: "5px 14px", borderRadius: 6, border: "none", background: "var(--color-primary, #1976d2)", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" };

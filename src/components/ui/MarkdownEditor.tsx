@@ -9,8 +9,18 @@
  *   - 내부 헤더 행 없음 — 세로 공간 낭비 방지
  */
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { renderMarkdown } from "@/lib/renderMarkdown";
+
+/**
+ * HTML 문서 여부 판별 — <!DOCTYPE, <html, <head, <body 등
+ * 전체 HTML 문서는 dangerouslySetInnerHTML로 삽입하면
+ * 전역 스타일이 본창을 오염시키므로 iframe으로 격리해야 함
+ */
+function isFullHtmlDocument(content: string): boolean {
+  const trimmed = content.trimStart().substring(0, 200).toLowerCase();
+  return trimmed.startsWith("<!doctype") || trimmed.startsWith("<html");
+}
 
 type Props = {
   value:          string;
@@ -32,6 +42,9 @@ export default function MarkdownEditor({
   // 외부 탭이 없으면 내부 state로 fallback (탭 버튼은 외부 MarkdownTabButtons에서 제어)
   const [internalTab] = useState<"edit" | "preview">("edit");
   const tab = externalTab ?? internalTab;
+
+  // HTML 문서 여부를 메모이제이션 — 불필요한 재계산 방지
+  const isHtml = useMemo(() => isFullHtmlDocument(value), [value]);
 
   return (
     <div style={{
@@ -65,6 +78,22 @@ export default function MarkdownEditor({
             flex:         fullHeight ? 1 : "none",
             minHeight:    0,
           }}
+        />
+      ) : isHtml ? (
+        /* HTML 문서는 iframe으로 격리 렌더링 — 전역 스타일 오염 방지 */
+        <iframe
+          srcDoc={value}
+          sandbox="allow-scripts"
+          style={{
+            width:        "100%",
+            height:       fullHeight ? "100%" : (rows * 21),
+            border:       "1px solid var(--color-border)",
+            borderRadius: 6,
+            background:   "#fff",
+            flex:         fullHeight ? 1 : "none",
+            minHeight:    fullHeight ? 0 : (rows * 21),
+          }}
+          title="HTML 미리보기"
         />
       ) : (
         <div

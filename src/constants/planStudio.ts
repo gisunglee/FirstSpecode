@@ -54,9 +54,13 @@ export const DIV_BADGE_COLOR: Record<string, { bg: string; color: string }> = {
 
 /** AI 상태 → 배지 */
 export const AI_STATUS_BADGE: Record<string, { bg: string; color: string; label: string }> = {
-  PENDING:    { bg: "#fff3e0", color: "#e65100", label: "대기" },
-  PROCESSING: { bg: "#e3f2fd", color: "#1565c0", label: "작업중" },
-  COMPLETED:  { bg: "#e8f5e9", color: "#2e7d32", label: "생성완료" },
-  DONE:       { bg: "#e8f5e9", color: "#2e7d32", label: "생성완료" },
-  FAILED:     { bg: "#fce4ec", color: "#c62828", label: "실패" },
+  PENDING:     { bg: "#fff3e0", color: "#e65100", label: "대기" },
+  IN_PROGRESS: { bg: "#e3f2fd", color: "#1565c0", label: "작업중" },
+  PROCESSING:  { bg: "#e3f2fd", color: "#1565c0", label: "작업중" },
+  COMPLETED:   { bg: "#e8f5e9", color: "#2e7d32", label: "생성완료" },
+  DONE:        { bg: "#e8f5e9", color: "#2e7d32", label: "생성완료" },
+  APPLIED:     { bg: "#e8f5e9", color: "#1b5e20", label: "반영됨" },
+  REJECTED:    { bg: "#f5f5f5", color: "#757575", label: "반려" },
+  FAILED:      { bg: "#fce4ec", color: "#c62828", label: "실패" },
+  TIMEOUT:     { bg: "#fce4ec", color: "#c62828", label: "시간초과" },
 };

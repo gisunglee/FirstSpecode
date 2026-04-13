@@ -7,7 +7,6 @@
  *   - 기능 상세 조회 (FID-00171)
  *   - 기능 생성/수정 + 명세 편집 (FID-00172, 00173)
  *   - AI 명세 누락 검토 요청 (FID-00174)
- *   - AI 영향도 분석 요청 (FID-00175)
  *   - 하단 컬럼 매핑 목록 (FID-00178)
  *   - 컬럼 매핑 관리 팝업 (PID-00053 / FID-00181)
  *
@@ -33,6 +32,7 @@ import ColMappingDialog from "@/components/ui/ColMappingDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
+import ImplTargetDialog from "@/components/ui/ImplTargetDialog";
 import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
 import ProgressTracker from "@/components/ui/ProgressTracker";
 import { useAppStore } from "@/store/appStore";
@@ -139,6 +139,7 @@ function FunctionDetailPageInner() {
   // ── AI 패널 팝업 상태 ────────────────────────────────────────────────────────
   const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
   const [aiHistoryTaskType, setAiHistoryTaskType] = useState<string | null>(null);
+  const [implTargetOpen, setImplTargetOpen] = useState(false);
 
   // ── AI 도움말 팝업 상태 ──────────────────────────────────────────────────────
   const [helpOpen, setHelpOpen] = useState<string | null>(null);
@@ -308,7 +309,6 @@ function FunctionDetailPageInner() {
       const labels: Record<string, string> = {
         DESIGN: "AI 설계 요청이 접수되었습니다.",
         INSPECT: "AI 점검 요청이 접수되었습니다.",
-        IMPACT: "AI 영향도 분석 요청이 접수되었습니다.",
       };
       toast.success(labels[vars.taskType] ?? "AI 요청이 접수되었습니다.");
       // 상태 갱신을 위해 상세 재조회
@@ -559,6 +559,43 @@ function FunctionDetailPageInner() {
                         </div>
                       );
                     })}
+
+                    {/* AI 구현 — 구현 대상 선택 팝업 트리거 */}
+                    <div className="ai-task-card" style={{
+                      display: "flex", alignItems: "center", gap: 12,
+                      padding: "10px 14px", borderRadius: 8,
+                      border: "1px solid var(--color-border)",
+                      background: "var(--color-bg-muted)",
+                    }}>
+                      <div style={{
+                        width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        background: "#e1f5fe", fontSize: 18,
+                      }}>
+                        {"⚡"}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                          AI 구현
+                        </span>
+                        <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 2, lineHeight: 1.4 }}>
+                          구현 대상 선택 후 AI에게 구현 요청
+                        </div>
+                      </div>
+                      <button
+                        className="ai-mini-btn ai-mini-btn-run"
+                        onClick={() => setImplTargetOpen(true)}
+                        style={{
+                          ...aiMiniBtn,
+                          background: "rgba(103,80,164,0.1)",
+                          color: "rgba(103,80,164,0.95)",
+                          border: "1px solid rgba(103,80,164,0.3)",
+                          fontWeight: 700,
+                        }}
+                      >
+                        선택
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1153,8 +1190,17 @@ function FunctionDetailPageInner() {
           projectId={projectId}
           refType="FUNCTION"
           refId={functionId}
-          taskType={aiHistoryTaskType as "DESIGN" | "INSPECT" | "IMPACT"}
+          taskType={aiHistoryTaskType as "DESIGN" | "INSPECT"}
           onClose={() => setAiHistoryTaskType(null)}
+        />
+      )}
+      {/* ── 구현 대상 선택 팝업 ──────────────────────────────────────────── */}
+      {implTargetOpen && !isNew && (
+        <ImplTargetDialog
+          projectId={projectId}
+          refType="FUNCTION"
+          refId={functionId}
+          onClose={() => setImplTargetOpen(false)}
         />
       )}
       {/* ── 삭제 확인 다이얼로그 ─────────────────────────────────────────── */}
@@ -1204,7 +1250,6 @@ function FunctionDetailPageInner() {
 const AI_TASK_CONFIGS = [
   { taskType: "DESIGN",  label: "AI 설계",   desc: "자유 형식 설명 → 표준 양식 재구성",            icon: { bg: "#e8eaf6", emoji: "⊞" }, hasHelp: true  },
   { taskType: "INSPECT", label: "AI 점검",   desc: "6가지 관점 설계 검토\n(같은 영역 기능 기준)",  icon: { bg: "#e8f5e9", emoji: "✓" }, hasHelp: true  },
-  { taskType: "IMPACT",  label: "AI 영향도", desc: "현 설계가 타 기능에\n미치는 영향 분석",        icon: { bg: "#fff8e1", emoji: "+"  }, hasHelp: false },
 ];
 
 // 도움말 팝업 내용 — taskType별 정의
