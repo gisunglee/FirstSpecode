@@ -16,6 +16,7 @@
  *   - refType:   호출 페이지의 엔티티 유형 (FUNCTION | AREA | SCREEN | UNIT_WORK)
  *   - refId:     호출 페이지의 엔티티 ID
  *   - onClose:   닫기 콜백
+ *   - onImplRequest: 구현요청 콜백 — 선택된 기능 ID 배열 전달
  */
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -91,11 +92,13 @@ export default function ImplTargetDialog({
   refType,
   refId,
   onClose,
+  onImplRequest,
 }: {
   projectId: string;
   refType:   NodeType;
   refId:     string;
   onClose:   () => void;
+  onImplRequest?: (selectedFunctionIds: string[]) => void;
 }) {
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
 
@@ -156,10 +159,27 @@ export default function ImplTargetDialog({
     [data?.tree, parentMap]
   );
 
-  // ── 구현요청 버튼 — 기능(FN) 1개 이상 선택 여부 확인 ──────────────────────
+  // ── 구현요청 버튼 — 선택된 기능(FN) ID 수집 후 콜백 호출 ─────────────────
   const handleImplRequest = useCallback(() => {
-    toast.info("준비 중입니다.");
-  }, []);
+    if (!data?.tree || !onImplRequest) return;
+
+    // 트리 전체에서 FUNCTION 타입이면서 체크된 노드 ID 수집
+    const fnIds: string[] = [];
+    function collectCheckedFns(node: TreeNode) {
+      if (node.type === "FUNCTION" && checkedIds.has(node.id)) {
+        fnIds.push(node.id);
+      }
+      for (const child of node.children) collectCheckedFns(child);
+    }
+    collectCheckedFns(data.tree);
+
+    if (fnIds.length === 0) {
+      toast.error("기능을 1개 이상 선택해 주세요.");
+      return;
+    }
+
+    onImplRequest(fnIds);
+  }, [data?.tree, checkedIds, onImplRequest]);
 
   return (
     <div

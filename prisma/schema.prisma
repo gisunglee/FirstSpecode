@@ -129,21 +129,21 @@ model TbCmSocialAccount {
 }
 
 model TbPjProject {
-  prjct_id          String                  @id @default(uuid())
-  prjct_nm          String
-  prjct_dc          String?
-  client_nm         String?
-  bgng_de           DateTime?
-  end_de            DateTime?
-  creat_mber_id     String?
-  creat_dt          DateTime                @default(now())
-  mdfcn_dt          DateTime?
-  planStudios       TbDsPlanStudio[]
-  apiKeys           TbPjProjectApiKey[]
-  invitations       TbPjProjectInvitation[]
-  members           TbPjProjectMember[]
-  settings          TbPjProjectSettings?
-  settingsHistory   TbPjSettingsHistory[]
+  prjct_id        String                  @id @default(uuid())
+  prjct_nm        String
+  prjct_dc        String?
+  client_nm       String?
+  bgng_de         DateTime?
+  end_de          DateTime?
+  creat_mber_id   String?
+  creat_dt        DateTime                @default(now())
+  mdfcn_dt        DateTime?
+  planStudios     TbDsPlanStudio[]
+  apiKeys         TbPjProjectApiKey[]
+  invitations     TbPjProjectInvitation[]
+  members         TbPjProjectMember[]
+  settings        TbPjProjectSettings?
+  settingsHistory TbPjSettingsHistory[]
 
   @@map("tb_pj_project")
 }
@@ -412,24 +412,25 @@ model TbCmProgress {
 }
 
 model TbAiTask {
-  ai_task_id        String    @id @default(uuid())
-  prjct_id          String
-  ref_ty_code       String
-  ref_id            String
-  task_ty_code      String
-  req_cn            String?
-  coment_cn         String?
-  result_cn         String?
-  task_sttus_code   String    @default("PENDING")
-  reject_rsn_cn     String?
-  req_snapshot_data Json?
-  parent_task_id    String?
-  retry_cnt         Int       @default(0)
-  exec_avlbl_dt     DateTime?
-  req_mber_id       String?
-  req_dt            DateTime  @default(now())
-  compl_dt          DateTime?
-  apply_dt          DateTime?
+  ai_task_id          String                @id @default(uuid())
+  prjct_id            String
+  ref_ty_code         String
+  ref_id              String
+  task_ty_code        String
+  req_cn              String?
+  coment_cn           String?
+  result_cn           String?
+  task_sttus_code     String                @default("PENDING")
+  reject_rsn_cn       String?
+  req_snapshot_data   Json?
+  parent_task_id      String?
+  retry_cnt           Int                   @default(0)
+  exec_avlbl_dt       DateTime?
+  req_mber_id         String?
+  req_dt              DateTime              @default(now())
+  compl_dt            DateTime?
+  apply_dt            DateTime?
+  implSnapshots TbSpImplSnapshot[]
 
   @@map("tb_ai_task")
 }
@@ -707,22 +708,20 @@ model TbSpDiffTestNode {
   @@map("tb_sp_diff_test_node")
 }
 
-// ── 기획실 (Plan Studio) — 산출물 컨테이너 (폴더) ────────────────────────────
 model TbDsPlanStudio {
-  plan_studio_id         String   @id
+  plan_studio_id         String               @id
   prjct_id               String
   plan_studio_display_id String
-  plan_studio_nm         String   @default("")
-  plan_studio_div_code   String   @default("IA")
-  plan_cn                String?
-  coment_cn              String?
-  sort_ordr              Int      @default(0)
+  plan_studio_nm         String               @default("")
   creat_mber_id          String?
-  creat_dt               DateTime @default(now())
+  creat_dt               DateTime             @default(now())
   mdfcn_dt               DateTime?
-
-  project   TbPjProject          @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_plan_studio_prjct_fk")
-  artifacts TbDsPlanStudioArtf[]
+  coment_cn              String?
+  plan_cn                String?
+  plan_studio_div_code   String               @default("IA")
+  sort_ordr              Int                  @default(0)
+  project                TbPjProject          @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_plan_studio_prjct_fk")
+  artifacts              TbDsPlanStudioArtf[]
 
   @@unique([prjct_id, plan_studio_display_id], map: "tb_ds_plan_studio_display_id_uk")
   @@index([prjct_id, plan_studio_div_code], map: "tb_ds_plan_studio_div_code_idx")
@@ -730,45 +729,57 @@ model TbDsPlanStudio {
   @@map("tb_ds_plan_studio")
 }
 
-// ── 기획실 산출물 (Artifact) — 실제 작업 단위 (문서) ─────────────────────────
 model TbDsPlanStudioArtf {
-  artf_id        String   @id
+  artf_id        String               @id
   plan_studio_id String
-  artf_nm        String   @default("")
-  artf_div_code  String   @default("IA")
-  artf_fmt_code  String   @default("MD")
+  artf_nm        String               @default("")
+  artf_div_code  String               @default("IA")
+  artf_fmt_code  String               @default("MD")
   artf_idea_cn   String?
   coment_cn      String?
   artf_cn        String?
-  ver_no         Int      @default(1)
-  good_design_yn String   @default("N") @db.Char(1)
+  good_design_yn String               @default("N") @db.Char(1)
   ai_task_id     String?
   creat_mber_id  String?
-  creat_dt       DateTime @default(now())
+  creat_dt       DateTime             @default(now())
   mdfr_mber_id   String?
   mdfcn_dt       DateTime?
-
-  planStudio TbDsPlanStudio     @relation(fields: [plan_studio_id], references: [plan_studio_id], onDelete: Cascade, map: "tb_ds_plan_studio_artf_plan_studio_fk")
-  contexts   TbDsPlanStudioCtxt[]
+  ver_no         Int                  @default(1)
+  planStudio     TbDsPlanStudio       @relation(fields: [plan_studio_id], references: [plan_studio_id], onDelete: Cascade, map: "tb_ds_plan_studio_artf_plan_studio_fk")
+  contexts       TbDsPlanStudioCtxt[]
 
   @@index([ai_task_id], map: "tb_ds_plan_studio_artf_ai_task_idx")
   @@index([plan_studio_id, artf_fmt_code, ver_no(sort: Desc)], map: "tb_ds_plan_studio_artf_ps_idx")
   @@map("tb_ds_plan_studio_artf")
 }
 
-// ── 기획실 컨텍스트 (REQ/ARTF 참조 매핑, artf 레벨) ─────────────────────────
 model TbDsPlanStudioCtxt {
-  ctxt_id       String   @id
+  ctxt_id       String             @id
   artf_id       String
   ctxt_ty_code  String
   ref_id        String
-  sort_ordr     Int      @default(0)
+  sort_ordr     Int                @default(0)
   creat_mber_id String?
-  creat_dt      DateTime @default(now())
-
-  artifact TbDsPlanStudioArtf @relation(fields: [artf_id], references: [artf_id], onDelete: Cascade, map: "tb_ds_plan_studio_ctxt_artf_fk")
+  creat_dt      DateTime           @default(now())
+  artifact      TbDsPlanStudioArtf @relation(fields: [artf_id], references: [artf_id], onDelete: Cascade, map: "tb_ds_plan_studio_ctxt_artf_fk")
 
   @@unique([artf_id, ctxt_ty_code, ref_id], map: "tb_ds_plan_studio_ctxt_uk")
   @@index([ctxt_ty_code, ref_id], map: "tb_ds_plan_studio_ctxt_ref_idx")
   @@map("tb_ds_plan_studio_ctxt")
+}
+
+// ── 구현요청 스냅샷 — 각 계층의 _dc 내용을 요청 시점에 저장 (diff 추적용) ──
+model TbSpImplSnapshot {
+  snapshot_id  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ai_task_id   String
+  ref_tbl_nm   String    @db.VarChar(50)
+  ref_id       String    @db.VarChar(36)
+  content_hash String    @db.Char(64)
+  raw_cn       String
+  creat_dt     DateTime? @default(now()) @db.Timestamp(6)
+
+  aiTask TbAiTask @relation(fields: [ai_task_id], references: [ai_task_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_impl_snapshot_task")
+
+  @@index([ref_tbl_nm, ref_id, creat_dt(sort: Desc)], map: "idx_impl_snapshot_ref")
+  @@map("tb_sp_impl_snapshot")
 }

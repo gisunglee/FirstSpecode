@@ -32,6 +32,7 @@ import ColMappingDialog from "@/components/ui/ColMappingDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
+import ImplRequestPopup from "@/components/ui/ImplRequestPopup";
 import ImplTargetDialog from "@/components/ui/ImplTargetDialog";
 import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
 import ProgressTracker from "@/components/ui/ProgressTracker";
@@ -140,6 +141,8 @@ function FunctionDetailPageInner() {
   const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
   const [aiHistoryTaskType, setAiHistoryTaskType] = useState<string | null>(null);
   const [implTargetOpen, setImplTargetOpen] = useState(false);
+  // 구현요청: ImplTargetDialog에서 선택된 기능 ID → ImplRequestPopup에 전달
+  const [implRequestFnIds, setImplRequestFnIds] = useState<string[] | null>(null);
 
   // ── AI 도움말 팝업 상태 ──────────────────────────────────────────────────────
   const [helpOpen, setHelpOpen] = useState<string | null>(null);
@@ -1126,6 +1129,18 @@ function FunctionDetailPageInner() {
         unitWorkDc={data?.unitWorkDc ?? ""}
       />
 
+      {/* ── 구현요청 프롬프트 미리보기 팝업 ─────────────────────────────── */}
+      {implRequestFnIds && (
+        <ImplRequestPopup
+          projectId={projectId}
+          entryType="FUNCTION"
+          entryId={functionId}
+          functionIds={implRequestFnIds}
+          onClose={() => setImplRequestFnIds(null)}
+          onSubmitted={() => queryClient.invalidateQueries({ queryKey: ["function", projectId, functionId] })}
+        />
+      )}
+
       {/* ── AI 태스크 결과 상세 팝업 ────────────────────────────────────── */}
       {aiDetailTaskId && (
         <AiTaskDetailDialog
@@ -1201,6 +1216,11 @@ function FunctionDetailPageInner() {
           refType="FUNCTION"
           refId={functionId}
           onClose={() => setImplTargetOpen(false)}
+          onImplRequest={(fnIds) => {
+            // ImplTargetDialog 닫고 → 프롬프트 미리보기 팝업 열기
+            setImplTargetOpen(false);
+            setImplRequestFnIds(fnIds);
+          }}
         />
       )}
       {/* ── 삭제 확인 다이얼로그 ─────────────────────────────────────────── */}

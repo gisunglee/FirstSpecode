@@ -172,7 +172,9 @@
       "Bash(ls -la /d/source/FirstSpecode/src/app/api/projects/*/planning/tree/)",
       "Bash(grep -E \"^\\(areas|screens|unit-works|functions\\)$\")",
       "Bash(ls d:/source/specode/src/app/api/functions/[id]/)",
-      "Bash(ls d:/source/FirstSpecode/src/app/api/projects/[id]/unit-works/)"
+      "Bash(ls d:/source/FirstSpecode/src/app/api/projects/[id]/unit-works/)",
+      "Bash(grep -E \"import|^$\")",
+      "Bash(node -e \"const { PrismaClient } = require\\('@prisma/client'\\); const p = new PrismaClient\\(\\); console.log\\(typeof p.tbSpImplSnapshot\\);\")"
     ]
   }
 }
