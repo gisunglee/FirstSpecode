@@ -52,7 +52,7 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
 const TASK_TYPE_LABELS: Record<TaskType, string> = {
   INSPECT:   "명세 검토",
   DESIGN:    "설계",
-  IMPLEMENT: "구현 가이드",
+  IMPLEMENT: "구현",
   MOCKUP:    "목업",
   IMPACT:    "영향도 분석",
   CUSTOM:    "자유 요청",
@@ -117,7 +117,14 @@ export default function AiTaskHistoryDialog({
   const { data, isLoading } = useQuery({
     queryKey: ["ai-task-history", projectId, refType, refId, taskType],
     queryFn:  () => {
-      const sp = new URLSearchParams({ refType, refId, taskType });
+      const sp = new URLSearchParams({ taskType });
+      // IMPLEMENT는 스냅샷 경유 조회 (여러 기능이 한 태스크에 포함될 수 있으므로)
+      if (taskType === "IMPLEMENT") {
+        sp.set("snapshotRefId", refId);
+      } else {
+        sp.set("refType", refType);
+        sp.set("refId", refId);
+      }
       return authFetch<{ data: { items: TaskRow[] } }>(
         `/api/projects/${projectId}/ai-tasks?${sp.toString()}`
       ).then((r) => r.data.items);

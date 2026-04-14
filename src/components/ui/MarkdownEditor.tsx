@@ -9,7 +9,7 @@
  *   - 내부 헤더 행 없음 — 세로 공간 낭비 방지
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { renderMarkdown } from "@/lib/renderMarkdown";
 
 /**
@@ -45,6 +45,59 @@ export default function MarkdownEditor({
 
   // HTML 문서 여부를 메모이제이션 — 불필요한 재계산 방지
   const isHtml = useMemo(() => isFullHtmlDocument(value), [value]);
+
+  // Mermaid 코드블록 포함 여부 — ```mermaid 패턴 감지
+  const hasMermaid = useMemo(() => /```mermaid/i.test(value), [value]);
+
+  // 마크다운 미리보기 영역 ref — Mermaid 렌더링용
+  const mdPreviewRef = useRef<HTMLDivElement>(null);
+
+  // Mermaid 코드블록을 다이어그램으로 변환
+  const renderMermaidBlocks = useCallback(async () => {
+    const container = mdPreviewRef.current;
+    if (!container) return;
+
+    // marked가 ```mermaid 블록을 <code class="language-mermaid"> 로 변환함
+    const codeEls = container.querySelectorAll<HTMLElement>("code.language-mermaid");
+    if (codeEls.length === 0) return;
+
+    try {
+      const mermaid = (await import("mermaid")).default;
+      mermaid.initialize({ startOnLoad: false, theme: "default" });
+
+      for (let i = 0; i < codeEls.length; i++) {
+        const codeEl = codeEls[i];
+        const preEl = codeEl.parentElement;   // <pre> 래퍼
+        const src = codeEl.textContent ?? "";
+        if (!src.trim()) continue;
+
+        try {
+          const { svg } = await mermaid.render(`mde-mm-${Date.now()}-${i}`, src);
+          // <pre><code> → Mermaid SVG 래퍼로 교체
+          const wrapper = document.createElement("div");
+          wrapper.className = "mermaid-rendered";
+          wrapper.style.cssText = "overflow-x:auto;padding:12px 0;text-align:center";
+          wrapper.innerHTML = svg;
+          (preEl ?? codeEl).replaceWith(wrapper);
+        } catch (err) {
+          // 개별 블록 에러 — 원본 유지, 에러 메시지 추가
+          const errDiv = document.createElement("div");
+          errDiv.style.cssText = "color:#e53935;font-size:12px;margin-top:4px";
+          errDiv.textContent = `Mermaid 렌더링 오류: ${err}`;
+          (preEl ?? codeEl).after(errDiv);
+        }
+      }
+    } catch {
+      // mermaid 모듈 로드 실패 — 무시 (코드블록 그대로 표시)
+    }
+  }, []);
+
+  // 미리보기 탭 + Mermaid 포함 시 렌더링 실행
+  useEffect(() => {
+    if (tab === "preview" && !isHtml && hasMermaid) {
+      renderMermaidBlocks();
+    }
+  }, [tab, isHtml, hasMermaid, value, renderMermaidBlocks]);
 
   return (
     <div style={{
@@ -97,6 +150,7 @@ export default function MarkdownEditor({
         />
       ) : (
         <div
+          ref={mdPreviewRef}
           className="sp-markdown"
           style={{
             width:        "100%",

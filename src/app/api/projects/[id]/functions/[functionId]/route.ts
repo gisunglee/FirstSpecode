@@ -29,7 +29,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const [fn, aiTaskRows] = await Promise.all([
+    const [fn, aiTaskRows, implSnapshotRows] = await Promise.all([
       prisma.tbDsFunction.findUnique({
         where:   { func_id: functionId },
         include: {
@@ -50,6 +50,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           },
         },
       }),
+      // DESIGN/INSPECT/IMPACT — 기존: ref_id = functionId 직접 조회
       prisma.tbAiTask.findMany({
         where: {
           prjct_id:     projectId,
@@ -58,6 +59,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           task_ty_code: { in: ["DESIGN", "INSPECT", "IMPACT"] },
         },
         orderBy: { req_dt: "desc" },
+      }),
+      // IMPLEMENT — 스냅샷 경유: 이 기능이 포함된 구현요청 태스크 조회
+      // tb_sp_impl_snapshot에 기능별 레코드가 있으므로 해당 ai_task_id로 역추적
+      prisma.tbSpImplSnapshot.findMany({
+        where: { ref_tbl_nm: "tb_ds_function", ref_id: functionId },
+        select: { ai_task_id: true },
+        orderBy: { creat_dt: "desc" },
+        distinct: ["ai_task_id"],
       }),
     ]);
 
@@ -73,6 +82,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    // IMPLEMENT — 스냅샷에서 찾은 ai_task_id로 최신 태스크 1건 조회
+    if (!aiTasks["IMPLEMENT"] && implSnapshotRows.length > 0) {
+      const implTask = await prisma.tbAiTask.findFirst({
+        where: {
+          ai_task_id:   { in: implSnapshotRows.map((s) => s.ai_task_id) },
+          task_ty_code: "IMPLEMENT",
+        },
+        orderBy: { req_dt: "desc" },
+      });
+      if (implTask) {
+        aiTasks["IMPLEMENT"] = { aiTaskId: implTask.ai_task_id, status: implTask.task_sttus_code };
+      }
+    }
+
     return apiSuccess({
       funcId:         fn.func_id,
       displayId:      fn.func_display_id,
@@ -80,7 +103,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       description:    fn.func_dc ?? "",
       commentCn:        fn.coment_cn ?? "",
       type:           fn.func_ty_code,
-      status:         fn.func_sttus_code,
       priority:       fn.priort_code,
       complexity:     fn.cmplx_code,
       effort:         fn.efrt_val ?? "",

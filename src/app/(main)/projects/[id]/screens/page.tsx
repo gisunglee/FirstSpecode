@@ -184,6 +184,7 @@ function ScreensPageInner() {
             <div>화면명</div>
             <div>화면유형</div>
             <div style={{ textAlign: "center" }}>영역수</div>
+            <div style={{ textAlign: "center" }}>정렬</div>
             <div>대분류</div>
             <div>중분류</div>
             <div>소분류</div>
@@ -233,18 +234,21 @@ function ScreensPageInner() {
                   ) : null}
                 </div>
 
-                {/* 단위업무명 (클릭 → 단위업무 상세, 행 클릭과 분리) */}
+                {/* 단위업무명 — 같은 unitWorkId이면 첫 행에만 표시 */}
                 <div onClick={(e) => e.stopPropagation()}>
-                  {screen.unitWorkId ? (
-                    <button
-                      onClick={() => router.push(`/projects/${projectId}/unit-works/${screen.unitWorkId}`)}
-                      style={linkBtnStyle}
-                    >
-                      {screen.unitWorkName}
-                    </button>
-                  ) : (
-                    <span style={{ color: "#aaa", fontSize: 13 }}>미분류</span>
-                  )}
+                  {items[idx - 1]?.unitWorkId === screen.unitWorkId && screen.unitWorkId
+                    ? null
+                    : screen.unitWorkId ? (
+                      <button
+                        onClick={() => router.push(`/projects/${projectId}/unit-works/${screen.unitWorkId}`)}
+                        style={linkBtnStyle}
+                      >
+                        {screen.unitWorkName}
+                      </button>
+                    ) : (
+                      <span style={{ color: "#aaa", fontSize: 13 }}>미분류</span>
+                    )
+                  }
                 </div>
 
                 {/* 화면명 */}
@@ -265,6 +269,11 @@ function ScreensPageInner() {
                 {/* 영역 수 */}
                 <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
                   {screen.areaCount}
+                </div>
+
+                {/* 정렬순서 */}
+                <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>
+                  {screen.sortOrder}
                 </div>
 
                 {/* 대분류 */}
@@ -439,7 +448,7 @@ function typeBadgeStyle(type: string): React.CSSProperties {
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
 // 요구사항·단위업무·화면명·분류는 fr 비율, 소형 컬럼은 고정
-const GRID_TEMPLATE = "32px 1.5fr 1.5fr 3fr 70px 48px 1fr 1fr 1fr 7%";
+const GRID_TEMPLATE = "32px 1.5fr 1.5fr 3fr 70px 48px 40px 1fr 1fr 1fr 7%";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid",

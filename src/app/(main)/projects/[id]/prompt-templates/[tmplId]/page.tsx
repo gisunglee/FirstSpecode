@@ -55,7 +55,7 @@ const TASK_TYPE_OPTIONS: { value: TaskType; label: string }[] = [
 
 // 더 이상 사용하지 않는 유형 (기존 데이터 표시용)
 const DEPRECATED_TASK_TYPES: Partial<Record<TaskType, string>> = {
-  IMPLEMENT: "구현 가이드",
+  IMPLEMENT: "구현",
   MOCKUP: "목업",
   CUSTOM: "자유 요청",
 };

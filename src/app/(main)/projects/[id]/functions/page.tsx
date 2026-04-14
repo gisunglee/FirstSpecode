@@ -33,7 +33,6 @@ type FuncRow = {
   displayId:       string;
   name:            string;
   type:            string;
-  status:          string;
   priority:        string;
   complexity:      string;
   effort:          string;
@@ -399,7 +398,6 @@ function FunctionsPageInner() {
             <div>유형</div>
             <div>복잡도</div>
             <div>공수</div>
-            <div>상태</div>
             <div style={{ textAlign: "center" }}>AI</div>
             <div style={{ textAlign: "center", paddingLeft: 8 }}>설/구/테</div>
           </div>
@@ -598,13 +596,6 @@ function FunctionsPageInner() {
                   )}
                 </div>
 
-                {/* 상태 배지 */}
-                <div>
-                  <span style={statusBadgeStyle(fn.status)}>
-                    {STATUS_LABELS[fn.status] ?? fn.status}
-                  </span>
-                </div>
-
                 {/* AI 진행 현황 인디케이터 */}
                 <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "center" }} onClick={(e) => e.stopPropagation()}>
                   <AiDot label="설" taskInfo={fn.aiDesign}  onClick={(id) => setAiDetailTaskId(id)} />
@@ -731,11 +722,6 @@ function AiDot({ label, taskInfo, onClick }: {
 
 // ── 상수·스타일 ───────────────────────────────────────────────────────────────
 
-const STATUS_LABELS: Record<string, string> = {
-  NONE:        "미착수",
-  DESIGN_DONE: "설계완료",
-  IMPL_DONE:   "구현완료",
-};
 
 function typeBadgeStyle(type: string): React.CSSProperties {
   return {
@@ -754,19 +740,10 @@ function complexityBadgeStyle(c: string): React.CSSProperties {
   return { display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, ...s };
 }
 
-function statusBadgeStyle(status: string): React.CSSProperties {
-  const map: Record<string, { bg: string; color: string }> = {
-    NONE:        { bg: "#f5f5f5",  color: "#555" },
-    DESIGN_DONE: { bg: "#e3f2fd", color: "#1565c0" },
-    IMPL_DONE:   { bg: "#e8f5e9", color: "#2e7d32" },
-  };
-  const s = map[status] ?? { bg: "#f5f5f5", color: "#555" };
-  return { display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, ...s };
-}
 
 // 단위업무·화면·영역·기능명은 fr로 비율 분배, 나머지 소형 컬럼은 고정
-const GRID_TEMPLATE          = "32px 1.5fr 2fr 2fr 4fr 44px 65px 75px 55px 75px 60px 90px";
-const GRID_TEMPLATE_CATEGORY = "32px 1.5fr 1.5fr 1.5fr 4fr 44px 65px 75px 55px 75px 60px 90px";
+const GRID_TEMPLATE          = "32px 1.5fr 2fr 2fr 4fr 44px 65px 75px 55px 60px 90px";
+const GRID_TEMPLATE_CATEGORY = "32px 1.5fr 1.5fr 1.5fr 4fr 44px 65px 75px 55px 60px 90px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID_TEMPLATE, gap: 8,

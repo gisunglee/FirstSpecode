@@ -193,6 +193,27 @@ model TbPjProjectMember {
   @@map("tb_pj_project_member")
 }
 
+// ── 프로젝트 환경설정 — key-value 방식 설정 관리 ────────────────────────────
+model TbPjProjectConfig {
+  config_id      String    @id @default(uuid())
+  prjct_id       String
+  config_group   String    @default("GENERAL")
+  config_key     String
+  config_value   String    @default("")
+  config_label   String    @default("")
+  config_dc      String?
+  value_type     String    @default("TEXT")
+  default_value  String    @default("")
+  select_options Json?
+  sort_ordr      Int       @default(0)
+  creat_dt       DateTime  @default(now())
+  mdfcn_dt       DateTime?
+
+  @@unique([prjct_id, config_key], map: "tb_pj_project_config_uk")
+  @@index([prjct_id, config_group], map: "tb_pj_project_config_grp_idx")
+  @@map("tb_pj_project_config")
+}
+
 model TbPjProjectApiKey {
   api_key_id    String      @id @default(uuid())
   prjct_id      String
@@ -335,7 +356,6 @@ model TbDsFunction {
   func_display_id String
   func_nm         String    @default("")
   func_dc         String?
-  func_sttus_code String    @default("NONE")
   priort_code     String    @default("MEDIUM")
   sort_ordr       Int       @default(0)
   creat_dt        DateTime  @default(now())
@@ -766,6 +786,26 @@ model TbDsPlanStudioCtxt {
   @@unique([artf_id, ctxt_ty_code, ref_id], map: "tb_ds_plan_studio_ctxt_uk")
   @@index([ctxt_ty_code, ref_id], map: "tb_ds_plan_studio_ctxt_ref_idx")
   @@map("tb_ds_plan_studio_ctxt")
+}
+
+// ── 메모 — 프로젝트 내 자유 메모 (엔티티 연결 선택) ─────────────────────────
+model TbDsMemo {
+  memo_id       String    @id @default(uuid())
+  prjct_id      String
+  memo_sj       String    @default("")
+  memo_cn       String?
+  share_yn      String    @default("N") @db.Char(1)
+  ref_ty_code   String?
+  ref_id        String?
+  view_cnt      Int       @default(0)
+  creat_mber_id String
+  creat_dt      DateTime  @default(now())
+  mdfr_mber_id  String?
+  mdfcn_dt      DateTime?
+
+  @@index([prjct_id, creat_dt(sort: Desc)], map: "tb_ds_memo_prjct_dt_idx")
+  @@index([prjct_id, ref_ty_code, ref_id], map: "tb_ds_memo_ref_idx")
+  @@map("tb_ds_memo")
 }
 
 // ── 구현요청 스냅샷 — 각 계층의 _dc 내용을 요청 시점에 저장 (diff 추적용) ──

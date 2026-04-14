@@ -121,55 +121,15 @@ function findNearestSectionHeader(rawMd: string, targetLineNo: number): string {
   return "(루트)";
 }
 
-/**
- * createPatch 결과의 각 hunk 헤더(@@ -X,Y +A,B @@) 앞에
- * "@@ 섹션: <찾은 헤더> @@" 라인을 주입한다.
- *
- * 핵심: hunk의 시작 라인(컨텍스트 포함)이 아닌, 첫 번째 실제 변경(+) 라인의
- * 위치로 역추적해야 정확한 섹션 헤더를 찾는다.
- * 예) 컨텍스트 3줄이 이전 표의 마지막 행이고, 변경은 **처리 로직** 아래에 있을 때
- *     시작 라인으로 역추적하면 **Output** 을 잡지만,
- *     첫 + 라인으로 역추적하면 **처리 로직** 을 정확히 잡는다.
- */
-function injectSectionHeaders(patchText: string, afterRawMd: string): string {
-  const patchLines = patchText.split("\n");
-  const result: string[] = [];
-
-  for (let i = 0; i < patchLines.length; i++) {
-    const line = patchLines[i];
-    const hunkMatch = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
-
-    if (hunkMatch) {
-      const newStartLine = parseInt(hunkMatch[1], 10);
-
-      // hunk 내부를 스캔하여 첫 번째 + 라인의 실제 라인 번호 계산
-      // (context 라인은 new file 기준으로 +1, 삭제(-) 라인은 카운트 안 함)
-      let lineOffset = 0;
-      let firstChangeLineNo = newStartLine; // fallback
-      for (let j = i + 1; j < patchLines.length; j++) {
-        const pl = patchLines[j];
-        if (pl.startsWith("@@") || pl === "\\ No newline at end of file") break;
-        if (pl.startsWith("+")) {
-          firstChangeLineNo = newStartLine + lineOffset;
-          break;
-        }
-        if (pl.startsWith("-")) continue;  // 삭제 라인은 new file에 없음
-        lineOffset++;  // context 라인 (" " prefix)
-      }
-
-      const sectionHeader = findNearestSectionHeader(afterRawMd, firstChangeLineNo);
-      result.push(`@@ 섹션: ${sectionHeader} @@`);
-      result.push(line);
-    } else {
-      result.push(line);
-    }
-  }
-
-  return result.join("\n");
-}
+// ── injectSectionHeaders (1차 주입) 제거 ────────────────────────────────────
+// 이전: hunk 시작 기준으로 대표 섹션 라벨을 hunk 앞에 1회 주입
+// 제거 이유:
+//   1. context 라인이 다른 섹션 내용일 때 라벨이 틀림 (misleading)
+//   2. 변경 라인이 heading 자체일 때 2차 주입과 동일한 라벨이 중복 출력
+//   3. 2차 주입(injectSectionHeadersInline)이 변경 라인마다 정확히 라벨을 붙이므로 불필요
 
 /**
- * createPatch + injectSectionHeaders 결과를 한 단계 더 정밀화한다.
+ * createPatch 결과에 섹션 헤더를 인라인 주입한다.
  *
  * 한 hunk 안에서 변경 라인(+/-)을 순회하며, 각 변경 라인의 "현재 라인 번호"를
  * 추적하여 소속 섹션이 바뀌는 지점마다 @@ 섹션: ... @@ 라인을 추가로 주입한다.
@@ -271,10 +231,16 @@ export function buildUnifiedPatch(nodeType: string, beforeRawMd: string, afterRa
   // 2. 첫 4줄(Index, ===, ---, +++) 제거
   const cleanedPatch = patch.split("\n").slice(4).join("\n");
 
-  // 3. 1차: hunk 시작 기준 섹션 헤더 주입
-  const withHunkHeaders = injectSectionHeaders(cleanedPatch, afterRawMd);
-
-  // 4. 2차: hunk 내부에서 섹션이 바뀌는 지점마다 추가 헤더 주입
+  // 3. 변경 라인마다 섹션 헤더 인라인 주입
   //    삭제 라인은 beforeRawMd 기준, 추가 라인은 afterRawMd 기준으로 섹션 탐색
-  return injectSectionHeadersInline(withHunkHeaders, beforeRawMd, afterRawMd);
+  //    (1차 hunk 대표 섹션 주입은 context 라벨 오류 + 중복 문제로 제거됨)
+  const withInlineHeaders = injectSectionHeadersInline(cleanedPatch, beforeRawMd, afterRawMd);
+
+  // 5. git hunk 헤더(@@ -X,Y +A,B @@) 제거
+  //    @@ 섹션: ... @@ 로 위치가 이미 표현되므로 git 형식 라인은 노이즈
+  //    ⚠ 반드시 모든 주입 완료 후 제거 — injectSectionHeadersInline이 이 라인을 cursor 계산에 사용
+  return withInlineHeaders
+    .split("\n")
+    .filter((line) => !/^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/.test(line))
+    .join("\n");
 }

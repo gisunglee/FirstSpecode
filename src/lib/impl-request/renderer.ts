@@ -132,20 +132,22 @@ function renderLayer(layer: LayerInfo): string {
   }
   lines.push("");
 
-  // ── 풀버전 — ```markdown 펜스로 감싸기 ──
+  // ── 풀버전 — ````markdown 펜스로 감싸기 ──
+  // 설계 내용 자체에 ``` 코드블록이 포함될 수 있으므로
+  // 외부 펜스는 백틱 4개(````)로 감싸서 내부 ```과 충돌 방지
   if (layer.mode === "NO_CHANGE") {
     // NO_CHANGE는 컨텍스트 참고용이므로 간략하게 표시
     lines.push("### 현재 내용 (컨텍스트 참고용)");
     lines.push("");
-    lines.push("```markdown");
+    lines.push("````markdown");
     lines.push(layer.currentDc.trim() || "(내용 없음)");
-    lines.push("```");
+    lines.push("````");
   } else {
     lines.push("### 현재 풀버전 (변경 후)");
     lines.push("");
-    lines.push("```markdown");
+    lines.push("````markdown");
     lines.push(layer.currentDc.trim() || "(내용 없음)");
-    lines.push("```");
+    lines.push("````");
   }
   lines.push("");
 
@@ -166,9 +168,9 @@ function renderLayer(layer: LayerInfo): string {
       lines.push("아래는 직전 버전과의 차이점입니다. `@@ 섹션: ... @@` 라인은 변경이 발생한 위치를 표시합니다.");
     }
     lines.push("");
-    lines.push("```diff");
+    lines.push("````diff");
     lines.push(labeled);
-    lines.push("```");
+    lines.push("````");
     lines.push("");
   }
 

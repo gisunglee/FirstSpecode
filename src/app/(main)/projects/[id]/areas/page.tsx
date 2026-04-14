@@ -234,9 +234,9 @@ function AreasPageInner() {
               {/* 드래그 핸들 */}
               <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
 
-              {/* 단위업무명 — 같은 화면(screenId)이면 첫 행에만 표시, 클릭 시 단위업무 상세로 이동 */}
+              {/* 단위업무명 — 같은 unitWorkId이면 첫 행에만 표시, 클릭 시 단위업무 상세로 이동 */}
               <div onClick={(e) => e.stopPropagation()}>
-                {items[idx - 1]?.screenId === area.screenId && area.screenId
+                {items[idx - 1]?.unitWorkId === area.unitWorkId && area.unitWorkId
                   ? null
                   : area.unitWorkId ? (
                     <button

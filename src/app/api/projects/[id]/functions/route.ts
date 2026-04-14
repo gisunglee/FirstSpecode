@@ -128,7 +128,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       displayId:       f.func_display_id,
       name:            f.func_nm,
       type:            f.func_ty_code,
-      status:          f.func_sttus_code,
       priority:        f.priort_code,
       complexity:      f.cmplx_code,
       effort:          f.efrt_val ?? "",

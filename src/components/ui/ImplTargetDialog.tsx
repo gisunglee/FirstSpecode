@@ -16,7 +16,7 @@
  *   - refType:   호출 페이지의 엔티티 유형 (FUNCTION | AREA | SCREEN | UNIT_WORK)
  *   - refId:     호출 페이지의 엔티티 ID
  *   - onClose:   닫기 콜백
- *   - onImplRequest: 구현요청 콜백 — 선택된 기능 ID 배열 전달
+ *   - onImplRequest: 구현요청 콜백 — 트리 루트 진입점(entryType/entryId) + 선택된 기능 ID 배열 전달
  */
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -75,6 +75,31 @@ function collectDescendantIds(node: TreeNode, result: Set<string>): void {
   }
 }
 
+/** 노드 하위에 FUNCTION 타입 자손이 있는지 확인 */
+function hasFunctionDescendant(node: TreeNode): boolean {
+  if (node.type === "FUNCTION") return true;
+  return node.children.some((c) => hasFunctionDescendant(c));
+}
+
+/**
+ * 선택된 기능(FN) 기준으로 상위 체인 자동 선택 상태를 재계산
+ * - 기능이 1개라도 선택된 영역/화면/단위업무는 자동 선택
+ * - 기능이 0개인 상위 노드는 자동 해제
+ */
+function rebuildParentSelection(tree: TreeNode, fnIds: Set<string>): Set<string> {
+  const result = new Set<string>(fnIds);
+
+  function hasCheckedFn(node: TreeNode): boolean {
+    if (node.type === "FUNCTION") return fnIds.has(node.id);
+    const has = node.children.some((c) => hasCheckedFn(c));
+    if (has) result.add(node.id);
+    return has;
+  }
+
+  hasCheckedFn(tree);
+  return result;
+}
+
 /** 트리에서 특정 ID의 노드를 찾는 재귀 탐색 */
 function findNode(node: TreeNode, id: string): TreeNode | null {
   if (node.id === id) return node;
@@ -98,7 +123,7 @@ export default function ImplTargetDialog({
   refType:   NodeType;
   refId:     string;
   onClose:   () => void;
-  onImplRequest?: (selectedFunctionIds: string[]) => void;
+  onImplRequest?: (params: { entryType: NodeType; entryId: string; functionIds: string[] }) => void;
 }) {
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
 
@@ -119,44 +144,50 @@ export default function ImplTargetDialog({
     return map;
   }, [data?.tree]);
 
-  // ── 초기 선택 상태 세팅 — API 응답의 selectedIds 반영 ─────────────────────
+  // ── 초기 선택 상태 세팅 — API 응답의 selectedIds 중 기능만 추출 후 상위 자동 계산
   useEffect(() => {
-    if (data?.selectedIds) {
-      setCheckedIds(new Set(data.selectedIds));
+    if (data?.selectedIds && data?.tree) {
+      const fnIds = new Set<string>();
+      for (const id of data.selectedIds) {
+        const node = findNode(data.tree, id);
+        if (node?.type === "FUNCTION") fnIds.add(id);
+      }
+      setCheckedIds(rebuildParentSelection(data.tree, fnIds));
     }
-  }, [data?.selectedIds]);
+  }, [data?.selectedIds, data?.tree]);
 
   // ── 체크박스 토글 핸들러 ──────────────────────────────────────────────────
+  // 규칙:
+  //   1. 기능(FN)만 직접 체크/해제 가능
+  //   2. 상위(UW/SCR/AR)는 하위 기능 선택 상태에 따라 자동 결정
+  //   3. 하위 기능이 없는 노드는 선택 불가
   const handleToggle = useCallback(
     (id: string, checked: boolean) => {
       if (!data?.tree) return;
 
-      setCheckedIds((prev) => {
-        const next = new Set(prev);
+      const node = findNode(data.tree, id);
+      if (!node) return;
 
-        if (checked) {
-          // 체크: 자신 + 부모 체인 전부 추가
-          next.add(id);
-          let parent = parentMap.get(id);
-          while (parent) {
-            next.add(parent);
-            parent = parentMap.get(parent);
-          }
-        } else {
-          // 해제: 자신 + 모든 자손 제거
-          next.delete(id);
-          const node = findNode(data.tree, id);
-          if (node) {
-            const descendants = new Set<string>();
-            collectDescendantIds(node, descendants);
-            for (const d of descendants) next.delete(d);
-          }
+      // 기능이 아닌 상위 노드 직접 클릭 → 무시 (자동 계산됨)
+      if (node.type !== "FUNCTION") return;
+
+      setCheckedIds((prev) => {
+        // 현재 선택된 기능 ID 목록 추출
+        const fnIds = new Set<string>();
+        for (const pid of prev) {
+          const n = findNode(data.tree, pid);
+          if (n?.type === "FUNCTION") fnIds.add(pid);
         }
 
-        return next;
+        // 토글 적용
+        if (checked) fnIds.add(id);
+        else fnIds.delete(id);
+
+        // 상위 체인 자동 재계산
+        return rebuildParentSelection(data.tree, fnIds);
       });
     },
-    [data?.tree, parentMap]
+    [data?.tree]
   );
 
   // ── 구현요청 버튼 — 선택된 기능(FN) ID 수집 후 콜백 호출 ─────────────────
@@ -178,12 +209,17 @@ export default function ImplTargetDialog({
       return;
     }
 
-    onImplRequest(fnIds);
+    // 트리 루트의 type/id를 진입점으로 전달
+    // (트리는 항상 UW 루트이므로 collectLayers가 UNIT_WORK 분기를 타고 functionIds로 필터링)
+    onImplRequest({
+      entryType: data.tree.type,
+      entryId: data.tree.id,
+      functionIds: fnIds,
+    });
   }, [data?.tree, checkedIds, onImplRequest]);
 
   return (
     <div
-      onClick={onClose}
       style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
         display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
@@ -256,7 +292,7 @@ export default function ImplTargetDialog({
                     fontSize: 12, fontWeight: 700, cursor: "pointer",
                   }}
                 >
-                  구현요청
+                  프롬프트 확인
                 </button>
               </div>
             </div>
@@ -294,25 +330,31 @@ function TreeNodeRow({
   const prefix    = NODE_PREFIX[node.type];
   const color     = NODE_COLOR[node.type];
 
+  // 기능(FN)만 직접 토글 가능. 하위에 FN이 없는 노드는 비활성화
+  const isFn = node.type === "FUNCTION";
+  const canToggle = isFn || hasFunctionDescendant(node);
+  const isClickable = isFn; // 상위 노드는 클릭해도 토글 안 됨
+
   return (
     <>
       <div
         style={{
           display: "flex", alignItems: "center", gap: 8,
           paddingLeft: level * 24, paddingTop: 4, paddingBottom: 4,
-          cursor: "pointer",
-          // 선택/미선택 시각 차이: 미선택 시 흐리게 표시
-          opacity: isChecked ? 1 : 0.45,
+          cursor: isClickable ? "pointer" : "default",
+          // 선택/미선택 시각 차이: 미선택 시 흐리게, 기능 없으면 더 흐리게
+          opacity: !canToggle ? 0.3 : isChecked ? 1 : 0.45,
           transition: "opacity 0.15s ease",
         }}
-        onClick={() => onToggle(node.id, !isChecked)}
+        onClick={() => isClickable && onToggle(node.id, !isChecked)}
       >
-        {/* 체크박스 */}
+        {/* 체크박스 — 기능만 활성화, 상위는 읽기전용 */}
         <input
           type="checkbox"
           checked={isChecked}
-          onChange={(e) => { e.stopPropagation(); onToggle(node.id, e.target.checked); }}
-          style={{ margin: 0, cursor: "pointer", accentColor: color }}
+          disabled={!isClickable}
+          onChange={(e) => { e.stopPropagation(); if (isClickable) onToggle(node.id, e.target.checked); }}
+          style={{ margin: 0, cursor: isClickable ? "pointer" : "default", accentColor: color }}
         />
         {/* 타입 배지 + 이름 */}
         <span style={{

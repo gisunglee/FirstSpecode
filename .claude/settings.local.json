@@ -174,7 +174,16 @@
       "Bash(ls d:/source/specode/src/app/api/functions/[id]/)",
       "Bash(ls d:/source/FirstSpecode/src/app/api/projects/[id]/unit-works/)",
       "Bash(grep -E \"import|^$\")",
-      "Bash(node -e \"const { PrismaClient } = require\\('@prisma/client'\\); const p = new PrismaClient\\(\\); console.log\\(typeof p.tbSpImplSnapshot\\);\")"
+      "Bash(node -e \"const { PrismaClient } = require\\('@prisma/client'\\); const p = new PrismaClient\\(\\); console.log\\(typeof p.tbSpImplSnapshot\\);\")",
+      "Bash(grep -E \"\\\\.tsx$\")",
+      "Bash(awk '{print $9, $5}')",
+      "Bash(awk '{print $1}')",
+      "Bash(ls -lh d:/source/FirstSpecode/src/app/api/projects/\\\\[id\\\\]/functions/\\\\[functionId\\\\]/*.ts d:/source/FirstSpecode/src/app/api/projects/\\\\[id\\\\]/impl-request/*.ts)",
+      "Bash(ls -lh \"d:/source/FirstSpecode/src/app/api/projects/[id]/impl-request\"/*.ts)",
+      "Bash(find \"d:/source/FirstSpecode/src/app/api/projects\" -type f -path \"*impl-request*\" -name \"*.ts\" -exec ls -lh {} \\\\;)",
+      "Bash(awk '{print $NF, $\\(NF-4\\)}')",
+      "Bash(ls -lh d:/source/FirstSpecode/src/lib/impl-request/*.ts)",
+      "Bash(find d:/source/FirstSpecode/src/lib/impl-request -type f -name \"*.ts\" -exec ls -lh {} \\\\;)"
     ]
   }
 }

@@ -51,7 +51,7 @@ const TASK_TYPE_LABELS: Record<TaskType, string> = {
   INSPECT:   "명세 검토",
   IMPACT:    "영향도 분석",
   // 폐기 유형 — 기존 데이터 표시용
-  IMPLEMENT: "구현 가이드",
+  IMPLEMENT: "구현",
   MOCKUP:    "목업",
   CUSTOM:    "자유 요청",
 };

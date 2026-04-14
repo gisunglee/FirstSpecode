@@ -49,6 +49,7 @@ type TaskRow = {
   reqMberName:  string;
   retryCnt:     number;
   execAvlblDt:  string | null;
+  implFunctions?: { displayId: string; name: string }[];
 };
 
 // ── 상수 ──────────────────────────────────────────────────────────────────────
@@ -66,7 +67,7 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
 const TASK_TYPE_LABELS: Record<TaskType, string> = {
   INSPECT:   "명세 검토",
   DESIGN:    "설계",
-  IMPLEMENT: "구현 가이드",
+  IMPLEMENT: "구현",
   MOCKUP:    "목업",
   IMPACT:    "영향도 분석",
   CUSTOM:    "자유 요청",
@@ -106,7 +107,7 @@ function taskTypeBadgeStyle(type: TaskType): React.CSSProperties {
   const colors: Record<TaskType, { bg: string; color: string }> = {
     INSPECT:   { bg: "#f5f5f5", color: "#616161" },
     DESIGN:    { bg: "#e8eaf6", color: "#3f51b5" },
-    IMPLEMENT: { bg: "#e1f5fe", color: "#0288d1" },
+    IMPLEMENT: { bg: "#fce4ec", color: "#c62828" },
     MOCKUP:    { bg: "#f1f8e9", color: "#558b2f" },
     IMPACT:    { bg: "#fff3e0", color: "#ef6c00" },
     CUSTOM:    { bg: "#f5f5f5", color: "#757575" },
@@ -312,9 +313,9 @@ function AiTasksPageInner() {
     }
   }
 
-  // ── 10컬럼 그리드 템플릿 (1115px) ──────────────────────────────────────────
+  // ── 11컬럼 그리드 템플릿 ──────────────────────────────────────────
   // 요청구분 | 작업유형 | 대상(가변) | 요청자 | 요청일시 | 완료일시 | 소요 | 재시도 | 상태/액션 | 실행가능일 | 삭제
-  const GRID_CONFIG = "64px 90px minmax(200px, 1fr) 70px 96px 96px 64px 44px 110px 88px 36px";
+  const GRID_CONFIG = "64px 90px minmax(200px, 1fr) 64px 86px 86px 52px 40px 100px 68px 36px";
 
   return (
     <div style={{ padding: 0 }}>
@@ -341,7 +342,7 @@ function AiTasksPageInner() {
             <option value="">유형 전체</option>
             <option value="INSPECT">명세 검토</option>
             <option value="DESIGN">설계</option>
-            <option value="IMPLEMENT">구현 가이드</option>
+            <option value="IMPLEMENT">구현</option>
             <option value="MOCKUP">목업</option>
             <option value="IMPACT">영향도 분석</option>
             <option value="CUSTOM">자유 요청</option>
@@ -428,7 +429,14 @@ function AiTasksPageInner() {
                       {row.refDisplayId && <span style={{ color: "var(--color-primary)", fontSize: 13, marginRight: 6, fontWeight: 600, flexShrink: 0 }}>{row.refDisplayId}</span>}
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.refName}</span>
                     </button>
-                    <RefBreadcrumb row={row} />
+                    {/* IMPLEMENT: 포함된 기능 목록 표시 */}
+                    {(row.implFunctions?.length ?? 0) > 0 ? (
+                      <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {row.implFunctions!.map((f) => f.name).join(", ")}
+                      </div>
+                    ) : (
+                      <RefBreadcrumb row={row} />
+                    )}
                   </div>
                   <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>{row.reqMberName}</div>
                   <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>{formatDatetime(row.requestedAt)}</div>

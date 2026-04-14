@@ -6,6 +6,7 @@
  *   status?   — PENDING|IN_PROGRESS|DONE|APPLIED|REJECTED|FAILED|TIMEOUT
  *   taskType? — INSPECT|DESIGN|IMPLEMENT|MOCKUP|IMPACT|CUSTOM
  *   refType?  — UNIT_WORK|AREA|FUNCTION
+ *   snapshotRefId? — 스냅샷 경유 조회 (IMPLEMENT 전용: 해당 기능이 포함된 태스크)
  */
 
 import { NextRequest } from "next/server";
@@ -27,6 +28,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const taskType   = url.searchParams.get("taskType")   ?? undefined;
   const refType    = url.searchParams.get("refType")    ?? undefined;
   const refId      = url.searchParams.get("refId")      ?? undefined;
+  const snapshotRefId = url.searchParams.get("snapshotRefId") ?? undefined;
   const reqMberId  = url.searchParams.get("reqMberId")  ?? undefined;
   const page     = Math.max(1, parseInt(url.searchParams.get("page")     ?? "1",  10));
   const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get("pageSize") ?? "20", 10)));
@@ -39,12 +41,28 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
+    // IMPLEMENT + snapshotRefId: 스냅샷 테이블에서 해당 기능이 포함된 ai_task_id 목록을 먼저 조회
+    let snapshotTaskIds: string[] | undefined;
+    if (snapshotRefId && taskType === "IMPLEMENT") {
+      const snapshots = await prisma.tbSpImplSnapshot.findMany({
+        where: { ref_tbl_nm: "tb_ds_function", ref_id: snapshotRefId },
+        select: { ai_task_id: true },
+        distinct: ["ai_task_id"],
+      });
+      snapshotTaskIds = snapshots.map((s) => s.ai_task_id);
+    }
+
     const where = {
       prjct_id: projectId,
       ...(status    ? { task_sttus_code: status }    : {}),
       ...(taskType  ? { task_ty_code:    taskType }   : {}),
-      ...(refType   ? { ref_ty_code:     refType }    : {}),
-      ...(refId     ? { ref_id:          refId }      : {}),
+      // snapshotRefId가 있으면 ai_task_id IN 조건으로 대체, 없으면 기존 refType/refId 필터
+      ...(snapshotTaskIds
+        ? { ai_task_id: { in: snapshotTaskIds } }
+        : {
+            ...(refType ? { ref_ty_code: refType } : {}),
+            ...(refId   ? { ref_id:      refId }   : {}),
+          }),
       ...(reqMberId ? { req_mber_id:     reqMberId }  : {}),
     };
 
@@ -167,7 +185,38 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       : [];
     const memberMap = new Map(members.map(m => [m.mber_id, m.mber_nm]));
 
+    // IMPLEMENT 태스크의 기능 목록 조회 (스냅샷에서 기능명 추출)
+    const implTaskIds = tasks.filter((t) => t.task_ty_code === "IMPLEMENT").map((t) => t.ai_task_id);
+    const implFnMap = new Map<string, { displayId: string; name: string }[]>();
+    if (implTaskIds.length > 0) {
+      const implSnapshots = await prisma.tbSpImplSnapshot.findMany({
+        where: { ai_task_id: { in: implTaskIds }, ref_tbl_nm: "tb_ds_function" },
+        select: { ai_task_id: true, ref_id: true },
+      });
+      // 기능 ID 수집 → 기능명 조회
+      const implFnIds = [...new Set(implSnapshots.map((s) => s.ref_id))];
+      const implFns = implFnIds.length > 0
+        ? await prisma.tbDsFunction.findMany({
+            where: { func_id: { in: implFnIds } },
+            select: { func_id: true, func_display_id: true, func_nm: true },
+          })
+        : [];
+      const fnLookup = new Map(implFns.map((f) => [f.func_id, { displayId: f.func_display_id, name: f.func_nm }]));
+
+      // 태스크별 기능 목록 매핑
+      for (const snap of implSnapshots) {
+        const fn = fnLookup.get(snap.ref_id);
+        if (!fn) continue;
+        const list = implFnMap.get(snap.ai_task_id) ?? [];
+        list.push(fn);
+        implFnMap.set(snap.ai_task_id, list);
+      }
+    }
+
     const items = tasks.map((t) => {
+      const isImpl = t.task_ty_code === "IMPLEMENT";
+      const implFns = isImpl ? (implFnMap.get(t.ai_task_id) ?? []) : [];
+
       const refInfo = t.ref_ty_code === "UNIT_WORK"
         ? unitWorkMap.get(t.ref_id)
         : t.ref_ty_code === "AREA"
@@ -184,13 +233,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return {
         taskId:       t.ai_task_id,
         taskType:     t.task_ty_code,
-        refType:      t.ref_ty_code,
+        // IMPLEMENT는 요청 구분을 "기능"으로 표시
+        refType:      isImpl ? "FUNCTION" : t.ref_ty_code,
         refId:        t.ref_id,
-        refName:      refInfo?.name      ?? "알 수 없음",
-        refDisplayId: refInfo?.displayId ?? "",
+        refName:      isImpl && implFns.length > 0
+          ? `${implFns[0].name} (기능 ${implFns.length}개)`
+          : (refInfo?.name ?? "알 수 없음"),
+        refDisplayId: isImpl && implFns.length > 0
+          ? implFns[0].displayId
+          : (refInfo?.displayId ?? ""),
         unitWorkName: refInfo?.unitWorkName ?? null,
         screenName:   refInfo?.screenName   ?? null,
         areaName:     refInfo?.areaName     ?? null,
+        // IMPLEMENT 태스크에 포함된 기능 목록 (목록 페이지 표시용)
+        implFunctions: isImpl && implFns.length > 0 ? implFns : undefined,
         status:       t.task_sttus_code,
         comment:     t.coment_cn ?? "",
         resultCn:    t.result_cn ?? "",

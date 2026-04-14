@@ -135,10 +135,12 @@ export async function collectLayers(
     layers.push(await buildLayerInfo("screen", scr.scrn_id, scr.scrn_display_id, scr.scrn_nm, scr.scrn_dc ?? ""));
 
     for (const area of scr.areas) {
-      layers.push(await buildLayerInfo("area", area.area_id, area.area_display_id, area.area_nm, area.area_dc ?? ""));
       const fns = functionIds?.length
         ? area.functions.filter((f) => functionIds.includes(f.func_id))
         : area.functions;
+      // 선택된 기능이 없는 영역은 건너뜀
+      if (fns.length === 0) continue;
+      layers.push(await buildLayerInfo("area", area.area_id, area.area_display_id, area.area_nm, area.area_dc ?? ""));
       const fnLayers = await Promise.all(
         fns.map((fn) => buildLayerInfo("function", fn.func_id, fn.func_display_id, fn.func_nm, fn.func_dc ?? ""))
       );
@@ -146,7 +148,7 @@ export async function collectLayers(
     }
 
   } else if (entryType === "UNIT_WORK") {
-    // 단위업무 → 하위 전체 순회
+    // 단위업무 → 하위 순회 (선택된 기능의 상위 체인만 포함)
     const uw = await prisma.tbDsUnitWork.findUnique({
       where: { unit_work_id: entryId },
       include: {
@@ -163,12 +165,20 @@ export async function collectLayers(
     layers.push(await buildLayerInfo("unit_work", uw.unit_work_id, uw.unit_work_display_id, uw.unit_work_nm, uw.unit_work_dc ?? ""));
 
     for (const scr of uw.screens) {
-      layers.push(await buildLayerInfo("screen", scr.scrn_id, scr.scrn_display_id, scr.scrn_nm, scr.scrn_dc ?? ""));
-      for (const area of scr.areas) {
-        layers.push(await buildLayerInfo("area", area.area_id, area.area_display_id, area.area_nm, area.area_dc ?? ""));
+      // 해당 화면 하위에서 선택된 기능이 있는 영역만 필터
+      const areasWithFns = scr.areas.map((area) => {
         const fns = functionIds?.length
           ? area.functions.filter((f) => functionIds.includes(f.func_id))
           : area.functions;
+        return { area, fns };
+      }).filter(({ fns }) => fns.length > 0);
+
+      // 선택된 기능이 하나도 없는 화면은 건너뜀
+      if (areasWithFns.length === 0) continue;
+
+      layers.push(await buildLayerInfo("screen", scr.scrn_id, scr.scrn_display_id, scr.scrn_nm, scr.scrn_dc ?? ""));
+      for (const { area, fns } of areasWithFns) {
+        layers.push(await buildLayerInfo("area", area.area_id, area.area_display_id, area.area_nm, area.area_dc ?? ""));
         const fnLayers = await Promise.all(
           fns.map((fn) => buildLayerInfo("function", fn.func_id, fn.func_display_id, fn.func_nm, fn.func_dc ?? ""))
         );

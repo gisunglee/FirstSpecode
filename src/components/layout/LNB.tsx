@@ -53,10 +53,12 @@ export default function LNB() {
   const aiTasksHref         = pBase ? `${pBase}/ai-tasks`         : "#";
   const promptTemplatesHref = pBase ? `${pBase}/prompt-templates` : "#";
   const reviewsHref         = pBase ? `${pBase}/reviews`          : "#";
+  const memosHref           = pBase ? `${pBase}/memos`            : "#";
   const planningHref        = pBase ? `${pBase}/planning`           : "#";
   const aiImportHref        = pBase ? `${pBase}/planning/ai-import` : "#";
   const designImportHref    = pBase ? `${pBase}/design-import`      : "#";
   const commonCodesHref  = pBase ? `${pBase}/common-codes`   : "#";
+  const configsHref      = pBase ? `${pBase}/configs`       : "#";
   const settingsHref     = pBase ? `${pBase}/settings`      : "#";
   const membersHref      = pBase ? `${pBase}/members`       : "#";
 
@@ -84,6 +86,7 @@ export default function LNB() {
     { label: "AI 태스크",    href: aiTasksHref,         icon: "✨", isActive: !!pBase && pathname.startsWith(`${pBase}/ai-tasks`) },
     { label: "프롬프트 관리", href: promptTemplatesHref, icon: "📝", isActive: !!pBase && pathname.startsWith(`${pBase}/prompt-templates`) },
     { label: "리뷰 요청",   href: reviewsHref,          icon: "💬", isActive: !!pBase && pathname.startsWith(`${pBase}/reviews`) },
+    { label: "메모",        href: memosHref,            icon: "🗒", isActive: !!pBase && pathname.startsWith(`${pBase}/memos`) },
     { label: "설계 변경 이력", href: designChangesHref,   icon: "📜", isActive: !!pBase && pathname.startsWith(`${pBase}/design-changes`) },
   ];
 
@@ -92,6 +95,9 @@ export default function LNB() {
     { label: "프로젝트", href: "/projects", icon: "📂", isActive: pathname === "/projects" },
     ...(canAccessSettings && pBase
       ? [{ label: "프로젝트 설정", href: settingsHref, icon: "⚙️", isActive: pathname.startsWith(settingsHref) }]
+      : []),
+    ...(canAccessSettings && pBase
+      ? [{ label: "환경설정", href: configsHref, icon: "🔧", isActive: pathname.startsWith(configsHref) }]
       : []),
     ...(canManageMembers && pBase
       ? [{ label: "멤버 관리", href: membersHref, icon: "👥", isActive: pathname.startsWith(membersHref) }]

@@ -43,7 +43,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
               func_id:         true,
               func_display_id: true,
               func_nm:         true,
-              func_sttus_code: true,
               priort_code:     true,
               sort_ordr:       true,
             },
@@ -74,10 +73,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // 설계율(DESIGN_DONE 기준), 구현율(IMPL_DONE 기준) 계산 (AR-00073 요약)
-    const total     = area.functions.length;
-    const designDone = area.functions.filter((f) => f.func_sttus_code === "DESIGN_DONE" || f.func_sttus_code === "IMPL_DONE").length;
-    const implDone   = area.functions.filter((f) => f.func_sttus_code === "IMPL_DONE").length;
+    // 기능 수 (AR-00073 요약)
+    const total = area.functions.length;
 
     // 기능별 진척률 조회 — tb_cm_progress에서 한번에 가져오기
     const funcIds = area.functions.map(f => f.func_id);
@@ -112,8 +109,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       // 요약 정보 (AR-00073)
       summary: {
         functionCount: total,
-        designRate:    total > 0 ? Math.round((designDone / total) * 100) : 0,
-        implRate:      total > 0 ? Math.round((implDone / total) * 100) : 0,
       },
       // 하단 기능 목록 (AR-00074)
       functions: area.functions.map((f) => {
@@ -122,7 +117,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           funcId:    f.func_id,
           displayId: f.func_display_id,
           name:      f.func_nm,
-          status:    f.func_sttus_code,
           priority:  f.priort_code,
           sortOrder: f.sort_ordr,
           designRt:  prog?.designRt ?? 0,

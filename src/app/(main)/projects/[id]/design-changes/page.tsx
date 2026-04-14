@@ -31,6 +31,7 @@ const TABLE_LABEL: Record<string, string> = {
   tb_rq_user_story:       "사용자스토리",
   tb_pj_project:          "프로젝트",
   tb_ds_function_column_mapping: "컬럼 매핑",
+  tb_ds_plan_studio_artf: "기획 산출물",
 };
 
 const TABLE_COLOR: Record<string, { bg: string; text: string }> = {
@@ -45,6 +46,7 @@ const TABLE_COLOR: Record<string, { bg: string; text: string }> = {
   tb_rq_requirement:           { bg: "#f3e5f5", text: "#6a1b9a" },
   tb_rq_user_story:            { bg: "#fff3e0", text: "#e65100" },
   tb_pj_project:               { bg: "#efebe9", text: "#4e342e" },
+  tb_ds_plan_studio_artf:      { bg: "#e1f5fe", text: "#0277bd" },
 };
 
 // ── 상수 ──────────────────────────────────────────────────────────────────────

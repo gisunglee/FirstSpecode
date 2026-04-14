@@ -67,7 +67,7 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
 const TASK_TYPE_LABELS: Record<TaskType, string> = {
   INSPECT:   "명세 검토",
   DESIGN:    "설계",
-  IMPLEMENT: "구현 가이드",
+  IMPLEMENT: "구현",
   MOCKUP:    "목업",
   IMPACT:    "영향도 분석",
   CUSTOM:    "자유 요청",
@@ -97,7 +97,7 @@ function taskTypeBadgeStyle(type: TaskType): React.CSSProperties {
   const colors: Record<TaskType, { bg: string; color: string }> = {
     INSPECT:   { bg: "#f5f5f5",  color: "#616161" },
     DESIGN:    { bg: "#e8eaf6",  color: "#3f51b5" },
-    IMPLEMENT: { bg: "#e1f5fe",  color: "#0288d1" },
+    IMPLEMENT: { bg: "#fce4ec",  color: "#c62828" },
     MOCKUP:    { bg: "#f1f8e9",  color: "#558b2f" },
     IMPACT:    { bg: "#fff3e0",  color: "#ef6c00" },
     CUSTOM:    { bg: "#f5f5f5",  color: "#757575" },
@@ -427,7 +427,7 @@ export default function AiTaskDetailDialog({
                 padding: "12px 20px", borderRight: "1px solid var(--color-border)",
                 display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0,
               }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, flexShrink: 0 }}>
                   <span style={panelLabelStyle}>요청 SPEC</span>
                   <LocalTabButtons tab={reqTab} onTabChange={setReqTab} />
                 </div>
@@ -444,7 +444,7 @@ export default function AiTaskDetailDialog({
                 padding: "12px 20px", display: "flex", flexDirection: "column",
                 overflow: "hidden", minHeight: 0,
               }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, flexShrink: 0 }}>
                   <span style={panelLabelStyle}>응답 피드백</span>
                   <LocalTabButtons tab={resultTab} onTabChange={setResultTab} />
                 </div>

@@ -947,10 +947,22 @@ function AreaDetailPageInner() {
           {!isNew && (
             <section style={sectionStyle}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>기능 목록</span>
-                <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
-                  총 {data?.functions.length ?? 0}개
-                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>기능 목록</span>
+                  <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+                    총 {data?.functions.length ?? 0}개
+                  </span>
+                </div>
+                <button
+                  onClick={() => router.push(`/projects/${projectId}/functions/new?areaId=${areaId}`)}
+                  style={{
+                    padding: "4px 12px", borderRadius: 5, border: "1px solid var(--color-border)",
+                    background: "var(--color-bg-card)", color: "var(--color-primary, #1976d2)",
+                    fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  + 추가
+                </button>
               </div>
 
               {!data?.functions.length ? (

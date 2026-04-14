@@ -141,8 +141,10 @@ function FunctionDetailPageInner() {
   const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
   const [aiHistoryTaskType, setAiHistoryTaskType] = useState<string | null>(null);
   const [implTargetOpen, setImplTargetOpen] = useState(false);
-  // 구현요청: ImplTargetDialog에서 선택된 기능 ID → ImplRequestPopup에 전달
-  const [implRequestFnIds, setImplRequestFnIds] = useState<string[] | null>(null);
+  // 구현요청: ImplTargetDialog에서 진입점 정보 + 선택된 기능 ID → ImplRequestPopup에 전달
+  const [implRequestParams, setImplRequestParams] = useState<{
+    entryType: string; entryId: string; functionIds: string[];
+  } | null>(null);
 
   // ── AI 도움말 팝업 상태 ──────────────────────────────────────────────────────
   const [helpOpen, setHelpOpen] = useState<string | null>(null);
@@ -192,15 +194,17 @@ function FunctionDetailPageInner() {
   }, [projectId, isNew, data?.areaName, data?.displayId, setBreadcrumb]);
 
   // AI 작업 패널 외부 클릭 시 닫기
+  // 구현 대상 선택 팝업(ImplTargetDialog)이 열려있으면 외부 클릭 닫기 무시
   useEffect(() => {
     function handleClick(e: MouseEvent) {
+      if (implTargetOpen || implRequestParams) return;
       if (aiPanelRef.current && !aiPanelRef.current.contains(e.target as Node)) {
         setAiPanelOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
+  }, [implTargetOpen, implRequestParams]);
 
   useEffect(() => {
     if (data) {
@@ -563,42 +567,88 @@ function FunctionDetailPageInner() {
                       );
                     })}
 
-                    {/* AI 구현 — 구현 대상 선택 팝업 트리거 */}
-                    <div className="ai-task-card" style={{
-                      display: "flex", alignItems: "center", gap: 12,
-                      padding: "10px 14px", borderRadius: 8,
-                      border: "1px solid var(--color-border)",
-                      background: "var(--color-bg-muted)",
-                    }}>
-                      <div style={{
-                        width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        background: "#e1f5fe", fontSize: 18,
-                      }}>
-                        {"⚡"}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)" }}>
-                          AI 구현
-                        </span>
-                        <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 2, lineHeight: 1.4 }}>
-                          구현 대상 선택 후 AI에게 구현 요청
+                    {/* AI 구현 — 상태·내용·이력 + 구현 대상 선택 */}
+                    {(() => {
+                      const implInfo = data?.aiTasks?.["IMPLEMENT"];
+                      const implDotColor = implInfo ? (AI_STATUS_DOT[implInfo.status] ?? "#ccc") : "#ccc";
+                      const implStatusLabel = implInfo
+                        ? (AI_STATUS_LABEL[implInfo.status] ?? implInfo.status)
+                        : "-";
+                      return (
+                        <div className="ai-task-card" style={{
+                          display: "flex", alignItems: "center", gap: 12,
+                          padding: "10px 14px", borderRadius: 8,
+                          border: "1px solid var(--color-border)",
+                          background: "var(--color-bg-muted)",
+                        }}>
+                          {/* 아이콘 */}
+                          <div style={{
+                            width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            background: "#e1f5fe", fontSize: 18,
+                          }}>
+                            {"⚡"}
+                          </div>
+
+                          {/* 레이블 + 설명 */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                              AI 구현
+                            </span>
+                            <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 2, lineHeight: 1.4 }}>
+                              구현 대상 선택 후 AI에게 구현 요청
+                            </div>
+                          </div>
+
+                          {/* 상태 + 버튼 (우측 고정, 수직 배치) */}
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+                            {/* 상태 표시 */}
+                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              <span style={{ width: 7, height: 7, borderRadius: "50%", background: implDotColor, flexShrink: 0 }} />
+                              <span style={{ fontSize: 11, color: implDotColor, fontWeight: 600, whiteSpace: "nowrap" }}>
+                                {implStatusLabel}
+                              </span>
+                            </div>
+                            {/* 버튼 행 */}
+                            <div style={{ display: "flex", gap: 4 }}>
+                              {implInfo && (
+                                <button
+                                  className="ai-mini-btn"
+                                  onClick={() => setAiDetailTaskId(implInfo.aiTaskId)}
+                                  title="내용 보기"
+                                  style={aiMiniBtn}
+                                >
+                                  내용
+                                </button>
+                              )}
+                              <button
+                                className="ai-mini-btn ai-mini-btn-run"
+                                onClick={() => setImplTargetOpen(true)}
+                                style={{
+                                  ...aiMiniBtn,
+                                  background: "rgba(103,80,164,0.1)",
+                                  color: "rgba(103,80,164,0.95)",
+                                  border: "1px solid rgba(103,80,164,0.3)",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {implInfo ? "재 요청" : "실행"}
+                              </button>
+                              {implInfo && (
+                                <button
+                                  className="ai-mini-btn"
+                                  onClick={() => setAiHistoryTaskType("IMPLEMENT")}
+                                  title="이력 목록"
+                                  style={{ ...aiMiniBtn, fontSize: 13, padding: "2px 6px", lineHeight: 1 }}
+                                >
+                                  ☰
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      <button
-                        className="ai-mini-btn ai-mini-btn-run"
-                        onClick={() => setImplTargetOpen(true)}
-                        style={{
-                          ...aiMiniBtn,
-                          background: "rgba(103,80,164,0.1)",
-                          color: "rgba(103,80,164,0.95)",
-                          border: "1px solid rgba(103,80,164,0.3)",
-                          fontWeight: 700,
-                        }}
-                      >
-                        선택
-                      </button>
-                    </div>
+                      );
+                    })()}
                   </div>
                 </div>
               )}
@@ -1130,13 +1180,13 @@ function FunctionDetailPageInner() {
       />
 
       {/* ── 구현요청 프롬프트 미리보기 팝업 ─────────────────────────────── */}
-      {implRequestFnIds && (
+      {implRequestParams && (
         <ImplRequestPopup
           projectId={projectId}
-          entryType="FUNCTION"
-          entryId={functionId}
-          functionIds={implRequestFnIds}
-          onClose={() => setImplRequestFnIds(null)}
+          entryType={implRequestParams.entryType as "UNIT_WORK" | "SCREEN" | "AREA" | "FUNCTION"}
+          entryId={implRequestParams.entryId}
+          functionIds={implRequestParams.functionIds}
+          onClose={() => setImplRequestParams(null)}
           onSubmitted={() => queryClient.invalidateQueries({ queryKey: ["function", projectId, functionId] })}
         />
       )}
@@ -1205,7 +1255,7 @@ function FunctionDetailPageInner() {
           projectId={projectId}
           refType="FUNCTION"
           refId={functionId}
-          taskType={aiHistoryTaskType as "DESIGN" | "INSPECT"}
+          taskType={aiHistoryTaskType as "DESIGN" | "INSPECT" | "IMPLEMENT"}
           onClose={() => setAiHistoryTaskType(null)}
         />
       )}
@@ -1216,10 +1266,9 @@ function FunctionDetailPageInner() {
           refType="FUNCTION"
           refId={functionId}
           onClose={() => setImplTargetOpen(false)}
-          onImplRequest={(fnIds) => {
-            // ImplTargetDialog 닫고 → 프롬프트 미리보기 팝업 열기
-            setImplTargetOpen(false);
-            setImplRequestFnIds(fnIds);
+          onImplRequest={(params) => {
+            // ImplTargetDialog는 유지한 채 프롬프트 미리보기 팝업 열기
+            setImplRequestParams(params);
           }}
         />
       )}

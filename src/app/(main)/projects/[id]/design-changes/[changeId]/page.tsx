@@ -30,6 +30,7 @@ const TABLE_LABEL: Record<string, string> = {
   tb_rq_requirement:  "요구사항",
   tb_rq_user_story:   "사용자스토리",
   tb_pj_project:      "프로젝트",
+  tb_ds_plan_studio_artf: "기획 산출물",
 };
 
 // snapshot_data 필드명 한글 매핑
@@ -239,8 +240,10 @@ function DesignChangeDetailInner() {
         </section>
 
         {/* ── 스냅샷 데이터 카드 ── */}
-        <section style={cardStyle}>
-          <div style={cardTitleStyle}>스냅샷 데이터</div>
+        <section style={{ ...cardStyle, maxHeight: 600, overflowY: "auto" }}>
+          <div style={{ ...cardTitleStyle, position: "sticky", top: -20, background: "var(--color-bg-card)", zIndex: 1, margin: "-20px -24px 16px", padding: "20px 24px 10px" }}>
+            스냅샷 데이터
+          </div>
           <SnapshotViewer data={detail.snapshotData} />
         </section>
 
