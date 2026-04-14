@@ -428,7 +428,10 @@ export default function AiTaskDetailDialog({
                 display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0,
               }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, flexShrink: 0 }}>
-                  <span style={panelLabelStyle}>요청 SPEC</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={panelLabelStyle}>요청 SPEC</span>
+                    <MdActionButtons content={[data.comment, data.reqCn ? `\n\n---\n\n${data.reqCn}` : ""].filter(Boolean).join("")} filename={`요청SPEC_${data.taskId.substring(0, 8)}`} />
+                  </div>
                   <LocalTabButtons tab={reqTab} onTabChange={setReqTab} />
                 </div>
                 <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
@@ -445,7 +448,10 @@ export default function AiTaskDetailDialog({
                 overflow: "hidden", minHeight: 0,
               }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, flexShrink: 0 }}>
-                  <span style={panelLabelStyle}>응답 피드백</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={panelLabelStyle}>응답 피드백</span>
+                    <MdActionButtons content={data.resultCn || ""} filename={`응답피드백_${data.taskId.substring(0, 8)}`} />
+                  </div>
                   <LocalTabButtons tab={resultTab} onTabChange={setResultTab} />
                 </div>
                 <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
@@ -510,3 +516,39 @@ const panelLabelStyle: React.CSSProperties = {
   fontSize: 11, fontWeight: 700, textTransform: "uppercase",
   letterSpacing: "0.05em", color: "var(--color-text-secondary)", marginBottom: 6,
 };
+
+// ── 복사 + 다운로드 아이콘 버튼 ──────────────────────────────────────────────
+
+const iconBtnStyle: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", justifyContent: "center",
+  width: 24, height: 24, borderRadius: 4,
+  border: "none", background: "transparent",
+  color: "var(--color-text-secondary)", fontSize: 13,
+  cursor: "pointer", padding: 0, flexShrink: 0,
+};
+
+function MdActionButtons({ content, filename }: { content: string; filename: string }) {
+  if (!content.trim()) return null;
+
+  function handleCopy() {
+    navigator.clipboard.writeText(content);
+    toast.success("클립보드에 복사되었습니다.");
+  }
+
+  function handleDownload() {
+    const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${filename}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <>
+      <button onClick={handleCopy} title="클립보드 복사" style={iconBtnStyle}>📋</button>
+      <button onClick={handleDownload} title="MD 파일 다운로드" style={iconBtnStyle}>⬇</button>
+    </>
+  );
+}

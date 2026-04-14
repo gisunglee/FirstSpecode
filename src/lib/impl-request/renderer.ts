@@ -119,8 +119,8 @@ function renderLayer(layer: LayerInfo): string {
   const label = LAYER_LABELS[layer.type] ?? layer.type;
   const modeLabel = !layer.hasSnapshot ? "신규" : layer.mode;
 
-  // ── 계층 헤더 — ## H2 ──
-  lines.push(`## ${abbr} — ${label}`);
+  // ── 계층 헤더 — ## H2 + displayId ──
+  lines.push(`## ${abbr}(${layer.displayId}) — ${label}`);
   lines.push("");
 
   // ── 모드 정보 ──

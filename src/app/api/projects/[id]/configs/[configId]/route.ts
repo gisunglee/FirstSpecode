@@ -29,7 +29,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
   let body: {
     group?: string; key?: string; label?: string; description?: string;
-    valueType?: string; defaultValue?: string; selectOptions?: string[];
+    valueType?: string; value?: string; defaultValue?: string; selectOptions?: string[];
   };
   try {
     body = await request.json();
@@ -67,6 +67,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         ...(body.label     != null ? { config_label:  body.label.trim() } : {}),
         ...(body.description !== undefined ? { config_dc: body.description?.trim() || null } : {}),
         ...(body.valueType != null ? { value_type:    body.valueType } : {}),
+        ...(body.value    != null ? { config_value:  body.value } : {}),
         ...(body.defaultValue != null ? { default_value: body.defaultValue.trim() } : {}),
         ...(body.selectOptions !== undefined ? { select_options: body.selectOptions?.length ? body.selectOptions : [] } : {}),
         mdfcn_dt: new Date(),

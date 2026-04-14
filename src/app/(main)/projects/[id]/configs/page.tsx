@@ -194,12 +194,6 @@ function ConfigsInner() {
         <button onClick={() => setAddFormOpen(true)} style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px" }}>
           + 설정 추가
         </button>
-        <button onClick={handleReset} disabled={saveMutation.isPending} style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px" }}>
-          초기화
-        </button>
-        <button onClick={handleSave} disabled={saveMutation.isPending} style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}>
-          {saveMutation.isPending ? "저장 중..." : "저장"}
-        </button>
       </div>
 
       {/* ── 건수 ── */}
@@ -285,35 +279,19 @@ function ConfigsInner() {
                     </span>
                   </div>
 
-                  {/* 값 — 타입별 렌더링 */}
-                  <div>
+                  {/* 설정 값 — 읽기 전용 */}
+                  <div style={{ fontSize: 12, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.value}>
                     {item.valueType === "BOOLEAN" ? (
-                      <button
-                        onClick={() => updateValue(item.configId, val === "Y" ? "N" : "Y")}
-                        style={{
-                          padding: "3px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-                          border: "1px solid", cursor: "pointer",
-                          ...(val === "Y"
-                            ? { background: "#e8f5e9", color: "#2e7d32", borderColor: "#a5d6a7" }
-                            : { background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", borderColor: "var(--color-border)" }),
-                        }}
-                      >
-                        {val === "Y" ? "ON" : "OFF"}
-                      </button>
-                    ) : item.valueType === "SELECT" && item.selectOptions?.length ? (
-                      <select
-                        value={val}
-                        onChange={(e) => updateValue(item.configId, e.target.value)}
-                        style={valueSelectStyle}
-                      >
-                        {item.selectOptions.map((opt) => (
-                          <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                      </select>
-                    ) : item.valueType === "NUMBER" ? (
-                      <input type="number" value={val} onChange={(e) => updateValue(item.configId, e.target.value)} style={{ ...valueInputStyle, width: 80 }} />
+                      <span style={{
+                        display: "inline-block", padding: "2px 10px", borderRadius: 10, fontSize: 11, fontWeight: 700,
+                        ...(item.value === "Y"
+                          ? { background: "#e8f5e9", color: "#2e7d32" }
+                          : { background: "#f5f5f5", color: "#999" }),
+                      }}>
+                        {item.value === "Y" ? "ON" : "OFF"}
+                      </span>
                     ) : (
-                      <input type="text" value={val} onChange={(e) => updateValue(item.configId, e.target.value)} style={{ ...valueInputStyle, width: "100%" }} />
+                      item.value || <span style={{ color: "#ccc" }}>—</span>
                     )}
                   </div>
 
@@ -688,6 +666,7 @@ function EditConfigModal({ projectId, item, onClose, onSaved }: {
   const [label, setLabel]             = useState(item.label);
   const [description, setDescription] = useState(item.description ?? "");
   const [valueType, setValueType]     = useState(item.valueType);
+  const [value, setValue]             = useState(item.value);
   const [defaultValue, setDefaultValue] = useState(item.defaultValue);
   const [selectOptions, setSelectOptions] = useState(item.selectOptions?.join(", ") ?? "");
 
@@ -719,6 +698,7 @@ function EditConfigModal({ projectId, item, onClose, onSaved }: {
       label,
       description:   description || undefined,
       valueType,
+      value,
       defaultValue,
       selectOptions: selectOpts,
     });
@@ -763,12 +743,44 @@ function EditConfigModal({ projectId, item, onClose, onSaved }: {
             <input value={description} onChange={(e) => setDescription(e.target.value)} style={formInputStyle} />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
             <div>
               <label style={formLabelStyle}>값 유형</label>
               <select value={valueType} onChange={(e) => setValueType(e.target.value)} style={formInputStyle}>
                 {VALUE_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
+            </div>
+            <div>
+              <label style={formLabelStyle}>설정 값</label>
+              {valueType === "BOOLEAN" ? (
+                <button
+                  type="button"
+                  onClick={() => setValue(value === "Y" ? "N" : "Y")}
+                  style={{
+                    display: "block", width: "100%", padding: "7px 12px", borderRadius: 6,
+                    fontSize: 13, fontWeight: 700, cursor: "pointer",
+                    border: "1px solid",
+                    ...(value === "Y"
+                      ? { background: "#e8f5e9", color: "#2e7d32", borderColor: "#a5d6a7" }
+                      : { background: "#f5f5f5", color: "#999", borderColor: "var(--color-border)" }),
+                  }}
+                >
+                  {value === "Y" ? "ON" : "OFF"}
+                </button>
+              ) : valueType === "SELECT" && selectOptions.trim() ? (
+                <select value={value} onChange={(e) => setValue(e.target.value)} style={formInputStyle}>
+                  {selectOptions.split(",").map((s) => s.trim()).filter(Boolean).map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type={valueType === "NUMBER" ? "number" : "text"}
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
+                  style={formInputStyle}
+                />
+              )}
             </div>
             <div>
               <label style={formLabelStyle}>기본값</label>
