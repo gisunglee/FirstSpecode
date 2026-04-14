@@ -7,11 +7,12 @@
  *     + 각 hunk 헤더 앞에 "@@ 섹션: ... @@" 주입 (AI 위치 파악용)
  *
  * 주요 기술:
- *   - jsdiff (`diff` 패키지) — git unified diff 생성
- *   - 섹션 헤더 = 가장 가까운 상위 markdown heading 또는 **bold** 단독 라인
+ *   - jsdiff (`diff` 패키지) — Myers 알고리즘(LCS) 기반 라인 diff + unified patch 생성
+ *   - 섹션 헤더 = 가장 가까운 상위 markdown heading / **bold** 단독 라인 / 테이블 헤더
+ *   - 수평선(---/***) 은 섹션 경계로 취급 (헤더 탐색 중단)
  */
 
-import { createPatch } from "diff";
+import { createPatch, diffLines as jsDiffLines } from "diff";
 import { DIFF_CONTEXT_LINES } from "./constants";
 
 export type LineDiffStats = {
@@ -25,42 +26,45 @@ export type LineDiffStats = {
 };
 
 /**
- * 라인 기반 diff — 단순 set 비교 (순서 무시 X, 단순 카운트)
+ * 라인 기반 diff — Myers 알고리즘(LCS, jsdiff) 기반
  *
- * 정확한 LCS는 Phase 5에서 jsdiff로 대체.
- * 현재는 변경 감지/모드 결정용 통계만 필요하므로 충분.
+ * 변경 이력:
+ *   - v1: 단순 집합 비교 (순서 무시) → 같은 줄이 이동해도 kept로 처리되는 문제
+ *   - v2: jsDiffLines(LCS 기반)으로 교체 → 순서까지 정확히 추적
+ *
+ * 전처리: 빈 줄 제거 후 비교 (공백 차이 false positive 방지)
  */
 export function diffLines(beforeMd: string, afterMd: string): LineDiffStats {
-  const beforeLines = beforeMd.split("\n").filter((l) => l.trim().length > 0);
-  const afterLines = afterMd.split("\n").filter((l) => l.trim().length > 0);
+  // 빈 줄 제거 정규화 (공백만 있는 줄 포함)
+  const strip = (md: string): string =>
+    md.split("\n").filter((l) => l.trim().length > 0).join("\n");
 
-  // 빈도 맵으로 카운트 — 같은 라인이 여러 번 나오면 각각 매칭
-  const beforeMap = new Map<string, number>();
-  beforeLines.forEach((l) => beforeMap.set(l, (beforeMap.get(l) ?? 0) + 1));
+  const beforeNorm = strip(beforeMd);
+  const afterNorm  = strip(afterMd);
 
-  let kept = 0;
-  const afterMapRemain = new Map<string, number>(beforeMap);
+  // jsdiff Myers 알고리즘 — LCS 기반으로 순서를 정확히 추적
+  const changes = jsDiffLines(beforeNorm, afterNorm);
 
-  for (const line of afterLines) {
-    const cnt = afterMapRemain.get(line) ?? 0;
-    if (cnt > 0) {
-      kept += 1;
-      afterMapRemain.set(line, cnt - 1);
-    }
+  let added = 0, removed = 0, kept = 0;
+  for (const part of changes) {
+    const count = part.count ?? 0;
+    if (part.added)        added   += count;
+    else if (part.removed) removed += count;
+    else                   kept    += count;
   }
 
-  const added = afterLines.length - kept;
-  const removed = beforeLines.length - kept;
-  const total = Math.max(beforeLines.length, afterLines.length, 1);
-  const lineRatio = (added + removed) / total;
+  // totalBefore/After: 정규화 후 라인 수 (빈 줄 제외)
+  const totalBefore = beforeNorm === "" ? 0 : beforeNorm.split("\n").length;
+  const totalAfter  = afterNorm  === "" ? 0 : afterNorm.split("\n").length;
+  const total = Math.max(totalBefore, totalAfter, 1);
 
   return {
     added,
     removed,
     kept,
-    totalBefore: beforeLines.length,
-    totalAfter: afterLines.length,
-    lineRatio: Math.min(lineRatio, 1),
+    totalBefore,
+    totalAfter,
+    lineRatio: Math.min((added + removed) / total, 1),
   };
 }
 
@@ -69,9 +73,13 @@ export function diffLines(beforeMd: string, afterMd: string): LineDiffStats {
 /**
  * raw MD에서 주어진 라인 번호의 "가장 가까운 상위 섹션 헤더"를 찾는다.
  *
- * 섹션 헤더 후보:
+ * 섹션 헤더 후보 (우선순위 순):
  *   1. 마크다운 헤딩 (#, ##, ###, ...)
  *   2. 볼드 라벨 단독 라인 (**텍스트**)
+ *   3. 테이블 구분선(|---|) → 바로 위 헤더 행의 첫 번째 셀
+ *
+ * 탐색 중단 조건:
+ *   - 수평선(---, ***, ___) 을 만나면 섹션 경계로 보고 탐색 즉시 중단
  *
  * @param rawMd 전체 MD 문자열
  * @param targetLineNo 1-indexed 라인 번호
@@ -84,6 +92,7 @@ function findNearestSectionHeader(rawMd: string, targetLineNo: number): string {
   for (let i = targetLineNo - 1; i >= 0; i--) {
     // trim() 안 함 — 정규식이 prefix(인용블록 등)를 직접 처리
     const line = lines[i] ?? "";
+    const trimmed = line.trim();
 
     // 마크다운 헤딩 — 인용블록(>) prefix 허용
     // 매칭: "## 제목", "> ## 제목", ">## 제목" 모두 인식
@@ -91,8 +100,22 @@ function findNearestSectionHeader(rawMd: string, targetLineNo: number): string {
     if (headingMatch) return headingMatch[2].trim();
 
     // 볼드 라벨 단독 라인 — trim 후 매칭 (인용블록 안에는 없다고 가정)
-    const boldMatch = line.trim().match(/^\*\*(.+?)\*\*\s*$/);
+    const boldMatch = trimmed.match(/^\*\*(.+?)\*\*\s*$/);
     if (boldMatch) return boldMatch[1].trim();
+
+    // 수평선(---/***/__) → 섹션 경계: 더 위로 탐색해도 다른 섹션이므로 중단
+    // 최소 3자 이상, 해당 문자만으로 구성된 줄
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) break;
+
+    // 테이블 구분선 (|---|, |:---|, |---:|, | --- | 등)
+    // → 바로 위 행이 테이블 헤더이므로 첫 번째 셀명을 섹션으로 사용
+    if (/^\|([ :\-]+\|)+$/.test(trimmed)) {
+      const headerLine = (lines[i - 1] ?? "").trim();
+      if (headerLine.startsWith("|")) {
+        const cells = headerLine.split("|").map((c) => c.trim()).filter(Boolean);
+        if (cells.length > 0) return `표(${cells[0]})`;
+      }
+    }
   }
 
   return "(루트)";
