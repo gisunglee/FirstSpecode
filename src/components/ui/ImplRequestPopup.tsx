@@ -142,6 +142,27 @@ export default function ImplRequestPopup({ projectId, entryType, entryId, functi
                 </button>
               </div>
             )}
+            {/* 복사 (클립보드) */}
+            {built && promptMd && (
+              <button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(promptMd);
+                    toast.success("프롬프트를 복사했습니다.");
+                  } catch {
+                    toast.error("복사에 실패했습니다.");
+                  }
+                }}
+                title="프롬프트 클립보드 복사"
+                style={{
+                  padding: "4px 10px", borderRadius: 4, fontSize: 11, fontWeight: 600,
+                  border: "1px solid var(--color-border)", background: "var(--color-bg-muted)",
+                  color: "var(--color-text-secondary)", cursor: "pointer",
+                }}
+              >
+                📋 복사
+              </button>
+            )}
             {/* MD 다운로드 */}
             {built && promptMd && (
               <button

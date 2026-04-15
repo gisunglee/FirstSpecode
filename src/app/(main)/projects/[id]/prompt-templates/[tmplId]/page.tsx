@@ -24,7 +24,7 @@ import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
-type TaskType = "INSPECT" | "DESIGN" | "IMPLEMENT" | "MOCKUP" | "IMPACT" | "CUSTOM";
+type TaskType = "INSPECT" | "DESIGN" | "IMPLEMENT" | "TEST" | "MOCKUP" | "IMPACT" | "CUSTOM";
 type RefType = "AREA" | "FUNCTION" | "UNIT_WORK" | "SCREEN";
 
 type TemplateDetail = {
@@ -51,11 +51,12 @@ const TASK_TYPE_OPTIONS: { value: TaskType; label: string }[] = [
   { value: "DESIGN", label: "설계" },
   { value: "INSPECT", label: "명세 검토" },
   { value: "IMPACT", label: "영향도 분석" },
+  { value: "IMPLEMENT", label: "구현" },
+  { value: "TEST", label: "테스트" },
 ];
 
 // 더 이상 사용하지 않는 유형 (기존 데이터 표시용)
 const DEPRECATED_TASK_TYPES: Partial<Record<TaskType, string>> = {
-  IMPLEMENT: "구현",
   MOCKUP: "목업",
   CUSTOM: "자유 요청",
 };
@@ -315,7 +316,7 @@ function PromptTemplateDetailPageInner() {
               fontSize: 13, color: "#795548", lineHeight: 1.6,
             }}>
               ⚠️ 이 템플릿의 작업 유형 <strong>"{DEPRECATED_TASK_TYPES[taskTyCode]}"</strong>은(는) 더 이상 사용하지 않는 유형입니다.
-              저장 전에 <strong>설계 / 명세 검토 / 영향도 분석</strong> 중 하나로 변경해 주세요.
+              저장 전에 <strong>설계 / 명세 검토 / 영향도 분석 / 구현 / 테스트</strong> 중 하나로 변경해 주세요.
             </div>
           )}
 

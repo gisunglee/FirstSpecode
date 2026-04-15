@@ -25,7 +25,7 @@ import { useEffect } from "react";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
-type TaskType = "INSPECT" | "DESIGN" | "IMPLEMENT" | "MOCKUP" | "IMPACT" | "CUSTOM";
+type TaskType = "INSPECT" | "DESIGN" | "IMPLEMENT" | "TEST" | "MOCKUP" | "IMPACT" | "CUSTOM";
 type RefType  = "AREA" | "FUNCTION";
 
 type TemplateRow = {
@@ -50,8 +50,9 @@ const TASK_TYPE_LABELS: Record<TaskType, string> = {
   DESIGN:    "설계",
   INSPECT:   "명세 검토",
   IMPACT:    "영향도 분석",
-  // 폐기 유형 — 기존 데이터 표시용
   IMPLEMENT: "구현",
+  TEST:      "테스트",
+  // 폐기 유형 — 기존 데이터 표시용
   MOCKUP:    "목업",
   CUSTOM:    "자유 요청",
 };
@@ -66,8 +67,9 @@ const taskTypeBadgeColors: Record<TaskType, { bg: string; color: string }> = {
   DESIGN:    { bg: "#f3e5f5", color: "#6a1b9a" },
   INSPECT:   { bg: "#e3f2fd", color: "#1565c0" },
   IMPACT:    { bg: "#fff3e0", color: "#e65100" },
+  IMPLEMENT: { bg: "#fce4ec", color: "#c62828" },
+  TEST:      { bg: "#e8f5e9", color: "#2e7d32" },
   // 폐기 유형 — 회색으로 표시
-  IMPLEMENT: { bg: "#f5f5f5", color: "#9e9e9e" },
   MOCKUP:    { bg: "#f5f5f5", color: "#9e9e9e" },
   CUSTOM:    { bg: "#f5f5f5", color: "#9e9e9e" },
 };
