@@ -61,6 +61,7 @@ function CommonCodesPageInner() {
   const [selectedGrpCode, setSelectedGrpCode] = useState<string | null>(null);
   const [showAllCodes, setShowAllCodes] = useState(false); // 모든 그룹의 코드 조회 모드
   const [globalUnique, setGlobalUnique] = useState(false); // 전체 공통코드 유니크 옵션 (저장 시 검증)
+  const [uniqueHelpOpen, setUniqueHelpOpen] = useState(false); // "공통코드 유니크 사용" 도움말 팝업
 
   // 그룹 추가 모드
   const [addingGroup, setAddingGroup] = useState(false);
@@ -76,11 +77,11 @@ function CommonCodesPageInner() {
   const [descValue, setDescValue] = useState("");
   const [descDirty, setDescDirty] = useState(false);
 
-  // 코드 추가 모드
+  // 코드 추가 모드 — 여러 행 동시 입력 지원
   const [addingCode, setAddingCode] = useState(false);
-  const [newCmCode, setNewCmCode] = useState("");
-  const [newCodeNm, setNewCodeNm] = useState("");
-  const [newCodeDc, setNewCodeDc] = useState("");
+  type NewCodeDraft = { cmCode: string; codeNm: string; codeDc: string };
+  const emptyDraft: NewCodeDraft = { cmCode: "", codeNm: "", codeDc: "" };
+  const [newCodeDrafts, setNewCodeDrafts] = useState<NewCodeDraft[]>([emptyDraft]);
   const codeNmInputRef = useRef<HTMLInputElement>(null);
 
   // 코드 인라인 편집 (codeId = serial PK 기준)
@@ -242,30 +243,66 @@ function CommonCodesPageInner() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // ── 코드 추가 ─────────────────────────────────────────────────────────────
+  // ── 코드 추가 (단건 API를 순차 호출해서 다건 처리) ─────────────────────────
   const addCodeMut = useMutation({
     mutationFn: (body: { cmCode: string; codeNm: string; codeDc?: string; globalUnique?: boolean }) =>
       authFetch(`/api/projects/${projectId}/code-groups/${selectedGrpCode}/codes`, {
         method: "POST",
         body: JSON.stringify(body),
       }),
-    onSuccess: () => {
-      toast.success("코드가 추가되었습니다.");
-      queryClient.invalidateQueries({ queryKey: ["codes", projectId, selectedGrpCode] });
-      queryClient.invalidateQueries({ queryKey: ["code-groups", projectId] });
-      setAddingCode(false);
-      setNewCmCode("");
-      setNewCodeNm("");
-      setNewCodeDc("");
-    },
-    onError: (err: Error) => toast.error(err.message),
   });
 
-  function commitAddCode() {
-    if (!newCmCode.trim()) { toast.error("코드를 입력해 주세요."); return; }
-    if (!CODE_PATTERN.test(newCmCode.trim())) { toast.error("코드는 영문, 숫자, _, :, - 만 입력 가능합니다."); return; }
-    if (!newCodeNm.trim()) { toast.error("코드명을 입력해 주세요."); return; }
-    addCodeMut.mutate({ cmCode: newCmCode.trim(), codeNm: newCodeNm.trim(), codeDc: newCodeDc.trim() || undefined, globalUnique });
+  async function commitAddCodes() {
+    // 비어있지 않은 행만 대상
+    const valid = newCodeDrafts
+      .map((d) => ({ cmCode: d.cmCode.trim(), codeNm: d.codeNm.trim(), codeDc: d.codeDc.trim() }))
+      .filter((d) => d.cmCode || d.codeNm);
+
+    if (valid.length === 0) { toast.error("추가할 코드를 입력해 주세요."); return; }
+
+    // 벨리데이션 — 한 건이라도 문제면 저장 중단
+    for (let i = 0; i < valid.length; i++) {
+      const d = valid[i];
+      if (!d.cmCode) { toast.error(`${i + 1}번째 행: 코드를 입력해 주세요.`); return; }
+      if (!CODE_PATTERN.test(d.cmCode)) { toast.error(`${i + 1}번째 행: 코드는 영문, 숫자, _, :, - 만 입력 가능합니다.`); return; }
+      if (!d.codeNm) { toast.error(`${i + 1}번째 행: 코드명을 입력해 주세요.`); return; }
+    }
+    // 입력 중 중복 체크 (같은 제출 안에서)
+    const codes = valid.map((d) => d.cmCode);
+    const dupLocal = codes.find((c, i) => codes.indexOf(c) !== i);
+    if (dupLocal) { toast.error(`입력한 코드 중 중복이 있습니다: ${dupLocal}`); return; }
+
+    // 순차 저장 — 실패 시 중단하고 에러 토스트
+    let successCnt = 0;
+    for (const d of valid) {
+      try {
+        await addCodeMut.mutateAsync({ cmCode: d.cmCode, codeNm: d.codeNm, codeDc: d.codeDc || undefined, globalUnique });
+        successCnt++;
+      } catch (err) {
+        toast.error(`${d.cmCode}: ${(err as Error).message}`);
+        break;
+      }
+    }
+    if (successCnt > 0) {
+      toast.success(`${successCnt}건 추가되었습니다.`);
+      queryClient.invalidateQueries({ queryKey: ["codes", projectId, selectedGrpCode] });
+      queryClient.invalidateQueries({ queryKey: ["code-groups", projectId] });
+    }
+    if (successCnt === valid.length) {
+      // 전체 성공 시 입력 폼 닫기
+      setAddingCode(false);
+      setNewCodeDrafts([emptyDraft]);
+    }
+  }
+
+  function updateDraft(idx: number, field: keyof NewCodeDraft, value: string) {
+    setNewCodeDrafts((prev) => prev.map((d, i) => (i === idx ? { ...d, [field]: value } : d)));
+  }
+  function addDraftRow() {
+    setNewCodeDrafts((prev) => [...prev, { ...emptyDraft }]);
+  }
+  function removeDraftRow(idx: number) {
+    setNewCodeDrafts((prev) => prev.length === 1 ? [{ ...emptyDraft }] : prev.filter((_, i) => i !== idx));
   }
 
   // ── 코드 수정 ─────────────────────────────────────────────────────────────
@@ -336,8 +373,9 @@ function CommonCodesPageInner() {
       <style>{`
         .cc-group-row:hover { background: var(--color-bg-muted) !important; }
         .cc-code-row:hover { background: var(--color-bg-muted) !important; }
-        .cc-code-row .cc-del-btn { opacity: 0; transition: opacity 0.15s; }
+        .cc-code-row .cc-del-btn { opacity: 0.6; transition: all 0.15s; }
         .cc-code-row:hover .cc-del-btn { opacity: 1; }
+        .cc-del-btn:hover { background: #ffebee !important; border-color: #ef9a9a !important; color: #c62828 !important; }
       `}</style>
 
       {/* 헤더 */}
@@ -352,20 +390,15 @@ function CommonCodesPageInner() {
 
         {/* ── 상단 바: 좌측 검색(30%) | 우측 모든 코드 조회 옵션(70%) ── */}
         <div style={{ display: "grid", gridTemplateColumns: "30% 70%", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
-          {/* 좌측: 검색 + 추가 */}
-          <div style={{ display: "flex", gap: 8, padding: "10px 16px", borderRight: "1px solid var(--color-border)" }}>
+          {/* 좌측: 검색 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRight: "1px solid var(--color-border)" }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", flexShrink: 0 }}>검색</span>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="그룹 코드·코드명 검색..."
-              style={searchInputStyle}
+              style={{ ...searchInputStyle, flex: 1 }}
             />
-            <button
-              onClick={() => { setAddingGroup(true); setNewGrpCode(""); setNewGrpCodeNm(""); }}
-              style={addBtnStyle}
-            >
-              + 추가
-            </button>
           </div>
           {/* 우측: 옵션 토글들 */}
           <div style={{ display: "flex", alignItems: "center", padding: "10px 16px", gap: 16 }}>
@@ -378,15 +411,30 @@ function CommonCodesPageInner() {
               />
               모든 그룹코드 조회 (그룹별 정렬)
             </label>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--color-text-secondary)", cursor: "pointer" }} title="체크 시 코드 등록/수정 시 전체 그룹에서 cm_code가 유니크해야 함">
-              <input
-                type="checkbox"
-                checked={globalUnique}
-                onChange={(e) => setGlobalUnique(e.target.checked)}
-                style={{ cursor: "pointer" }}
-              />
-              공통코드 유니크 사용
-            </label>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--color-text-secondary)", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={globalUnique}
+                  onChange={(e) => setGlobalUnique(e.target.checked)}
+                  style={{ cursor: "pointer" }}
+                />
+                공통코드 유니크 사용
+              </label>
+              <button
+                onClick={() => setUniqueHelpOpen(true)}
+                title="도움말"
+                style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  width: 18, height: 18, borderRadius: "50%",
+                  border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
+                  color: "var(--color-text-secondary)", fontSize: 10, fontWeight: 700,
+                  cursor: "pointer", lineHeight: 1, padding: 0,
+                }}
+              >
+                ?
+              </button>
+            </div>
           </div>
         </div>
 
@@ -395,39 +443,51 @@ function CommonCodesPageInner() {
 
           {/* ── 좌측: 코드 그룹 ── */}
           <div style={{ borderRight: "1px solid var(--color-border)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            {/* 섹션 라벨 */}
-            <div style={{ padding: "8px 16px", fontSize: 12, fontWeight: 700, color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)", background: "var(--color-bg-muted)" }}>
-              그룹코드
+            {/* 섹션 헤더 — 타이틀 + 추가 버튼 */}
+            <div style={{ padding: "6px 16px", fontSize: 12, fontWeight: 700, color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)", background: "var(--color-bg-muted)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span>그룹코드</span>
+              <button
+                onClick={() => { setAddingGroup(true); setNewGrpCode(""); setNewGrpCodeNm(""); }}
+                style={{ ...addBtnStyle, padding: "3px 10px", fontSize: 11 }}
+              >
+                + 추가
+              </button>
+            </div>
+            {/* 컬럼 헤더 */}
+            <div style={{ ...groupColHeaderStyle }}>
+              <div>그룹 코드</div>
+              <div>그룹명</div>
+              <div style={{ textAlign: "center" }}>코드수</div>
+              <div style={{ textAlign: "center" }}>사용</div>
+              <div />
             </div>
             {/* 그룹 목록 */}
             <div style={{ flex: 1, overflowY: "auto" }}>
             {/* 신규 추가 인라인 행 */}
             {addingGroup && (
-              <div style={{ ...groupRowStyle, background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
-                  <input
-                    ref={grpCodeInputRef}
-                    value={newGrpCode}
-                    onChange={(e) => setNewGrpCode(e.target.value)}
-                    placeholder="그룹 코드 (예: USER_STATUS)"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commitAddGroup();
-                      if (e.key === "Escape") setAddingGroup(false);
-                    }}
-                    style={{ ...inlineInputStyle, fontSize: 13, fontWeight: 600 }}
-                  />
-                  <input
-                    value={newGrpCodeNm}
-                    onChange={(e) => setNewGrpCodeNm(e.target.value)}
-                    placeholder="코드명 (예: 사용자 상태)"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commitAddGroup();
-                      if (e.key === "Escape") setAddingGroup(false);
-                    }}
-                    style={{ ...inlineInputStyle, fontSize: 12 }}
-                  />
-                </div>
-                <button onClick={commitAddGroup} style={miniSaveBtnStyle}>저장</button>
+              <div style={{ ...groupRowStyle, background: "#fff9e8" }}>
+                <input
+                  ref={grpCodeInputRef}
+                  value={newGrpCode}
+                  onChange={(e) => setNewGrpCode(e.target.value)}
+                  placeholder="USER_STATUS"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitAddGroup();
+                    if (e.key === "Escape") setAddingGroup(false);
+                  }}
+                  style={{ ...inlineInputStyle, fontSize: 12, fontWeight: 600 }}
+                />
+                <input
+                  value={newGrpCodeNm}
+                  onChange={(e) => setNewGrpCodeNm(e.target.value)}
+                  placeholder="사용자 상태"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitAddGroup();
+                    if (e.key === "Escape") setAddingGroup(false);
+                  }}
+                  style={{ ...inlineInputStyle, fontSize: 12 }}
+                />
+                <button onClick={commitAddGroup} style={{ ...miniSaveBtnStyle, gridColumn: "span 2", padding: "4px 8px", fontSize: 11 }}>저장</button>
                 <button onClick={() => setAddingGroup(false)} style={deleteBtnStyle} title="취소">×</button>
               </div>
             )}
@@ -451,76 +511,80 @@ function CommonCodesPageInner() {
                     cursor: "pointer",
                   }}
                 >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    {/* 그룹 코드 (더블클릭 인라인 편집) */}
-                    {editingGroup?.grpCode === g.grpCode && editingGroup.field === "grpCode" ? (
-                      <input
-                        autoFocus
-                        value={editGroupValue}
-                        onChange={(e) => setEditGroupValue(e.target.value)}
-                        onBlur={commitEditGroup}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") commitEditGroup();
-                          if (e.key === "Escape") { setEditingGroup(null); setEditGroupValue(""); }
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        style={{ ...inlineInputStyle, fontSize: 13, fontWeight: 600 }}
-                      />
-                    ) : (
-                      <div
-                        onDoubleClick={(e) => { e.stopPropagation(); startEditGroup(g.grpCode, "grpCode", g.grpCode); }}
-                        style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "text" }}
-                        title="더블클릭하여 그룹 코드 편집"
-                      >
-                        {g.grpCode}
-                      </div>
-                    )}
-                    {/* 그룹 코드명 (인라인 편집) */}
-                    {editingGroup?.grpCode === g.grpCode && editingGroup.field === "grpCodeNm" ? (
-                      <input
-                        autoFocus
-                        value={editGroupValue}
-                        onChange={(e) => setEditGroupValue(e.target.value)}
-                        onBlur={commitEditGroup}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") commitEditGroup();
-                          if (e.key === "Escape") { setEditingGroup(null); setEditGroupValue(""); }
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        style={{ ...inlineInputStyle, fontSize: 12, marginTop: 2 }}
-                      />
-                    ) : (
-                      <div
-                        onDoubleClick={(e) => { e.stopPropagation(); startEditGroup(g.grpCode, "grpCodeNm", g.grpCodeNm); }}
-                        style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                        title="더블클릭하여 편집"
-                      >
-                        {g.grpCodeNm}
-                      </div>
-                    )}
-                  </div>
+                  {/* 그룹 코드 (더블클릭 인라인 편집) */}
+                  {editingGroup?.grpCode === g.grpCode && editingGroup.field === "grpCode" ? (
+                    <input
+                      autoFocus
+                      value={editGroupValue}
+                      onChange={(e) => setEditGroupValue(e.target.value)}
+                      onBlur={commitEditGroup}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitEditGroup();
+                        if (e.key === "Escape") { setEditingGroup(null); setEditGroupValue(""); }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ ...inlineInputStyle, fontSize: 12, fontWeight: 600 }}
+                    />
+                  ) : (
+                    <div
+                      onDoubleClick={(e) => { e.stopPropagation(); startEditGroup(g.grpCode, "grpCode", g.grpCode); }}
+                      style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "text" }}
+                      title="더블클릭하여 그룹 코드 편집"
+                    >
+                      {g.grpCode}
+                    </div>
+                  )}
+
+                  {/* 그룹명 (더블클릭 인라인 편집) */}
+                  {editingGroup?.grpCode === g.grpCode && editingGroup.field === "grpCodeNm" ? (
+                    <input
+                      autoFocus
+                      value={editGroupValue}
+                      onChange={(e) => setEditGroupValue(e.target.value)}
+                      onBlur={commitEditGroup}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitEditGroup();
+                        if (e.key === "Escape") { setEditingGroup(null); setEditGroupValue(""); }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ ...inlineInputStyle, fontSize: 12 }}
+                    />
+                  ) : (
+                    <div
+                      onDoubleClick={(e) => { e.stopPropagation(); startEditGroup(g.grpCode, "grpCodeNm", g.grpCodeNm); }}
+                      style={{ fontSize: 12, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "text" }}
+                      title="더블클릭하여 편집"
+                    >
+                      {g.grpCodeNm}
+                    </div>
+                  )}
 
                   {/* 코드 수 뱃지 */}
-                  <span style={{
-                    fontSize: 11, fontWeight: 600, flexShrink: 0, minWidth: 22, textAlign: "center",
-                    color: g.codeCount > 0 ? "var(--color-primary, #1976d2)" : "#bbb",
-                    background: g.codeCount > 0 ? "rgba(25,118,210,0.08)" : "var(--color-bg-muted)",
-                    borderRadius: 10, padding: "2px 8px",
-                  }}>
-                    {g.codeCount}
-                  </span>
+                  <div style={{ display: "flex", justifyContent: "center" }}>
+                    <span style={{
+                      fontSize: 11, fontWeight: 600, minWidth: 22, textAlign: "center",
+                      color: g.codeCount > 0 ? "var(--color-primary, #1976d2)" : "#bbb",
+                      background: g.codeCount > 0 ? "rgba(25,118,210,0.08)" : "var(--color-bg-muted)",
+                      borderRadius: 10, padding: "2px 8px",
+                    }}>
+                      {g.codeCount}
+                    </span>
+                  </div>
 
                   {/* 사용여부 토글 */}
-                  <div
-                    onClick={(e) => { e.stopPropagation(); toggleGroupUseYn(g.grpCode, g.useYn); }}
-                    style={{ width: 32, height: 18, borderRadius: 9, background: g.useYn === "Y" ? "#4caf50" : "#ddd", position: "relative", cursor: "pointer", flexShrink: 0, transition: "background 0.2s" }}
-                    title={g.useYn === "Y" ? "사용 중 → 미사용으로 변경" : "미사용 → 사용으로 변경"}
-                  >
-                    <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: g.useYn === "Y" ? 16 : 2, transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+                  <div style={{ display: "flex", justifyContent: "center" }}>
+                    <div
+                      onClick={(e) => { e.stopPropagation(); toggleGroupUseYn(g.grpCode, g.useYn); }}
+                      style={{ width: 32, height: 18, borderRadius: 9, background: g.useYn === "Y" ? "#4caf50" : "#ddd", position: "relative", cursor: "pointer", transition: "background 0.2s" }}
+                      title={g.useYn === "Y" ? "사용 중 → 미사용으로 변경" : "미사용 → 사용으로 변경"}
+                    >
+                      <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: g.useYn === "Y" ? 16 : 2, transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+                    </div>
                   </div>
 
                   {/* 삭제 */}
                   <button
+                    className="cc-del-btn"
                     onClick={(e) => { e.stopPropagation(); setDeleteTarget({ type: "group", id: g.grpCode, name: g.grpCodeNm }); }}
                     style={deleteBtnStyle}
                     title="그룹 삭제"
@@ -618,7 +682,7 @@ function CommonCodesPageInner() {
                     </span>
                   </div>
                   <button
-                    onClick={() => { setAddingCode(true); setNewCmCode(""); setNewCodeNm(""); setNewCodeDc(""); }}
+                    onClick={() => { setAddingCode(true); setNewCodeDrafts([{ ...emptyDraft }]); }}
                     style={addBtnStyle}
                   >
                     + 코드 추가
@@ -651,42 +715,84 @@ function CommonCodesPageInner() {
 
               {/* 코드 행 */}
               <div style={{ flex: 1, overflowY: "auto" }}>
-                {/* 신규 추가 인라인 행 */}
+                {/* 신규 추가 인라인 행 — 여러 건 동시 입력 */}
                 {addingCode && (
-                  <div style={{ display: "flex", gap: 8, padding: "8px 16px", alignItems: "center", borderBottom: "1px solid var(--color-border)", background: "var(--color-bg-card)" }}>
-                    <input
-                      ref={codeNmInputRef}
-                      value={newCmCode}
-                      onChange={(e) => setNewCmCode(e.target.value)}
-                      placeholder="코드 (영문,숫자,_,:,-)"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") commitAddCode();
-                        if (e.key === "Escape") setAddingCode(false);
-                      }}
-                      style={{ ...inlineInputStyle, flex: 1 }}
-                    />
-                    <input
-                      value={newCodeNm}
-                      onChange={(e) => setNewCodeNm(e.target.value)}
-                      placeholder="코드명"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") commitAddCode();
-                        if (e.key === "Escape") setAddingCode(false);
-                      }}
-                      style={{ ...inlineInputStyle, flex: 1.2 }}
-                    />
-                    <input
-                      value={newCodeDc}
-                      onChange={(e) => setNewCodeDc(e.target.value)}
-                      placeholder="설명 (선택)"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") commitAddCode();
-                        if (e.key === "Escape") setAddingCode(false);
-                      }}
-                      style={{ ...inlineInputStyle, flex: 1.5 }}
-                    />
-                    <button onClick={commitAddCode} style={miniSaveBtnStyle}>저장</button>
-                    <button onClick={() => setAddingCode(false)} style={deleteBtnStyle} title="취소">×</button>
+                  <div style={{ padding: "8px 16px", borderBottom: "1px solid var(--color-border)", background: "#fff9e8" }}>
+                    {newCodeDrafts.map((draft, idx) => (
+                      <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                        <input
+                          ref={idx === 0 ? codeNmInputRef : undefined}
+                          value={draft.cmCode}
+                          onChange={(e) => updateDraft(idx, "cmCode", e.target.value)}
+                          placeholder="코드 (영문,숫자,_,:,-)"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") commitAddCodes();
+                            if (e.key === "Escape") { setAddingCode(false); setNewCodeDrafts([{ ...emptyDraft }]); }
+                          }}
+                          style={{ ...inlineInputStyle, flex: 1 }}
+                        />
+                        <input
+                          value={draft.codeNm}
+                          onChange={(e) => updateDraft(idx, "codeNm", e.target.value)}
+                          placeholder="코드명"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") commitAddCodes();
+                            if (e.key === "Escape") { setAddingCode(false); setNewCodeDrafts([{ ...emptyDraft }]); }
+                          }}
+                          style={{ ...inlineInputStyle, flex: 1.2 }}
+                        />
+                        <input
+                          value={draft.codeDc}
+                          onChange={(e) => updateDraft(idx, "codeDc", e.target.value)}
+                          placeholder="설명 (선택)"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") commitAddCodes();
+                            if (e.key === "Escape") { setAddingCode(false); setNewCodeDrafts([{ ...emptyDraft }]); }
+                          }}
+                          style={{ ...inlineInputStyle, flex: 1.5 }}
+                        />
+                        <button
+                          onClick={() => removeDraftRow(idx)}
+                          title="행 제거"
+                          style={{ ...deleteBtnStyle, color: "#c62828" }}
+                        >
+                          −
+                        </button>
+                      </div>
+                    ))}
+                    {/* 행 추가 + 일괄 저장 + 취소 */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+                      <button
+                        onClick={addDraftRow}
+                        style={{
+                          padding: "4px 12px", borderRadius: 5, border: "1px dashed var(--color-border)",
+                          background: "transparent", color: "var(--color-text-secondary)",
+                          fontSize: 11, fontWeight: 600, cursor: "pointer",
+                        }}
+                      >
+                        + 행 추가
+                      </button>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {globalUnique && (
+                          <span style={{ fontSize: 10, color: "#e65100", alignSelf: "center", marginRight: 6 }}>
+                            ⚠ 유니크 옵션 적용 중
+                          </span>
+                        )}
+                        <button
+                          onClick={() => { setAddingCode(false); setNewCodeDrafts([{ ...emptyDraft }]); }}
+                          style={{ ...miniCancelBtnStyle, padding: "4px 12px", fontSize: 11 }}
+                        >
+                          취소
+                        </button>
+                        <button
+                          onClick={commitAddCodes}
+                          disabled={addCodeMut.isPending}
+                          style={{ ...miniSaveBtnStyle, padding: "4px 14px", fontSize: 11 }}
+                        >
+                          {addCodeMut.isPending ? "저장 중..." : `일괄 저장 (${newCodeDrafts.filter((d) => d.cmCode.trim() || d.codeNm.trim()).length})`}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -830,22 +936,40 @@ function CommonCodesPageInner() {
       {/* ── 삭제 확인 다이얼로그 ── */}
       {deleteTarget && (
         <div
-          onClick={() => setDeleteTarget(null)}
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
         >
           <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "24px 28px", minWidth: 340, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}
+            style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "24px 28px", minWidth: 400, maxWidth: 460, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}
           >
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>
-              {deleteTarget.type === "group" ? "그룹 삭제" : "코드 삭제"}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+              <span style={{ fontSize: 18 }}>⚠️</span>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "#c62828" }}>
+                {deleteTarget.type === "group" ? "그룹 삭제 확인" : "코드 삭제 확인"}
+              </span>
             </div>
-            <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: "0 0 20px" }}>
-              <strong>{deleteTarget.name}</strong>을(를) 삭제하시겠습니까?
-              {deleteTarget.type === "group" && (
-                <><br /><span style={{ color: "#e53935" }}>하위 코드도 모두 삭제됩니다.</span></>
+            <div style={{ padding: "12px 14px", borderRadius: 8, background: "var(--color-bg-muted)", border: "1px solid var(--color-border)", marginBottom: 14 }}>
+              <span style={{ fontSize: 12, color: "var(--color-text-secondary)", marginRight: 8 }}>
+                {deleteTarget.type === "group" ? "그룹명" : "코드명"}
+              </span>
+              <strong style={{ fontSize: 13, color: "var(--color-text-primary)" }}>{deleteTarget.name}</strong>
+            </div>
+            <div style={{
+              padding: "10px 14px", borderRadius: 8,
+              background: "#ffebee", border: "1px solid #ef9a9a",
+              fontSize: 12, lineHeight: 1.7, color: "#b71c1c", marginBottom: 20,
+            }}>
+              {deleteTarget.type === "group" ? (
+                <>
+                  <b>주의</b> — 그룹을 삭제하면 <b>하위의 모든 코드도 함께 삭제</b>됩니다.
+                  <br />이미 다른 기능이나 데이터에서 이 코드를 사용 중이라면 오류가 발생할 수 있습니다.
+                </>
+              ) : (
+                <>
+                  <b>주의</b> — 이 코드를 프로그램이나 데이터에서 참조하고 있다면 오류가 발생할 수 있습니다. 확인 후 삭제하세요.
+                </>
               )}
-            </p>
+              <br />삭제 후에는 복구할 수 없습니다.
+            </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button onClick={() => setDeleteTarget(null)} style={miniCancelBtnStyle}>취소</button>
               <button
@@ -892,6 +1016,56 @@ function CommonCodesPageInner() {
         </div>
       )}
 
+      {/* ── "공통코드 유니크 사용" 도움말 팝업 ── */}
+      {uniqueHelpOpen && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }}
+          onClick={() => setUniqueHelpOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "min(560px, 90vw)", background: "var(--color-bg-card)", borderRadius: 12, boxShadow: "0 12px 40px rgba(0,0,0,0.2)", overflow: "hidden" }}
+          >
+            {/* 헤더 */}
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "14px 20px", borderBottom: "1px solid var(--color-border)", background: "var(--color-bg-muted)",
+            }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>공통코드 유니크 사용</span>
+              <button
+                onClick={() => setUniqueHelpOpen(false)}
+                style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "var(--color-text-secondary)", padding: "0 4px", lineHeight: 1 }}
+              >×</button>
+            </div>
+
+            {/* 내용 */}
+            <div style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: 12, fontSize: 13, lineHeight: 1.7, color: "var(--color-text-primary)" }}>
+              <div style={{ color: "var(--color-text-secondary)" }}>
+                코드가 <b>프로젝트 내 모든 그룹</b>에서 유일해야 하는지 결정합니다.
+              </div>
+
+              <div style={{ padding: "10px 14px", borderRadius: 8, background: "var(--color-bg-muted)", border: "1px solid var(--color-border)" }}>
+                <div style={{ fontWeight: 700, marginBottom: 2 }}>체크 해제 (기본)</div>
+                <div style={{ color: "var(--color-text-secondary)" }}>
+                  같은 그룹 안에서만 코드 중복 방지. 다른 그룹에는 같은 코드가 있어도 괜찮습니다.
+                </div>
+              </div>
+
+              <div style={{ padding: "10px 14px", borderRadius: 8, background: "#fff8e1", border: "1px solid #ffe082" }}>
+                <div style={{ fontWeight: 700, marginBottom: 2, color: "#e65100" }}>체크 시</div>
+                <div style={{ color: "#795548" }}>
+                  전체 프로젝트에서 코드는 유일해야 합니다. 동일한 이름의 코드가 다른 그룹에도 존재할 수 없습니다.
+                </div>
+              </div>
+
+              <div style={{ fontSize: 12, color: "var(--color-text-secondary)", fontStyle: "italic" }}>
+                ※ 등록·수정 시점에만 검증됩니다.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -918,9 +1092,19 @@ const addBtnStyle: React.CSSProperties = {
   alignSelf: "center", height: "fit-content",
 };
 
+// 그룹 컬럼 그리드: 그룹코드 | 그룹명 | 코드수 | 사용 | 삭제
+const GROUP_GRID = "1.2fr 1.5fr 48px 40px 28px";
+
+const groupColHeaderStyle: React.CSSProperties = {
+  display: "grid", gridTemplateColumns: GROUP_GRID, gap: 8,
+  padding: "7px 14px", background: "var(--color-bg-card)",
+  fontSize: 11, fontWeight: 600, color: "var(--color-text-tertiary, #999)",
+  borderBottom: "1px solid var(--color-border)", alignItems: "center",
+};
+
 const groupRowStyle: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: 10,
-  padding: "11px 16px", borderBottom: "1px solid var(--color-border)",
+  display: "grid", gridTemplateColumns: GROUP_GRID, gap: 8, alignItems: "center",
+  padding: "9px 14px", borderBottom: "1px solid var(--color-border)",
   transition: "background 0.15s",
 };
 
@@ -949,8 +1133,11 @@ const codeGridRowStyle: React.CSSProperties = {
 };
 
 const deleteBtnStyle: React.CSSProperties = {
-  background: "none", border: "none", cursor: "pointer",
-  fontSize: 18, color: "#ccc", lineHeight: 1, padding: "0 4px",
+  display: "inline-flex", alignItems: "center", justifyContent: "center",
+  width: 22, height: 22, borderRadius: 4,
+  background: "transparent", border: "1px solid transparent",
+  cursor: "pointer", fontSize: 15, color: "#bbb", lineHeight: 1, padding: 0,
+  transition: "all 0.12s",
 };
 
 const miniSaveBtnStyle: React.CSSProperties = {

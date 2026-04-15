@@ -52,16 +52,38 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "단위업무를 찾을 수 없습니다.", 404);
     }
 
-    // AI 태스크 최신 상태 조회 (taskType별 최신 1건)
-    const aiTasks = await prisma.tbAiTask.findMany({
-      where:   { ref_ty_code: "UNIT_WORK", ref_id: unitWorkId },
-      orderBy: { req_dt: "desc" },
-    });
+    // AI 태스크 최신 상태 조회 (taskType별 최신 1건) + IMPLEMENT 스냅샷 경유 병렬 조회
+    const [aiTasks, implSnapshotRows] = await Promise.all([
+      prisma.tbAiTask.findMany({
+        where:   { ref_ty_code: "UNIT_WORK", ref_id: unitWorkId },
+        orderBy: { req_dt: "desc" },
+      }),
+      prisma.tbSpImplSnapshot.findMany({
+        where: { ref_tbl_nm: "tb_ds_unit_work", ref_id: unitWorkId },
+        select: { ai_task_id: true },
+        orderBy: { creat_dt: "desc" },
+        distinct: ["ai_task_id"],
+      }),
+    ]);
     // taskType별 최신 1건만 유지
     const aiTaskMap: Record<string, { aiTaskId: string; status: string }> = {};
     for (const t of aiTasks) {
       if (!aiTaskMap[t.task_ty_code]) {
         aiTaskMap[t.task_ty_code] = { aiTaskId: t.ai_task_id, status: t.task_sttus_code };
+      }
+    }
+    // IMPLEMENT — 스냅샷에서 찾은 ai_task_id로 최신 태스크 1건 조회
+    // (이 단위업무 하위 어느 계층이든 포함된 구현요청 태스크가 여기서 잡힘)
+    if (!aiTaskMap["IMPLEMENT"] && implSnapshotRows.length > 0) {
+      const implTask = await prisma.tbAiTask.findFirst({
+        where: {
+          ai_task_id:   { in: implSnapshotRows.map((s) => s.ai_task_id) },
+          task_ty_code: "IMPLEMENT",
+        },
+        orderBy: { req_dt: "desc" },
+      });
+      if (implTask) {
+        aiTaskMap["IMPLEMENT"] = { aiTaskId: implTask.ai_task_id, status: implTask.task_sttus_code };
       }
     }
 

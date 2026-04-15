@@ -29,6 +29,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const refType    = url.searchParams.get("refType")    ?? undefined;
   const refId      = url.searchParams.get("refId")      ?? undefined;
   const snapshotRefId = url.searchParams.get("snapshotRefId") ?? undefined;
+  const snapshotRefType = url.searchParams.get("snapshotRefType") ?? undefined; // FUNCTION|AREA|SCREEN|UNIT_WORK
   const reqMberId  = url.searchParams.get("reqMberId")  ?? undefined;
   const page     = Math.max(1, parseInt(url.searchParams.get("page")     ?? "1",  10));
   const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get("pageSize") ?? "20", 10)));
@@ -41,11 +42,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    // IMPLEMENT + snapshotRefId: 스냅샷 테이블에서 해당 기능이 포함된 ai_task_id 목록을 먼저 조회
+    // IMPLEMENT + snapshotRefId: 스냅샷 테이블에서 해당 노드가 포함된 ai_task_id 목록 조회
+    // snapshotRefType(FUNCTION|AREA|SCREEN|UNIT_WORK)에 따라 ref_tbl_nm 결정
+    const SNAPSHOT_TBL_MAP: Record<string, string> = {
+      FUNCTION: "tb_ds_function",
+      AREA: "tb_ds_area",
+      SCREEN: "tb_ds_screen",
+      UNIT_WORK: "tb_ds_unit_work",
+    };
     let snapshotTaskIds: string[] | undefined;
     if (snapshotRefId && taskType === "IMPLEMENT") {
+      const refTblNm = SNAPSHOT_TBL_MAP[snapshotRefType ?? "FUNCTION"] ?? "tb_ds_function";
       const snapshots = await prisma.tbSpImplSnapshot.findMany({
-        where: { ref_tbl_nm: "tb_ds_function", ref_id: snapshotRefId },
+        where: { ref_tbl_nm: refTblNm, ref_id: snapshotRefId },
         select: { ai_task_id: true },
         distinct: ["ai_task_id"],
       });

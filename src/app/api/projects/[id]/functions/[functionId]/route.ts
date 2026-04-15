@@ -49,6 +49,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
                       unit_work_display_id: true,
                       unit_work_nm:         true,
                       unit_work_dc:         true,
+                      bgng_de:              true,
+                      end_de:               true,
                     },
                   },
                 },
@@ -126,6 +128,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       unitWorkId:        fn.area?.screen?.unitWork?.unit_work_id ?? null,
       unitWorkDisplayId: fn.area?.screen?.unitWork?.unit_work_display_id ?? null,
       unitWorkName:      fn.area?.screen?.unitWork?.unit_work_nm ?? "미분류",
+      // 단위업무 기간 — 기능 구현 기간 검증용
+      unitWorkStartDate: fn.area?.screen?.unitWork?.bgng_de ?? null,
+      unitWorkEndDate:   fn.area?.screen?.unitWork?.end_de ?? null,
       // 단위업무 설명 — 컬럼 매핑 팝업 TABLE_SCRIPT 자동 선택에 사용
       unitWorkDc:        fn.area?.screen?.unitWork?.unit_work_dc ?? "",
       aiTasks,

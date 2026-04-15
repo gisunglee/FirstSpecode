@@ -35,6 +35,7 @@ type TaskRow = {
   completedAt: string | null;
   reqMberName: string;
   retryCnt:    number;
+  implFunctions?: { displayId: string; name: string }[];
 };
 
 // ── 상수 ──────────────────────────────────────────────────────────────────────
@@ -118,9 +119,10 @@ export default function AiTaskHistoryDialog({
     queryKey: ["ai-task-history", projectId, refType, refId, taskType],
     queryFn:  () => {
       const sp = new URLSearchParams({ taskType });
-      // IMPLEMENT는 스냅샷 경유 조회 (여러 기능이 한 태스크에 포함될 수 있으므로)
+      // IMPLEMENT는 스냅샷 경유 조회 (여러 노드가 한 태스크에 포함될 수 있으므로)
       if (taskType === "IMPLEMENT") {
         sp.set("snapshotRefId", refId);
+        sp.set("snapshotRefType", refType);
       } else {
         sp.set("refType", refType);
         sp.set("refId", refId);
@@ -136,6 +138,7 @@ export default function AiTaskHistoryDialog({
   return (
     <>
       <div
+        data-impl-overlay="history"
         onClick={onClose}
         style={{
           position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
@@ -145,7 +148,7 @@ export default function AiTaskHistoryDialog({
         <div
           onClick={(e) => e.stopPropagation()}
           style={{
-            width: "min(860px, 95vw)", maxHeight: "80vh",
+            width: "min(1100px, 95vw)", maxHeight: "80vh",
             display: "flex", flexDirection: "column",
             border: "1px solid var(--color-border)", borderRadius: 10,
             background: "var(--color-bg-card)", boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
@@ -191,55 +194,105 @@ export default function AiTaskHistoryDialog({
                 이력이 없습니다.
               </div>
             ) : (
-              <div>
-                {/* 테이블 헤더 */}
+              <>
+                {/* 안내 문구 */}
                 <div style={{
-                  display: "grid", gridTemplateColumns: "144px 144px 80px 60px 80px",
-                  padding: "10px 20px", background: "var(--color-bg-muted)",
-                  borderBottom: "1px solid var(--color-border)",
-                  fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)",
-                  gap: 12, alignItems: "center",
+                  padding: "8px 20px", fontSize: 11, color: "var(--color-text-secondary)",
+                  background: "rgba(103,80,164,0.04)", borderBottom: "1px solid var(--color-border)",
                 }}>
-                  <span>요청일시</span>
-                  <span>완료일시</span>
-                  <span style={{ textAlign: "center" }}>소요</span>
-                  <span style={{ textAlign: "center" }}>재시도</span>
-                  <span style={{ textAlign: "center" }}>상태</span>
+                  💡 행을 클릭하면 요청/응답 내용을 볼 수 있습니다.
                 </div>
 
-                {items.map((row, idx) => (
-                  <div
-                    key={row.taskId}
-                    onClick={() => setDetailTaskId(row.taskId)}
-                    style={{
-                      display: "grid", gridTemplateColumns: "144px 144px 80px 60px 80px",
-                      padding: "12px 20px",
-                      borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-                      background: "var(--color-bg-card)", cursor: "pointer",
-                      gap: 12, alignItems: "center",
-                      transition: "background 0.1s",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-hover, #f0f4ff)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-bg-card)")}
-                  >
-                    <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
-                      {formatDatetime(row.requestedAt)}
-                    </span>
-                    <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
-                      {row.completedAt ? formatDatetime(row.completedAt) : "—"}
-                    </span>
-                    <span style={{ textAlign: "center", fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)" }}>
-                      {formatDuration(row.requestedAt, row.completedAt)}
-                    </span>
-                    <span style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
-                      {row.retryCnt}회
-                    </span>
-                    <div style={{ textAlign: "center" }}>
-                      <span style={statusBadgeStyle(row.status)}>{STATUS_LABELS[row.status]}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                {/* 카드 목록 — 각 태스크 1개씩 */}
+                <div style={{ padding: "8px 12px" }}>
+                  {items.map((row) => {
+                    const fnCount = row.implFunctions?.length ?? 0;
+                    const fnNames = row.implFunctions?.map((f) => `${f.displayId} ${f.name}`).join(", ") ?? "";
+
+                    return (
+                      <div
+                        key={row.taskId}
+                        onClick={() => setDetailTaskId(row.taskId)}
+                        style={{
+                          padding: "12px 14px", marginBottom: 6,
+                          border: "1px solid var(--color-border)", borderRadius: 8,
+                          background: "var(--color-bg-card)", cursor: "pointer",
+                          transition: "all 0.1s",
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-bg-hover, #f5f7ff)"; e.currentTarget.style.borderColor = "rgba(103,80,164,0.3)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "var(--color-bg-card)"; e.currentTarget.style.borderColor = "var(--color-border)"; }}
+                      >
+                        {/* 1행 — 상태 + 요청일시 + 소요시간 + 재시도 + 요청자 */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+                          <span style={statusBadgeStyle(row.status)}>{STATUS_LABELS[row.status]}</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                            {formatDatetime(row.requestedAt)}
+                          </span>
+                          <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+                            소요 <strong style={{ color: "var(--color-text-primary)" }}>{formatDuration(row.requestedAt, row.completedAt)}</strong>
+                          </span>
+                          {row.retryCnt > 0 && (
+                            <span style={{ fontSize: 11, color: "#e65100", fontWeight: 600 }}>
+                              재시도 {row.retryCnt}회
+                            </span>
+                          )}
+                          <span style={{ fontSize: 11, color: "var(--color-text-secondary)", marginLeft: "auto" }}>
+                            👤 {row.reqMberName}
+                          </span>
+                        </div>
+
+                        {/* 2행 — IMPLEMENT: 포함 기능 / 기타: 코멘트 */}
+                        {taskType === "IMPLEMENT" && fnCount > 0 && (
+                          <div style={{
+                            fontSize: 11, color: "var(--color-text-secondary)",
+                            padding: "6px 8px", background: "var(--color-bg-muted)", borderRadius: 4,
+                            marginBottom: row.comment ? 4 : 0,
+                          }}>
+                            <span style={{
+                              fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 3,
+                              background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)",
+                              marginRight: 6,
+                            }}>
+                              기능 {fnCount}개
+                            </span>
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", display: "inline-block", maxWidth: "calc(100% - 80px)", verticalAlign: "middle", whiteSpace: "nowrap" }}>
+                              {fnNames}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* 코멘트 (있으면) */}
+                        {row.comment?.trim() && (
+                          <div style={{
+                            fontSize: 11, color: "var(--color-text-secondary)",
+                            padding: "4px 0 0", display: "flex", gap: 6, alignItems: "flex-start",
+                          }}>
+                            <span style={{
+                              fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 3,
+                              background: "#fff3e0", color: "#e65100", flexShrink: 0,
+                            }}>
+                              코멘트
+                            </span>
+                            <span style={{
+                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                              flex: 1, minWidth: 0,
+                            }}>
+                              {row.comment.trim()}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* 완료일시 (완료된 경우) */}
+                        {row.completedAt && (
+                          <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginTop: 4 }}>
+                            완료: {formatDatetime(row.completedAt)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
         </div>

@@ -29,11 +29,11 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
-import ProgressTracker from "@/components/ui/ProgressTracker";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import { useAppStore } from "@/store/appStore";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
+import AiImplementCard from "@/components/ui/AiImplementCard";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -206,6 +206,9 @@ function UnitWorkDetailPageInner() {
   // 패널 외부 클릭 시 닫기
   useEffect(() => {
     function handleClick(e: MouseEvent) {
+      // AiImplementCard 내부 팝업(ImplTargetDialog/ImplRequestPopup/이력/상세)이 열려있으면 무시
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-impl-overlay]')) return;
       if (aiPanelRef.current && !aiPanelRef.current.contains(e.target as Node)) {
         setAiPanelOpen(false);
       }
@@ -472,6 +475,7 @@ function UnitWorkDetailPageInner() {
       {/* AI 요청 컨펌 다이얼로그 */}
       {aiConfirm && (
         <div
+          data-impl-overlay="ai-confirm"
           style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}
           onClick={() => { setAiConfirm(null); setTaskPrompt(null); }}
         >
@@ -630,17 +634,6 @@ function UnitWorkDetailPageInner() {
           <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)", flexShrink: 0 }}>
             {isNew ? "단위업무 신규 등록" : `${detail?.displayId ?? ""} 단위업무 편집`}
           </span>
-          {/* 타이틀과 40px 띄워서 진척률 표시 — 수정 모드에서만 */}
-          {!isNew && detail && (
-            <div style={{ marginLeft: 40 }}>
-              <ProgressTracker
-                projectId={projectId}
-                refTable="tb_ds_unit_work"
-                refId={unitWorkId}
-                phases={["analy", "design", "impl", "test"]}
-              />
-            </div>
-          )}
         </div>
 
         {/* 우: AI 작업 + PRD 다운로드 + 취소·저장 */}
@@ -760,6 +753,17 @@ function UnitWorkDetailPageInner() {
                         </div>
                       );
                     })}
+
+                    {/* AI 구현 — 공통 컴포넌트 */}
+                    {!isNew && (
+                      <AiImplementCard
+                        projectId={projectId}
+                        refType="UNIT_WORK"
+                        refId={unitWorkId}
+                        implInfo={detail?.aiTasks?.["IMPLEMENT"] ?? null}
+                        onInvalidate={() => queryClient.invalidateQueries({ queryKey: ["unit-work", projectId, unitWorkId] })}
+                      />
+                    )}
                   </div>
                 </div>
               )}

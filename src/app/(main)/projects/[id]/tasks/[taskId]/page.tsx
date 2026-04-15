@@ -163,10 +163,20 @@ function TaskDetailPageInner() {
   }
 
   // ── GNB 브레드크럼 ─────────────────────────────────────────────────────────
+  // 분석 계층 네비: [과업 목록] > [현재 과업] > [요구사항 목록(하위로 이동)]
+  // - 과업과 요구사항은 1:N 관계. 현재 과업 하위 요구사항으로 바로 이동할 수 있도록
+  //   마지막에 "요구사항 목록" 링크를 둔다.
+  // - 신규 등록 모드에서는 하위로 이동할 맥락이 없으므로 링크를 생략한다.
   useEffect(() => {
     const items = [
+      // 상위: 과업 목록
       { label: "과업", href: `/projects/${projectId}/tasks` },
+      // 현재: 과업 상세 (href 없음 = 현재 위치 표시)
       { label: isNew ? "신규 등록" : (taskDetail?.displayId ?? "편집") },
+      // 하위: 요구사항 목록 (수정 모드에서만 노출)
+      ...(isNew
+        ? []
+        : [{ label: "요구사항 목록", href: `/projects/${projectId}/requirements` }]),
     ];
     setBreadcrumb(items);
     return () => setBreadcrumb([]);

@@ -10,7 +10,7 @@
  */
 
 import { Suspense, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
@@ -45,13 +45,20 @@ export default function UserStoriesPage() {
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 
 function UserStoriesPageInner() {
-  const params      = useParams<{ id: string }>();
-  const router      = useRouter();
-  const queryClient = useQueryClient();
-  const projectId   = params.id;
+  const params       = useParams<{ id: string }>();
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const queryClient  = useQueryClient();
+  const projectId    = params.id;
 
-  const [taskFilter, setTaskFilter]   = useState("");
-  const [reqFilter,  setReqFilter]    = useState("");
+  // ── URL 쿼리 필터 초기값 ─────────────────────────────────────────────────────
+  // 요구사항 상세의 "사용자스토리 목록" 링크가 ?reqId=xxx 로 진입 시 해당 요구사항 필터 자동 적용.
+  // 과업 상세에서도 향후 ?taskId=xxx 로 진입 가능하도록 둘 다 지원한다.
+  const initialReqFilter  = searchParams.get("reqId")  ?? "";
+  const initialTaskFilter = searchParams.get("taskId") ?? "";
+
+  const [taskFilter, setTaskFilter]   = useState(initialTaskFilter);
+  const [reqFilter,  setReqFilter]    = useState(initialReqFilter);
   const [keyword,    setKeyword]      = useState("");
   const [deleteTarget, setDeleteTarget] = useState<StoryCard | null>(null);
 
@@ -141,8 +148,19 @@ function UserStoriesPageInner() {
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
-      {/* ── 검색 필터 (AR-00048) ─────────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+      {/* 총 건수 (왼쪽) + 검색 필터 (오른쪽) — 기능 정의 목록과 동일 패턴 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
+          총 {data?.totalCount ?? 0}건
+        </span>
+        <div style={{ flex: 1 }} />
+        <input
+          type="text"
+          placeholder="스토리명·페르소나 검색..."
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          style={{ ...filterSelectStyle, minWidth: 220, backgroundImage: "none", paddingRight: 12 }}
+        />
         <select
           value={taskFilter}
           onChange={(e) => handleTaskFilterChange(e.target.value)}
@@ -153,7 +171,6 @@ function UserStoriesPageInner() {
             <option key={t.taskId} value={t.taskId}>{t.name}</option>
           ))}
         </select>
-
         <select
           value={reqFilter}
           onChange={(e) => setReqFilter(e.target.value)}
@@ -164,21 +181,14 @@ function UserStoriesPageInner() {
             <option key={r.requirementId} value={r.requirementId}>{r.name}</option>
           ))}
         </select>
-
-        <input
-          type="text"
-          placeholder="스토리명·페르소나 검색..."
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
-          style={{ ...filterSelectStyle, minWidth: 200 }}
-        />
-
-        <div style={{ flex: 1 }} />
-      </div>
-
-      {/* 총 건수 */}
-      <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
-        총 {data?.totalCount ?? 0}건
+        {(taskFilter || reqFilter || keyword) && (
+          <button
+            onClick={() => { setTaskFilter(""); setReqFilter(""); setKeyword(""); }}
+            style={{ fontSize: 12, padding: "5px 10px", borderRadius: 5, border: "1px solid var(--color-border)", background: "none", cursor: "pointer", color: "var(--color-text-secondary)" }}
+          >
+            초기화
+          </button>
+        )}
       </div>
 
       {/* ── 테이블 목록 ──────────────────────────────────────────────────────── */}

@@ -178,26 +178,22 @@ function ScreensPageInner() {
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
-      {/* 필터 + 총 건수 */}
-      <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+      {/* 총 건수 + 필터 (오른쪽 정렬) */}
+      <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
+          총 {items.length}건
+        </span>
+        <div style={{ flex: 1 }} />
         <select
           value={unitWorkFilter}
           onChange={(e) => setUnitWorkFilter(e.target.value)}
-          style={{
-            padding: "6px 10px", borderRadius: 6,
-            border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
-            color: "var(--color-text-primary)", fontSize: 13, outline: "none",
-            minWidth: 200, cursor: "pointer",
-          }}
+          style={filterSelectStyle}
         >
-          <option value="">단위업무 — 전체</option>
+          <option value="">단위업무 전체</option>
           {unitWorkOptions.map((opt) => (
             <option key={opt.id} value={opt.id}>{opt.name}</option>
           ))}
         </select>
-        <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
-          총 {items.length}건
-        </span>
       </div>
 
       {/* 목록 */}
@@ -514,6 +510,23 @@ const linkBtnStyle: React.CSSProperties = {
   padding: 0,
   textAlign: "left",
   textDecoration: "underline",
+};
+
+const filterSelectStyle: React.CSSProperties = {
+  padding:            "7px 32px 7px 12px",
+  borderRadius:       6,
+  border:             "1px solid var(--color-border)",
+  fontSize:           13,
+  background:         "var(--color-bg-card)",
+  color:              "var(--color-text-primary)",
+  cursor:             "pointer",
+  outline:            "none",
+  appearance:         "none",
+  WebkitAppearance:   "none",
+  backgroundImage:    `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+  backgroundRepeat:   "no-repeat",
+  backgroundPosition: "right 10px center",
+  minWidth:           160,
 };
 
 const primaryBtnStyle: React.CSSProperties = {

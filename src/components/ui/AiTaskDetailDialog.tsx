@@ -249,10 +249,13 @@ export default function AiTaskDetailDialog({
 
   return (
     <div
-      onClick={onClose}
+      data-impl-overlay="detail"
+      // 오버레이 클릭 시 자기만 닫고 부모 다이얼로그(예: AiTaskHistoryDialog)까지 닫히지 않도록
+      // 이벤트 버블링 중단 — React 이벤트는 컴포넌트 트리를 따라 부모로 전파됨
+      onClick={(e) => { e.stopPropagation(); onClose(); }}
       style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
-        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100,
       }}
     >
       <div
@@ -285,7 +288,7 @@ export default function AiTaskDetailDialog({
             )}
           </div>
           <button
-            onClick={onClose}
+            onClick={(e) => { e.stopPropagation(); onClose(); }}
             style={{
               padding: "5px 12px", background: "var(--color-bg-muted)",
               border: "1px solid var(--color-border)", borderRadius: 4,

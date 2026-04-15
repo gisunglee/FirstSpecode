@@ -62,56 +62,106 @@ export default function LNB() {
   const settingsHref     = pBase ? `${pBase}/settings`      : "#";
   const membersHref      = pBase ? `${pBase}/members`       : "#";
 
-  // NAVIGATION 섹션 — 대시보드·프로젝트 외 모든 항목은 프로젝트 스코프
-  type NavItem = (MenuItem & { isActive: boolean }) | { isSeparator: true };
-  const navItems: NavItem[] = [
-    { label: "대시보드",    href: "/dashboard",    icon: "◉",  isActive: pathname.startsWith("/dashboard") },
-    { isSeparator: true },
-    { label: "과업",         href: tasksHref,        icon: "📌", isActive: !!pBase && pathname.startsWith(`${pBase}/tasks`) },
-    { label: "요구사항",    href: requirementsHref, icon: "📋", isActive: !!pBase && pathname.startsWith(`${pBase}/requirements`) },
-    { label: "사용자스토리", href: userStoriesHref, icon: "📖", isActive: !!pBase && pathname.startsWith(`${pBase}/user-stories`) },
-    { label: "요구분석 일괄 편집", href: planningHref, icon: "📅", isActive: !!pBase && pathname.startsWith(`${pBase}/planning`) && !pathname.startsWith(`${pBase}/planning/ai-import`) },
-    { label: "요구사항 확정", href: baselineHref,   icon: "🏁", isActive: !!pBase && pathname.startsWith(`${pBase}/baseline`) },
-    { isSeparator: true },
-    { label: "단위업무",    href: unitWorksHref,    icon: "🧱", isActive: !!pBase && pathname.startsWith(`${pBase}/unit-works`) },
-    { label: "화면 설계",   href: screensHref,      icon: "🖼",  isActive: !!pBase && pathname.startsWith(`${pBase}/screens`) },
-    { label: "영역 관리",   href: areasHref,        icon: "📦", isActive: !!pBase && pathname.startsWith(`${pBase}/areas`) },
-    { label: "기능 정의",   href: functionsHref,    icon: "⚙",  isActive: !!pBase && pathname.startsWith(`${pBase}/functions`) },
-    { label: "DB 테이블",   href: dbTablesHref,          icon: "🗄",  isActive: !!pBase && pathname.startsWith(`${pBase}/db-tables`) },
-    { isSeparator: true },
-    { label: "기획실",       href: planStudioHref,   icon: "🎨", isActive: !!pBase && pathname.startsWith(`${pBase}/plan-studio`) },
-    { label: "기획 가져오기", href: aiImportHref,    icon: "📥", isActive: !!pBase && pathname.startsWith(`${pBase}/planning/ai-import`) },
-    { label: "설계 가져오기", href: designImportHref, icon: "🏗", isActive: !!pBase && pathname.startsWith(`${pBase}/design-import`) },
-    { isSeparator: true },
-    { label: "AI 태스크",    href: aiTasksHref,         icon: "✨", isActive: !!pBase && pathname.startsWith(`${pBase}/ai-tasks`) },
-    { label: "프롬프트 관리", href: promptTemplatesHref, icon: "📝", isActive: !!pBase && pathname.startsWith(`${pBase}/prompt-templates`) },
-    { label: "리뷰 요청",   href: reviewsHref,          icon: "💬", isActive: !!pBase && pathname.startsWith(`${pBase}/reviews`) },
-    { label: "메모",        href: memosHref,            icon: "🗒", isActive: !!pBase && pathname.startsWith(`${pBase}/memos`) },
-    { label: "설계 변경 이력", href: designChangesHref,   icon: "📜", isActive: !!pBase && pathname.startsWith(`${pBase}/design-changes`) },
-  ];
+  // ── 메뉴 그룹 구조 ───────────────────────────────────────────────────────
+  // 대시보드는 최상단 단독, 이후 분석 / 설계 / 기타 설계 / AI 작업실 / 도움창고 / 프로젝트 / 환경설정
+  type GroupItem = MenuItem & { isActive: boolean };
+  type MenuGroup = { title: string; items: GroupItem[] };
 
-  // SYSTEM 섹션 항목 — 역할에 따라 동적 구성
-  const systemItems: (MenuItem & { isActive: boolean })[] = [
-    { label: "프로젝트", href: "/projects", icon: "📂", isActive: pathname === "/projects" },
-    ...(canAccessSettings && pBase
-      ? [{ label: "프로젝트 설정", href: settingsHref, icon: "⚙️", isActive: pathname.startsWith(settingsHref) }]
-      : []),
-    ...(canAccessSettings && pBase
-      ? [{ label: "환경설정", href: configsHref, icon: "🔧", isActive: pathname.startsWith(configsHref) }]
-      : []),
-    ...(canManageMembers && pBase
-      ? [{ label: "멤버 관리", href: membersHref, icon: "👥", isActive: pathname.startsWith(membersHref) }]
-      : []),
-    ...(pBase
-      ? [{ label: "공통코드", href: commonCodesHref, icon: "🏷", isActive: pathname.startsWith(commonCodesHref) }]
-      : []),
-    ...(pBase
-      ? [{ label: "기준 정보", href: referenceInfoHref, icon: "📑", isActive: pathname.startsWith(referenceInfoHref) }]
-      : []),
-    { label: "개인 설정", href: "/settings/profile", icon: "👤", isActive: pathname.startsWith("/settings/profile") },
-    // 테스트 메뉴 — 프로젝트 무관
-    { label: "Diff 테스트", href: "/test/diff-prompt", icon: "🧪", isActive: pathname.startsWith("/test/diff-prompt") },
-  ];
+  // 분석
+  const analysisGroup: MenuGroup = {
+    title: "분석",
+    items: [
+      { label: "과업",          href: tasksHref,        icon: "📌", isActive: !!pBase && pathname.startsWith(`${pBase}/tasks`) },
+      { label: "요구사항",      href: requirementsHref, icon: "📋", isActive: !!pBase && pathname.startsWith(`${pBase}/requirements`) },
+      { label: "사용자스토리",  href: userStoriesHref,  icon: "📖", isActive: !!pBase && pathname.startsWith(`${pBase}/user-stories`) },
+      { label: "요구사항 확정", href: baselineHref,     icon: "🏁", isActive: !!pBase && pathname.startsWith(`${pBase}/baseline`) },
+    ],
+  };
+
+  // 설계
+  const designGroup: MenuGroup = {
+    title: "설계",
+    items: [
+      { label: "단위업무",  href: unitWorksHref,  icon: "🧱", isActive: !!pBase && pathname.startsWith(`${pBase}/unit-works`) },
+      { label: "화면설계",  href: screensHref,    icon: "🖼",  isActive: !!pBase && pathname.startsWith(`${pBase}/screens`) },
+      { label: "영역설계",  href: areasHref,      icon: "📦", isActive: !!pBase && pathname.startsWith(`${pBase}/areas`) },
+      { label: "기능설계",  href: functionsHref,  icon: "⚙",  isActive: !!pBase && pathname.startsWith(`${pBase}/functions`) },
+      { label: "DB 테이블", href: dbTablesHref,   icon: "🗄",  isActive: !!pBase && pathname.startsWith(`${pBase}/db-tables`) },
+    ],
+  };
+
+  // 기타 설계
+  const extraDesignGroup: MenuGroup = {
+    title: "기타 설계",
+    items: [
+      ...(pBase ? [{ label: "공통코드", href: commonCodesHref,   icon: "🏷", isActive: pathname.startsWith(commonCodesHref) }] : []),
+      ...(pBase ? [{ label: "기준 정보", href: referenceInfoHref, icon: "📑", isActive: pathname.startsWith(referenceInfoHref) }] : []),
+    ],
+  };
+
+  // AI 작업실
+  const aiStudioGroup: MenuGroup = {
+    title: "AI 작업실",
+    items: [
+      { label: "프롬프트 관리", href: promptTemplatesHref, icon: "📝", isActive: !!pBase && pathname.startsWith(`${pBase}/prompt-templates`) },
+      { label: "AI 태스크",     href: aiTasksHref,         icon: "✨", isActive: !!pBase && pathname.startsWith(`${pBase}/ai-tasks`) },
+      { label: "기획 가져오기", href: aiImportHref,        icon: "📥", isActive: !!pBase && pathname.startsWith(`${pBase}/planning/ai-import`) },
+      { label: "설계 가져오기", href: designImportHref,    icon: "🏗", isActive: !!pBase && pathname.startsWith(`${pBase}/design-import`) },
+    ],
+  };
+
+  // 도움창고
+  const helperGroup: MenuGroup = {
+    title: "도움창고",
+    items: [
+      { label: "요구분석 일괄 편집", href: planningHref,      icon: "📅", isActive: !!pBase && pathname.startsWith(`${pBase}/planning`) && !pathname.startsWith(`${pBase}/planning/ai-import`) },
+      { label: "기획실",             href: planStudioHref,    icon: "🎨", isActive: !!pBase && pathname.startsWith(`${pBase}/plan-studio`) },
+      { label: "리뷰 요청",          href: reviewsHref,       icon: "💬", isActive: !!pBase && pathname.startsWith(`${pBase}/reviews`) },
+      { label: "메모",               href: memosHref,         icon: "🗒", isActive: !!pBase && pathname.startsWith(`${pBase}/memos`) },
+    ],
+  };
+
+  // 데이터 조회
+  const dataViewGroup: MenuGroup = {
+    title: "데이터 조회",
+    items: [
+      { label: "설계 변경 이력", href: designChangesHref, icon: "📜", isActive: !!pBase && pathname.startsWith(`${pBase}/design-changes`) },
+    ],
+  };
+
+  // 프로젝트
+  const projectGroup: MenuGroup = {
+    title: "프로젝트",
+    items: [
+      { label: "프로젝트", href: "/projects", icon: "📂", isActive: pathname === "/projects" },
+      ...(canAccessSettings && pBase ? [{ label: "프로젝트 설정", href: settingsHref, icon: "⚙️", isActive: pathname.startsWith(settingsHref) }] : []),
+      ...(canManageMembers && pBase  ? [{ label: "멤버 관리",     href: membersHref,  icon: "👥", isActive: pathname.startsWith(membersHref)  }] : []),
+      { label: "개인 설정", href: "/settings/profile", icon: "👤", isActive: pathname.startsWith("/settings/profile") },
+    ],
+  };
+
+  // 환경설정
+  const configGroup: MenuGroup = {
+    title: "환경설정",
+    items: [
+      ...(canAccessSettings && pBase ? [{ label: "환경설정", href: configsHref, icon: "🔧", isActive: pathname.startsWith(configsHref) }] : []),
+    ],
+  };
+
+  // 빈 그룹은 표시하지 않음 (환경설정 → 데이터 조회 순서)
+  const menuGroups: MenuGroup[] = [
+    analysisGroup, designGroup, extraDesignGroup, aiStudioGroup, helperGroup, projectGroup, configGroup, dataViewGroup,
+  ].filter((g) => g.items.length > 0);
+
+  // 대시보드 (최상단 단독)
+  const dashboardItem: GroupItem = {
+    label: "대시보드", href: "/dashboard", icon: "◉", isActive: pathname.startsWith("/dashboard"),
+  };
+
+  // 테스트 메뉴 (하단 별도)
+  const testItem: GroupItem = {
+    label: "Diff 테스트", href: "/test/diff-prompt", icon: "🧪", isActive: pathname.startsWith("/test/diff-prompt"),
+  };
 
   return (
     // 토글 버튼이 nav 바깥으로 삐져나오므로 overflow-x: hidden 없는 wrapper로 감쌈
@@ -130,23 +180,24 @@ export default function LNB() {
       </button>
 
       <nav className={`sp-sidebar${sidebarCollapsed ? " is-collapsed" : ""}`}>
-        {/* NAVIGATION 섹션 */}
+        {/* 대시보드 — 그룹 외 최상단 단독 */}
         <div className="sp-sidebar-section">
-          <div className="sp-sidebar-title">Navigation</div>
-          {navItems.map((item, idx) => {
-            if ("isSeparator" in item) {
-              return <div key={`sep-${idx}`} style={{ height: 1, background: "var(--color-border)", margin: "8px 24px", opacity: 0.5 }} />;
-            }
-            return <SidebarLink key={item.label} item={item} isActive={item.isActive} />;
-          })}
+          <SidebarLink item={dashboardItem} isActive={dashboardItem.isActive} />
         </div>
 
-        {/* SYSTEM 섹션 — 역할 기반 필터링 적용 (UW-00011) */}
+        {/* 그룹별 메뉴 */}
+        {menuGroups.map((group) => (
+          <div key={group.title} className="sp-sidebar-section">
+            <div className="sp-sidebar-title">{group.title}</div>
+            {group.items.map((item) => (
+              <SidebarLink key={item.label} item={item} isActive={item.isActive} />
+            ))}
+          </div>
+        ))}
+
+        {/* 테스트 메뉴 — 프로젝트 무관 */}
         <div className="sp-sidebar-section">
-          <div className="sp-sidebar-title">System</div>
-          {systemItems.map((item) => (
-            <SidebarLink key={item.label} item={item} isActive={item.isActive} />
-          ))}
+          <SidebarLink item={testItem} isActive={testItem.isActive} />
         </div>
       </nav>
     </div>
@@ -172,9 +223,9 @@ function SidebarLink({
       onClick={isDisabled ? (e) => e.preventDefault() : undefined}
       style={isDisabled ? { opacity: 0.4, cursor: "not-allowed", pointerEvents: "none" } : undefined}
     >
-      {/* 아이콘 — SVG 자리에 이모지 임시 사용 */}
+      {/* 아이콘 — SVG 자리에 이모지 임시 사용 (textAnchor로 가로 중앙 정렬) */}
       <svg viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
-        <text y="18" fontSize="14" fill="currentColor">{item.icon}</text>
+        <text x="12" y="18" fontSize="14" fill="currentColor" textAnchor="middle">{item.icon}</text>
       </svg>
       <span>{item.label}</span>
     </Link>

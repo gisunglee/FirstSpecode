@@ -420,14 +420,38 @@ function RequirementDetailPageInner() {
   }
 
   // ── GNB 브레드크럼 ─────────────────────────────────────────────────────────
+  // 분석 계층 네비: [상위 과업?] > [요구사항 목록] > [현재 요구사항] > [사용자스토리 목록(하위)]
+  // - 요구사항은 과업 하위(1:N). detail.taskId 가 있으면 taskOptions 에서 이름을 찾아
+  //   상위 과업 상세로 이동할 수 있도록 링크를 건다.
+  // - 하위 사용자스토리 목록은 reqId 로 필터링된 뷰로 이동한다.
+  //   (사용자스토리 목록 페이지는 reqId 쿼리 파라미터 필터를 이미 지원)
+  // - 신규 등록 모드는 연결된 맥락이 없으므로 상/하위 링크를 생략한다.
   useEffect(() => {
+    // 현재 요구사항의 상위 과업 — tasksData 에서 lookup (없으면 undefined)
+    // tasksData 는 TanStack Query 가 관리하는 안정 참조이므로 의존성에 안전하게 사용 가능.
+    // 파생값(taskOptions = tasksData ?? [])을 직접 의존성에 넣으면 매 렌더마다 새 배열이 되어
+    // useEffect 무한 루프가 발생하므로 원본 쿼리 데이터를 참조한다.
+    const parentTask = detail?.taskId
+      ? tasksData?.find((t) => t.taskId === detail.taskId)
+      : undefined;
+
     const items = [
+      // 상위 과업 (연결돼 있으면만 노출)
+      ...(parentTask
+        ? [{ label: parentTask.name, href: `/projects/${projectId}/tasks/${parentTask.taskId}` }]
+        : []),
+      // 요구사항 목록 진입점
       { label: "요구사항", href: `/projects/${projectId}/requirements` },
+      // 현재 요구사항 (href 없음 = 현재 위치)
       { label: isNew ? "신규 등록" : (detail?.displayId ?? "편집") },
+      // 하위 사용자스토리 목록 (수정 모드에서만)
+      ...(isNew
+        ? []
+        : [{ label: "사용자스토리 목록", href: `/projects/${projectId}/user-stories?reqId=${reqId}` }]),
     ];
     setBreadcrumb(items);
     return () => setBreadcrumb([]);
-  }, [projectId, isNew, detail?.displayId, setBreadcrumb]);
+  }, [projectId, reqId, isNew, detail?.displayId, detail?.taskId, tasksData, setBreadcrumb]);
 
   // ── 파일 업로드 ─────────────────────────────────────────────────────────────
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {

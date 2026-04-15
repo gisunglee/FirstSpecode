@@ -314,8 +314,12 @@ function FunctionsPageInner() {
         </div>
       </div>
 
-      {/* 검색 필터 바 */}
+      {/* 총 건수 + 검색 필터 바 (오른쪽 정렬) */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 24px 14px" }}>
+        <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
+          총 {filteredItems.length}건{filteredItems.length !== items.length && ` (전체 ${items.length}건)`}
+        </span>
+        <div style={{ flex: 1 }} />
         <select
           value={unitWorkFilter}
           onChange={(e) => handleUnitWorkChange(e.target.value)}
@@ -364,11 +368,6 @@ function FunctionsPageInner() {
             초기화
           </button>
         )}
-      </div>
-
-      {/* 총 건수 */}
-      <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)", padding: "0 24px" }}>
-        총 {filteredItems.length}건{filteredItems.length !== items.length && ` (전체 ${items.length}건)`}
       </div>
 
       {filteredItems.length === 0 ? (

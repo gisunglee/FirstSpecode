@@ -36,6 +36,7 @@ import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
+import AiImplementCard from "@/components/ui/AiImplementCard";
 import ExcalidrawDialog from "@/components/ui/ExcalidrawDialog";
 import { useAppStore } from "@/store/appStore";
 
@@ -144,6 +145,9 @@ function AreaDetailPageInner() {
   // AI 패널 외부 클릭 시 닫기
   useEffect(() => {
     function handleClick(e: MouseEvent) {
+      // AiImplementCard 내부 팝업이 열려있으면 외부 클릭 감지 무시
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-impl-overlay]')) return;
       if (aiPanelRef.current && !aiPanelRef.current.contains(e.target as Node)) {
         setAiPanelOpen(false);
       }
@@ -499,6 +503,7 @@ function AreaDetailPageInner() {
       {/* AI 요청 확인 다이얼로그 */}
       {aiConfirm !== null && (
         <div
+          data-impl-overlay="ai-confirm"
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }}
           onClick={() => { setAiConfirm(null); setTaskPrompt(null); }}
         >
@@ -693,7 +698,7 @@ function AreaDetailPageInner() {
                       borderRadius: 12,
                       boxShadow: "0 8px 32px rgba(0,0,0,0.16)",
                       padding: "14px 16px",
-                      width: 520,
+                      width: 470,
                     }}>
                       <style>{`
                         .ai-area-card { transition: background 0.15s, border-color 0.15s; }
@@ -796,6 +801,17 @@ function AreaDetailPageInner() {
                             )}
                           </div>
                         </div>
+                      </div>
+
+                      {/* AI 구현 — 공통 컴포넌트 */}
+                      <div style={{ marginTop: 8 }}>
+                        <AiImplementCard
+                          projectId={projectId}
+                          refType="AREA"
+                          refId={areaId}
+                          implInfo={data?.aiTasks?.["IMPLEMENT"] ?? null}
+                          onInvalidate={() => queryClient.invalidateQueries({ queryKey: ["area", projectId, areaId] })}
+                        />
                       </div>
                     </div>
                   );

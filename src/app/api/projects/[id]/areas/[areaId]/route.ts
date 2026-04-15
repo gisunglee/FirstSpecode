@@ -31,7 +31,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const [area, aiTaskRows] = await Promise.all([
+    const [area, aiTaskRows, implSnapshotRows] = await Promise.all([
       prisma.tbDsArea.findUnique({
         where:   { area_id: areaId },
         include: {
@@ -64,6 +64,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         orderBy: { req_dt: "desc" },
         select: { ai_task_id: true, task_ty_code: true, task_sttus_code: true },
       }),
+      // IMPLEMENT — 스냅샷 경유: 이 영역이 포함된 구현요청 태스크 조회
+      prisma.tbSpImplSnapshot.findMany({
+        where: { ref_tbl_nm: "tb_ds_area", ref_id: areaId },
+        select: { ai_task_id: true },
+        orderBy: { creat_dt: "desc" },
+        distinct: ["ai_task_id"],
+      }),
     ]);
 
     if (!area || area.prjct_id !== projectId) {
@@ -75,6 +82,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     for (const t of aiTaskRows) {
       if (!aiTasks[t.task_ty_code]) {
         aiTasks[t.task_ty_code] = { aiTaskId: t.ai_task_id, status: t.task_sttus_code };
+      }
+    }
+
+    // IMPLEMENT — 스냅샷에서 찾은 ai_task_id로 최신 태스크 1건 조회
+    if (!aiTasks["IMPLEMENT"] && implSnapshotRows.length > 0) {
+      const implTask = await prisma.tbAiTask.findFirst({
+        where: {
+          ai_task_id:   { in: implSnapshotRows.map((s) => s.ai_task_id) },
+          task_ty_code: "IMPLEMENT",
+        },
+        orderBy: { req_dt: "desc" },
+      });
+      if (implTask) {
+        aiTasks["IMPLEMENT"] = { aiTaskId: implTask.ai_task_id, status: implTask.task_sttus_code };
       }
     }
 

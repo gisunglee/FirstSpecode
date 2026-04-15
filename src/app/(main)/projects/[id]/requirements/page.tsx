@@ -11,7 +11,7 @@
  */
 
 import { Suspense, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
@@ -30,6 +30,9 @@ type RequirementRow = {
   sortOrder:     number;
 };
 
+// 과업 필터 드롭다운 옵션
+type TaskOption = { taskId: string; name: string };
+
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
 
 export default function RequirementsPage() {
@@ -43,13 +46,31 @@ export default function RequirementsPage() {
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 
 function RequirementsPageInner() {
-  const params      = useParams<{ id: string }>();
-  const router      = useRouter();
-  const queryClient = useQueryClient();
-  const projectId   = params.id;
+  const params       = useParams<{ id: string }>();
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const queryClient  = useQueryClient();
+  const projectId    = params.id;
+
+  // ── 필터 상태 ────────────────────────────────────────────────────────────────
+  // 과업 필터: URL ?taskId=xxx (과업 상세 → "요구사항 목록" 링크) 진입 시 초기값 반영.
+  // 이후 사용자가 드롭다운에서 변경하면 state 로만 관리 (URL 동기화는 생략 — 단순성 우선).
+  const initialTaskFilter = searchParams.get("taskId") ?? "";
+  const [taskFilter, setTaskFilter] = useState(initialTaskFilter);
+  const [keyword, setKeyword]       = useState("");
 
   // 삭제 다이얼로그 상태
   const [deleteTarget, setDeleteTarget] = useState<RequirementRow | null>(null);
+
+  // ── 과업 옵션 조회 (필터 드롭다운용) ──────────────────────────────────────
+  const { data: tasksData } = useQuery({
+    queryKey: ["tasks-for-filter", projectId],
+    queryFn:  () =>
+      authFetch<{ data: { tasks: TaskOption[] } }>(
+        `/api/projects/${projectId}/tasks`
+      ).then((r) => r.data.tasks),
+  });
+  const taskOptions = tasksData ?? [];
 
   // ── 드래그 상태 ────────────────────────────────────────────────────────────
   const dragItem     = useRef<number | null>(null);
@@ -65,8 +86,21 @@ function RequirementsPageInner() {
   });
   
   const isError = !!error;
-  const items = isError ? [] : (data?.items ?? []);
-  const totalCount = isError ? 0 : (data?.totalCount ?? 0);
+  const allItems = isError ? [] : (data?.items ?? []);
+
+  // 필터 + 키워드 검색 (클라이언트 측) — 기능 정의 목록과 같은 패턴
+  const kw = keyword.trim().toLowerCase();
+  const items = allItems.filter((r) => {
+    if (taskFilter && r.taskId !== taskFilter) return false;
+    if (!kw) return true;
+    return (
+      r.name.toLowerCase().includes(kw) ||
+      r.displayId.toLowerCase().includes(kw) ||
+      (r.taskName ?? "").toLowerCase().includes(kw)
+    );
+  });
+  const totalCount = items.length;
+  const isFiltered = !!taskFilter || !!kw;
 
   // ── 순서 변경 뮤테이션 ──────────────────────────────────────────────────────
   const sortMutation = useMutation({
@@ -137,9 +171,36 @@ function RequirementsPageInner() {
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
-      {/* 총 건수 */}
-      <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
-        총 {totalCount}건
+      {/* 총 건수 (왼쪽) + 필터 바 (오른쪽) — 기능 정의 목록과 동일 패턴 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
+          총 {totalCount}건{isFiltered && allItems.length !== totalCount && ` (전체 ${allItems.length}건)`}
+        </span>
+        <div style={{ flex: 1 }} />
+        <input
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          placeholder="요구사항명·ID 검색..."
+          style={filterInputStyle}
+        />
+        <select
+          value={taskFilter}
+          onChange={(e) => setTaskFilter(e.target.value)}
+          style={filterSelectStyle}
+        >
+          <option value="">과업 전체</option>
+          {taskOptions.map((t) => (
+            <option key={t.taskId} value={t.taskId}>{t.name}</option>
+          ))}
+        </select>
+        {isFiltered && (
+          <button
+            onClick={() => { setTaskFilter(""); setKeyword(""); }}
+            style={{ fontSize: 12, padding: "5px 10px", borderRadius: 5, border: "1px solid var(--color-border)", background: "none", cursor: "pointer", color: "var(--color-text-secondary)" }}
+          >
+            초기화
+          </button>
+        )}
       </div>
 
       {/* 목록 */}
@@ -434,6 +495,34 @@ const primaryBtnStyle: React.CSSProperties = {
   fontSize:     14,
   fontWeight:   600,
   cursor:       "pointer",
+};
+
+// 필터 바 — 기능 정의 목록과 동일 규격
+const filterSelectStyle: React.CSSProperties = {
+  padding:      "7px 32px 7px 12px",
+  borderRadius: 6,
+  border:       "1px solid var(--color-border)",
+  fontSize:     13,
+  background:   "var(--color-bg-card)",
+  color:        "var(--color-text-primary)",
+  minWidth:     160,
+  cursor:       "pointer",
+  appearance:   "none",
+  WebkitAppearance: "none",
+  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
+  backgroundRepeat:   "no-repeat",
+  backgroundPosition: "right 10px center",
+};
+
+const filterInputStyle: React.CSSProperties = {
+  padding:      "7px 12px",
+  borderRadius: 6,
+  border:       "1px solid var(--color-border)",
+  fontSize:     13,
+  background:   "var(--color-bg-card)",
+  color:        "var(--color-text-primary)",
+  minWidth:     220,
+  outline:      "none",
 };
 
 const secondaryBtnStyle: React.CSSProperties = {

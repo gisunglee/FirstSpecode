@@ -32,8 +32,7 @@ import ColMappingDialog from "@/components/ui/ColMappingDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
-import ImplRequestPopup from "@/components/ui/ImplRequestPopup";
-import ImplTargetDialog from "@/components/ui/ImplTargetDialog";
+import AiImplementCard from "@/components/ui/AiImplementCard";
 import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
 import ProgressTracker from "@/components/ui/ProgressTracker";
 import { useAppStore } from "@/store/appStore";
@@ -140,10 +139,9 @@ function FunctionDetailPageInner() {
   // ── AI 패널 팝업 상태 ────────────────────────────────────────────────────────
   const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
   const [aiHistoryTaskType, setAiHistoryTaskType] = useState<string | null>(null);
-  const [implTargetOpen, setImplTargetOpen] = useState(false);
-  // 구현요청: ImplTargetDialog에서 진입점 정보 + 선택된 기능 ID → ImplRequestPopup에 전달
-  const [implRequestParams, setImplRequestParams] = useState<{
-    entryType: string; entryId: string; functionIds: string[];
+  // 단위업무 기간 범위 경고 모달
+  const [periodAlert, setPeriodAlert] = useState<{
+    messages: string[]; uwId: string; newStart: string | null; newEnd: string | null;
   } | null>(null);
 
   // ── AI 도움말 팝업 상태 ──────────────────────────────────────────────────────
@@ -216,17 +214,20 @@ function FunctionDetailPageInner() {
   }, [projectId, isNew, data, setBreadcrumb]);
 
   // AI 작업 패널 외부 클릭 시 닫기
-  // 구현 대상 선택 팝업(ImplTargetDialog)이 열려있으면 외부 클릭 닫기 무시
+  // 다른 다이얼로그(구현 대상 선택, 이력 팝업, 상세 팝업, 기간 알림)가 열려있으면 외부 클릭 닫기 무시
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (implTargetOpen || implRequestParams) return;
+      if (aiHistoryTaskType || aiDetailTaskId || periodAlert) return;
+      // AiImplementCard 내부 팝업(overlay)이 열려있으면 외부 클릭 감지 무시
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-impl-overlay]')) return;
       if (aiPanelRef.current && !aiPanelRef.current.contains(e.target as Node)) {
         setAiPanelOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [implTargetOpen, implRequestParams]);
+  }, [aiHistoryTaskType, aiDetailTaskId, periodAlert]);
 
   useEffect(() => {
     if (data) {
@@ -281,10 +282,77 @@ function FunctionDetailPageInner() {
         if (variables?.saveHistory) {
           queryClient.invalidateQueries({ queryKey: ["settings-history", projectId] });
         }
+        // 단위업무 기간 범위 검증 — 벗어났으면 추가로 컨펌 모달 표시
+        const violation = checkUnitWorkPeriod();
+        if (violation) setPeriodAlert(violation);
       }
     },
     onError: (err: Error) => toast.error(err.message),
   });
+
+  // ── 단위업무 기간 자동 조정 뮤테이션 ────────────────────────────────────────
+  // 기능의 구현 기간이 단위업무 기간을 벗어났을 때, 단위업무 기간을 확장하여 포함시킴
+  const adjustUnitWorkMutation = useMutation({
+    mutationFn: async ({ uwId, startDate, endDate }: { uwId: string; startDate: string | null; endDate: string | null }) => {
+      // 단위업무 PUT은 name이 필수이므로 먼저 detail GET → 전체 필드를 그대로 PUT
+      const uw = await authFetch<{ data: {
+        name: string; description: string; comment?: string; assignMemberId: string | null;
+        startDate: string | null; endDate: string | null; progress: number; sortOrder: number;
+      } }>(`/api/projects/${projectId}/unit-works/${uwId}`).then((r) => r.data);
+
+      return authFetch(`/api/projects/${projectId}/unit-works/${uwId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          name:           uw.name,
+          description:    uw.description,
+          comment:        uw.comment,
+          assignMemberId: uw.assignMemberId,
+          progress:       uw.progress,
+          sortOrder:      uw.sortOrder,
+          startDate:      startDate ?? uw.startDate,
+          endDate:        endDate ?? uw.endDate,
+        }),
+      });
+    },
+    onSuccess: () => {
+      toast.success("단위업무 기간이 조정되었습니다.");
+      queryClient.invalidateQueries({ queryKey: ["function", projectId, functionId] });
+      queryClient.invalidateQueries({ queryKey: ["unit-work"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // ── 단위업무 기간 범위 검증 ─────────────────────────────────────────────────
+  // 기능의 구현 기간이 단위업무 기간을 벗어났는지 확인하고 위반 정보 반환
+  // 위반 없으면 null — onSuccess에서 위반 여부에 따라 모달/토스트 분기
+  function checkUnitWorkPeriod(): {
+    messages: string[]; uwId: string; newStart: string | null; newEnd: string | null;
+  } | null {
+    if (!data) return null;
+    const d = data as unknown as { unitWorkId?: string | null; unitWorkStartDate?: string | null; unitWorkEndDate?: string | null };
+    if (!d.unitWorkId) return null;
+
+    const fnStart = implStartDate || null;
+    const fnEnd   = implEndDate   || null;
+    const uwStart = d.unitWorkStartDate || null;
+    const uwEnd   = d.unitWorkEndDate   || null;
+
+    const messages: string[] = [];
+    let newUwStart: string | null = null;
+    let newUwEnd: string | null = null;
+
+    if (fnStart && uwStart && fnStart < uwStart) {
+      messages.push(`구현 시작일(${fnStart})이 단위업무 시작일(${uwStart})보다 빠릅니다.`);
+      newUwStart = fnStart;
+    }
+    if (fnEnd && uwEnd && fnEnd > uwEnd) {
+      messages.push(`구현 종료일(${fnEnd})이 단위업무 종료일(${uwEnd})보다 늦습니다.`);
+      newUwEnd = fnEnd;
+    }
+
+    if (messages.length === 0) return null;
+    return { messages, uwId: d.unitWorkId, newStart: newUwStart, newEnd: newUwEnd };
+  }
 
   // ── 삭제 뮤테이션 ──────────────────────────────────────────────────────────
   const deleteMutation = useMutation({
@@ -381,7 +449,7 @@ function FunctionDetailPageInner() {
               projectId={projectId}
               refTable="tb_ds_function"
               refId={functionId}
-              phases={["design", "impl", "test"]}
+              phases={["analy", "design", "impl", "test"]}
             />
           </div>
         )}
@@ -589,88 +657,16 @@ function FunctionDetailPageInner() {
                       );
                     })}
 
-                    {/* AI 구현 — 상태·내용·이력 + 구현 대상 선택 */}
-                    {(() => {
-                      const implInfo = data?.aiTasks?.["IMPLEMENT"];
-                      const implDotColor = implInfo ? (AI_STATUS_DOT[implInfo.status] ?? "#ccc") : "#ccc";
-                      const implStatusLabel = implInfo
-                        ? (AI_STATUS_LABEL[implInfo.status] ?? implInfo.status)
-                        : "-";
-                      return (
-                        <div className="ai-task-card" style={{
-                          display: "flex", alignItems: "center", gap: 12,
-                          padding: "10px 14px", borderRadius: 8,
-                          border: "1px solid var(--color-border)",
-                          background: "var(--color-bg-muted)",
-                        }}>
-                          {/* 아이콘 */}
-                          <div style={{
-                            width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            background: "#e1f5fe", fontSize: 18,
-                          }}>
-                            {"⚡"}
-                          </div>
-
-                          {/* 레이블 + 설명 */}
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)" }}>
-                              AI 구현
-                            </span>
-                            <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 2, lineHeight: 1.4 }}>
-                              구현 대상 선택 후 AI에게 구현 요청
-                            </div>
-                          </div>
-
-                          {/* 상태 + 버튼 (우측 고정, 수직 배치) */}
-                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
-                            {/* 상태 표시 */}
-                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                              <span style={{ width: 7, height: 7, borderRadius: "50%", background: implDotColor, flexShrink: 0 }} />
-                              <span style={{ fontSize: 11, color: implDotColor, fontWeight: 600, whiteSpace: "nowrap" }}>
-                                {implStatusLabel}
-                              </span>
-                            </div>
-                            {/* 버튼 행 */}
-                            <div style={{ display: "flex", gap: 4 }}>
-                              {implInfo && (
-                                <button
-                                  className="ai-mini-btn"
-                                  onClick={() => setAiDetailTaskId(implInfo.aiTaskId)}
-                                  title="내용 보기"
-                                  style={aiMiniBtn}
-                                >
-                                  내용
-                                </button>
-                              )}
-                              <button
-                                className="ai-mini-btn ai-mini-btn-run"
-                                onClick={() => setImplTargetOpen(true)}
-                                style={{
-                                  ...aiMiniBtn,
-                                  background: "rgba(103,80,164,0.1)",
-                                  color: "rgba(103,80,164,0.95)",
-                                  border: "1px solid rgba(103,80,164,0.3)",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                {implInfo ? "재 요청" : "실행"}
-                              </button>
-                              {implInfo && (
-                                <button
-                                  className="ai-mini-btn"
-                                  onClick={() => setAiHistoryTaskType("IMPLEMENT")}
-                                  title="이력 목록"
-                                  style={{ ...aiMiniBtn, fontSize: 13, padding: "2px 6px", lineHeight: 1 }}
-                                >
-                                  ☰
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
+                    {/* AI 구현 — 공통 컴포넌트 (ImplTargetDialog + ImplRequestPopup + 상세/이력) */}
+                    {!isNew && (
+                      <AiImplementCard
+                        projectId={projectId}
+                        refType="FUNCTION"
+                        refId={functionId}
+                        implInfo={data?.aiTasks?.["IMPLEMENT"] ?? null}
+                        onInvalidate={() => queryClient.invalidateQueries({ queryKey: ["function", projectId, functionId] })}
+                      />
+                    )}
                   </div>
                 </div>
               )}
@@ -1025,6 +1021,7 @@ function FunctionDetailPageInner() {
       {/* ── AI 요청 컨펌 다이얼로그 ──────────────────────────────────────── */}
       {aiConfirm && (
         <div
+          data-impl-overlay="ai-confirm"
           style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}
           onClick={() => { setAiConfirm(null); setTaskPrompt(null); }}
         >
@@ -1201,18 +1198,6 @@ function FunctionDetailPageInner() {
         unitWorkDc={data?.unitWorkDc ?? ""}
       />
 
-      {/* ── 구현요청 프롬프트 미리보기 팝업 ─────────────────────────────── */}
-      {implRequestParams && (
-        <ImplRequestPopup
-          projectId={projectId}
-          entryType={implRequestParams.entryType as "UNIT_WORK" | "SCREEN" | "AREA" | "FUNCTION"}
-          entryId={implRequestParams.entryId}
-          functionIds={implRequestParams.functionIds}
-          onClose={() => setImplRequestParams(null)}
-          onSubmitted={() => queryClient.invalidateQueries({ queryKey: ["function", projectId, functionId] })}
-        />
-      )}
-
       {/* ── AI 태스크 결과 상세 팝업 ────────────────────────────────────── */}
       {aiDetailTaskId && (
         <AiTaskDetailDialog
@@ -1281,18 +1266,52 @@ function FunctionDetailPageInner() {
           onClose={() => setAiHistoryTaskType(null)}
         />
       )}
-      {/* ── 구현 대상 선택 팝업 ──────────────────────────────────────────── */}
-      {implTargetOpen && !isNew && (
-        <ImplTargetDialog
-          projectId={projectId}
-          refType="FUNCTION"
-          refId={functionId}
-          onClose={() => setImplTargetOpen(false)}
-          onImplRequest={(params) => {
-            // ImplTargetDialog는 유지한 채 프롬프트 미리보기 팝업 열기
-            setImplRequestParams(params);
-          }}
-        />
+      {/* ── 단위업무 기간 범위 경고 모달 ─────────────────────────────────── */}
+      {periodAlert && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }}
+          onClick={() => setPeriodAlert(null)}
+        >
+          <div
+            style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "24px 28px", minWidth: 420, maxWidth: 520, boxShadow: "0 8px 32px rgba(0,0,0,0.22)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+              <span style={{ fontSize: 20 }}>⚠️</span>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                구현 기간이 단위업무 기간을 벗어났습니다
+              </h3>
+            </div>
+            <ul style={{ margin: "0 0 18px", paddingLeft: 20, fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.7 }}>
+              {periodAlert.messages.map((m, i) => <li key={i}>{m}</li>)}
+            </ul>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--color-text-secondary)" }}>
+              단위업무 기간을 자동으로 조정하시겠습니까?
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                onClick={() => setPeriodAlert(null)}
+                style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
+              >
+                닫기
+              </button>
+              <button
+                onClick={() => {
+                  adjustUnitWorkMutation.mutate({
+                    uwId:      periodAlert.uwId,
+                    startDate: periodAlert.newStart,
+                    endDate:   periodAlert.newEnd,
+                  });
+                  setPeriodAlert(null);
+                }}
+                disabled={adjustUnitWorkMutation.isPending}
+                style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
+              >
+                단위업무 기간 수정
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {/* ── 삭제 확인 다이얼로그 ─────────────────────────────────────────── */}
       {deleteConfirmOpen && (

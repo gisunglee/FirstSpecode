@@ -176,16 +176,35 @@ function UserStoryDetailPageInner() {
   }
 
   // ── GNB 브레드크럼 ─────────────────────────────────────────────────────────
+  // 분석 계층 네비: [상위 과업?] > [상위 요구사항?] > [사용자스토리 목록] > [현재 스토리]
+  // - 사용자스토리는 요구사항 하위이고, 요구사항은 과업 하위. 이 경로를 그대로 표현한다.
+  // - 상위 과업/요구사항은 이름만 있던 기존 구현을 href 포함 링크로 교체해
+  //   클릭하여 바로 상세로 이동할 수 있게 한다.
+  // - 연결된 ID(taskId/requirementId)가 없는 경우(미연결 스토리) 해당 단계는 생략한다.
   useEffect(() => {
     const items = [
+      // 상위 과업 (taskId + taskName 둘 다 있을 때만 링크)
+      ...(detail?.taskId && detail?.taskName
+        ? [{ label: detail.taskName, href: `/projects/${projectId}/tasks/${detail.taskId}` }]
+        : []),
+      // 상위 요구사항
+      ...(detail?.requirementId && detail?.requirementName
+        ? [{ label: detail.requirementName, href: `/projects/${projectId}/requirements/${detail.requirementId}` }]
+        : []),
+      // 사용자스토리 목록 진입점
       { label: "사용자스토리", href: `/projects/${projectId}/user-stories` },
-      ...(detail?.taskName ? [{ label: detail.taskName }] : []),
-      ...(detail?.requirementName ? [{ label: detail.requirementName }] : []),
+      // 현재 사용자스토리 (href 없음 = 현재 위치)
       { label: isNew ? "신규 등록" : (detail?.displayId ?? "편집") },
     ];
     setBreadcrumb(items);
     return () => setBreadcrumb([]);
-  }, [projectId, isNew, detail?.taskName, detail?.requirementName, detail?.displayId, setBreadcrumb]);
+  }, [
+    projectId, isNew,
+    detail?.taskId, detail?.taskName,
+    detail?.requirementId, detail?.requirementName,
+    detail?.displayId,
+    setBreadcrumb,
+  ]);
 
   // ── 현재 선택된 요구사항의 과업명 표시 ────────────────────────────────────
   const selectedReq = reqOptions.find((r) => r.requirementId === form.requirementId);

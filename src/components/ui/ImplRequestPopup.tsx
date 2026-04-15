@@ -135,7 +135,7 @@ export default function ImplRequestPopup({ projectId, entryType, entryId, functi
 
   // ── 렌더링 ──
   return (
-    <div onClick={onClose} style={overlay}>
+    <div data-impl-overlay="request" onClick={onClose} style={overlay}>
       <div onClick={(e) => e.stopPropagation()} style={dialogStyle}>
 
         {/* ── 헤더 ── */}

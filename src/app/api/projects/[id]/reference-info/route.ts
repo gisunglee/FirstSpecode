@@ -31,7 +31,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
   try {
     const items = await prisma.tbCmReferenceInfo.findMany({
-      where: { prjct_id: projectId, del_yn: "N" },
+      where: { del_yn: "N" },
       orderBy: [{ bus_div_code: "asc" }, { ref_info_code: "asc" }, { ref_bgng_de: "desc" }],
     });
 
@@ -96,9 +96,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (!refDataTyCode?.trim()) return apiError("VALIDATION_ERROR", "자료 유형 코드를 선택해 주세요.", 400);
 
   try {
-    // 중복 체크: 프로젝트 + 코드 + 시작일 유니크
+    // 중복 체크: 코드 + 시작일 유니크 (전역)
     const dup = await prisma.tbCmReferenceInfo.findUnique({
-      where: { prjct_id_ref_info_code_ref_bgng_de: { prjct_id: projectId, ref_info_code: refInfoCode.trim(), ref_bgng_de: refBgngDe.trim() } },
+      where: { ref_info_code_ref_bgng_de: { ref_info_code: refInfoCode.trim(), ref_bgng_de: refBgngDe.trim() } },
     });
     if (dup) {
       return apiError("VALIDATION_ERROR", "동일한 기준 코드 + 시작일이 이미 존재합니다.", 400);
@@ -106,7 +106,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const created = await prisma.tbCmReferenceInfo.create({
       data: {
-        prjct_id:         projectId,
         ref_info_code:    refInfoCode.trim(),
         ref_bgng_de:      refBgngDe.trim(),
         ref_end_de:       refEndDe?.trim() || null,
