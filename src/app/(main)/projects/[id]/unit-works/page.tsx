@@ -16,7 +16,7 @@
  */
 
 import { Suspense, useEffect, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
@@ -68,7 +68,9 @@ function UnitWorksPageInner() {
   const projectId   = params.id;
 
   // 요구사항 필터 (빈 문자열 = 전체)
-  const [filterReqId, setFilterReqId] = useState("");
+  // URL 쿼리 ?reqId=xxx 로 초기화 (상세 페이지 브레드크럼에서 진입 시 해당 요구사항으로 자동 필터)
+  const searchParams = useSearchParams();
+  const [filterReqId, setFilterReqId] = useState(searchParams.get("reqId") ?? "");
 
   // 삭제 다이얼로그 상태
   const [deleteTarget, setDeleteTarget] = useState<UnitWorkRow | null>(null);

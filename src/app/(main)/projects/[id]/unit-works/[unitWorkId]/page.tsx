@@ -302,16 +302,28 @@ function UnitWorkDetailPageInner() {
     saveMutation.mutate(form);
   }
 
-  // GNB 브레드크럼 설정 — 마운트 시 설정, 언마운트 시 초기화
+  // GNB 브레드크럼 설정 — 요구사항 > 단위업무 > 화면 목록
   useEffect(() => {
-    const items = [
-      { label: "단위업무", href: `/projects/${projectId}/unit-works` },
-      ...(detail?.reqName ? [{ label: `${detail.reqDisplayId} ${detail.reqName}` }] : []),
-      { label: isNew ? "신규 등록" : (detail?.displayId ?? "편집") },
-    ];
-    setBreadcrumb(items);
+    if (isNew) {
+      setBreadcrumb([
+        { label: "단위업무", href: `/projects/${projectId}/unit-works` },
+        { label: "신규 등록" },
+      ]);
+    } else if (detail) {
+      const items = [
+        // 요구사항 (클릭 → 요구사항 상세)
+        ...(detail.reqId && detail.reqName
+          ? [{ label: `${detail.reqDisplayId} ${detail.reqName}`, href: `/projects/${projectId}/requirements/${detail.reqId}` }]
+          : []),
+        // 단위업무 (현재 페이지 — href 없음)
+        { label: `${detail.displayId} ${detail.name}` },
+        // 하위 화면 목록 (해당 단위업무로 필터)
+        { label: "화면 목록", href: `/projects/${projectId}/screens?unitWorkId=${unitWorkId}` },
+      ];
+      setBreadcrumb(items);
+    }
     return () => setBreadcrumb([]);
-  }, [projectId, isNew, detail?.reqName, detail?.reqDisplayId, detail?.displayId, setBreadcrumb]);
+  }, [projectId, unitWorkId, isNew, detail, setBreadcrumb]);
 
   // ── 로딩 ───────────────────────────────────────────────────────────────────
   if (!isNew && isDetailLoading) {

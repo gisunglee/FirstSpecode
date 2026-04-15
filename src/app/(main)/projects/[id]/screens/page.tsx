@@ -16,7 +16,7 @@
  */
 
 import { Suspense, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
@@ -70,7 +70,11 @@ function ScreensPageInner() {
   // 드래그 중인 화면의 unitWorkId — 같은 단위업무 내에서만 순서 변경 허용
   const dragItemUnitWorkId = useRef<string | null>(null);
 
-  // ── 데이터 조회 ────────────────────────────────────────────────────────────
+  // ── 단위업무 필터 (URL ?unitWorkId=xxx 로 초기화 — 브레드크럼에서 진입 시 자동 적용) ──
+  const searchParams    = useSearchParams();
+  const [unitWorkFilter, setUnitWorkFilter] = useState(searchParams.get("unitWorkId") ?? "");
+
+  // ── 데이터 조회 — 전체 조회 후 클라이언트 필터 (드롭다운 옵션 생성용) ──
   const { data, isLoading } = useQuery({
     queryKey: ["screens", projectId],
     queryFn: () =>
@@ -79,7 +83,17 @@ function ScreensPageInner() {
       ).then((r) => r.data),
   });
 
-  const items = data?.items ?? [];
+  const allItems = data?.items ?? [];
+
+  // 단위업무 드롭다운 옵션 — items에서 중복 제거하여 추출
+  const unitWorkOptions = Array.from(
+    new Map(allItems.filter((s) => s.unitWorkId).map((s) => [s.unitWorkId, s.unitWorkName])).entries()
+  ).map(([id, name]) => ({ id: id!, name }));
+
+  // 필터 적용
+  const items = unitWorkFilter
+    ? allItems.filter((s) => s.unitWorkId === unitWorkFilter)
+    : allItems;
 
   // ── 순서 변경 뮤테이션 ──────────────────────────────────────────────────────
   const sortMutation = useMutation({
@@ -164,9 +178,26 @@ function ScreensPageInner() {
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
-      {/* 총 건수 */}
-      <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
-        총 {items.length}건
+      {/* 필터 + 총 건수 */}
+      <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+        <select
+          value={unitWorkFilter}
+          onChange={(e) => setUnitWorkFilter(e.target.value)}
+          style={{
+            padding: "6px 10px", borderRadius: 6,
+            border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
+            color: "var(--color-text-primary)", fontSize: 13, outline: "none",
+            minWidth: 200, cursor: "pointer",
+          }}
+        >
+          <option value="">단위업무 — 전체</option>
+          {unitWorkOptions.map((opt) => (
+            <option key={opt.id} value={opt.id}>{opt.name}</option>
+          ))}
+        </select>
+        <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
+          총 {items.length}건
+        </span>
       </div>
 
       {/* 목록 */}

@@ -40,9 +40,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
               area_display_id: true,
               screen: {
                 select: {
-                  scrn_id: true,
+                  scrn_id:         true,
+                  scrn_nm:         true,
+                  scrn_display_id: true,
                   unitWork: {
-                    select: { unit_work_id: true, unit_work_dc: true },
+                    select: {
+                      unit_work_id:         true,
+                      unit_work_display_id: true,
+                      unit_work_nm:         true,
+                      unit_work_dc:         true,
+                    },
                   },
                 },
               },
@@ -110,13 +117,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       implStartDate:  fn.impl_bgng_de ?? "",
       implEndDate:    fn.impl_end_de ?? "",
       sortOrder:      fn.sort_ordr,
-      areaId:         fn.area_id ?? null,
-      areaName:       fn.area?.area_nm ?? "미분류",
-      areaDisplayId:  fn.area?.area_display_id ?? null,
-      screenId:       fn.area?.screen?.scrn_id ?? null,
-      unitWorkId:     fn.area?.screen?.unitWork?.unit_work_id ?? null,
+      areaId:            fn.area_id ?? null,
+      areaName:          fn.area?.area_nm ?? "미분류",
+      areaDisplayId:     fn.area?.area_display_id ?? null,
+      screenId:          fn.area?.screen?.scrn_id ?? null,
+      screenName:        fn.area?.screen?.scrn_nm ?? "미분류",
+      screenDisplayId:   fn.area?.screen?.scrn_display_id ?? null,
+      unitWorkId:        fn.area?.screen?.unitWork?.unit_work_id ?? null,
+      unitWorkDisplayId: fn.area?.screen?.unitWork?.unit_work_display_id ?? null,
+      unitWorkName:      fn.area?.screen?.unitWork?.unit_work_nm ?? "미분류",
       // 단위업무 설명 — 컬럼 매핑 팝업 TABLE_SCRIPT 자동 선택에 사용
-      unitWorkDc:     fn.area?.screen?.unitWork?.unit_work_dc ?? "",
+      unitWorkDc:        fn.area?.screen?.unitWork?.unit_work_dc ?? "",
       aiTasks,
     });
   } catch (err) {

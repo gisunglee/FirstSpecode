@@ -35,7 +35,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const screen = await prisma.tbDsScreen.findUnique({
       where:   { scrn_id: screenId },
       include: {
-        unitWork: { select: { unit_work_id: true, unit_work_nm: true } },
+        unitWork: { select: { unit_work_id: true, unit_work_display_id: true, unit_work_nm: true } },
         // 하단 영역 목록 (AR-00066, FID-00148) — sort_ordr 오름차순
         areas: {
           orderBy: { sort_ordr: "asc" },
@@ -92,8 +92,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       comment:      screen.coment_cn ?? "",
       urlPath:      screen.url_path ?? "",
       sortOrder:    screen.sort_ordr,
-      unitWorkId:   screen.unit_work_id ?? null,
-      unitWorkName: screen.unitWork?.unit_work_nm ?? "미분류",
+      unitWorkId:        screen.unit_work_id ?? null,
+      unitWorkDisplayId: screen.unitWork?.unit_work_display_id ?? null,
+      unitWorkName:      screen.unitWork?.unit_work_nm ?? "미분류",
       areas: screen.areas.map((a) => {
         const prog = progMap.get(a.area_id);
         return {

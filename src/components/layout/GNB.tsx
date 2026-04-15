@@ -227,24 +227,20 @@ export default function GNB() {
         {breadcrumb.length > 0 && (
           <>
             <span className="sp-menu-sep" />
-            <nav style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
-              {breadcrumb.map((item, i) => (
-                <span key={i} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  {i > 0 && <span style={{ color: "var(--color-text-tertiary)", opacity: 0.5, fontSize: 10, lineHeight: 1 }}>›</span>}
-                  {item.href ? (
-                    <button
-                      onClick={() => router.push(item.href!)}
-                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--color-text-secondary)", padding: "2px 3px", borderRadius: "var(--radius-sm)", lineHeight: 1.4 }}
-                      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-text-primary)"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.color = "var(--color-text-secondary)"; }}
-                    >
-                      {item.label}
-                    </button>
-                  ) : (
-                    <span style={{ color: "var(--color-text-primary)", fontWeight: 500, padding: "2px 3px" }}>{item.label}</span>
-                  )}
-                </span>
-              ))}
+            <nav style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+              {breadcrumb.map((item, i) => {
+                const isLast = i === breadcrumb.length - 1;
+                return (
+                  <span key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {i > 0 && (
+                      <span style={{ color: "var(--color-text-tertiary)", opacity: 0.6, fontSize: 14, lineHeight: 1, userSelect: "none" }}>
+                        ›
+                      </span>
+                    )}
+                    <BreadcrumbChip label={item.label} href={item.href} isLast={isLast} onNavigate={(h) => router.push(h)} />
+                  </span>
+                );
+              })}
             </nav>
           </>
         )}
@@ -352,5 +348,83 @@ export default function GNB() {
         </div>
       </div>
     </header>
+  );
+}
+
+// ── 브레드크럼 칩 ──────────────────────────────────────────────────────────────
+// 라벨 prefix(UW-/SCR-/AR-/FN-/RQ-/PID-) 또는 "~ 목록" 키워드로 타입 자동 감지
+// → 타입별 컬러 배지(prefix) + 이름으로 렌더링
+
+type ChipType = "UW" | "SCR" | "AR" | "FN" | "RQ" | "PID" | "LIST" | "TEXT";
+
+function detectChipType(label: string): { type: ChipType; badge: string; rest: string } {
+  // "UW-00001 프로젝트 생성·관리" 형식 분리
+  const m = label.match(/^(UW|SCR|AR|FN|RQ|PID)-(\d+)\s*(.*)$/);
+  if (m) return { type: m[1] as ChipType, badge: `${m[1]}-${m[2]}`, rest: m[3] };
+  // "~ 목록"
+  if (label.endsWith("목록")) return { type: "LIST", badge: "", rest: label };
+  return { type: "TEXT", badge: "", rest: label };
+}
+
+const CHIP_COLORS: Record<ChipType, { bg: string; color: string }> = {
+  UW:   { bg: "#e3f2fd", color: "#1565c0" },  // 파랑
+  SCR:  { bg: "#e8f5e9", color: "#2e7d32" },  // 초록
+  PID:  { bg: "#e8f5e9", color: "#2e7d32" },  // 초록 (화면 동일)
+  AR:   { bg: "#fff3e0", color: "#e65100" },  // 주황
+  FN:   { bg: "#f3e5f5", color: "#6a1b9a" },  // 보라
+  RQ:   { bg: "#eceff1", color: "#455a64" },  // 회색
+  LIST: { bg: "#f5f5f5", color: "#757575" },  // 회색
+  TEXT: { bg: "#f5f5f5", color: "#757575" },
+};
+
+function BreadcrumbChip({ label, href, isLast, onNavigate }: {
+  label:      string;
+  href?:      string;
+  isLast:     boolean;
+  onNavigate: (href: string) => void;
+}) {
+  const { type, badge, rest } = detectChipType(label);
+  const color = CHIP_COLORS[type];
+  const clickable = !!href;
+
+  const content = (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 6,
+      padding: "3px 10px", borderRadius: 14,
+      fontSize: 12, lineHeight: 1.2,
+      background: isLast && !clickable ? color.bg : "transparent",
+      border: `1px solid ${isLast && !clickable ? color.color + "30" : "transparent"}`,
+      transition: "all 0.15s",
+    }}>
+      {badge && (
+        <span style={{
+          fontSize: 10, fontWeight: 700,
+          padding: "1px 5px", borderRadius: 3,
+          background: color.bg, color: color.color,
+          fontFamily: "monospace", letterSpacing: "0.02em",
+        }}>
+          {badge}
+        </span>
+      )}
+      <span style={{
+        color: isLast && !clickable ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+        fontWeight: isLast && !clickable ? 600 : 400,
+      }}>
+        {rest}
+      </span>
+    </span>
+  );
+
+  if (!clickable) return content;
+
+  return (
+    <button
+      onClick={() => onNavigate(href!)}
+      style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}
+      onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.7"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
+    >
+      {content}
+    </button>
   );
 }

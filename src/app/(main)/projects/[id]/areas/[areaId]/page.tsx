@@ -191,16 +191,36 @@ function AreaDetailPageInner() {
     enabled: !isNew,
   });
 
-  // GNB 브레드크럼 설정 — 마운트 시 설정, 언마운트 시 초기화
+  // GNB 브레드크럼 설정 — 단위업무 > 화면 > 영역 > 기능 목록
   useEffect(() => {
-    const items = [
-      { label: "영역 관리", href: `/projects/${projectId}/areas` },
-      ...(data?.screenName ? [{ label: data.screenName }] : []),
-      { label: isNew ? "신규 등록" : (data?.displayId ?? "편집") },
-    ];
-    setBreadcrumb(items);
+    if (isNew) {
+      setBreadcrumb([
+        { label: "영역 관리", href: `/projects/${projectId}/areas` },
+        { label: "신규 등록" },
+      ]);
+    } else if (data) {
+      const d = data as unknown as {
+        unitWorkId?: string | null; unitWorkDisplayId?: string | null; unitWorkName?: string;
+        screenId?: string | null;   screenDisplayId?: string | null;
+      };
+      const items = [
+        // 단위업무
+        ...(d.unitWorkId && d.unitWorkName
+          ? [{ label: `${d.unitWorkDisplayId ?? ""} ${d.unitWorkName}`.trim(), href: `/projects/${projectId}/unit-works/${d.unitWorkId}` }]
+          : []),
+        // 화면
+        ...(d.screenId && data.screenName
+          ? [{ label: `${d.screenDisplayId ?? ""} ${data.screenName}`.trim(), href: `/projects/${projectId}/screens/${d.screenId}` }]
+          : []),
+        // 영역 (현재 페이지)
+        { label: `${data.displayId} ${data.name}` },
+        // 하위 기능 목록
+        { label: "기능 목록", href: `/projects/${projectId}/functions?areaId=${areaId}` },
+      ];
+      setBreadcrumb(items);
+    }
     return () => setBreadcrumb([]);
-  }, [projectId, isNew, data?.screenName, data?.displayId, setBreadcrumb]);
+  }, [projectId, areaId, isNew, data, setBreadcrumb]);
 
   // 상세 데이터로 폼 초기화
   useEffect(() => {

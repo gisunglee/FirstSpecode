@@ -182,16 +182,38 @@ function FunctionDetailPageInner() {
     enabled: !isNew,
   });
 
-  // GNB 브레드크럼 설정 — 마운트 시 설정, 언마운트 시 초기화
+  // GNB 브레드크럼 설정 — 단위업무 > 화면 > 영역 > 기능
   useEffect(() => {
-    const items = [
-      { label: "기능 정의", href: `/projects/${projectId}/functions` },
-      ...(data?.areaName ? [{ label: data.areaName }] : []),
-      { label: isNew ? "신규 등록" : (data?.displayId ?? "편집") },
-    ];
-    setBreadcrumb(items);
+    if (isNew) {
+      setBreadcrumb([
+        { label: "기능 정의", href: `/projects/${projectId}/functions` },
+        { label: "신규 등록" },
+      ]);
+    } else if (data) {
+      const d = data as unknown as {
+        unitWorkId?: string | null; unitWorkDisplayId?: string | null; unitWorkName?: string;
+        screenId?: string | null;   screenDisplayId?: string | null;   screenName?: string;
+      };
+      const items = [
+        // 단위업무
+        ...(d.unitWorkId && d.unitWorkName
+          ? [{ label: `${d.unitWorkDisplayId ?? ""} ${d.unitWorkName}`.trim(), href: `/projects/${projectId}/unit-works/${d.unitWorkId}` }]
+          : []),
+        // 화면
+        ...(d.screenId && d.screenName
+          ? [{ label: `${d.screenDisplayId ?? ""} ${d.screenName}`.trim(), href: `/projects/${projectId}/screens/${d.screenId}` }]
+          : []),
+        // 영역
+        ...(data.areaId && data.areaName
+          ? [{ label: `${data.areaDisplayId ?? ""} ${data.areaName}`.trim(), href: `/projects/${projectId}/areas/${data.areaId}` }]
+          : []),
+        // 기능 (현재 페이지 — href 없음)
+        { label: `${data.displayId} ${data.name}` },
+      ];
+      setBreadcrumb(items);
+    }
     return () => setBreadcrumb([]);
-  }, [projectId, isNew, data?.areaName, data?.displayId, setBreadcrumb]);
+  }, [projectId, isNew, data, setBreadcrumb]);
 
   // AI 작업 패널 외부 클릭 시 닫기
   // 구현 대상 선택 팝업(ImplTargetDialog)이 열려있으면 외부 클릭 닫기 무시

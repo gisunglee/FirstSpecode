@@ -62,8 +62,8 @@ function AreasPageInner() {
   const queryClient  = useQueryClient();
   const projectId    = params.id;
 
-  // URL에 screenId 파라미터가 있으면 해당 화면 기준으로 필터
-  const screenIdFilter = searchParams.get("screenId") ?? undefined;
+  // 화면 필터 (URL ?screenId=xxx 로 초기화 — 브레드크럼에서 진입 시 자동 적용)
+  const [screenFilter, setScreenFilter] = useState(searchParams.get("screenId") ?? "");
 
   // 삭제 다이얼로그 상태
   const [deleteTarget, setDeleteTarget] = useState<AreaRow | null>(null);
@@ -75,23 +75,26 @@ function AreasPageInner() {
   // 드래그 중인 아이템의 screenId — 동일 화면 내에서만 순서 변경 허용
   const dragItemScreenId = useRef<string | null>(null);
 
-  // ── 데이터 조회 ────────────────────────────────────────────────────────────
-  const queryKey = screenIdFilter
-    ? ["areas", projectId, screenIdFilter]
-    : ["areas", projectId];
-
+  // ── 데이터 조회 — 전체 조회 후 클라이언트 필터 (드롭다운 옵션 생성용) ─────
   const { data, isLoading } = useQuery({
-    queryKey,
-    queryFn: () => {
-      const url = screenIdFilter
-        ? `/api/projects/${projectId}/areas?screenId=${screenIdFilter}`
-        : `/api/projects/${projectId}/areas`;
-      return authFetch<{ data: { items: AreaRow[]; totalCount: number } }>(url)
-        .then((r) => r.data);
-    },
+    queryKey: ["areas", projectId],
+    queryFn: () =>
+      authFetch<{ data: { items: AreaRow[]; totalCount: number } }>(
+        `/api/projects/${projectId}/areas`
+      ).then((r) => r.data),
   });
 
-  const items = data?.items ?? [];
+  const allItems = data?.items ?? [];
+
+  // 화면 드롭다운 옵션 — items에서 중복 제거하여 추출
+  const screenOptions = Array.from(
+    new Map(allItems.filter((a) => a.screenId).map((a) => [a.screenId, a.screenName])).entries()
+  ).map(([id, name]) => ({ id: id!, name }));
+
+  // 필터 적용
+  const items = screenFilter
+    ? allItems.filter((a) => a.screenId === screenFilter)
+    : allItems;
 
   // ── 순서 변경 뮤테이션 ──────────────────────────────────────────────────────
   const sortMutation = useMutation({
@@ -168,8 +171,8 @@ function AreasPageInner() {
         </div>
         <button
           onClick={() => {
-            const url = screenIdFilter
-              ? `/projects/${projectId}/areas/new?screenId=${screenIdFilter}`
+            const url = screenFilter
+              ? `/projects/${projectId}/areas/new?screenId=${screenFilter}`
               : `/projects/${projectId}/areas/new`;
             router.push(url);
           }}
@@ -180,14 +183,26 @@ function AreasPageInner() {
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
-      {/* 총 건수 */}
-      <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
-        총 {items.length}건
-        {screenIdFilter && (
-          <span style={{ marginLeft: 8, color: "var(--color-primary, #1976d2)", fontSize: 12 }}>
-            (화면 필터 적용)
-          </span>
-        )}
+      {/* 필터 + 총 건수 */}
+      <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+        <select
+          value={screenFilter}
+          onChange={(e) => setScreenFilter(e.target.value)}
+          style={{
+            padding: "6px 10px", borderRadius: 6,
+            border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
+            color: "var(--color-text-primary)", fontSize: 13, outline: "none",
+            minWidth: 200, cursor: "pointer",
+          }}
+        >
+          <option value="">화면 — 전체</option>
+          {screenOptions.map((opt) => (
+            <option key={opt.id} value={opt.id}>{opt.name}</option>
+          ))}
+        </select>
+        <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
+          총 {items.length}건
+        </span>
       </div>
 
       {/* 목록 */}

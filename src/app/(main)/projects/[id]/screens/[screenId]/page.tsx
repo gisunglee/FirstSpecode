@@ -261,16 +261,29 @@ function ScreenDetailPageInner() {
     doSave(false);
   }
 
-  // GNB 브레드크럼 설정 — 마운트 시 설정, 언마운트 시 초기화
+  // GNB 브레드크럼 설정 — 단위업무 > 화면 > 영역 목록
   useEffect(() => {
-    const items = [
-      { label: "화면 설계", href: `/projects/${projectId}/screens` },
-      ...(detail?.unitWorkName ? [{ label: detail.unitWorkName }] : []),
-      { label: isNew ? "신규 등록" : (detail?.displayId ?? "편집") },
-    ];
-    setBreadcrumb(items);
+    if (isNew) {
+      setBreadcrumb([
+        { label: "화면 설계", href: `/projects/${projectId}/screens` },
+        { label: "신규 등록" },
+      ]);
+    } else if (detail) {
+      const d = detail as unknown as { unitWorkId?: string | null; unitWorkDisplayId?: string | null; unitWorkName?: string };
+      const items = [
+        // 단위업무 (클릭 → 단위업무 상세)
+        ...(d.unitWorkId && d.unitWorkName
+          ? [{ label: `${d.unitWorkDisplayId ?? ""} ${d.unitWorkName}`.trim(), href: `/projects/${projectId}/unit-works/${d.unitWorkId}` }]
+          : []),
+        // 화면 (현재 페이지)
+        { label: `${detail.displayId} ${detail.name}` },
+        // 하위 영역 목록
+        { label: "영역 목록", href: `/projects/${projectId}/areas?screenId=${screenId}` },
+      ];
+      setBreadcrumb(items);
+    }
     return () => setBreadcrumb([]);
-  }, [projectId, isNew, detail?.unitWorkName, detail?.displayId, setBreadcrumb]);
+  }, [projectId, screenId, isNew, detail, setBreadcrumb]);
 
   // ── 로딩 ───────────────────────────────────────────────────────────────────
   if (!isNew && isDetailLoading) {
