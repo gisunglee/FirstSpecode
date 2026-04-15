@@ -39,6 +39,35 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // 스냅샷 저장을 위해 현재 4계층 재수집
     const layers = await collectLayers(body.entryType, body.entryId, body.functionIds, projectId);
 
+    // ── 시스템 프롬프트 조회 ──
+    // tb_ai_prompt_template에서 task_ty_code=IMPLEMENT, use_yn=Y 중 최신 1건
+    // 프로젝트 우선 → 시스템 공통, 기능 특화 > 일반, default > 비default, 최신 순
+    const promptTmpl = await prisma.tbAiPromptTemplate.findFirst({
+      where: {
+        AND: [
+          { OR: [{ prjct_id: projectId }, { prjct_id: null }] },
+        ],
+        task_ty_code: "IMPLEMENT",
+        use_yn: "Y",
+      },
+      orderBy: [
+        { default_yn: "desc" },
+        { prjct_id: { sort: "desc", nulls: "last" } },
+        { creat_dt: "desc" },
+      ],
+    });
+
+    // ── req_cn 조립: <시스템프롬프트> + <코멘트> + <구현요청서> ──
+    const parts: string[] = [];
+    if (promptTmpl?.sys_prompt_cn?.trim()) {
+      parts.push(`<시스템프롬프트>\n${promptTmpl.sys_prompt_cn.trim()}\n</시스템프롬프트>`);
+    }
+    if (body.comentCn?.trim()) {
+      parts.push(`<코멘트>\n${body.comentCn.trim()}\n</코멘트>`);
+    }
+    parts.push(`<구현요청서>\n${body.promptMd.trim()}\n</구현요청서>`);
+    const finalReqCn = parts.join("\n\n");
+
     // 트랜잭션: AI 태스크 + 스냅샷 동시 저장
     const aiTaskId = crypto.randomUUID();
 
@@ -51,7 +80,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           ref_ty_code: body.entryType,
           ref_id: body.entryId,
           task_ty_code: "IMPLEMENT",
-          req_cn: body.promptMd,
+          req_cn: finalReqCn,
           coment_cn: body.comentCn ?? null,
           task_sttus_code: "PENDING",
           req_snapshot_data: {
@@ -59,6 +88,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             entryId: body.entryId,
             functionIds: body.functionIds,
             layerCount: layers.length,
+            promptTemplateId: promptTmpl?.tmpl_id ?? null,
           },
           req_mber_id: auth.mberId,
         },

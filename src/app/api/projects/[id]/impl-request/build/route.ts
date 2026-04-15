@@ -28,7 +28,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
   }
 
-  let body: { entryType: string; entryId: string; functionIds: string[]; comentCn?: string };
+  let body: { entryType: string; entryId: string; functionIds: string[] };
   try { body = await request.json(); } catch { return apiError("VALIDATION_ERROR", "올바른 JSON이 아닙니다.", 400); }
 
   if (!body.entryType || !body.entryId) {
@@ -46,10 +46,38 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "대상 설계서를 찾을 수 없습니다.", 404);
     }
 
-    // 프롬프트 렌더링 (DB 저장 없음)
-    const promptMd = renderImplPrompt(layers, body.comentCn);
+    // 프롬프트 렌더링 — 미리보기용 본문만 (시스템 프롬프트/코멘트는 submit에서 주입)
+    const promptMd = renderImplPrompt(layers);
 
-    return apiSuccess({ promptMd });
+    // 요약 정보 — 팝업 상단 모드 배지 + "모두 NO_CHANGE면 요청 불가" 판정용
+    const summary = layers.map((l) => ({
+      type: l.type,
+      displayId: l.displayId,
+      name: l.name,
+      mode: l.hasSnapshot ? l.mode : "신규",
+      lineRatio: l.lineRatio,
+    }));
+
+    // 시스템 프롬프트 템플릿 조회 (최종 요청 컨펌 팝업 표시용)
+    const promptTmpl = await prisma.tbAiPromptTemplate.findFirst({
+      where: {
+        AND: [{ OR: [{ prjct_id: projectId }, { prjct_id: null }] }],
+        task_ty_code: "IMPLEMENT",
+        use_yn: "Y",
+      },
+      orderBy: [
+        { default_yn: "desc" },
+        { prjct_id: { sort: "desc", nulls: "last" } },
+        { creat_dt: "desc" },
+      ],
+      select: { tmpl_id: true, tmpl_nm: true },
+    });
+
+    return apiSuccess({
+      promptMd,
+      summary,
+      promptTemplate: promptTmpl ? { id: promptTmpl.tmpl_id, name: promptTmpl.tmpl_nm } : null,
+    });
   } catch (err) {
     console.error("[POST /impl-request/build]", err);
     return apiError("DB_ERROR", "프롬프트 생성에 실패했습니다.", 500);

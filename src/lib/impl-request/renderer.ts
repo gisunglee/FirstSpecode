@@ -43,67 +43,25 @@ const LAYER_LABELS: Record<string, string> = {
 };
 
 /**
- * 4계층 LayerInfo 배열로 구현요청 프롬프트 생성
+ * 4계층 LayerInfo 배열로 구현요청 본문 생성 (구현요청서 내용)
+ *
+ * 주의: AI 작업 지침/변경 모드/diff 규칙은 tb_ai_prompt_template에 저장된 시스템 프롬프트로 주입되고,
+ *       사용자 코멘트는 submit API에서 `<코멘트>` 블록으로 별도 래핑됩니다.
+ *       이 함수는 `<구현요청서>` 내부에 들어갈 계층 본문만 생성합니다.
  *
  * @param layers collector.collectLayers() 결과
- * @param comentCn 사용자 AI 지시사항 (선택)
- * @returns 프롬프트 마크다운 문자열
+ * @returns 계층 본문 마크다운 문자열 (UW/PID/AR/FID ~ 금지선 X)
  */
-export function renderImplPrompt(layers: LayerInfo[], comentCn?: string): string {
+export function renderImplPrompt(layers: LayerInfo[]): string {
   const lines: string[] = [];
 
-  // ── 최상단 제목 ──
-  lines.push("# PRD_CHANGE — 구현요청");
-  lines.push("");
-
-  // ── AI 작업 지침 ──
-  lines.push("## AI 작업 지침");
-  lines.push("");
-  lines.push("- 아래는 4계층 스펙(UW/PID/AR/FID)의 변경 사항입니다.");
-  lines.push("- 각 노드는 변경 모드(NO_CHANGE/DIFF/FULL/REPLACE)에 따라 다르게 표시됩니다.");
-  lines.push("- 변경된 노드만 작업 대상으로 삼고, NO_CHANGE 노드는 컨텍스트 참고용입니다.");
-  lines.push("");
-  lines.push("### 변경 모드별 작업 지침");
-  lines.push("");
-  lines.push("- `NO_CHANGE`: 변경 없음 — 컨텍스트 참고만 하세요. 이 부분은 수정하지 마세요.");
-  lines.push("- `DIFF`: 일부 변경 — 변경 부분(diff 블록)을 확인하고 해당 부분만 반영하세요.");
-  lines.push("- `FULL`: 많은 변경 — 풀버전을 기준으로 전체적으로 반영하세요.");
-  lines.push("- `REPLACE`: 완전 교체 — 이전 구현을 무시하고 새로 구현하세요.");
-  lines.push("- `신규`: 최초 요청 — 전체 내용 기반으로 새로 구현하세요.");
-  lines.push("");
-  lines.push("### diff 블록 표기 규칙");
-  lines.push("");
-  lines.push("- `- [삭제]` 로 시작하는 줄: 이전 버전에서 **삭제된** 줄");
-  lines.push("- `+ [추가]` 로 시작하는 줄: 새 버전에 **추가된** 줄");
-  lines.push("- 공백으로 시작하는 줄(라벨 없음): 변경 없는 **컨텍스트** (위아래 3줄)");
-  lines.push("- `@@ 섹션: ... @@` : 변경이 발생한 마크다운 섹션의 위치");
-  lines.push("- `@@ -X,Y +A,B @@` : git unified diff 형식의 라인 위치 정보");
-  lines.push("");
-
-  // ── 사용자 코멘트 ──
-  if (comentCn?.trim()) {
-    lines.push("### 추가 지시사항");
-    lines.push("");
-    lines.push(comentCn.trim());
-    lines.push("");
-  }
-
-  lines.push("---");
-  lines.push("");
-
-  // ── 계층별 렌더링 ──
+  // ── 계층별 렌더링만 (시스템 프롬프트는 submit API에서 tb_ai_prompt_template로 주입) ──
   for (const layer of layers) {
     lines.push(renderLayer(layer));
     lines.push("");
   }
 
-  // ── 금지선 ──
-  lines.push("## ⛔ 금지선");
-  lines.push("");
-  lines.push("- 위 변경 사항 외의 다른 영역은 수정하지 마세요.");
-  lines.push("- NO_CHANGE 노드는 참고용입니다 (수정 금지).");
-
-  return lines.join("\n");
+  return lines.join("\n").trim();
 }
 
 /**
