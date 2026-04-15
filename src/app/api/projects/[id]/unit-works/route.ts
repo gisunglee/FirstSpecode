@@ -48,17 +48,51 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const unitWorkIds = unitWorks.map((uw) => uw.unit_work_id);
 
-    // 단계별 진척률 조회 (tb_cm_progress)
-    const progressRecords = unitWorkIds.length > 0
-      ? await prisma.tbCmProgress.findMany({
-          where:  { ref_tbl_nm: "tb_ds_unit_work", ref_id: { in: unitWorkIds } },
-          select: { ref_id: true, analy_rt: true, design_rt: true, impl_rt: true, test_rt: true },
-        })
-      : [];
+    // 진척률 + IMPLEMENT 스냅샷을 병렬 조회 (N+1 방지)
+    const [progressRecords, implSnapshots] = await Promise.all([
+      unitWorkIds.length > 0
+        ? prisma.tbCmProgress.findMany({
+            where:  { ref_tbl_nm: "tb_ds_unit_work", ref_id: { in: unitWorkIds } },
+            select: { ref_id: true, analy_rt: true, design_rt: true, impl_rt: true, test_rt: true },
+          })
+        : Promise.resolve([]),
+      unitWorkIds.length > 0
+        ? prisma.tbSpImplSnapshot.findMany({
+            where:  { ref_tbl_nm: "tb_ds_unit_work", ref_id: { in: unitWorkIds } },
+            select: { ref_id: true, ai_task_id: true, creat_dt: true },
+            orderBy: { creat_dt: "desc" },
+          })
+        : Promise.resolve([]),
+    ]);
     const progressMap = new Map(progressRecords.map((p) => [p.ref_id, p]));
+
+    // ── 단위업무별 IMPLEMENT 태스크 최신 1건 매핑 ────────────────────────
+    // 스냅샷 → ai_task_id 수집 → tbAiTask 일괄 조회 (taskType=IMPLEMENT) → 단위업무별 최신 1건
+    const implTaskMap = new Map<string, { aiTaskId: string; status: string; requestedAt: Date }>();
+    if (implSnapshots.length > 0) {
+      const allTaskIds = [...new Set(implSnapshots.map((s) => s.ai_task_id))];
+      const implTasks = await prisma.tbAiTask.findMany({
+        where: { ai_task_id: { in: allTaskIds }, task_ty_code: "IMPLEMENT" },
+        select: { ai_task_id: true, task_sttus_code: true, req_dt: true },
+      });
+      const taskInfoMap = new Map(implTasks.map((t) => [t.ai_task_id, t]));
+
+      // 스냅샷이 creat_dt desc로 정렬되어 있으므로 첫 번째 매칭이 최신
+      for (const snap of implSnapshots) {
+        if (implTaskMap.has(snap.ref_id)) continue;
+        const task = taskInfoMap.get(snap.ai_task_id);
+        if (!task) continue;
+        implTaskMap.set(snap.ref_id, {
+          aiTaskId:    task.ai_task_id,
+          status:      task.task_sttus_code,
+          requestedAt: task.req_dt,
+        });
+      }
+    }
 
     const items = unitWorks.map((uw) => {
       const prog = progressMap.get(uw.unit_work_id);
+      const impl = implTaskMap.get(uw.unit_work_id);
       return {
         unitWorkId:    uw.unit_work_id,
         displayId:     uw.unit_work_display_id,
@@ -77,6 +111,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         designRt:      prog?.design_rt ?? 0,
         implRt:        prog?.impl_rt   ?? 0,
         testRt:        prog?.test_rt   ?? 0,
+        // AI 구현 요청 정보 (스냅샷 → IMPLEMENT 태스크 최신 1건)
+        implTask:      impl ? { aiTaskId: impl.aiTaskId, status: impl.status, requestedAt: impl.requestedAt } : null,
       };
     });
 

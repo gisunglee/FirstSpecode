@@ -90,8 +90,40 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }]));
     }
 
+    // ── AI 구현 요청 정보 — 화면 단위 스냅샷 → IMPLEMENT 태스크 최신 1건 ─────
+    const implTaskMap = new Map<string, { aiTaskId: string; status: string; requestedAt: Date }>();
+    if (screens.length > 0) {
+      const screenIds = screens.map((s) => s.scrn_id);
+      const implSnapshots = await prisma.tbSpImplSnapshot.findMany({
+        where:  { ref_tbl_nm: "tb_ds_screen", ref_id: { in: screenIds } },
+        select: { ref_id: true, ai_task_id: true, creat_dt: true },
+        orderBy: { creat_dt: "desc" },
+      });
+      if (implSnapshots.length > 0) {
+        const allTaskIds = [...new Set(implSnapshots.map((s) => s.ai_task_id))];
+        const implTasks = await prisma.tbAiTask.findMany({
+          where:  { ai_task_id: { in: allTaskIds }, task_ty_code: "IMPLEMENT" },
+          select: { ai_task_id: true, task_sttus_code: true, req_dt: true },
+        });
+        const taskInfoMap = new Map(implTasks.map((t) => [t.ai_task_id, t]));
+
+        // 스냅샷 desc 정렬이므로 첫 매칭이 최신
+        for (const snap of implSnapshots) {
+          if (implTaskMap.has(snap.ref_id)) continue;
+          const task = taskInfoMap.get(snap.ai_task_id);
+          if (!task) continue;
+          implTaskMap.set(snap.ref_id, {
+            aiTaskId:    task.ai_task_id,
+            status:      task.task_sttus_code,
+            requestedAt: task.req_dt,
+          });
+        }
+      }
+    }
+
     const items = screens.map((s) => {
       const prog = progMap.get(s.scrn_id);
+      const impl = implTaskMap.get(s.scrn_id);
       return {
         screenId:        s.scrn_id,
         displayId:       s.scrn_display_id,
@@ -111,6 +143,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         avgDesignRt:     prog?.designRt ?? 0,
         avgImplRt:       prog?.implRt ?? 0,
         avgTestRt:       prog?.testRt ?? 0,
+        // AI 구현 요청 정보 (스냅샷 → IMPLEMENT 태스크 최신 1건)
+        implTask:        impl ? { aiTaskId: impl.aiTaskId, status: impl.status, requestedAt: impl.requestedAt } : null,
       };
     });
 

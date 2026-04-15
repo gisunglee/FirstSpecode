@@ -20,6 +20,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,8 @@ type ScreenRow = {
   avgDesignRt: number;
   avgImplRt: number;
   avgTestRt: number;
+  // AI 구현 요청 정보 (스냅샷 → IMPLEMENT 태스크 최신 1건)
+  implTask: { aiTaskId: string; status: string; requestedAt: string } | null;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -73,6 +76,8 @@ function ScreensPageInner() {
   // ── 단위업무 필터 (URL ?unitWorkId=xxx 로 초기화 — 브레드크럼에서 진입 시 자동 적용) ──
   const searchParams    = useSearchParams();
   const [unitWorkFilter, setUnitWorkFilter] = useState(searchParams.get("unitWorkId") ?? "");
+  // AI 구현 태스크 상세 팝업
+  const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
 
   // ── 데이터 조회 — 전체 조회 후 클라이언트 필터 (드롭다운 옵션 생성용) ──
   const { data, isLoading } = useQuery({
@@ -215,6 +220,7 @@ function ScreensPageInner() {
             <div>대분류</div>
             <div>중분류</div>
             <div>소분류</div>
+            <div style={{ textAlign: "center" }}>AI 구현</div>
             <div style={{ textAlign: "center" }}>설/구/테</div>
           </div>
 
@@ -318,6 +324,32 @@ function ScreensPageInner() {
                   {screen.categoryS || "-"}
                 </div>
 
+                {/* AI 구현 — 스냅샷 경유 IMPLEMENT 태스크 최신 1건 */}
+                <div
+                  style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {screen.implTask ? (
+                    <button
+                      onClick={() => setAiDetailTaskId(screen.implTask!.aiTaskId)}
+                      title="AI 구현 태스크 상세"
+                      style={{
+                        display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                        background: "transparent", border: "none", padding: 0, cursor: "pointer",
+                      }}
+                    >
+                      <span style={implStatusBadgeStyle(screen.implTask.status)}>
+                        {AI_STATUS_LABEL[screen.implTask.status] ?? screen.implTask.status}
+                      </span>
+                      <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>
+                        {formatRequestedAt(screen.implTask.requestedAt)}
+                      </span>
+                    </button>
+                  ) : (
+                    <span style={{ color: "#ccc", fontSize: 13 }}>—</span>
+                  )}
+                </div>
+
                 {/* 설/구/테 평균 진행률 */}
                 <div style={{ display: "flex", gap: 4, justifyContent: "center", fontSize: 11 }}>
                   {[
@@ -354,8 +386,52 @@ function ScreensPageInner() {
           }}
         />
       )}
+
+      {/* AI 구현 태스크 상세 팝업 */}
+      {aiDetailTaskId && (
+        <AiTaskDetailDialog
+          projectId={projectId}
+          taskId={aiDetailTaskId}
+          onClose={() => setAiDetailTaskId(null)}
+        />
+      )}
     </div>
   );
+}
+
+// ── AI 태스크 상태 라벨 + 배지 스타일 (AI 구현 컬럼용) ─────────────────────
+const AI_STATUS_LABEL: Record<string, string> = {
+  PENDING:     "대기",
+  IN_PROGRESS: "처리중",
+  DONE:        "완료",
+  APPLIED:     "반영됨",
+  REJECTED:    "반려",
+  FAILED:      "실패",
+  TIMEOUT:     "시간초과",
+};
+
+const AI_STATUS_COLORS: Record<string, { bg: string; color: string }> = {
+  PENDING:     { bg: "#f5f5f5", color: "#666" },
+  IN_PROGRESS: { bg: "#e3f2fd", color: "#1565c0" },
+  DONE:        { bg: "#e8f5e9", color: "#2e7d32" },
+  APPLIED:     { bg: "#e8eaf6", color: "#283593" },
+  REJECTED:    { bg: "#fff3e0", color: "#e65100" },
+  FAILED:      { bg: "#ffebee", color: "#c62828" },
+  TIMEOUT:     { bg: "#fff3e0", color: "#e65100" },
+};
+
+function implStatusBadgeStyle(status: string): React.CSSProperties {
+  const c = AI_STATUS_COLORS[status] ?? { bg: "#f5f5f5", color: "#555" };
+  return {
+    display: "inline-block", padding: "2px 8px", borderRadius: 4,
+    fontSize: 11, fontWeight: 700, background: c.bg, color: c.color,
+    whiteSpace: "nowrap",
+  };
+}
+
+function formatRequestedAt(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 // ── PID-00045 삭제 확인 다이얼로그 ───────────────────────────────────────────
@@ -474,8 +550,8 @@ function typeBadgeStyle(type: string): React.CSSProperties {
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-// 요구사항·단위업무·화면명·분류는 fr 비율, 소형 컬럼은 고정
-const GRID_TEMPLATE = "32px 1.5fr 1.5fr 3fr 70px 48px 40px 1fr 1fr 1fr 7%";
+// 요구사항·단위업무·화면명·분류는 fr 비율, 소형 컬럼은 고정 / AI 구현 + 설구테
+const GRID_TEMPLATE = "32px 1.5fr 1.5fr 3fr 70px 48px 40px 1fr 1fr 1fr 130px 7%";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid",

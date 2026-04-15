@@ -57,6 +57,7 @@ export default function LNB() {
   const planningHref        = pBase ? `${pBase}/planning`           : "#";
   const aiImportHref        = pBase ? `${pBase}/planning/ai-import` : "#";
   const designImportHref    = pBase ? `${pBase}/design-import`      : "#";
+  const graphViewHref       = pBase ? `${pBase}/graph`              : "#";
   const commonCodesHref  = pBase ? `${pBase}/common-codes`   : "#";
   const configsHref      = pBase ? `${pBase}/configs`       : "#";
   const settingsHref     = pBase ? `${pBase}/settings`      : "#";
@@ -118,6 +119,8 @@ export default function LNB() {
       { label: "기획실",             href: planStudioHref,    icon: "🎨", isActive: !!pBase && pathname.startsWith(`${pBase}/plan-studio`) },
       { label: "리뷰 요청",          href: reviewsHref,       icon: "💬", isActive: !!pBase && pathname.startsWith(`${pBase}/reviews`) },
       { label: "메모",               href: memosHref,         icon: "🗒", isActive: !!pBase && pathname.startsWith(`${pBase}/memos`) },
+      // 실험: 프로젝트 계층을 그래프로 시각화 (UX 테스트 중)
+      { label: "그래프 뷰 ✨",       href: graphViewHref,     icon: "🕸", isActive: !!pBase && pathname.startsWith(`${pBase}/graph`) },
     ],
   };
 

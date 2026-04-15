@@ -20,6 +20,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,8 @@ type UnitWorkRow = {
   designRt:      number;
   implRt:        number;
   testRt:        number;
+  // AI 구현 요청 정보 (스냅샷 → IMPLEMENT 태스크 최신 1건). 없으면 null
+  implTask: { aiTaskId: string; status: string; requestedAt: string } | null;
 };
 
 type RequirementOption = {
@@ -71,6 +74,8 @@ function UnitWorksPageInner() {
   // URL 쿼리 ?reqId=xxx 로 초기화 (상세 페이지 브레드크럼에서 진입 시 해당 요구사항으로 자동 필터)
   const searchParams = useSearchParams();
   const [filterReqId, setFilterReqId] = useState(searchParams.get("reqId") ?? "");
+  // AI 구현 태스크 상세 팝업
+  const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
 
   // 삭제 다이얼로그 상태
   const [deleteTarget, setDeleteTarget] = useState<UnitWorkRow | null>(null);
@@ -438,6 +443,7 @@ function UnitWorksPageInner() {
             <div>기간</div>
             <div style={{ textAlign: "center" }}>진행률</div>
             <div style={{ textAlign: "center" }}>화면수</div>
+            <div style={{ textAlign: "center" }}>AI 구현</div>
             <div style={{ textAlign: "center" }}>분/설/구/테</div>
           </div>
 
@@ -533,6 +539,32 @@ function UnitWorksPageInner() {
               {/* 화면수 */}
               <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
                 {uw.screenCount}
+              </div>
+
+              {/* AI 구현 — 스냅샷 경유 IMPLEMENT 태스크 최신 1건 */}
+              <div
+                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {uw.implTask ? (
+                  <button
+                    onClick={() => setAiDetailTaskId(uw.implTask!.aiTaskId)}
+                    title="AI 구현 태스크 상세"
+                    style={{
+                      display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                      background: "transparent", border: "none", padding: 0, cursor: "pointer",
+                    }}
+                  >
+                    <span style={implStatusBadgeStyle(uw.implTask.status)}>
+                      {AI_STATUS_LABEL[uw.implTask.status] ?? uw.implTask.status}
+                    </span>
+                    <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>
+                      {formatRequestedAt(uw.implTask.requestedAt)}
+                    </span>
+                  </button>
+                ) : (
+                  <span style={{ color: "#ccc", fontSize: 13 }}>—</span>
+                )}
               </div>
 
               {/* 분석/설계/구현/테스트 진척률 */}
@@ -661,8 +693,53 @@ function UnitWorksPageInner() {
           }}
         />
       )}
+
+      {/* AI 구현 태스크 상세 팝업 */}
+      {aiDetailTaskId && (
+        <AiTaskDetailDialog
+          projectId={projectId}
+          taskId={aiDetailTaskId}
+          onClose={() => setAiDetailTaskId(null)}
+        />
+      )}
     </div>
   );
+}
+
+// ── AI 태스크 상태 라벨 + 배지 스타일 ──────────────────────────────────────
+const AI_STATUS_LABEL: Record<string, string> = {
+  PENDING:     "대기",
+  IN_PROGRESS: "처리중",
+  DONE:        "완료",
+  APPLIED:     "반영됨",
+  REJECTED:    "반려",
+  FAILED:      "실패",
+  TIMEOUT:     "시간초과",
+};
+
+const AI_STATUS_COLORS: Record<string, { bg: string; color: string }> = {
+  PENDING:     { bg: "#f5f5f5", color: "#666" },
+  IN_PROGRESS: { bg: "#e3f2fd", color: "#1565c0" },
+  DONE:        { bg: "#e8f5e9", color: "#2e7d32" },
+  APPLIED:     { bg: "#e8eaf6", color: "#283593" },
+  REJECTED:    { bg: "#fff3e0", color: "#e65100" },
+  FAILED:      { bg: "#ffebee", color: "#c62828" },
+  TIMEOUT:     { bg: "#fff3e0", color: "#e65100" },
+};
+
+function implStatusBadgeStyle(status: string): React.CSSProperties {
+  const c = AI_STATUS_COLORS[status] ?? { bg: "#f5f5f5", color: "#555" };
+  return {
+    display: "inline-block", padding: "2px 8px", borderRadius: 4,
+    fontSize: 11, fontWeight: 700, background: c.bg, color: c.color,
+    whiteSpace: "nowrap",
+  };
+}
+
+// 요청 일시 — MM-DD HH:mm 단축 포맷
+function formatRequestedAt(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 // ── 분석/설계/구현/테스트 비율 칩 ────────────────────────────────────────────
@@ -844,8 +921,8 @@ function DeleteConfirmDialog({
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-// 드래그핸들 / 순서 / 요구사항 / 단위업무명(flex) / 기간 / 진행률 / 화면수 / 분석구테
-const GRID_TEMPLATE = "28px 44px 22% 1fr 16% 80px 56px 110px";
+// 드래그핸들 / 순서 / 요구사항 / 단위업무명(flex) / 기간 / 진행률 / 화면수 / AI구현 / 분설구테
+const GRID_TEMPLATE = "28px 44px 22% 1fr 16% 80px 56px 130px 110px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",

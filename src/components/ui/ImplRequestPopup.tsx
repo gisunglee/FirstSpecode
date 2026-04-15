@@ -69,6 +69,8 @@ export default function ImplRequestPopup({ projectId, entryType, entryId, functi
   const [viewMode, setViewMode] = useState<"preview" | "raw">("preview");
   // 최종 요청 컨펌 다이얼로그
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // 테이블 정보 치환 모드 (none = 원본 유지, brief = 컬럼명만, full = 컬럼표)
+  const [tableMode, setTableMode] = useState<"none" | "brief" | "full">("none");
 
   // 모든 계층이 NO_CHANGE면 요청 불가
   const allNoChange = summary.length > 0 && summary.every((l) => l.mode === "NO_CHANGE");
@@ -79,6 +81,14 @@ export default function ImplRequestPopup({ projectId, entryType, entryId, functi
     return acc;
   }, {});
 
+  // 현재 프롬프트에 치환되지 않은 <TABLE_SCRIPT:xxx> 플레이스홀더가 남아있는지
+  // - tableMode가 none이거나 미등록 테이블이 있으면 true
+  // - diff 블록의 "- [삭제]" 라인은 과거 기록이므로 제외 (라인 단위 판정)
+  const hasUnresolvedTableScript = promptMd.split("\n").some((line) => {
+    if (line.startsWith("- [삭제]")) return false;
+    return /<TABLE_SCRIPT:[^>]+>/.test(line);
+  });
+
   // ── 팝업 열리면 자동으로 프롬프트 생성 ──
   // 코멘트 입력 후 "프롬프트 재생성" 가능하도록 수동 빌드도 지원
   useEffect(() => {
@@ -88,14 +98,16 @@ export default function ImplRequestPopup({ projectId, entryType, entryId, functi
   }, []);
 
   // ── 프롬프트 생성 (build API) ──
-  async function handleBuild() {
+  // tableMode 인자: 호출 시점의 모드를 명시적으로 전달 (state 비동기 문제 회피)
+  async function handleBuild(modeOverride?: "none" | "brief" | "full") {
     setBuilding(true);
     try {
+      const mode = modeOverride ?? tableMode;
       const r = await authFetch<{ data: { promptMd: string; summary: LayerSummary[]; promptTemplate: PromptTemplate } }>(
         `/api/projects/${projectId}/impl-request/build`,
         {
           method: "POST",
-          body: JSON.stringify({ entryType, entryId, functionIds }),
+          body: JSON.stringify({ entryType, entryId, functionIds, tableMode: mode }),
         }
       );
       setPromptMd(r.data.promptMd);
@@ -107,6 +119,14 @@ export default function ImplRequestPopup({ projectId, entryType, entryId, functi
     } finally {
       setBuilding(false);
     }
+  }
+
+  // 테이블 모드 변경 — 같은 모드 클릭 시 토글 해제(none), 다른 모드면 전환
+  // 모드 변경 즉시 build API 재호출 (서버에서 치환)
+  function handleTableModeClick(target: "brief" | "full") {
+    const next: "none" | "brief" | "full" = tableMode === target ? "none" : target;
+    setTableMode(next);
+    handleBuild(next);
   }
 
   // ── 최종 요청 (submit API) ──
@@ -250,6 +270,65 @@ export default function ImplRequestPopup({ projectId, entryType, entryId, functi
                 ⚠ 변경된 내용이 없어 요청할 수 없습니다.
               </span>
             )}
+
+            {/* 테이블 치환 토글 — 우측 정렬, "?" 도움말 포함 */}
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ fontSize: 11, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
+                DB 테이블 치환
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toast.info(
+                    "프롬프트의 <TABLE_SCRIPT:tb_xxx> 플레이스홀더를 실제 DB 테이블 정보로 치환합니다. 간략=컬럼명 목록, 상세=컬럼 표(타입·설명 포함). 미등록 테이블은 원본 그대로 유지됩니다.",
+                    { duration: 7000 }
+                  );
+                }}
+                title="도움말"
+                style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  width: 16, height: 16, borderRadius: "50%",
+                  border: "1px solid var(--color-border)",
+                  background: "var(--color-bg-card)",
+                  color: "var(--color-text-secondary)",
+                  fontSize: 10, fontWeight: 700,
+                  cursor: "pointer", lineHeight: 1, padding: 0,
+                  marginRight: 4,
+                }}
+              >
+                ?
+              </button>
+              <button
+                onClick={() => handleTableModeClick("brief")}
+                disabled={building}
+                title="컬럼명 목록으로 치환 (컨텍스트 절약)"
+                style={{
+                  padding: "3px 10px", borderRadius: 4, fontSize: 11, fontWeight: 600,
+                  border: "1px solid var(--color-border)",
+                  background: tableMode === "brief" ? "rgba(103,80,164,0.15)" : "var(--color-bg-card)",
+                  color: tableMode === "brief" ? "rgba(103,80,164,1)" : "var(--color-text-secondary)",
+                  cursor: building ? "wait" : "pointer",
+                  opacity: building ? 0.6 : 1,
+                }}
+              >
+                {tableMode === "brief" ? "✓ " : ""}간략
+              </button>
+              <button
+                onClick={() => handleTableModeClick("full")}
+                disabled={building}
+                title="컬럼 표(타입·설명 포함)로 치환"
+                style={{
+                  padding: "3px 10px", borderRadius: 4, fontSize: 11, fontWeight: 600,
+                  border: "1px solid var(--color-border)",
+                  background: tableMode === "full" ? "rgba(103,80,164,0.15)" : "var(--color-bg-card)",
+                  color: tableMode === "full" ? "rgba(103,80,164,1)" : "var(--color-text-secondary)",
+                  cursor: building ? "wait" : "pointer",
+                  opacity: building ? 0.6 : 1,
+                }}
+              >
+                {tableMode === "full" ? "✓ " : ""}상세
+              </button>
+            </div>
           </div>
         )}
 
@@ -383,6 +462,24 @@ export default function ImplRequestPopup({ projectId, entryType, entryId, functi
                 </>
               )}
             </div>
+
+            {/* DB 테이블 치환 경고 — 플레이스홀더가 남아있으면 안내 */}
+            {hasUnresolvedTableScript && (
+              <div style={{
+                marginBottom: 16, padding: "10px 14px",
+                background: "#fff8e1", border: "1px solid #ffe082",
+                borderRadius: 8, fontSize: 12, lineHeight: 1.6,
+              }}>
+                <p style={{ margin: "0 0 4px", fontWeight: 700, color: "#e65100" }}>
+                  ⚠ DB 테이블 정보가 치환되지 않았습니다
+                </p>
+                <p style={{ margin: 0, color: "var(--color-text-secondary)" }}>
+                  프롬프트에 <code style={{ background: "#fff3e0", padding: "0 4px", borderRadius: 2 }}>&lt;TABLE_SCRIPT:tb_xxx&gt;</code> 플레이스홀더가 남아있습니다.
+                  상단의 <strong>간략 / 상세</strong> 버튼으로 치환하면 AI가 테이블 구조를 정확히 파악합니다.
+                  이대로 요청하시겠습니까?
+                </p>
+              </div>
+            )}
 
             {/* 전달되는 내용 */}
             <div style={{ marginBottom: 22, fontSize: 13, lineHeight: 1.7 }}>

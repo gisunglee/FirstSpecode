@@ -183,7 +183,11 @@
       "Bash(find \"d:/source/FirstSpecode/src/app/api/projects\" -type f -path \"*impl-request*\" -name \"*.ts\" -exec ls -lh {} \\\\;)",
       "Bash(awk '{print $NF, $\\(NF-4\\)}')",
       "Bash(ls -lh d:/source/FirstSpecode/src/lib/impl-request/*.ts)",
-      "Bash(find d:/source/FirstSpecode/src/lib/impl-request -type f -name \"*.ts\" -exec ls -lh {} \\\\;)"
+      "Bash(find d:/source/FirstSpecode/src/lib/impl-request -type f -name \"*.ts\" -exec ls -lh {} \\\\;)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"http://localhost:3000/api/worker/tasks?limit=1\" -H \"X-Worker-Key: dev-worker-key\")",
+      "Bash(curl -s 'http://localhost:3000/api/worker/tasks?limit=5&taskType=DESIGN' -H 'X-Worker-Key: specode-worker-dev-key')",
+      "Bash(curl -s 'http://localhost:3000/api/worker/tasks?limit=3' -H 'X-Worker-Key: specode-worker-dev-key')",
+      "Bash(DATABASE_URL='postgresql://postgres.wnejonygronvmohkvdqo:vrltjd2Tyde@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true' npx tsx test_worker_filter.ts)"
     ]
   }
 }

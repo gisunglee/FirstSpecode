@@ -25,9 +25,10 @@ type Task = {
   displayId:        string;
   name:             string;
   category:         string;
+  rfpPageNo:        string;
+  outputInfo:       string;
   requirementCount: number;
   prioritySummary:  PrioritySummary;
-  progressRate:     number;
   sortOrder:        number;
 };
 
@@ -181,7 +182,7 @@ function TaskListPageInner() {
         {/* 헤더 */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "32px 1fr 10% 8% 12% 8%",
+          gridTemplateColumns: "32px 1fr 10% 80px 1.2fr 8% 12%",
           padding: "10px 16px",
           background: "var(--color-bg-muted)",
           borderBottom: "1px solid var(--color-border)",
@@ -193,9 +194,10 @@ function TaskListPageInner() {
           <span />
           <span>과업명</span>
           <span style={{ textAlign: "center" }}>카테고리</span>
+          <span style={{ textAlign: "center" }}>RFP 페이지</span>
+          <span>산출물</span>
           <span>요구사항</span>
           <span>H/M/L</span>
-          <span>진행률</span>
         </div>
 
         {/* 바디 */}
@@ -217,7 +219,7 @@ function TaskListPageInner() {
                 onClick={() => router.push(`/projects/${projectId}/tasks/${task.taskId}`)}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "32px 1fr 10% 8% 12% 8%",
+                  gridTemplateColumns: "32px 1fr 10% 80px 1.2fr 8% 12%",
                   padding: "12px 16px",
                   borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
                   alignItems: "center",
@@ -256,6 +258,22 @@ function TaskListPageInner() {
                   </span>
                 </div>
 
+                {/* RFP 페이지 */}
+                <span style={{ fontSize: 12, color: "var(--color-text-secondary)", textAlign: "center" }}>
+                  {task.rfpPageNo || <span style={{ color: "#ccc" }}>—</span>}
+                </span>
+
+                {/* 산출물 */}
+                <span
+                  style={{
+                    fontSize: 12, color: "var(--color-text-secondary)",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}
+                  title={task.outputInfo || ""}
+                >
+                  {task.outputInfo || <span style={{ color: "#ccc" }}>—</span>}
+                </span>
+
                 {/* 요구사항 건수 */}
                 <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
                   {task.requirementCount}건
@@ -269,25 +287,6 @@ function TaskListPageInner() {
                   {" / "}
                   <span style={{ color: "#43a047" }}>{task.prioritySummary.low}</span>
                 </span>
-
-                {/* 진행률 */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{
-                    flex: 1,
-                    height: 6, borderRadius: 3,
-                    background: "#e0e0e0", overflow: "hidden",
-                  }}>
-                    <div style={{
-                      height: "100%",
-                      width: `${task.progressRate}%`,
-                      background: "#1976d2",
-                      borderRadius: 3,
-                    }} />
-                  </div>
-                  <span style={{ fontSize: 11, color: "#888", minWidth: 24, textAlign: "right" }}>
-                    {task.progressRate}%
-                  </span>
-                </div>
 
               </div>
             );

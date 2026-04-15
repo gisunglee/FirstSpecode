@@ -20,6 +20,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,8 @@ type AreaRow = {
   avgDesignRt:        number;
   avgImplRt:          number;
   avgTestRt:          number;
+  // AI 구현 요청 정보 (스냅샷 → IMPLEMENT 태스크 최신 1건)
+  implTask: { aiTaskId: string; status: string; requestedAt: string } | null;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -68,6 +71,8 @@ function AreasPageInner() {
   // 삭제 다이얼로그 상태
   const [deleteTarget, setDeleteTarget] = useState<AreaRow | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  // AI 구현 태스크 상세 팝업
+  const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
 
   // ── 드래그 상태 ────────────────────────────────────────────────────────────
   const dragItem         = useRef<number | null>(null);
@@ -219,6 +224,7 @@ function AreasPageInner() {
             <div style={{ textAlign: "center" }}>기능수</div>
             <div style={{ textAlign: "center" }}>구현기간</div>
             <div style={{ textAlign: "center" }}>예상공수</div>
+            <div style={{ textAlign: "center" }}>AI 구현</div>
             <div style={{ textAlign: "center" }}>설/구/테</div>
           </div>
 
@@ -333,6 +339,32 @@ function AreasPageInner() {
                 }
               </div>
 
+              {/* AI 구현 — 스냅샷 경유 IMPLEMENT 태스크 최신 1건 */}
+              <div
+                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {area.implTask ? (
+                  <button
+                    onClick={() => setAiDetailTaskId(area.implTask!.aiTaskId)}
+                    title="AI 구현 태스크 상세"
+                    style={{
+                      display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                      background: "transparent", border: "none", padding: 0, cursor: "pointer",
+                    }}
+                  >
+                    <span style={implStatusBadgeStyle(area.implTask.status)}>
+                      {AI_STATUS_LABEL[area.implTask.status] ?? area.implTask.status}
+                    </span>
+                    <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>
+                      {formatRequestedAt(area.implTask.requestedAt)}
+                    </span>
+                  </button>
+                ) : (
+                  <span style={{ color: "#ccc", fontSize: 13 }}>—</span>
+                )}
+              </div>
+
               {/* 설/구/테 평균 진행률 */}
               <div style={{ display: "flex", gap: 4, justifyContent: "center", fontSize: 11 }}>
                 {[
@@ -364,8 +396,17 @@ function AreasPageInner() {
           onClose={() => setDeleteTarget(null)}
           onDeleted={() => {
             setDeleteTarget(null);
-            queryClient.invalidateQueries({ queryKey });
+            queryClient.invalidateQueries({ queryKey: ["areas", projectId] });
           }}
+        />
+      )}
+
+      {/* AI 구현 태스크 상세 팝업 */}
+      {aiDetailTaskId && (
+        <AiTaskDetailDialog
+          projectId={projectId}
+          taskId={aiDetailTaskId}
+          onClose={() => setAiDetailTaskId(null)}
         />
       )}
     </div>
@@ -486,9 +527,44 @@ function typeBadgeStyle(type: string): React.CSSProperties {
   };
 }
 
+// ── AI 태스크 상태 라벨 + 배지 스타일 (AI 구현 컬럼용) ─────────────────────
+const AI_STATUS_LABEL: Record<string, string> = {
+  PENDING:     "대기",
+  IN_PROGRESS: "처리중",
+  DONE:        "완료",
+  APPLIED:     "반영됨",
+  REJECTED:    "반려",
+  FAILED:      "실패",
+  TIMEOUT:     "시간초과",
+};
+
+const AI_STATUS_COLORS: Record<string, { bg: string; color: string }> = {
+  PENDING:     { bg: "#f5f5f5", color: "#666" },
+  IN_PROGRESS: { bg: "#e3f2fd", color: "#1565c0" },
+  DONE:        { bg: "#e8f5e9", color: "#2e7d32" },
+  APPLIED:     { bg: "#e8eaf6", color: "#283593" },
+  REJECTED:    { bg: "#fff3e0", color: "#e65100" },
+  FAILED:      { bg: "#ffebee", color: "#c62828" },
+  TIMEOUT:     { bg: "#fff3e0", color: "#e65100" },
+};
+
+function implStatusBadgeStyle(status: string): React.CSSProperties {
+  const c = AI_STATUS_COLORS[status] ?? { bg: "#f5f5f5", color: "#555" };
+  return {
+    display: "inline-block", padding: "2px 8px", borderRadius: 4,
+    fontSize: 11, fontWeight: 700, background: c.bg, color: c.color,
+    whiteSpace: "nowrap",
+  };
+}
+
+function formatRequestedAt(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-const GRID_TEMPLATE = "32px 10% 12% 1fr 7% 5% 5% 14% 8% 7%";
+const GRID_TEMPLATE = "32px 10% 12% 1fr 7% 5% 5% 14% 8% 130px 7%";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",

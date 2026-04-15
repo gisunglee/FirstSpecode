@@ -48,11 +48,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         displayId:        t.task_display_id,
         name:             t.task_nm,
         category:         t.ctgry_code,
+        rfpPageNo:        t.rfp_page_no ?? "",
+        outputInfo:       t.output_info_cn ?? "",
         requirementCount: reqs.length,
         prioritySummary:  { high, medium, low },
-        // 진행률: 설계·구현 테이블 미구현 → 0으로 고정 (추후 교체)
-        progressRate: 0,
-        sortOrder: t.sort_ordr,
+        sortOrder:        t.sort_ordr,
       };
     });
 
