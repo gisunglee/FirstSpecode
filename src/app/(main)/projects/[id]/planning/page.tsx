@@ -886,7 +886,7 @@ function TaskDetailPanel({ projectId, taskId, displayId, onSaved }: { projectId:
           <textarea value={definition} onChange={(e) => setDefinition(e.target.value)} rows={4} style={{ ...inputStyle, resize: "vertical" }} />
         </PanelField>
         <PanelField label="세부내용">
-          <RichEditor key={`task-content-${taskId}`} value={content} onChange={setContent} placeholder="세부 내용을 입력하세요." minHeight={200} />
+          <RichEditor key={`task-content-${taskId}`} value={content} onChange={setContent} placeholder="세부 내용을 입력하세요." minHeight={260} />
         </PanelField>
         <PanelField label="산출물">
           <textarea value={outputInfo} onChange={(e) => setOutputInfo(e.target.value)} rows={4} style={{ ...inputStyle, resize: "vertical" }} />
@@ -1071,7 +1071,7 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
               ))}
             </div>
           </div>
-          <MarkdownEditor value={analysisCn} onChange={setAnalysisCn} rows={15} placeholder="분석 메모를 입력하세요." tab={analysisTab} onTabChange={setAnalysisTab} />
+          <MarkdownEditor value={analysisCn} onChange={setAnalysisCn} rows={20} placeholder="분석 메모를 입력하세요." tab={analysisTab} onTabChange={setAnalysisTab} />
         </div>
 
         {/* 상세 명세 — 원문/마크다운 탭 */}
@@ -1092,7 +1092,7 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
               ))}
             </div>
           </div>
-          <MarkdownEditor value={specCn} onChange={setSpecCn} rows={15} placeholder="상세 명세를 입력하세요." tab={specTab} onTabChange={setSpecTab} />
+          <MarkdownEditor value={specCn} onChange={setSpecCn} rows={20} placeholder="상세 명세를 입력하세요." tab={specTab} onTabChange={setSpecTab} />
         </div>
       </div>
     </div>
