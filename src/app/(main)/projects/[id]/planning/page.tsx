@@ -1147,113 +1147,108 @@ function StoryDetailPanel({ projectId, storyId, displayId, onSaved }: { projectI
     setAcRows(updated);
   };
 
-  const acLabelColors = { given: "#1565c0", when: "#2e7d32", then: "#6a1b9a" };
-  const acLabels      = { given: "사전조건", when: "행동", then: "기대결과" };
-  const acPlaceholders = { given: "사전 조건...", when: "사용자 행동...", then: "기대 결과..." };
+  // 인수기준 컬러/라벨 정의 — 텍스트 라벨 + 연한 배경 톤
+  const acConfig = {
+    given: { label: "사전조건", color: "#6200EE", bg: "rgba(98,0,238,0.04)", placeholder: "사전 조건을 입력하세요..." },
+    when:  { label: "행동",     color: "#4CAF50", bg: "rgba(76,175,80,0.04)",  placeholder: "사용자 행동을 입력하세요..." },
+    then:  { label: "기대결과", color: "#FF5252", bg: "rgba(255,82,82,0.04)",  placeholder: "기대 결과를 입력하세요..." },
+  };
 
   return (
-    <div style={{ padding: "20px 24px" }}>
-      {/* 상단 헤더 — 스토리 키 + 저장 + 가이드 */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}># {displayId}</span>
-          <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>사용자스토리</span>
+    <div style={{ padding: "24px 28px" }}>
+      {/* ── 상단 헤더 ─────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}># {displayId}</span>
+          <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>사용자스토리</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <StoryGuide />
-          <button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} style={{ ...primaryBtnStyle, padding: "7px 20px" }}>
+          <button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} style={{ ...primaryBtnStyle, padding: "8px 22px", fontSize: 13 }}>
             {saveMutation.isPending ? "저장 중..." : "저장"}
           </button>
         </div>
       </div>
 
-      {/* 2컬럼 레이아웃 — 좌: Properties / 우: Acceptance Criteria */}
-      <div style={{ display: "flex", gap: 0, minHeight: "calc(100vh - 160px)" }}>
+      {/* ── 2컬럼 레이아웃 ────────────────────────────────────────────── */}
+      <div style={{ display: "flex", gap: 0, minHeight: "calc(100vh - 180px)" }}>
 
-        {/* ── 좌측: Properties ────────────────────────────────────────── */}
-        <div style={{
-          width: 360, minWidth: 320, flexShrink: 0,
-          borderRight: "1px solid var(--color-border)",
-          paddingRight: 28,
-        }}>
-          {/* Properties 섹션 헤더 */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 20 }}>
-            <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>ℹ</span>
-            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.05em", color: "var(--color-text-secondary)", textTransform: "uppercase" as const }}>
-              속성
-            </span>
+        {/* ── 좌측: 속성 ─────────────────────────────────────────────── */}
+        <div style={{ width: 380, minWidth: 320, flexShrink: 0, borderRight: "1px solid #EEEEEE", paddingRight: 32 }}>
+          {/* 섹션 헤더 */}
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: 20, letterSpacing: "0.02em" }}>
+            속성
           </div>
 
           {/* 스토리명 */}
-          <div style={{ marginBottom: 22 }}>
-            <label style={storyLabelStyle}>스토리명 <span style={{ color: "var(--color-primary, #1976d2)" }}>*</span></label>
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 6 }}>
+              스토리명 <span style={{ color: "#FF5252" }}>*</span>
+            </label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="스토리명을 입력하세요"
-              style={storyFieldInputStyle}
+              style={{
+                width: "100%", padding: "10px 12px", borderRadius: 4,
+                border: "1px solid #EEEEEE", background: "#fff",
+                color: "var(--color-text-primary)", fontSize: 14,
+                outline: "none", boxSizing: "border-box",
+              }}
             />
           </div>
 
           {/* 페르소나 */}
-          <div style={{ marginBottom: 26 }}>
-            <label style={storyLabelStyle}>페르소나</label>
+          <div style={{ marginBottom: 24 }}>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 6 }}>
+              페르소나
+            </label>
             <input
               value={persona}
               onChange={(e) => setPersona(e.target.value)}
               placeholder="예: 일반 회원 (신규 및 기존)"
-              style={storyFieldInputStyle}
+              style={{
+                width: "100%", padding: "10px 12px", borderRadius: 4,
+                border: "1px solid #EEEEEE", background: "#fff",
+                color: "var(--color-text-primary)", fontSize: 14,
+                outline: "none", boxSizing: "border-box",
+              }}
             />
           </div>
 
-          {/* 시나리오 — 별도 섹션 느낌 */}
+          {/* 시나리오 */}
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-              <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>📋</span>
-              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.05em", color: "var(--color-text-secondary)", textTransform: "uppercase" as const }}>
-                시나리오
-              </span>
-            </div>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 6 }}>
+              시나리오
+            </label>
             <textarea
               value={scenario}
               onChange={(e) => setScenario(e.target.value)}
               placeholder="사용자의 행동 흐름을 자연어로 서술하세요."
-              rows={7}
+              rows={8}
               style={{
-                width: "100%",
-                padding: "12px 14px",
-                borderRadius: 8,
-                border: "1px solid var(--color-border)",
-                background: "var(--color-bg-muted, #f8f9fb)",
-                color: "var(--color-text-primary)",
-                fontSize: 13,
-                lineHeight: 1.7,
-                resize: "vertical",
-                boxSizing: "border-box",
-                outline: "none",
+                width: "100%", padding: "10px 12px", borderRadius: 4,
+                border: "1px solid #EEEEEE", background: "#fff",
+                color: "var(--color-text-primary)", fontSize: 13, lineHeight: 1.7,
+                resize: "vertical", boxSizing: "border-box", outline: "none",
               }}
             />
           </div>
         </div>
 
-        {/* ── 우측: Acceptance Criteria ────────────────────────────────── */}
-        <div style={{ flex: 1, paddingLeft: 28, display: "flex", flexDirection: "column" }}>
-          <h3 style={{
-            fontSize: 18, fontWeight: 700, margin: "0 0 24px",
-            color: "var(--color-text-primary)",
-            paddingBottom: 14,
-            borderBottom: "1px solid var(--color-border)",
-          }}>
+        {/* ── 우측: 인수기준 ──────────────────────────────────────────── */}
+        <div style={{ flex: 1, paddingLeft: 32, display: "flex", flexDirection: "column" }}>
+          <h3 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 20px", color: "var(--color-text-primary)" }}>
             인수기준
           </h3>
 
-          {/* 인수기준 목록 */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* 인수기준 카드 목록 */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 20 }}>
             {acRows.length === 0 && (
               <div style={{
                 padding: "48px 20px", textAlign: "center",
                 color: "var(--color-text-secondary)", fontSize: 13,
-                border: "2px dashed var(--color-border)", borderRadius: 10,
+                border: "2px dashed #E0E0E0", borderRadius: 8,
               }}>
                 인수기준이 없습니다. 아래 버튼으로 추가해 주세요.
               </div>
@@ -1261,79 +1256,59 @@ function StoryDetailPanel({ projectId, storyId, displayId, onSaved }: { projectI
 
             {acRows.map((row, idx) => (
               <div key={idx} style={{
-                border: "1px solid var(--color-border)",
-                borderRadius: 10,
-                overflow: "hidden",
-                background: "var(--color-bg-card)",
+                border: "1px solid #E0E0E0", borderRadius: 8,
+                background: "#fff", overflow: "hidden",
               }}>
-                {/* Criterion 헤더 */}
+                {/* 기준 헤더 */}
                 <div style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   padding: "10px 16px",
-                  background: "var(--color-bg-muted, #f8f9fb)",
-                  borderBottom: "1px solid var(--color-border)",
+                  borderBottom: "1px solid #EEEEEE",
+                  background: "#FAFAFA",
                 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{
-                      width: 8, height: 8, borderRadius: "50%",
-                      background: "var(--color-primary, #1976d2)",
-                      display: "inline-block", flexShrink: 0,
-                    }} />
-                    <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", color: "var(--color-text-secondary)", textTransform: "uppercase" as const }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#1976d2", display: "inline-block" }} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)" }}>
                       기준 #{idx + 1}
                     </span>
                   </div>
                   <button
                     onClick={() => setAcRows(acRows.filter((_, i) => i !== idx))}
-                    style={{
-                      background: "none", border: "none", cursor: "pointer",
-                      color: "var(--color-text-secondary)", fontSize: 14, padding: "2px 6px",
-                      borderRadius: 4, opacity: 0.5,
-                    }}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#bbb", fontSize: 16, padding: "2px 6px", lineHeight: 1 }}
                     title="삭제"
-                    onMouseEnter={(e) => { e.currentTarget.style.color = "#e53935"; e.currentTarget.style.opacity = "1"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--color-text-secondary)"; e.currentTarget.style.opacity = "0.5"; }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = "#e53935"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = "#bbb"; }}
                   >×</button>
                 </div>
 
-                {/* Given / When / Then 행 */}
-                <div style={{ display: "flex", flexDirection: "column" }}>
-                  {(["given", "when", "then"] as const).map((field, fi) => (
-                    <div
-                      key={field}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 0,
-                        borderBottom: fi < 2 ? "1px solid var(--color-border)" : "none",
-                      }}
-                    >
-                      {/* 라벨 — 컬러 좌측 바 포함 */}
-                      <div style={{
-                        width: 80, flexShrink: 0,
-                        padding: "12px 14px",
-                        fontSize: 12, fontWeight: 700, letterSpacing: "0.03em",
-                        color: acLabelColors[field],
-                        borderLeft: `3px solid ${acLabelColors[field]}`,
-                      }}>
-                        {acLabels[field]}
+                {/* Given / When / Then — 각 행에 명확한 입력 필드 */}
+                <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+                  {(["given", "when", "then"] as const).map((field) => {
+                    const cfg = acConfig[field];
+                    return (
+                      <div key={field} style={{ display: "flex", alignItems: "flex-start", gap: 0 }}>
+                        {/* 컬러 텍스트 라벨 */}
+                        <div style={{
+                          width: 72, flexShrink: 0, paddingTop: 10,
+                          fontSize: 12, fontWeight: 700, color: cfg.color,
+                        }}>
+                          {cfg.label}
+                        </div>
+                        {/* 입력 필드 — 명확한 테두리 + 연한 배경 */}
+                        <input
+                          value={row[field]}
+                          onChange={(e) => updateAc(idx, field, e.target.value)}
+                          placeholder={cfg.placeholder}
+                          style={{
+                            flex: 1, padding: "9px 12px", borderRadius: 4,
+                            border: "1px solid #E0E0E0", background: cfg.bg,
+                            color: "var(--color-text-primary)", fontSize: 13,
+                            outline: "none", boxSizing: "border-box",
+                          }}
+                        />
                       </div>
-                      {/* 입력 */}
-                      <input
-                        value={row[field]}
-                        onChange={(e) => updateAc(idx, field, e.target.value)}
-                        placeholder={acPlaceholders[field]}
-                        style={{
-                          flex: 1,
-                          padding: "12px 14px",
-                          border: "none",
-                          background: "transparent",
-                          color: "var(--color-text-primary)",
-                          fontSize: 13,
-                          outline: "none",
-                          lineHeight: 1.5,
-                        }}
-                      />
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -1343,21 +1318,14 @@ function StoryDetailPanel({ projectId, storyId, displayId, onSaved }: { projectI
           <button
             onClick={() => setAcRows([...acRows, { given: "", when: "", then: "" }])}
             style={{
-              marginTop: 20,
-              width: "100%",
-              padding: "12px 0",
-              borderRadius: 8,
-              border: "none",
-              background: "var(--color-bg-inverse, #1a1a2e)",
-              color: "#fff",
-              fontSize: 13,
-              fontWeight: 700,
-              letterSpacing: "0.05em",
-              cursor: "pointer",
-              textTransform: "uppercase" as const,
+              marginTop: 20, width: "100%", padding: "11px 0",
+              borderRadius: 6, border: "1px solid #E0E0E0",
+              background: "#FAFAFA", color: "var(--color-text-secondary)",
+              fontSize: 13, fontWeight: 600, cursor: "pointer",
+              letterSpacing: "0.02em",
             }}
           >
-            + Append New Criteria
+            + 인수기준 추가
           </button>
         </div>
       </div>
