@@ -425,7 +425,7 @@ function PlanningTreePageInner() {
       </div>
 
       {/* ── 우측 상세 패널 (AR-00058) ──────────────────────────────────────── */}
-      <div style={{ flex: 1, overflow: "auto", borderTop: "1px solid var(--color-border)", borderRight: "1px solid var(--color-border)", borderRadius: "0 8px 8px 0", background: "var(--color-bg-muted, #f5f6f8)" }}>
+      <div style={{ flex: 1, overflow: "auto", borderTop: "1px solid var(--color-border)", borderRight: "1px solid var(--color-border)", borderBottom: "1px solid var(--color-border)", borderRadius: "0 8px 8px 0", background: "var(--color-bg-card)" }}>
         {selected ? (
           <DetailPanel
             key={`${selected.type}-${selected.id}`}
@@ -1140,71 +1140,224 @@ function StoryDetailPanel({ projectId, storyId, displayId, onSaved }: { projectI
 
   if (isLoading || !loaded) return <PanelLoading />;
 
-  return (
-    <div style={panelStyle}>
-      <PanelHeader icon="👤" displayType="사용자스토리" displayId={displayId} name={name} onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <PanelField label="스토리명 *">
-          <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
-        </PanelField>
-        <PanelField label="페르소나">
-          <textarea value={persona} onChange={(e) => setPersona(e.target.value)} rows={3} style={{ ...inputStyle, resize: "vertical" }} />
-        </PanelField>
-        <PanelField label="시나리오">
-          <textarea value={scenario} onChange={(e) => setScenario(e.target.value)} rows={3} style={{ ...inputStyle, resize: "vertical" }} />
-        </PanelField>
+  // 인수기준 행 수정 헬퍼
+  const updateAc = (idx: number, field: "given" | "when" | "then", value: string) => {
+    const updated = [...acRows];
+    updated[idx] = { ...updated[idx], [field]: value };
+    setAcRows(updated);
+  };
 
-        {/* 인수기준 */}
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: "var(--color-text-secondary)" }}>
-            인수기준 (Given / When / Then)
+  const acLabelColors = { given: "#1565c0", when: "#2e7d32", then: "#6a1b9a" };
+  const acLabels      = { given: "사전조건", when: "행동", then: "기대결과" };
+  const acPlaceholders = { given: "사전 조건...", when: "사용자 행동...", then: "기대 결과..." };
+
+  return (
+    <div style={{ padding: "20px 24px" }}>
+      {/* 상단 헤더 — 스토리 키 + 저장 + 가이드 */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}># {displayId}</span>
+          <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>사용자스토리</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <StoryGuide />
+          <button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} style={{ ...primaryBtnStyle, padding: "7px 20px" }}>
+            {saveMutation.isPending ? "저장 중..." : "저장"}
+          </button>
+        </div>
+      </div>
+
+      {/* 2컬럼 레이아웃 — 좌: Properties / 우: Acceptance Criteria */}
+      <div style={{ display: "flex", gap: 0, minHeight: "calc(100vh - 160px)" }}>
+
+        {/* ── 좌측: Properties ────────────────────────────────────────── */}
+        <div style={{
+          width: 360, minWidth: 320, flexShrink: 0,
+          borderRight: "1px solid var(--color-border)",
+          paddingRight: 28,
+        }}>
+          {/* Properties 섹션 헤더 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 20 }}>
+            <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>ℹ</span>
+            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.05em", color: "var(--color-text-secondary)", textTransform: "uppercase" as const }}>
+              속성
+            </span>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+
+          {/* 스토리명 */}
+          <div style={{ marginBottom: 22 }}>
+            <label style={storyLabelStyle}>스토리명 <span style={{ color: "var(--color-primary, #1976d2)" }}>*</span></label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="스토리명을 입력하세요"
+              style={storyFieldInputStyle}
+            />
+          </div>
+
+          {/* 페르소나 */}
+          <div style={{ marginBottom: 26 }}>
+            <label style={storyLabelStyle}>페르소나</label>
+            <input
+              value={persona}
+              onChange={(e) => setPersona(e.target.value)}
+              placeholder="예: 일반 회원 (신규 및 기존)"
+              style={storyFieldInputStyle}
+            />
+          </div>
+
+          {/* 시나리오 — 별도 섹션 느낌 */}
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+              <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>📋</span>
+              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.05em", color: "var(--color-text-secondary)", textTransform: "uppercase" as const }}>
+                시나리오
+              </span>
+            </div>
+            <textarea
+              value={scenario}
+              onChange={(e) => setScenario(e.target.value)}
+              placeholder="사용자의 행동 흐름을 자연어로 서술하세요."
+              rows={7}
+              style={{
+                width: "100%",
+                padding: "12px 14px",
+                borderRadius: 8,
+                border: "1px solid var(--color-border)",
+                background: "var(--color-bg-muted, #f8f9fb)",
+                color: "var(--color-text-primary)",
+                fontSize: 13,
+                lineHeight: 1.7,
+                resize: "vertical",
+                boxSizing: "border-box",
+                outline: "none",
+              }}
+            />
+          </div>
+        </div>
+
+        {/* ── 우측: Acceptance Criteria ────────────────────────────────── */}
+        <div style={{ flex: 1, paddingLeft: 28, display: "flex", flexDirection: "column" }}>
+          <h3 style={{
+            fontSize: 18, fontWeight: 700, margin: "0 0 24px",
+            color: "var(--color-text-primary)",
+            paddingBottom: 14,
+            borderBottom: "1px solid var(--color-border)",
+          }}>
+            인수기준
+          </h3>
+
+          {/* 인수기준 목록 */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 24 }}>
+            {acRows.length === 0 && (
+              <div style={{
+                padding: "48px 20px", textAlign: "center",
+                color: "var(--color-text-secondary)", fontSize: 13,
+                border: "2px dashed var(--color-border)", borderRadius: 10,
+              }}>
+                인수기준이 없습니다. 아래 버튼으로 추가해 주세요.
+              </div>
+            )}
+
             {acRows.map((row, idx) => (
               <div key={idx} style={{
-                border:       "1px solid var(--color-border)",
-                borderRadius: 8,
-                padding:      "12px 14px 10px",
-                background:   "var(--color-bg-muted)",
-                position:     "relative",
+                border: "1px solid var(--color-border)",
+                borderRadius: 10,
+                overflow: "hidden",
+                background: "var(--color-bg-card)",
               }}>
-                {/* 삭제 — 절대 위치로 카드 우상단에 붙임 */}
-                <button
-                  onClick={() => setAcRows(acRows.filter((_, i) => i !== idx))}
-                  style={{ position: "absolute", top: 6, right: 8, background: "none", border: "none", cursor: "pointer", color: "#e53935", fontSize: 16, lineHeight: 1, padding: "2px 4px" }}
-                  title="삭제"
-                >×</button>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-                  {(["given", "when", "then"] as const).map((field, fi) => {
-                    const colors = ["#1565c0", "#2e7d32", "#6a1b9a"];
-                    const labels = ["Given", "When", "Then"];
-                    return (
-                      <div key={field}>
-                        <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 5, color: colors[fi] }}>
-                          {labels[fi]}
-                        </div>
-                        <textarea
-                          value={row[field]}
-                          onChange={(e) => {
-                            const updated = [...acRows];
-                            updated[idx] = { ...updated[idx], [field]: e.target.value };
-                            setAcRows(updated);
-                          }}
-                          rows={4}
-                          style={{ ...inputStyle, resize: "vertical", fontSize: 13, lineHeight: 1.6 }}
-                        />
+                {/* Criterion 헤더 */}
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "10px 16px",
+                  background: "var(--color-bg-muted, #f8f9fb)",
+                  borderBottom: "1px solid var(--color-border)",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{
+                      width: 8, height: 8, borderRadius: "50%",
+                      background: "var(--color-primary, #1976d2)",
+                      display: "inline-block", flexShrink: 0,
+                    }} />
+                    <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", color: "var(--color-text-secondary)", textTransform: "uppercase" as const }}>
+                      기준 #{idx + 1}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setAcRows(acRows.filter((_, i) => i !== idx))}
+                    style={{
+                      background: "none", border: "none", cursor: "pointer",
+                      color: "var(--color-text-secondary)", fontSize: 14, padding: "2px 6px",
+                      borderRadius: 4, opacity: 0.5,
+                    }}
+                    title="삭제"
+                    onMouseEnter={(e) => { e.currentTarget.style.color = "#e53935"; e.currentTarget.style.opacity = "1"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--color-text-secondary)"; e.currentTarget.style.opacity = "0.5"; }}
+                  >×</button>
+                </div>
+
+                {/* Given / When / Then 행 */}
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  {(["given", "when", "then"] as const).map((field, fi) => (
+                    <div
+                      key={field}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 0,
+                        borderBottom: fi < 2 ? "1px solid var(--color-border)" : "none",
+                      }}
+                    >
+                      {/* 라벨 — 컬러 좌측 바 포함 */}
+                      <div style={{
+                        width: 80, flexShrink: 0,
+                        padding: "12px 14px",
+                        fontSize: 12, fontWeight: 700, letterSpacing: "0.03em",
+                        color: acLabelColors[field],
+                        borderLeft: `3px solid ${acLabelColors[field]}`,
+                      }}>
+                        {acLabels[field]}
                       </div>
-                    );
-                  })}
+                      {/* 입력 */}
+                      <input
+                        value={row[field]}
+                        onChange={(e) => updateAc(idx, field, e.target.value)}
+                        placeholder={acPlaceholders[field]}
+                        style={{
+                          flex: 1,
+                          padding: "12px 14px",
+                          border: "none",
+                          background: "transparent",
+                          color: "var(--color-text-primary)",
+                          fontSize: 13,
+                          outline: "none",
+                          lineHeight: 1.5,
+                        }}
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}
           </div>
+
+          {/* 추가 버튼 */}
           <button
             onClick={() => setAcRows([...acRows, { given: "", when: "", then: "" }])}
-            style={{ ...secondaryBtnStyle, fontSize: 12, padding: "6px 14px", marginTop: 10 }}
+            style={{
+              marginTop: 20,
+              width: "100%",
+              padding: "12px 0",
+              borderRadius: 8,
+              border: "none",
+              background: "var(--color-bg-inverse, #1a1a2e)",
+              color: "#fff",
+              fontSize: 13,
+              fontWeight: 700,
+              letterSpacing: "0.05em",
+              cursor: "pointer",
+              textTransform: "uppercase" as const,
+            }}
           >
-            + 인수기준 추가
+            + Append New Criteria
           </button>
         </div>
       </div>
@@ -1262,11 +1415,267 @@ function SaveBar({ onSave, isPending }: { onSave: () => void; isPending: boolean
   );
 }
 
+// ── 사용자스토리 작성 가이드 (팝업) ──────────────────────────────────────────
+
+function StoryGuide() {
+  const [open, setOpen] = useState(false);
+
+  const gwt = (g: string, w: string, t: string) => ({ given: g, when: w, then: t });
+
+  // 예시 데이터 — 3개 스토리, 각각 인수기준 포함
+  const examples = [
+    {
+      title: "멤버 초대",
+      name: "PM이 프로젝트에 새 멤버를 초대할 수 있다",
+      persona: "프로젝트 관리자 (PM)",
+      scenario: "PM이 프로젝트 설정 > 멤버 관리에서 초대 버튼을 클릭하고, 이메일 주소를 입력하여 초대장을 발송한다.",
+      ac: [
+        gwt("PM이 멤버 관리 페이지에 있을 때", "유효한 이메일을 입력하고 초대 버튼을 클릭하면", "초대 메일이 발송되고 초대 현황에 '대기중'으로 표시된다"),
+        gwt("이미 초대된 이메일을 입력했을 때", "초대 버튼을 클릭하면", "\"이미 초대된 이메일입니다\" 메시지가 표시된다"),
+      ],
+    },
+    {
+      title: "비밀번호 재설정",
+      name: "사용자가 비밀번호를 재설정할 수 있다",
+      persona: "일반 사용자",
+      scenario: "사용자가 로그인 페이지에서 '비밀번호 찾기'를 누르고, 가입 이메일을 입력하면 재설정 링크가 발송된다.",
+      ac: [
+        gwt("로그인 페이지에서 '비밀번호 찾기'를 클릭한 상태에서", "가입된 이메일을 입력하고 '링크 발송'을 누르면", "해당 이메일로 재설정 링크가 발송되고 안내 메시지가 표시된다"),
+        gwt("재설정 링크를 클릭하여 재설정 페이지에 있을 때", "새 비밀번호를 입력하고 확인하면", "비밀번호가 변경되고 로그인 페이지로 이동한다"),
+      ],
+    },
+    {
+      title: "요구사항 삭제",
+      name: "관리자가 요구사항을 삭제할 수 있다",
+      persona: "시스템 관리자",
+      scenario: "관리자가 기획 트리에서 불필요한 요구사항을 선택하고 삭제 버튼을 눌러 하위 스토리와 함께 제거한다.",
+      ac: [
+        gwt("하위에 사용자스토리 3건이 연결된 요구사항이 있을 때", "삭제 버튼을 클릭하면", "\"하위 스토리 3건이 함께 삭제됩니다\" 경고가 표시된다"),
+        gwt("삭제 확인 팝업이 표시된 상태에서", "\"삭제\" 버튼을 클릭하면", "요구사항과 하위 스토리가 모두 삭제되고 트리에서 사라진다"),
+      ],
+    },
+  ];
+
+  const labelColor = { given: "#1565c0", when: "#2e7d32", then: "#6a1b9a" };
+  const thStyle: React.CSSProperties = { textAlign: "left", padding: "8px 10px", fontWeight: 700, color: "var(--color-text-primary)", borderBottom: "2px solid var(--color-border)" };
+  const tdStyle: React.CSSProperties = { padding: "8px 10px", borderBottom: "1px solid var(--color-border)", verticalAlign: "top" };
+
+  return (
+    <>
+      {/* 트리거 버튼 — 패널 헤더 아래 간단한 링크 */}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 6,
+          padding: "6px 12px", borderRadius: 6,
+          border: "1px solid var(--color-border)",
+          background: "var(--color-bg-muted, #f5f6f8)",
+          cursor: "pointer", fontSize: 12, color: "var(--color-text-secondary)",
+        }}
+      >
+        <span>💡</span>
+        <span>작성 가이드 보기</span>
+      </button>
+
+      {/* 팝업 오버레이 */}
+      {open && (
+        <div
+          onClick={() => setOpen(false)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "min(860px, 90vw)", maxHeight: "85vh", overflowY: "auto",
+              background: "var(--color-bg-card, #fff)", borderRadius: 12,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+              padding: "28px 32px",
+            }}
+          >
+            {/* 헤더 */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 20 }}>💡</span>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                  사용자스토리 작성 가이드
+                </h2>
+              </div>
+              <button
+                onClick={() => setOpen(false)}
+                style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "var(--color-text-secondary)", padding: "4px 8px", lineHeight: 1 }}
+              >×</button>
+            </div>
+
+            {/* 필드 설명 */}
+            <div style={{ marginBottom: 24 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: "var(--color-text-primary)" }}>각 필드 설명</h3>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...thStyle, width: 100 }}>필드</th>
+                    <th style={thStyle}>설명</th>
+                    <th style={thStyle}>작성 팁</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={{ ...tdStyle, fontWeight: 600 }}>스토리명</td>
+                    <td style={tdStyle}>사용자 관점에서 기능을 한 문장으로 요약</td>
+                    <td style={{ ...tdStyle, fontSize: 12, color: "var(--color-text-secondary)" }}>&ldquo;[누가] [무엇을] 할 수 있다&rdquo; 형태로 작성</td>
+                  </tr>
+                  <tr>
+                    <td style={{ ...tdStyle, fontWeight: 600 }}>페르소나</td>
+                    <td style={tdStyle}>이 기능의 주요 사용자/역할</td>
+                    <td style={{ ...tdStyle, fontSize: 12, color: "var(--color-text-secondary)" }}>역할명 + 부연설명 (예: &ldquo;PM (프로젝트 관리자)&rdquo;)</td>
+                  </tr>
+                  <tr>
+                    <td style={{ ...tdStyle, fontWeight: 600 }}>시나리오</td>
+                    <td style={tdStyle}>사용자의 행동 흐름을 자연어로 서술</td>
+                    <td style={{ ...tdStyle, fontSize: 12, color: "var(--color-text-secondary)" }}>시간 순서대로 2~3문장이 적당</td>
+                  </tr>
+                  <tr>
+                    <td style={{ ...tdStyle, fontWeight: 600 }}>인수기준</td>
+                    <td style={tdStyle}>기능이 &ldquo;완료&rdquo;되었다고 판단할 수 있는 검증 조건</td>
+                    <td style={{ ...tdStyle, fontSize: 12, color: "var(--color-text-secondary)" }}>정상 케이스 + 예외 케이스를 각각 작성하면 좋음</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Given/When/Then 설명 */}
+            <div style={{
+              marginBottom: 24, padding: "14px 16px", borderRadius: 8,
+              background: "var(--color-bg-muted, #f5f6f8)",
+              border: "1px solid var(--color-border)",
+            }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: "var(--color-text-primary)" }}>
+                인수기준 — Given / When / Then 이란?
+              </h3>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, fontSize: 13 }}>
+                <div>
+                  <div style={{ fontWeight: 700, color: labelColor.given, marginBottom: 4 }}>Given (사전 조건)</div>
+                  <div style={{ color: "var(--color-text-secondary)", lineHeight: 1.6 }}>시나리오 시작 전의 상태<br />&ldquo;~한 상황에서&rdquo;</div>
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, color: labelColor.when, marginBottom: 4 }}>When (행동)</div>
+                  <div style={{ color: "var(--color-text-secondary)", lineHeight: 1.6 }}>사용자가 수행하는 동작<br />&ldquo;~을 하면&rdquo;</div>
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, color: labelColor.then, marginBottom: 4 }}>Then (기대 결과)</div>
+                  <div style={{ color: "var(--color-text-secondary)", lineHeight: 1.6 }}>시스템의 기대 반응/결과<br />&ldquo;~이 되어야 한다&rdquo;</div>
+                </div>
+              </div>
+            </div>
+
+            {/* 작성 예시 — 3개 */}
+            <div>
+              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 14, color: "var(--color-text-primary)" }}>
+                작성 예시
+              </h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {examples.map((ex, i) => (
+                  <div key={i} style={{
+                    border: "1px solid var(--color-border)", borderRadius: 8,
+                    overflow: "hidden",
+                  }}>
+                    {/* 예시 헤더 */}
+                    <div style={{
+                      padding: "10px 14px", fontSize: 13, fontWeight: 700,
+                      background: "var(--color-bg-muted, #f5f6f8)",
+                      borderBottom: "1px solid var(--color-border)",
+                      color: "var(--color-text-primary)",
+                    }}>
+                      예시 {i + 1}. {ex.title}
+                    </div>
+                    <div style={{ padding: "14px 16px", fontSize: 13, lineHeight: 1.7 }}>
+                      {/* 필드들 */}
+                      <div style={{ display: "grid", gridTemplateColumns: "80px 1fr", gap: "6px 12px", marginBottom: 14 }}>
+                        <span style={{ fontWeight: 600, color: "var(--color-text-secondary)" }}>스토리명</span>
+                        <span>{ex.name}</span>
+                        <span style={{ fontWeight: 600, color: "var(--color-text-secondary)" }}>페르소나</span>
+                        <span>{ex.persona}</span>
+                        <span style={{ fontWeight: 600, color: "var(--color-text-secondary)" }}>시나리오</span>
+                        <span>{ex.scenario}</span>
+                      </div>
+                      {/* 인수기준 */}
+                      <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: "var(--color-text-secondary)" }}>인수기준</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {ex.ac.map((ac, j) => (
+                          <div key={j} style={{
+                            display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10,
+                            padding: "10px 12px", borderRadius: 6,
+                            background: "var(--color-bg-muted, #f5f6f8)",
+                            fontSize: 12, lineHeight: 1.6,
+                          }}>
+                            <div>
+                              <div style={{ fontWeight: 700, color: labelColor.given, marginBottom: 3 }}>Given</div>
+                              <div style={{ color: "var(--color-text-secondary)" }}>{ac.given}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 700, color: labelColor.when, marginBottom: 3 }}>When</div>
+                              <div style={{ color: "var(--color-text-secondary)" }}>{ac.when}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 700, color: labelColor.then, marginBottom: 3 }}>Then</div>
+                              <div style={{ color: "var(--color-text-secondary)" }}>{ac.then}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 하단 닫기 */}
+            <div style={{ marginTop: 24, display: "flex", justifyContent: "flex-end" }}>
+              <button onClick={() => setOpen(false)} style={{ ...primaryBtnStyle, padding: "8px 24px", fontSize: 14 }}>
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
 const panelStyle: React.CSSProperties = {
   padding:   "16px 24px",
   maxWidth:  720,
+};
+
+// 사용자스토리 전용 스타일
+const storyLabelStyle: React.CSSProperties = {
+  display:       "block",
+  fontSize:      11,
+  fontWeight:    600,
+  color:         "var(--color-text-secondary)",
+  marginBottom:  6,
+  letterSpacing: "0.03em",
+  textTransform: "uppercase",
+};
+
+// 좌측 Properties 입력 필드 — 배경+테두리로 입력 영역 명확히 구분
+const storyFieldInputStyle: React.CSSProperties = {
+  width:        "100%",
+  padding:      "10px 14px",
+  borderRadius: 8,
+  border:       "1px solid var(--color-border)",
+  background:   "var(--color-bg-muted, #f8f9fb)",
+  color:        "var(--color-text-primary)",
+  fontSize:     14,
+  fontWeight:   500,
+  outline:      "none",
+  boxSizing:    "border-box",
 };
 
 const inputStyle: React.CSSProperties = {
