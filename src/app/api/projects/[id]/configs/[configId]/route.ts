@@ -13,7 +13,7 @@ type RouteParams = { params: Promise<{ id: string; configId: string }> };
 
 // ── PUT: 설정 항목 메타 수정 (그룹, 키, 설정명, 설명, 유형, 기본값, 선택지) ──
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, configId } = await params;
@@ -82,7 +82,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, configId } = await params;

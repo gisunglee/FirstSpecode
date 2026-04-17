@@ -27,7 +27,7 @@ type RequestBody = {
 };
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId } = await params;

@@ -18,7 +18,7 @@ type RouteParams = { params: Promise<{ id: string }> };
 
 // ─── GET: 컬럼 매핑 목록 조회 ────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId } = await params;
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // ─── POST: 컬럼 매핑 전체 교체 저장 ──────────────────────────────────────────
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId } = await params;

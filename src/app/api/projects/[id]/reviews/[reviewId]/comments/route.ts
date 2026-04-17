@@ -13,7 +13,7 @@ type RouteParams = { params: Promise<{ id: string; reviewId: string }> };
 
 // ─── GET: 코멘트 목록 ────────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, reviewId } = await params;
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // ─── POST: 코멘트 작성 ──────────────────────────────────────────────────────
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, reviewId } = await params;

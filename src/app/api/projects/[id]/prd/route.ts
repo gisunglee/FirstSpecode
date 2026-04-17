@@ -24,7 +24,7 @@ function push(parts: string[], dc: string | null | undefined) {
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId } = await params;

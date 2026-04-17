@@ -23,7 +23,7 @@ const ALLOWED_TYPES    = ["image/jpeg", "image/png"];
 const UPLOAD_DIR       = join(process.cwd(), "public", "uploads", "profiles");
 
 export async function PUT(request: NextRequest) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   let formData: FormData;

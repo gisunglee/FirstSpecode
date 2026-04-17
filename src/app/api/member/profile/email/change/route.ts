@@ -20,7 +20,7 @@ import { generateVerifyToken, sendEmailChangeEmail } from "@/lib/auth";
 const VERIFY_EXPIRES_MS = 60 * 60 * 1000; // 1시간
 
 export async function POST(request: NextRequest) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   let body: unknown;

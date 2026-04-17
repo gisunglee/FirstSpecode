@@ -17,7 +17,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 
 // ─── 타입 ────────────────────────────────────────────────────────────────
-type Tab = "basic" | "security" | "social";
+type Tab = "basic" | "security" | "social" | "api-keys";
 
 interface ProfileData {
   name:         string;
@@ -97,8 +97,8 @@ function ProfileSettingsInner() {
       <div style={{ padding: "0 24px 24px", maxWidth: 640 }}>
       {/* 탭 네비게이션 */}
       <div style={{ display: "flex", gap: 4, borderBottom: "1px solid var(--color-border)", marginBottom: 32 }}>
-        {(["basic", "security", "social"] as Tab[]).map((tab) => {
-          const labels: Record<Tab, string> = { basic: "기본정보", security: "보안", social: "소셜연동" };
+        {(["basic", "security", "social", "api-keys"] as Tab[]).map((tab) => {
+          const labels: Record<Tab, string> = { basic: "기본정보", security: "보안", social: "소셜연동", "api-keys": "API 키" };
           return (
             <button
               key={tab}
@@ -126,6 +126,7 @@ function ProfileSettingsInner() {
         {activeTab === "basic"    && <BasicTab    profile={profile} onRefresh={fetchProfile} />}
         {activeTab === "security" && <SecurityTab hasPassword={profile.hasPassword} />}
         {activeTab === "social"   && <SocialTab   social={profile.hasSocialAccounts} hasPassword={profile.hasPassword} onRefresh={fetchProfile} />}
+        {activeTab === "api-keys" && <ApiKeysTab />}
       </div>
 
       {/* 위험 영역 */}
@@ -551,6 +552,258 @@ function SocialTab({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// API 키 탭
+// ─────────────────────────────────────────────────────────────────────────
+interface ApiKeyItem {
+  apiKeyId: string;
+  keyPrefix: string;
+  keyName: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+function ApiKeysTab() {
+  const [keys, setKeys] = useState<ApiKeyItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [creating, setCreating] = useState(false);
+  // 생성 직후 원문 표시용 (1회만 — 이후 조회 불가)
+  const [createdRawKey, setCreatedRawKey] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // 키 목록 조회
+  const fetchKeys = useCallback(async () => {
+    try {
+      const res = await authFetch("/api/auth/api-keys");
+      if (res.ok) {
+        const body = await res.json();
+        setKeys(body.data?.items ?? []);
+      }
+    } catch { /* 무시 */ }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchKeys(); }, [fetchKeys]);
+
+  // 키 생성
+  const handleCreate = async () => {
+    if (!newKeyName.trim()) return;
+    setCreating(true);
+    try {
+      const res = await authFetch("/api/auth/api-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keyName: newKeyName.trim() }),
+      });
+      const body = await res.json();
+      if (res.ok) {
+        setCreatedRawKey(body.data.rawKey);
+        setNewKeyName("");
+        setShowCreate(false);
+        fetchKeys();
+      } else {
+        toast.error(body.message || "키 생성 실패");
+      }
+    } catch {
+      toast.error("키 생성 중 오류가 발생했습니다.");
+    }
+    setCreating(false);
+  };
+
+  // 키 복사
+  const handleCopy = async () => {
+    if (!createdRawKey) return;
+    await navigator.clipboard.writeText(createdRawKey);
+    setCopied(true);
+    toast.success("API 키가 클립보드에 복사되었습니다.");
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // 키 폐기
+  const handleRevoke = async (keyId: string, keyName: string) => {
+    if (!confirm(`"${keyName}" 키를 폐기하시겠습니까?\n폐기 후 이 키로는 인증할 수 없습니다.`)) return;
+    try {
+      const res = await authFetch(`/api/auth/api-keys/${keyId}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("API 키가 폐기되었습니다.");
+        fetchKeys();
+      } else {
+        const body = await res.json();
+        toast.error(body.message || "폐기 실패");
+      }
+    } catch {
+      toast.error("키 폐기 중 오류가 발생했습니다.");
+    }
+  };
+
+  if (loading) return <div style={{ color: "var(--color-text-secondary)" }}>로딩 중...</div>;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: "var(--text-base)", fontWeight: 600 }}>API 키 관리</h3>
+          <p style={{ margin: "4px 0 0", fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
+            MCP 등 외부 클라이언트에서 SPECODE API에 접근할 때 사용합니다.
+          </p>
+        </div>
+        <button
+          className="sp-btn sp-btn-primary"
+          onClick={() => { setShowCreate(true); setCreatedRawKey(null); }}
+          style={{ fontSize: "var(--text-sm)", whiteSpace: "nowrap" }}
+        >
+          + 키 생성
+        </button>
+      </div>
+
+      {/* 생성 직후 원문 표시 배너 — 이 키는 다시 표시되지 않음 */}
+      {createdRawKey && (
+        <div style={{
+          padding: "16px",
+          background: "var(--color-bg-warning, #fff8e1)",
+          border: "1px solid var(--color-border-warning, #ffe082)",
+          borderRadius: 8,
+        }}>
+          <p style={{ margin: "0 0 8px", fontWeight: 600, fontSize: "var(--text-sm)", color: "var(--color-text-warning, #e65100)" }}>
+            이 키는 다시 표시되지 않습니다. 지금 복사하세요.
+          </p>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <code style={{
+              flex: 1,
+              padding: "8px 12px",
+              background: "var(--color-bg-subtle, #f5f5f5)",
+              borderRadius: 4,
+              fontSize: "var(--text-xs)",
+              fontFamily: "monospace",
+              wordBreak: "break-all",
+            }}>
+              {createdRawKey}
+            </code>
+            <button
+              className="sp-btn sp-btn-secondary"
+              onClick={handleCopy}
+              style={{ fontSize: "var(--text-sm)", whiteSpace: "nowrap" }}
+            >
+              {copied ? "복사됨" : "복사"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 키 생성 폼 */}
+      {showCreate && (
+        <div style={{
+          padding: "16px",
+          border: "1px solid var(--color-border)",
+          borderRadius: 8,
+          display: "flex",
+          gap: 8,
+          alignItems: "flex-end",
+        }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: "block", fontSize: "var(--text-sm)", fontWeight: 500, marginBottom: 4 }}>
+              키 이름
+            </label>
+            <input
+              type="text"
+              value={newKeyName}
+              onChange={(e) => setNewKeyName(e.target.value)}
+              placeholder="예: 내 PC, CI/CD, 팀 공용"
+              maxLength={100}
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                border: "1px solid var(--color-border)",
+                borderRadius: 6,
+                fontSize: "var(--text-sm)",
+                background: "var(--color-bg-input, var(--color-bg))",
+                color: "var(--color-text)",
+              }}
+              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+            />
+          </div>
+          <button
+            className="sp-btn sp-btn-primary"
+            onClick={handleCreate}
+            disabled={creating || !newKeyName.trim()}
+            style={{ fontSize: "var(--text-sm)" }}
+          >
+            {creating ? "생성 중..." : "생성"}
+          </button>
+          <button
+            className="sp-btn sp-btn-secondary"
+            onClick={() => { setShowCreate(false); setNewKeyName(""); }}
+            style={{ fontSize: "var(--text-sm)" }}
+          >
+            취소
+          </button>
+        </div>
+      )}
+
+      {/* 키 목록 */}
+      {keys.length === 0 ? (
+        <div style={{
+          textAlign: "center",
+          padding: "40px 0",
+          color: "var(--color-text-secondary)",
+          fontSize: "var(--text-sm)",
+        }}>
+          등록된 API 키가 없습니다.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {keys.map((k) => (
+            <div
+              key={k.apiKeyId}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "12px 16px",
+                border: "1px solid var(--color-border)",
+                borderRadius: 8,
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>{k.keyName}</span>
+                  <code style={{
+                    fontSize: "var(--text-xs)",
+                    fontFamily: "monospace",
+                    color: "var(--color-text-secondary)",
+                    background: "var(--color-bg-subtle, #f5f5f5)",
+                    padding: "2px 6px",
+                    borderRadius: 3,
+                  }}>
+                    {k.keyPrefix}...
+                  </code>
+                </div>
+                <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary, var(--color-text-secondary))" }}>
+                  생성: {new Date(k.createdAt).toLocaleDateString("ko-KR")}
+                  {k.lastUsedAt && ` · 마지막 사용: ${new Date(k.lastUsedAt).toLocaleDateString("ko-KR")}`}
+                </span>
+              </div>
+              <button
+                className="sp-btn sp-btn-secondary"
+                onClick={() => handleRevoke(k.apiKeyId, k.keyName)}
+                style={{
+                  fontSize: "var(--text-xs)",
+                  color: "var(--color-danger, #e53935)",
+                  borderColor: "var(--color-danger, #e53935)",
+                }}
+              >
+                폐기
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

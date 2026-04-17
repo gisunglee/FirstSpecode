@@ -17,7 +17,7 @@ type RouteParams = { params: Promise<{ id: string; memberId: string }> };
 const VALID_ROLES = ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER", "VIEWER"];
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, memberId } = await params;

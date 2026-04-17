@@ -18,7 +18,7 @@ import { requireAuth } from "@/lib/requireAuth";
 import { verifySocialToken } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   let body: unknown;

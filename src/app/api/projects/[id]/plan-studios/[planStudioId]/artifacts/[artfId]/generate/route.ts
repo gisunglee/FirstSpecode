@@ -20,7 +20,7 @@ import { AI_TASK_REF_TY_ARTF } from "@/constants/planStudio";
 type RouteParams = { params: Promise<{ id: string; planStudioId: string; artfId: string }> };
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
   const { id: projectId, planStudioId, artfId } = await params;
 

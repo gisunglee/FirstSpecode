@@ -13,7 +13,7 @@ import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { requireAuth } from "@/lib/requireAuth";
 
 export async function GET(request: NextRequest) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   try {

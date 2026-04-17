@@ -11,7 +11,7 @@ import { apiSuccess, apiError } from "@/lib/apiResponse";
 type RouteParams = { params: Promise<{ id: string; planStudioId: string; artfId: string }> };
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
   const { id: projectId, planStudioId, artfId } = await params;
 

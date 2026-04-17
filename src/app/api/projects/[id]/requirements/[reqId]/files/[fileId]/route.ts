@@ -12,7 +12,7 @@ import { deleteFile } from "@/lib/fileStorage";
 type RouteParams = { params: Promise<{ id: string; reqId: string; fileId: string }> };
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, reqId, fileId } = await params;

@@ -25,6 +25,7 @@ model TbCmMember {
   passwordResetTokens TbCmPasswordResetToken[]
   refreshTokens       TbCmRefreshToken[]
   socialAccounts      TbCmSocialAccount[]
+  apiKeys             TbCmApiKey[]
   removalNotices      TbPjMemberRemovalNotice[]
   projectMembers      TbPjProjectMember[]
   settingsHistory     TbPjSettingsHistory[]
@@ -806,6 +807,23 @@ model TbDsMemo {
   @@index([prjct_id, creat_dt(sort: Desc)], map: "tb_ds_memo_prjct_dt_idx")
   @@index([prjct_id, ref_ty_code, ref_id], map: "tb_ds_memo_ref_idx")
   @@map("tb_ds_memo")
+}
+
+// ── API 키 — MCP 등 외부 클라이언트 인증용 (서비스 토큰 대체) ────────────
+model TbCmApiKey {
+  api_key_id   String     @id @default(uuid())
+  mber_id      String
+  key_hash     String     @unique
+  key_prefix   String     @db.VarChar(12)
+  key_nm       String     @db.VarChar(100)
+  last_used_dt DateTime?
+  revoke_dt    DateTime?
+  creat_dt     DateTime   @default(now())
+
+  member TbCmMember @relation(fields: [mber_id], references: [mber_id])
+
+  @@index([mber_id], map: "idx_api_key_mber")
+  @@map("tb_cm_api_key")
 }
 
 // ── 구현요청 스냅샷 — 각 계층의 _dc 내용을 요청 시점에 저장 (diff 추적용) ──

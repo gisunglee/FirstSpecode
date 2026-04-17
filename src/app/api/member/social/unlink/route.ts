@@ -15,7 +15,7 @@ import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { requireAuth } from "@/lib/requireAuth";
 
 export async function DELETE(request: NextRequest) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   let body: unknown;

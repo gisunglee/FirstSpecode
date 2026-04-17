@@ -23,7 +23,7 @@ const MIME_MAP: Record<string, string> = {
 };
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, areaId, fileId } = await params;

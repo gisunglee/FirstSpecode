@@ -95,6 +95,23 @@ export function refreshTokenExpiryDate(): Date {
   return d;
 }
 
+// ── API 키 (MCP 등 외부 클라이언트 인증용) ────────────────────────
+
+/** API 키 원문 생성: "spk_" + 32바이트 랜덤 hex (총 68자) */
+export function generateApiKey(): string {
+  return "spk_" + crypto.randomBytes(32).toString("hex");
+}
+
+/** API 키 SHA-256 해시 — DB에 저장할 값 (원문은 저장 금지) */
+export function hashApiKey(rawKey: string): string {
+  return crypto.createHash("sha256").update(rawKey).digest("hex");
+}
+
+/** API 키 prefix 추출 — 목록에서 식별용 ("spk_" + 앞 8자 = 12자) */
+export function getApiKeyPrefix(rawKey: string): string {
+  return rawKey.slice(0, 12);
+}
+
 // ── 이메일 인증 토큰 ──────────────────────────────────────────────
 
 /** 이메일 인증 토큰 원문 생성 (32바이트 랜덤) */

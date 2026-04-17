@@ -13,7 +13,7 @@ import { apiSuccess, apiError } from "@/lib/apiResponse";
 type RouteParams = { params: Promise<{ id: string; functionId: string }> };
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, functionId } = await params;

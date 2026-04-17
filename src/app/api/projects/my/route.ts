@@ -11,7 +11,7 @@ import { requireAuth } from "@/lib/requireAuth";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 export async function GET(request: NextRequest) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   try {

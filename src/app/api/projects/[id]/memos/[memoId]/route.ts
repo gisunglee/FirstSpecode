@@ -13,7 +13,7 @@ type RouteParams = { params: Promise<{ id: string; memoId: string }> };
 
 // ── GET: 단건 조회 + 조회수 증가 ────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, memoId } = await params;
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // ── PUT: 메모 수정 (본인만) ─────────────────────────────────────────────────
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, memoId } = await params;
@@ -127,7 +127,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 // ── DELETE: 메모 삭제 (본인 또는 OWNER/ADMIN) ──────────────────────────────
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, memoId } = await params;

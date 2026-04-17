@@ -14,7 +14,7 @@ type RouteParams = { params: Promise<{ id: string; areaId: string; fileId: strin
 
 // ─── DELETE: 첨부파일 삭제 ────────────────────────────────────────────────────
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, areaId, fileId } = await params;
@@ -49,7 +49,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
 // ─── PATCH: req_ref_yn 토글 ────────────────────────────────────────────────
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, areaId, fileId } = await params;

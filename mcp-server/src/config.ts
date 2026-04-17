@@ -2,26 +2,27 @@
  * config.ts — MCP 서버 환경변수 로드
  *
  * 역할:
- *   - SPECODE API 서버 URL, MCP 포트, JWT 시크릿 등을 환경변수에서 읽음
+ *   - SPECODE API 서버 URL, MCP 포트, 인증 정보를 환경변수에서 읽음
  *   - 필수값 누락 시 서버 기동 단계에서 즉시 에러를 발생시킴
  *
- * 주의:
- *   - ESM에서는 import 시점에 process.env가 아직 세팅 안 됐을 수 있으므로
- *     환경변수 읽기는 함수 호출 시점까지 지연(lazy)시킴
+ * 인증 방식 (둘 중 하나):
+ *   1. API 키 방식: SPECODE_API_KEY (권장 — 사용자별 키 발급)
+ *   2. 서비스 토큰 방식: JWT_SECRET + SERVICE_MBER_ID + SERVICE_EMAIL (레거시)
  *
  * 환경변수:
- *   SPECODE_BASE_URL — SPECODE Next.js 서버 URL (기본: http://localhost:3001)
+ *   SPECODE_BASE_URL — SPECODE Next.js 서버 URL (기본: http://localhost:3000)
  *   MCP_PORT         — MCP 서버 포트 (기본: 3002)
- *   JWT_SECRET       — JWT 서명 키 (SPECODE와 동일한 값)
- *   SERVICE_MBER_ID  — 서비스 계정 회원 ID (개발용)
- *   SERVICE_EMAIL    — 서비스 계정 이메일 (개발용)
+ *   SPECODE_API_KEY  — SPECODE API 키 (spk_... 형식, 프로필에서 발급)
+ *   JWT_SECRET       — JWT 서명 키 (서비스 토큰 방식 — SPECODE_API_KEY 없을 때 fallback)
+ *   SERVICE_MBER_ID  — 서비스 계정 회원 ID (서비스 토큰 방식)
+ *   SERVICE_EMAIL    — 서비스 계정 이메일 (서비스 토큰 방식)
  */
 
 // ─── 환경변수 접근 함수 ─────────────────────────────────────────
 
 /** SPECODE API 서버 base URL */
 export function getBaseUrl(): string {
-  return process.env.SPECODE_BASE_URL || "http://localhost:3001";
+  return process.env.SPECODE_BASE_URL || "http://localhost:3000";
 }
 
 /** MCP 서버 포트 */
@@ -29,7 +30,12 @@ export function getMcpPort(): number {
   return parseInt(process.env.MCP_PORT || "3002", 10);
 }
 
-/** JWT 시크릿 — 서비스 토큰 자체 발급에 사용 */
+/** SPECODE API 키 (spk_... 형식) — 설정되어 있으면 서비스 토큰보다 우선 사용 */
+export function getApiKey(): string {
+  return process.env.SPECODE_API_KEY || "";
+}
+
+/** JWT 시크릿 — 서비스 토큰 자체 발급에 사용 (API 키 없을 때 fallback) */
 export function getJwtSecret(): string {
   return process.env.JWT_SECRET || "";
 }
@@ -47,20 +53,19 @@ export function getServiceEmail(): string {
 // ─── 유효성 검증 ─────────────────────────────────────────────────
 
 /**
- * 서버 기동 전 필수 환경변수 검증
- * — 누락 시 명확한 에러 메시지와 함께 프로세스 종료
+ * 서버 기동 전 인증 환경변수 검증
+ * — SPECODE_API_KEY 또는 (JWT_SECRET + SERVICE_MBER_ID + SERVICE_EMAIL) 중 하나 필수
  */
 export function validateConfig(): void {
-  const missing: string[] = [];
+  const hasApiKey = !!getApiKey();
+  const hasServiceToken = !!getJwtSecret() && !!getServiceMberId() && !!getServiceEmail();
 
-  if (!getJwtSecret()) missing.push("JWT_SECRET");
-  if (!getServiceMberId()) missing.push("SERVICE_MBER_ID");
-  if (!getServiceEmail()) missing.push("SERVICE_EMAIL");
-
-  if (missing.length > 0) {
+  if (!hasApiKey && !hasServiceToken) {
     console.error(
-      `[MCP Server] 필수 환경변수 누락: ${missing.join(", ")}\n` +
-        `.env.local 파일을 확인해 주세요.`
+      `[MCP Server] 인증 환경변수 누락.\n` +
+        `다음 중 하나를 .env.local에 설정해 주세요:\n` +
+        `  1. SPECODE_API_KEY=spk_...  (권장)\n` +
+        `  2. JWT_SECRET + SERVICE_MBER_ID + SERVICE_EMAIL  (레거시)`
     );
     process.exit(1);
   }

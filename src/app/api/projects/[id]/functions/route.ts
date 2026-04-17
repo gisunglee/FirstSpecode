@@ -15,7 +15,7 @@ type RouteParams = { params: Promise<{ id: string }> };
 
 // ─── GET: 기능 목록 조회 ─────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId } = await params;
@@ -161,7 +161,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // ─── POST: 기능 생성 + 이력 ──────────────────────────────────────────────────
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId } = await params;

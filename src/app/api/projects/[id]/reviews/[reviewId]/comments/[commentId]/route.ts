@@ -13,7 +13,7 @@ type RouteParams = { params: Promise<{ id: string; reviewId: string; commentId: 
 
 // ─── PUT: 코멘트 수정 ───────────────────────────────────────────────────────
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, reviewId, commentId } = await params;
@@ -64,7 +64,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 // ─── DELETE: 코멘트 삭제 ─────────────────────────────────────────────────────
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, reviewId, commentId } = await params;

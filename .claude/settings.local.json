@@ -236,7 +236,8 @@
       "mcp__specode__get_design_tree",
       "mcp__specode__get_planning_tree",
       "mcp__specode__list_functions",
-      "mcp__specode__update_function"
+      "mcp__specode__update_function",
+      "Bash(find src/app/api -name \"route.ts\" -exec grep -l \"const auth = requireAuth\\(request\\)\" {} \\\\;)"
     ]
   }
 }

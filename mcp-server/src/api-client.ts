@@ -3,30 +3,35 @@
  *
  * 역할:
  *   - SPECODE Next.js API 서버에 HTTP 요청을 보냄
- *   - JWT 서비스 토큰을 자동 생성하여 Authorization 헤더에 포함
+ *   - 인증: API 키(spk_...) 우선, 없으면 JWT 서비스 토큰 fallback
  *   - 에러 발생 시 명확한 메시지로 래핑
  *
- * 주의:
- *   - 서비스 토큰은 매 요청마다 발급 (1시간 유효 — 캐싱 불필요)
- *   - SPECODE API 응답 형식: { data: T } (성공), { code, message } (에러)
+ * 인증 우선순위:
+ *   1. SPECODE_API_KEY 환경변수 → API 키 그대로 전달
+ *   2. JWT_SECRET + SERVICE_MBER_ID + SERVICE_EMAIL → JWT 서비스 토큰 발급
  */
 
 import jwt from "jsonwebtoken";
 import {
   getBaseUrl,
+  getApiKey,
   getJwtSecret,
   getServiceMberId,
   getServiceEmail,
 } from "./config.js";
 
-// ─── JWT 서비스 토큰 발급 ─────────────────────────────────────────
+// ─── 인증 헤더 값 결정 ───────────────────────────────────────────
 
 /**
- * SPECODE API와 동일한 JWT 서명 방식으로 서비스 토큰 발급
- * — payload: { mberId, email }, 만료: 1시간
- * — SPECODE의 requireAuth()가 검증하는 것과 동일한 형식
+ * Authorization 헤더에 넣을 토큰 값 반환
+ * — API 키가 있으면 그대로, 없으면 JWT 서비스 토큰 발급
  */
-function createServiceToken(): string {
+function getAuthToken(): string {
+  // API 키 우선 (spk_... 형식 그대로 전달)
+  const apiKey = getApiKey();
+  if (apiKey) return apiKey;
+
+  // fallback: JWT 서비스 토큰 자체 발급
   return jwt.sign(
     { mberId: getServiceMberId(), email: getServiceEmail() },
     getJwtSecret(),
@@ -38,7 +43,7 @@ function createServiceToken(): string {
 
 /**
  * SPECODE API 호출 래퍼
- * — 서비스 토큰 자동 포함, 에러 시 명확한 메시지 throw
+ * — 인증 토큰 자동 포함, 에러 시 명확한 메시지 throw
  *
  * @param path  API 경로 (예: "/api/projects")
  * @param init  fetch 옵션 (method, body 등)
@@ -48,7 +53,7 @@ export async function specodeFetch<T = unknown>(
   path: string,
   init?: RequestInit
 ): Promise<T> {
-  const token = createServiceToken();
+  const token = getAuthToken();
   const url = `${getBaseUrl()}${path}`;
 
   const res = await fetch(url, {

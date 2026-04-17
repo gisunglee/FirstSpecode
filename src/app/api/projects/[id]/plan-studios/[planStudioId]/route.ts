@@ -16,7 +16,7 @@ import { AI_TASK_REF_TY_ARTF } from "@/constants/planStudio";
 type RouteParams = { params: Promise<{ id: string; planStudioId: string }> };
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
   const { id: projectId, planStudioId } = await params;
 
@@ -77,7 +77,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
   const { id: projectId, planStudioId } = await params;
 

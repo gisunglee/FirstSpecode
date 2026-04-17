@@ -10,7 +10,7 @@ import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 // ─── GET: 내 프로젝트 목록 ─────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   try {
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
 
 // ─── POST: 프로젝트 생성 ──────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   let body: unknown;

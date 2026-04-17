@@ -186,7 +186,7 @@ async function nextFunctionSortOrder(projectId: string, tx: TxClient): Promise<n
 // ── POST 핸들러 ──────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId } = await params;

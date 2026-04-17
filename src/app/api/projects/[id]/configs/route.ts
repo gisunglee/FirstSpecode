@@ -14,7 +14,7 @@ type RouteParams = { params: Promise<{ id: string }> };
 
 // ── GET: 설정 목록 (그룹별 묶어서 반환) ─────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId } = await params;
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // ── POST: 설정 항목 추가 ────────────────────────────────────────────────────
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId } = await params;
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
 // ── PUT: 설정값 일괄 저장 ───────────────────────────────────────────────────
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId } = await params;

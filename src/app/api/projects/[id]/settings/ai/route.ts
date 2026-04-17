@@ -29,7 +29,7 @@ async function checkAdminAccess(projectId: string, mberId: string) {
 
 // ─── GET: AI 설정 조회 ────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId } = await params;
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // ─── PUT: AI 호출 방식 저장 ───────────────────────────────────────────────
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId } = await params;

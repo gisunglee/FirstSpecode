@@ -19,7 +19,7 @@ type RouteParams = { params: Promise<{ id: string; screenId: string }> };
 
 // ─── GET: 화면 상세 조회 ─────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, screenId } = await params;
@@ -117,7 +117,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // ─── PUT: 화면 수정 + 이력 ───────────────────────────────────────────────────
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, screenId } = await params;
@@ -227,7 +227,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 // ─── DELETE: 화면 삭제 + 이력 ───────────────────────────────────────────────
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, screenId } = await params;

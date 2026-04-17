@@ -23,7 +23,7 @@ import { buildDesignContext } from "@/lib/buildDesignContext";
 type RouteParams = { params: Promise<{ id: string; unitWorkId: string }> };
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, unitWorkId } = await params;

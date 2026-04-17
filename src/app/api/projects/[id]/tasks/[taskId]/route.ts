@@ -15,7 +15,7 @@ type RouteParams = { params: Promise<{ id: string; taskId: string }> };
 
 // ─── GET: 과업 단건 조회 ─────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, taskId } = await params;
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // ─── PUT: 과업 수정 ──────────────────────────────────────────────────────────
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, taskId } = await params;
@@ -107,7 +107,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 // ─── DELETE: 과업 삭제 ───────────────────────────────────────────────────────
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, taskId } = await params;

@@ -15,7 +15,7 @@ type RouteParams = { params: Promise<{ id: string; reqId: string }> };
 
 // ─── GET: 첨부파일 목록 ──────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, reqId } = await params;
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // ─── POST: 첨부파일 업로드 ───────────────────────────────────────────────────
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, reqId } = await params;

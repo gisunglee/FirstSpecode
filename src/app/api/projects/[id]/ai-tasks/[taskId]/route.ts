@@ -13,7 +13,7 @@ import { apiSuccess, apiError } from "@/lib/apiResponse";
 type RouteParams = { params: Promise<{ id: string; taskId: string }> };
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, taskId } = await params;
@@ -103,7 +103,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 // ── PATCH: 상태 직접 수정 ─────────────────────────────────────────────────────
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, taskId } = await params;
@@ -149,7 +149,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 // ── DELETE: AI 태스크 삭제 ────────────────────────────────────────────────────
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = requireAuth(request);
+  const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, taskId } = await params;
