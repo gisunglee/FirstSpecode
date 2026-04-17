@@ -154,17 +154,16 @@ export default function MarkdownEditor({
           className="sp-markdown"
           style={{
             width:        "100%",
-            height:       fullHeight ? "100%" : undefined,
+            height:       fullHeight ? "100%" : (rows * 21),
             padding:      "12px 16px",
             border:       "1px solid var(--color-border)",
             background:   "var(--color-bg-card)",
             color:        "var(--color-text-primary)",
             boxSizing:    "border-box",
-            minHeight:    fullHeight ? 0 : (rows * 21),
-            maxHeight:    fullHeight ? "none" : (rows * 21),
             borderRadius: 6,
             overflowY:    "auto",
             flex:         fullHeight ? 1 : "none",
+            minHeight:    fullHeight ? 0 : undefined,
           }}
           dangerouslySetInnerHTML={{ __html: renderMarkdown(value) || "<p style='color:#aaa;font-size:13px'>내용 없음</p>" }}
         />
@@ -212,8 +211,8 @@ export function MarkdownTabButtons({
   );
   return (
     <div style={{ display: "flex", gap: 2, background: "var(--color-bg-muted)", borderRadius: 7, padding: 3 }}>
-      {btn("edit",    "원문")}
-      {btn("preview", "마크다운")}
+      {btn("edit",    "편집")}
+      {btn("preview", "미리보기")}
     </div>
   );
 }

@@ -16,7 +16,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Theme } from "@/types/layout";
 
-export type BreadcrumbItem = { label: string; href?: string };
+export type BreadcrumbItem = { label: string; href?: string; tag?: string };
 
 type AppState = {
   // 현재 작업 중인 프로젝트 ID (null = 프로젝트 미선택)

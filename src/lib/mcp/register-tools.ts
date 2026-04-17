@@ -24,7 +24,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { specodeFetch } from "./api-client.js";
+import { specodeFetch } from "@/lib/mcp/api-client";
 
 // ─── 공통 헬퍼 ──────────────────────────────────────────────────
 

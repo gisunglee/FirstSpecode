@@ -910,7 +910,9 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
   const [loaded,      setLoaded]      = useState(false);
   // 원문/현행화 탭 — 현행화가 기본 활성
   const [contentTab,  setContentTab]  = useState<"current" | "original">("current");
-  // 분석 메모 / 상세 명세 마크다운 탭
+  // 분석 메모 / 상세 명세 전환 탭
+  const [reqContentTab, setReqContentTab] = useState<"analysis" | "spec">("analysis");
+  // 마크다운 편집/미리보기 탭
   const [analysisTab, setAnalysisTab] = useState<"edit" | "preview">("edit");
   const [specTab,     setSpecTab]     = useState<"edit" | "preview">("edit");
   // 기본 정보 섹션 접힘 — 기본적으로 접혀 있음
@@ -1053,46 +1055,57 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
           )}
         </div>
 
-        {/* 분석 메모 — 원문/마크다운 탭 */}
-        <div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-            <label style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)" }}>분석 메모</label>
-            <div style={{ display: "flex", gap: 2 }}>
-              {(["edit", "preview"] as const).map((t) => (
-                <button key={t} type="button" onClick={() => setAnalysisTab(t)} style={{
-                  padding: "3px 10px", fontSize: 12, borderRadius: 4, cursor: "pointer",
-                  background: analysisTab === t ? "var(--color-primary, #1976d2)" : "var(--color-bg-muted)",
-                  color:      analysisTab === t ? "#fff" : "var(--color-text-secondary)",
-                  border:     "1px solid var(--color-border)",
-                  fontWeight: analysisTab === t ? 600 : 400,
-                }}>
-                  {t === "edit" ? "원문" : "마크다운"}
-                </button>
-              ))}
+        {/* 분석 메모 / 상세 명세 — 탭 전환 */}
+        <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+          {/* 탭 헤더 */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--color-border)", marginBottom: 12 }}>
+            <div style={{ display: "flex" }}>
+              {(["analysis", "spec"] as const).map((tab) => {
+                const label = tab === "analysis" ? "분석 메모" : "상세 명세";
+                const active = reqContentTab === tab;
+                return (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setReqContentTab(tab)}
+                    style={{
+                      padding: "8px 18px", fontSize: 13,
+                      fontWeight: active ? 600 : 400,
+                      color: active ? "var(--color-brand)" : "var(--color-text-secondary)",
+                      background: "none", border: "none",
+                      borderBottom: active ? "2px solid var(--color-brand)" : "2px solid transparent",
+                      cursor: "pointer", marginBottom: -1,
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            {/* 편집/미리보기 전환 버튼 */}
+            <div style={{ display: "flex", gap: 2, marginBottom: 4 }}>
+              {(["edit", "preview"] as const).map((t) => {
+                const currentMdTab = reqContentTab === "analysis" ? analysisTab : specTab;
+                return (
+                  <button key={t} type="button" onClick={() => reqContentTab === "analysis" ? setAnalysisTab(t) : setSpecTab(t)} style={{
+                    padding: "3px 10px", fontSize: 12, borderRadius: 4, cursor: "pointer",
+                    background: currentMdTab === t ? "var(--color-primary, #1976d2)" : "var(--color-bg-muted)",
+                    color:      currentMdTab === t ? "#fff" : "var(--color-text-secondary)",
+                    border:     "1px solid var(--color-border)",
+                    fontWeight: currentMdTab === t ? 600 : 400,
+                  }}>
+                    {t === "edit" ? "편집" : "미리보기"}
+                  </button>
+                );
+              })}
             </div>
           </div>
-          <MarkdownEditor value={analysisCn} onChange={setAnalysisCn} rows={20} placeholder="분석 메모를 입력하세요." tab={analysisTab} onTabChange={setAnalysisTab} />
-        </div>
-
-        {/* 상세 명세 — 원문/마크다운 탭 */}
-        <div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-            <label style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)" }}>상세 명세</label>
-            <div style={{ display: "flex", gap: 2 }}>
-              {(["edit", "preview"] as const).map((t) => (
-                <button key={t} type="button" onClick={() => setSpecTab(t)} style={{
-                  padding: "3px 10px", fontSize: 12, borderRadius: 4, cursor: "pointer",
-                  background: specTab === t ? "var(--color-primary, #1976d2)" : "var(--color-bg-muted)",
-                  color:      specTab === t ? "#fff" : "var(--color-text-secondary)",
-                  border:     "1px solid var(--color-border)",
-                  fontWeight: specTab === t ? 600 : 400,
-                }}>
-                  {t === "edit" ? "원문" : "마크다운"}
-                </button>
-              ))}
-            </div>
-          </div>
-          <MarkdownEditor value={specCn} onChange={setSpecCn} rows={20} placeholder="상세 명세를 입력하세요." tab={specTab} onTabChange={setSpecTab} />
+          {/* 탭 콘텐츠 */}
+          {reqContentTab === "analysis" ? (
+            <MarkdownEditor value={analysisCn} onChange={setAnalysisCn} rows={32} placeholder="분석 메모를 입력하세요." tab={analysisTab} onTabChange={setAnalysisTab} />
+          ) : (
+            <MarkdownEditor value={specCn} onChange={setSpecCn} rows={32} placeholder="상세 명세를 입력하세요." tab={specTab} onTabChange={setSpecTab} />
+          )}
         </div>
       </div>
     </div>
@@ -1147,188 +1160,172 @@ function StoryDetailPanel({ projectId, storyId, displayId, onSaved }: { projectI
     setAcRows(updated);
   };
 
-  // 인수기준 컬러/라벨 정의 — 텍스트 라벨 + 연한 배경 톤
-  const acConfig = {
-    given: { label: "사전조건", color: "#6200EE", bg: "rgba(98,0,238,0.04)", placeholder: "사전 조건을 입력하세요..." },
-    when:  { label: "행동",     color: "#4CAF50", bg: "rgba(76,175,80,0.04)",  placeholder: "사용자 행동을 입력하세요..." },
-    then:  { label: "기대결과", color: "#FF5252", bg: "rgba(255,82,82,0.04)",  placeholder: "기대 결과를 입력하세요..." },
-  };
-
   return (
-    <div style={{ padding: "24px 28px" }}>
-      {/* ── 상단 헤더 ─────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}># {displayId}</span>
-          <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>사용자스토리</span>
+    <div style={panelStyle}>
+      {/* 헤더 — 저장 + 작성 가이드를 함께 배치 */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
+          <span style={{ fontSize: 13, flexShrink: 0 }}>👤</span>
+          <span style={{ fontSize: 11, color: "var(--color-text-secondary)", flexShrink: 0 }}>사용자스토리</span>
+          {displayId && <span style={{ fontSize: 11, fontFamily: "monospace", color: "var(--color-text-secondary)", opacity: 0.6, flexShrink: 0 }}>{displayId}</span>}
+          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name || "(이름 없음)"}</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <StoryGuide />
-          <button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} style={{ ...primaryBtnStyle, padding: "8px 22px", fontSize: 13 }}>
+          <button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} style={{ ...primaryBtnStyle, flexShrink: 0 }}>
             {saveMutation.isPending ? "저장 중..." : "저장"}
           </button>
         </div>
       </div>
 
-      {/* ── 2컬럼 레이아웃 ────────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 0, minHeight: "calc(100vh - 180px)" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* 스토리명 */}
+        <PanelField label="스토리명 *">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="스토리명을 입력하세요" style={inputStyle} />
+        </PanelField>
 
-        {/* ── 좌측: 속성 ─────────────────────────────────────────────── */}
-        <div style={{ width: 380, minWidth: 320, flexShrink: 0, borderRight: "1px solid #EEEEEE", paddingRight: 32 }}>
-          {/* 섹션 헤더 */}
-          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: 20, letterSpacing: "0.02em" }}>
-            속성
+        {/* 페르소나 / 시나리오 — 2행 */}
+        <PanelField label="페르소나">
+          <input value={persona} onChange={(e) => setPersona(e.target.value)} placeholder="예: 일반 회원 (신규 및 기존)" style={inputStyle} />
+        </PanelField>
+        <PanelField label="시나리오">
+          <textarea value={scenario} onChange={(e) => setScenario(e.target.value)} placeholder="사용자의 행동 흐름을 자연어로 서술하세요." rows={5} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.7 }} />
+        </PanelField>
+
+        {/* 인수기준 (Given / When / Then) */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <label style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)" }}>인수기준 (Given / When / Then)</label>
+            <button
+              onClick={() => setAcRows([...acRows, { given: "", when: "", then: "" }])}
+              style={addBtnStyle}
+            >
+              + 추가
+            </button>
           </div>
 
-          {/* 스토리명 */}
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 6 }}>
-              스토리명 <span style={{ color: "#FF5252" }}>*</span>
-            </label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="스토리명을 입력하세요"
-              style={{
-                width: "100%", padding: "10px 12px", borderRadius: 4,
-                border: "1px solid #EEEEEE", background: "#fff",
-                color: "var(--color-text-primary)", fontSize: 14,
-                outline: "none", boxSizing: "border-box",
-              }}
-            />
-          </div>
+          {acRows.length === 0 && (
+            <div style={{
+              padding: "32px 20px", textAlign: "center",
+              color: "var(--color-text-secondary)", fontSize: 13,
+              border: "2px dashed var(--color-border)", borderRadius: 8,
+              background: "var(--color-bg-muted)",
+            }}>
+              인수기준이 없습니다. 추가 버튼을 클릭해 주세요.
+            </div>
+          )}
 
-          {/* 페르소나 */}
-          <div style={{ marginBottom: 24 }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 6 }}>
-              페르소나
-            </label>
-            <input
-              value={persona}
-              onChange={(e) => setPersona(e.target.value)}
-              placeholder="예: 일반 회원 (신규 및 기존)"
-              style={{
-                width: "100%", padding: "10px 12px", borderRadius: 4,
-                border: "1px solid #EEEEEE", background: "#fff",
-                color: "var(--color-text-primary)", fontSize: 14,
-                outline: "none", boxSizing: "border-box",
-              }}
-            />
-          </div>
-
-          {/* 시나리오 */}
-          <div>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 6 }}>
-              시나리오
-            </label>
-            <textarea
-              value={scenario}
-              onChange={(e) => setScenario(e.target.value)}
-              placeholder="사용자의 행동 흐름을 자연어로 서술하세요."
-              rows={8}
-              style={{
-                width: "100%", padding: "10px 12px", borderRadius: 4,
-                border: "1px solid #EEEEEE", background: "#fff",
-                color: "var(--color-text-primary)", fontSize: 13, lineHeight: 1.7,
-                resize: "vertical", boxSizing: "border-box", outline: "none",
-              }}
-            />
-          </div>
-        </div>
-
-        {/* ── 우측: 인수기준 ──────────────────────────────────────────── */}
-        <div style={{ flex: 1, paddingLeft: 32, display: "flex", flexDirection: "column" }}>
-          <h3 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 20px", color: "var(--color-text-primary)" }}>
-            인수기준
-          </h3>
-
-          {/* 인수기준 카드 목록 */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 20 }}>
-            {acRows.length === 0 && (
+          {acRows.length > 0 && (
+            <div style={{
+              border: "1px solid var(--color-border)",
+              borderRadius: 8,
+              overflow: "hidden",
+            }}>
+              {/* 컬럼 헤더 — 한 번만 표시 */}
               <div style={{
-                padding: "48px 20px", textAlign: "center",
-                color: "var(--color-text-secondary)", fontSize: 13,
-                border: "2px dashed #E0E0E0", borderRadius: 8,
+                display: "grid",
+                gridTemplateColumns: "28px 1fr 1fr 1fr",
+                gap: 0,
+                background: "var(--color-bg-muted)",
+                borderBottom: "1px solid var(--color-border)",
               }}>
-                인수기준이 없습니다. 아래 버튼으로 추가해 주세요.
+                <div />
+                <div style={{ padding: "8px 10px", fontSize: 11, fontWeight: 700, color: "#1565c0" }}>Given (사전조건)</div>
+                <div style={{ padding: "8px 10px", fontSize: 11, fontWeight: 700, color: "#2e7d32" }}>When (행동)</div>
+                <div style={{ padding: "8px 10px", fontSize: 11, fontWeight: 700, color: "#6a1b9a" }}>Then (기대결과)</div>
               </div>
-            )}
 
-            {acRows.map((row, idx) => (
-              <div key={idx} style={{
-                border: "1px solid #E0E0E0", borderRadius: 8,
-                background: "#fff", overflow: "hidden",
-              }}>
-                {/* 기준 헤더 */}
-                <div style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: "10px 16px",
-                  borderBottom: "1px solid #EEEEEE",
-                  background: "#FAFAFA",
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#1976d2", display: "inline-block" }} />
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)" }}>
-                      기준 #{idx + 1}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => setAcRows(acRows.filter((_, i) => i !== idx))}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "#bbb", fontSize: 16, padding: "2px 6px", lineHeight: 1 }}
-                    title="삭제"
-                    onMouseEnter={(e) => { e.currentTarget.style.color = "#e53935"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = "#bbb"; }}
-                  >×</button>
-                </div>
-
-                {/* Given / When / Then — 각 행에 명확한 입력 필드 */}
-                <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
-                  {(["given", "when", "then"] as const).map((field) => {
-                    const cfg = acConfig[field];
-                    return (
-                      <div key={field} style={{ display: "flex", alignItems: "flex-start", gap: 0 }}>
-                        {/* 컬러 텍스트 라벨 */}
-                        <div style={{
-                          width: 72, flexShrink: 0, paddingTop: 10,
-                          fontSize: 12, fontWeight: 700, color: cfg.color,
-                        }}>
-                          {cfg.label}
-                        </div>
-                        {/* 입력 필드 — 명확한 테두리 + 연한 배경 */}
-                        <input
-                          value={row[field]}
-                          onChange={(e) => updateAc(idx, field, e.target.value)}
-                          placeholder={cfg.placeholder}
-                          style={{
-                            flex: 1, padding: "9px 12px", borderRadius: 4,
-                            border: "1px solid #E0E0E0", background: cfg.bg,
-                            color: "var(--color-text-primary)", fontSize: 13,
-                            outline: "none", boxSizing: "border-box",
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* 추가 버튼 */}
-          <button
-            onClick={() => setAcRows([...acRows, { given: "", when: "", then: "" }])}
-            style={{
-              marginTop: 20, width: "100%", padding: "11px 0",
-              borderRadius: 6, border: "1px solid #E0E0E0",
-              background: "#FAFAFA", color: "var(--color-text-secondary)",
-              fontSize: 13, fontWeight: 600, cursor: "pointer",
-              letterSpacing: "0.02em",
-            }}
-          >
-            + 인수기준 추가
-          </button>
+              {/* 인수기준 행들 */}
+              {acRows.map((row, idx) => (
+                <AcRowItem
+                  key={idx}
+                  row={row}
+                  idx={idx}
+                  total={acRows.length}
+                  onUpdate={(field, value) => updateAc(idx, field, value)}
+                  onDelete={() => setAcRows(acRows.filter((_, i) => i !== idx))}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── 인수기준 행 컴포넌트 ──────────────────────────────────────────────────────
+
+function AcRowItem({ row, idx, total, onUpdate, onDelete }: {
+  row:      AcRow;
+  idx:      number;
+  total:    number;
+  onUpdate: (field: "given" | "when" | "then", value: string) => void;
+  onDelete: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <div
+      style={{
+        display:      "grid",
+        gridTemplateColumns: "28px 1fr 1fr 1fr",
+        gap:          0,
+        borderBottom: idx < total - 1 ? "1px solid var(--color-border)" : "none",
+        background:   hovered ? "var(--color-bg-muted)" : "var(--color-bg-card)",
+        transition:   "background 0.12s",
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* 좌측 번호 + 삭제 버튼 (세로 배치) */}
+      <div style={{
+        display:        "flex",
+        flexDirection:  "column",
+        alignItems:     "center",
+        paddingTop:     12,
+        gap:            4,
+      }}>
+        <span style={{
+          fontSize:   11,
+          fontWeight: 700,
+          color:      "var(--color-text-secondary)",
+          opacity:    0.5,
+        }}>
+          {idx + 1}
+        </span>
+        {/* 삭제 — 호버 시에만 표시 */}
+        <button
+          onClick={onDelete}
+          style={{
+            background:  "none",
+            border:      "none",
+            cursor:      "pointer",
+            color:       hovered ? "#e53935" : "transparent",
+            fontSize:    13,
+            lineHeight:  1,
+            padding:     "2px",
+            transition:  "color 0.12s",
+          }}
+          title="삭제"
+        >×</button>
+      </div>
+
+      {/* Given / When / Then 입력 */}
+      {(["given", "when", "then"] as const).map((field) => {
+        const placeholders: Record<string, string> = { given: "사전 조건...", when: "사용자 행동...", then: "기대 결과..." };
+        return (
+          <div key={field} style={{ padding: "8px 6px" }}>
+            <textarea
+              value={row[field]}
+              onChange={(e) => onUpdate(field, e.target.value)}
+              placeholder={placeholders[field]}
+              rows={4}
+              style={{ ...inputStyle, resize: "vertical", fontSize: 13, lineHeight: 1.6, border: "1px solid var(--color-border)" }}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1430,20 +1427,21 @@ function StoryGuide() {
 
   return (
     <>
-      {/* 트리거 버튼 — 패널 헤더 아래 간단한 링크 */}
+      {/* 트리거 — 타이틀 옆 텍스트 링크 */}
       <button
         type="button"
         onClick={() => setOpen(true)}
         style={{
-          display: "inline-flex", alignItems: "center", gap: 6,
-          padding: "6px 12px", borderRadius: 6,
-          border: "1px solid var(--color-border)",
-          background: "var(--color-bg-muted, #f5f6f8)",
-          cursor: "pointer", fontSize: 12, color: "var(--color-text-secondary)",
+          display: "inline-flex", alignItems: "center", gap: 4,
+          padding: 0, border: "none", background: "none",
+          cursor: "pointer", fontSize: 12,
+          color: "var(--color-primary, #1976d2)",
+          textDecoration: "none",
         }}
+        onMouseEnter={(e) => { e.currentTarget.style.textDecoration = "underline"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.textDecoration = "none"; }}
       >
-        <span>💡</span>
-        <span>작성 가이드 보기</span>
+        작성 가이드
       </button>
 
       {/* 팝업 오버레이 */}
@@ -1459,14 +1457,15 @@ function StoryGuide() {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              width: "min(860px, 90vw)", maxHeight: "85vh", overflowY: "auto",
+              width: "min(860px, 90vw)", maxHeight: "85vh",
               background: "var(--color-bg-card, #fff)", borderRadius: 12,
               boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
-              padding: "28px 32px",
+              display: "flex", flexDirection: "column",
+              overflow: "hidden",
             }}
           >
-            {/* 헤더 */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+            {/* 헤더 — sticky */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 32px 16px", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 20 }}>💡</span>
                 <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-text-primary)" }}>
@@ -1478,6 +1477,9 @@ function StoryGuide() {
                 style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "var(--color-text-secondary)", padding: "4px 8px", lineHeight: 1 }}
               >×</button>
             </div>
+
+            {/* 스크롤 영역 */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "20px 32px 28px" }}>
 
             {/* 필드 설명 */}
             <div style={{ marginBottom: 24 }}>
@@ -1607,6 +1609,8 @@ function StoryGuide() {
                 닫기
               </button>
             </div>
+
+            </div>{/* 스크롤 영역 끝 */}
           </div>
         </div>
       )}
@@ -1618,33 +1622,9 @@ function StoryGuide() {
 
 const panelStyle: React.CSSProperties = {
   padding:   "16px 24px",
-  maxWidth:  720,
+  maxWidth:  828,
 };
 
-// 사용자스토리 전용 스타일
-const storyLabelStyle: React.CSSProperties = {
-  display:       "block",
-  fontSize:      11,
-  fontWeight:    600,
-  color:         "var(--color-text-secondary)",
-  marginBottom:  6,
-  letterSpacing: "0.03em",
-  textTransform: "uppercase",
-};
-
-// 좌측 Properties 입력 필드 — 배경+테두리로 입력 영역 명확히 구분
-const storyFieldInputStyle: React.CSSProperties = {
-  width:        "100%",
-  padding:      "10px 14px",
-  borderRadius: 8,
-  border:       "1px solid var(--color-border)",
-  background:   "var(--color-bg-muted, #f8f9fb)",
-  color:        "var(--color-text-primary)",
-  fontSize:     14,
-  fontWeight:   500,
-  outline:      "none",
-  boxSizing:    "border-box",
-};
 
 const inputStyle: React.CSSProperties = {
   width:        "100%",

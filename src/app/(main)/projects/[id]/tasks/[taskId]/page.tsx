@@ -169,18 +169,16 @@ function TaskDetailPageInner() {
   // - 신규 등록 모드에서는 하위로 이동할 맥락이 없으므로 링크를 생략한다.
   useEffect(() => {
     const items = [
-      // 상위: 과업 목록
-      { label: "과업", href: `/projects/${projectId}/tasks` },
       // 현재: 과업 상세 (href 없음 = 현재 위치 표시)
-      { label: isNew ? "신규 등록" : (taskDetail?.displayId ?? "편집") },
+      { label: isNew ? "신규 등록" : (taskDetail?.name ?? "편집"), tag: "과업" },
       // 하위: 요구사항 목록 (수정 모드에서만 노출)
       ...(isNew
         ? []
-        : [{ label: "요구사항 목록", href: `/projects/${projectId}/requirements` }]),
+        : [{ label: "요구사항 목록", href: `/projects/${projectId}/requirements?taskId=${taskId}` }]),
     ];
     setBreadcrumb(items);
     return () => setBreadcrumb([]);
-  }, [projectId, isNew, taskDetail?.displayId, setBreadcrumb]);
+  }, [projectId, taskId, isNew, taskDetail?.name, setBreadcrumb]);
 
   // ── 로딩 ───────────────────────────────────────────────────────────────────
   if (!isNew && isLoading) {

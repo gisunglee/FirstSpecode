@@ -185,16 +185,14 @@ function UserStoryDetailPageInner() {
     const items = [
       // 상위 과업 (taskId + taskName 둘 다 있을 때만 링크)
       ...(detail?.taskId && detail?.taskName
-        ? [{ label: detail.taskName, href: `/projects/${projectId}/tasks/${detail.taskId}` }]
+        ? [{ label: detail.taskName, href: `/projects/${projectId}/tasks/${detail.taskId}`, tag: "과업" }]
         : []),
       // 상위 요구사항
       ...(detail?.requirementId && detail?.requirementName
-        ? [{ label: detail.requirementName, href: `/projects/${projectId}/requirements/${detail.requirementId}` }]
+        ? [{ label: detail.requirementName, href: `/projects/${projectId}/requirements/${detail.requirementId}`, tag: "요구사항" }]
         : []),
-      // 사용자스토리 목록 진입점
-      { label: "사용자스토리", href: `/projects/${projectId}/user-stories` },
       // 현재 사용자스토리 (href 없음 = 현재 위치)
-      { label: isNew ? "신규 등록" : (detail?.displayId ?? "편집") },
+      { label: isNew ? "신규 등록" : (detail?.name ?? "편집"), tag: "스토리" },
     ];
     setBreadcrumb(items);
     return () => setBreadcrumb([]);
@@ -202,7 +200,7 @@ function UserStoryDetailPageInner() {
     projectId, isNew,
     detail?.taskId, detail?.taskName,
     detail?.requirementId, detail?.requirementName,
-    detail?.displayId,
+    detail?.name,
     setBreadcrumb,
   ]);
 

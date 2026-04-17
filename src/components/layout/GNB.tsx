@@ -237,7 +237,7 @@ export default function GNB() {
                         ›
                       </span>
                     )}
-                    <BreadcrumbChip label={item.label} href={item.href} isLast={isLast} onNavigate={(h) => router.push(h)} />
+                    <BreadcrumbChip label={item.label} href={item.href} tag={item.tag} isLast={isLast} onNavigate={(h) => router.push(h)} />
                   </span>
                 );
               })}
@@ -377,25 +377,53 @@ const CHIP_COLORS: Record<ChipType, { bg: string; color: string }> = {
   TEXT: { bg: "#f5f5f5", color: "#757575" },
 };
 
-function BreadcrumbChip({ label, href, isLast, onNavigate }: {
+// tag별 색상 — 브레드크럼 아이템에 tag 속성으로 전달
+const TAG_COLORS: Record<string, { bg: string; color: string }> = {
+  과업:       { bg: "#e3f2fd", color: "#1565c0" },
+  요구사항:   { bg: "#eceff1", color: "#455a64" },
+  스토리:     { bg: "#f3e5f5", color: "#6a1b9a" },
+  화면:       { bg: "#e8f5e9", color: "#2e7d32" },
+  영역:       { bg: "#fff3e0", color: "#e65100" },
+  기능:       { bg: "#f3e5f5", color: "#6a1b9a" },
+};
+
+function BreadcrumbChip({ label, href, tag, isLast, onNavigate }: {
   label:      string;
   href?:      string;
+  tag?:       string;
   isLast:     boolean;
   onNavigate: (href: string) => void;
 }) {
   const { type, badge, rest } = detectChipType(label);
   const color = CHIP_COLORS[type];
+  const tagColor = tag ? TAG_COLORS[tag] : undefined;
   const clickable = !!href;
+
+  // 현재 위치 = href 없는 항목
+  const isCurrent = !clickable;
 
   const content = (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 6,
       padding: "3px 10px", borderRadius: 14,
       fontSize: 12, lineHeight: 1.2,
-      background: isLast && !clickable ? color.bg : "transparent",
-      border: `1px solid ${isLast && !clickable ? color.color + "30" : "transparent"}`,
+      background: "transparent",
+      border: "1px solid transparent",
       transition: "all 0.15s",
     }}>
+      {/* tag 배지 — badge(ID prefix)가 없고 tag가 있을 때 표시 */}
+      {!badge && tag && (
+        <span style={{
+          fontSize: 10, fontWeight: 600,
+          padding: "1px 5px", borderRadius: 3,
+          background: tagColor?.bg ?? "#f5f5f5",
+          color: tagColor?.color ?? "#757575",
+          letterSpacing: "0.02em",
+          whiteSpace: "nowrap",
+        }}>
+          {tag}
+        </span>
+      )}
       {badge && (
         <span style={{
           fontSize: 10, fontWeight: 700,
@@ -407,8 +435,8 @@ function BreadcrumbChip({ label, href, isLast, onNavigate }: {
         </span>
       )}
       <span style={{
-        color: isLast && !clickable ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-        fontWeight: isLast && !clickable ? 600 : 400,
+        color: isCurrent ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+        fontWeight: isCurrent ? 700 : 400,
       }}>
         {rest}
       </span>

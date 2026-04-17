@@ -221,74 +221,82 @@ function RequirementsPageInner() {
             <div style={{ textAlign: "center" }}>정렬</div>
           </div>
 
-          {/* 데이터 행 */}
-          {items.map((req, idx) => (
-            <div
-              key={req.requirementId}
-              draggable
-              onDragStart={() => handleDragStart(idx)}
-              onDragEnter={() => handleDragEnter(idx)}
-              onDragEnd={handleDragEnd}
-              onDragOver={(e) => e.preventDefault()}
-              onClick={() => router.push(`/projects/${projectId}/requirements/${req.requirementId}`)}
-              style={{
-                ...gridRowStyle,
-                borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-              }}
-            >
-              {/* 드래그 핸들 */}
-              <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>
-                ☰
-              </div>
+          {/* 데이터 행 — 동일 과업명 연속 시 첫 행에만 표시 */}
+          {items.map((req, idx) => {
+            // 이전 행과 과업이 같으면 과업명 숨김
+            const prevTaskId = idx > 0 ? items[idx - 1].taskId : null;
+            const showTaskName = req.taskId !== prevTaskId;
 
-              {/* 과업명 (클릭 → 과업 상세, 행 클릭과 분리) */}
-              <div onClick={(e) => e.stopPropagation()}>
-                {req.taskId ? (
-                  <button
-                    onClick={() => router.push(`/projects/${projectId}/tasks/${req.taskId}`)}
-                    style={linkBtnStyle}
-                  >
-                    {req.taskName}
-                  </button>
-                ) : (
-                  <span style={{ color: "#aaa", fontSize: 13 }}>미분류</span>
-                )}
-              </div>
+            return (
+              <div
+                key={req.requirementId}
+                draggable
+                onDragStart={() => handleDragStart(idx)}
+                onDragEnter={() => handleDragEnter(idx)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => e.preventDefault()}
+                onClick={() => router.push(`/projects/${projectId}/requirements/${req.requirementId}`)}
+                style={{
+                  ...gridRowStyle,
+                  borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+                }}
+              >
+                {/* 드래그 핸들 */}
+                <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>
+                  ☰
+                </div>
 
-              {/* 요구사항명 */}
-              <div style={{ fontSize: 14, fontWeight: 500 }}>
-                <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
-                  {req.displayId}
-                </span>
-                {req.name}
-              </div>
+                {/* 과업명 — 동일 과업 연속 시 첫 행에만 표시 */}
+                <div onClick={(e) => e.stopPropagation()}>
+                  {showTaskName ? (
+                    req.taskId ? (
+                      <button
+                        onClick={() => router.push(`/projects/${projectId}/tasks/${req.taskId}`)}
+                        style={linkBtnStyle}
+                      >
+                        {req.taskName}
+                      </button>
+                    ) : (
+                      <span style={{ color: "#aaa", fontSize: 13 }}>미분류</span>
+                    )
+                  ) : null}
+                </div>
 
-              {/* 우선순위 배지 */}
-              <div>
-                <span style={priorityBadgeStyle(req.priority)}>
-                  {PRIORITY_LABELS[req.priority] ?? req.priority}
-                </span>
-              </div>
+                {/* 요구사항명 */}
+                <div style={{ fontSize: 14, fontWeight: 500 }}>
+                  <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
+                    {req.displayId}
+                  </span>
+                  {req.name}
+                </div>
 
-              {/* 출처 배지 */}
-              <div>
-                <span style={sourceBadgeStyle(req.source)}>
-                  {SOURCE_LABELS[req.source] ?? req.source}
-                </span>
-              </div>
+                {/* 우선순위 배지 */}
+                <div>
+                  <span style={priorityBadgeStyle(req.priority)}>
+                    {PRIORITY_LABELS[req.priority] ?? req.priority}
+                  </span>
+                </div>
 
-              {/* 단위업무 수 */}
-              <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
-                {req.unitWorkCount}
-              </div>
+                {/* 출처 배지 */}
+                <div>
+                  <span style={sourceBadgeStyle(req.source)}>
+                    {SOURCE_LABELS[req.source] ?? req.source}
+                  </span>
+                </div>
 
-              {/* 정렬 순서 */}
-              <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
-                {req.sortOrder || "-"}
-              </div>
+                {/* 단위업무 수 */}
+                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
+                  {req.unitWorkCount}
+                </div>
 
-            </div>
-          ))}
+                {/* 정렬 순서 */}
+                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
+                  {req.sortOrder || "-"}
+                </div>
+
+              </div>
+            );
+          })}
         </div>
       )}
 

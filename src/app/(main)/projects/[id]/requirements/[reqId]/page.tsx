@@ -438,12 +438,10 @@ function RequirementDetailPageInner() {
     const items = [
       // 상위 과업 (연결돼 있으면만 노출)
       ...(parentTask
-        ? [{ label: parentTask.name, href: `/projects/${projectId}/tasks/${parentTask.taskId}` }]
+        ? [{ label: parentTask.name, href: `/projects/${projectId}/tasks/${parentTask.taskId}`, tag: "과업" }]
         : []),
-      // 요구사항 목록 진입점
-      { label: "요구사항", href: `/projects/${projectId}/requirements` },
       // 현재 요구사항 (href 없음 = 현재 위치)
-      { label: isNew ? "신규 등록" : (detail?.displayId ?? "편집") },
+      { label: isNew ? "신규 등록" : (detail?.name ?? "편집"), tag: "요구사항" },
       // 하위 사용자스토리 목록 (수정 모드에서만)
       ...(isNew
         ? []

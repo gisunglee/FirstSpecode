@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "specode": {
+      "command": "node",
+      "args": ["D:\\source\\FirstSpecode\\mcp-server\\start.mjs"]
+    }
+  }
+}

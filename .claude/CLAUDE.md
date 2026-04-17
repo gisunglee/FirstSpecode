@@ -56,6 +56,37 @@ PRD에는 화면 목록, 영역, 기능 명세, API, 참조 테이블이 모두 
 
 ---
 
+## ⚡ MCP 동기화 규칙
+
+API route의 **인터페이스**를 변경할 때 MCP 도구도 반드시 함께 수정할 것.
+
+**인터페이스 변경 = MCP 수정 필요한 경우:**
+- URL 경로 변경 (예: `/api/projects/[id]/tasks` → `/api/projects/[id]/sfr`)
+- 파라미터 추가/삭제/이름변경 (body, query param)
+- 필수/선택 변경 (선택이었던 필드가 필수로 변경)
+- 허용값 변경 (예: category에 새 값 추가)
+- 새 API route 추가 (→ MCP 도구 추가 검토)
+- API route 삭제 (→ MCP 도구 삭제)
+
+**수정 대상 파일 (2곳 동시 수정):**
+```
+1. mcp-server/src/register-tools.ts   ← stdio 로컬용
+2. src/lib/mcp/register-tools.ts      ← HTTP Vercel용
+```
+
+**수정 후 필수 작업:**
+```
+1. mcp-server: cd mcp-server && npx tsc     ← dist/ 빌드
+2. 스모크 테스트: cd mcp-server && npx tsx test/smoke.ts
+```
+
+**인터페이스 변경이 아닌 경우 (MCP 수정 불필요):**
+- API 내부 로직 변경 (쿼리 최적화, 정렬 변경 등)
+- 응답 필드 추가 (기존 필드 유지 + 새 필드 추가)
+- 에러 메시지 변경
+
+---
+
 ## ⚡ DB / DDL 작업 시작 전 필수 읽기
 
 DB 스키마 조회·수정·마이그레이션 작업 전에 **반드시** 읽을 것:
