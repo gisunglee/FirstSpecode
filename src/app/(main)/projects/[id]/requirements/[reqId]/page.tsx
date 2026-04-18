@@ -522,7 +522,7 @@ function RequirementDetailPageInner() {
   }
 
   return (
-    <div style={{ padding: 0, maxWidth: 1400 }}>
+    <div style={{ padding: 0 }}>
       {/* 헤더 타이틀 바 */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -562,7 +562,7 @@ function RequirementDetailPageInner() {
         </div>
       </div>
 
-      <div style={{ padding: "0 24px 24px" }}>
+      <div style={{ padding: "0 24px 24px", maxWidth: 1400 }}>
       {/* 2단 레이아웃: 왼쪽(기본정보+원문·현행화) / 오른쪽(분석메모·상세명세+근거파일) */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 24, alignItems: "start" }}>
 
@@ -657,7 +657,7 @@ function RequirementDetailPageInner() {
           </Section>
 
           {/* ── AR-00044 원문·현행화 ──────────────────────────────────────────── */}
-          <Section label={
+          <Section compact label={
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
               <span>요구사항 내용</span>
               {!isNew && (
@@ -672,14 +672,14 @@ function RequirementDetailPageInner() {
             </div>
           }>
             {/* 탭 헤더 */}
-            <div style={{ display: "flex", gap: 16, borderBottom: "1px solid var(--color-border)", marginBottom: 12 }}>
+            <div style={{ display: "flex", gap: 16, borderBottom: "1px solid var(--color-border)", marginBottom: 6 }}>
               {(["original", "current"] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
                   onClick={() => setContentTab(tab)}
                   style={{
-                    padding:      "8px 6px",
+                    padding:      "6px 6px",
                     border:       "none",
                     borderBottom: contentTab === tab ? "2px solid var(--color-primary, #1976d2)" : "2px solid transparent",
                     background:   "transparent",
@@ -824,7 +824,7 @@ function RequirementDetailPageInner() {
                 onTabChange={setSpecTab}
                 onChange={(v) => handleChange("detailSpec", v)}
                 placeholder={`## 기능 상세\n\n- 항목1\n- 항목2`}
-                rows={18}
+                rows={20}
               />
             </div>
 
@@ -851,7 +851,7 @@ function RequirementDetailPageInner() {
                 onTabChange={setAnalyzeTab}
                 onChange={(v) => handleChange("analysisMemo", v)}
                 placeholder={`## 분석 내용\n\n- 항목1\n- 항목2`}
-                rows={14}
+                rows={20}
               />
             </div>
           </Section>
@@ -1036,10 +1036,12 @@ function ReqDeleteDialog({
 function Section({
   title,
   label,
+  compact,
   children,
 }: {
   title?: string;
   label?: React.ReactNode;
+  compact?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -1047,11 +1049,11 @@ function Section({
       style={{
         border:        "1px solid var(--color-border)",
         borderRadius:  8,
-        padding:       "20px 24px",
+        padding:       compact ? "12px 24px" : "20px 24px",
         background:    "var(--color-bg-card)",
         display:       "flex",
         flexDirection: "column",
-        gap:           16,
+        gap:           compact ? 8 : 16,
       }}
     >
       {/* 큰 헤더 — title 있을 때만 표시 */}
@@ -1190,6 +1192,129 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// ── Diff 유틸: HTML 블록 단위 + 단어 단위 diff ────────────────────────────────
+// TipTap(RichEditor)은 HTML로 저장하므로 \n split이 무의미.
+// HTML을 블록 태그(<p>, <li>, <h1~6> 등) 단위로 분리 → 블록 LCS diff →
+// 변경된 블록 내에서는 단어 단위 diff로 변경 부분만 하이라이트.
+
+type DiffBlock = {
+  text:     string;                           // HTML 태그 제거된 텍스트
+  html:     string;                           // 원본 HTML 블록
+  type:     "same" | "del" | "add" | "mod";   // mod: 부분 변경
+  wordDiff?: { text: string; type: "same" | "del" | "add" }[];
+};
+
+// HTML → 블록 분리 (p, li, h1~h6, tr 등 블록 태그 기준)
+function splitHtmlBlocks(html: string): string[] {
+  if (!html) return [""];
+  // 블록 태그 앞에서 분리 (태그 자체는 유지)
+  const blocks = html
+    .replace(/>\s+</g, "><")  // 태그 사이 불필요한 공백 제거
+    .split(/(?=<(?:p|li|h[1-6]|tr|blockquote|div|pre)[\s>])/i)
+    .map((b) => b.trim())
+    .filter(Boolean);
+  return blocks.length > 0 ? blocks : [""];
+}
+
+// HTML 태그 제거 → 순수 텍스트 (비교용)
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").trim();
+}
+
+// 단어 단위 LCS diff
+function wordDiff(oldStr: string, newStr: string): { text: string; type: "same" | "del" | "add" }[] {
+  const oldWords = oldStr.split(/(\s+)/);  // 공백도 토큰으로 보존
+  const newWords = newStr.split(/(\s+)/);
+  const m = oldWords.length, n = newWords.length;
+
+  // LCS
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = oldWords[i - 1] === newWords[j - 1]
+        ? dp[i - 1][j - 1] + 1
+        : Math.max(dp[i - 1][j], dp[i][j - 1]);
+
+  // 역추적
+  const result: { text: string; type: "same" | "del" | "add" }[] = [];
+  let i = m, j = n;
+  const temp: typeof result = [];
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldWords[i - 1] === newWords[j - 1]) {
+      temp.push({ text: oldWords[i - 1], type: "same" });
+      i--; j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      temp.push({ text: newWords[j - 1], type: "add" });
+      j--;
+    } else {
+      temp.push({ text: oldWords[i - 1], type: "del" });
+      i--;
+    }
+  }
+  result.push(...temp.reverse());
+
+  // 인접한 같은 타입 합치기
+  const merged: typeof result = [];
+  for (const item of result) {
+    if (merged.length > 0 && merged[merged.length - 1].type === item.type) {
+      merged[merged.length - 1].text += item.text;
+    } else {
+      merged.push({ ...item });
+    }
+  }
+  return merged;
+}
+
+// 블록 단위 LCS diff
+function computeDiff(oldHtml: string, newHtml: string): { left: DiffBlock[]; right: DiffBlock[] } {
+  const oldBlocks = splitHtmlBlocks(oldHtml);
+  const newBlocks = splitHtmlBlocks(newHtml);
+  const oldTexts  = oldBlocks.map(stripHtml);
+  const newTexts  = newBlocks.map(stripHtml);
+  const m = oldBlocks.length, n = newBlocks.length;
+
+  // LCS
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = oldTexts[i - 1] === newTexts[j - 1]
+        ? dp[i - 1][j - 1] + 1
+        : Math.max(dp[i - 1][j], dp[i][j - 1]);
+
+  // 역추적
+  const left: DiffBlock[]  = [];
+  const right: DiffBlock[] = [];
+  let i = m, j = n;
+  const tL: DiffBlock[] = [], tR: DiffBlock[] = [];
+
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldTexts[i - 1] === newTexts[j - 1]) {
+      // 완전 동일
+      tL.push({ text: oldTexts[i - 1], html: oldBlocks[i - 1], type: "same" });
+      tR.push({ text: newTexts[j - 1], html: newBlocks[j - 1], type: "same" });
+      i--; j--;
+    } else if (i > 0 && j > 0 && dp[i - 1][j - 1] >= dp[i - 1][j] && dp[i - 1][j - 1] >= dp[i][j - 1]) {
+      // 같은 위치인데 내용이 다름 → 부분 변경 (단어 diff)
+      const wd = wordDiff(oldTexts[i - 1], newTexts[j - 1]);
+      tL.push({ text: oldTexts[i - 1], html: oldBlocks[i - 1], type: "mod", wordDiff: wd.filter((w) => w.type !== "add") });
+      tR.push({ text: newTexts[j - 1], html: newBlocks[j - 1], type: "mod", wordDiff: wd.filter((w) => w.type !== "del") });
+      i--; j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      tL.push({ text: "", html: "", type: "same" });
+      tR.push({ text: newTexts[j - 1], html: newBlocks[j - 1], type: "add" });
+      j--;
+    } else {
+      tL.push({ text: oldTexts[i - 1], html: oldBlocks[i - 1], type: "del" });
+      tR.push({ text: "", html: "", type: "same" });
+      i--;
+    }
+  }
+
+  left.push(...tL.reverse());
+  right.push(...tR.reverse());
+  return { left, right };
+}
+
 // ── Diff 뷰어 팝업 ────────────────────────────────────────────────────────────
 
 function ReqDiffViewerPopup({
@@ -1216,78 +1341,127 @@ function ReqDiffViewerPopup({
     enabled: !!v1Id && !!v2Id && !sameSelected,
   });
 
-  const selStyle: React.CSSProperties = { padding: "7px 12px", borderRadius: 6, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-primary)", fontSize: 13 };
+  const selStyle: React.CSSProperties = { padding: "5px 10px", borderRadius: 5, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-primary)", fontSize: 12 };
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-start", overflowY: "auto", justifyContent: "center" }}
+    <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={onClose}>
       <div
-        style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "28px 32px", width: "90vw", maxWidth: 1100, margin: "40px auto", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+        style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "16px 24px", width: "90vw", maxWidth: 1100, maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>버전 비교 (Diff)</h3>
-          <button onClick={onClose} style={{ ...secondaryBtnStyle, fontSize: 13 }}>닫기</button>
-        </div>
-        <div style={{ display: "flex", gap: 16, marginBottom: 16, alignItems: "center" }}>
-          <div>
-            <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 4 }}>좌측 버전</label>
+        {/* 헤더: 타이틀 + 버전 셀렉터를 한 줄에 */}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 12, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--color-text-primary)" }}>버전 비교</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <select value={v1Id} onChange={(e) => setV1Id(e.target.value)} style={selStyle}>
-              {items.map((i) => <option key={i.historyId} value={i.historyId}>{i.versionNo} ({i.versionType === "CONFIRMED" ? "확정" : "내부"})</option>)}
+              {items.map((i) => <option key={i.historyId} value={i.historyId}>{i.versionNo}</option>)}
+            </select>
+            <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>↔</span>
+            <select value={v2Id} onChange={(e) => setV2Id(e.target.value)} style={selStyle}>
+              {items.map((i) => <option key={i.historyId} value={i.historyId}>{i.versionNo}</option>)}
             </select>
           </div>
-          <div style={{ marginTop: 16, fontSize: 18, color: "var(--color-text-secondary)" }}>↔</div>
-          <div>
-            <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 4 }}>우측 버전</label>
-            <select value={v2Id} onChange={(e) => setV2Id(e.target.value)} style={selStyle}>
-              {items.map((i) => <option key={i.historyId} value={i.historyId}>{i.versionNo} ({i.versionType === "CONFIRMED" ? "확정" : "내부"})</option>)}
-            </select>
+          <div style={{ marginLeft: "auto" }}>
+            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#888", lineHeight: 1 }}>×</button>
           </div>
         </div>
-        {sameSelected && <div style={{ padding: "16px 0", textAlign: "center", color: "#f57c00", fontSize: 14 }}>서로 다른 버전을 선택해 주세요.</div>}
-        {isLoading && !sameSelected && <div style={{ padding: "16px 0", textAlign: "center", color: "#888" }}>로딩 중...</div>}
-        {data && !sameSelected && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            {([
-              { label: "원문 (orgnl_cn)",     l: data.v1Content.orgnlCn,  r: data.v2Content.orgnlCn  },
-              { label: "현행화 (curncy_cn)",  l: data.v1Content.curncyCn, r: data.v2Content.curncyCn },
-            ] as { label: string; l: string; r: string }[]).map(({ label, l, r }) => (
-              <ReqDiffSection key={label} label={label} leftText={l} rightText={r}
-                leftVersion={data.v1Content.versionNo} rightVersion={data.v2Content.versionNo} />
-            ))}
-          </div>
-        )}
+
+        {/* 본문 */}
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {sameSelected && <div style={{ padding: "16px 0", textAlign: "center", color: "#f57c00", fontSize: 13 }}>서로 다른 버전을 선택해 주세요.</div>}
+          {isLoading && !sameSelected && <div style={{ padding: "16px 0", textAlign: "center", color: "#888", fontSize: 13 }}>로딩 중...</div>}
+          {data && !sameSelected && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {([
+                { label: "원문",   l: data.v1Content.orgnlCn,  r: data.v2Content.orgnlCn  },
+                { label: "현행화", l: data.v1Content.curncyCn, r: data.v2Content.curncyCn },
+              ] as { label: string; l: string; r: string }[]).map(({ label, l, r }) => (
+                <ReqDiffSection key={label} label={label} leftText={l} rightText={r}
+                  leftVersion={data.v1Content.versionNo} rightVersion={data.v2Content.versionNo} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+// 단어 diff 블록 렌더링 (삭제 측 / 추가 측 공용)
+function WordDiffSpans({ words, side }: {
+  words: { text: string; type: "same" | "del" | "add" }[];
+  side:  "del" | "add";
+}) {
+  return (
+    <>
+      {words.map((w, i) => {
+        // 반대편 타입은 표시하지 않음 (이미 filter 됨)
+        const isDiff = w.type === side;
+        return (
+          <span key={i} style={{
+            background:      isDiff ? (side === "del" ? "rgba(229,57,53,0.25)" : "rgba(46,125,50,0.25)") : "transparent",
+            color:           isDiff ? (side === "del" ? "#c62828" : "#2e7d32") : "inherit",
+            textDecoration:  isDiff && side === "del" ? "line-through" : "none",
+            borderRadius:    isDiff ? 2 : 0,
+          }}>{w.text}</span>
+        );
+      })}
+    </>
   );
 }
 
 function ReqDiffSection({ label, leftText, rightText, leftVersion, rightVersion }: {
   label: string; leftText: string; rightText: string; leftVersion: string; rightVersion: string;
 }) {
-  const leftLines  = leftText.split("\n");
-  const rightLines = rightText.split("\n");
+  const { left, right } = computeDiff(leftText, rightText);
+
+  // 블록 한 줄 렌더
+  function renderBlock(d: DiffBlock, side: "del" | "add") {
+    if (d.type === "same" && d.text === "") {
+      // 정렬용 빈 줄
+      return <div style={{ minHeight: "1.6em" }}>{" "}</div>;
+    }
+    if (d.type === "same") {
+      return <div style={{ padding: "2px 0" }}>{d.text}</div>;
+    }
+    if (d.type === "mod" && d.wordDiff) {
+      // 부분 변경: 블록 배경 연하게 + 변경 단어만 진하게
+      return (
+        <div style={{
+          padding: "2px 0",
+          background: side === "del" ? "rgba(229,57,53,0.06)" : "rgba(46,125,50,0.06)",
+        }}>
+          <WordDiffSpans words={d.wordDiff} side={side} />
+        </div>
+      );
+    }
+    // 전체 삭제 or 전체 추가
+    return (
+      <div style={{
+        padding: "2px 0",
+        background: side === "del" ? "rgba(229,57,53,0.12)" : "rgba(46,125,50,0.12)",
+        color: side === "del" ? "#c62828" : "#2e7d32",
+        textDecoration: side === "del" ? "line-through" : "none",
+      }}>{d.text}</div>
+    );
+  }
+
   return (
     <div>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "var(--color-text-secondary)" }}>{label}</div>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, color: "var(--color-text-secondary)" }}>{label}</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0, border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
         <div style={{ borderRight: "1px solid var(--color-border)" }}>
-          <div style={{ padding: "5px 12px", fontSize: 11, fontWeight: 600, background: "var(--color-bg-muted)", borderBottom: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}>{leftVersion} (이전)</div>
-          <pre style={{ margin: 0, padding: "10px 12px", fontSize: 12, lineHeight: 1.6, fontFamily: "inherit", whiteSpace: "pre-wrap", wordBreak: "break-word", minHeight: 48, background: "transparent" }}>
-            {leftLines.map((line, i) => {
-              const inRight = rightLines.includes(line);
-              return <span key={i} style={{ display: "block", background: !inRight && line ? "rgba(229,57,53,0.12)" : "transparent", color: !inRight && line ? "#c62828" : "inherit", textDecoration: !inRight && line ? "line-through" : "none" }}>{line || " "}</span>;
-            })}
-          </pre>
+          <div style={{ padding: "4px 10px", fontSize: 11, fontWeight: 600, background: "var(--color-bg-muted)", borderBottom: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}>{leftVersion} (이전)</div>
+          <div style={{ padding: "8px 10px", fontSize: 12, lineHeight: 1.6, minHeight: 40 }}>
+            {left.map((d, i) => <div key={i}>{renderBlock(d, "del")}</div>)}
+          </div>
         </div>
         <div>
-          <div style={{ padding: "5px 12px", fontSize: 11, fontWeight: 600, background: "var(--color-bg-muted)", borderBottom: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}>{rightVersion} (이후)</div>
-          <pre style={{ margin: 0, padding: "10px 12px", fontSize: 12, lineHeight: 1.6, fontFamily: "inherit", whiteSpace: "pre-wrap", wordBreak: "break-word", minHeight: 48, background: "transparent" }}>
-            {rightLines.map((line, i) => {
-              const inLeft = leftLines.includes(line);
-              return <span key={i} style={{ display: "block", background: !inLeft && line ? "rgba(46,125,50,0.12)" : "transparent", color: !inLeft && line ? "#2e7d32" : "inherit" }}>{line || " "}</span>;
-            })}
-          </pre>
+          <div style={{ padding: "4px 10px", fontSize: 11, fontWeight: 600, background: "var(--color-bg-muted)", borderBottom: "1px solid var(--color-border)", color: "var(--color-text-secondary)" }}>{rightVersion} (이후)</div>
+          <div style={{ padding: "8px 10px", fontSize: 12, lineHeight: 1.6, minHeight: 40 }}>
+            {right.map((d, i) => <div key={i}>{renderBlock(d, "add")}</div>)}
+          </div>
         </div>
       </div>
     </div>

@@ -159,7 +159,7 @@ export default function RichEditor({
 
       {/* ── 툴바 ───────────────────────────────────────────────────────── */}
       {!readOnly && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 2, padding: "6px 8px", borderBottom: "1px solid var(--color-border)", background: "var(--color-bg-muted)" }}>
+        <div style={{ display: "flex", flexWrap: "nowrap", gap: 2, padding: "6px 8px", borderBottom: "1px solid var(--color-border)", background: "var(--color-bg-muted)", overflowX: "auto" }}>
 
           <ToolBtn active={editor.isActive("heading", { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} title="제목 1">H1</ToolBtn>
           <ToolBtn active={editor.isActive("heading", { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="제목 2">H2</ToolBtn>

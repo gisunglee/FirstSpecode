@@ -33,6 +33,7 @@ type TaskDetail = {
 
 type SaveBody = {
   name:       string;
+  displayId:  string;
   category:   string;
   definition: string;
   content:    string;
@@ -62,7 +63,7 @@ function TaskDetailPageInner() {
 
   // ── 폼 상태 ────────────────────────────────────────────────────────────────
   const [form, setForm] = useState<SaveBody>({
-    name: "", category: "NEW_DEV",
+    name: "", displayId: "", category: "NEW_DEV",
     definition: "", content: "", outputInfo: "", rfpPage: "",
   });
 
@@ -84,6 +85,7 @@ function TaskDetailPageInner() {
           : rawContent;
         setForm({
           name:       d.name,
+          displayId:  d.displayId ?? "",
           category:   d.category,
           definition: d.definition ?? "",
           content,
@@ -254,16 +256,27 @@ function TaskDetailPageInner() {
         }}
       >
 
-        {/* 과업명 */}
-        <FormField label="과업명" required>
-          <input
-            type="text"
-            value={form.name}
-            placeholder="과업명을 입력하세요"
-            onChange={(e) => handleChange("name", e.target.value)}
-            style={inputStyle}
-          />
-        </FormField>
+        {/* 과업명 + 표시ID */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <FormField label="과업명" required>
+            <input
+              type="text"
+              value={form.name}
+              placeholder="과업명을 입력하세요"
+              onChange={(e) => handleChange("name", e.target.value)}
+              style={inputStyle}
+            />
+          </FormField>
+          <FormField label="표시 ID">
+            <input
+              type="text"
+              value={form.displayId}
+              placeholder="미입력 시 자동 생성"
+              onChange={(e) => handleChange("displayId", e.target.value)}
+              style={inputStyle}
+            />
+          </FormField>
+        </div>
 
         {/* 카테고리 + RFP 페이지 번호 */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>

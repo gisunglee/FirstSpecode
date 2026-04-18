@@ -103,10 +103,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         where: { prjct_id: projectId },
         data: {
           prjct_nm:  name.trim(),
-          prjct_dc:  description?.trim() || null,
-          bgng_de:   startDate ? new Date(startDate) : null,
-          end_de:    endDate   ? new Date(endDate)   : null,
-          client_nm: clientName?.trim() || null,
+          ...(description !== undefined ? { prjct_dc: description?.trim() || null } : {}),
+          ...(startDate !== undefined ? { bgng_de: startDate ? new Date(startDate) : null } : {}),
+          ...(endDate !== undefined ? { end_de: endDate ? new Date(endDate) : null } : {}),
+          ...(clientName !== undefined ? { client_nm: clientName?.trim() || null } : {}),
           mdfcn_dt:  new Date(),
         },
       });

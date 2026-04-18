@@ -201,20 +201,20 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       prisma.tbDsFunction.update({
         where: { func_id: functionId },
         data: {
-          // area_id 직접 지정 대신 relation 연결/해제로 처리 (Prisma v6 호환)
-          area: areaId
-            ? { connect: { area_id: areaId } }
-            : { disconnect: true },
-          func_nm:       name.trim(),
-          func_ty_code:  type || "OTHER",
-          func_dc:       newDescription,
-          coment_cn:   commentCn !== undefined ? (commentCn.trim() || null) : existing.coment_cn,
-          priort_code: priority || "MEDIUM",
-          cmplx_code:    complexity || "MEDIUM",
-          efrt_val:      effort?.trim() || null,
-          asign_mber_id: assignMemberId || null,
-          impl_bgng_de:  implStartDate || null,
-          impl_end_de:   implEndDate || null,
+          // area_id: 명시적으로 전달된 경우만 변경
+          ...(areaId !== undefined
+            ? { area: areaId ? { connect: { area_id: areaId } } : { disconnect: true } }
+            : {}),
+          func_nm:       name?.trim() || existing.func_nm,
+          func_ty_code:  type || existing.func_ty_code,
+          func_dc:       description !== undefined ? newDescription : existing.func_dc,
+          coment_cn:     commentCn !== undefined ? (commentCn.trim() || null) : existing.coment_cn,
+          priort_code:   priority || existing.priort_code,
+          cmplx_code:    complexity || existing.cmplx_code,
+          efrt_val:      effort !== undefined ? (effort?.trim() || null) : existing.efrt_val,
+          asign_mber_id: assignMemberId !== undefined ? (assignMemberId || null) : existing.asign_mber_id,
+          impl_bgng_de:  implStartDate !== undefined ? (implStartDate || null) : existing.impl_bgng_de,
+          impl_end_de:   implEndDate !== undefined ? (implEndDate || null) : existing.impl_end_de,
           sort_ordr:     sortOrder ?? existing.sort_ordr,
           mdfcn_dt:      new Date(),
         },

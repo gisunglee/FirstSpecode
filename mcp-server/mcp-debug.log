@@ -1,8 +1,8 @@
-[2026-04-17T07:14:25.116Z] MCP server starting...
-  cwd: D:\source\FirstSpecode
+[2026-04-18T09:38:16.406Z] MCP server starting...
+  cwd: d:\source\FirstSpecode
   __dirname: D:\source\FirstSpecode\mcp-server
   node: v22.14.0
   argv: ["C:\\Program Files\\nodejs\\node.exe","D:\\source\\FirstSpecode\\mcp-server\\start.mjs"]
-  env.PATH: C:\Program Files (x86)\Common Files\Oracle\Java\java8path;C:\Program Files (x86)\Common Files\Oracle\Java\javapath;C:\Program Files\Java\jdk-11\bin;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\W
-[2026-04-17T07:14:25.119Z] importing dist/stdio.js...
-[2026-04-17T07:14:25.657Z] server connected OK
+  env.PATH: C:\Users\USER\.pyenv\pyenv-win\versions\3.13.5\Scripts;C:\Program Files (x86)\Common Files\Oracle\Java\java8path;C:\Program Files (x86)\Common Files\Oracle\Java\javapath;%JAVA_HOME%\bin;C:\WINDOWS\sys
+[2026-04-18T09:38:16.422Z] importing dist/stdio.js...
+[2026-04-18T09:38:17.139Z] server connected OK

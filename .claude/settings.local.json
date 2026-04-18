@@ -237,7 +237,18 @@
       "mcp__specode__get_planning_tree",
       "mcp__specode__list_functions",
       "mcp__specode__update_function",
-      "Bash(find src/app/api -name \"route.ts\" -exec grep -l \"const auth = requireAuth\\(request\\)\" {} \\\\;)"
+      "Bash(find src/app/api -name \"route.ts\" -exec grep -l \"const auth = requireAuth\\(request\\)\" {} \\\\;)",
+      "mcp__specode__list_tasks",
+      "mcp__specode__list_requirements",
+      "mcp__specode__update_requirement",
+      "mcp__specode__create_task",
+      "mcp__specode__create_requirement",
+      "mcp__specode__update_task",
+      "mcp__specode__create_user_story",
+      "mcp__specode__list_db_tables",
+      "Bash(node d:/tmp/register-db-tables.mjs)",
+      "Bash(cp d:/tmp/register-db-tables.mjs d:/source/FirstSpecode/register-db-tables.mjs)",
+      "Bash(sed -i 's|resolve\\(\"d:/source/FirstSpecode/.env.local\"\\)|resolve\\(\".env.local\"\\)|' register-db-tables.mjs)"
     ]
   }
 }

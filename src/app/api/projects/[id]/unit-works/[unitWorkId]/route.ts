@@ -162,22 +162,25 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const newDescription = description?.trim() || null;
 
+    // 공통 update data — 미전송 필드는 기존 값 유지
+    const updateData = {
+      unit_work_nm:  name.trim(),
+      unit_work_dc:  description !== undefined ? newDescription : existing.unit_work_dc,
+      coment_cn:     comment !== undefined ? (comment?.trim() || null) : existing.coment_cn,
+      asign_mber_id: assignMemberId !== undefined ? (assignMemberId || null) : existing.asign_mber_id,
+      bgng_de:       startDate !== undefined ? (startDate?.trim() || null) : existing.bgng_de,
+      end_de:        endDate !== undefined ? (endDate?.trim() || null) : existing.end_de,
+      progrs_rt:     progress ?? existing.progrs_rt,
+      sort_ordr:     sortOrder ?? existing.sort_ordr,
+      mdfcn_dt:      new Date(),
+    };
+
     if (saveHistory) {
       // 설명 변경 이력 저장과 단위업무 수정을 트랜잭션으로 처리
       await prisma.$transaction([
         (prisma.tbDsUnitWork.update as any)({
           where: { unit_work_id: unitWorkId },
-          data:  {
-            unit_work_nm:  name.trim(),
-            unit_work_dc:  newDescription,
-            coment_cn:     comment?.trim() || null,
-            asign_mber_id: assignMemberId || null,
-            bgng_de:       startDate?.trim() || null,
-            end_de:        endDate?.trim() || null,
-            progrs_rt:     progress ?? existing.progrs_rt,
-            sort_ordr:     sortOrder ?? existing.sort_ordr,
-            mdfcn_dt:      new Date(),
-          },
+          data: updateData,
         }),
         // 설명 변경 이력 — tb_ds_design_change에 before/after JSON으로 저장
         prisma.tbDsDesignChange.create({
@@ -198,17 +201,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     } else {
       await (prisma.tbDsUnitWork.update as any)({
         where: { unit_work_id: unitWorkId },
-        data:  {
-          unit_work_nm:  name.trim(),
-          unit_work_dc:  newDescription,
-          coment_cn:     comment?.trim() || null,
-          asign_mber_id: assignMemberId || null,
-          bgng_de:       startDate?.trim() || null,
-          end_de:        endDate?.trim() || null,
-          progrs_rt:     progress ?? existing.progrs_rt,
-          sort_ordr:     sortOrder ?? existing.sort_ordr,
-          mdfcn_dt:      new Date(),
-        },
+        data: updateData,
       });
     }
 

@@ -23,6 +23,7 @@ type StoryCard = {
   name:                    string;
   persona:                 string;
   requirementId:           string;
+  requirementDisplayId:    string;
   requirementName:         string;
   taskId:                  string | null;
   taskName:                string;
@@ -61,6 +62,7 @@ function UserStoriesPageInner() {
   const [reqFilter,  setReqFilter]    = useState(initialReqFilter);
   const [keyword,    setKeyword]      = useState("");
   const [deleteTarget, setDeleteTarget] = useState<StoryCard | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   // ── 과업 목록 (필터 옵션) ──────────────────────────────────────────────────
   const { data: tasksData } = useQuery({
@@ -149,7 +151,7 @@ function UserStoriesPageInner() {
 
       <div style={{ padding: "0 24px 24px" }}>
       {/* 총 건수 (왼쪽) + 검색 필터 (오른쪽) — 기능 정의 목록과 동일 패턴 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
         <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
           총 {data?.totalCount ?? 0}건
         </span>
@@ -200,7 +202,7 @@ function UserStoriesPageInner() {
         <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
           {/* 헤더 */}
           <div style={gridHeaderStyle}>
-            <div>과업 › 요구사항</div>
+            <div>요구사항</div>
             <div>스토리명</div>
             <div>페르소나</div>
             <div style={{ textAlign: "center" }}>인수기준</div>
@@ -212,16 +214,28 @@ function UserStoriesPageInner() {
             <div
               key={s.storyId}
               onClick={() => router.push(`/projects/${projectId}/user-stories/${s.storyId}`)}
+              onMouseEnter={() => setHoveredId(s.storyId)}
+              onMouseLeave={() => setHoveredId(null)}
               style={{
                 ...gridRowStyle,
                 borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+                background: hoveredId === s.storyId ? "var(--color-bg-hover, rgba(99,102,241,0.06))" : "var(--color-bg-card)",
+                borderLeft: hoveredId === s.storyId ? "3px solid var(--color-primary, #6366f1)" : "3px solid transparent",
+                paddingLeft: 13,
               }}
             >
-              {/* 과업 › 요구사항 */}
+              {/* 요구사항 — 표시번호 + 이름 */}
               <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.4 }}>
-                {s.taskName && <span>{s.taskName}</span>}
-                {s.taskName && s.requirementName && <span style={{ margin: "0 4px", color: "#ccc" }}>›</span>}
-                {s.requirementName && <span>{s.requirementName}</span>}
+                {s.requirementDisplayId ? (
+                  <>
+                    <span style={{ color: "var(--color-text-secondary)", fontSize: 11, marginRight: 4 }}>
+                      {s.requirementDisplayId}
+                    </span>
+                    {s.requirementName}
+                  </>
+                ) : (
+                  <span style={{ color: "#ccc" }}>—</span>
+                )}
               </div>
 
               {/* 스토리명 */}
@@ -315,38 +329,42 @@ function DeleteConfirmModal({
 const gridHeaderStyle: React.CSSProperties = {
   display:               "grid",
   gridTemplateColumns:   "2fr 3fr 3fr 80px 60px",
-  padding:               "8px 14px",
+  gap:                   12,
+  padding:               "10px 16px",
   background:            "var(--color-bg-muted)",
   fontSize:              12,
   fontWeight:            600,
   color:                 "var(--color-text-secondary)",
-  gap:                   8,
+  borderBottom:          "1px solid var(--color-border)",
+  alignItems:            "center",
 };
 
 const gridRowStyle: React.CSSProperties = {
   display:               "grid",
   gridTemplateColumns:   "2fr 3fr 3fr 80px 60px",
-  padding:               "10px 14px",
+  gap:                   12,
+  padding:               "12px 16px",
   alignItems:            "center",
-  cursor:                "pointer",
-  gap:                   8,
   background:            "var(--color-bg-card)",
+  transition:            "background 0.1s",
+  cursor:                "pointer",
 };
 
 const filterSelectStyle: React.CSSProperties = {
-  padding:            "7px 12px",
-  paddingRight:       "32px",
+  padding:            "7px 32px 7px 12px",
   borderRadius:       6,
   border:             "1px solid var(--color-border)",
+  fontSize:           13,
   background:         "var(--color-bg-card)",
   color:              "var(--color-text-primary)",
-  fontSize:           13,
+  cursor:             "pointer",
   outline:            "none",
   appearance:         "none",
   WebkitAppearance:   "none",
-  backgroundImage:    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
+  backgroundImage:    `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
   backgroundRepeat:   "no-repeat",
   backgroundPosition: "right 10px center",
+  minWidth:           160,
 };
 
 const primaryBtnStyle: React.CSSProperties = {

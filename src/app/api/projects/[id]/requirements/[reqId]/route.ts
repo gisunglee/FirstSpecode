@@ -123,16 +123,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       prisma.tbRqRequirement.update({
         where: { req_id: reqId },
         data:  {
-          task_id:        taskId || null,
+          // taskId가 명시적으로 전달된 경우만 변경 (undefined면 기존 값 유지)
+          task_id:        taskId !== undefined ? (taskId || null) : existing.task_id,
           req_display_id: reqDisplayId?.trim() || existing.req_display_id,
           req_nm:         name.trim(),
           priort_code:    priority,
           src_code:       source,
-          rfp_page_no:    rfpPage?.trim() || null,
-          orgnl_cn:       newOrgnlCn,
-          curncy_cn:      newCurncyCn,
-          analy_cn:       newAnalyCn,
-          spec_cn:        newSpecCn,
+          rfp_page_no:    rfpPage !== undefined ? (rfpPage?.trim() || null) : existing.rfp_page_no,
+          orgnl_cn:       originalContent !== undefined ? newOrgnlCn : existing.orgnl_cn,
+          curncy_cn:      currentContent !== undefined ? newCurncyCn : existing.curncy_cn,
+          analy_cn:       analysisMemo !== undefined ? newAnalyCn : existing.analy_cn,
+          spec_cn:        detailSpec !== undefined ? newSpecCn : existing.spec_cn,
           sort_ordr:      typeof sortOrder === "number" ? sortOrder : existing.sort_ordr,
           mdfcn_dt:       new Date(),
         },

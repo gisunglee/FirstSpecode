@@ -120,8 +120,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         where: { tbl_id: tableId },
         data: {
           tbl_physcl_nm: tblPhysclNm.trim(),
-          tbl_lgcl_nm:   tblLgclNm?.trim() || null,
-          tbl_dc:        tblDc?.trim()     || null,
+          tbl_lgcl_nm:   tblLgclNm !== undefined ? (tblLgclNm?.trim() || null) : existing.tbl_lgcl_nm,
+          tbl_dc:        tblDc !== undefined ? (tblDc?.trim() || null) : existing.tbl_dc,
         },
       });
 

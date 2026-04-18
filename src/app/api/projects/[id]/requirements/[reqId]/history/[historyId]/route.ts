@@ -31,16 +31,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const history = await prisma.tbRqRequirementHistory.findUnique({
       where:  { req_hist_id: historyId },
-      select: { req_id: true, vrsn_ty_code: true },
+      select: { req_id: true },
     });
 
     if (!history || history.req_id !== reqId) {
       return apiError("NOT_FOUND", "이력을 찾을 수 없습니다.", 404);
-    }
-
-    // 확정 버전은 삭제 불가 (비즈니스 규칙)
-    if (history.vrsn_ty_code === "CONFIRMED") {
-      return apiError("VALIDATION_ERROR", "확정 버전은 삭제할 수 없습니다.", 400);
     }
 
     await prisma.tbRqRequirementHistory.delete({ where: { req_hist_id: historyId } });

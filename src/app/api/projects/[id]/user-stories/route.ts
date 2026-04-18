@@ -63,30 +63,33 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       include: {
         requirement: {
           select: {
-            req_id:  true,
-            req_nm:  true,
-            task_id: true,
-            task:    { select: { task_id: true, task_nm: true } },
+            req_id:         true,
+            req_display_id: true,
+            req_nm:         true,
+            task_id:        true,
+            task:           { select: { task_id: true, task_nm: true } },
           },
         },
         acceptanceCriteria: { select: { ac_id: true } },
       },
+      // 요구사항 표시번호(req_display_id) ASC → 스토리 정렬순 ASC → 생성일 DESC
       orderBy: [
-        { requirement: { sort_ordr: "asc" } },
+        { requirement: { req_display_id: "asc" } },
         { sort_ordr: "asc" },
         { creat_dt:  "desc" },
       ],
     });
 
     const items = stories.map((s) => ({
-      storyId:             s.story_id,
-      displayId:           s.story_display_id,
-      name:                s.story_nm,
-      persona:             s.persona_cn ?? "",
-      requirementId:       s.req_id,
-      requirementName:     s.requirement.req_nm,
-      taskId:              s.requirement.task_id ?? null,
-      taskName:            s.requirement.task?.task_nm ?? "미분류",
+      storyId:                 s.story_id,
+      displayId:               s.story_display_id,
+      name:                    s.story_nm,
+      persona:                 s.persona_cn ?? "",
+      requirementId:           s.req_id,
+      requirementDisplayId:    s.requirement.req_display_id,
+      requirementName:         s.requirement.req_nm,
+      taskId:                  s.requirement.task_id ?? null,
+      taskName:                s.requirement.task?.task_nm ?? "미분류",
       acceptanceCriteriaCount: s.acceptanceCriteria.length,
     }));
 

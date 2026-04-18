@@ -362,6 +362,3 @@ throw new Error(`사용자(id=${userId})를 찾을 수 없습니다. DB 응답: 
 | 컴포넌트 내 비즈니스 로직 | 테스트 불가, 재사용 불가 → lib/이나 hooks/로 분리 |
 | 에러 무시 (`catch {}`) | 반드시 로깅 또는 사용자 알림 처리 |
 | 조건 없는 목록 조회 | 논리삭제 필터(`useYn: "Y"` 등) 항상 포함 |
-
-
-## spk_c34b91f0ca782f63954efa53bd994ff524c2cbc7bdf135c46b5d127dc0aeace3

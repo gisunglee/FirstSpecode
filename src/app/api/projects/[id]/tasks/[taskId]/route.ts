@@ -70,10 +70,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { name, category, definition, content, outputInfo, rfpPage } = body as {
+  const { name, category, definition, content, outputInfo, rfpPage, displayId } = body as {
     name?: string; category?: string;
     definition?: string; content?: string;
     outputInfo?: string; rfpPage?: string;
+    displayId?: string;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "과업명을 입력해 주세요.", 400);
@@ -88,13 +89,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     await prisma.tbRqTask.update({
       where: { task_id: taskId },
       data: {
-        task_nm:        name.trim(),
-        ctgry_code:     category,
-        defn_cn:        definition?.trim() || null,
-        dtl_cn:         content?.trim() || null,
-        output_info_cn: outputInfo?.trim() || null,
-        rfp_page_no:    rfpPage?.trim() || null,
-        mdfcn_dt:       new Date(),
+        task_nm:         name.trim(),
+        task_display_id: displayId?.trim() || existing.task_display_id,
+        ctgry_code:      category,
+        defn_cn:         definition !== undefined ? (definition?.trim() || null) : existing.defn_cn,
+        dtl_cn:          content !== undefined ? (content?.trim() || null) : existing.dtl_cn,
+        output_info_cn:  outputInfo !== undefined ? (outputInfo?.trim() || null) : existing.output_info_cn,
+        rfp_page_no:     rfpPage !== undefined ? (rfpPage?.trim() || null) : existing.rfp_page_no,
+        mdfcn_dt:        new Date(),
       },
     });
 

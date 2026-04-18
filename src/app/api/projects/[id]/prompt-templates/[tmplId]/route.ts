@@ -108,7 +108,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     const existing = await prisma.tbAiPromptTemplate.findUnique({
       where:  { tmpl_id: tmplId },
-      select: { tmpl_id: true, prjct_id: true },
     });
 
     if (!existing || (existing.prjct_id !== null && existing.prjct_id !== projectId)) {
@@ -120,11 +119,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       data: {
         tmpl_nm:       tmplNm.trim(),
         task_ty_code:  taskTyCode,
-        ref_ty_code:   refTyCode   ?? null,
-        sys_prompt_cn: sysPromptCn ?? null,
-        tmpl_dc:       tmplDc      ?? null,
-        use_yn:        useYn       ?? "Y",
-        sort_ordr:     sortOrdr    ?? 0,
+        ref_ty_code:   refTyCode !== undefined ? (refTyCode ?? null) : existing.ref_ty_code,
+        sys_prompt_cn: sysPromptCn !== undefined ? (sysPromptCn ?? null) : existing.sys_prompt_cn,
+        tmpl_dc:       tmplDc !== undefined ? (tmplDc ?? null) : existing.tmpl_dc,
+        use_yn:        useYn ?? existing.use_yn,
+        sort_ordr:     sortOrdr ?? existing.sort_ordr,
         mdfcn_dt:      new Date(),
       },
     });

@@ -34,7 +34,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           select: { req_id: true, priort_code: true },
         },
       },
-      orderBy: { sort_ordr: "asc" },
+      orderBy: [
+        { task_display_id: "asc" },
+        { creat_dt: "desc" },
+      ],
     });
 
     const items = tasks.map((t) => {
@@ -84,26 +87,32 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { name, category, definition, content, outputInfo, rfpPage } = body as {
+  const { name, category, definition, content, outputInfo, rfpPage, displayId: inputDisplayId } = body as {
     name?: string; category?: string;
     definition?: string; content?: string;
     outputInfo?: string; rfpPage?: string;
+    displayId?: string;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "과업명을 입력해 주세요.", 400);
   if (!category?.trim()) return apiError("VALIDATION_ERROR", "카테고리를 선택해 주세요.", 400);
 
   try {
-    // 표시 ID 채번 (프로젝트 내 최대값 + 1)
-    const maxTask = await prisma.tbRqTask.findFirst({
-      where: { prjct_id: projectId },
-      orderBy: { task_display_id: "desc" },
-      select: { task_display_id: true },
-    });
-    const nextSeq = maxTask
-      ? (parseInt(maxTask.task_display_id.replace(/\D/g, "")) || 0) + 1
-      : 1;
-    const displayId = `SFR-${String(nextSeq).padStart(5, "0")}`;
+    // 표시 ID: 사용자가 입력하면 그대로 사용, 미입력 시 자동 채번
+    let displayId: string;
+    if (inputDisplayId?.trim()) {
+      displayId = inputDisplayId.trim();
+    } else {
+      const maxTask = await prisma.tbRqTask.findFirst({
+        where: { prjct_id: projectId },
+        orderBy: { task_display_id: "desc" },
+        select: { task_display_id: true },
+      });
+      const nextSeq = maxTask
+        ? (parseInt(maxTask.task_display_id.replace(/\D/g, "")) || 0) + 1
+        : 1;
+      displayId = `SFR-${String(nextSeq).padStart(5, "0")}`;
+    }
 
     // sort_ordr: 마지막 + 1
     const maxSort = await prisma.tbRqTask.findFirst({
