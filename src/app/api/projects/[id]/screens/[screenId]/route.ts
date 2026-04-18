@@ -84,7 +84,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       name:         screen.scrn_nm,
       description:  screen.scrn_dc ?? "",
       layoutData:   screen.layer_data_dc ?? null,
-      displayCode:  screen.dsply_code ?? "",
       type:         screen.scrn_ty_code,
       categoryL:    screen.ctgry_l_nm ?? "",
       categoryM:    screen.ctgry_m_nm ?? "",
@@ -136,12 +135,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { unitWorkId, name, description, comment, displayCode, type, sortOrder, categoryL, categoryM, categoryS, layoutData, saveHistory } = body as {
+  const { unitWorkId, displayId, name, description, comment, type, sortOrder, categoryL, categoryM, categoryS, layoutData, saveHistory } = body as {
     unitWorkId?:   string;
+    displayId?:    string;
     name?:         string;
     description?:  string;
     comment?:      string;
-    displayCode?:  string;
     type?:         string;
     sortOrder?:    number;
     categoryL?:    string;
@@ -166,12 +165,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       prisma.tbDsScreen.update({
         where: { scrn_id: screenId },
         data:  {
-          unit_work_id:  unitWorkId !== undefined ? (unitWorkId || null) : existing.unit_work_id,
-          scrn_nm:       name?.trim() || existing.scrn_nm,
+          unit_work_id:    unitWorkId !== undefined ? (unitWorkId || null) : existing.unit_work_id,
+          scrn_display_id: displayId?.trim() || existing.scrn_display_id,
+          scrn_nm:         name?.trim() || existing.scrn_nm,
           scrn_dc:       description !== undefined ? newDescription : existing.scrn_dc,
           coment_cn:     comment !== undefined ? (comment?.trim() || null) : existing.coment_cn,
           layer_data_dc: layoutData !== undefined ? (layoutData ?? null) : existing.layer_data_dc,
-          dsply_code:    displayCode !== undefined ? (displayCode?.trim() || null) : existing.dsply_code,
           scrn_ty_code:  type || existing.scrn_ty_code,
           sort_ordr:     sortOrder ?? existing.sort_ordr,
           ctgry_l_nm:    categoryL !== undefined ? (categoryL?.trim() || null) : existing.ctgry_l_nm,
@@ -189,12 +188,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           chg_type_code: "UPDATE",
           chg_rsn_cn:    "화면 수정",
           snapshot_data: {
-            screenId:    screenId,
-            displayId:   existing.scrn_display_id,
-            name:        name.trim(),
-            type:        type || "LIST",
-            displayCode: displayCode?.trim() || null,
-            categoryL:   categoryL?.trim() || null,
+            screenId:  screenId,
+            displayId: displayId?.trim() || existing.scrn_display_id,
+            name:      name.trim(),
+            type:      type || "LIST",
+            categoryL: categoryL?.trim() || null,
           },
           chg_mber_id: auth.mberId,
         },

@@ -57,7 +57,6 @@ type ScreenDetail = {
   description:  string;
   comment:      string;
   layoutData:   string | null;
-  displayCode:  string;
   type:         string;
   sortOrder:    number;
   categoryL:    string;
@@ -70,10 +69,10 @@ type ScreenDetail = {
 
 type SaveBody = {
   unitWorkId?:  string;
+  displayId?:   string;
   name:         string;
   description:  string;
   comment?:     string;
-  displayCode:  string;
   type:         string;
   sortOrder:    number;
   categoryL:    string;
@@ -111,10 +110,10 @@ function ScreenDetailPageInner() {
   // ── 폼 상태 ────────────────────────────────────────────────────────────────
   const [form, setForm] = useState<SaveBody>({
     unitWorkId:  presetUnitWorkId || undefined,
+    displayId:   "",
     name:        "",
     description: "",
     comment:     "",
-    displayCode: "",
     type:        "LIST",
     sortOrder:   0,
     categoryL:   "",
@@ -159,10 +158,10 @@ function ScreenDetailPageInner() {
         const d = r.data;
         setForm({
           unitWorkId:  d.unitWorkId ?? undefined,
+          displayId:   d.displayId ?? "",
           name:        d.name,
           description: d.description ?? "",
           comment:     d.comment ?? "",
-          displayCode: d.displayCode,
           type:        d.type,
           sortOrder:   d.sortOrder,
           categoryL:   d.categoryL,
@@ -309,7 +308,7 @@ function ScreenDetailPageInner() {
             ←
           </button>
           <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
-            {isNew ? "화면 신규 등록" : `${detail?.displayId ?? ""} 화면 편집`}
+            {isNew ? "화면 신규 등록" : `화면 편집 (${detail?.displayId ?? ""})`}
           </span>
         </div>
         {/* 우: PRD 다운로드 + 삭제·취소·저장 */}
@@ -374,28 +373,30 @@ function ScreenDetailPageInner() {
               </select>
             </FormField>
 
-            {/* 화면명 */}
-            <FormField label="화면명" required>
-              <input
-                type="text"
-                value={form.name}
-                placeholder="화면명을 입력하세요"
-                onChange={(e) => handleChange("name", e.target.value)}
-                style={inputStyle}
-              />
-            </FormField>
-
-            {/* 표시코드 + 화면 유형 + 정렬 순서 */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 100px", gap: 16 }}>
-              <FormField label="표시코드">
+            {/* 화면명 + 표시 ID */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 200px", gap: 16 }}>
+              <FormField label="화면명" required>
                 <input
                   type="text"
-                  value={form.displayCode}
-                  placeholder="예: MBR_LIST"
-                  onChange={(e) => handleChange("displayCode", e.target.value)}
+                  value={form.name}
+                  placeholder="화면명을 입력하세요"
+                  onChange={(e) => handleChange("name", e.target.value)}
                   style={inputStyle}
                 />
               </FormField>
+              <FormField label="표시 ID">
+                <input
+                  type="text"
+                  value={form.displayId ?? ""}
+                  placeholder="미입력 시 자동 생성"
+                  onChange={(e) => handleChange("displayId", e.target.value)}
+                  style={inputStyle}
+                />
+              </FormField>
+            </div>
+
+            {/* 화면 유형 + 정렬 순서 */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: 16 }}>
               <FormField label="화면 유형">
                 <select
                   value={form.type}

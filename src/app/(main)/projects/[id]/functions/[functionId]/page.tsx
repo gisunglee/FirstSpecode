@@ -110,6 +110,7 @@ function FunctionDetailPageInner() {
 
   // ── 폼 상태 ────────────────────────────────────────────────────────────────
   const [name, setName] = useState("");
+  const [displayId, setDisplayId] = useState("");
   const [type, setType] = useState("OTHER");
   const [description, setDescription] = useState("");
   const [descTab, setDescTab] = useState<"edit" | "preview">("edit");
@@ -232,6 +233,7 @@ function FunctionDetailPageInner() {
   useEffect(() => {
     if (data) {
       setName(data.name);
+      setDisplayId(data.displayId ?? "");
       setType(data.type);
       setDescription(data.description);
       setPriority(data.priority);
@@ -253,6 +255,7 @@ function FunctionDetailPageInner() {
     mutationFn: ({ saveHistory } = {}) => {
       const body = {
         areaId: areaId || null,
+        displayId: displayId.trim() || undefined,
         name: name.trim(), type, description: description.trim(),
         commentCn: commentCn.trim(),
         priority, complexity, effort: effort.trim(),
@@ -437,7 +440,7 @@ function FunctionDetailPageInner() {
             ←
           </button>
           <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
-            {isNew ? "기능 신규 등록" : `${data?.displayId ?? ""} 기능 편집`}
+            {isNew ? "기능 신규 등록" : `기능 편집 (${data?.displayId ?? ""})`}
           </span>
         </div>
 
@@ -738,16 +741,28 @@ function FunctionDetailPageInner() {
                 </div>
               </div>
 
-              {/* 행2: 기능명 단독 */}
-              <div style={formGroupStyle}>
-                <label style={labelStyle}>기능명 <span style={{ color: "#e53935" }}>*</span></label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="기능명을 입력하세요"
-                  style={inputStyle}
-                />
+              {/* 행2: 기능명 | 표시 ID */}
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "0 16px" }}>
+                <div style={formGroupStyle}>
+                  <label style={labelStyle}>기능명 <span style={{ color: "#e53935" }}>*</span></label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="기능명을 입력하세요"
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={formGroupStyle}>
+                  <label style={labelStyle}>표시 ID</label>
+                  <input
+                    type="text"
+                    value={displayId}
+                    onChange={(e) => setDisplayId(e.target.value)}
+                    placeholder="미입력 시 자동 생성"
+                    style={inputStyle}
+                  />
+                </div>
               </div>
 
               {/* 행3: 우선순위 | 복잡도 | 예상 공수 */}

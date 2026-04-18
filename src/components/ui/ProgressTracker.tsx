@@ -44,12 +44,12 @@ const PHASE_TO_FIELD: Record<PhaseKey, keyof PhaseProgressData> = {
   test:   "testRt",
 };
 
-// 단계별 그라디언트 색상 — 사무적이고 절제된 톤
+// 단계별 색상 — 동일 블루 계열, 채도·명도 차이로 단계 구분
 const PHASE_COLORS: Record<PhaseKey, { from: string; to: string; glow: string }> = {
-  analy:  { from: "#93c5fd", to: "#2563eb", glow: "rgba(37,99,235,0.20)"  },
-  design: { from: "#6ee7b7", to: "#059669", glow: "rgba(5,150,105,0.20)"  },
-  impl:   { from: "#fca5a5", to: "#dc2626", glow: "rgba(220,38,38,0.20)"  },
-  test:   { from: "#fcd34d", to: "#d97706", glow: "rgba(217,119,6,0.20)"  },
+  analy:  { from: "#bfdbfe", to: "#60a5fa", glow: "rgba(96,165,250,0.15)"  },
+  design: { from: "#93c5fd", to: "#3b82f6", glow: "rgba(59,130,246,0.15)"  },
+  impl:   { from: "#60a5fa", to: "#2563eb", glow: "rgba(37,99,235,0.15)"   },
+  test:   { from: "#3b82f6", to: "#1d4ed8", glow: "rgba(29,78,216,0.15)"   },
 };
 
 export interface ProgressTrackerProps {

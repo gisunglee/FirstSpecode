@@ -137,8 +137,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { name, description, comment, assignMemberId, startDate, endDate, progress, sortOrder, saveHistory } = body as {
+  const { name, displayId, description, comment, assignMemberId, startDate, endDate, progress, sortOrder, saveHistory } = body as {
     name?:           string;
+    displayId?:      string;
     description?:    string;
     comment?:        string;
     assignMemberId?: string;
@@ -164,6 +165,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // 공통 update data — 미전송 필드는 기존 값 유지
     const updateData = {
+      unit_work_display_id: displayId?.trim() || existing.unit_work_display_id,
       unit_work_nm:  name.trim(),
       unit_work_dc:  description !== undefined ? newDescription : existing.unit_work_dc,
       coment_cn:     comment !== undefined ? (comment?.trim() || null) : existing.coment_cn,

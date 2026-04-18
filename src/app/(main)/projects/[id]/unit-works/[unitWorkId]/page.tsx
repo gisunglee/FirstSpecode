@@ -72,6 +72,7 @@ type UnitWorkDetail = {
 type SaveBody = {
   reqId:           string;
   name:            string;
+  displayId?:      string;
   description:     string;
   comment:         string;
   assignMemberId?: string;
@@ -112,6 +113,7 @@ function UnitWorkDetailPageInner() {
   const [form, setForm] = useState<SaveBody>({
     reqId:       presetReqId,
     name:        "",
+    displayId:   "",
     description: "",
     comment:     "",
     progress:    0,
@@ -154,6 +156,7 @@ function UnitWorkDetailPageInner() {
         setForm({
           reqId:           d.reqId,
           name:            d.name,
+          displayId:       d.displayId ?? "",
           description:     desc,
           comment:         d.comment ?? "",
           assignMemberId:  d.assignMemberId ?? undefined,
@@ -632,7 +635,7 @@ function UnitWorkDetailPageInner() {
             ←
           </button>
           <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)", flexShrink: 0 }}>
-            {isNew ? "단위업무 신규 등록" : `${detail?.displayId ?? ""} 단위업무 편집`}
+            {isNew ? "단위업무 신규 등록" : `단위업무 편집 (${detail?.displayId ?? ""})`}
           </span>
         </div>
 
@@ -847,16 +850,27 @@ function UnitWorkDetailPageInner() {
             </div>
           </FormField>
 
-          {/* 단위업무명 */}
-          <FormField label="단위업무명" required>
-            <input
-              type="text"
-              value={form.name}
-              placeholder="단위업무명을 입력하세요"
-              onChange={(e) => handleChange("name", e.target.value)}
-              style={inputStyle}
-            />
-          </FormField>
+          {/* 단위업무명 + 표시 ID */}
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
+            <FormField label="단위업무명" required>
+              <input
+                type="text"
+                value={form.name}
+                placeholder="단위업무명을 입력하세요"
+                onChange={(e) => handleChange("name", e.target.value)}
+                style={inputStyle}
+              />
+            </FormField>
+            <FormField label="표시 ID">
+              <input
+                type="text"
+                value={form.displayId ?? ""}
+                placeholder="미입력 시 자동 생성"
+                onChange={(e) => handleChange("displayId", e.target.value)}
+                style={inputStyle}
+              />
+            </FormField>
+          </div>
 
           {/* 시작일 + 종료일 */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>

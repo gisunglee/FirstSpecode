@@ -176,10 +176,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { unitWorkId, name, displayCode, type, categoryL, categoryM, categoryS } = body as {
+  const { unitWorkId, displayId: inputDisplayId, name, type, categoryL, categoryM, categoryS } = body as {
     unitWorkId?:  string;
+    displayId?:   string;
     name?:        string;
-    displayCode?: string;
     type?:        string;
     categoryL?:   string;
     categoryM?:   string;
@@ -197,16 +197,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    // 표시 ID 채번 (SCR-NNNNN)
-    const maxScr = await prisma.tbDsScreen.findFirst({
-      where:   { prjct_id: projectId },
-      orderBy: { scrn_display_id: "desc" },
-      select:  { scrn_display_id: true },
-    });
-    const nextSeq = maxScr
-      ? (parseInt(maxScr.scrn_display_id.replace(/\D/g, "")) || 0) + 1
-      : 1;
-    const displayId = `SCR-${String(nextSeq).padStart(5, "0")}`;
+    // 표시 ID — 사용자 입력값이 있으면 사용, 없으면 자동 채번 (SCR-NNNNN)
+    let displayId: string;
+    if (inputDisplayId?.trim()) {
+      displayId = inputDisplayId.trim();
+    } else {
+      const maxScr = await prisma.tbDsScreen.findFirst({
+        where:   { prjct_id: projectId },
+        orderBy: { scrn_display_id: "desc" },
+        select:  { scrn_display_id: true },
+      });
+      const nextSeq = maxScr
+        ? (parseInt(maxScr.scrn_display_id.replace(/\D/g, "")) || 0) + 1
+        : 1;
+      displayId = `SCR-${String(nextSeq).padStart(5, "0")}`;
+    }
 
     // sort_ordr: 전체 마지막 + 1
     const maxSort = await prisma.tbDsScreen.findFirst({
@@ -221,7 +226,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         unit_work_id:    unitWorkId || null,
         scrn_display_id: displayId,
         scrn_nm:         name.trim(),
-        dsply_code:      displayCode?.trim() || null,
         scrn_ty_code:    type || "LIST",
         ctgry_l_nm:      categoryL?.trim() || null,
         ctgry_m_nm:      categoryM?.trim() || null,

@@ -106,6 +106,7 @@ function AreaDetailPageInner() {
 
   // ── 폼 상태 ────────────────────────────────────────────────────────────────
   const [name,        setName]        = useState("");
+  const [displayIdInput, setDisplayIdInput] = useState("");
   const [type,        setType]        = useState("GRID");
   const [description, setDescription] = useState("");
   const [descTab, setDescTab] = useState<"edit" | "preview">("edit");
@@ -230,6 +231,7 @@ function AreaDetailPageInner() {
   useEffect(() => {
     if (data) {
       setName(data.name);
+      setDisplayIdInput(data.displayId ?? "");
       setType(data.type);
       setDescription(data.description);
       setSortOrder(data.sortOrder);
@@ -250,6 +252,7 @@ function AreaDetailPageInner() {
       const body = {
         screenId:    screenId || null,
         name:        name.trim(),
+        displayId:   displayIdInput.trim() || undefined,
         type,
         description: description.trim(),
         sortOrder:   sortOrder || 0,
@@ -636,7 +639,7 @@ function AreaDetailPageInner() {
             ←
           </button>
           <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
-            {isNew ? "영역 신규 등록" : `${data?.displayId ?? ""} 영역 편집`}
+            {isNew ? "영역 신규 등록" : `영역 편집 (${data?.displayId ?? ""})`}
           </span>
         </div>
 
@@ -900,8 +903,8 @@ function AreaDetailPageInner() {
               </div>
             </div>
 
-            {/* 영역명 + 정렬순서 */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: 16 }}>
+            {/* 영역명 + 표시 ID + 정렬순서 */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 150px 80px", gap: 16 }}>
               <div style={formGroupStyle}>
                 <label style={labelStyle}>영역명 <span style={{ color: "#e53935" }}>*</span></label>
                 <input
@@ -909,6 +912,16 @@ function AreaDetailPageInner() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="영역명을 입력하세요"
+                  style={inputStyle}
+                />
+              </div>
+              <div style={formGroupStyle}>
+                <label style={labelStyle}>표시 ID</label>
+                <input
+                  type="text"
+                  value={displayIdInput}
+                  onChange={(e) => setDisplayIdInput(e.target.value)}
+                  placeholder="자동 생성"
                   style={inputStyle}
                 />
               </div>
@@ -955,29 +968,7 @@ function AreaDetailPageInner() {
             </>
           )}
 
-          {/* ── AR-00073 요약 정보 ─────────────────────────────────────── */}
-          {!isNew && data?.summary && (
-            <section style={{ ...sectionStyle, background: "var(--color-bg-muted)", padding: "12px 16px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", textAlign: "center", fontSize: 13 }}>
-                <div style={{ borderRight: "1px solid var(--color-border)" }}>
-                  <div style={{ color: "var(--color-text-secondary)", marginBottom: 4 }}>기능 수</div>
-                  <strong style={{ fontSize: 18 }}>{data.summary.functionCount}</strong>
-                </div>
-                <div style={{ borderRight: "1px solid var(--color-border)" }}>
-                  <div style={{ color: "var(--color-text-secondary)", marginBottom: 4 }}>설계율</div>
-                  <strong style={{ fontSize: 18, color: data.summary.designRate >= 80 ? "#2e7d32" : "#e65100" }}>
-                    {data.summary.designRate}%
-                  </strong>
-                </div>
-                <div>
-                  <div style={{ color: "var(--color-text-secondary)", marginBottom: 4 }}>구현율</div>
-                  <strong style={{ fontSize: 18, color: data.summary.implRate >= 80 ? "#1565c0" : "#555" }}>
-                    {data.summary.implRate}%
-                  </strong>
-                </div>
-              </div>
-            </section>
-          )}
+          {/* AR-00073 요약 정보 — 삭제됨 */}
 
           {/* ── AR-00074 기능 목록 ────────────────────────────────────── */}
           {!isNew && (

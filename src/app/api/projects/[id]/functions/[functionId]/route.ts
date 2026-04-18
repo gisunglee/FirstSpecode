@@ -163,11 +163,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 
   const {
-    areaId, name, type, description, commentCn,
+    areaId, displayId, name, type, description, commentCn,
     priority, complexity, effort,
     assignMemberId, implStartDate, implEndDate, sortOrder, saveHistory,
   } = body as {
     areaId?:           string;
+    displayId?:        string;
     name?:             string;
     type?:             string;
     description?:      string;
@@ -205,6 +206,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           ...(areaId !== undefined
             ? { area: areaId ? { connect: { area_id: areaId } } : { disconnect: true } }
             : {}),
+          func_display_id: displayId?.trim() || existing.func_display_id,
           func_nm:       name?.trim() || existing.func_nm,
           func_ty_code:  type || existing.func_ty_code,
           func_dc:       description !== undefined ? newDescription : existing.func_dc,

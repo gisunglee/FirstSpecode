@@ -180,7 +180,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { screenId, name, type, description, sortOrder, layoutData, commentCn, saveHistory } = body as {
+  const { screenId, name, type, description, sortOrder, layoutData, commentCn, saveHistory, displayId } = body as {
     screenId?:    string;
     name?:        string;
     type?:        string;
@@ -189,6 +189,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     layoutData?:  string;
     commentCn?:   string;
     saveHistory?: boolean;
+    displayId?:   string;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "영역명을 입력해 주세요.", 400);
@@ -207,6 +208,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         where: { area_id: areaId },
         data: {
           scrn_id:      screenId !== undefined ? (screenId || null) : existing.scrn_id,
+          area_display_id: displayId?.trim() || existing.area_display_id,
           area_nm:      name.trim(),
           area_ty_code: type || "GRID",
           area_dc:      newDescription,
@@ -225,7 +227,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           chg_rsn_cn:    "영역 수정",
           snapshot_data: {
             areaId:    areaId,
-            displayId: existing.area_display_id,
+            displayId: displayId?.trim() || existing.area_display_id,
             name:      name.trim(),
             type:      type || "GRID",
           },

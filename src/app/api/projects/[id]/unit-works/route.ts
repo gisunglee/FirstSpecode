@@ -144,9 +144,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { reqId, name, description, assignMemberId, startDate, endDate } = body as {
+  const { reqId, name, displayId: inputDisplayId, description, assignMemberId, startDate, endDate } = body as {
     reqId?:          string;
     name?:           string;
+    displayId?:      string;
     description?:    string;
     assignMemberId?: string;
     startDate?:      string;
@@ -163,16 +164,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    // 표시 ID 채번 (UW-NNNNN)
-    const maxUw = await prisma.tbDsUnitWork.findFirst({
-      where:   { prjct_id: projectId },
-      orderBy: { unit_work_display_id: "desc" },
-      select:  { unit_work_display_id: true },
-    });
-    const nextSeq = maxUw
-      ? (parseInt(maxUw.unit_work_display_id.replace(/\D/g, "")) || 0) + 1
-      : 1;
-    const displayId = `UW-${String(nextSeq).padStart(5, "0")}`;
+    // 표시 ID — 사용자 입력이 있으면 그대로 사용, 없으면 자동 채번 (UW-NNNNN)
+    let displayId: string;
+    if (inputDisplayId?.trim()) {
+      displayId = inputDisplayId.trim();
+    } else {
+      const maxUw = await prisma.tbDsUnitWork.findFirst({
+        where:   { prjct_id: projectId },
+        orderBy: { unit_work_display_id: "desc" },
+        select:  { unit_work_display_id: true },
+      });
+      const nextSeq = maxUw
+        ? (parseInt(maxUw.unit_work_display_id.replace(/\D/g, "")) || 0) + 1
+        : 1;
+      displayId = `UW-${String(nextSeq).padStart(5, "0")}`;
+    }
 
     // sort_ordr: 해당 요구사항 내 마지막 + 1
     const maxSort = await prisma.tbDsUnitWork.findFirst({

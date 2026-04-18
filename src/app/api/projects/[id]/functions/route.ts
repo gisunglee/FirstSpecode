@@ -181,10 +181,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   const {
-    areaId, name, type, description, priority, complexity, effort,
+    areaId, displayId: inputDisplayId, name, type, description, priority, complexity, effort,
     assignMemberId, implStartDate, implEndDate, sortOrder,
   } = body as {
     areaId?:         string;
+    displayId?:      string;
     name?:           string;
     type?:           string;
     description?:    string;
@@ -205,14 +206,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    // FN-NNNNN 형식 displayId 생성
-    const last = await prisma.tbDsFunction.findFirst({
-      where:   { prjct_id: projectId },
-      orderBy: { func_display_id: "desc" },
-      select:  { func_display_id: true },
-    });
-    const nextNum   = last ? parseInt(last.func_display_id.replace(/\D/g, "")) + 1 : 1;
-    const displayId = `FN-${String(nextNum).padStart(5, "0")}`;
+    // displayId — 사용자 입력값이 있으면 사용, 없으면 FN-NNNNN 형식 자동 생성
+    let displayId: string;
+    if (inputDisplayId?.trim()) {
+      displayId = inputDisplayId.trim();
+    } else {
+      const last = await prisma.tbDsFunction.findFirst({
+        where:   { prjct_id: projectId },
+        orderBy: { func_display_id: "desc" },
+        select:  { func_display_id: true },
+      });
+      const nextNum = last ? parseInt(last.func_display_id.replace(/\D/g, "")) + 1 : 1;
+      displayId = `FN-${String(nextNum).padStart(5, "0")}`;
+    }
 
     const maxSort = await prisma.tbDsFunction.aggregate({
       where: { prjct_id: projectId },

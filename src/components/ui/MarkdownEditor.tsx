@@ -111,12 +111,11 @@ export default function MarkdownEditor({
         <textarea
           value={value}
           placeholder={placeholder}
-          rows={fullHeight ? undefined : rows}
           readOnly={readOnly}
           onChange={(e) => onChange(e.target.value)}
           style={{
             width:        "100%",
-            height:       fullHeight ? "100%" : undefined,
+            height:       fullHeight ? "100%" : (rows * 21),
             padding:      "8px 12px",
             borderRadius: 6,
             border:       "1px solid var(--color-border)",
@@ -155,6 +154,7 @@ export default function MarkdownEditor({
           style={{
             width:        "100%",
             height:       fullHeight ? "100%" : (rows * 21),
+            maxHeight:    fullHeight ? undefined : (rows * 21),
             padding:      "12px 16px",
             border:       "1px solid var(--color-border)",
             background:   "var(--color-bg-card)",

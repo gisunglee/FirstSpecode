@@ -187,25 +187,31 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { screenId, name, type, description, sortOrder } = body as {
+  const { screenId, name, type, description, sortOrder, displayId: inputDisplayId } = body as {
     screenId?:    string;
     name?:        string;
     type?:        string;
     description?: string;
     sortOrder?:   number;
+    displayId?:   string;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "영역명을 입력해 주세요.", 400);
 
   try {
-    // AR-NNNNN 형식 displayId 생성 — 프로젝트 내 마지막 번호 + 1
-    const last = await prisma.tbDsArea.findFirst({
-      where:   { prjct_id: projectId },
-      orderBy: { area_display_id: "desc" },
-      select:  { area_display_id: true },
-    });
-    const nextNum    = last ? parseInt(last.area_display_id.replace(/\D/g, "")) + 1 : 1;
-    const displayId  = `AR-${String(nextNum).padStart(5, "0")}`;
+    // displayId — 사용자 입력값이 있으면 사용, 없으면 AR-NNNNN 자동 생성
+    let displayId: string;
+    if (inputDisplayId?.trim()) {
+      displayId = inputDisplayId.trim();
+    } else {
+      const last = await prisma.tbDsArea.findFirst({
+        where:   { prjct_id: projectId },
+        orderBy: { area_display_id: "desc" },
+        select:  { area_display_id: true },
+      });
+      const nextNum = last ? parseInt(last.area_display_id.replace(/\D/g, "")) + 1 : 1;
+      displayId = `AR-${String(nextNum).padStart(5, "0")}`;
+    }
 
     // 정렬순서 기본값: 현재 최대 + 1
     const maxSort = await prisma.tbDsArea.aggregate({
