@@ -257,6 +257,48 @@ export default function ColMappingDialog({
     setRows(reordered);
   }
 
+  // ── 저장 전 검증 ──────────────────────────────────────────────────────────
+  const [saveWarnOpen, setSaveWarnOpen] = useState(false);
+  const [saveWarnings, setSaveWarnings] = useState<string[]>([]);
+
+  function handleSaveClick() {
+    const errors: string[] = [];   // 저장 불가 — 반드시 수정 필요
+    const warnings: string[] = []; // 경고 — 무시하고 저장 가능
+
+    rows.forEach((r, i) => {
+      const no = i + 1;
+
+      // 테이블만 선택하고 컬럼 미선택 → 저장 불가
+      if (r._tableId && !r.colId) {
+        errors.push(`${no}행: 테이블이 선택되었으나 컬럼이 선택되지 않았습니다.`);
+      }
+
+      // 컬럼이 매핑된 행에서 항목명/IO구분/UI유형 누락 → 경고
+      if (r.colId) {
+        const missing: string[] = [];
+        if (!r.usePurpsCn.trim()) missing.push("항목명");
+        if (!r.ioSeCode)          missing.push("IO구분");
+        if (!r.uiTyCode)          missing.push("UI유형");
+        if (missing.length > 0) {
+          warnings.push(`${no}행: ${missing.join(", ")}`);
+        }
+      }
+    });
+
+    // 저장 불가 오류가 있으면 toast로 안내 후 중단
+    if (errors.length > 0) {
+      toast.error(errors.join("\n"));
+      return;
+    }
+
+    if (warnings.length > 0) {
+      setSaveWarnings(warnings);
+      setSaveWarnOpen(true);
+      return;
+    }
+    saveMutation.mutate();
+  }
+
   // ── 저장 ──────────────────────────────────────────────────────────────────
   const saveMutation = useMutation({
     mutationFn: () => {
@@ -320,25 +362,18 @@ export default function ColMappingDialog({
 
           {/* 빠른 추가 영역 (테이블 선택 + 행 추가) */}
           <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-            <select
+            <TableSearchSelect
+              tables={tables}
               value={selectedTableId}
-              onChange={(e) => {
-                const val = e.target.value;
+              showLogical={showLogicalAll}
+              onChange={(val) => {
                 setSelectedTableId(val);
                 // 필터 목록에도 추가하여 그리드 동기화
                 if (val && !filterTableIds.includes(val)) {
                   setFilterTableIds((prev) => [...prev, val]);
                 }
               }}
-              style={{ ...selectStyle, flex: 1 }}
-            >
-              <option value="">테이블 선택 (필터링 및 컬럼 빠른 추가)</option>
-              {tables.map((t) => (
-                <option key={t.tableId} value={t.tableId}>
-                  {showLogicalAll ? (t.tableLogicalNm || t.tableName) : t.tableName}
-                </option>
-              ))}
-            </select>
+            />
             <button onClick={addEmptyRow} style={addRowBtnStyle}>+1</button>
             <button
               onClick={() => {
@@ -433,12 +468,12 @@ export default function ColMappingDialog({
           <div style={gridHeaderStyle}>
             <div style={{ width: 20 }} />
             <div style={{ width: 32, textAlign: "center" }}>NO</div>
-            <div style={{ flex: "0 0 156px" }}>항목명</div>
+            <div style={{ flex: "0 0 180px" }}>항목명</div>
             <div style={{ flex: "0 0 108px" }}>IO구분</div>
             <div style={{ flex: "0 0 110px" }}>UI유형</div>
-            <div style={{ flex: "0 0 150px" }}>테이블</div>
-            <div style={{ flex: "0 0 150px" }}>컬럼</div>
-            <div style={{ flex: 2.7 }}>설명</div>
+            <div style={{ flex: "0 0 190px" }}>테이블</div>
+            <div style={{ flex: "0 0 190px" }}>컬럼</div>
+            <div style={{ flex: 1 }}>설명</div>
             <div style={{ width: 32 }} />
           </div>
         </div>
@@ -488,7 +523,7 @@ export default function ColMappingDialog({
                   </div>
 
                 {/* 항목명 */}
-                <div style={{ flex: "0 0 156px" }}>
+                <div style={{ flex: "0 0 180px" }}>
                   <input
                     type="text"
                     value={row.usePurpsCn}
@@ -546,7 +581,7 @@ export default function ColMappingDialog({
                 </div>
 
                 {/* 테이블 / 컬럼 (분리됨) */}
-                <div style={{ flex: "0 0 300px", maxWidth: 300 }}>
+                <div style={{ flex: "0 0 380px", maxWidth: 380 }}>
                   <ColumnPicker
                     tables={tables}
                     projectId={projectId}
@@ -559,7 +594,7 @@ export default function ColMappingDialog({
                 </div>
 
                 {/* 설명 */}
-                <div style={{ flex: 2.7 }}>
+                <div style={{ flex: 1 }}>
                   <input
                     type="text"
                     value={row.colDc}
@@ -590,7 +625,7 @@ export default function ColMappingDialog({
             취소
           </button>
           <button
-            onClick={() => saveMutation.mutate()}
+            onClick={handleSaveClick}
             disabled={saveMutation.isPending}
             style={primaryBtnStyle}
           >
@@ -598,7 +633,177 @@ export default function ColMappingDialog({
           </button>
         </div>
 
+        {/* ── 누락 항목 경고 다이얼로그 ── */}
+        {saveWarnOpen && (
+          <div
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1300 }}
+            onClick={() => setSaveWarnOpen(false)}
+          >
+            <div
+              style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "28px 32px", minWidth: 380, maxWidth: 480, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>입력되지 않은 항목이 있습니다</p>
+              <div style={{ margin: "0 0 16px", fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.8, maxHeight: 200, overflowY: "auto" }}>
+                {saveWarnings.map((w, i) => (
+                  <div key={i} style={{ padding: "2px 0" }}>
+                    <span style={{ color: "#e65100", fontWeight: 600 }}>{w}</span>
+                  </div>
+                ))}
+              </div>
+              <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--color-text-primary)" }}>
+                나중에 입력하고, 지금은 이대로 저장하시겠습니까?
+              </p>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button
+                  style={{ padding: "6px 16px", borderRadius: 6, border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: 13, cursor: "pointer" }}
+                  onClick={() => setSaveWarnOpen(false)}
+                >
+                  취소
+                </button>
+                <button
+                  style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "rgba(103,80,164,1)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                  onClick={() => { setSaveWarnOpen(false); saveMutation.mutate(); }}
+                >
+                  저장
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
+    </div>
+  );
+}
+
+// ── 테이블 검색 드롭다운 ──────────────────────────────────────────────────────
+
+function TableSearchSelect({
+  tables,
+  value,
+  showLogical,
+  onChange,
+}: {
+  tables: DbTable[];
+  value: string;
+  showLogical: boolean;
+  onChange: (tableId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  const selected = tables.find((t) => t.tableId === value);
+  const displayName = selected
+    ? (showLogical ? (selected.tableLogicalNm || selected.tableName) : selected.tableName)
+    : "";
+
+  const filtered = tables.filter((t) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return t.tableName.toLowerCase().includes(q) || t.tableLogicalNm.toLowerCase().includes(q);
+  });
+
+  // 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: "relative", flex: 1 }}>
+      {/* 표시 영역 */}
+      <div
+        onClick={() => { setOpen(!open); setSearch(""); }}
+        style={{
+          ...selectStyle,
+          cursor: "pointer",
+          display: "flex", alignItems: "center", gap: 6,
+          overflow: "hidden", whiteSpace: "nowrap",
+        }}
+      >
+        <span style={{
+          flex: 1, overflow: "hidden", textOverflow: "ellipsis",
+          color: displayName ? "var(--color-text-primary)" : "var(--color-text-disabled)",
+          fontFamily: displayName ? "'JetBrains Mono','Consolas',monospace" : "inherit",
+        }}>
+          {displayName || "테이블 선택 (필터링 및 컬럼 빠른 추가)"}
+        </span>
+        <span style={{ color: "var(--color-text-disabled)", fontSize: 10, flexShrink: 0 }}>▼</span>
+      </div>
+
+      {/* 드롭다운 */}
+      {open && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, right: 0, zIndex: 200,
+          maxHeight: 300,
+          background: "var(--color-bg-card)", border: "1px solid var(--color-border)",
+          borderRadius: 6, boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+          display: "flex", flexDirection: "column",
+        }}>
+          <input
+            autoFocus
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="테이블 검색..."
+            style={{
+              padding: "8px 12px", border: "none", borderBottom: "1px solid var(--color-border)",
+              outline: "none", fontSize: 13, background: "var(--color-bg-muted)",
+              color: "var(--color-text-primary)",
+            }}
+          />
+          <div style={{ overflowY: "auto", flex: 1 }}>
+            {/* 선택 해제 옵션 */}
+            <div
+              onClick={() => { onChange(""); setOpen(false); }}
+              style={{
+                padding: "6px 12px", cursor: "pointer", fontSize: 12,
+                color: "var(--color-text-disabled)", borderBottom: "1px solid var(--color-border)",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-bg-hover, #f5f7ff)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+            >
+              (선택 해제)
+            </div>
+            {filtered.length === 0 ? (
+              <div style={{ padding: "12px", textAlign: "center", color: "#bbb", fontSize: 12 }}>
+                검색 결과 없음
+              </div>
+            ) : (
+              filtered.map((t) => (
+                <div
+                  key={t.tableId}
+                  onClick={() => { onChange(t.tableId); setOpen(false); }}
+                  style={{
+                    padding: "6px 12px", cursor: "pointer", fontSize: 12,
+                    background: t.tableId === value ? "rgba(103,80,164,0.08)" : "transparent",
+                    borderBottom: "1px solid var(--color-border)",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-bg-hover, #f5f7ff)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = t.tableId === value ? "rgba(103,80,164,0.08)" : "transparent"; }}
+                >
+                  <span style={{
+                    fontFamily: "'JetBrains Mono','Consolas',monospace",
+                    fontWeight: 600, color: "var(--color-text-primary)",
+                  }}>
+                    {t.tableName}
+                  </span>
+                  {t.tableLogicalNm && (
+                    <span style={{ marginLeft: 8, color: "var(--color-text-secondary)", fontSize: 11 }}>
+                      {t.tableLogicalNm}
+                    </span>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -690,8 +895,8 @@ const overlayStyle: React.CSSProperties = {
 const dialogStyle: React.CSSProperties = {
   background:    "var(--color-bg-card)",
   borderRadius:  10,
-  width:         "min(1100px, 92vw)",
-  height:        "min(88vh, 700px)",
+  width:         "min(1400px, 95vw)",
+  height:        "min(88vh, 750px)",
   display:       "flex",
   flexDirection: "column",
   overflow:      "hidden",               // 다이얼로그 자체는 스크롤 없음 → X버튼 고정

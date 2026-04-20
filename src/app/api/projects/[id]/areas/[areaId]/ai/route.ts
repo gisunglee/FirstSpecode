@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { checkRole } from "@/lib/checkRole";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { expandTableScripts } from "@/lib/dbTableScript";
 
 type RouteParams = { params: Promise<{ id: string; areaId: string }> };
 
@@ -179,7 +180,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       parts.push(`<점검내용>\n${점검내용Lines.join("\n")}\n</점검내용>`);
     }
 
-    const finalReqCn = parts.join("\n\n");
+    // <TABLE_SCRIPT:tb_xxx> 플레이스홀더 치환 (brief 모드 — 컬럼명 목록)
+    // 점검 대상 설명이나 설계 컨텍스트에 테이블 참조가 포함된 경우 AI가 구조를 파악할 수 있도록 치환
+    // 미등록 테이블은 원본 플레이스홀더 그대로 유지
+    const finalReqCn = await expandTableScripts(projectId, parts.join("\n\n"), "brief");
 
     // ── 사용 횟수 증가 ───────────────────────────────────────────────────────
     if (promptTmpl) {

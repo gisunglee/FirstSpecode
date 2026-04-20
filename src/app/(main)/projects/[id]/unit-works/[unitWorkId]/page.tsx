@@ -869,7 +869,7 @@ function UnitWorkDetailPageInner() {
                 style={inputStyle}
               />
             </FormField>
-            <FormField label="표시 ID">
+            <FormField label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>표시 ID<DisplayIdHelp /></span>}>
               <input
                 type="text"
                 value={form.displayId ?? ""}
@@ -1000,7 +1000,7 @@ function UnitWorkDetailPageInner() {
 function FormField({
   label, required, children,
 }: {
-  label:    string;
+  label:    React.ReactNode;
   required?: boolean;
   children: React.ReactNode;
 }) {
@@ -1012,6 +1012,44 @@ function FormField({
       </label>
       {children}
     </div>
+  );
+}
+
+// ── 표시 ID 도움말 ───────────────────────────────────────────────────────────
+
+function DisplayIdHelp() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+        title="도움말"
+        style={{
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: 16, height: 16, borderRadius: "50%",
+          border: "1.5px solid var(--color-text-secondary)",
+          background: "transparent", color: "var(--color-text-secondary)",
+          fontSize: 10, fontWeight: 700, cursor: "pointer", padding: 0, lineHeight: 1,
+        }}
+      >?</button>
+      {open && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1200 }}
+          onClick={() => setOpen(false)}
+        >
+          <div style={{ background: "var(--color-bg-card)", borderRadius: 12, padding: "24px 28px", minWidth: 400, maxWidth: 520, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>표시 ID</span>
+              <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.8, whiteSpace: "pre-line" }}>
+              {"명칭 대신 화면에 표시되는 고유 식별자입니다.\n비워 두면 자동으로 생성됩니다.\n\n예시)\n• 단위업무: UW-00001\n• 화면: SCR-00001\n• 영역: AR-00001\n• 기능: FN-00001"}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

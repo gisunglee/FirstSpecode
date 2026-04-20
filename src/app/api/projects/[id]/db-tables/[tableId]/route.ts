@@ -54,9 +54,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       columns: table.columns.map((c) => ({
         colId:       c.col_id,
         colPhysclNm: c.col_physcl_nm,
-        colLgclNm:   c.col_lgcl_nm  ?? "",
-        dataTyNm:    c.data_ty_nm   ?? "",
-        colDc:       c.col_dc       ?? "",
+        colLgclNm:   c.col_lgcl_nm   ?? "",
+        dataTyNm:    c.data_ty_nm    ?? "",
+        colDc:       c.col_dc        ?? "",
+        refGrpCode:  c.ref_grp_code  ?? "",
         sortOrdr:    c.sort_ordr,
         mdfcnDt:     c.mdfcn_dt?.toISOString() ?? null,
       })),
@@ -75,6 +76,7 @@ type ColumnInput = {
   colLgclNm?:  string;
   dataTyNm?:   string;
   colDc?:      string;
+  refGrpCode?: string;
   sortOrdr?:   number;
 };
 
@@ -146,9 +148,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             where: { col_id: c.colId },
             data: {
               col_physcl_nm: c.colPhysclNm.trim(),
-              col_lgcl_nm:   c.colLgclNm?.trim() || null,
-              data_ty_nm:    c.dataTyNm?.trim()   || null,
-              col_dc:        c.colDc?.trim()       || null,
+              col_lgcl_nm:   c.colLgclNm?.trim()   || null,
+              data_ty_nm:    c.dataTyNm?.trim()     || null,
+              col_dc:        c.colDc?.trim()         || null,
+              ref_grp_code:  c.refGrpCode?.trim()    || null,
               sort_ordr:     i + 1,
               mdfcn_mber_id: auth.mberId,
               mdfcn_dt:      now,
@@ -159,9 +162,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             data: {
               tbl_id:        tableId,
               col_physcl_nm: c.colPhysclNm.trim(),
-              col_lgcl_nm:   c.colLgclNm?.trim() || null,
-              data_ty_nm:    c.dataTyNm?.trim()   || null,
-              col_dc:        c.colDc?.trim()       || null,
+              col_lgcl_nm:   c.colLgclNm?.trim()   || null,
+              data_ty_nm:    c.dataTyNm?.trim()     || null,
+              col_dc:        c.colDc?.trim()         || null,
+              ref_grp_code:  c.refGrpCode?.trim()    || null,
               sort_ordr:     i + 1,
             },
           });

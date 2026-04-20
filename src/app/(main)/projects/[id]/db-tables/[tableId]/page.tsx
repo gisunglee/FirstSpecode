@@ -18,29 +18,36 @@ import { useAppStore } from "@/store/appStore";
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
 type ColDraft = {
-  _key:        string;
-  colId?:      string;
+  _key: string;
+  colId?: string;
   colPhysclNm: string;
-  colLgclNm:   string;
-  dataTyNm:    string;
-  colDc:       string;
+  colLgclNm: string;
+  dataTyNm: string;
+  colDc: string;
+  refGrpCode: string;
+};
+
+type CodeGroupOption = {
+  grpCode: string;
+  grpCodeNm: string;
 };
 
 type DbTableDetail = {
-  tblId:       string;
+  tblId: string;
   tblPhysclNm: string;
-  tblLgclNm:   string;
-  tblDc:       string;
-  creatDt:     string;
-  mdfcnDt:     string | null;
+  tblLgclNm: string;
+  tblDc: string;
+  creatDt: string;
+  mdfcnDt: string | null;
   columns: {
-    colId:       string;
+    colId: string;
     colPhysclNm: string;
-    colLgclNm:   string;
-    dataTyNm:    string;
-    colDc:       string;
-    sortOrdr:    number;
-    mdfcnDt:     string | null;
+    colLgclNm: string;
+    dataTyNm: string;
+    colDc: string;
+    refGrpCode: string;
+    sortOrdr: number;
+    mdfcnDt: string | null;
   }[];
 };
 
@@ -51,10 +58,10 @@ function nextKey() { return `col_${++_keySeq}`; }
 function formatDt(iso: string): string {
   const d = new Date(iso);
   const yyyy = d.getFullYear();
-  const MM   = String(d.getMonth() + 1).padStart(2, "0");
-  const dd   = String(d.getDate()).padStart(2, "0");
-  const hh   = String(d.getHours()).padStart(2, "0");
-  const mm   = String(d.getMinutes()).padStart(2, "0");
+  const MM = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
   return `${yyyy}-${MM}-${dd} ${hh}:${mm}`;
 }
 
@@ -165,36 +172,45 @@ export default function DbTableDetailPage() {
 }
 
 function DbTableDetailPageInner() {
-  const params    = useParams<{ id: string; tableId: string }>();
-  const router    = useRouter();
-  const qc        = useQueryClient();
+  const params = useParams<{ id: string; tableId: string }>();
+  const router = useRouter();
+  const qc = useQueryClient();
   const { setBreadcrumb } = useAppStore();
   const projectId = params.id;
-  const tableId   = params.tableId;
-  const isNew     = tableId === "new";
+  const tableId = params.tableId;
+  const isNew = tableId === "new";
 
   // ── 폼 상태 ────────────────────────────────────────────────────────────────
   const [physNm, setPhysNm] = useState("");
   const [lgclNm, setLgclNm] = useState("");
-  const [dc,     setDc]     = useState("");
-  const [cols,   setCols]   = useState<ColDraft[]>([]);
+  const [dc, setDc] = useState("");
+  const [cols, setCols] = useState<ColDraft[]>([]);
 
   // ── ADD DDL 팝업 상태 ──────────────────────────────────────────────────────
-  const [ddlOpen,    setDdlOpen]    = useState(false);
-  const [ddlText,    setDdlText]    = useState("");
-  const [ddlParsed,  setDdlParsed]  = useState<ParsedCol[] | null>(null);
+  const [ddlOpen, setDdlOpen] = useState(false);
+  const [ddlText, setDdlText] = useState("");
+  const [ddlParsed, setDdlParsed] = useState<ParsedCol[] | null>(null);
 
   // ── 드래그 상태 ─────────────────────────────────────────────────────────────
-  const dragIdx     = useRef<number | null>(null);
+  const dragIdx = useRef<number | null>(null);
   const dragOverIdx = useRef<number | null>(null);
 
   // ── 데이터 조회 ────────────────────────────────────────────────────────────
   const { data, isLoading } = useQuery<DbTableDetail>({
     queryKey: ["db-table", projectId, tableId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: DbTableDetail }>(`/api/projects/${projectId}/db-tables/${tableId}`)
         .then((r) => r.data),
     enabled: !isNew,
+  });
+
+  // 공통코드 그룹 목록 (코드 열 드롭다운 옵션용)
+  const { data: codeGroups } = useQuery<CodeGroupOption[]>({
+    queryKey: ["code-groups-options", projectId],
+    queryFn: () =>
+      authFetch<{ data: { items: CodeGroupOption[] } }>(
+        `/api/projects/${projectId}/code-groups?useYn=Y`
+      ).then((r) => r.data.items),
   });
 
   useEffect(() => {
@@ -203,12 +219,13 @@ function DbTableDetailPageInner() {
       setLgclNm(data.tblLgclNm);
       setDc(data.tblDc);
       setCols(data.columns.map((c) => ({
-        _key:        nextKey(),
-        colId:       c.colId,
+        _key: nextKey(),
+        colId: c.colId,
         colPhysclNm: c.colPhysclNm,
-        colLgclNm:   c.colLgclNm,
-        dataTyNm:    c.dataTyNm,
-        colDc:       c.colDc,
+        colLgclNm: c.colLgclNm,
+        dataTyNm: c.dataTyNm,
+        colDc: c.colDc,
+        refGrpCode: c.refGrpCode,
       })));
     }
   }, [data]);
@@ -239,6 +256,7 @@ function DbTableDetailPageInner() {
               columns: cols.map((c) => ({
                 colPhysclNm: c.colPhysclNm, colLgclNm: c.colLgclNm,
                 dataTyNm: c.dataTyNm, colDc: c.colDc,
+                refGrpCode: c.refGrpCode || undefined,
               })),
             }),
           });
@@ -252,6 +270,7 @@ function DbTableDetailPageInner() {
             columns: cols.map((c) => ({
               colId: c.colId, colPhysclNm: c.colPhysclNm, colLgclNm: c.colLgclNm,
               dataTyNm: c.dataTyNm, colDc: c.colDc,
+              refGrpCode: c.refGrpCode || undefined,
             })),
           }),
         });
@@ -259,8 +278,8 @@ function DbTableDetailPageInner() {
       }
     },
     onSuccess: (savedId) => {
-      qc.invalidateQueries({ queryKey: ["db-tables",  projectId] });
-      qc.invalidateQueries({ queryKey: ["db-table",   projectId, savedId] });
+      qc.invalidateQueries({ queryKey: ["db-tables", projectId] });
+      qc.invalidateQueries({ queryKey: ["db-table", projectId, savedId] });
       toast.success("저장되었습니다.");
       if (isNew) router.replace(`/projects/${projectId}/db-tables/${savedId}`);
     },
@@ -270,7 +289,7 @@ function DbTableDetailPageInner() {
   // ── 컬럼 조작 ───────────────────────────────────────────────────────────────
   function addColumns(count: number) {
     const newCols = Array.from({ length: count }, () => ({
-      _key: nextKey(), colPhysclNm: "", colLgclNm: "", dataTyNm: "", colDc: "",
+      _key: nextKey(), colPhysclNm: "", colLgclNm: "", dataTyNm: "", colDc: "", refGrpCode: "",
     }));
     setCols((prev) => [...prev, ...newCols]);
   }
@@ -288,7 +307,7 @@ function DbTableDetailPageInner() {
   function handleDragEnter(idx: number) { dragOverIdx.current = idx; }
   function handleDragEnd() {
     const from = dragIdx.current;
-    const to   = dragOverIdx.current;
+    const to = dragOverIdx.current;
     if (from === null || to === null || from === to) {
       dragIdx.current = dragOverIdx.current = null;
       return;
@@ -316,11 +335,12 @@ function DbTableDetailPageInner() {
   function handleDdlApply() {
     if (!ddlParsed) return;
     const newCols: ColDraft[] = ddlParsed.map((p) => ({
-      _key:        nextKey(),
+      _key: nextKey(),
       colPhysclNm: p.colPhysclNm,
-      colLgclNm:   p.colLgclNm,
-      dataTyNm:    p.dataTyNm,
-      colDc:       "",
+      colLgclNm: p.colLgclNm,
+      dataTyNm: p.dataTyNm,
+      colDc: "",
+      refGrpCode: "",
     }));
     setCols((prev) => [...prev, ...newCols]);
     toast.success(`${ddlParsed.length}개 컬럼을 추가했습니다.`);
@@ -329,10 +349,26 @@ function DbTableDetailPageInner() {
     setDdlParsed(null);
   }
 
+  // 도움말 팝업
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  // 논리 컬럼명 누락 확인 후 저장
+  const [lgclWarnOpen, setLgclWarnOpen] = useState(false);
+  const [lgclWarnCount, setLgclWarnCount] = useState(0);
+
   function handleSave() {
     if (!physNm.trim()) { toast.error("물리 테이블명을 입력해 주세요."); return; }
     const empty = cols.find((c) => !c.colPhysclNm.trim());
     if (empty) { toast.error("컬럼 물리명을 모두 입력해 주세요."); return; }
+
+    // 논리 컬럼명이 비어있는 컬럼 확인 → 경고 후 사용자 선택
+    const missingLgcl = cols.filter((c) => c.colPhysclNm.trim() && !c.colLgclNm.trim());
+    if (missingLgcl.length > 0) {
+      setLgclWarnCount(missingLgcl.length);
+      setLgclWarnOpen(true);
+      return;
+    }
+
     saveMutation.mutate();
   }
 
@@ -393,7 +429,7 @@ function DbTableDetailPageInner() {
       </div>
 
       {/* ── 본문 ── */}
-      <div style={{ flex: 1, minHeight: 0, overflow: "hidden", padding: "20px 24px 20px", display: "flex", flexDirection: "column", gap: 16, maxWidth: 900 }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: "hidden", padding: "20px 24px 20px", display: "flex", flexDirection: "column", gap: 16, maxWidth: 1200 }}>
 
         {/* ── 테이블 기본 정보 ── */}
         <section style={{ ...sectionStyle, flexShrink: 0 }}>
@@ -476,64 +512,87 @@ function DbTableDetailPageInner() {
               <div>논리 컬럼명</div>
               <div>데이터 타입</div>
               <div>설명</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                공통 코드
+                <button
+                  type="button"
+                  onClick={() => setHelpOpen(true)}
+                  title="도움말"
+                  style={{
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    width: 16, height: 16, borderRadius: "50%",
+                    border: "1.5px solid var(--color-text-secondary)",
+                    background: "transparent", color: "var(--color-text-secondary)",
+                    fontSize: 10, fontWeight: 700, cursor: "pointer", padding: 0, lineHeight: 1,
+                  }}
+                >
+                  ?
+                </button>
+              </div>
               <div />
             </div>
 
             <div style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
-            {cols.length === 0 ? (
-              <div style={{ padding: "32px 0", textAlign: "center", color: "#bbb", fontSize: 13 }}>
-                컬럼을 추가해 주세요.
-              </div>
-            ) : (
-              cols.map((col, idx) => (
-                <div
-                  key={col._key}
-                  draggable
-                  onDragStart={() => handleDragStart(idx)}
-                  onDragEnter={() => handleDragEnter(idx)}
-                  onDragEnd={handleDragEnd}
-                  onDragOver={(e) => e.preventDefault()}
-                  style={{
-                    ...colRowStyle,
-                    borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-                    background: col.colId ? "var(--color-bg-card)" : "#fffbeb",
-                  }}
-                >
-                  <div style={{ cursor: "grab", color: "#ccc", userSelect: "none", textAlign: "center", fontSize: 14 }}>⋮⋮</div>
-                  <input
-                    value={col.colPhysclNm}
-                    onChange={(e) => updateCol(col._key, "colPhysclNm", e.target.value)}
-                    placeholder="col_name"
-                    style={{ ...colInputStyle, fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace", fontWeight: 400 }}
-                  />
-                  <input
-                    value={col.colLgclNm}
-                    onChange={(e) => updateCol(col._key, "colLgclNm", e.target.value)}
-                    placeholder="컬럼 논리명"
-                    style={colInputStyle}
-                  />
-                  <input
-                    value={col.dataTyNm}
-                    onChange={(e) => updateCol(col._key, "dataTyNm", e.target.value)}
-                    placeholder="VARCHAR(100)"
-                    style={{ ...colInputStyle, fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace" }}
-                  />
-                  <input
-                    value={col.colDc}
-                    onChange={(e) => updateCol(col._key, "colDc", e.target.value)}
-                    placeholder="설명"
-                    style={{ ...colInputStyle, fontFamily: "'Pretendard','Noto Sans KR',sans-serif" }}
-                  />
-                  <button
-                    onClick={() => removeColumn(col._key)}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "#e57373", fontSize: 16, padding: "0 4px", lineHeight: 1 }}
-                    title="컬럼 삭제"
-                  >
-                    ✕
-                  </button>
+              {cols.length === 0 ? (
+                <div style={{ padding: "32px 0", textAlign: "center", color: "#bbb", fontSize: 13 }}>
+                  컬럼을 추가해 주세요.
                 </div>
-              ))
-            )}
+              ) : (
+                cols.map((col, idx) => (
+                  <div
+                    key={col._key}
+                    draggable
+                    onDragStart={() => handleDragStart(idx)}
+                    onDragEnter={() => handleDragEnter(idx)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => e.preventDefault()}
+                    style={{
+                      ...colRowStyle,
+                      borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+                      background: col.colId ? "var(--color-bg-card)" : "#fffbeb",
+                    }}
+                  >
+                    <div style={{ cursor: "grab", color: "#ccc", userSelect: "none", textAlign: "center", fontSize: 14 }}>⋮⋮</div>
+                    <input
+                      value={col.colPhysclNm}
+                      onChange={(e) => updateCol(col._key, "colPhysclNm", e.target.value)}
+                      placeholder="col_name"
+                      style={{ ...colInputStyle, fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace", fontWeight: 400 }}
+                    />
+                    <input
+                      value={col.colLgclNm}
+                      onChange={(e) => updateCol(col._key, "colLgclNm", e.target.value)}
+                      placeholder="컬럼 논리명"
+                      style={colInputStyle}
+                    />
+                    <input
+                      value={col.dataTyNm}
+                      onChange={(e) => updateCol(col._key, "dataTyNm", e.target.value)}
+                      placeholder="VARCHAR(100)"
+                      style={{ ...colInputStyle, fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace" }}
+                    />
+                    <input
+                      value={col.colDc}
+                      onChange={(e) => updateCol(col._key, "colDc", e.target.value)}
+                      placeholder="설명"
+                      style={{ ...colInputStyle, fontFamily: "'Pretendard','Noto Sans KR',sans-serif" }}
+                    />
+                    {/* 코드 — 공통코드 그룹 검색 드롭다운 */}
+                    <CodeGroupSelect
+                      value={col.refGrpCode}
+                      options={codeGroups ?? []}
+                      onChange={(v) => updateCol(col._key, "refGrpCode", v)}
+                    />
+                    <button
+                      onClick={() => removeColumn(col._key)}
+                      style={{ background: "none", border: "none", cursor: "pointer", color: "#e57373", fontSize: 16, padding: "0 4px", lineHeight: 1 }}
+                      title="컬럼 삭제"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
@@ -552,7 +611,7 @@ function DbTableDetailPageInner() {
           onClick={() => { setDdlOpen(false); setDdlParsed(null); }}
         >
           <div
-            style={{ width: 560, maxHeight: "80vh", background: "var(--color-bg-card)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", overflow: "hidden" }}
+            style={{ width: 560, height: "70vh", maxHeight: "85vh", background: "var(--color-bg-card)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", overflow: "hidden" }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* 팝업 헤더 */}
@@ -604,13 +663,13 @@ function DbTableDetailPageInner() {
                       <div>데이터 타입</div>
                     </div>
                     <div style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
-                    {ddlParsed.map((p, i) => (
-                      <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "5px 12px", borderTop: i === 0 ? "none" : "1px solid var(--color-border)", fontSize: 12 }}>
-                        <span style={{ fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace", fontWeight: 600, color: "var(--color-text-primary)" }}>{p.colPhysclNm}</span>
-                        <span style={{ color: p.colLgclNm ? "var(--color-text-primary)" : "#bbb" }}>{p.colLgclNm || "—"}</span>
-                        <span style={{ fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace", color: "var(--color-text-secondary)" }}>{p.dataTyNm}</span>
-                      </div>
-                    ))}
+                      {ddlParsed.map((p, i) => (
+                        <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "5px 12px", borderTop: i === 0 ? "none" : "1px solid var(--color-border)", fontSize: 12 }}>
+                          <span style={{ fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace", fontWeight: 600, color: "var(--color-text-primary)" }}>{p.colPhysclNm}</span>
+                          <span style={{ color: p.colLgclNm ? "var(--color-text-primary)" : "#bbb" }}>{p.colLgclNm || "—"}</span>
+                          <span style={{ fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace", color: "var(--color-text-secondary)" }}>{p.dataTyNm}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -620,6 +679,60 @@ function DbTableDetailPageInner() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── 공통 코드 도움말 팝업 ── */}
+      {helpOpen && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1200 }}
+          onClick={() => setHelpOpen(false)}
+        >
+          <div
+            style={{ background: "var(--color-bg-card)", borderRadius: 12, padding: "24px 28px", minWidth: 400, maxWidth: 520, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>공통 코드</span>
+              <button onClick={() => setHelpOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.8, whiteSpace: "pre-line" }}>
+              {"해당 컬럼이 공통코드를 사용한다면 어떤 공통코드 그룹을 참조하는지 선택해 주세요.\n\n" +
+                "• 필수 값이 아니므로 비워 두어도 무방합니다.\n" +
+                "• 공통코드를 지정하면 AI가 구현 시 해당 코드 그룹의 값 목록을 정확히 참조하여 코드를 생성합니다.\n" +
+                "• 이용을 위해서는 공통코드에 먼저 등록해 주세요."}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 논리 컬럼명 누락 경고 다이얼로그 ── */}
+      {lgclWarnOpen && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
+          onClick={() => setLgclWarnOpen(false)}
+        >
+          <div style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "28px 32px", minWidth: 360, maxWidth: 440, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }} onClick={(e) => e.stopPropagation()}>
+            <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700 }}>논리 컬럼명 누락</p>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+              논리 컬럼명이 없는 컬럼이 <strong style={{ color: "#e65100" }}>{lgclWarnCount}개</strong> 있습니다.<br />
+              나중에 입력하고, 지금은 이대로 저장하시겠습니까?
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                style={{ padding: "6px 16px", borderRadius: 6, border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: 13, cursor: "pointer" }}
+                onClick={() => setLgclWarnOpen(false)}
+              >
+                취소
+              </button>
+              <button
+                style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "rgba(103,80,164,1)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                onClick={() => { setLgclWarnOpen(false); saveMutation.mutate(); }}
+              >
+                저장
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -665,9 +778,126 @@ function DbTableDetailPageInner() {
   );
 }
 
+// ── 코드 그룹 검색 드롭다운 ───────────────────────────────────────────────────
+// 클릭 → 검색 입력 + 필터링된 목록 → 선택 → grp_code 저장
+
+function CodeGroupSelect({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: CodeGroupOption[];
+  onChange: (grpCode: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  // 선택된 그룹명 표시
+  const selected = options.find((o) => o.grpCode === value);
+
+  // 검색 필터링
+  const filtered = options.filter((o) =>
+    !search ||
+    o.grpCode.toLowerCase().includes(search.toLowerCase()) ||
+    o.grpCodeNm.toLowerCase().includes(search.toLowerCase())
+  );
+
+  // 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      {/* 표시 영역 — 클릭하면 드롭다운 토글 */}
+      <div
+        onClick={() => { setOpen(!open); setSearch(""); }}
+        style={{
+          ...colInputStyle,
+          cursor: "pointer",
+          display: "flex", alignItems: "center", gap: 4,
+          overflow: "hidden", whiteSpace: "nowrap",
+          minHeight: 28,
+        }}
+      >
+        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", color: selected ? "var(--color-text-primary)" : "#bbb", fontSize: 12 }}>
+          {selected ? selected.grpCodeNm : ""}
+        </span>
+        {/* 클리어 버튼 */}
+        {value && (
+          <span
+            onClick={(e) => { e.stopPropagation(); onChange(""); }}
+            style={{ color: "#999", fontSize: 12, cursor: "pointer", flexShrink: 0 }}
+          >
+            ✕
+          </span>
+        )}
+      </div>
+
+      {/* 드롭다운 */}
+      {open && (
+        <div style={{
+          position: "absolute", top: "100%", right: 0, zIndex: 100,
+          width: 280, maxHeight: 240,
+          background: "var(--color-bg-card)", border: "1px solid var(--color-border)",
+          borderRadius: 6, boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+          display: "flex", flexDirection: "column",
+        }}>
+          {/* 검색 입력 */}
+          <input
+            autoFocus
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="코드 그룹 검색..."
+            style={{
+              padding: "6px 10px", border: "none", borderBottom: "1px solid var(--color-border)",
+              outline: "none", fontSize: 12, background: "var(--color-bg-muted)",
+              color: "var(--color-text-primary)",
+            }}
+          />
+          {/* 목록 */}
+          <div style={{ overflowY: "auto", flex: 1 }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: "12px", textAlign: "center", color: "#bbb", fontSize: 11 }}>
+                검색 결과 없음
+              </div>
+            ) : (
+              filtered.map((o) => (
+                <div
+                  key={o.grpCode}
+                  onClick={() => { onChange(o.grpCode); setOpen(false); }}
+                  style={{
+                    padding: "5px 10px", cursor: "pointer", fontSize: 12,
+                    background: o.grpCode === value ? "rgba(103,80,164,0.08)" : "transparent",
+                    borderBottom: "1px solid var(--color-border)",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-bg-hover, #f5f7ff)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = o.grpCode === value ? "rgba(103,80,164,0.08)" : "transparent"; }}
+                >
+                  <span style={{ fontWeight: 600, color: "rgba(103,80,164,0.9)", marginRight: 6, fontFamily: "'JetBrains Mono','Consolas',monospace", fontSize: 11 }}>
+                    {o.grpCode}
+                  </span>
+                  <span style={{ color: "var(--color-text-primary)" }}>{o.grpCodeNm}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-const COL_GRID = "28px 1fr 1fr 140px 1fr 36px";
+const COL_GRID = "28px 1fr 1fr 140px 1fr 160px 36px";
 
 const sectionStyle: React.CSSProperties = {
   background: "var(--color-bg-card)",

@@ -74,8 +74,9 @@ type ColMappingItem = {
   uiTyCode: string;
   tableName: string;
   colName: string;
+  refGrpCode: string;
   sortOrder: number;
-};;
+};
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
 
@@ -754,7 +755,7 @@ function FunctionDetailPageInner() {
                   />
                 </div>
                 <div style={formGroupStyle}>
-                  <label style={labelStyle}>표시 ID</label>
+                  <label style={{ ...labelStyle, display: "inline-flex", alignItems: "center", gap: 4 }}>표시 ID<DisplayIdHelp /></label>
                   <input
                     type="text"
                     value={displayId}
@@ -981,6 +982,7 @@ function FunctionDetailPageInner() {
                     <div style={{ flex: "0 0 90px" }}>UI유형</div>
                     <div style={{ flex: "1 1 0" }}>테이블</div>
                     <div style={{ flex: "1 1 0" }}>컬럼</div>
+                    <div style={{ flex: "0 0 120px" }}>공통코드</div>
                   </div>
                   {/* 행 */}
                   {colMappings.map((m, idx) => (
@@ -1006,6 +1008,16 @@ function FunctionDetailPageInner() {
                       <div style={{ flex: "0 0 90px", fontSize: 12, color: "var(--color-text-secondary)" }}>{m.uiTyCode || "—"}</div>
                       <div style={{ flex: "1 1 0", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.tableName || "—"}</div>
                       <div style={{ flex: "1 1 0", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.colName || "—"}</div>
+                      <div style={{ flex: "0 0 120px", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {m.refGrpCode ? (
+                          <span style={{
+                            padding: "1px 6px", borderRadius: 3, fontSize: 10, fontWeight: 600,
+                            background: "rgba(46,125,50,0.1)", color: "#2e7d32",
+                          }}>
+                            {m.refGrpCode}
+                          </span>
+                        ) : <span style={{ color: "var(--color-text-disabled)" }}>—</span>}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1553,6 +1565,45 @@ const colMappingRowStyle: React.CSSProperties = {
   padding: "7px 12px",
 };
 const formGroupStyle: React.CSSProperties = { marginBottom: 16 };
+
+// ── 표시 ID 도움말 ───────────────────────────────────────────────────────────
+
+function DisplayIdHelp() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+        title="도움말"
+        style={{
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: 16, height: 16, borderRadius: "50%",
+          border: "1.5px solid var(--color-text-secondary)",
+          background: "transparent", color: "var(--color-text-secondary)",
+          fontSize: 10, fontWeight: 700, cursor: "pointer", padding: 0, lineHeight: 1,
+        }}
+      >?</button>
+      {open && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1200 }}
+          onClick={() => setOpen(false)}
+        >
+          <div style={{ background: "var(--color-bg-card)", borderRadius: 12, padding: "24px 28px", minWidth: 400, maxWidth: 520, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>표시 ID</span>
+              <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.8, whiteSpace: "pre-line" }}>
+              {"명칭 대신 화면에 표시되는 고유 식별자입니다.\n비워 두면 자동으로 생성됩니다.\n\n예시)\n• 단위업무: UW-00001\n• 화면: SCR-00001\n• 영역: AR-00001\n• 기능: FN-00001"}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 const labelStyle: React.CSSProperties = {
   display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600,
   color: "var(--color-text-secondary)",

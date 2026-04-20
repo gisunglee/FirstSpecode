@@ -806,6 +806,35 @@ body {
   border-top: 1px solid var(--color-border);
   margin: 1em 0;
 }
+/* diff 코드블록 — 붉은 테두리 + 연한 배경으로 시각적 강조 */
+.sp-markdown pre.sp-diff-block {
+  background: #fef2f2;
+  border: 2px solid #ef5350;
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin: 0.75em 0;
+}
+/* diff 라인별 색상 — 추가(초록)/삭제(빨강)/섹션(@@ 파랑) */
+.sp-markdown .sp-diff {
+  background: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+/* @@ 섹션 헤더 — 파란 강조 */
+.sp-diff-line-section {
+  color: #1565c0;
+  font-weight: 700;
+}
+/* + [추가] 라인 — 초록 */
+.sp-diff-line-add {
+  color: #2e7d32;
+  background: rgba(46, 125, 50, 0.08);
+}
+/* - [삭제] 라인 — 빨강 */
+.sp-diff-line-del {
+  color: #c62828;
+  background: rgba(198, 40, 40, 0.08);
+}
 
 /* ── RichEditor (TipTap) ────────────────────────────────────────────────── */
 /* EditorContent 내부 ProseMirror 컨테이너 스타일 */

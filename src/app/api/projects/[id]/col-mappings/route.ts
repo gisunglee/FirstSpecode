@@ -68,6 +68,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           uiTyCode:       m.ui_ty_code ?? "",
           usePurpsCn:     m.use_purps_cn ?? "",
           colDc:          m.col_dc ?? "",
+          refGrpCode:     col?.ref_grp_code ?? "",
           sortOrder:      m.sort_ordr,
         };
       }),

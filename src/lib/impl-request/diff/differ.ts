@@ -211,7 +211,10 @@ function injectSectionHeadersInline(
       continue;
     }
 
-    // 그 외 (빈 라인, "\ No newline" 등)
+    // "\ No newline at end of file" — AI 프롬프트에 무의미한 노이즈이므로 제거
+    if (line.startsWith("\\ No newline") || line.startsWith("\\")) continue;
+
+    // 그 외 (빈 라인 등)
     result.push(line);
   }
 

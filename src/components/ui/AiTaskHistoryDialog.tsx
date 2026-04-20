@@ -24,7 +24,7 @@ import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
 type TaskStatus = "PENDING" | "IN_PROGRESS" | "DONE" | "APPLIED" | "REJECTED" | "FAILED" | "TIMEOUT";
-type TaskType   = "INSPECT" | "DESIGN" | "IMPLEMENT" | "MOCKUP" | "IMPACT" | "CUSTOM";
+type TaskType   = "INSPECT" | "DESIGN" | "IMPLEMENT" | "PRE_IMPL" | "MOCKUP" | "IMPACT" | "CUSTOM";
 
 type TaskRow = {
   taskId:      string;
@@ -54,9 +54,21 @@ const TASK_TYPE_LABELS: Record<TaskType, string> = {
   INSPECT:   "명세 검토",
   DESIGN:    "설계",
   IMPLEMENT: "구현",
+  PRE_IMPL:  "선 구현 적용",
   MOCKUP:    "목업",
   IMPACT:    "영향도 분석",
   CUSTOM:    "자유 요청",
+};
+
+// 작업유형별 배지 색상
+const TASK_TYPE_BADGE: Record<TaskType, { bg: string; color: string }> = {
+  INSPECT:   { bg: "#f5f5f5", color: "#616161" },
+  DESIGN:    { bg: "#e8eaf6", color: "#3f51b5" },
+  IMPLEMENT: { bg: "#fce4ec", color: "#c62828" },
+  PRE_IMPL:  { bg: "#e8f5e9", color: "#2e7d32" },
+  MOCKUP:    { bg: "#f1f8e9", color: "#558b2f" },
+  IMPACT:    { bg: "#fff3e0", color: "#ef6c00" },
+  CUSTOM:    { bg: "#f5f5f5", color: "#757575" },
 };
 
 // ── 배지 스타일 ───────────────────────────────────────────────────────────────
@@ -208,6 +220,8 @@ export default function AiTaskHistoryDialog({
                   {items.map((row) => {
                     const fnCount = row.implFunctions?.length ?? 0;
                     const fnNames = row.implFunctions?.map((f) => `${f.displayId} ${f.name}`).join(", ") ?? "";
+                    const isPreImpl = row.taskType === "PRE_IMPL";
+                    const typeBadge = TASK_TYPE_BADGE[row.taskType] ?? TASK_TYPE_BADGE.IMPLEMENT;
 
                     return (
                       <div
@@ -215,22 +229,43 @@ export default function AiTaskHistoryDialog({
                         onClick={() => setDetailTaskId(row.taskId)}
                         style={{
                           padding: "12px 14px", marginBottom: 6,
-                          border: "1px solid var(--color-border)", borderRadius: 8,
-                          background: "var(--color-bg-card)", cursor: "pointer",
+                          border: `1px solid ${isPreImpl ? "rgba(46,125,50,0.25)" : "var(--color-border)"}`,
+                          borderRadius: 8,
+                          background: isPreImpl ? "rgba(46,125,50,0.03)" : "var(--color-bg-card)",
+                          cursor: "pointer",
                           transition: "all 0.1s",
                         }}
                         onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-bg-hover, #f5f7ff)"; e.currentTarget.style.borderColor = "rgba(103,80,164,0.3)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = "var(--color-bg-card)"; e.currentTarget.style.borderColor = "var(--color-border)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = isPreImpl ? "rgba(46,125,50,0.03)" : "var(--color-bg-card)"; e.currentTarget.style.borderColor = isPreImpl ? "rgba(46,125,50,0.25)" : "var(--color-border)"; }}
                       >
-                        {/* 1행 — 상태 + 요청일시 + 소요시간 + 재시도 + 요청자 */}
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+                        {/* 1행 — 상태 + 작업유형 + 요청일시 + 완료일시/소요 + 재시도 + 요청자 */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
                           <span style={statusBadgeStyle(row.status)}>{STATUS_LABELS[row.status]}</span>
+                          {/* 작업유형 배지 — 구현/선 구현 적용 구분 */}
+                          <span style={{
+                            display: "inline-block", padding: "2px 8px", borderRadius: 4,
+                            fontSize: 11, fontWeight: 700,
+                            background: typeBadge.bg, color: typeBadge.color,
+                            border: `1px solid ${typeBadge.color}20`,
+                          }}>
+                            {TASK_TYPE_LABELS[row.taskType]}
+                          </span>
                           <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)" }}>
                             {formatDatetime(row.requestedAt)}
                           </span>
-                          <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
-                            소요 <strong style={{ color: "var(--color-text-primary)" }}>{formatDuration(row.requestedAt, row.completedAt)}</strong>
-                          </span>
+                          {/* 완료된 경우: 완료 시각 + 소요시간 표시 */}
+                          {row.completedAt ? (
+                            <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+                              → {formatDatetime(row.completedAt)}
+                              <span style={{ marginLeft: 4, color: "#2e7d32", fontWeight: 600 }}>
+                                ({formatDuration(row.requestedAt, row.completedAt)})
+                              </span>
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+                              소요 <strong style={{ color: "var(--color-text-primary)" }}>—</strong>
+                            </span>
+                          )}
                           {row.retryCnt > 0 && (
                             <span style={{ fontSize: 11, color: "#e65100", fontWeight: 600 }}>
                               재시도 {row.retryCnt}회
@@ -241,8 +276,8 @@ export default function AiTaskHistoryDialog({
                           </span>
                         </div>
 
-                        {/* 2행 — IMPLEMENT: 포함 기능 / 기타: 코멘트 */}
-                        {taskType === "IMPLEMENT" && fnCount > 0 && (
+                        {/* 2행 — IMPLEMENT/PRE_IMPL: 포함 기능 */}
+                        {(row.taskType === "IMPLEMENT" || isPreImpl) && fnCount > 0 && (
                           <div style={{
                             fontSize: 11, color: "var(--color-text-secondary)",
                             padding: "6px 8px", background: "var(--color-bg-muted)", borderRadius: 4,
@@ -250,7 +285,8 @@ export default function AiTaskHistoryDialog({
                           }}>
                             <span style={{
                               fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 3,
-                              background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)",
+                              background: isPreImpl ? "rgba(46,125,50,0.12)" : "rgba(103,80,164,0.12)",
+                              color: isPreImpl ? "#2e7d32" : "rgba(103,80,164,0.9)",
                               marginRight: 6,
                             }}>
                               기능 {fnCount}개
@@ -258,6 +294,16 @@ export default function AiTaskHistoryDialog({
                             <span style={{ overflow: "hidden", textOverflow: "ellipsis", display: "inline-block", maxWidth: "calc(100% - 80px)", verticalAlign: "middle", whiteSpace: "nowrap" }}>
                               {fnNames}
                             </span>
+                          </div>
+                        )}
+
+                        {/* PRE_IMPL: 기능 목록이 없으면 안내 문구 */}
+                        {isPreImpl && fnCount === 0 && (
+                          <div style={{
+                            fontSize: 11, color: "#2e7d32",
+                            padding: "6px 8px", background: "rgba(46,125,50,0.05)", borderRadius: 4,
+                          }}>
+                            기준선 갱신 — 선택 계층의 스냅샷이 현재 상태로 갱신됨
                           </div>
                         )}
 
@@ -279,13 +325,6 @@ export default function AiTaskHistoryDialog({
                             }}>
                               {row.comment.trim()}
                             </span>
-                          </div>
-                        )}
-
-                        {/* 완료일시 (완료된 경우) */}
-                        {row.completedAt && (
-                          <div style={{ fontSize: 10, color: "var(--color-text-secondary)", marginTop: 4 }}>
-                            완료: {formatDatetime(row.completedAt)}
                           </div>
                         )}
                       </div>

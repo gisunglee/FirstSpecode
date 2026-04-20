@@ -394,6 +394,7 @@ model TbDsDbTableColumn {
   col_lgcl_nm   String?
   data_ty_nm    String?
   col_dc        String?
+  ref_grp_code  String?     @db.VarChar(100)   // 참조 공통코드 그룹코드 (tb_cm_code_group.grp_code)
   sort_ordr     Int         @default(0)
   creat_dt      DateTime    @default(now())
   mdfcn_mber_id String?

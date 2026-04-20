@@ -35,6 +35,7 @@ type Props = {
 
 type LayerSummary = {
   type: string;
+  id: string;
   displayId: string;
   name: string;
   mode: string;
@@ -42,6 +43,33 @@ type LayerSummary = {
 };
 
 type PromptTemplate = { id: string; name: string } | null;
+
+// 레이어 키 생성용 테이블명 매핑 (collector.ts의 TABLE_MAP과 동일)
+const TABLE_MAP: Record<string, string> = {
+  unit_work: "tb_ds_unit_work",
+  screen:    "tb_ds_screen",
+  area:      "tb_ds_area",
+  function:  "tb_ds_function",
+};
+
+// 타입별 표시 라벨
+const TYPE_LABEL: Record<string, string> = {
+  unit_work: "UW",
+  screen:    "SCR",
+  area:      "AR",
+  function:  "FN",
+};
+
+// 타입별 배지 색상
+const TYPE_COLOR: Record<string, string> = {
+  unit_work: "#1565c0",
+  screen:    "#2e7d32",
+  area:      "#e65100",
+  function:  "#6a1b9a",
+};
+
+// diff가 있는 모드 — 선 구현 적용 대상
+const DIFF_MODES = new Set(["DIFF", "FULL", "REPLACE"]);
 
 // 모드 배지 색상
 const MODE_BADGE: Record<string, { bg: string; color: string }> = {
@@ -71,6 +99,12 @@ export default function ImplRequestPopup({ projectId, entryType, entryId, functi
   const [confirmOpen, setConfirmOpen] = useState(false);
   // 테이블 정보 치환 모드 (none = 원본 유지, brief = 컬럼명만, full = 컬럼표)
   const [tableMode, setTableMode] = useState<"none" | "brief" | "full">("none");
+
+  // ── 선 구현 적용 상태 ──
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [resetChecked, setResetChecked] = useState<Set<string>>(new Set());
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   // 모든 계층이 NO_CHANGE면 요청 불가
   const allNoChange = summary.length > 0 && summary.every((l) => l.mode === "NO_CHANGE");
@@ -120,6 +154,36 @@ export default function ImplRequestPopup({ projectId, entryType, entryId, functi
       setBuilding(false);
     }
   }
+
+  // ── 선 구현 적용 (pre-impl API) ──
+  // 선택된 레이어만 스냅샷을 현재 상태로 갱신 → 이후 diff에서 제외
+  async function handlePreImpl() {
+    setResetting(true);
+    try {
+      const keys = Array.from(resetChecked);
+      await authFetch(`/api/projects/${projectId}/impl-request/pre-impl`, {
+        method: "POST",
+        body: JSON.stringify({ entryType, entryId, functionIds, resetLayerKeys: keys }),
+      });
+      toast.success(`${keys.length}개 계층의 기준선이 갱신되었습니다.`);
+      setResetChecked(new Set());
+      setResetConfirmOpen(false);
+      // 프롬프트 재빌드 → 적용된 레이어는 NO_CHANGE로 전환
+      handleBuild();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "선 구현 적용 실패");
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  // 레이어 키 생성 — "ref_tbl_nm::ref_id" 형식
+  function layerKey(s: LayerSummary): string {
+    return `${TABLE_MAP[s.type] ?? s.type}::${s.id}`;
+  }
+
+  // diff가 있는 레이어 수 (선 구현 적용 대상)
+  const diffLayerCount = summary.filter((l) => DIFF_MODES.has(l.mode)).length;
 
   // 테이블 모드 변경 — 같은 모드 클릭 시 토글 해제(none), 다른 모드면 전환
   // 모드 변경 즉시 build API 재호출 (서버에서 치환)
@@ -332,6 +396,128 @@ export default function ImplRequestPopup({ projectId, entryType, entryId, functi
           </div>
         )}
 
+        {/* ── 레이어 상세 — 선 구현 적용 (diff 있는 계층이 존재할 때만 표시) ── */}
+        {built && diffLayerCount > 0 && (
+          <div style={{
+            borderBottom: "1px solid var(--color-border)",
+            background: "var(--color-bg-card)",
+            flexShrink: 0,
+          }}>
+            {/* 접이식 헤더 */}
+            <button
+              onClick={() => setDetailOpen((v) => !v)}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                width: "100%", padding: "8px 20px",
+                background: "none", border: "none", cursor: "pointer",
+                color: "var(--color-text-secondary)", fontSize: 12, fontWeight: 600,
+              }}
+            >
+              <span>
+                {detailOpen ? "▼" : "▶"} 계층별 변경 상세
+                <span style={{ fontWeight: 400, marginLeft: 6 }}>
+                  (변경 {diffLayerCount}건)
+                </span>
+              </span>
+              {/* 선 구현 적용 버튼 — 1개 이상 체크 시만 활성 */}
+              {detailOpen && resetChecked.size > 0 && (
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setResetConfirmOpen(true);
+                  }}
+                  style={{
+                    padding: "3px 10px", borderRadius: 4, fontSize: 11, fontWeight: 600,
+                    background: "rgba(46,125,50,0.1)", color: "#2e7d32",
+                    border: "1px solid rgba(46,125,50,0.3)",
+                    cursor: "pointer",
+                  }}
+                >
+                  선 구현 적용 ({resetChecked.size})
+                </span>
+              )}
+            </button>
+
+            {/* 레이어 목록 — 펼침 상태일 때만 표시 */}
+            {detailOpen && (
+              <div style={{ padding: "0 20px 10px" }}>
+                <div style={{
+                  border: "1px solid var(--color-border)", borderRadius: 6,
+                  overflow: "hidden",
+                }}>
+                  {summary.map((layer) => {
+                    const key = layerKey(layer);
+                    const hasDiff = DIFF_MODES.has(layer.mode);
+                    const checked = resetChecked.has(key);
+                    const badge = MODE_BADGE[layer.mode] ?? MODE_BADGE.NO_CHANGE;
+                    const typeColor = TYPE_COLOR[layer.type] ?? "#666";
+                    const typeLabel = TYPE_LABEL[layer.type] ?? layer.type;
+
+                    return (
+                      <label
+                        key={key}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          padding: "6px 12px", fontSize: 12,
+                          borderBottom: "1px solid var(--color-border)",
+                          background: checked ? "rgba(46,125,50,0.04)" : "transparent",
+                          cursor: hasDiff ? "pointer" : "default",
+                          opacity: hasDiff ? 1 : 0.55,
+                        }}
+                      >
+                        {/* 체크박스 — diff 있는 레이어만 활성 */}
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={!hasDiff}
+                          onChange={() => {
+                            if (!hasDiff) return;
+                            setResetChecked((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(key)) next.delete(key);
+                              else next.add(key);
+                              return next;
+                            });
+                          }}
+                          style={{ accentColor: "#2e7d32" }}
+                        />
+                        {/* 타입 배지 */}
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, padding: "1px 5px",
+                          borderRadius: 3, background: `${typeColor}18`, color: typeColor,
+                          minWidth: 28, textAlign: "center",
+                        }}>
+                          {typeLabel}
+                        </span>
+                        {/* displayId + name */}
+                        <span style={{ flex: 1, color: "var(--color-text-primary)" }}>
+                          {layer.displayId} — {layer.name}
+                        </span>
+                        {/* 모드 배지 */}
+                        <span style={{
+                          fontSize: 10, fontWeight: 600, padding: "1px 6px",
+                          borderRadius: 3, background: badge.bg, color: badge.color,
+                        }}>
+                          {layer.mode}
+                        </span>
+                        {/* 변동률 */}
+                        {hasDiff && (
+                          <span style={{ fontSize: 10, color: "var(--color-text-secondary)", minWidth: 36, textAlign: "right" }}>
+                            {(layer.lineRatio * 100).toFixed(1)}%
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 6, lineHeight: 1.5 }}>
+                  ※ 이미 직접 반영한 변경사항을 선택 후 &quot;선 구현 적용&quot;을 클릭하면 해당 계층의 기준선이 갱신되어 diff에서 제외됩니다.
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── 본문: 프롬프트 미리보기 ── */}
         <div style={{ flex: 1, overflow: "auto", padding: "16px 20px" }}>
           {building ? (
@@ -528,6 +714,85 @@ export default function ImplRequestPopup({ projectId, entryType, entryId, functi
                 style={{ ...primaryBtn, background: "rgba(103,80,164,1)" }}
               >
                 {submitting ? "요청 중..." : "요청"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── 선 구현 적용 컨펌 다이얼로그 ── */}
+      {resetConfirmOpen && (
+        <div
+          onClick={() => !resetting && setResetConfirmOpen(false)}
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
+            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1200,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%", maxWidth: 480,
+              background: "var(--color-bg-card)", border: "1px solid var(--color-border)",
+              borderRadius: 12, boxShadow: "0 12px 48px rgba(0,0,0,0.25)", padding: "28px 32px",
+            }}
+          >
+            {/* 헤더 */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+              <span style={{ fontSize: 22 }}>🔄</span>
+              <div>
+                <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                  선 구현 적용
+                </p>
+                <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--color-text-secondary)" }}>
+                  이미 구현에 적용된 내용인가요?
+                </p>
+              </div>
+            </div>
+
+            {/* 선택된 레이어 목록 */}
+            <div style={{
+              marginBottom: 16, padding: "10px 14px",
+              background: "rgba(46,125,50,0.06)", border: "1px solid rgba(46,125,50,0.18)",
+              borderRadius: 8,
+            }}>
+              <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 600, color: "#2e7d32" }}>
+                적용 대상
+              </p>
+              {summary
+                .filter((l) => resetChecked.has(layerKey(l)))
+                .map((l) => (
+                  <div key={layerKey(l)} style={{ fontSize: 12, color: "var(--color-text-primary)", marginBottom: 2 }}>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, padding: "0 4px",
+                      borderRadius: 2, background: `${TYPE_COLOR[l.type] ?? "#666"}18`,
+                      color: TYPE_COLOR[l.type] ?? "#666", marginRight: 6,
+                    }}>
+                      {TYPE_LABEL[l.type] ?? l.type}
+                    </span>
+                    {l.displayId} — {l.name}
+                  </div>
+                ))}
+            </div>
+
+            <p style={{ margin: "0 0 18px", fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+              이미 적용된 사항으로 처리하여 이후 구현 요청 시 diff에서 제외하겠습니다.
+            </p>
+
+            {/* 버튼 */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                onClick={() => setResetConfirmOpen(false)}
+                disabled={resetting}
+                style={secBtn}
+              >
+                취소
+              </button>
+              <button
+                onClick={handlePreImpl}
+                disabled={resetting}
+                style={{ ...primaryBtn, background: "#2e7d32" }}
+              >
+                {resetting ? "적용 중..." : "적용"}
               </button>
             </div>
           </div>

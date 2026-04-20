@@ -250,7 +250,8 @@
       "Bash(cp d:/tmp/register-db-tables.mjs d:/source/FirstSpecode/register-db-tables.mjs)",
       "Bash(sed -i 's|resolve\\(\"d:/source/FirstSpecode/.env.local\"\\)|resolve\\(\".env.local\"\\)|' register-db-tables.mjs)",
       "Bash(wc -l /d/source/FirstSpecode/src/components/ui/*.tsx)",
-      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")"
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "Bash(find /d/source/FirstSpecode/src/app/api/projects/[id] -type d -name \"ai\" -o -name \"spec\")"
     ]
   }
 }

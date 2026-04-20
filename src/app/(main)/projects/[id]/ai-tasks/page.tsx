@@ -25,7 +25,7 @@ import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
 type TaskStatus = "PENDING" | "IN_PROGRESS" | "DONE" | "APPLIED" | "REJECTED" | "FAILED" | "TIMEOUT";
-type TaskType   = "INSPECT" | "DESIGN" | "IMPLEMENT" | "MOCKUP" | "IMPACT" | "CUSTOM" | "IA" | "JOURNEY" | "FLOW" | "ERD" | "PROCESS";
+type TaskType   = "INSPECT" | "DESIGN" | "IMPLEMENT" | "PRE_IMPL" | "MOCKUP" | "IMPACT" | "CUSTOM" | "IA" | "JOURNEY" | "FLOW" | "ERD" | "PROCESS";
 type RefType    = "AREA" | "FUNCTION" | "UNIT_WORK" | "PLAN_STUDIO_ARTF";
 
 type TaskRow = {
@@ -68,6 +68,7 @@ const TASK_TYPE_LABELS: Record<TaskType, string> = {
   INSPECT:   "명세 검토",
   DESIGN:    "설계",
   IMPLEMENT: "구현",
+  PRE_IMPL:  "선 구현 적용",
   MOCKUP:    "목업",
   IMPACT:    "영향도 분석",
   CUSTOM:    "자유 요청",
@@ -108,6 +109,7 @@ function taskTypeBadgeStyle(type: TaskType): React.CSSProperties {
     INSPECT:   { bg: "#f5f5f5", color: "#616161" },
     DESIGN:    { bg: "#e8eaf6", color: "#3f51b5" },
     IMPLEMENT: { bg: "#fce4ec", color: "#c62828" },
+    PRE_IMPL:  { bg: "#e8f5e9", color: "#2e7d32" },
     MOCKUP:    { bg: "#f1f8e9", color: "#558b2f" },
     IMPACT:    { bg: "#fff3e0", color: "#ef6c00" },
     CUSTOM:    { bg: "#f5f5f5", color: "#757575" },
@@ -343,6 +345,7 @@ function AiTasksPageInner() {
             <option value="INSPECT">명세 검토</option>
             <option value="DESIGN">설계</option>
             <option value="IMPLEMENT">구현</option>
+            <option value="PRE_IMPL">선 구현 적용</option>
             <option value="MOCKUP">목업</option>
             <option value="IMPACT">영향도 분석</option>
             <option value="CUSTOM">자유 요청</option>

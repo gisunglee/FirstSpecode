@@ -51,7 +51,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       UNIT_WORK: "tb_ds_unit_work",
     };
     let snapshotTaskIds: string[] | undefined;
-    if (snapshotRefId && taskType === "IMPLEMENT") {
+    // IMPLEMENT 이력 조회 시 PRE_IMPL(선 구현 적용) 태스크도 동일 스냅샷을 사용하므로 함께 조회
+    const isImplQuery = snapshotRefId && (taskType === "IMPLEMENT" || taskType === "PRE_IMPL");
+    if (isImplQuery) {
       const refTblNm = SNAPSHOT_TBL_MAP[snapshotRefType ?? "FUNCTION"] ?? "tb_ds_function";
       const snapshots = await prisma.tbSpImplSnapshot.findMany({
         where: { ref_tbl_nm: refTblNm, ref_id: snapshotRefId },
@@ -61,17 +63,36 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       snapshotTaskIds = snapshots.map((s) => s.ai_task_id);
     }
 
+    // IMPLEMENT 조회 시 PRE_IMPL도 함께 포함
+    const taskTypeFilter = taskType === "IMPLEMENT"
+      ? { task_ty_code: { in: ["IMPLEMENT", "PRE_IMPL"] } }
+      : taskType ? { task_ty_code: taskType } : {};
+
+    // PRE_IMPL은 선택된 레이어만 스냅샷을 저장하므로
+    // 스냅샷 경유 조회만으로는 매칭 안 될 수 있음 (예: 영역만 리셋했는데 단위업무 이력에서 조회)
+    // → 스냅샷 경유(IMPLEMENT) OR 태스크 ref_id 직접 매칭(PRE_IMPL) 으로 합산
+    let implWhereFilter = {};
+    if (snapshotTaskIds) {
+      // PRE_IMPL은 태스크의 ref_id가 entryId(단위업무 등)이므로 직접 매칭도 시도
+      implWhereFilter = {
+        OR: [
+          { ai_task_id: { in: snapshotTaskIds } },
+          // PRE_IMPL 태스크는 ref_id(=entryId)로 직접 매칭
+          { task_ty_code: "PRE_IMPL", ref_id: snapshotRefId },
+        ],
+      };
+    } else if (!isImplQuery) {
+      implWhereFilter = {
+        ...(refType ? { ref_ty_code: refType } : {}),
+        ...(refId   ? { ref_id:      refId }   : {}),
+      };
+    }
+
     const where = {
       prjct_id: projectId,
-      ...(status    ? { task_sttus_code: status }    : {}),
-      ...(taskType  ? { task_ty_code:    taskType }   : {}),
-      // snapshotRefId가 있으면 ai_task_id IN 조건으로 대체, 없으면 기존 refType/refId 필터
-      ...(snapshotTaskIds
-        ? { ai_task_id: { in: snapshotTaskIds } }
-        : {
-            ...(refType ? { ref_ty_code: refType } : {}),
-            ...(refId   ? { ref_id:      refId }   : {}),
-          }),
+      ...(status ? { task_sttus_code: status } : {}),
+      ...taskTypeFilter,
+      ...implWhereFilter,
       ...(reqMberId ? { req_mber_id:     reqMberId }  : {}),
     };
 

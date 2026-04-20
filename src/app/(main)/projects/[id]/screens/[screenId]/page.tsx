@@ -35,50 +35,50 @@ import { useAppStore } from "@/store/appStore";
 
 type UnitWorkOption = {
   unitWorkId: string;
-  displayId:  string;
-  name:       string;
+  displayId: string;
+  name: string;
 };
 
 type AreaRow = {
-  areaId:    string;
+  areaId: string;
   displayId: string;
-  name:      string;
-  type:      string;
+  name: string;
+  type: string;
   sortOrder: number;
-  designRt:  number;
-  implRt:    number;
-  testRt:    number;
+  designRt: number;
+  implRt: number;
+  testRt: number;
 };
 
 type ScreenDetail = {
-  screenId:     string;
-  displayId:    string;
-  name:         string;
-  description:  string;
-  comment:      string;
-  layoutData:   string | null;
-  type:         string;
-  sortOrder:    number;
-  categoryL:    string;
-  categoryM:    string;
-  categoryS:    string;
-  unitWorkId:   string | null;
+  screenId: string;
+  displayId: string;
+  name: string;
+  description: string;
+  comment: string;
+  layoutData: string | null;
+  type: string;
+  sortOrder: number;
+  categoryL: string;
+  categoryM: string;
+  categoryS: string;
+  unitWorkId: string | null;
   unitWorkName: string;
-  areas:        AreaRow[];
+  areas: AreaRow[];
 };
 
 type SaveBody = {
-  unitWorkId?:  string;
-  displayId?:   string;
-  name:         string;
-  description:  string;
-  comment?:     string;
-  type:         string;
-  sortOrder:    number;
-  categoryL:    string;
-  categoryM:    string;
-  categoryS:    string;
-  layoutData?:  string;
+  unitWorkId?: string;
+  displayId?: string;
+  name: string;
+  description: string;
+  comment?: string;
+  type: string;
+  sortOrder: number;
+  categoryL: string;
+  categoryM: string;
+  categoryS: string;
+  layoutData?: string;
   saveHistory?: boolean;
 };
 
@@ -95,30 +95,30 @@ export default function ScreenDetailPage() {
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 
 function ScreenDetailPageInner() {
-  const params       = useParams<{ id: string; screenId: string }>();
+  const params = useParams<{ id: string; screenId: string }>();
   const searchParams = useSearchParams();
-  const router       = useRouter();
-  const queryClient  = useQueryClient();
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const { setBreadcrumb } = useAppStore();
-  const projectId    = params.id;
-  const screenId     = params.screenId;
-  const isNew        = screenId === "new";
+  const projectId = params.id;
+  const screenId = params.screenId;
+  const isNew = screenId === "new";
 
   // useSearchParams()는 Suspense 안에서만 동작 — 페이지 래퍼에서 보장됨
   const presetUnitWorkId = searchParams.get("unitWorkId") ?? "";
 
   // ── 폼 상태 ────────────────────────────────────────────────────────────────
   const [form, setForm] = useState<SaveBody>({
-    unitWorkId:  presetUnitWorkId || undefined,
-    displayId:   "",
-    name:        "",
+    unitWorkId: presetUnitWorkId || undefined,
+    displayId: "",
+    name: "",
     description: "",
-    comment:     "",
-    type:        "LIST",
-    sortOrder:   0,
-    categoryL:   "",
-    categoryM:   "",
-    categoryS:   "",
+    comment: "",
+    type: "LIST",
+    sortOrder: 0,
+    categoryL: "",
+    categoryM: "",
+    categoryS: "",
   });
 
   // 레이아웃 에디터 상태 (기본: 빈 배열)
@@ -129,7 +129,7 @@ function ScreenDetailPageInner() {
   const [descTab, setDescTab] = useState<"edit" | "preview">("edit");
 
   // 설명 변경 이력 저장 여부 확인 다이얼로그
-  const [prdOpen,           setPrdOpen]           = useState(false);
+  const [prdOpen, setPrdOpen] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
 
   // 이력 조회 팝업 (SettingsHistoryDialog)
@@ -144,7 +144,7 @@ function ScreenDetailPageInner() {
   // ── 단위업무 목록 조회 (단위업무 선택용) ─────────────────────────────────────
   const { data: uwData } = useQuery({
     queryKey: ["unit-works-for-select", projectId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: { items: UnitWorkOption[] } }>(
         `/api/projects/${projectId}/unit-works`
       ).then((r) => r.data.items),
@@ -154,22 +154,22 @@ function ScreenDetailPageInner() {
   // ── 기존 화면 로드 (수정 모드) ─────────────────────────────────────────────
   const { data: detail, isLoading: isDetailLoading } = useQuery({
     queryKey: ["screen", projectId, screenId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: ScreenDetail }>(
         `/api/projects/${projectId}/screens/${screenId}`
       ).then((r) => {
         const d = r.data;
         setForm({
-          unitWorkId:  d.unitWorkId ?? undefined,
-          displayId:   d.displayId ?? "",
-          name:        d.name,
+          unitWorkId: d.unitWorkId ?? undefined,
+          displayId: d.displayId ?? "",
+          name: d.name,
           description: d.description ?? "",
-          comment:     d.comment ?? "",
-          type:        d.type,
-          sortOrder:   d.sortOrder,
-          categoryL:   d.categoryL,
-          categoryM:   d.categoryM,
-          categoryS:   d.categoryS,
+          comment: d.comment ?? "",
+          type: d.type,
+          sortOrder: d.sortOrder,
+          categoryL: d.categoryL,
+          categoryM: d.categoryM,
+          categoryS: d.categoryS,
         });
         // 설명 변경 감지를 위해 원본 값 보관
         setOriginalDescription(d.description ?? "");
@@ -183,8 +183,8 @@ function ScreenDetailPageInner() {
   });
 
   // ── 삭제 상태 / 뮤테이션 ─────────────────────────────────────────────────
-  const [deleteConfirmOpen,   setDeleteConfirmOpen]   = useState(false);
-  const [deleteChildren,      setDeleteChildren]      = useState<boolean | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteChildren, setDeleteChildren] = useState<boolean | null>(null);
 
   const deleteMutation = useMutation({
     mutationFn: () => {
@@ -209,13 +209,13 @@ function ScreenDetailPageInner() {
     mutationFn: (body: SaveBody) =>
       isNew
         ? authFetch<{ data: { screenId: string } }>(`/api/projects/${projectId}/screens`, {
-            method: "POST",
-            body:   JSON.stringify(body),
-          })
+          method: "POST",
+          body: JSON.stringify(body),
+        })
         : authFetch<{ data: { screenId: string } }>(`/api/projects/${projectId}/screens/${screenId}`, {
-            method: "PUT",
-            body:   JSON.stringify(body),
-          }),
+          method: "PUT",
+          body: JSON.stringify(body),
+        }),
     onSuccess: (res, variables) => {
       toast.success(isNew ? "화면이 등록되었습니다." : "저장되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["screens", projectId] });
@@ -243,7 +243,7 @@ function ScreenDetailPageInner() {
   function doSave(saveHistory: boolean) {
     saveMutation.mutate({
       ...form,
-      layoutData:  layoutRows.length > 0 ? JSON.stringify(layoutRows) : undefined,
+      layoutData: layoutRows.length > 0 ? JSON.stringify(layoutRows) : undefined,
       saveHistory: saveHistory || undefined,
     });
     setHistoryDialogOpen(false);
@@ -352,321 +352,321 @@ function ScreenDetailPageInner() {
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
-      {/* 2-컬럼 레이아웃: 기본 정보 | 화면 설명 */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 28, alignItems: "start" }}>
+        {/* 2-컬럼 레이아웃: 기본 정보 | 화면 설명 */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 28, alignItems: "start" }}>
 
-        {/* 왼쪽: 기본 정보 + 영역 목록 */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* 왼쪽: 기본 정보 + 영역 목록 */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
-          {/* AR-00065 기본 정보 폼 */}
-          <Section title="기본 정보" hideTitle>
-            {/* 상위 단위업무 선택 */}
-            <FormField label="상위 단위업무">
-              <select
-                value={form.unitWorkId ?? ""}
-                onChange={(e) => handleChange("unitWorkId", e.target.value)}
-                style={selectStyle}
-              >
-                <option value="">미분류</option>
-                {uwOptions.map((uw) => (
-                  <option key={uw.unitWorkId} value={uw.unitWorkId}>
-                    {uw.displayId} — {uw.name}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-
-            {/* 화면명 + 표시 ID */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 200px", gap: 16 }}>
-              <FormField label="화면명" required>
-                <input
-                  type="text"
-                  value={form.name}
-                  placeholder="화면명을 입력하세요"
-                  onChange={(e) => handleChange("name", e.target.value)}
-                  style={inputStyle}
-                />
-              </FormField>
-              <FormField label="표시 ID">
-                <input
-                  type="text"
-                  value={form.displayId ?? ""}
-                  placeholder="미입력 시 자동 생성"
-                  onChange={(e) => handleChange("displayId", e.target.value)}
-                  style={inputStyle}
-                />
-              </FormField>
-            </div>
-
-            {/* 화면 유형 + 정렬 순서 */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: 16 }}>
-              <FormField label="화면 유형">
+            {/* AR-00065 기본 정보 폼 */}
+            <Section title="기본 정보" hideTitle>
+              {/* 상위 단위업무 선택 */}
+              <FormField label="상위 단위업무">
                 <select
-                  value={form.type}
-                  onChange={(e) => handleChange("type", e.target.value)}
+                  value={form.unitWorkId ?? ""}
+                  onChange={(e) => handleChange("unitWorkId", e.target.value)}
                   style={selectStyle}
                 >
-                  <option value="LIST">LIST</option>
-                  <option value="DETAIL">DETAIL</option>
-                  <option value="INPUT">INPUT</option>
-                  <option value="POPUP">POPUP</option>
-                  <option value="TAB">TAB</option>
-                  <option value="REPORT">REPORT</option>
+                  <option value="">미분류</option>
+                  {uwOptions.map((uw) => (
+                    <option key={uw.unitWorkId} value={uw.unitWorkId}>
+                      {uw.displayId} — {uw.name}
+                    </option>
+                  ))}
                 </select>
               </FormField>
-              <FormField label="정렬 순서">
-                <input
-                  type="number"
-                  min={0}
-                  value={form.sortOrder}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, sortOrder: parseInt(e.target.value) || 0 }))
-                  }
-                  style={inputStyle}
-                />
-              </FormField>
-            </div>
 
-            {/* 메뉴 분류 (대/중/소) */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-              <FormField label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>대분류<HelpIcon onClick={() => setHelpOpen("category")} /></span>}>
-                <input
-                  type="text"
-                  value={form.categoryL}
-                  placeholder="예: 회원 관리"
-                  onChange={(e) => handleChange("categoryL", e.target.value)}
-                  style={inputStyle}
-                />
-              </FormField>
-              <FormField label="중분류">
-                <input
-                  type="text"
-                  value={form.categoryM}
-                  placeholder="예: 회원 정보"
-                  onChange={(e) => handleChange("categoryM", e.target.value)}
-                  style={inputStyle}
-                />
-              </FormField>
-              <FormField label="소분류">
-                <input
-                  type="text"
-                  value={form.categoryS}
-                  placeholder="예: 목록 조회"
-                  onChange={(e) => handleChange("categoryS", e.target.value)}
-                  style={inputStyle}
-                />
-              </FormField>
-            </div>
-          </Section>
+              {/* 화면명 + 표시 ID */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 200px", gap: 16 }}>
+                <FormField label="화면명" required>
+                  <input
+                    type="text"
+                    value={form.name}
+                    placeholder="화면명을 입력하세요"
+                    onChange={(e) => handleChange("name", e.target.value)}
+                    style={inputStyle}
+                  />
+                </FormField>
+                <FormField label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>표시 ID<HelpIcon onClick={() => setHelpOpen("displayId")} /></span>}>
+                  <input
+                    type="text"
+                    value={form.displayId ?? ""}
+                    placeholder="미입력 시 자동 생성"
+                    onChange={(e) => handleChange("displayId", e.target.value)}
+                    style={inputStyle}
+                  />
+                </FormField>
+              </div>
 
-          {/* 레이아웃 에디터 — 기본 정보 아래 */}
-          <Section title="레이아웃 구성" hideTitle small>
-            <ScreenLayoutEditor
-              title={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>레이아웃 구성<HelpIcon onClick={() => setHelpOpen("layout")} /></span>}
-              value={layoutRows}
-              onChange={setLayoutRows}
-              areas={detail?.areas.map((a) => ({
-                areaId:    a.areaId,
-                displayId: a.displayId,
-                name:      a.name,
-              }))}
-            />
-          </Section>
+              {/* 화면 유형 + 정렬 순서 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: 16 }}>
+                <FormField label="화면 유형">
+                  <select
+                    value={form.type}
+                    onChange={(e) => handleChange("type", e.target.value)}
+                    style={selectStyle}
+                  >
+                    <option value="LIST">LIST</option>
+                    <option value="DETAIL">DETAIL</option>
+                    <option value="INPUT">INPUT</option>
+                    <option value="POPUP">POPUP</option>
+                    <option value="TAB">TAB</option>
+                    <option value="REPORT">REPORT</option>
+                  </select>
+                </FormField>
+                <FormField label="정렬 순서">
+                  <input
+                    type="number"
+                    min={0}
+                    value={form.sortOrder}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, sortOrder: parseInt(e.target.value) || 0 }))
+                    }
+                    style={inputStyle}
+                  />
+                </FormField>
+              </div>
 
-          {/* AR-00066 영역 목록 (수정 모드에서만, FID-00148) */}
-          {!isNew && detail && (
-            <AreaListSection
-              areas={detail.areas}
-              projectId={projectId}
-              screenId={screenId}
-              router={router}
-            />
-          )}
-        </div>
+              {/* 메뉴 분류 (대/중/소) */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                <FormField label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>대분류<HelpIcon onClick={() => setHelpOpen("category")} /></span>}>
+                  <input
+                    type="text"
+                    value={form.categoryL}
+                    placeholder="예: 회원 관리"
+                    onChange={(e) => handleChange("categoryL", e.target.value)}
+                    style={inputStyle}
+                  />
+                </FormField>
+                <FormField label="중분류">
+                  <input
+                    type="text"
+                    value={form.categoryM}
+                    placeholder="예: 회원 정보"
+                    onChange={(e) => handleChange("categoryM", e.target.value)}
+                    style={inputStyle}
+                  />
+                </FormField>
+                <FormField label="소분류">
+                  <input
+                    type="text"
+                    value={form.categoryS}
+                    placeholder="예: 목록 조회"
+                    onChange={(e) => handleChange("categoryS", e.target.value)}
+                    style={inputStyle}
+                  />
+                </FormField>
+              </div>
+            </Section>
 
-        {/* 오른쪽: 화면 설명 (마크다운) */}
-        <Section
-          title="화면 설명"
-          small
-          headerLeft={<MarkdownTabButtons tab={descTab} onTabChange={setDescTab} />}
-          headerRight={
-            <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-              <button
-                type="button"
-                onClick={() => setDescExampleOpen(true)}
-                style={ghostSmBtnStyle}
-              >
-                예시
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  handleChange(
-                    "description",
-                    DESCRIPTION_TEMPLATE(detail?.displayId ?? "PID-XXXXX", form.name)
-                  )
-                }
-                style={ghostSmBtnStyle}
-              >
-                템플릿 삽입
-              </button>
-              {!isNew && (
+            {/* 레이아웃 에디터 — 기본 정보 아래 */}
+            <Section title="레이아웃 구성" hideTitle small>
+              <ScreenLayoutEditor
+                title={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>레이아웃 구성<HelpIcon onClick={() => setHelpOpen("layout")} /></span>}
+                value={layoutRows}
+                onChange={setLayoutRows}
+                areas={detail?.areas.map((a) => ({
+                  areaId: a.areaId,
+                  displayId: a.displayId,
+                  name: a.name,
+                }))}
+              />
+            </Section>
+
+            {/* AR-00066 영역 목록 (수정 모드에서만, FID-00148) */}
+            {!isNew && detail && (
+              <AreaListSection
+                areas={detail.areas}
+                projectId={projectId}
+                screenId={screenId}
+                router={router}
+              />
+            )}
+          </div>
+
+          {/* 오른쪽: 화면 설명 (마크다운) */}
+          <Section
+            title="화면 설명"
+            small
+            headerLeft={<MarkdownTabButtons tab={descTab} onTabChange={setDescTab} />}
+            headerRight={
+              <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
                 <button
                   type="button"
-                  onClick={() => setHistoryViewOpen(true)}
+                  onClick={() => setDescExampleOpen(true)}
                   style={ghostSmBtnStyle}
                 >
-                  🕐 변경 이력
+                  예시
                 </button>
-              )}
-            </div>
-          }
-        >
-          <MarkdownEditor
-            value={form.description}
-            onChange={(md) => handleChange("description", md)}
-            placeholder="화면 내용 및 세부 설계를 작성하세요."
-            rows={26}
-            tab={descTab}
-            onTabChange={setDescTab}
-          />
-        </Section>
-
-        {/* 화면 설명 예시 팝업 */}
-        {descExampleOpen && (
-          <ScreenExamplePopup onClose={() => setDescExampleOpen(false)} />
-        )}
-
-      {/* 설명 변경 이력 저장 여부 확인 다이얼로그 */}
-      {historyDialogOpen && (
-        <div
-          style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={() => setHistoryDialogOpen(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: "100%", maxWidth: 420, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.2)", padding: "24px 28px" }}
-          >
-            <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
-              변경 이력 저장
-            </p>
-            <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-              화면 설명이 변경되었습니다.<br />
-              변경 이력을 함께 저장하시겠습니까?
-            </p>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button
-                type="button"
-                onClick={() => setHistoryDialogOpen(false)}
-                style={{ ...secondaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={() => doSave(false)}
-                disabled={saveMutation.isPending}
-                style={{ ...secondaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
-              >
-                이력 없이 저장
-              </button>
-              <button
-                type="button"
-                onClick={() => doSave(true)}
-                disabled={saveMutation.isPending}
-                style={{ ...primaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
-              >
-                이력과 함께 저장
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 삭제 확인 다이얼로그 */}
-      {deleteConfirmOpen && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={() => setDeleteConfirmOpen(false)}
-        >
-          <div style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "28px 32px", minWidth: 360, maxWidth: 480, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>화면 삭제</div>
-            <p style={{ fontSize: 14, color: "var(--color-text-secondary)", marginBottom: 16 }}>
-              <strong style={{ color: "var(--color-text-primary)" }}>{detail?.displayId} {detail?.name}</strong> 화면을 삭제합니다.
-            </p>
-            {(detail?.areas?.length ?? 0) > 0 && (
-              <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-                <p style={{ fontSize: 13, color: "#e53935", marginBottom: 4 }}>이 화면에 영역이 {detail!.areas.length}개 있습니다. 처리 방법을 선택하세요.</p>
-                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
-                  <input type="radio" name="deleteChildren" checked={deleteChildren === true} onChange={() => setDeleteChildren(true)} />
-                  영역 포함 모두 삭제
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
-                  <input type="radio" name="deleteChildren" checked={deleteChildren === false} onChange={() => setDeleteChildren(false)} />
-                  화면만 삭제 (영역 미분류 상태로 유지)
-                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleChange(
+                      "description",
+                      DESCRIPTION_TEMPLATE(detail?.displayId ?? "PID-XXXXX", form.name)
+                    )
+                  }
+                  style={ghostSmBtnStyle}
+                >
+                  템플릿 삽입
+                </button>
+                {!isNew && (
+                  <button
+                    type="button"
+                    onClick={() => setHistoryViewOpen(true)}
+                    style={ghostSmBtnStyle}
+                  >
+                    🕐 변경 이력
+                  </button>
+                )}
               </div>
-            )}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button onClick={() => setDeleteConfirmOpen(false)} style={secondaryBtnStyle} disabled={deleteMutation.isPending}>취소</button>
-              <button
-                onClick={() => deleteMutation.mutate()}
-                style={{ ...secondaryBtnStyle, color: "#e53935", borderColor: "#e53935" }}
-                disabled={deleteMutation.isPending}
-              >
-                {deleteMutation.isPending ? "삭제 중..." : "삭제"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* PRD 다운로드 팝업 */}
-      <PrdDownloadDialog
-        open={prdOpen}
-        onClose={() => setPrdOpen(false)}
-        projectId={projectId}
-        availableLevels={["UNIT_WORK", "SCREEN"]}
-        defaultLevel="SCREEN"
-        unitWorkId={detail?.unitWorkId}
-        screenId={screenId}
-      />
-
-      {/* 설명 변경 이력 조회 팝업 */}
-      <SettingsHistoryDialog
-        open={historyViewOpen}
-        onClose={() => setHistoryViewOpen(false)}
-        projectId={projectId}
-        itemName="화면 설명"
-        currentValue={form.description}
-        title="화면 설명 변경 이력"
-        refTblNm="tb_ds_screen"
-        refId={screenId}
-      />
-
-      {/* ── 도움말 팝업 ── */}
-      {helpOpen && SCREEN_HELP[helpOpen] && (
-        <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1200 }}
-          onClick={() => setHelpOpen(null)}
-        >
-          <div
-            style={{ background: "var(--color-bg-card)", borderRadius: 12, padding: "24px 28px", minWidth: 400, maxWidth: 520, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}
-            onClick={(e) => e.stopPropagation()}
+            }
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>{SCREEN_HELP[helpOpen].title}</span>
-              <button onClick={() => setHelpOpen(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}>×</button>
-            </div>
-            <div style={{ fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.8, whiteSpace: "pre-line", background: "var(--color-bg-muted)", borderRadius: 8, padding: "14px 16px" }}>
-              {SCREEN_HELP[helpOpen].body}
-            </div>
-          </div>
-        </div>
-      )}
+            <MarkdownEditor
+              value={form.description}
+              onChange={(md) => handleChange("description", md)}
+              placeholder="화면 내용 및 세부 설계를 작성하세요."
+              rows={26}
+              tab={descTab}
+              onTabChange={setDescTab}
+            />
+          </Section>
 
-      </div>
+          {/* 화면 설명 예시 팝업 */}
+          {descExampleOpen && (
+            <ScreenExamplePopup onClose={() => setDescExampleOpen(false)} />
+          )}
+
+          {/* 설명 변경 이력 저장 여부 확인 다이얼로그 */}
+          {historyDialogOpen && (
+            <div
+              style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
+              onClick={() => setHistoryDialogOpen(false)}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{ width: "100%", maxWidth: 420, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.2)", padding: "24px 28px" }}
+              >
+                <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                  변경 이력 저장
+                </p>
+                <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+                  화면 설명이 변경되었습니다.<br />
+                  변경 이력을 함께 저장하시겠습니까?
+                </p>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setHistoryDialogOpen(false)}
+                    style={{ ...secondaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => doSave(false)}
+                    disabled={saveMutation.isPending}
+                    style={{ ...secondaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
+                  >
+                    이력 없이 저장
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => doSave(true)}
+                    disabled={saveMutation.isPending}
+                    style={{ ...primaryBtnStyle, fontSize: 13, padding: "6px 16px" }}
+                  >
+                    이력과 함께 저장
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 삭제 확인 다이얼로그 */}
+          {deleteConfirmOpen && (
+            <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}
+              onClick={() => setDeleteConfirmOpen(false)}
+            >
+              <div style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "28px 32px", minWidth: 360, maxWidth: 480, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>화면 삭제</div>
+                <p style={{ fontSize: 14, color: "var(--color-text-secondary)", marginBottom: 16 }}>
+                  <strong style={{ color: "var(--color-text-primary)" }}>{detail?.displayId} {detail?.name}</strong> 화면을 삭제합니다.
+                </p>
+                {(detail?.areas?.length ?? 0) > 0 && (
+                  <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <p style={{ fontSize: 13, color: "#e53935", marginBottom: 4 }}>이 화면에 영역이 {detail!.areas.length}개 있습니다. 처리 방법을 선택하세요.</p>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+                      <input type="radio" name="deleteChildren" checked={deleteChildren === true} onChange={() => setDeleteChildren(true)} />
+                      영역 포함 모두 삭제
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+                      <input type="radio" name="deleteChildren" checked={deleteChildren === false} onChange={() => setDeleteChildren(false)} />
+                      화면만 삭제 (영역 미분류 상태로 유지)
+                    </label>
+                  </div>
+                )}
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <button onClick={() => setDeleteConfirmOpen(false)} style={secondaryBtnStyle} disabled={deleteMutation.isPending}>취소</button>
+                  <button
+                    onClick={() => deleteMutation.mutate()}
+                    style={{ ...secondaryBtnStyle, color: "#e53935", borderColor: "#e53935" }}
+                    disabled={deleteMutation.isPending}
+                  >
+                    {deleteMutation.isPending ? "삭제 중..." : "삭제"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* PRD 다운로드 팝업 */}
+          <PrdDownloadDialog
+            open={prdOpen}
+            onClose={() => setPrdOpen(false)}
+            projectId={projectId}
+            availableLevels={["UNIT_WORK", "SCREEN"]}
+            defaultLevel="SCREEN"
+            unitWorkId={detail?.unitWorkId}
+            screenId={screenId}
+          />
+
+          {/* 설명 변경 이력 조회 팝업 */}
+          <SettingsHistoryDialog
+            open={historyViewOpen}
+            onClose={() => setHistoryViewOpen(false)}
+            projectId={projectId}
+            itemName="화면 설명"
+            currentValue={form.description}
+            title="화면 설명 변경 이력"
+            refTblNm="tb_ds_screen"
+            refId={screenId}
+          />
+
+          {/* ── 도움말 팝업 ── */}
+          {helpOpen && SCREEN_HELP[helpOpen] && (
+            <div
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1200 }}
+              onClick={() => setHelpOpen(null)}
+            >
+              <div
+                style={{ background: "var(--color-bg-card)", borderRadius: 12, padding: "24px 28px", minWidth: 400, maxWidth: 520, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>{SCREEN_HELP[helpOpen].title}</span>
+                  <button onClick={() => setHelpOpen(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}>×</button>
+                </div>
+                <div style={{ fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.8, whiteSpace: "pre-line" }}>
+                  {SCREEN_HELP[helpOpen].body}
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
       </div>
     </div>
   );
@@ -704,8 +704,19 @@ const SCREEN_HELP: Record<string, { title: string; body: string }> = {
       "• 열마다 너비(%)와 대상 영역을 지정할 수 있습니다.\n" +
       "• 하위 영역이 등록되어 있으면 드롭다운으로 선택할 수 있습니다.\n" +
       "• 같은 행의 열 너비 합이 100%가 되도록 조정해 주세요.\n\n" +
-      "💡 우측 상단의 [출력] 버튼을 클릭하면 마크다운·JSON 형식으로 변환됩니다.\n" +
+      "💡 [출력] 버튼을 클릭하면 마크다운·JSON 형식으로 변환됩니다.\n" +
       "출력된 텍스트를 화면 설명에 붙여 넣으면 AI 설계 시 레이아웃 정보를 활용할 수 있습니다.",
+  },
+  displayId: {
+    title: "표시 ID 안내",
+    body:
+      "명칭 대신 화면에 표시되는 고유 식별자입니다.\n" +
+      "비워 두면 자동으로 생성됩니다.\n\n" +
+      "예시)\n" +
+      "• 단위업무: UW-00001\n" +
+      "• 화면: SCR-00001\n" +
+      "• 영역: AR-00001\n" +
+      "• 기능: FN-00001",
   },
   category: {
     title: "대분류 · 중분류 · 소분류",
@@ -722,10 +733,10 @@ const SCREEN_HELP: Record<string, { title: string; body: string }> = {
 function AreaListSection({
   areas, projectId, screenId, router,
 }: {
-  areas:     AreaRow[];
+  areas: AreaRow[];
   projectId: string;
-  screenId:  string;
-  router:    ReturnType<typeof useRouter>;
+  screenId: string;
+  router: ReturnType<typeof useRouter>;
 }) {
   return (
     <Section
@@ -778,8 +789,8 @@ function AreaListSection({
               <div style={{ display: "flex", gap: 3, justifyContent: "center", fontSize: 11 }}>
                 {[
                   { val: area.designRt, color: "#1565c0" },
-                  { val: area.implRt,   color: "#2e7d32" },
-                  { val: area.testRt,   color: "#6a1b9a" },
+                  { val: area.implRt, color: "#2e7d32" },
+                  { val: area.testRt, color: "#6a1b9a" },
                 ].map(({ val, color }, i) => (
                   <span key={i} style={{
                     color, fontWeight: 600,
@@ -806,25 +817,25 @@ function AreaListSection({
 function Section({
   title, headerLeft, headerRight, children, small = false, hideTitle = false,
 }: {
-  title:         string;
-  headerLeft?:   React.ReactNode;
-  headerRight?:  React.ReactNode;
-  children:      React.ReactNode;
+  title: string;
+  headerLeft?: React.ReactNode;
+  headerRight?: React.ReactNode;
+  children: React.ReactNode;
   /** 타이틀을 작은 uppercase 레이블로 표시 */
-  small?:        boolean;
+  small?: boolean;
   /** 타이틀 행 자체를 숨김 */
-  hideTitle?:    boolean;
+  hideTitle?: boolean;
 }) {
   return (
     <div
       style={{
-        border:        "1px solid var(--color-border)",
-        borderRadius:  8,
-        padding:       small ? "14px 16px" : "20px 24px",
-        background:    "var(--color-bg-card)",
-        display:       "flex",
+        border: "1px solid var(--color-border)",
+        borderRadius: 8,
+        padding: small ? "14px 16px" : "20px 24px",
+        background: "var(--color-bg-card)",
+        display: "flex",
         flexDirection: "column",
-        gap:           small ? 10 : 16,
+        gap: small ? 10 : 16,
       }}
     >
       {!hideTitle && (
@@ -853,7 +864,7 @@ function Section({
 function FormField({
   label, required, children,
 }: {
-  label:    React.ReactNode;
+  label: React.ReactNode;
   required?: boolean;
   children: React.ReactNode;
 }) {
@@ -870,111 +881,111 @@ function FormField({
 
 function areaTypeBadgeStyle(type: string): React.CSSProperties {
   const colors: Record<string, { bg: string; color: string }> = {
-    SEARCH:      { bg: "#e3f2fd", color: "#1565c0" },
-    GRID:        { bg: "#e8f5e9", color: "#2e7d32" },
-    FORM:        { bg: "#fff3e0", color: "#e65100" },
-    INFO_CARD:   { bg: "#f3e5f5", color: "#6a1b9a" },
-    TAB:         { bg: "#e0f2f1", color: "#00695c" },
+    SEARCH: { bg: "#e3f2fd", color: "#1565c0" },
+    GRID: { bg: "#e8f5e9", color: "#2e7d32" },
+    FORM: { bg: "#fff3e0", color: "#e65100" },
+    INFO_CARD: { bg: "#f3e5f5", color: "#6a1b9a" },
+    TAB: { bg: "#e0f2f1", color: "#00695c" },
     FULL_SCREEN: { bg: "#fce4ec", color: "#880e4f" },
   };
   const c = colors[type] ?? { bg: "#f5f5f5", color: "#555" };
   return {
-    display:      "inline-block",
-    padding:      "2px 8px",
+    display: "inline-block",
+    padding: "2px 8px",
     borderRadius: 4,
-    fontSize:     11,
-    fontWeight:   600,
-    background:   c.bg,
-    color:        c.color,
+    fontSize: 11,
+    fontWeight: 600,
+    background: c.bg,
+    color: c.color,
   };
 }
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
 const inputStyle: React.CSSProperties = {
-  width:        "100%",
-  padding:      "8px 12px",
+  width: "100%",
+  padding: "8px 12px",
   borderRadius: 6,
-  border:       "1px solid var(--color-border)",
-  background:   "var(--color-bg-card)",
-  color:        "var(--color-text-primary)",
-  fontSize:     14,
-  boxSizing:    "border-box",
-  outline:      "none",
+  border: "1px solid var(--color-border)",
+  background: "var(--color-bg-card)",
+  color: "var(--color-text-primary)",
+  fontSize: 14,
+  boxSizing: "border-box",
+  outline: "none",
 };
 
 // select 전용 — 브라우저 기본 화살표를 제거하고 커스텀 화살표로 대체
 const selectStyle: React.CSSProperties = {
   ...inputStyle,
-  paddingRight:       "32px",
-  appearance:         "none",
-  WebkitAppearance:   "none",
-  backgroundImage:    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
-  backgroundRepeat:   "no-repeat",
+  paddingRight: "32px",
+  appearance: "none",
+  WebkitAppearance: "none",
+  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
+  backgroundRepeat: "no-repeat",
   backgroundPosition: "right 10px center",
 };
 
 const primaryBtnStyle: React.CSSProperties = {
-  padding:      "8px 24px",
+  padding: "8px 24px",
   borderRadius: 6,
-  border:       "1px solid transparent",
-  background:   "var(--color-primary, #1976d2)",
-  color:        "#fff",
-  fontSize:     14,
-  fontWeight:   600,
-  cursor:       "pointer",
+  border: "1px solid transparent",
+  background: "var(--color-primary, #1976d2)",
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
 };
 
 const secondaryBtnStyle: React.CSSProperties = {
-  padding:      "8px 16px",
+  padding: "8px 16px",
   borderRadius: 6,
-  border:       "1px solid var(--color-border)",
-  background:   "var(--color-bg-card)",
-  color:        "var(--color-text-primary)",
-  fontSize:     14,
-  cursor:       "pointer",
+  border: "1px solid var(--color-border)",
+  background: "var(--color-bg-card)",
+  color: "var(--color-text-primary)",
+  fontSize: 14,
+  cursor: "pointer",
 };
 
 const linkBtnStyle: React.CSSProperties = {
-  background:     "none",
-  border:         "none",
-  cursor:         "pointer",
-  color:          "var(--color-primary, #1976d2)",
-  fontSize:       14,
-  padding:        0,
-  textAlign:      "left",
+  background: "none",
+  border: "none",
+  cursor: "pointer",
+  color: "var(--color-primary, #1976d2)",
+  fontSize: 14,
+  padding: 0,
+  textAlign: "left",
   textDecoration: "underline",
 };
 
 const areaGridHeaderStyle: React.CSSProperties = {
-  display:             "grid",
+  display: "grid",
   gridTemplateColumns: "44px 1fr 80px 100px",
-  gap:                 12,
-  padding:             "8px 14px",
-  background:          "var(--color-bg-muted)",
-  fontSize:            12,
-  fontWeight:          600,
-  color:               "var(--color-text-secondary)",
-  borderBottom:        "1px solid var(--color-border)",
+  gap: 12,
+  padding: "8px 14px",
+  background: "var(--color-bg-muted)",
+  fontSize: 12,
+  fontWeight: 600,
+  color: "var(--color-text-secondary)",
+  borderBottom: "1px solid var(--color-border)",
 };
 
 const ghostSmBtnStyle: React.CSSProperties = {
-  padding:      "3px 9px",
+  padding: "3px 9px",
   borderRadius: 5,
-  border:       "1px solid var(--color-border)",
-  background:   "none",
-  color:        "var(--color-text-secondary)",
-  fontSize:     12,
-  cursor:       "pointer",
+  border: "1px solid var(--color-border)",
+  background: "none",
+  color: "var(--color-text-secondary)",
+  fontSize: 12,
+  cursor: "pointer",
 };
 
 const areaGridRowStyle: React.CSSProperties = {
-  display:             "grid",
+  display: "grid",
   gridTemplateColumns: "44px 1fr 80px 100px",
-  gap:                 12,
-  padding:             "10px 14px",
-  alignItems:          "center",
-  background:          "var(--color-bg-card)",
+  gap: 12,
+  padding: "10px 14px",
+  alignItems: "center",
+  background: "var(--color-bg-card)",
 };
 
 // ── 화면 설명 예시 / 템플릿 ────────────────────────────────────────────────────
@@ -1002,7 +1013,7 @@ const DESCRIPTION_EXAMPLE = `## [PID-00001] 게시판 목록
 - 행 클릭 → PID-00002 상세 화면 이동`;
 
 const DESCRIPTION_TEMPLATE = (displayId: string, name: string) =>
-`## [${displayId}] ${name}
+  `## [${displayId}] ${name}
 
 ### 화면 개요
 

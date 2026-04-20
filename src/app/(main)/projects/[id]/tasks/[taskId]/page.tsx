@@ -319,7 +319,7 @@ function TaskDetailPageInner() {
             value={form.content}
             onChange={(html) => handleChange("content", html)}
             placeholder="내용을 입력하세요. 이미지는 클립보드에서 바로 붙여넣기 가능합니다."
-            minHeight={280}
+            minHeight={308}
           />
         </FormField>
 

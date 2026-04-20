@@ -59,8 +59,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // 요약 정보 — 팝업 상단 모드 배지 + "모두 NO_CHANGE면 요청 불가" 판정용
+    // id: 선 구현 적용(PRE_IMPL) 시 레이어 식별에 사용
     const summary = layers.map((l) => ({
       type: l.type,
+      id: l.id,
       displayId: l.displayId,
       name: l.name,
       mode: l.hasSnapshot ? l.mode : "신규",
