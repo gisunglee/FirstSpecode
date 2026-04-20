@@ -47,7 +47,7 @@ interface ScreenLayoutEditorProps {
   value:    LayoutRow[];
   onChange: (rows: LayoutRow[]) => void;
   /** 섹션 타이틀 — 출력 버튼과 같은 줄에 표시 */
-  title?:   string;
+  title?:   React.ReactNode;
   /** 하위 영역 목록 — 제공되면 드롭다운으로 영역 선택, 없으면 직접 입력 */
   areas?:   AreaOption[];
   /** 직접 입력 시 placeholder 텍스트 (기본: "영역 라벨") */

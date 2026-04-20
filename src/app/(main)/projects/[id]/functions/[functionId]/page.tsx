@@ -838,18 +838,6 @@ function FunctionDetailPageInner() {
 
             </section>
 
-            {/* ── 왼쪽 하단: AI 요청 코멘트 + 첨부파일 ── */}
-            <section style={sectionStyle}>
-              <label style={{ ...labelStyle, marginBottom: 6 }}>AI 요청 코멘트</label>
-              <textarea
-                value={commentCn}
-                onChange={(e) => setCommentCn(e.target.value)}
-                placeholder="AI 요청 시 참고할 추가 지시사항을 입력해 주세요."
-                rows={3}
-                style={{ ...inputStyle, resize: "vertical" }}
-              />
-            </section>
-
             {!isNew && (
               <section style={sectionStyle}>
                 <h3 style={sectionTitleStyle}>첨부파일</h3>
@@ -1038,10 +1026,8 @@ function FunctionDetailPageInner() {
         <div
           data-impl-overlay="ai-confirm"
           style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={() => { setAiConfirm(null); setTaskPrompt(null); }}
         >
           <div
-            onClick={(e) => e.stopPropagation()}
             style={{ width: "100%", maxWidth: (aiConfirm.taskType === "DESIGN" || aiConfirm.taskType === "INSPECT") ? 520 : 420, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 12, boxShadow: "0 12px 48px rgba(0,0,0,0.25)", padding: "32px 36px" }}
           >
 
@@ -1101,12 +1087,6 @@ function FunctionDetailPageInner() {
                         <span>{taskPrompt.tmplNm}</span>
                       </div>
                     )}
-                    {commentCn.trim() && (
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                        <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>코멘트</span>
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 320 }}>{commentCn.trim()}</span>
-                      </div>
-                    )}
                     <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                       <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>설명</span>
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 320 }}>{description.trim().slice(0, 80)}{description.trim().length > 80 ? "…" : ""}</span>
@@ -1126,6 +1106,21 @@ function FunctionDetailPageInner() {
               </>
             )}
 
+            {/* AI 요청 코멘트 입력 */}
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 8 }}>
+                <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px" }}>코멘트</span>
+                AI 요청 코멘트
+              </label>
+              <textarea
+                value={commentCn}
+                onChange={(e) => setCommentCn(e.target.value)}
+                placeholder="AI 요청 시 참고할 추가 지시사항을 입력해 주세요"
+                rows={3}
+                style={{ width: "100%", boxSizing: "border-box", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-primary)", fontSize: 13, resize: "vertical", lineHeight: 1.6, outline: "none" }}
+              />
+            </div>
+
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button
                 onClick={() => { setAiConfirm(null); setTaskPrompt(null); }}
@@ -1133,7 +1128,6 @@ function FunctionDetailPageInner() {
               >
                 취소
               </button>
-              {/* 프롬프트 못 찾은 경우 — "AI 요청 코멘트로 처리" 버튼 (코멘트 있어야 활성) */}
               {(aiConfirm.taskType === "DESIGN" || aiConfirm.taskType === "INSPECT") && taskPrompt === "none" && (
                 <button
                   onClick={() => {
@@ -1147,9 +1141,8 @@ function FunctionDetailPageInner() {
                     background: commentCn.trim() ? "#e65100" : "#ccc",
                     cursor: commentCn.trim() ? "pointer" : "not-allowed",
                   }}
-                  title={!commentCn.trim() ? "AI 요청 코멘트를 먼저 입력해 주세요." : ""}
                 >
-                  AI 요청 코멘트로 처리
+                  코멘트로 처리
                 </button>
               )}
               {/* DESIGN/INSPECT: 프롬프트 찾은 경우만 활성 / 나머지: 항상 활성 */}

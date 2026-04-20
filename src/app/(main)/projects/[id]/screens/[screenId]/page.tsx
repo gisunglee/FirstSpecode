@@ -135,6 +135,9 @@ function ScreenDetailPageInner() {
   // 이력 조회 팝업 (SettingsHistoryDialog)
   const [historyViewOpen, setHistoryViewOpen] = useState(false);
 
+  // 도움말 풍선
+  const [helpOpen, setHelpOpen] = useState<string | null>(null);
+
   // 이력 저장 시 원본 설명 추적용
   const [originalDescription, setOriginalDescription] = useState("");
 
@@ -426,7 +429,7 @@ function ScreenDetailPageInner() {
 
             {/* 메뉴 분류 (대/중/소) */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-              <FormField label="대분류">
+              <FormField label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>대분류<HelpIcon onClick={() => setHelpOpen("category")} /></span>}>
                 <input
                   type="text"
                   value={form.categoryL}
@@ -456,35 +459,10 @@ function ScreenDetailPageInner() {
             </div>
           </Section>
 
-          {/* 코멘트 — 레이아웃 구성 위 */}
-          <Section title="코멘트" hideTitle small>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>
-                AI 요청 코멘트
-              </label>
-              <textarea
-                value={form.comment ?? ""}
-                onChange={(e) => setForm((prev) => ({ ...prev, comment: e.target.value }))}
-                readOnly={false}
-                placeholder="AI 요청 시 참고할 추가 지시사항을 입력해 주세요."
-                rows={4}
-                style={{
-                  width: "100%", boxSizing: "border-box",
-                  padding: "8px 10px", borderRadius: 6,
-                  border: "1px solid var(--color-border)",
-                  background: "var(--color-bg-card)",
-                  color: "var(--color-text-primary)",
-                  fontSize: 13, lineHeight: 1.6, resize: "vertical",
-                  outline: "none", fontFamily: "inherit",
-                }}
-              />
-            </div>
-          </Section>
-
           {/* 레이아웃 에디터 — 기본 정보 아래 */}
           <Section title="레이아웃 구성" hideTitle small>
             <ScreenLayoutEditor
-              title="레이아웃 구성"
+              title={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>레이아웃 구성<HelpIcon onClick={() => setHelpOpen("layout")} /></span>}
               value={layoutRows}
               onChange={setLayoutRows}
               areas={detail?.areas.map((a) => ({
@@ -667,11 +645,77 @@ function ScreenDetailPageInner() {
         refId={screenId}
       />
 
+      {/* ── 도움말 팝업 ── */}
+      {helpOpen && SCREEN_HELP[helpOpen] && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1200 }}
+          onClick={() => setHelpOpen(null)}
+        >
+          <div
+            style={{ background: "var(--color-bg-card)", borderRadius: 12, padding: "24px 28px", minWidth: 400, maxWidth: 520, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>{SCREEN_HELP[helpOpen].title}</span>
+              <button onClick={() => setHelpOpen(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.8, whiteSpace: "pre-line", background: "var(--color-bg-muted)", borderRadius: 8, padding: "14px 16px" }}>
+              {SCREEN_HELP[helpOpen].body}
+            </div>
+          </div>
+        </div>
+      )}
+
       </div>
       </div>
     </div>
   );
 }
+
+// ── 도움말 아이콘 ────────────────────────────────────────────────────────────
+
+function HelpIcon({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      title="도움말"
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: 16, height: 16, borderRadius: "50%",
+        border: "1.5px solid var(--color-text-secondary)",
+        background: "transparent", color: "var(--color-text-secondary)",
+        fontSize: 10, fontWeight: 700, cursor: "pointer", padding: 0, lineHeight: 1,
+      }}
+    >
+      ?
+    </button>
+  );
+}
+
+// ── 도움말 내용 ──────────────────────────────────────────────────────────────
+
+const SCREEN_HELP: Record<string, { title: string; body: string }> = {
+  layout: {
+    title: "레이아웃 구성 안내",
+    body:
+      "화면을 구성하는 영역의 배치를 설정합니다.\n\n" +
+      "• 행(Row)을 추가한 뒤, 각 행에 열(Column)을 배치하세요.\n" +
+      "• 열마다 너비(%)와 대상 영역을 지정할 수 있습니다.\n" +
+      "• 하위 영역이 등록되어 있으면 드롭다운으로 선택할 수 있습니다.\n" +
+      "• 같은 행의 열 너비 합이 100%가 되도록 조정해 주세요.\n\n" +
+      "💡 우측 상단의 [출력] 버튼을 클릭하면 마크다운·JSON 형식으로 변환됩니다.\n" +
+      "출력된 텍스트를 화면 설명에 붙여 넣으면 AI 설계 시 레이아웃 정보를 활용할 수 있습니다.",
+  },
+  category: {
+    title: "대분류 · 중분류 · 소분류",
+    body:
+      "화면에 대한 분류를 자유롭게 지정할 수 있습니다.\n\n" +
+      "• 필수 값이 아니므로 비워 두어도 무방합니다.\n" +
+      "• 분류를 입력하면 화면 목록에서 해당 텍스트로 필터링·검색할 수 있습니다.\n" +
+      "• 업무 분류(예: 회원 관리 > 회원 정보 > 목록 조회) 또는\n  메뉴 계층 용도로 활용하시면 됩니다.",
+  },
+};
 
 // ── AR-00066 영역 목록 섹션 ───────────────────────────────────────────────────
 
@@ -809,7 +853,7 @@ function Section({
 function FormField({
   label, required, children,
 }: {
-  label:    string;
+  label:    React.ReactNode;
   required?: boolean;
   children: React.ReactNode;
 }) {

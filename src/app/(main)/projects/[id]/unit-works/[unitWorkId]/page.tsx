@@ -480,7 +480,6 @@ function UnitWorkDetailPageInner() {
         <div
           data-impl-overlay="ai-confirm"
           style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={() => { setAiConfirm(null); setTaskPrompt(null); }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -532,12 +531,6 @@ function UnitWorkDetailPageInner() {
                     <span>단위업무 전체 tree (화면 · 영역 · 기능)</span>
                   </div>
                 )}
-                {form.comment.trim() && (
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                    <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>코멘트</span>
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 320 }}>{form.comment.trim()}</span>
-                  </div>
-                )}
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                   <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>점검 대상</span>
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 320 }}>{form.description.trim().slice(0, 80)}{form.description.trim().length > 80 ? "…" : ""}</span>
@@ -545,15 +538,30 @@ function UnitWorkDetailPageInner() {
               </div>
             </div>
 
+            {/* AI 요청 코멘트 입력 */}
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 8 }}>
+                <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px" }}>코멘트</span>
+                AI 요청 코멘트
+              </label>
+              <textarea
+                value={form.comment}
+                onChange={(e) => handleChange("comment", e.target.value)}
+                placeholder="AI 요청 시 참고할 추가 지시사항을 입력해 주세요"
+                rows={3}
+                style={{ width: "100%", boxSizing: "border-box", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-primary)", fontSize: 13, resize: "vertical", lineHeight: 1.6, outline: "none" }}
+              />
+            </div>
+
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button onClick={() => { setAiConfirm(null); setTaskPrompt(null); }} style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 18px" }}>취소</button>
               {taskPrompt === "none" && (
                 <button
                   onClick={() => { aiMutation.mutate({ taskType: aiConfirm.taskType }); setAiConfirm(null); setTaskPrompt(null); }}
-                  disabled={aiMutation.isPending}
-                  style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 18px", background: "#e65100" }}
+                  disabled={aiMutation.isPending || !form.comment.trim()}
+                  style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 18px", background: form.comment.trim() ? "#e65100" : "#ccc", cursor: form.comment.trim() ? "pointer" : "not-allowed" }}
                 >
-                  AI 요청 코멘트로 처리
+                  코멘트로 처리
                 </button>
               )}
               <button
@@ -915,27 +923,6 @@ function UnitWorkDetailPageInner() {
             </FormField>
           </div>
 
-        </div>
-
-        {/* ── AI 요청 코멘트 카드 ── */}
-        <div
-          style={{
-            border:        "1px solid var(--color-border)",
-            borderRadius:  8,
-            background:    "var(--color-bg-card)",
-            padding:       "20px 28px",
-          }}
-        >
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 10 }}>
-            AI 요청 코멘트
-          </label>
-          <textarea
-            value={form.comment}
-            placeholder="AI 요청 시 참고할 추가 지시사항을 입력해 주세요"
-            onChange={(e) => handleChange("comment", e.target.value)}
-            rows={4}
-            style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }}
-          />
         </div>
 
         </div>{/* ── 왼쪽 컬럼 끝 ── */}

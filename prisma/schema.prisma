@@ -380,6 +380,8 @@ model TbDsDbTable {
   tbl_lgcl_nm   String?
   tbl_dc        String?
   creat_dt      DateTime            @default(now())
+  mdfcn_mber_id String?
+  mdfcn_dt      DateTime?           @db.Timestamp(3)
   columns       TbDsDbTableColumn[]
 
   @@map("tb_ds_db_table")
@@ -394,22 +396,24 @@ model TbDsDbTableColumn {
   col_dc        String?
   sort_ordr     Int         @default(0)
   creat_dt      DateTime    @default(now())
+  mdfcn_mber_id String?
+  mdfcn_dt      DateTime?   @db.Timestamp(3)
   table         TbDsDbTable @relation(fields: [tbl_id], references: [tbl_id])
 
   @@map("tb_ds_db_table_column")
 }
 
 model TbDsColMapping {
-  mapping_id   String    @id @default(uuid()) @db.VarChar(36)
-  ref_ty_code  String    @db.VarChar(20)
-  ref_id       String    @db.VarChar(36)
-  col_id       String?   @db.VarChar(36)
-  io_se_code   String?   @db.VarChar(10)
-  ui_ty_code   String?   @db.VarChar(20)
-  use_purps_cn String?   @db.VarChar(200)
-  col_dc       String?
-  sort_ordr    Int?      @default(0)
-  creat_dt     DateTime? @default(now()) @db.Timestamp(6)
+  mapping_id    String    @id @default(uuid()) @db.VarChar(36)
+  ref_ty_code   String    @db.VarChar(20)
+  ref_id        String    @db.VarChar(36)
+  col_id        String?   @db.VarChar(36)
+  io_se_code    String?   @db.VarChar(10)
+  ui_ty_code    String?   @db.VarChar(20)
+  use_purps_cn  String?   @db.VarChar(200)
+  col_dc        String?
+  sort_ordr     Int?      @default(0)
+  creat_dt      DateTime? @default(now()) @db.Timestamp(6)
 
   @@map("tb_ds_col_mapping")
 }

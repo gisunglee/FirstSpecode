@@ -37,6 +37,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         tblLgclNm:   t.tbl_lgcl_nm  ?? "",
         tblDc:       t.tbl_dc       ?? "",
         creatDt:     t.creat_dt.toISOString(),
+        mdfcnDt:     t.mdfcn_dt?.toISOString() ?? null,
         columnCount: t._count.columns,
       }))
     );

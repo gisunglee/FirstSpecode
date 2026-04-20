@@ -50,6 +50,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       tblLgclNm:   table.tbl_lgcl_nm  ?? "",
       tblDc:       table.tbl_dc       ?? "",
       creatDt:     table.creat_dt.toISOString(),
+      mdfcnDt:     table.mdfcn_dt?.toISOString() ?? null,
       columns: table.columns.map((c) => ({
         colId:       c.col_id,
         colPhysclNm: c.col_physcl_nm,
@@ -57,6 +58,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         dataTyNm:    c.data_ty_nm   ?? "",
         colDc:       c.col_dc       ?? "",
         sortOrdr:    c.sort_ordr,
+        mdfcnDt:     c.mdfcn_dt?.toISOString() ?? null,
       })),
     });
   } catch (err) {
@@ -115,13 +117,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const incomingIds = colList.map((c) => c.colId).filter(Boolean) as string[];
 
     await prisma.$transaction(async (tx) => {
-      // 테이블 정보 업데이트
+      // 테이블 정보 업데이트 (수정자·수정일시 포함)
       await tx.tbDsDbTable.update({
         where: { tbl_id: tableId },
         data: {
           tbl_physcl_nm: tblPhysclNm.trim(),
           tbl_lgcl_nm:   tblLgclNm !== undefined ? (tblLgclNm?.trim() || null) : existing.tbl_lgcl_nm,
           tbl_dc:        tblDc !== undefined ? (tblDc?.trim() || null) : existing.tbl_dc,
+          mdfcn_mber_id: auth.mberId,
+          mdfcn_dt:      new Date(),
         },
       });
 
@@ -133,7 +137,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         },
       });
 
-      // 컬럼 upsert (순서 유지)
+      // 컬럼 upsert (순서 유지, 수정자·수정일시 포함)
+      const now = new Date();
       for (let i = 0; i < colList.length; i++) {
         const c = colList[i]!;
         if (c.colId) {
@@ -145,6 +150,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
               data_ty_nm:    c.dataTyNm?.trim()   || null,
               col_dc:        c.colDc?.trim()       || null,
               sort_ordr:     i + 1,
+              mdfcn_mber_id: auth.mberId,
+              mdfcn_dt:      now,
             },
           });
         } else {

@@ -508,7 +508,6 @@ function AreaDetailPageInner() {
         <div
           data-impl-overlay="ai-confirm"
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={() => { setAiConfirm(null); setTaskPrompt(null); }}
         >
           <div
             style={{ width: "100%", maxWidth: (aiConfirm.taskType === "INSPECT" || aiConfirm.taskType === "DESIGN") ? 520 : 420, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 12, boxShadow: "0 12px 48px rgba(0,0,0,0.25)", padding: "32px 36px" }}
@@ -569,12 +568,6 @@ function AreaDetailPageInner() {
                         </div>
                       </>
                     )}
-                    {asciiComment.trim() && (
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                        <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>코멘트</span>
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 320 }}>{asciiComment.trim()}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
               </>
@@ -588,6 +581,21 @@ function AreaDetailPageInner() {
               </>
             )}
 
+            {/* AI 요청 코멘트 입력 */}
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 8 }}>
+                <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px" }}>코멘트</span>
+                AI 요청 코멘트
+              </label>
+              <textarea
+                value={asciiComment}
+                onChange={(e) => setAsciiComment(e.target.value)}
+                placeholder="AI 요청 시 참고할 추가 지시사항을 입력해 주세요"
+                rows={3}
+                style={{ width: "100%", boxSizing: "border-box", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-primary)", fontSize: 13, resize: "vertical", lineHeight: 1.6, outline: "none" }}
+              />
+            </div>
+
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button onClick={() => { setAiConfirm(null); setTaskPrompt(null); }} style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 18px" }}>취소</button>
               {(aiConfirm.taskType === "INSPECT" || aiConfirm.taskType === "DESIGN") && taskPrompt === "none" && (
@@ -595,9 +603,8 @@ function AreaDetailPageInner() {
                   onClick={() => { aiMutation.mutate({ taskType: aiConfirm.taskType }); setAiConfirm(null); setTaskPrompt(null); }}
                   disabled={aiMutation.isPending || !asciiComment.trim()}
                   style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 18px", background: asciiComment.trim() ? "#e65100" : "#ccc", cursor: asciiComment.trim() ? "pointer" : "not-allowed" }}
-                  title={!asciiComment.trim() ? "AI 요청 코멘트를 먼저 입력해 주세요." : ""}
                 >
-                  AI 요청 코멘트로 처리
+                  코멘트로 처리
                 </button>
               )}
               <button
@@ -938,20 +945,9 @@ function AreaDetailPageInner() {
 
           </section>
 
-          {/* ── AI 요청 코멘트 + 레이아웃 + 첨부파일 (수정 모드에서만) ── */}
+          {/* ── 레이아웃 + 첨부파일 (수정 모드에서만) ── */}
           {!isNew && (
             <>
-              <section style={rightSectionStyle}>
-                <label style={rightLabelStyle}>AI 요청 코멘트</label>
-                <textarea
-                  value={asciiComment}
-                  onChange={(e) => setAsciiComment(e.target.value)}
-                  placeholder="AI 요청 시 참고할 추가 지시사항을 입력해 주세요."
-                  rows={5}
-                  style={{ ...inputStyle, resize: "vertical" }}
-                />
-              </section>
-
               <section style={rightSectionStyle}>
                 <ScreenLayoutEditor
                   title="레이아웃 구성"

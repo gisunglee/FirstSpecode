@@ -32,6 +32,7 @@ type DbTableDetail = {
   tblLgclNm:   string;
   tblDc:       string;
   creatDt:     string;
+  mdfcnDt:     string | null;
   columns: {
     colId:       string;
     colPhysclNm: string;
@@ -39,11 +40,23 @@ type DbTableDetail = {
     dataTyNm:    string;
     colDc:       string;
     sortOrdr:    number;
+    mdfcnDt:     string | null;
   }[];
 };
 
 let _keySeq = 0;
 function nextKey() { return `col_${++_keySeq}`; }
+
+// ISO 날짜 문자열 → "YYYY-MM-DD HH:mm" (한국 시간) 형식으로 변환
+function formatDt(iso: string): string {
+  const d = new Date(iso);
+  const yyyy = d.getFullYear();
+  const MM   = String(d.getMonth() + 1).padStart(2, "0");
+  const dd   = String(d.getDate()).padStart(2, "0");
+  const hh   = String(d.getHours()).padStart(2, "0");
+  const mm   = String(d.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${MM}-${dd} ${hh}:${mm}`;
+}
 
 // ── DDL 파서 (Oracle / MySQL / PostgreSQL 공통) ────────────────────────────────
 // 지원 형식:
@@ -384,7 +397,18 @@ function DbTableDetailPageInner() {
 
         {/* ── 테이블 기본 정보 ── */}
         <section style={{ ...sectionStyle, flexShrink: 0 }}>
-          <div style={sectionTitleStyle}>테이블 정보</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <div style={{ ...sectionTitleStyle, marginBottom: 0 }}>테이블 정보</div>
+            {/* 등록일시 / 수정일시 — 신규 등록 시에는 표시하지 않음 */}
+            {!isNew && data && (
+              <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--color-text-secondary)" }}>
+                <span>등록 <span style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{formatDt(data.creatDt)}</span></span>
+                {data.mdfcnDt && (
+                  <span>수정 <span style={{ color: "var(--color-text-primary)", fontWeight: 500 }}>{formatDt(data.mdfcnDt)}</span></span>
+                )}
+              </div>
+            )}
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 20px" }}>
             <div style={formGroupStyle}>
               <label style={labelStyle}>물리 테이블명 *</label>

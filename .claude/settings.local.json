@@ -248,7 +248,9 @@
       "mcp__specode__list_db_tables",
       "Bash(node d:/tmp/register-db-tables.mjs)",
       "Bash(cp d:/tmp/register-db-tables.mjs d:/source/FirstSpecode/register-db-tables.mjs)",
-      "Bash(sed -i 's|resolve\\(\"d:/source/FirstSpecode/.env.local\"\\)|resolve\\(\".env.local\"\\)|' register-db-tables.mjs)"
+      "Bash(sed -i 's|resolve\\(\"d:/source/FirstSpecode/.env.local\"\\)|resolve\\(\".env.local\"\\)|' register-db-tables.mjs)",
+      "Bash(wc -l /d/source/FirstSpecode/src/components/ui/*.tsx)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")"
     ]
   }
 }
