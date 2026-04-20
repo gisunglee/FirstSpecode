@@ -487,14 +487,24 @@ function RefInfoModal({
           {/* 업무 구분 + 자료 유형 */}
           <div style={{ display: "flex", gap: 12 }}>
             <ModalField label="업무 구분 *" style={{ flex: 1 }}>
-              <select value={busDivCode} onChange={(e) => setBusDivCode(e.target.value)} style={modalInputStyle}>
+              <select value={busDivCode} onChange={(e) => setBusDivCode(e.target.value)} style={modalSelectStyle}>
                 {BUS_DIV_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </ModalField>
             <ModalField label="자료 유형 *" style={{ flex: 1 }}>
-              <select value={refDataTyCode} onChange={(e) => setRefDataTyCode(e.target.value)} style={modalInputStyle}>
+              <select value={refDataTyCode} onChange={(e) => setRefDataTyCode(e.target.value)} style={modalSelectStyle}>
                 {DATA_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
+            </ModalField>
+          </div>
+
+          {/* 값 */}
+          <div style={{ display: "flex", gap: 12 }}>
+            <ModalField label="주요 기준 값" style={{ flex: 1 }}>
+              <input value={mainRefVal} onChange={(e) => setMainRefVal(e.target.value)} style={modalInputStyle} placeholder="Y, 5, ADMIN 등" />
+            </ModalField>
+            <ModalField label="보조 기준 값" style={{ flex: 1 }}>
+              <input value={subRefVal} onChange={(e) => setSubRefVal(e.target.value)} style={modalInputStyle} />
             </ModalField>
           </div>
 
@@ -507,16 +517,6 @@ function RefInfoModal({
             <ModalField label="기준 종료일" style={{ flex: 1 }}>
               <input value={refEndDe} onChange={(e) => setRefEndDe(e.target.value)}
                 maxLength={8} placeholder="99991231" style={modalInputStyle} />
-            </ModalField>
-          </div>
-
-          {/* 값 */}
-          <div style={{ display: "flex", gap: 12 }}>
-            <ModalField label="주요 기준 값" style={{ flex: 1 }}>
-              <input value={mainRefVal} onChange={(e) => setMainRefVal(e.target.value)} style={modalInputStyle} placeholder="Y, 5, ADMIN 등" />
-            </ModalField>
-            <ModalField label="보조 기준 값" style={{ flex: 1 }}>
-              <input value={subRefVal} onChange={(e) => setSubRefVal(e.target.value)} style={modalInputStyle} />
             </ModalField>
           </div>
 
@@ -586,7 +586,7 @@ const searchInputStyle: React.CSSProperties = {
 };
 
 const selectStyle: React.CSSProperties = {
-  padding: "7px 10px", borderRadius: 7,
+  padding: "7px 28px 7px 10px", borderRadius: 7,
   border: "1px solid var(--color-border)",
   background: "var(--color-bg-card)", color: "var(--color-text-primary)",
   fontSize: 13, cursor: "pointer",
@@ -625,6 +625,12 @@ const modalInputStyle: React.CSSProperties = {
   border: "1px solid var(--color-border)",
   background: "var(--color-bg-card)", color: "var(--color-text-primary)",
   fontSize: 13, boxSizing: "border-box",
+};
+
+// select 전용 — 오른쪽에 드롭다운 화살표 공간 확보
+const modalSelectStyle: React.CSSProperties = {
+  ...modalInputStyle,
+  paddingRight: 28,
 };
 
 const overlayStyle: React.CSSProperties = {
