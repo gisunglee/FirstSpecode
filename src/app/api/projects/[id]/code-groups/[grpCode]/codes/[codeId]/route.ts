@@ -8,27 +8,20 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 type RouteParams = { params: Promise<{ id: string; grpCode: string; codeId: string }> };
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, codeId: codeIdStr } = await params;
   const codeId = parseInt(codeIdStr);
   if (isNaN(codeId) || codeId <= 0) {
     return apiError("VALIDATION_ERROR", "유효하지 않은 코드 ID입니다.", 400);
   }
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "code.write");
+  if (gate instanceof Response) return gate;
 
   let body: { cmCode?: string; codeNm?: string; codeDc?: string; useYn?: string; sortOrdr?: number; globalUnique?: boolean };
   try {
@@ -86,21 +79,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, codeId: codeIdStr } = await params;
   const codeId = parseInt(codeIdStr);
   if (isNaN(codeId) || codeId <= 0) {
     return apiError("VALIDATION_ERROR", "유효하지 않은 코드 ID입니다.", 400);
   }
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "code.write");
+  if (gate instanceof Response) return gate;
 
   try {
     // 프로젝트 스코프 검증

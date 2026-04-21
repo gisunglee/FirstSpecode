@@ -9,25 +9,17 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
-import { checkRole } from "@/lib/checkRole";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 // ── GET: 메모 목록 조회 ─────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "content.read");
+  if (gate instanceof Response) return gate;
 
   const url      = new URL(request.url);
   const refType  = url.searchParams.get("refType") ?? undefined;
@@ -40,7 +32,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const where: Record<string, unknown> = {
       prjct_id: projectId,
       OR: [
-        { creat_mber_id: auth.mberId },
+        { creat_mber_id: gate.mberId },
         { share_yn: "Y" },
       ],
     };
@@ -60,7 +52,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (shareFilter === "mine") {
       // 내 메모만 — OR 조건 제거
       delete where.OR;
-      where.creat_mber_id = auth.mberId;
+      where.creat_mber_id = gate.mberId;
     } else if (shareFilter === "shared") {
       // 공유 메모만
       delete where.OR;
@@ -94,7 +86,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       viewCnt:      m.view_cnt,
       creatMberId:  m.creat_mber_id,
       creatMberName: mberMap.get(m.creat_mber_id) ?? "",
-      isMine:       m.creat_mber_id === auth.mberId,
+      isMine:       m.creat_mber_id === gate.mberId,
       creatDt:      m.creat_dt,
     }));
 
@@ -107,17 +99,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // ── POST: 메모 생성 ─────────────────────────────────────────────────────────
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "content.create");
+  if (gate instanceof Response) return gate;
 
   let body: { subject?: string; content?: string; shareYn?: string; refTyCode?: string; refId?: string };
   try {
@@ -146,7 +131,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         share_yn:      body.shareYn === "Y" ? "Y" : "N",
         ref_ty_code:   body.refTyCode ?? null,
         ref_id:        body.refId ?? null,
-        creat_mber_id: auth.mberId,
+        creat_mber_id: gate.mberId,
       },
     });
 

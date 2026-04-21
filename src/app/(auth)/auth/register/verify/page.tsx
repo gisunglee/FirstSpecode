@@ -106,23 +106,36 @@ function VerifyEmailInner() {
         </div>
 
         {/* FID-00009 만료 시간 안내 */}
-        <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-tertiary)", textAlign: "center" }}>
-          인증 링크는 발송 후 <strong style={{ color: "var(--color-text-secondary)" }}>1시간</strong> 동안 유효합니다.
+        <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", textAlign: "center" }}>
+          인증 링크는 발송 후 <strong style={{ color: "var(--color-brand)" }}>1시간</strong> 동안 유효합니다.
         </p>
 
-        {/* FID-00010 재발송 버튼 + FID-00011 쿨타임 */}
-        <button
-          className="sp-btn sp-btn-secondary"
-          onClick={handleResend}
-          disabled={cooldown > 0 || isResending}
-          style={{ width: "100%" }}
-        >
-          {isResending
-            ? "발송 중..."
-            : cooldown > 0
-            ? `재발송 (${cooldown}초 후 가능)`
-            : "인증 메일 재발송"}
-        </button>
+        {/* 보조 액션 (재발송 / 로그인 이동) — 이 화면의 주 액션은 "메일함 확인"이므로
+            두 버튼 모두 ghost 로 톤 다운 */}
+        <div style={{ display: "flex", gap: "var(--space-2)" }}>
+          {/* FID-00010 재발송 버튼 + FID-00011 쿨타임 */}
+          <button
+            className="sp-btn sp-btn-ghost"
+            onClick={handleResend}
+            disabled={cooldown > 0 || isResending}
+            style={{ flex: 1 }}
+          >
+            {isResending
+              ? "발송 중..."
+              : cooldown > 0
+              ? `재발송 (${cooldown}초)`
+              : "인증 메일 재발송"}
+          </button>
+
+          <button
+            type="button"
+            className="sp-btn sp-btn-ghost"
+            onClick={() => router.push("/auth/login")}
+            style={{ flex: 1 }}
+          >
+            로그인 화면으로 이동
+          </button>
+        </div>
 
       </div>
     </div>

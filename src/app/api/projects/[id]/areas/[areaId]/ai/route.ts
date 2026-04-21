@@ -1,13 +1,17 @@
 /**
  * POST /api/projects/[id]/areas/[areaId]/ai — 영역 AI 태스크 요청
  *
- * Body: { taskType: "INSPECT", coment_cn? }
+ * Body (둘 중 하나):
+ *   - application/json  : { taskType: "INSPECT", coment_cn? }             ← MCP·외부
+ *   - multipart/form-data: 동일 필드 + files[]                             ← 브라우저 FE
  *
  * INSPECT 프롬프트 조립:
  *   <시스템프롬프트>
  *   <전체설계>  단위업무 + 화면 + 같은 화면의 다른 영역들 (기능 상세 제외)
  *   <코멘트>    (있을 때만)
  *   <점검내용>  현재 영역 정보 + 현재 영역의 기능 전체
+ *
+ * 첨부 이미지는 태스크 생성 후 tb_cm_attach_file에 저장 (aiTaskAttach.ts)
  */
 
 import { NextRequest } from "next/server";
@@ -16,6 +20,7 @@ import { requireAuth } from "@/lib/requireAuth";
 import { checkRole } from "@/lib/checkRole";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { expandTableScripts } from "@/lib/dbTableScript";
+import { parseAiRequest, saveAiTaskAttachments } from "@/lib/aiTaskAttach";
 
 type RouteParams = { params: Promise<{ id: string; areaId: string }> };
 
@@ -34,16 +39,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER"]);
   if (roleCheck) return roleCheck;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
+  // multipart 또는 JSON 둘 다 수용
+  let raw: Record<string, string>;
+  let files: File[];
+  try {
+    const parsed = await parseAiRequest(request);
+    raw   = parsed.raw;
+    files = parsed.files;
+  } catch {
+    return apiError("VALIDATION_ERROR", "요청 본문을 파싱할 수 없습니다.", 400);
   }
 
-  const { taskType, comment, coment_cn } = body as {
-    taskType?:  string;
-    comment?:   string;
-    coment_cn?: string;
-  };
+  const { taskType, comment, coment_cn } = raw;
 
   if (!taskType || taskType !== "INSPECT") {
     return apiError("VALIDATION_ERROR", "taskType은 INSPECT 이어야 합니다.", 400);
@@ -217,7 +224,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       },
     });
 
-    return apiSuccess({ aiTaskId: task.ai_task_id, status: "PENDING", taskType }, 202);
+    // ── 첨부 이미지 저장 (multipart 요청에만 존재) ───────────────────────────
+    let attachmentCount = 0;
+    if (files.length > 0) {
+      try {
+        attachmentCount = await saveAiTaskAttachments({
+          projectId,
+          taskId: task.ai_task_id,
+          files,
+        });
+      } catch (attachErr) {
+        await prisma.tbAiTask.delete({ where: { ai_task_id: task.ai_task_id } })
+          .catch((e) => console.error("[AI Task] 롤백 실패:", e));
+        const msg = attachErr instanceof Error ? attachErr.message : "첨부 저장 실패";
+        return apiError("UPLOAD_ERROR", msg, 500);
+      }
+    }
+
+    return apiSuccess({ aiTaskId: task.ai_task_id, status: "PENDING", taskType, attachmentCount }, 202);
   } catch (err) {
     console.error(`[POST /api/projects/${projectId}/areas/${areaId}/ai] DB 오류:`, err);
     return apiError("DB_ERROR", "AI 요청 중 오류가 발생했습니다.", 500);

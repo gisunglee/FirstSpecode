@@ -1,71 +1,93 @@
 /**
- * useMyRole — 현재 프로젝트에서 내 역할 조회 훅 (UW-00011)
+ * useMyRole / usePermissions — 프론트 권한 훅 (역할 + 직무 + 플랜)
  *
  * 역할:
- *   - TanStack Query로 역할 캐싱 (staleTime 5분)
- *   - projectId가 없으면 쿼리 비활성화
- *   - UI 권한 제어 헬퍼 함수 제공
+ *   - 현재 프로젝트 멤버십(role/job)과 계정 플랜(plan)을 함께 조회·캐시
+ *   - permissions.ts의 PERMISSIONS 매트릭스를 그대로 사용해 `has(perm)` 제공
+ *   - projectId 없으면 쿼리 비활성화 (모든 권한 false)
  *
- * 사용 예:
- *   const { myRole, canEdit, canManageMembers } = useMyRole(projectId);
+ * 백엔드와 동일한 규칙(역할 OR 직무) 을 프론트에서도 쓰기 위해
+ * `has()` 는 반드시 permissions.ts 의 hasPermission 을 거칩니다.
+ *
+ * 호환성:
+ *   - 기존 useMyRole 반환값(canEdit, canManageMembers...)은 유지
+ *   - 신규 코드는 usePermissions 를 쓰는 걸 권장
+ *
+ * 설계 문서: src/lib/permissions.md
  */
 
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
+import {
+  hasPermission,
+  type ActorContext,
+  type RoleCode,
+  type JobCode,
+  type PlanCode,
+  type Permission,
+} from "@/lib/permissions";
 
-export type RoleCode =
-  | "OWNER"
-  | "ADMIN"
-  | "PM"
-  | "DESIGNER"
-  | "DEVELOPER"
-  | "VIEWER"
-  | "MEMBER";
-
-// 역할 계층: 높을수록 권한 많음
-const ROLE_RANK: Record<RoleCode, number> = {
-  OWNER:     6,
-  ADMIN:     5,
-  PM:        4,
-  DESIGNER:  3,
-  DEVELOPER: 3,
-  MEMBER:    2,
-  VIEWER:    1,
+// ─── 서버 응답 타입 ──────────────────────────────────────────────────────────
+// /api/projects/{projectId}/my-role 의 응답 계약
+// 기존 { myRole } 만 오는 응답을 { myRole, myJob, myPlan } 으로 확장 예정
+type MyRoleResponse = {
+  myRole: RoleCode;
+  myJob:  JobCode;   // 미지정 시 "ETC"
+  myPlan: PlanCode;  // 계정 플랜 (FREE/PRO/TEAM/ENTERPRISE)
 };
 
-export function useMyRole(projectId: string | null) {
+// ─── 메인 훅 ─────────────────────────────────────────────────────────────────
+
+export function usePermissions(projectId: string | null) {
   const { data, isLoading } = useQuery({
     queryKey: ["my-role", projectId],
     queryFn: () =>
-      authFetch<{ data: { myRole: RoleCode } }>(
+      authFetch<{ data: MyRoleResponse }>(
         `/api/projects/${projectId}/my-role`
-      ).then((r) => r.data.myRole),
+      ).then((r) => r.data),
     enabled: !!projectId,
     staleTime: 60 * 1000, // 1분 캐싱 — 역할은 자주 바뀌지 않음
   });
 
-  const myRole = data ?? null;
+  // actor 객체 — hasPermission 에 그대로 전달
+  const actor: ActorContext = useMemo(
+    () => ({
+      role: data?.myRole ?? null,
+      job:  data?.myJob  ?? null,
+      plan: data?.myPlan ?? "FREE",
+    }),
+    [data]
+  );
+
+  // has(perm) — 단일 권한 체크
+  const has = useMemo(
+    () => (perm: Permission) => hasPermission(actor, perm),
+    [actor]
+  );
 
   return {
-    myRole,
+    // 원본 값
+    myRole: actor.role,
+    myJob:  actor.job,
+    myPlan: actor.plan,
     isLoading,
 
-    // 생성·수정·삭제 가능 (VIEWER 제외)
-    canEdit: myRole !== null && myRole !== "VIEWER",
+    // 단일 권한 체크 — 백엔드와 동일 로직
+    has,
 
-    // 멤버 관리 (OWNER/ADMIN만)
-    canManageMembers: myRole === "OWNER" || myRole === "ADMIN",
-
-    // 프로젝트 설정 접근 (OWNER/ADMIN만 — 편집 목적)
-    canAccessSettings: myRole === "OWNER" || myRole === "ADMIN",
-
-    // 프로젝트 삭제 (OWNER만)
-    canDeleteProject: myRole === "OWNER",
-
-    // AI 요청 (VIEWER 제외)
-    canRequestAI: myRole !== null && myRole !== "VIEWER",
-
-    // 역할 수치 비교 유틸
-    roleRank: myRole ? (ROLE_RANK[myRole] ?? 0) : 0,
+    // 자주 쓰는 편의 플래그 (하위 호환)
+    canEdit:           has("content.update"),
+    canRequestAI:      has("ai.request"),
+    canManageMembers:  has("member.invite"),
+    canAccessSettings: has("project.settings"),
+    canDeleteProject:  has("project.delete"),
   };
 }
+
+// ─── 하위 호환 별칭 ──────────────────────────────────────────────────────────
+// 기존 컴포넌트(LNB 등)는 useMyRole 을 그대로 쓸 수 있도록 별칭 유지
+export const useMyRole = usePermissions;
+
+// 기존 타입 재export — import { RoleCode } 호출부 호환
+export type { RoleCode, JobCode, PlanCode } from "@/lib/permissions";

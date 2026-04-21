@@ -43,16 +43,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       });
 
       // 멤버 등록 (이미 있으면 upsert)
+      // 초대 시 지정한 role_code + job_title_code 를 함께 이관
       await tx.tbPjProjectMember.upsert({
         where: { prjct_id_mber_id: { prjct_id: invitation.prjct_id, mber_id: auth.mberId } },
         create: {
           prjct_id:        invitation.prjct_id,
           mber_id:         auth.mberId,
           role_code:       invitation.role_code,
+          job_title_code:  invitation.job_title_code,
           mber_sttus_code: "ACTIVE",
         },
         update: {
           role_code:       invitation.role_code,
+          job_title_code:  invitation.job_title_code,
           mber_sttus_code: "ACTIVE",
         },
       });

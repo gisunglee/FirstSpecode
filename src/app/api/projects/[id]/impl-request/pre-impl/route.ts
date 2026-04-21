@@ -13,7 +13,7 @@
  */
 
 import { NextRequest } from "next/server";
-import { requireAuth } from "@/lib/requireAuth";
+import { requirePermission } from "@/lib/requirePermission";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { collectLayers, TABLE_MAP } from "@/lib/impl-request/collector";
@@ -21,17 +21,10 @@ import { collectLayers, TABLE_MAP } from "@/lib/impl-request/collector";
 type RouteParams = { params: Promise<{ id: string }> };
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
   const { id: projectId } = await params;
 
-  // 프로젝트 멤버 확인
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "ai.request");
+  if (gate instanceof Response) return gate;
 
   // 요청 본문 파싱
   let body: {
@@ -104,7 +97,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             })),
             reason: "PRE_IMPL",
           },
-          req_mber_id: auth.mberId,
+          req_mber_id: gate.mberId,
           compl_dt: new Date(),
         },
       });

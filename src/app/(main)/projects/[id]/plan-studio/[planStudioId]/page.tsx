@@ -803,11 +803,6 @@ function DetailInner() {
           projectId={projectId}
           taskId={aiDetailTaskId}
           onClose={() => setAiDetailTaskId(null)}
-          onApplied={() => {
-            setAiDetailTaskId(null);
-            qc.invalidateQueries({ queryKey: ["plan-studio-detail", projectId, planStudioId] });
-            qc.invalidateQueries({ queryKey: ["artf-detail", projectId, planStudioId, selectedArtfId] });
-          }}
           onRejected={() => {
             setAiDetailTaskId(null);
             qc.invalidateQueries({ queryKey: ["plan-studio-detail", projectId, planStudioId] });

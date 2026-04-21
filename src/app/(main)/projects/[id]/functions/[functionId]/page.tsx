@@ -31,6 +31,7 @@ import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import ColMappingDialog from "@/components/ui/ColMappingDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
+import AiTaskFilePicker from "@/components/ui/AiTaskFilePicker";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import AiImplementCard from "@/components/ui/AiImplementCard";
 import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
@@ -374,6 +375,10 @@ function FunctionDetailPageInner() {
   // ── AI 컨펌 상태 ──────────────────────────────────────────────────────────
   const [aiConfirm, setAiConfirm] = useState<{ taskType: string; label: string } | null>(null);
 
+  // 팝업 내부에서 첨부할 참고 이미지 — "요청" 시 multipart로 함께 전송
+  // aiConfirm이 닫힐 때 초기화 (취소/성공 모두)
+  const [aiPickedFiles, setAiPickedFiles] = useState<File[]>([]);
+
   // DESIGN/INSPECT 공통: 프롬프트 템플릿 조회 결과 (버튼 클릭 시 fetch → 컨펌 창에 표시)
   const [taskPrompt, setTaskPrompt] = useState<{ tmplId: string; tmplNm: string } | null | "loading" | "none">(null);
 
@@ -396,23 +401,39 @@ function FunctionDetailPageInner() {
   }
 
   // ── AI 요청 뮤테이션 ──────────────────────────────────────────────────────
+  // multipart/form-data로 전송 — 텍스트 필드 + 첨부 이미지(aiPickedFiles) 동봉
+  // authFetch는 Content-Type을 application/json으로 강제하므로 raw fetch 사용
+  // 첨부가 없어도 multipart로 보냄 (서버는 둘 다 수용 — aiTaskAttach.ts)
   const aiMutation = useMutation({
-    mutationFn: ({ taskType }: { taskType: string }) =>
-      authFetch(`/api/projects/${projectId}/functions/${functionId}/ai`, {
-        method: "POST",
-        body: JSON.stringify({
-          taskType,
-          coment_cn: commentCn.trim(),
-          req_cn: description.trim(),
-          comment: commentCn.trim() // 유지 (하위 호환성)
-        }),
-      }),
+    mutationFn: async ({ taskType }: { taskType: string }) => {
+      const fd = new FormData();
+      fd.append("taskType",  taskType);
+      fd.append("coment_cn", commentCn.trim());
+      fd.append("req_cn",    description.trim());
+      // 하위 호환성 — 일부 코드 경로에서 "comment" 키를 읽을 수 있음
+      fd.append("comment",   commentCn.trim());
+      aiPickedFiles.forEach((f) => fd.append("files", f));
+
+      const at  = typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
+      const res = await fetch(`/api/projects/${projectId}/functions/${functionId}/ai`, {
+        method:  "POST",
+        body:    fd,
+        headers: at ? { Authorization: `Bearer ${at}` } : {},
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error((json as { message?: string }).message ?? "AI 요청에 실패했습니다.");
+      }
+      return res.json();
+    },
     onSuccess: (_res, vars) => {
       const labels: Record<string, string> = {
         DESIGN: "AI 설계 요청이 접수되었습니다.",
         INSPECT: "AI 점검 요청이 접수되었습니다.",
       };
       toast.success(labels[vars.taskType] ?? "AI 요청이 접수되었습니다.");
+      // 첨부 state 초기화 — 다음 요청 시 이전 이미지가 남지 않도록
+      setAiPickedFiles([]);
       // 상태 갱신을 위해 상세 재조회
       queryClient.invalidateQueries({ queryKey: ["function", projectId, functionId] });
     },
@@ -1120,7 +1141,7 @@ function FunctionDetailPageInner() {
             )}
 
             {/* AI 요청 코멘트 입력 */}
-            <div style={{ marginBottom: 24 }}>
+            <div style={{ marginBottom: 16 }}>
               <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 8 }}>
                 <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px" }}>코멘트</span>
                 AI 요청 코멘트
@@ -1134,9 +1155,23 @@ function FunctionDetailPageInner() {
               />
             </div>
 
+            {/* 참고 이미지 피커 — "요청" 클릭 시 multipart로 함께 전송됨 */}
+            {/* Claude 멀티모달 분석용 — 와이어프레임·스크린샷 등 첨부 */}
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 8 }}>
+                <span style={{ fontSize: 11, background: "rgba(25,118,210,0.12)", color: "#1565c0", borderRadius: 4, padding: "1px 6px" }}>첨부</span>
+                참고 이미지 (선택)
+              </label>
+              <AiTaskFilePicker
+                files={aiPickedFiles}
+                onChange={setAiPickedFiles}
+                disabled={aiMutation.isPending}
+              />
+            </div>
+
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button
-                onClick={() => { setAiConfirm(null); setTaskPrompt(null); }}
+                onClick={() => { setAiConfirm(null); setTaskPrompt(null); setAiPickedFiles([]); }}
                 style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 18px" }}
               >
                 취소
@@ -1225,7 +1260,6 @@ function FunctionDetailPageInner() {
           projectId={projectId}
           taskId={aiDetailTaskId}
           onClose={() => setAiDetailTaskId(null)}
-          onApplied={() => { setAiDetailTaskId(null); queryClient.invalidateQueries({ queryKey: ["function", projectId, functionId] }); }}
           onRejected={() => { setAiDetailTaskId(null); queryClient.invalidateQueries({ queryKey: ["function", projectId, functionId] }); }}
         />
       )}

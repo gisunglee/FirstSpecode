@@ -21,6 +21,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { renderMarkdown } from "@/lib/renderMarkdown";
+import AiTaskFilePicker from "@/components/ui/AiTaskFilePicker";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -105,6 +106,11 @@ export default function ImplRequestPopup({ projectId, entryType, entryId, functi
   const [resetChecked, setResetChecked] = useState<Set<string>>(new Set());
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
+
+  // ── 참고 이미지 첨부 ──
+  // "최종 요청" 클릭 시 multipart/form-data로 함께 전송된다
+  // Claude 멀티모달 분석용 — 와이어프레임·UI 스크린샷 등
+  const [pickedFiles, setPickedFiles] = useState<File[]>([]);
 
   // 모든 계층이 NO_CHANGE면 요청 불가
   const allNoChange = summary.length > 0 && summary.every((l) => l.mode === "NO_CHANGE");
@@ -194,19 +200,44 @@ export default function ImplRequestPopup({ projectId, entryType, entryId, functi
   }
 
   // ── 최종 요청 (submit API) ──
+  // 첨부 이미지가 있으면 multipart, 없으면 JSON으로 전송
+  // (서버는 둘 다 수용 — aiTaskAttach.ts)
   async function handleSubmit() {
     setSubmitting(true);
     try {
-      await authFetch(`/api/projects/${projectId}/impl-request/submit`, {
-        method: "POST",
-        body: JSON.stringify({
-          entryType,
-          entryId,
-          functionIds,
-          comentCn: comentCn || undefined,
-          promptMd,
-        }),
-      });
+      if (pickedFiles.length > 0) {
+        // multipart — 첨부 이미지 동봉. functionIds는 JSON.stringify된 문자열로 전달
+        const fd = new FormData();
+        fd.append("entryType",   entryType);
+        fd.append("entryId",     entryId);
+        fd.append("functionIds", JSON.stringify(functionIds));
+        if (comentCn) fd.append("comentCn", comentCn);
+        fd.append("promptMd",    promptMd);
+        pickedFiles.forEach((f) => fd.append("files", f));
+
+        const at  = typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
+        const res = await fetch(`/api/projects/${projectId}/impl-request/submit`, {
+          method:  "POST",
+          body:    fd,
+          headers: at ? { Authorization: `Bearer ${at}` } : {},
+        });
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error((json as { message?: string }).message ?? "구현 요청 등록 실패");
+        }
+      } else {
+        // 첨부 없음 — 기존 JSON 경로 유지 (MCP·외부 호출과 동일 경로)
+        await authFetch(`/api/projects/${projectId}/impl-request/submit`, {
+          method: "POST",
+          body: JSON.stringify({
+            entryType,
+            entryId,
+            functionIds,
+            comentCn: comentCn || undefined,
+            promptMd,
+          }),
+        });
+      }
       toast.success("구현 요청이 등록되었습니다.");
       onSubmitted?.();
       onClose();
@@ -548,7 +579,7 @@ export default function ImplRequestPopup({ projectId, entryType, entryId, functi
           )}
         </div>
 
-        {/* ── 하단: AI 지시사항 + 버튼 ── */}
+        {/* ── 하단: AI 지시사항 + 참고 이미지 + 버튼 ── */}
         <div style={{ borderTop: "1px solid var(--color-border)", padding: "12px 20px", flexShrink: 0 }}>
           {/* AI 지시사항 입력 */}
           <div style={{ marginBottom: 10 }}>
@@ -566,6 +597,18 @@ export default function ImplRequestPopup({ projectId, entryType, entryId, functi
                 color: "var(--color-text-primary)", fontSize: 12, outline: "none",
                 boxSizing: "border-box", resize: "vertical",
               }}
+            />
+          </div>
+
+          {/* 참고 이미지 피커 — "최종 요청" 클릭 시 multipart로 함께 전송 */}
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, color: "var(--color-text-secondary)" }}>
+              참고 이미지 (선택)
+            </div>
+            <AiTaskFilePicker
+              files={pickedFiles}
+              onChange={setPickedFiles}
+              disabled={submitting}
             />
           </div>
 

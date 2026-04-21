@@ -637,7 +637,6 @@ function FunctionsPageInner() {
           projectId={projectId}
           taskId={aiDetailTaskId}
           onClose={() => setAiDetailTaskId(null)}
-          onApplied={() => { setAiDetailTaskId(null); queryClient.invalidateQueries({ queryKey }); }}
           onRejected={() => { setAiDetailTaskId(null); queryClient.invalidateQueries({ queryKey }); }}
         />
       )}

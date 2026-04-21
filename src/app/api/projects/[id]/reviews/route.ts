@@ -5,7 +5,7 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { randomUUID } from "crypto";
 
@@ -13,17 +13,10 @@ type RouteParams = { params: Promise<{ id: string }> };
 
 // ─── GET: 목록 조회 ─────────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "content.read");
+  if (gate instanceof Response) return gate;
 
   try {
     const reviews = await prisma.tb_ds_review_request.findMany({
@@ -75,17 +68,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // ─── POST: 리뷰 요청 생성 ───────────────────────────────────────────────────
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "content.create");
+  if (gate instanceof Response) return gate;
 
   let body: unknown;
   try { body = await request.json(); } catch {
@@ -106,7 +92,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         ref_id:            refId    ?? projectId,
         review_title_nm:   titleNm.trim(),
         review_cn:         reviewCn,
-        req_mber_id:       auth.mberId,
+        req_mber_id:       gate.mberId,
         revwr_mber_id:     revwrMemberId,
         review_sttus_code: "REQUESTED",
       },

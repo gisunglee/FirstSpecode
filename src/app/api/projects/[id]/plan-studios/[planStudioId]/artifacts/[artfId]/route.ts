@@ -11,22 +11,16 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 type RouteParams = { params: Promise<{ id: string; planStudioId: string; artfId: string }> };
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
   const { id: projectId, planStudioId, artfId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "content.read");
+  if (gate instanceof Response) return gate;
 
   try {
     const artf = await prisma.tbDsPlanStudioArtf.findUnique({
@@ -92,16 +86,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
   const { id: projectId, planStudioId, artfId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "content.update");
+  if (gate instanceof Response) return gate;
 
   let body: {
     artfNm?: string;
@@ -142,7 +130,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           artf_idea_cn: body.artfIdeaCn ?? existing.artf_idea_cn,
           coment_cn: body.comentCn ?? existing.coment_cn,
           artf_cn: body.artfCn ?? existing.artf_cn,
-          mdfr_mber_id: auth.mberId,
+          mdfr_mber_id: gate.mberId,
           mdfcn_dt: new Date(),
         },
       });
@@ -158,7 +146,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
               ctxt_ty_code: c.ctxtTyCode,
               ref_id: c.refId,
               sort_ordr: c.sortOrdr ?? i,
-              creat_mber_id: auth.mberId,
+              creat_mber_id: gate.mberId,
             })),
           });
         }
@@ -173,16 +161,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
   const { id: projectId, planStudioId, artfId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "content.delete");
+  if (gate instanceof Response) return gate;
 
   try {
     const existing = await prisma.tbDsPlanStudioArtf.findUnique({ where: { artf_id: artfId } });

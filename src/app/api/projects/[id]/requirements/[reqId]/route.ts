@@ -7,8 +7,7 @@
 import { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
-import { checkRole } from "@/lib/checkRole";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { deleteFile } from "@/lib/fileStorage";
 
@@ -16,17 +15,10 @@ type RouteParams = { params: Promise<{ id: string; reqId: string }> };
 
 // ─── GET: 요구사항 상세 조회 ─────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, reqId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "content.read");
+  if (gate instanceof Response) return gate;
 
   try {
     const req = await prisma.tbRqRequirement.findUnique({
@@ -61,19 +53,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // ─── PUT: 요구사항 수정 + 이력 생성 ─────────────────────────────────────────
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, reqId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
-  const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER"]);
-  if (roleCheck) return roleCheck;
+  const gate = await requirePermission(request, projectId, "content.update");
+  if (gate instanceof Response) return gate;
 
   let body: unknown;
   try { body = await request.json(); } catch {
@@ -175,7 +158,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             orgnl_cn:       newOrgnlCn,
             curncy_cn:      newCurncyCn,
             vrsn_coment_cn: versionComment?.trim() || null,
-            chg_mber_id:    auth.mberId,
+            chg_mber_id:    gate.mberId,
           },
         })
       );
@@ -192,7 +175,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             chg_type_code: "UPDATE",
             chg_rsn_cn:    "분석 메모",
             snapshot_data: { before: oldAnalyCn, after: newAnalyCn },
-            chg_mber_id:   auth.mberId,
+            chg_mber_id:   gate.mberId,
           },
         })
       );
@@ -209,7 +192,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             chg_type_code: "UPDATE",
             chg_rsn_cn:    "상세 명세",
             snapshot_data: { before: oldSpecCn, after: newSpecCn },
-            chg_mber_id:   auth.mberId,
+            chg_mber_id:   gate.mberId,
           },
         })
       );
@@ -226,21 +209,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 // ─── DELETE: 요구사항 삭제 ───────────────────────────────────────────────────
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, reqId } = await params;
   const url          = new URL(request.url);
   const deleteChildren = url.searchParams.get("deleteChildren") !== "false"; // 기본 true
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
-  const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER"]);
-  if (roleCheck) return roleCheck;
+  const gate = await requirePermission(request, projectId, "content.delete");
+  if (gate instanceof Response) return gate;
 
   try {
     const existing = await prisma.tbRqRequirement.findUnique({

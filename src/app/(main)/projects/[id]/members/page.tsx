@@ -19,6 +19,11 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import {
+  ROLE_CODES, ROLE_LABEL,
+  JOB_CODES,  JOB_LABEL,
+  type RoleCode, type JobCode,
+} from "@/lib/permissions";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -26,7 +31,8 @@ type Member = {
   memberId:       string;
   name:           string | null;
   email:          string;
-  role:           string;
+  role:           RoleCode;
+  job:            JobCode;
   joinedAt:       string;
   lastAccessedAt: string | null;
   hasWork:        boolean;
@@ -35,7 +41,9 @@ type Member = {
 type MembersResponse = {
   members:    Member[];
   totalCount: number;
-  myRole:     string;
+  myRole:     RoleCode;
+  myJob:      JobCode;
+  myMemberId: string;
   ownerCount: number;
 };
 
@@ -47,34 +55,19 @@ type LeaveCheckResponse = {
 };
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
+// 역할·직무 레이블은 permissions.ts 의 ROLE_LABEL / JOB_LABEL 단일 소스 사용
 
-const ROLE_OPTIONS = [
-  { value: "OWNER",     label: "OWNER" },
-  { value: "ADMIN",     label: "관리자" },
-  { value: "PM",        label: "PM" },
-  { value: "DESIGNER",  label: "디자이너" },
-  { value: "DEVELOPER", label: "개발자" },
-  { value: "VIEWER",    label: "뷰어" },
-];
+// 역할 드롭다운 옵션 (OWNER 포함 4개)
+const ROLE_OPTIONS = ROLE_CODES.map((code) => ({ value: code, label: ROLE_LABEL[code] }));
 
-const ROLE_LABEL: Record<string, string> = {
-  OWNER:     "OWNER",
-  ADMIN:     "관리자",
-  PM:        "PM",
-  DESIGNER:  "디자이너",
-  DEVELOPER: "개발자",
-  VIEWER:    "뷰어",
-  MEMBER:    "멤버",
-};
+// 직무 드롭다운 옵션 (7개)
+const JOB_OPTIONS  = JOB_CODES.map ((code) => ({ value: code, label: JOB_LABEL [code] }));
 
-const ROLE_COLOR: Record<string, { bg: string; color: string }> = {
-  OWNER:     { bg: "#fff3e0", color: "#e65100" },
-  ADMIN:     { bg: "#e8eaf6", color: "#3949ab" },
-  PM:        { bg: "#e8f5e9", color: "#2e7d32" },
-  DESIGNER:  { bg: "#fce4ec", color: "#c62828" },
-  DEVELOPER: { bg: "#e3f2fd", color: "#1565c0" },
-  VIEWER:    { bg: "#f5f5f5", color: "#616161" },
-  MEMBER:    { bg: "#f5f5f5", color: "#616161" },
+const ROLE_COLOR: Record<RoleCode, { bg: string; color: string }> = {
+  OWNER:  { bg: "#fff3e0", color: "#e65100" },
+  ADMIN:  { bg: "#e8eaf6", color: "#3949ab" },
+  MEMBER: { bg: "#f5f5f5", color: "#616161" },
+  VIEWER: { bg: "#eceff1", color: "#546e7a" },
 };
 
 // ── 유틸 ─────────────────────────────────────────────────────────────────────
@@ -119,7 +112,7 @@ function MembersPageInner() {
 
   // ── 역할 변경 ──────────────────────────────────────────────────────────────
   const roleMutation = useMutation({
-    mutationFn: ({ memberId, role }: { memberId: string; role: string }) =>
+    mutationFn: ({ memberId, role }: { memberId: string; role: RoleCode }) =>
       authFetch(`/api/projects/${projectId}/members/${memberId}/role`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -127,6 +120,23 @@ function MembersPageInner() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["project-members", projectId] });
+      // 본인 역할 변경 시 상단 권한 캐시도 갱신
+      queryClient.invalidateQueries({ queryKey: ["my-role", projectId] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // ── 직무 변경 ──────────────────────────────────────────────────────────────
+  const jobMutation = useMutation({
+    mutationFn: ({ memberId, job }: { memberId: string; job: JobCode }) =>
+      authFetch(`/api/projects/${projectId}/members/${memberId}/job`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ job }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project-members", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["my-role",         projectId] });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -162,10 +172,12 @@ function MembersPageInner() {
   }
   if (!data) return null;
 
-  const { members, totalCount, myRole, ownerCount } = data;
+  const { members, totalCount, myRole, myMemberId, ownerCount } = data;
   const canChangeRole = myRole === "OWNER" || myRole === "ADMIN";
+  const canChangeJob  = myRole === "OWNER" || myRole === "ADMIN";
   const canRemove     = myRole === "OWNER" || myRole === "ADMIN";
 
+  // OWNER 옵션은 OWNER 본인만 노출 (PRD UW-00010)
   const roleOptions = myRole === "OWNER"
     ? ROLE_OPTIONS
     : ROLE_OPTIONS.filter((o) => o.value !== "OWNER");
@@ -198,10 +210,10 @@ function MembersPageInner() {
         borderRadius: "var(--radius-lg)",
         overflow: "hidden",
       }}>
-        {/* 헤더 */}
+        {/* 헤더 — 역할/직무 2개 컬럼 분리 */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "1fr 160px 110px 120px",
+          gridTemplateColumns: "1fr 140px 140px 110px 120px",
           padding: "12px 20px",
           background: "var(--color-bg-muted)",
           borderBottom: "1px solid var(--color-border)",
@@ -212,6 +224,7 @@ function MembersPageInner() {
         }}>
           <span>이름 / 이메일</span>
           <span>역할</span>
+          <span>직무</span>
           <span>합류일</span>
           <span>액션</span>
         </div>
@@ -223,17 +236,18 @@ function MembersPageInner() {
           </div>
         ) : (
           members.map((member) => {
-            const isMe        = member.memberId === getMemberId(data);
-            const isLastOwner = member.role === "OWNER" && ownerCount <= 1;
-            const isDisabled  = !canChangeRole || isLastOwner;
-            const rc          = ROLE_COLOR[member.role] ?? ROLE_COLOR["MEMBER"];
+            const isMe          = member.memberId === myMemberId;
+            const isLastOwner   = member.role === "OWNER" && ownerCount <= 1;
+            const roleDisabled  = !canChangeRole || isLastOwner;
+            const jobDisabled   = !canChangeJob;
+            const rc            = ROLE_COLOR[member.role] ?? ROLE_COLOR["MEMBER"];
 
             return (
               <div
                 key={member.memberId}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 160px 110px 120px",
+                  gridTemplateColumns: "1fr 140px 140px 110px 120px",
                   padding: "14px 20px",
                   borderBottom: "1px solid var(--color-border)",
                   alignItems: "center",
@@ -255,7 +269,7 @@ function MembersPageInner() {
 
                 {/* 역할 드롭다운 / 배지 */}
                 <div>
-                  {isDisabled ? (
+                  {roleDisabled ? (
                     <span style={{
                       display: "inline-block",
                       padding: "4px 12px",
@@ -272,28 +286,48 @@ function MembersPageInner() {
                       value={member.role}
                       disabled={roleMutation.isPending}
                       onChange={(e) => {
-                        const newRole = e.target.value;
+                        const newRole = e.target.value as RoleCode;
                         if (newRole !== member.role) {
                           roleMutation.mutate({ memberId: member.memberId, role: newRole });
                         }
                       }}
-                      style={{
-                        padding: "5px 24px 5px 8px",
-                        borderRadius: 6,
-                        border: "1px solid var(--color-border)",
-                        fontSize: 13,
-                        background: "var(--color-bg-card)",
-                        color: "var(--color-text-primary)",
-                        cursor: "pointer",
-                        width: 128,
-                        appearance: "none",
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
-                        backgroundRepeat: "no-repeat",
-                        backgroundPosition: "right 8px center",
-                        backgroundSize: "14px",
-                      }}
+                      style={inlineSelectStyle}
                     >
                       {roleOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* 직무 드롭다운 / 배지 */}
+                <div>
+                  {jobDisabled ? (
+                    <span style={{
+                      display: "inline-block",
+                      padding: "4px 10px",
+                      borderRadius: 20,
+                      fontSize: 12,
+                      background: "var(--color-bg-muted)",
+                      color: "var(--color-text-secondary)",
+                    }}>
+                      {JOB_LABEL[member.job] ?? member.job}
+                    </span>
+                  ) : (
+                    <select
+                      value={member.job}
+                      disabled={jobMutation.isPending}
+                      onChange={(e) => {
+                        const newJob = e.target.value as JobCode;
+                        if (newJob !== member.job) {
+                          jobMutation.mutate({ memberId: member.memberId, job: newJob });
+                        }
+                      }}
+                      style={inlineSelectStyle}
+                    >
+                      {JOB_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
                           {opt.label}
                         </option>
@@ -366,26 +400,24 @@ function MembersPageInner() {
   );
 }
 
-// ── getMemberId 헬퍼 ─────────────────────────────────────────────────────────
-// 클라이언트에서 내 memberId를 AT payload에서 읽는 간단한 방법
-// — authFetch 응답이 아닌 JWT 쿠키/스토리지에서 읽어야 하지만,
-//   현재 구조에서는 API 응답에 myMemberId가 없으므로 localStorage에서 읽거나
-//   members 중 isMe를 알 수 없음.
-// 대신 API에서 myMemberId를 반환하도록 수정하거나 AT를 디코딩한다.
-// 여기서는 실용적으로 AT를 클라이언트에서 decode (서명 검증 없이).
-function getMemberId(_data: MembersResponse): string {
-  try {
-    // authFetch는 sessionStorage의 "access_token"을 사용
-    const at = sessionStorage.getItem("access_token") ?? "";
-    if (!at) return "";
-    const payload = JSON.parse(atob(at.split(".")[1]));
-    return payload.mberId ?? payload.sub ?? "";
-  } catch {
-    return "";
-  }
-}
+// ── 버튼·셀렉트 스타일 ────────────────────────────────────────────────────────
 
-// ── 버튼 스타일 ──────────────────────────────────────────────────────────────
+// 인라인 드롭다운 공통 스타일 — 역할·직무 양쪽에서 재사용
+const inlineSelectStyle: React.CSSProperties = {
+  padding: "5px 24px 5px 8px",
+  borderRadius: 6,
+  border: "1px solid var(--color-border)",
+  fontSize: 13,
+  background: "var(--color-bg-card)",
+  color: "var(--color-text-primary)",
+  cursor: "pointer",
+  width: 128,
+  appearance: "none",
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 8px center",
+  backgroundSize: "14px",
+};
 
 const secondaryBtnStyle: React.CSSProperties = {
   padding: "5px 14px",
@@ -616,7 +648,8 @@ function LeaveDialog({
                 {m.name ?? "(이름 없음)"}
               </span>
               <span style={{ fontSize: 12, color: "#888" }}>
-                ({ROLE_LABEL[m.role] ?? m.role})
+                {/* transferableMembers.role 은 API 응답에서 string 으로 옴 → 안전한 폴백 */}
+                ({(ROLE_LABEL as Record<string, string>)[m.role] ?? m.role})
               </span>
             </label>
           ))}

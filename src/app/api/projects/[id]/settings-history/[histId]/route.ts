@@ -1,31 +1,21 @@
 /**
  * DELETE /api/projects/[id]/settings-history/[histId] — 이력 단건 삭제
  *
- * OWNER / ADMIN / PM만 삭제 가능.
+ * project.settings 권한(OWNER/ADMIN) 보유자만 삭제 가능.
  */
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
-import { checkRole } from "@/lib/checkRole";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 type RouteParams = { params: Promise<{ id: string; histId: string }> };
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, histId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
-  const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM"]);
-  if (roleCheck) return roleCheck;
+  const gate = await requirePermission(request, projectId, "project.settings");
+  if (gate instanceof Response) return gate;
 
   try {
     const hist = await prisma.tbPjSettingsHistory.findUnique({ where: { hist_id: histId } });

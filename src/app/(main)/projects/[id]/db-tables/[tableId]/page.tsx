@@ -14,6 +14,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
+import RevisionList from "@/components/db-table/RevisionList";
+import RevisionDiffDialog from "@/components/db-table/RevisionDiffDialog";
+import RevisionListDialog from "@/components/db-table/RevisionListDialog";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -374,6 +377,13 @@ function DbTableDetailPageInner() {
 
   // ── 삭제 ────────────────────────────────────────────────────────────────────
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  // 이력 Diff 뷰어 팝업 대상 리비전 id
+  const [diffRevId, setDiffRevId] = useState<string | null>(null);
+  // 전체 이력 보기 모달 표시 여부
+  const [revListOpen, setRevListOpen] = useState(false);
+  // 드래그 핸들(⋮⋮)을 눌렀을 때만 해당 행을 draggable 로 전환
+  // → input 영역에서 텍스트 선택/복사가 드래그앤드롭으로 흡수되는 문제 방지
+  const [dragHandleIdx, setDragHandleIdx] = useState<number | null>(null);
 
   const deleteMutation = useMutation({
     mutationFn: () =>
@@ -541,10 +551,11 @@ function DbTableDetailPageInner() {
                 cols.map((col, idx) => (
                   <div
                     key={col._key}
-                    draggable
+                    // 드래그는 핸들(⋮⋮)을 mousedown 했을 때만 활성화됨
+                    draggable={dragHandleIdx === idx}
                     onDragStart={() => handleDragStart(idx)}
                     onDragEnter={() => handleDragEnter(idx)}
-                    onDragEnd={handleDragEnd}
+                    onDragEnd={() => { handleDragEnd(); setDragHandleIdx(null); }}
                     onDragOver={(e) => e.preventDefault()}
                     style={{
                       ...colRowStyle,
@@ -552,7 +563,14 @@ function DbTableDetailPageInner() {
                       background: col.colId ? "var(--color-bg-card)" : "#fffbeb",
                     }}
                   >
-                    <div style={{ cursor: "grab", color: "#ccc", userSelect: "none", textAlign: "center", fontSize: 14 }}>⋮⋮</div>
+                    <div
+                      // 핸들에서만 드래그 시작 — mouseup/drag 종료 시 해제
+                      onMouseDown={() => setDragHandleIdx(idx)}
+                      onMouseUp={() => setDragHandleIdx(null)}
+                      style={{ cursor: "grab", color: "#ccc", userSelect: "none", textAlign: "center", fontSize: 14 }}
+                    >
+                      ⋮⋮
+                    </div>
                     <input
                       value={col.colPhysclNm}
                       onChange={(e) => updateCol(col._key, "colPhysclNm", e.target.value)}
@@ -602,7 +620,51 @@ function DbTableDetailPageInner() {
             </p>
           )}
         </section>
+
+        {/* ── 변경 이력 (최근 5건 · 인라인) ── */}
+        {!isNew && data && (
+          <section style={{ ...sectionStyle, flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <div style={{ ...sectionTitleStyle, marginBottom: 0 }}>변경 이력</div>
+              <button
+                type="button"
+                className="sp-btn sp-btn-ghost"
+                onClick={() => setRevListOpen(true)}
+                style={{ padding: "4px 10px", fontSize: "var(--text-xs)" }}
+              >
+                전체 이력 보기
+              </button>
+            </div>
+            <RevisionList
+              projectId={projectId}
+              tblId={tableId}
+              pageSize={5}
+              compact
+              onSelectRev={(revId) => setDiffRevId(revId)}
+            />
+          </section>
+        )}
       </div>
+
+      {/* ── Diff 뷰어 팝업 (인라인 최근 5건에서 직접 여는 경우) ── */}
+      {diffRevId && (
+        <RevisionDiffDialog
+          projectId={projectId}
+          tblId={tableId}
+          revId={diffRevId}
+          onClose={() => setDiffRevId(null)}
+          onNavigate={(id) => setDiffRevId(id)}
+        />
+      )}
+
+      {/* ── 전체 이력 목록 모달 (내부에서 Diff 팝업 중첩 가능) ── */}
+      {revListOpen && (
+        <RevisionListDialog
+          projectId={projectId}
+          tblId={tableId}
+          onClose={() => setRevListOpen(false)}
+        />
+      )}
 
       {/* ── ADD DDL 팝업 ── */}
       {ddlOpen && (

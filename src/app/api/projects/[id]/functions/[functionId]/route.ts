@@ -8,25 +8,17 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
-import { checkRole } from "@/lib/checkRole";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 type RouteParams = { params: Promise<{ id: string; functionId: string }> };
 
 // ─── GET: 기능 상세 조회 ─────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, functionId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "content.read");
+  if (gate instanceof Response) return gate;
 
   try {
     const [fn, aiTaskRows, implSnapshotRows] = await Promise.all([
@@ -143,19 +135,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // ─── PUT: 기능 수정 + 이력 ────────────────────────────────────────────────────
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, functionId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
-  const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER"]);
-  if (roleCheck) return roleCheck;
+  const gate = await requirePermission(request, projectId, "content.update");
+  if (gate instanceof Response) return gate;
 
   let body: unknown;
   try { body = await request.json(); } catch {
@@ -234,7 +217,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             name:      name.trim(),
             type:      type || "OTHER",
           },
-          chg_mber_id: auth.mberId,
+          chg_mber_id: gate.mberId,
         },
       }),
       // 설명 변경 이력 — tb_ds_design_change에 before/after JSON으로 저장
@@ -250,7 +233,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
               before: oldDescription,
               after:  newDescription,
             },
-            chg_mber_id: auth.mberId,
+            chg_mber_id: gate.mberId,
           },
         }),
       ] : []),
@@ -265,19 +248,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 // ─── DELETE: 기능 삭제 + 이력 ───────────────────────────────────────────────
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, functionId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
-  const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER"]);
-  if (roleCheck) return roleCheck;
+  const gate = await requirePermission(request, projectId, "content.delete");
+  if (gate instanceof Response) return gate;
 
   try {
     const existing = await prisma.tbDsFunction.findUnique({ where: { func_id: functionId } });
@@ -301,7 +275,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
             name:      existing.func_nm,
             deletedAt: new Date().toISOString(),
           },
-          chg_mber_id: auth.mberId,
+          chg_mber_id: gate.mberId,
         },
       }),
     ]);

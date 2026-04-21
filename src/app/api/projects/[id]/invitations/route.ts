@@ -1,54 +1,47 @@
 /**
  * GET  /api/projects/[id]/invitations — 초대 현황 조회 (FID-00066)
- * POST /api/projects/[id]/invitations — 초대 발송 (FID-00065)
+ * POST /api/projects/[id]/invitations — 초대 발송      (FID-00065)
+ *
+ * 역할·직무:
+ *   - 초대 시 역할(ADMIN/MEMBER)과 직무(PM/PL/DBA/DEV/DESIGNER/QA/ETC) 함께 지정
+ *   - 직무 미지정 시 ETC 로 기본값 저장
+ *   - OWNER 초대는 불가 (OWNER 는 양도로만 변경)
  */
 
 import { NextRequest } from "next/server";
 import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { sendInvitationEmail } from "@/lib/auth";
+import { isJobCode, JOB_CODES } from "@/lib/permissions";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
-// OWNER/ADMIN 권한 확인 헬퍼
-async function requireOwnerOrAdmin(projectId: string, mberId: string) {
-  const m = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: mberId } },
-  });
-  if (!m || m.mber_sttus_code !== "ACTIVE") return null;
-  if (m.role_code !== "OWNER" && m.role_code !== "ADMIN") return null;
-  return m;
-}
+// 초대 가능한 역할 — OWNER 는 양도로만 변경되므로 초대 불가
+const INVITABLE_ROLES = ["ADMIN", "MEMBER", "VIEWER"] as const;
 
 // ─── GET: 초대 현황 조회 ──────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId } = await params;
 
-  const m = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!m || m.mber_sttus_code !== "ACTIVE" || (m.role_code !== "OWNER" && m.role_code !== "ADMIN")) {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  // member.read 권한 + OWNER/ADMIN 만 초대현황을 본다 → member.invite 권한으로 가드
+  const gate = await requirePermission(request, projectId, "member.invite");
+  if (gate instanceof Response) return gate;
 
   try {
     // 만료 자동 처리: PENDING이고 expiry_dt ≤ NOW() → EXPIRED
     await prisma.tbPjProjectInvitation.updateMany({
       where: {
-        prjct_id: projectId,
+        prjct_id:        projectId,
         invt_sttus_code: "PENDING",
-        expiry_dt: { lte: new Date() },
+        expiry_dt:       { lte: new Date() },
       },
       data: { invt_sttus_code: "EXPIRED" },
     });
 
     const invitations = await prisma.tbPjProjectInvitation.findMany({
-      where: { prjct_id: projectId },
+      where:   { prjct_id: projectId },
       orderBy: { invt_dt: "desc" },
     });
 
@@ -56,6 +49,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       invitationId: inv.invt_id,
       email:        inv.email_addr,
       role:         inv.role_code,
+      job:          inv.job_title_code,  // 신규
       status:       inv.invt_sttus_code,
       invitedAt:    inv.invt_dt,
       expiresAt:    inv.expiry_dt,
@@ -70,42 +64,54 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // ─── POST: 초대 발송 ─────────────────────────────────────────────────────
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId } = await params;
 
-  const member = await requireOwnerOrAdmin(projectId, auth.mberId);
-  if (!member) return apiError("FORBIDDEN", "초대 권한이 없습니다.", 403);
+  const gate = await requirePermission(request, projectId, "member.invite");
+  if (gate instanceof Response) return gate;
 
   let body: unknown;
-  try { body = await request.json(); } catch {
+  try {
+    body = await request.json();
+  } catch {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
+  // role 외에 job 도 받음 (선택 — 없으면 ETC)
   const { invitations } = body as {
-    invitations?: Array<{ email: string; role: string }>;
+    invitations?: Array<{ email: string; role: string; job?: string }>;
   };
 
   if (!Array.isArray(invitations) || invitations.length === 0) {
     return apiError("VALIDATION_ERROR", "초대할 이메일 목록이 필요합니다.", 400);
   }
 
-  // 이메일 형식 검증
+  // 형식 검증 — 먼저 전체를 훑어서 하나라도 틀리면 400
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   for (const inv of invitations) {
     if (!emailRegex.test(inv.email)) {
       return apiError("VALIDATION_ERROR", `올바른 이메일 형식이 아닙니다: ${inv.email}`, 400);
     }
-    if (!["ADMIN", "MEMBER"].includes(inv.role)) {
-      return apiError("VALIDATION_ERROR", "역할은 ADMIN 또는 MEMBER이어야 합니다.", 400);
+    if (!(INVITABLE_ROLES as readonly string[]).includes(inv.role)) {
+      return apiError(
+        "VALIDATION_ERROR",
+        `역할은 ${INVITABLE_ROLES.join("/")} 중 하나여야 합니다.`,
+        400
+      );
+    }
+    // job 은 선택 — 제공되면 검증, 안 하면 ETC
+    if (inv.job !== undefined && !isJobCode(inv.job)) {
+      return apiError(
+        "VALIDATION_ERROR",
+        `직무는 ${JOB_CODES.join("/")} 중 하나여야 합니다.`,
+        400
+      );
     }
   }
 
   // 프로젝트 정보 + 초대자 이메일 조회
   const [project, inviter] = await Promise.all([
     prisma.tbPjProject.findUnique({ where: { prjct_id: projectId }, select: { prjct_nm: true } }),
-    prisma.tbCmMember.findUnique({ where: { mber_id: auth.mberId }, select: { email_addr: true } }),
+    prisma.tbCmMember.findUnique({ where: { mber_id: gate.mberId }, select: { email_addr: true } }),
   ]);
 
   const results: Array<{ email: string; ok: boolean; error?: string }> = [];
@@ -114,7 +120,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     try {
       // 이미 멤버인지 확인
       const existingMember = await prisma.tbCmMember.findUnique({
-        where: { email_addr: inv.email },
+        where:  { email_addr: inv.email },
         select: { mber_id: true },
       });
       if (existingMember) {
@@ -137,16 +143,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
 
       // 초대 토큰 생성 + INSERT
-      const token   = randomBytes(32).toString("hex");
-      const expiry  = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7일
+      const token  = randomBytes(32).toString("hex");
+      const expiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7일
 
       await prisma.tbPjProjectInvitation.create({
         data: {
           prjct_id:        projectId,
           email_addr:      inv.email,
           role_code:       inv.role,
+          job_title_code:  inv.job ?? "ETC",   // 신규 — 미지정 시 ETC
           invt_token_val:  token,
-          invtr_mber_id:   auth.mberId,
+          invtr_mber_id:   gate.mberId,
           invt_sttus_code: "PENDING",
           expiry_dt:       expiry,
         },
@@ -157,7 +164,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         inv.email,
         token,
         project?.prjct_nm ?? "",
-        inviter?.email_addr ?? auth.email
+        inviter?.email_addr ?? gate.email
       ).catch((e) => console.error("[초대 메일 발송 실패]", e));
 
       results.push({ email: inv.email, ok: true });

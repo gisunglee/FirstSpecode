@@ -19,6 +19,7 @@ import { requireAuth } from "@/lib/requireAuth";
 import { checkRole } from "@/lib/checkRole";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { buildDesignContext } from "@/lib/buildDesignContext";
+import { parseAiRequest, saveAiTaskAttachments } from "@/lib/aiTaskAttach";
 
 type RouteParams = { params: Promise<{ id: string; unitWorkId: string }> };
 
@@ -37,12 +38,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER"]);
   if (roleCheck) return roleCheck;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
+  // multipart 또는 JSON 둘 다 수용
+  let raw: Record<string, string>;
+  let files: File[];
+  try {
+    const parsed = await parseAiRequest(request);
+    raw   = parsed.raw;
+    files = parsed.files;
+  } catch {
+    return apiError("VALIDATION_ERROR", "요청 본문을 파싱할 수 없습니다.", 400);
   }
 
-  const { taskType, coment_cn } = body as { taskType?: string; coment_cn?: string };
+  const { taskType, coment_cn } = raw;
 
   if (!taskType || !["DESIGN", "INSPECT"].includes(taskType)) {
     return apiError("VALIDATION_ERROR", "taskType은 DESIGN, INSPECT 중 하나여야 합니다.", 400);
@@ -138,7 +145,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       },
     });
 
-    return apiSuccess({ aiTaskId: task.ai_task_id, status: "PENDING", taskType }, 202);
+    // ── 첨부 이미지 저장 (multipart 요청에만 존재) ───────────────────────────
+    let attachmentCount = 0;
+    if (files.length > 0) {
+      try {
+        attachmentCount = await saveAiTaskAttachments({
+          projectId,
+          taskId: task.ai_task_id,
+          files,
+        });
+      } catch (attachErr) {
+        await prisma.tbAiTask.delete({ where: { ai_task_id: task.ai_task_id } })
+          .catch((e) => console.error("[AI Task] 롤백 실패:", e));
+        const msg = attachErr instanceof Error ? attachErr.message : "첨부 저장 실패";
+        return apiError("UPLOAD_ERROR", msg, 500);
+      }
+    }
+
+    return apiSuccess({ aiTaskId: task.ai_task_id, status: "PENDING", taskType, attachmentCount }, 202);
   } catch (err) {
     console.error(`[POST /api/projects/${projectId}/unit-works/${unitWorkId}/ai] DB 오류:`, err);
     return apiError("DB_ERROR", "AI 요청 중 오류가 발생했습니다.", 500);

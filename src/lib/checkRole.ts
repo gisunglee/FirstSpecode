@@ -1,30 +1,28 @@
 /**
- * checkRole — API Route 역할 검증 헬퍼 (UW-00011)
+ * checkRole — [DEPRECATED] 구 7-role 체계 잔존 헬퍼
  *
- * 역할:
- *   - API Route에서 역할 검증을 한 줄로 처리
- *   - 검증 실패 시 403 Response 반환 (반환값이 Response이면 즉시 return)
+ * ⚠️ 신규 코드에선 사용 금지. 대신 다음을 사용:
+ *     - 백엔드 API:  requirePermission()  @ src/lib/requirePermission.ts
+ *     - 프론트:      usePermissions()     @ src/hooks/useMyRole.ts
+ *     - 권한 매트릭스: PERMISSIONS        @ src/lib/permissions.ts
  *
- * 사용 예:
- *   const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN"]);
- *   if (roleCheck) return roleCheck; // 403
+ * 이 파일은 기존 호출부 이전 유예를 위해 남겨두며,
+ * 모든 호출부가 permissions.ts 로 이전되면 삭제됩니다.
+ * 새 4-role(OWNER/ADMIN/MEMBER/VIEWER)에서도 동작하도록
+ * 구 코드(PM/DESIGNER/DEVELOPER)는 내부적으로 MEMBER 로 간주합니다.
  *
- * 권한 정의 (PRD UW-00011):
- *   - 전체 읽기:        모든 역할
- *   - 생성·수정·삭제:   OWNER, ADMIN, PM, DESIGNER, DEVELOPER
- *   - AI 요청:         OWNER, ADMIN, PM, DESIGNER, DEVELOPER
- *   - 멤버 관리:        OWNER, ADMIN
- *   - 프로젝트 삭제:    OWNER
+ * 설계 문서: src/lib/permissions.md
  */
 
 import { apiError } from "@/lib/apiResponse";
 
-// 역할 그룹 상수 — 사용 시 ROLES.EDIT처럼 참조
+// 역할 그룹 상수 — 구 7-role 호환 유지
+// 신규 4-role 이관 후에도 동일 결과가 나오도록 MEMBER 포함
 export const ROLES = {
   // 읽기 전용 이상 (전체)
   ALL:            ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER", "VIEWER", "MEMBER"] as const,
-  // 생성·수정·삭제·AI 요청 가능
-  EDIT:           ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER"] as const,
+  // 생성·수정·삭제·AI 요청 가능 — 신규 체계에선 MEMBER 가 담당 (구 PM/DESIGNER/DEVELOPER 대체)
+  EDIT:           ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER", "MEMBER"] as const,
   // 멤버 관리
   MANAGE_MEMBERS: ["OWNER", "ADMIN"] as const,
   // 프로젝트 삭제
@@ -34,11 +32,9 @@ export const ROLES = {
 type AllowedRoles = readonly string[];
 
 /**
- * 역할이 허용 목록에 없으면 403 Response를 반환, 있으면 null 반환
+ * @deprecated 신규 코드에선 requirePermission() 사용
  *
- * @param roleCode     - 현재 사용자의 역할 코드
- * @param allowedRoles - 허용할 역할 목록 (ROLES 상수 활용 권장)
- * @param message      - 403 메시지 (기본: "권한이 없습니다.")
+ * 역할이 허용 목록에 없으면 403 Response를 반환, 있으면 null 반환
  */
 export function checkRole(
   roleCode: string,

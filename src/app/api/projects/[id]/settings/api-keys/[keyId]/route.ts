@@ -1,35 +1,24 @@
 /**
  * PUT    /api/projects/[id]/settings/api-keys/[keyId] — AI API 키 수정 (FID-00079)
  * DELETE /api/projects/[id]/settings/api-keys/[keyId] — AI API 키 삭제 (FID-00080)
+ *
+ * apiKey.manage 권한(OWNER/ADMIN) 보유자만 접근 가능.
  */
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { encryptApiKey, maskApiKey } from "@/lib/encrypt";
 
 type RouteParams = { params: Promise<{ id: string; keyId: string }> };
 
-async function checkAdminAccess(projectId: string, mberId: string) {
-  const m = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: mberId } },
-  });
-  if (!m || m.mber_sttus_code !== "ACTIVE") return null;
-  if (!["OWNER", "ADMIN"].includes(m.role_code)) return null;
-  return m;
-}
-
 // ─── PUT: API 키 수정 ─────────────────────────────────────────────────────
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, keyId } = await params;
 
-  if (!await checkAdminAccess(projectId, auth.mberId)) {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "apiKey.manage");
+  if (gate instanceof Response) return gate;
 
   let body: unknown;
   try { body = await request.json(); } catch {
@@ -66,7 +55,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       await tx.tbPjSettingsHistory.create({
         data: {
           prjct_id:    projectId,
-          chg_mber_id: auth.mberId,
+          chg_mber_id: gate.mberId,
           chg_item_nm: "API 키 수정",
           bfr_val_cn:  `${existing.provdr_nm} (${existing.mask_key_val})`,
           aftr_val_cn: `${existing.provdr_nm} (${newMasked})`,
@@ -83,14 +72,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 // ─── DELETE: API 키 삭제 ──────────────────────────────────────────────────
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, keyId } = await params;
 
-  if (!await checkAdminAccess(projectId, auth.mberId)) {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "apiKey.manage");
+  if (gate instanceof Response) return gate;
 
   const existing = await prisma.tbPjProjectApiKey.findFirst({
     where: { api_key_id: keyId, prjct_id: projectId },
@@ -106,7 +91,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       await tx.tbPjSettingsHistory.create({
         data: {
           prjct_id:    projectId,
-          chg_mber_id: auth.mberId,
+          chg_mber_id: gate.mberId,
           chg_item_nm: "API 키 삭제",
           bfr_val_cn:  `${existing.provdr_nm} (${existing.mask_key_val})`,
         },

@@ -34,6 +34,7 @@ import { useAppStore } from "@/store/appStore";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
 import AiImplementCard from "@/components/ui/AiImplementCard";
+import AiTaskFilePicker from "@/components/ui/AiTaskFilePicker";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -203,6 +204,9 @@ function UnitWorkDetailPageInner() {
   const aiPanelRef = useRef<HTMLDivElement>(null);
   const [aiConfirm,       setAiConfirm]       = useState<{ taskType: string; label: string } | null>(null);
   const [taskPrompt,      setTaskPrompt]      = useState<{ tmplId: string; tmplNm: string } | null | "loading" | "none">(null);
+
+  // AI 요청 팝업의 참고 이미지 — multipart로 함께 전송, 팝업 종료 시 초기화
+  const [aiPickedFiles, setAiPickedFiles] = useState<File[]>([]);
   const [aiDetailTaskId,  setAiDetailTaskId]  = useState<string | null>(null);
   const [aiHistoryTaskType, setAiHistoryTaskType] = useState<string | null>(null);
 
@@ -237,18 +241,35 @@ function UnitWorkDetailPageInner() {
     }
   }
 
+  // multipart/form-data로 전송 — 첨부 이미지(aiPickedFiles)를 함께 올림
+  // authFetch는 Content-Type을 JSON으로 고정하므로 raw fetch 사용
   const aiMutation = useMutation({
-    mutationFn: ({ taskType }: { taskType: string }) =>
-      authFetch(`/api/projects/${projectId}/unit-works/${unitWorkId}/ai`, {
-        method: "POST",
-        body: JSON.stringify({ taskType, coment_cn: form.comment.trim() }),
-      }),
+    mutationFn: async ({ taskType }: { taskType: string }) => {
+      const fd = new FormData();
+      fd.append("taskType",  taskType);
+      fd.append("coment_cn", form.comment.trim());
+      aiPickedFiles.forEach((f) => fd.append("files", f));
+
+      const at  = typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
+      const res = await fetch(`/api/projects/${projectId}/unit-works/${unitWorkId}/ai`, {
+        method:  "POST",
+        body:    fd,
+        headers: at ? { Authorization: `Bearer ${at}` } : {},
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error((json as { message?: string }).message ?? "AI 요청에 실패했습니다.");
+      }
+      return res.json();
+    },
     onSuccess: (_res, vars) => {
       const labels: Record<string, string> = {
         DESIGN:  "AI 설계 요청이 접수되었습니다.",
         INSPECT: "AI 점검 요청이 접수되었습니다.",
       };
       toast.success(labels[vars.taskType] ?? "AI 요청이 접수되었습니다.");
+      // 첨부 state 초기화 — 다음 요청 시 이전 이미지가 남지 않도록
+      setAiPickedFiles([]);
       queryClient.invalidateQueries({ queryKey: ["unit-work", projectId, unitWorkId] });
     },
     onError: (err: Error) => toast.error(err.message),
@@ -539,7 +560,7 @@ function UnitWorkDetailPageInner() {
             </div>
 
             {/* AI 요청 코멘트 입력 */}
-            <div style={{ marginBottom: 24 }}>
+            <div style={{ marginBottom: 16 }}>
               <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 8 }}>
                 <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px" }}>코멘트</span>
                 AI 요청 코멘트
@@ -553,8 +574,21 @@ function UnitWorkDetailPageInner() {
               />
             </div>
 
+            {/* 참고 이미지 피커 — multipart로 함께 전송 (Claude 멀티모달 분석용) */}
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 8 }}>
+                <span style={{ fontSize: 11, background: "rgba(25,118,210,0.12)", color: "#1565c0", borderRadius: 4, padding: "1px 6px" }}>첨부</span>
+                참고 이미지 (선택)
+              </label>
+              <AiTaskFilePicker
+                files={aiPickedFiles}
+                onChange={setAiPickedFiles}
+                disabled={aiMutation.isPending}
+              />
+            </div>
+
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button onClick={() => { setAiConfirm(null); setTaskPrompt(null); }} style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 18px" }}>취소</button>
+              <button onClick={() => { setAiConfirm(null); setTaskPrompt(null); setAiPickedFiles([]); }} style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 18px" }}>취소</button>
               {taskPrompt === "none" && (
                 <button
                   onClick={() => { aiMutation.mutate({ taskType: aiConfirm.taskType }); setAiConfirm(null); setTaskPrompt(null); }}
@@ -586,7 +620,6 @@ function UnitWorkDetailPageInner() {
           projectId={projectId}
           taskId={aiDetailTaskId}
           onClose={() => setAiDetailTaskId(null)}
-          onApplied={() => { setAiDetailTaskId(null); queryClient.invalidateQueries({ queryKey: ["unit-work", projectId, unitWorkId] }); }}
           onRejected={() => { setAiDetailTaskId(null); queryClient.invalidateQueries({ queryKey: ["unit-work", projectId, unitWorkId] }); }}
         />
       )}

@@ -5,31 +5,59 @@
  *   - 2단계(build)에서 생성된 프롬프트를 받아 tb_ai_task INSERT (PENDING)
  *   - 각 엔티티별 현재 _dc 스냅샷을 tb_sp_impl_snapshot에 저장
  *   - 다음 구현요청 시 이 스냅샷과 비교하여 diff 생성
+ *
+ * Body (둘 중 하나):
+ *   - application/json  : { entryType, entryId, functionIds, comentCn?, promptMd }
+ *   - multipart/form-data: 위 필드(+ files[])  — functionIds는 JSON.stringify 문자열로
+ *
+ * 첨부 이미지는 태스크 생성 후 tb_cm_attach_file에 저장 (aiTaskAttach.ts)
  */
 
 import { NextRequest } from "next/server";
-import { requireAuth } from "@/lib/requireAuth";
+import { requirePermission } from "@/lib/requirePermission";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { collectLayers } from "@/lib/impl-request/collector";
 import { TABLE_MAP } from "@/lib/impl-request/collector";
+import { parseAiRequest, saveAiTaskAttachments } from "@/lib/aiTaskAttach";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
   const { id: projectId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "ai.request");
+  if (gate instanceof Response) return gate;
 
+  // multipart 또는 JSON 둘 다 수용
+  // multipart에서는 functionIds를 JSON.stringify된 문자열로 수신
   let body: { entryType: string; entryId: string; functionIds: string[]; comentCn?: string; promptMd: string };
-  try { body = await request.json(); } catch { return apiError("VALIDATION_ERROR", "올바른 JSON이 아닙니다.", 400); }
+  let files: File[];
+  try {
+    const parsed = await parseAiRequest(request);
+    files = parsed.files;
+
+    if (parsed.json) {
+      // JSON 요청 — 원형 그대로 사용
+      body = parsed.json as unknown as typeof body;
+    } else {
+      // multipart — raw에서 재조립. functionIds는 JSON.parse
+      const raw = parsed.raw;
+      let functionIds: string[] = [];
+      if (raw.functionIds) {
+        try { functionIds = JSON.parse(raw.functionIds); } catch { functionIds = []; }
+      }
+      body = {
+        entryType:   raw.entryType,
+        entryId:     raw.entryId,
+        functionIds,
+        comentCn:    raw.comentCn,
+        promptMd:    raw.promptMd,
+      };
+    }
+  } catch {
+    return apiError("VALIDATION_ERROR", "요청 본문을 파싱할 수 없습니다.", 400);
+  }
 
   if (!body.promptMd?.trim()) {
     return apiError("VALIDATION_ERROR", "프롬프트 내용이 없습니다.", 400);
@@ -90,7 +118,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             layerCount: layers.length,
             promptTemplateId: promptTmpl?.tmpl_id ?? null,
           },
-          req_mber_id: auth.mberId,
+          req_mber_id: gate.mberId,
         },
       });
 
@@ -108,7 +136,28 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     });
 
-    return apiSuccess({ aiTaskId, taskSttusCode: "PENDING" });
+    // ── 첨부 이미지 저장 (multipart 요청에만 존재) ───────────────────────────
+    // 트랜잭션 밖에서 처리 — 디스크 IO가 포함되어 DB 트랜잭션과 묶으면 롤백이 불완전
+    // 실패 시 수동 롤백: 태스크 + 스냅샷 전체 삭제
+    let attachmentCount = 0;
+    if (files.length > 0) {
+      try {
+        attachmentCount = await saveAiTaskAttachments({
+          projectId,
+          taskId: aiTaskId,
+          files,
+        });
+      } catch (attachErr) {
+        await prisma.tbSpImplSnapshot.deleteMany({ where: { ai_task_id: aiTaskId } })
+          .catch((e) => console.error("[Impl Submit] 스냅샷 롤백 실패:", e));
+        await prisma.tbAiTask.delete({ where: { ai_task_id: aiTaskId } })
+          .catch((e) => console.error("[Impl Submit] 태스크 롤백 실패:", e));
+        const msg = attachErr instanceof Error ? attachErr.message : "첨부 저장 실패";
+        return apiError("UPLOAD_ERROR", msg, 500);
+      }
+    }
+
+    return apiSuccess({ aiTaskId, taskSttusCode: "PENDING", attachmentCount });
   } catch (err) {
     console.error("[POST /impl-request/submit]", err);
     return apiError("DB_ERROR", "구현 요청 등록에 실패했습니다.", 500);

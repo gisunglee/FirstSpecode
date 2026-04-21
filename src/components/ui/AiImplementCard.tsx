@@ -174,7 +174,6 @@ export default function AiImplementCard({ projectId, refType, refId, implInfo, o
           projectId={projectId}
           taskId={detailTaskId}
           onClose={() => setDetailTaskId(null)}
-          onApplied={() => { setDetailTaskId(null); onInvalidate?.(); }}
           onRejected={() => { setDetailTaskId(null); onInvalidate?.(); }}
         />
       )}

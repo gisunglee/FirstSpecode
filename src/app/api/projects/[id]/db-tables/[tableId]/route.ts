@@ -12,25 +12,19 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { captureTableSnapshot, recordRevision } from "@/lib/dbTableRevision";
 
 type RouteParams = { params: Promise<{ id: string; tableId: string }> };
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, tableId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "content.read");
+  if (gate instanceof Response) return gate;
 
   try {
     const table = await prisma.tbDsDbTable.findUnique({
@@ -81,17 +75,10 @@ type ColumnInput = {
 };
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, tableId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "db.table.write");
+  if (gate instanceof Response) return gate;
 
   let body: unknown;
   try { body = await request.json(); } catch {
@@ -119,6 +106,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const incomingIds = colList.map((c) => c.colId).filter(Boolean) as string[];
 
     await prisma.$transaction(async (tx) => {
+      // 변경 전 스냅샷 (이력용)
+      const before = await captureTableSnapshot(tx, tableId);
+
       // 테이블 정보 업데이트 (수정자·수정일시 포함)
       await tx.tbDsDbTable.update({
         where: { tbl_id: tableId },
@@ -126,7 +116,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           tbl_physcl_nm: tblPhysclNm.trim(),
           tbl_lgcl_nm:   tblLgclNm !== undefined ? (tblLgclNm?.trim() || null) : existing.tbl_lgcl_nm,
           tbl_dc:        tblDc !== undefined ? (tblDc?.trim() || null) : existing.tbl_dc,
-          mdfcn_mber_id: auth.mberId,
+          mdfcn_mber_id: gate.mberId,
           mdfcn_dt:      new Date(),
         },
       });
@@ -153,7 +143,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
               col_dc:        c.colDc?.trim()         || null,
               ref_grp_code:  c.refGrpCode?.trim()    || null,
               sort_ordr:     i + 1,
-              mdfcn_mber_id: auth.mberId,
+              mdfcn_mber_id: gate.mberId,
               mdfcn_dt:      now,
             },
           });
@@ -171,6 +161,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           });
         }
       }
+
+      // 변경 후 스냅샷 → 이력 기록 (실제 변경 없으면 recordRevision 이 null 반환하고 skip)
+      const after = await captureTableSnapshot(tx, tableId);
+      await recordRevision(tx, {
+        projectId,
+        tblId:       tableId,
+        chgTypeCode: "UPDATE",
+        before,
+        after,
+        chgMberId:   gate.mberId,
+      });
     });
 
     return apiSuccess({ tblId: tableId });
@@ -183,17 +184,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 // ── DELETE ────────────────────────────────────────────────────────────────────
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, tableId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "db.table.write");
+  if (gate instanceof Response) return gate;
 
   try {
     const existing = await prisma.tbDsDbTable.findUnique({ where: { tbl_id: tableId } });
@@ -201,11 +195,24 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "테이블을 찾을 수 없습니다.", 404);
     }
 
-    // 컬럼 먼저 삭제 후 테이블 삭제 (cascade 미설정 대비)
-    await prisma.$transaction([
-      prisma.tbDsDbTableColumn.deleteMany({ where: { tbl_id: tableId } }),
-      prisma.tbDsDbTable.delete({ where: { tbl_id: tableId } }),
-    ]);
+    // 트랜잭션: 삭제 직전 스냅샷 → DELETE 이력 기록 → 컬럼/테이블 삭제
+    await prisma.$transaction(async (tx) => {
+      const before = await captureTableSnapshot(tx, tableId);
+
+      // 이력 먼저 기록 (테이블 삭제되면 외래키 검증 상 문제 없고, 감사 기록은 선행)
+      await recordRevision(tx, {
+        projectId,
+        tblId:       tableId,
+        chgTypeCode: "DELETE",
+        before,
+        after:       null,
+        chgMberId:   gate.mberId,
+      });
+
+      // 컬럼 먼저 삭제 후 테이블 삭제 (cascade 미설정 대비)
+      await tx.tbDsDbTableColumn.deleteMany({ where: { tbl_id: tableId } });
+      await tx.tbDsDbTable.delete({ where: { tbl_id: tableId } });
+    });
 
     return apiSuccess({ deleted: true });
   } catch (err) {

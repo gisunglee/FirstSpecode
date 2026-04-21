@@ -6,24 +6,17 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 type RouteParams = { params: Promise<{ id: string; memoId: string }> };
 
 // ── GET: 단건 조회 + 조회수 증가 ────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, memoId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "content.read");
+  if (gate instanceof Response) return gate;
 
   try {
     const memo = await prisma.tbDsMemo.findUnique({
@@ -35,7 +28,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     // 접근 권한 확인: 본인 메모이거나 공유 메모여야 함
-    if (memo.creat_mber_id !== auth.mberId && memo.share_yn !== "Y") {
+    if (memo.creat_mber_id !== gate.mberId && memo.share_yn !== "Y") {
       return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
     }
 
@@ -61,7 +54,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       viewCnt:       memo.view_cnt + 1,
       creatMberId:   memo.creat_mber_id,
       creatMberName: creator?.mber_nm ?? "",
-      isMine:        memo.creat_mber_id === auth.mberId,
+      isMine:        memo.creat_mber_id === gate.mberId,
       creatDt:       memo.creat_dt,
       mdfcnDt:       memo.mdfcn_dt,
     });
@@ -73,24 +66,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // ── PUT: 메모 수정 (본인만) ─────────────────────────────────────────────────
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, memoId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "content.update");
+  if (gate instanceof Response) return gate;
 
   const memo = await prisma.tbDsMemo.findUnique({ where: { memo_id: memoId } });
   if (!memo || memo.prjct_id !== projectId) {
     return apiError("NOT_FOUND", "메모를 찾을 수 없습니다.", 404);
   }
   // 본인 메모만 수정 가능
-  if (memo.creat_mber_id !== auth.mberId) {
+  if (memo.creat_mber_id !== gate.mberId) {
     return apiError("FORBIDDEN", "본인 메모만 수정할 수 있습니다.", 403);
   }
 
@@ -113,7 +99,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         ...(subject !== undefined && { memo_sj: subject }),
         ...(body.content !== undefined && { memo_cn: body.content }),
         ...(body.shareYn !== undefined && { share_yn: body.shareYn === "Y" ? "Y" : "N" }),
-        mdfr_mber_id: auth.mberId,
+        mdfr_mber_id: gate.mberId,
         mdfcn_dt:     new Date(),
       },
     });
@@ -127,17 +113,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 // ── DELETE: 메모 삭제 (본인 또는 OWNER/ADMIN) ──────────────────────────────
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, memoId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "content.delete");
+  if (gate instanceof Response) return gate;
 
   const memo = await prisma.tbDsMemo.findUnique({ where: { memo_id: memoId } });
   if (!memo || memo.prjct_id !== projectId) {
@@ -145,8 +124,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   }
 
   // 삭제 권한: 본인 또는 OWNER/ADMIN
-  const isOwnerOrAdmin = ["OWNER", "ADMIN"].includes(membership.role_code);
-  if (memo.creat_mber_id !== auth.mberId && !isOwnerOrAdmin) {
+  const isOwnerOrAdmin = gate.role === "OWNER" || gate.role === "ADMIN";
+  if (memo.creat_mber_id !== gate.mberId && !isOwnerOrAdmin) {
     return apiError("FORBIDDEN", "삭제 권한이 없습니다.", 403);
   }
 

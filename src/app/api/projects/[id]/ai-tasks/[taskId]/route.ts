@@ -123,7 +123,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
 
   const { status } = body as { status?: string };
-  const VALID_STATUSES = ["PENDING", "IN_PROGRESS", "DONE", "APPLIED", "REJECTED", "FAILED", "TIMEOUT"];
+  // APPLIED는 "결과 반영" 프로세스가 폐지되어 더 이상 수동 전환 불가
+  // (기존 DB에 APPLIED 레코드는 그대로 남을 수 있으나, 새 전환은 허용하지 않음)
+  const VALID_STATUSES = ["PENDING", "IN_PROGRESS", "DONE", "REJECTED", "FAILED", "TIMEOUT"];
   if (!status || !VALID_STATUSES.includes(status)) {
     return apiError("VALIDATION_ERROR", "유효하지 않은 상태값입니다.", 400);
   }

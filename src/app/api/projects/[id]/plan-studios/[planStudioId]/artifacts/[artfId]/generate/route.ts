@@ -12,7 +12,7 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { buildPrompt } from "@/lib/plan-studio/prompt-builder";
 import { AI_TASK_REF_TY_ARTF } from "@/constants/planStudio";
@@ -20,16 +20,11 @@ import { AI_TASK_REF_TY_ARTF } from "@/constants/planStudio";
 type RouteParams = { params: Promise<{ id: string; planStudioId: string; artfId: string }> };
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
   const { id: projectId, planStudioId, artfId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  // AI 생성 — 실질적 AI 요청이므로 ai.request (VIEWER만 차단, 플랜 게이트 없음)
+  const gate = await requirePermission(request, projectId, "ai.request");
+  if (gate instanceof Response) return gate;
 
   let body: {
     artfNm: string;
@@ -74,7 +69,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           artf_fmt_code: body.artfFmtCode,
           artf_idea_cn: body.artfIdeaCn ?? null,
           coment_cn: body.comentCn ?? null,
-          mdfr_mber_id: auth.mberId,
+          mdfr_mber_id: gate.mberId,
           mdfcn_dt: new Date(),
         },
       });
@@ -87,7 +82,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             ctxt_ty_code: c.ctxtTyCode,
             ref_id: c.refId,
             sort_ordr: c.sortOrdr ?? i,
-            creat_mber_id: auth.mberId,
+            creat_mber_id: gate.mberId,
           })),
         });
       }
@@ -117,7 +112,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         coment_cn: body.comentCn,
         task_sttus_code: "PENDING",
         req_snapshot_data: { artfNm: body.artfNm, artfDivCode: body.artfDivCode, artfFmtCode: body.artfFmtCode, contexts: body.contexts },
-        req_mber_id: auth.mberId,
+        req_mber_id: gate.mberId,
       },
     });
 

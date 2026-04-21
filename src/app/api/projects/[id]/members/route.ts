@@ -2,8 +2,8 @@
  * GET /api/projects/[id]/members — 멤버 목록 조회 (FID-00072)
  *
  * 역할:
- *   - ACTIVE 멤버 전체 목록 반환
- *   - myRole, ownerCount 포함 (드롭다운 비활성화 판별용)
+ *   - ACTIVE 멤버 전체 목록 반환 (역할 + 직무)
+ *   - myRole, myMemberId, ownerCount 포함 (드롭다운 비활성화·본인 판별용)
  *   - hasWork: tb_ds_screen/tb_ds_function 구현 후 활성화 예정 (현재 false)
  */
 
@@ -49,6 +49,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       name:           m.member.mber_nm ?? null,
       email:          m.member.email_addr ?? "",
       role:           m.role_code,
+      job:            m.job_title_code,   // 신규 — 직무
       joinedAt:       m.join_dt,
       lastAccessedAt: m.last_acces_dt ?? null,
       // TODO: tb_ds_screen/tb_ds_function 구현 후 실제 담당 여부로 교체
@@ -57,8 +58,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     return apiSuccess({
       members,
-      totalCount: members.length,
-      myRole:     myMembership.role_code,
+      totalCount:   members.length,
+      myRole:       myMembership.role_code,
+      myJob:        myMembership.job_title_code,  // 신규
+      myMemberId:   auth.mberId,                  // 신규 — 프론트에서 atob 디코딩 대체
       ownerCount,
     });
   } catch (err) {

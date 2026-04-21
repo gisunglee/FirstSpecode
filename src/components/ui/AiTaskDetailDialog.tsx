@@ -12,7 +12,6 @@
  *   - projectId: 프로젝트 ID
  *   - taskId:    AI 태스크 ID
  *   - onClose:   닫기 콜백
- *   - onApplied: 반영 완료 후 콜백 (optional)
  *   - onRejected: 반려 완료 후 콜백 (optional)
  */
 
@@ -122,13 +121,11 @@ export default function AiTaskDetailDialog({
   projectId,
   taskId,
   onClose,
-  onApplied,
   onRejected,
 }: {
   projectId:   string;
   taskId:      string;
   onClose:     () => void;
-  onApplied?:  () => void;
   onRejected?: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -183,17 +180,6 @@ export default function AiTaskDetailDialog({
         queryClient.invalidateQueries({ queryKey: ["function", projectId, data.refId] });
       }
       onClose();
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  const applyMutation = useMutation({
-    mutationFn: () =>
-      authFetch(`/api/projects/${projectId}/ai-tasks/${taskId}/apply`, { method: "POST" }),
-    onSuccess: () => {
-      toast.success("결과가 반영되었습니다.");
-      queryClient.invalidateQueries({ queryKey: ["ai-tasks", projectId] });
-      if (onApplied) onApplied(); else onClose();
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -351,19 +337,11 @@ export default function AiTaskDetailDialog({
               {/* 액션 버튼 — 본인·OWNER·ADMIN만 표시 */}
               {canControl && (
                 <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+                  {/* DONE 상태에서는 "반려"만 제공 — 결과 반영은 워커 complete 단계에서 자동 처리됨 */}
                   {data.status === "DONE" && (
                     <div style={{ display: "flex", gap: 8 }}>
                       {!rejectMode ? (
-                        <>
-                          <button onClick={() => setRejectMode(true)} style={{ ...secondaryBtnStyle, padding: "5px 12px", fontSize: 12 }}>반려</button>
-                          <button
-                            onClick={() => applyMutation.mutate()}
-                            disabled={applyMutation.isPending}
-                            style={{ ...primaryBtnStyle, padding: "5px 14px", fontSize: 12 }}
-                          >
-                            {applyMutation.isPending ? "반영 중..." : "결과 반영"}
-                          </button>
-                        </>
+                        <button onClick={() => setRejectMode(true)} style={{ ...secondaryBtnStyle, padding: "5px 12px", fontSize: 12 }}>반려</button>
                       ) : (
                         <>
                           <button onClick={() => { setRejectMode(false); setRejectReason(""); }} style={{ ...secondaryBtnStyle, padding: "5px 12px", fontSize: 12 }}>취소</button>
@@ -395,10 +373,14 @@ export default function AiTaskDetailDialog({
                           backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center",
                         }}
                       >
+                        {/*
+                          APPLIED 옵션은 제거 — "결과 반영" 프로세스가 없어졌으므로
+                          새로 APPLIED 로 수동 전환할 경로도 차단한다.
+                          기존 데이터가 APPLIED 인 경우의 라벨은 STATUS_LABEL 에서 그대로 유지.
+                        */}
                         <option value="PENDING">대기</option>
                         <option value="IN_PROGRESS">처리중</option>
                         <option value="DONE">완료</option>
-                        <option value="APPLIED">반영됨</option>
                         <option value="REJECTED">반려</option>
                         <option value="FAILED">실패</option>
                         <option value="TIMEOUT">시간초과</option>

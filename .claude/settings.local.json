@@ -252,7 +252,25 @@
       "Bash(wc -l /d/source/FirstSpecode/src/components/ui/*.tsx)",
       "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
       "Bash(find /d/source/FirstSpecode/src/app/api/projects/[id] -type d -name \"ai\" -o -name \"spec\")",
-      "Bash(tee /tmp/tsc-errors.log)"
+      "Bash(tee /tmp/tsc-errors.log)",
+      "Bash(curl -s \"http://localhost:3001/api/worker/tasks?limit=10&taskType=INSPECT,IMPACT,DESIGN\" -H \"X-Worker-Key: specode-worker-dev-key\")",
+      "Bash(curl -s \"http://localhost:3000/api/worker/tasks?limit=10&excludeTaskType=IMPLEMENT\" -H \"X-Worker-Key: specode-worker-dev-key\")",
+      "Bash(curl -s \"http://localhost:3000/api/worker/tasks?limit=10&taskType=IMPLEMENT\" -H \"X-Worker-Key: specode-worker-dev-key\")",
+      "Bash(curl -sI \"http://localhost:3000\" -m 3)",
+      "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/cb7186e8-e5ee-47a7-adde-9ba723363524/start\" -H \"X-Worker-Key: specode-worker-dev-key\")",
+      "Bash(echo \"exit code: $?\")",
+      "Bash(npx eslint *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(npx next *)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/bdd211c1-b098-454d-9019-90fd7b21fa45/start\" -H \"X-Worker-Key: specode-worker-dev-key\")",
+      "Bash(curl -s \"http://localhost:3000/api/worker/tasks?limit=3&excludeTaskType=IMPLEMENT\" -H \"X-Worker-Key: specode-worker-dev-key\")",
+      "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/9b6d67f5-61bf-4f53-91aa-5f18ea9216d0/start\" -H \"X-Worker-Key: specode-worker-dev-key\")",
+      "Bash(curl -s \"http://localhost:3000/api/worker/tasks/9b6d67f5-61bf-4f53-91aa-5f18ea9216d0/files/dd0b58b3-2b5b-4381-8e3e-9d4f34331c5b/download\" -H \"X-Worker-Key: specode-worker-dev-key\" -o \"d:/tmp/specode_task_9b6d67f5-61bf-4f53-91aa-5f18ea9216d0_dd0b58b3-2b5b-4381-8e3e-9d4f34331c5b.png\")",
+      "Bash(bash /tmp/check_security.sh)",
+      "Bash(bash /tmp/analyze.sh)",
+      "Bash(rm -v \"d:/source/FirstSpecode/src/app/api/projects/[id]/ai-tasks/[taskId]/apply/route.ts\")",
+      "Bash(rmdir \"d:/source/FirstSpecode/src/app/api/projects/[id]/ai-tasks/[taskId]/apply\")"
     ]
   }
 }

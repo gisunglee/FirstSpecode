@@ -32,6 +32,7 @@ import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import { ScreenLayoutEditor, type LayoutRow } from "@/components/ui/ScreenLayoutEditor";
 import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
+import AiTaskFilePicker from "@/components/ui/AiTaskFilePicker";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
@@ -144,6 +145,9 @@ function AreaDetailPageInner() {
 
   // ── AI 컨펌 상태 ──────────────────────────────────────────────────────────
   const [aiConfirm,  setAiConfirm]  = useState<{ taskType: string; label: string } | null>(null);
+
+  // AI 요청 팝업의 참고 이미지 — "요청" 클릭 시 multipart로 함께 전송, 팝업 종료 시 초기화
+  const [aiPickedFiles, setAiPickedFiles] = useState<File[]>([]);
   const [taskPrompt, setTaskPrompt] = useState<{ tmplId: string; tmplNm: string } | null | "loading" | "none">(null);
 
   // AI 패널 외부 클릭 시 닫기
@@ -333,12 +337,27 @@ function AreaDetailPageInner() {
 
 
   // ── 영역 AI 요청 뮤테이션 ─────────────────────────────────────────────────
+  // multipart/form-data로 전송 — 첨부 이미지(aiPickedFiles)를 함께 올림
+  // authFetch는 Content-Type을 JSON으로 고정하므로 raw fetch 사용
   const aiMutation = useMutation({
-    mutationFn: ({ taskType }: { taskType: string }) =>
-      authFetch(`/api/projects/${projectId}/areas/${areaId}/ai`, {
-        method: "POST",
-        body: JSON.stringify({ taskType, coment_cn: asciiComment.trim() }),
-      }),
+    mutationFn: async ({ taskType }: { taskType: string }) => {
+      const fd = new FormData();
+      fd.append("taskType",  taskType);
+      fd.append("coment_cn", asciiComment.trim());
+      aiPickedFiles.forEach((f) => fd.append("files", f));
+
+      const at  = typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
+      const res = await fetch(`/api/projects/${projectId}/areas/${areaId}/ai`, {
+        method:  "POST",
+        body:    fd,
+        headers: at ? { Authorization: `Bearer ${at}` } : {},
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error((json as { message?: string }).message ?? "AI 요청에 실패했습니다.");
+      }
+      return res.json();
+    },
     onSuccess: (_res, vars) => {
       const labels: Record<string, string> = {
         INSPECT: "영역 AI 점검 요청이 접수되었습니다.",
@@ -346,6 +365,8 @@ function AreaDetailPageInner() {
         IMPACT:  "AI 영향도 분석 요청이 접수되었습니다.",
       };
       toast.success(labels[vars.taskType] ?? "AI 요청이 접수되었습니다.");
+      // 첨부 state 초기화 — 다음 요청에 이전 이미지가 남지 않도록
+      setAiPickedFiles([]);
       // 상태 갱신을 위해 상세 재조회
       queryClient.invalidateQueries({ queryKey: ["area", projectId, areaId] });
     },
@@ -585,7 +606,7 @@ function AreaDetailPageInner() {
             )}
 
             {/* AI 요청 코멘트 입력 */}
-            <div style={{ marginBottom: 24 }}>
+            <div style={{ marginBottom: 16 }}>
               <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 8 }}>
                 <span style={{ fontSize: 11, background: "rgba(103,80,164,0.12)", color: "rgba(103,80,164,0.9)", borderRadius: 4, padding: "1px 6px" }}>코멘트</span>
                 AI 요청 코멘트
@@ -599,8 +620,21 @@ function AreaDetailPageInner() {
               />
             </div>
 
+            {/* 참고 이미지 피커 — multipart로 함께 전송 (Claude 멀티모달 분석용) */}
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 8 }}>
+                <span style={{ fontSize: 11, background: "rgba(25,118,210,0.12)", color: "#1565c0", borderRadius: 4, padding: "1px 6px" }}>첨부</span>
+                참고 이미지 (선택)
+              </label>
+              <AiTaskFilePicker
+                files={aiPickedFiles}
+                onChange={setAiPickedFiles}
+                disabled={aiMutation.isPending}
+              />
+            </div>
+
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button onClick={() => { setAiConfirm(null); setTaskPrompt(null); }} style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 18px" }}>취소</button>
+              <button onClick={() => { setAiConfirm(null); setTaskPrompt(null); setAiPickedFiles([]); }} style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 18px" }}>취소</button>
               {(aiConfirm.taskType === "INSPECT" || aiConfirm.taskType === "DESIGN") && taskPrompt === "none" && (
                 <button
                   onClick={() => { aiMutation.mutate({ taskType: aiConfirm.taskType }); setAiConfirm(null); setTaskPrompt(null); }}

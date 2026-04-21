@@ -1,27 +1,25 @@
 /**
  * GET  /api/projects/[id]/db-tables — DB 테이블 목록 (컬럼 수 포함)
  * POST /api/projects/[id]/db-tables — DB 테이블 생성
+ *
+ * 권한:
+ *   - GET:  content.read (모든 멤버 — VIEWER 포함)
+ *   - POST: db.table.write (OWNER/ADMIN 또는 DBA/DEV 직무)
  */
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { captureTableSnapshot, recordRevision } from "@/lib/dbTableRevision";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "content.read");
+  if (gate instanceof Response) return gate;
 
   try {
     const tables = await prisma.tbDsDbTable.findMany({
@@ -48,17 +46,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "db.table.write");
+  if (gate instanceof Response) return gate;
 
   let body: unknown;
   try { body = await request.json(); } catch {
@@ -76,13 +67,29 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const created = await prisma.tbDsDbTable.create({
-      data: {
-        prjct_id:      projectId,
-        tbl_physcl_nm: tblPhysclNm.trim(),
-        tbl_lgcl_nm:   tblLgclNm?.trim() || null,
-        tbl_dc:        tblDc?.trim()     || null,
-      },
+    // 트랜잭션: 테이블 생성 + CREATE 이력 1건 기록
+    const created = await prisma.$transaction(async (tx) => {
+      const row = await tx.tbDsDbTable.create({
+        data: {
+          prjct_id:      projectId,
+          tbl_physcl_nm: tblPhysclNm.trim(),
+          tbl_lgcl_nm:   tblLgclNm?.trim() || null,
+          tbl_dc:        tblDc?.trim()     || null,
+        },
+      });
+
+      // 생성 직후 스냅샷 (컬럼 없음)
+      const after = await captureTableSnapshot(tx, row.tbl_id);
+      await recordRevision(tx, {
+        projectId,
+        tblId:       row.tbl_id,
+        chgTypeCode: "CREATE",
+        before:      null,
+        after,
+        chgMberId:   gate.mberId,
+      });
+
+      return row;
     });
 
     return apiSuccess({ tblId: created.tbl_id }, 201);

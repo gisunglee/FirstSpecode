@@ -5,7 +5,7 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { randomUUID } from "crypto";
 
@@ -13,17 +13,10 @@ type RouteParams = { params: Promise<{ id: string; reviewId: string }> };
 
 // ─── GET: 코멘트 목록 ────────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, reviewId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "content.read");
+  if (gate instanceof Response) return gate;
 
   try {
     const comments = await prisma.tb_ds_review_comment.findMany({
@@ -45,7 +38,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       content:       c.coment_cn,
       writeMemberId: c.write_mber_id,
       writeMemberNm: memberMap[c.write_mber_id] ?? c.write_mber_id,
-      isOwn:         c.write_mber_id === auth.mberId,
+      isOwn:         c.write_mber_id === gate.mberId,
       createdAt:     c.creat_dt,
       updatedAt:     c.mdfcn_dt,
     }));
@@ -59,17 +52,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // ─── POST: 코멘트 작성 ──────────────────────────────────────────────────────
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, reviewId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "content.create");
+  if (gate instanceof Response) return gate;
 
   let body: unknown;
   try { body = await request.json(); } catch {
@@ -91,7 +77,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         coment_id:     randomUUID(),
         review_id:     reviewId,
         coment_cn:     content,
-        write_mber_id: auth.mberId,
+        write_mber_id: gate.mberId,
       },
     });
     return apiSuccess({ commentId: comment.coment_id }, 201);

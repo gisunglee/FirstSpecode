@@ -15,18 +15,20 @@ import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { JOB_CODES, JOB_LABEL, type JobCode } from "@/lib/permissions";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────
 type InvitationItem = {
   invitationId: string;
   email:        string;
   role:         string;
-  status:       string; // PENDING | ACCEPTED | EXPIRED | CANCELLED
+  job:          string;  // 신규
+  status:       string;  // PENDING | ACCEPTED | EXPIRED | CANCELLED
   invitedAt:    string;
   expiresAt:    string;
 };
 
-type InviteRow = { email: string; role: string };
+type InviteRow = { email: string; role: string; job: JobCode };
 
 // ── 헬퍼 ──────────────────────────────────────────────────────────────────
 function formatDate(d: string) {
@@ -71,11 +73,11 @@ function InviteDialog({
   onClose: () => void;
   onSent: () => void;
 }) {
-  const [rows, setRows] = useState<InviteRow[]>([{ email: "", role: "MEMBER" }]);
+  const [rows, setRows] = useState<InviteRow[]>([{ email: "", role: "MEMBER", job: "ETC" }]);
   const [errors, setErrors] = useState<string[]>([""]);
 
   function addRow() {
-    setRows((r) => [...r, { email: "", role: "MEMBER" }]);
+    setRows((r) => [...r, { email: "", role: "MEMBER", job: "ETC" }]);
     setErrors((e) => [...e, ""]);
   }
   function removeRow(i: number) {
@@ -143,10 +145,11 @@ function InviteDialog({
         </h2>
 
         <form onSubmit={handleSubmit}>
-          {/* 헤더 레이블 */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 130px 28px", gap: 8, marginBottom: 6 }}>
+          {/* 헤더 레이블 — 역할·직무 2개 컬럼 */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 110px 130px 28px", gap: 8, marginBottom: 6 }}>
             <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", fontWeight: 600 }}>이메일</span>
             <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", fontWeight: 600 }}>역할</span>
+            <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", fontWeight: 600 }}>직무</span>
             <span />
           </div>
 
@@ -154,7 +157,7 @@ function InviteDialog({
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
             {rows.map((row, i) => (
               <div key={i}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 130px 28px", gap: 8, alignItems: "center" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 110px 130px 28px", gap: 8, alignItems: "center" }}>
                   <input
                     className={`sp-input${errors[i] ? " is-error" : ""}`}
                     type="email"
@@ -171,6 +174,17 @@ function InviteDialog({
                   >
                     <option value="MEMBER">MEMBER</option>
                     <option value="ADMIN">ADMIN</option>
+                    <option value="VIEWER">VIEWER</option>
+                  </select>
+                  <select
+                    className="sp-input"
+                    value={row.job}
+                    onChange={(e) => updateRow(i, "job", e.target.value)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    {JOB_CODES.map((code) => (
+                      <option key={code} value={code}>{JOB_LABEL[code]}</option>
+                    ))}
                   </select>
                   <button
                     type="button"

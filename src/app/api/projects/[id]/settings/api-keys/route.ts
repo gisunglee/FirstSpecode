@@ -5,35 +5,22 @@
  *   - API 키 원문 AES 암호화 저장
  *   - 마스킹 생성 (sk-****1234)
  *   - 등록 이력 기록
- *   - OWNER/ADMIN만 접근 가능
+ *   - apiKey.manage 권한(OWNER/ADMIN) 보유자만 접근 가능
  */
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { encryptApiKey, maskApiKey } from "@/lib/encrypt";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
-async function checkAdminAccess(projectId: string, mberId: string) {
-  const m = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: mberId } },
-  });
-  if (!m || m.mber_sttus_code !== "ACTIVE") return null;
-  if (!["OWNER", "ADMIN"].includes(m.role_code)) return null;
-  return m;
-}
-
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId } = await params;
 
-  if (!await checkAdminAccess(projectId, auth.mberId)) {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "apiKey.manage");
+  if (gate instanceof Response) return gate;
 
   let body: unknown;
   try { body = await request.json(); } catch {
@@ -67,7 +54,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       await tx.tbPjSettingsHistory.create({
         data: {
           prjct_id:    projectId,
-          chg_mber_id: auth.mberId,
+          chg_mber_id: gate.mberId,
           chg_item_nm: "API 키 등록",
           aftr_val_cn: `${provider.trim()} (${maskedKey})`,
         },

@@ -5,22 +5,16 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 type RouteParams = { params: Promise<{ id: string; planStudioId: string; artfId: string }> };
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
   const { id: projectId, planStudioId, artfId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
+  const gate = await requirePermission(request, projectId, "content.update");
+  if (gate instanceof Response) return gate;
 
   let body: { goodDesignYn?: string };
   try { body = await request.json(); } catch { return apiError("VALIDATION_ERROR", "올바른 JSON이 아닙니다.", 400); }
@@ -34,7 +28,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     await prisma.tbDsPlanStudioArtf.update({
       where: { artf_id: artfId },
-      data: { good_design_yn: yn, mdfr_mber_id: auth.mberId, mdfcn_dt: new Date() },
+      data: { good_design_yn: yn, mdfr_mber_id: gate.mberId, mdfcn_dt: new Date() },
     });
 
     return apiSuccess({ artfId, goodDesignYn: yn });
