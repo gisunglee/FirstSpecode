@@ -70,6 +70,9 @@ type AreaDetail = {
     status:    string;
     priority:  string;
     sortOrder: number;
+    designRt:  number;
+    implRt:    number;
+    testRt:    number;
   }[];
 };
 
