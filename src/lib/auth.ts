@@ -218,7 +218,7 @@ export async function sendEmailChangeEmail(
   toEmail: string,
   token: string
 ): Promise<void> {
-  const appUrl    = process.env.APP_URL ?? "http://localhost:3001";
+  const appUrl    = process.env.APP_URL ?? "http://localhost:3000";
   const verifyUrl = `${appUrl}/settings/profile/email/complete?token=${token}`;
 
   if (!process.env.SMTP_HOST) {
@@ -264,7 +264,7 @@ export async function sendPasswordResetEmail(
   toEmail: string,
   token: string
 ): Promise<void> {
-  const appUrl   = process.env.APP_URL ?? "http://localhost:3001";
+  const appUrl   = process.env.APP_URL ?? "http://localhost:3000";
   const resetUrl = `${appUrl}/auth/password/reset?token=${token}`;
 
   if (!process.env.SMTP_HOST) {
@@ -313,7 +313,7 @@ export async function sendUnlockEmail(
   toEmail: string,
   token: string
 ): Promise<void> {
-  const appUrl    = process.env.APP_URL ?? "http://localhost:3001";
+  const appUrl    = process.env.APP_URL ?? "http://localhost:3000";
   const unlockUrl = `${appUrl}/auth/login/unlock?token=${token}`;
 
   if (!process.env.SMTP_HOST) {
@@ -364,7 +364,7 @@ export async function sendInvitationEmail(
   projectName: string,
   inviterEmail: string
 ): Promise<void> {
-  const appUrl    = process.env.APP_URL ?? "http://localhost:3001";
+  const appUrl    = process.env.APP_URL ?? "http://localhost:3000";
   const inviteUrl = `${appUrl}/invite/accept?token=${token}`;
 
   if (!process.env.SMTP_HOST) {

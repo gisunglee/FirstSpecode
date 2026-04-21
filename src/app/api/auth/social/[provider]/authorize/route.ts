@@ -34,7 +34,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   const action   = req.nextUrl.searchParams.get("action")   || "";
   const redirectTo = req.nextUrl.searchParams.get("redirect") || "";
 
-  const appUrl   = process.env.APP_URL ?? "http://localhost:3001";
+  const appUrl   = process.env.APP_URL ?? "http://localhost:3000";
   const redirect = `${appUrl}/auth/social/callback`;
 
   // CSRF 방지 nonce — 쿠키에 저장, state 파라미터에 포함

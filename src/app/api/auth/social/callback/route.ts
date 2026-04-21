@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     return apiError("CSRF_ERROR", "인증 요청이 유효하지 않습니다. 다시 시도해 주세요.", 400);
   }
 
-  const appUrl    = process.env.APP_URL ?? "http://localhost:3001";
+  const appUrl    = process.env.APP_URL ?? "http://localhost:3000";
   const redirectUri = `${appUrl}/auth/social/callback`;
   const ipAddr    = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const userAgent = request.headers.get("user-agent") ?? "unknown";
