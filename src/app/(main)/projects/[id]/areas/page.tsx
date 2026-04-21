@@ -80,9 +80,12 @@ function AreasPageInner() {
   // 드래그 중인 아이템의 screenId — 동일 화면 내에서만 순서 변경 허용
   const dragItemScreenId = useRef<string | null>(null);
 
+  // 캐시 무효화/낙관적 업데이트를 위해 queryKey를 상수로 추출
+  const queryKey = ["areas", projectId];
+
   // ── 데이터 조회 — 전체 조회 후 클라이언트 필터 (드롭다운 옵션 생성용) ─────
   const { data, isLoading } = useQuery({
-    queryKey: ["areas", projectId],
+    queryKey,
     queryFn: () =>
       authFetch<{ data: { items: AreaRow[]; totalCount: number } }>(
         `/api/projects/${projectId}/areas`
