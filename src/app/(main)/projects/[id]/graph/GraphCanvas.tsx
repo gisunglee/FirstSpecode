@@ -52,7 +52,10 @@ export default function GraphCanvas({
       .filter((n) => !hiddenTypes.has(n.type))
       .map((n) => ({ ...n }));
     const keepIds = new Set(filteredNodes.map((n) => n.id));
-    const filteredLinks = links.filter((l) => keepIds.has(l.source) && keepIds.has(l.target));
+    // source/target 은 API 응답 시점에는 string, force-graph 시뮬레이션 후에는
+    // { id } 객체로 mutate 될 수 있어 유니온 타입. id 값을 안전하게 추출.
+    const linkId = (v: string | { id: string }) => (typeof v === "string" ? v : v.id);
+    const filteredLinks = links.filter((l) => keepIds.has(linkId(l.source)) && keepIds.has(linkId(l.target)));
     return { nodes: filteredNodes, links: filteredLinks };
   }, [nodes, links, hiddenTypes]);
 
