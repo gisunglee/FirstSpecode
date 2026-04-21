@@ -16,6 +16,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { renderMarkdown } from "@/lib/renderMarkdown";
 import { useAppStore } from "@/store/appStore";
 import RichEditor from "@/components/ui/RichEditor";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";

@@ -60,8 +60,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         },
       });
 
-      // 원본 설정값 복사
-      const origSettings = original.settings[0];
+      // 원본 설정값 복사 (settings 는 1:1 nullable 관계)
+      const origSettings = original.settings;
       await tx.tbPjProjectSettings.create({
         data: {
           prjct_id:          copy.prjct_id,

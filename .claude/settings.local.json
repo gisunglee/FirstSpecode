@@ -251,7 +251,8 @@
       "Bash(sed -i 's|resolve\\(\"d:/source/FirstSpecode/.env.local\"\\)|resolve\\(\".env.local\"\\)|' register-db-tables.mjs)",
       "Bash(wc -l /d/source/FirstSpecode/src/components/ui/*.tsx)",
       "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
-      "Bash(find /d/source/FirstSpecode/src/app/api/projects/[id] -type d -name \"ai\" -o -name \"spec\")"
+      "Bash(find /d/source/FirstSpecode/src/app/api/projects/[id] -type d -name \"ai\" -o -name \"spec\")",
+      "Bash(tee /tmp/tsc-errors.log)"
     ]
   }
 }

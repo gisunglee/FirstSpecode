@@ -244,14 +244,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           result.updated.unitWorks++;
         } else {
           // ── 단위업무 신규 등록 ───────────────────────────────────────────
-          // requirementId가 있으면 유효성 확인 후 연결, 없으면 null로 생성
+          // TbDsUnitWork.req_id 는 non-null → 유효한 요구사항이 없으면 skip
           let resolvedReqId: string | null = null;
           if (uwInput.requirementId) {
             const req = await tx.tbRqRequirement.findUnique({
               where: { req_id: uwInput.requirementId },
             });
-            // 요구사항이 존재하지 않거나 다른 프로젝트 소속이면 null로 처리 (보안)
+            // 요구사항이 존재하지 않거나 다른 프로젝트 소속이면 null (보안)
             resolvedReqId = req?.prjct_id === projectId ? uwInput.requirementId : null;
+          }
+          if (!resolvedReqId) {
+            result.skipped.unitWorks++;
+            continue;
           }
           const displayId  = await nextUnitWorkDisplayId(projectId, tx);
           const sortOrder  = await nextUnitWorkSortOrder(projectId, resolvedReqId, tx);

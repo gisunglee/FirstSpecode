@@ -56,12 +56,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     });
 
     // 변경자 이름 일괄 조회 (N+1 방지)
-    const memberIds = [...new Set(changes.map((c) => c.chg_mber_id))];
-    const members   = await prisma.tbMbMember.findMany({
+    // chg_mber_id 는 nullable → null 제거 후 타입 좁히기
+    const memberIds = [...new Set(changes.map((c) => c.chg_mber_id).filter((id): id is string => id !== null))];
+    const members   = await prisma.tbCmMember.findMany({
       where:  { mber_id: { in: memberIds } },
       select: { mber_id: true, mber_nm: true },
     });
-    const memberMap = Object.fromEntries(members.map((m) => [m.mber_id, m.mber_nm]));
+    const memberMap: Record<string, string> = Object.fromEntries(
+      members.map((m) => [m.mber_id, m.mber_nm ?? "알 수 없음"])
+    );
 
     return apiSuccess({
       unitWorkName: uw.unit_work_nm,
@@ -69,7 +72,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         const snap = c.snapshot_data as { before?: string | null; after?: string | null } | null;
         return {
           histId:    c.chg_id,
-          changedBy: memberMap[c.chg_mber_id] ?? "알 수 없음",
+          changedBy: c.chg_mber_id ? (memberMap[c.chg_mber_id] ?? "알 수 없음") : "알 수 없음",
           changedAt: c.chg_dt.toISOString(),
           beforeVal: snap?.before ?? "",
           afterVal:  snap?.after  ?? "",

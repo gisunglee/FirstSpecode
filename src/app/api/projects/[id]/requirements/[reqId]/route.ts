@@ -5,6 +5,7 @@
  */
 
 import { NextRequest } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { checkRole } from "@/lib/checkRole";
@@ -116,7 +117,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const oldSpecCn    = existing.spec_cn ?? null;
 
     // ── 트랜잭션 구성 ────────────────────────────────────────────────────
-    const ops: Parameters<typeof prisma.$transaction>[0] = [];
+    // $transaction 오버로드가 배열/함수 두 가지라 Parameters[0] 만으론 배열 타입이
+    // 좁혀지지 않음 → PrismaPromise 배열로 명시
+    const ops: Prisma.PrismaPromise<unknown>[] = [];
 
     // 1. 요구사항 본문 UPDATE (항상 실행)
     ops.push(

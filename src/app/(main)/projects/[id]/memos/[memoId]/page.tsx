@@ -107,12 +107,12 @@ function MemoDetailInner() {
   const saveMutation = useMutation({
     mutationFn: (body: { subject: string; content: string; shareYn: string; refTyCode?: string; refId?: string }) =>
       isNew
-        ? authFetch(`/api/projects/${projectId}/memos`, {
+        ? authFetch<{ data: { memoId: string } }>(`/api/projects/${projectId}/memos`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
           })
-        : authFetch(`/api/projects/${projectId}/memos/${memoId}`, {
+        : authFetch<{ data: { memoId: string } }>(`/api/projects/${projectId}/memos/${memoId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
