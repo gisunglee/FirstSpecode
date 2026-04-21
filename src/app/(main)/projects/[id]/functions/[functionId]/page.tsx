@@ -58,6 +58,7 @@ type FuncDetail = {
   sortOrder: number;
   areaId: string | null;
   areaName: string;
+  areaDisplayId: string | null;
   screenId: string | null;
   unitWorkId: string | null;
   // 단위업무 설명 — TABLE_SCRIPT 파싱용
