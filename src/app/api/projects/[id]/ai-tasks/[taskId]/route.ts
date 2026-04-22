@@ -64,6 +64,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       reqMberName = mber?.mber_nm ?? "알 수 없음";
     }
 
+    // 첨부파일 개수 — 다이얼로그의 "첨부 자료 보기" 버튼 노출 판단용
+    // count 만 필요하므로 findMany 대신 count 쿼리로 페이로드·IO 최소화
+    const attachmentCount = await prisma.tbCmAttachFile.count({
+      where: { ref_tbl_nm: "tb_ai_task", ref_id: taskId },
+    });
+
     const now = Date.now();
     const FIVE_MIN_MS = 5 * 60 * 1000;
 
@@ -93,6 +99,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         task.task_sttus_code === "IN_PROGRESS" &&
         now - task.req_dt.getTime() > FIVE_MIN_MS,
       elapsedMs: now - task.req_dt.getTime(),
+      attachmentCount,
     });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/ai-tasks/${taskId}] DB 오류:`, err);

@@ -13,13 +13,22 @@ type RouteParams = { params: Promise<{ id: string }> };
 // ─── GET: 과업 목록 조회 ─────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id: projectId } = await params;
+  // 담당자 필터 — "me" 또는 mberId. URL 공유 가능
+  const url        = new URL(request.url);
+  const assignedTo = url.searchParams.get("assignedTo") ?? undefined;
 
   const gate = await requirePermission(request, projectId, "content.read");
   if (gate instanceof Response) return gate;
 
+  // assignedTo="me" → 로그인 사용자 mberId, 그 외 truthy 값은 그대로
+  const assigneeFilter = assignedTo === "me" ? gate.mberId : (assignedTo || undefined);
+
   try {
     const tasks = await prisma.tbRqTask.findMany({
-      where: { prjct_id: projectId },
+      where: {
+        prjct_id: projectId,
+        ...(assigneeFilter ? { asign_mber_id: assigneeFilter } : {}),
+      },
       include: {
         requirements: {
           select: { req_id: true, priort_code: true },
@@ -30,6 +39,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         { creat_dt: "desc" },
       ],
     });
+
+    // 담당자 mberId → 이름 배치 조회 (N+1 방지)
+    const assigneeIds = [
+      ...new Set(tasks.map((t) => t.asign_mber_id).filter((v): v is string => !!v)),
+    ];
+    const assigneeMembers = assigneeIds.length > 0
+      ? await prisma.tbCmMember.findMany({
+          where:  { mber_id: { in: assigneeIds } },
+          // email_addr를 fallback으로 — mber_nm 미설정 계정도 식별 가능
+          select: { mber_id: true, mber_nm: true, email_addr: true },
+        })
+      : [];
+    const assigneeMap = new Map(assigneeMembers.map((m) => [m.mber_id, m.mber_nm || m.email_addr || null]));
 
     const items = tasks.map((t) => {
       const reqs  = t.requirements;
@@ -44,6 +66,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         category:         t.ctgry_code,
         rfpPageNo:        t.rfp_page_no ?? "",
         outputInfo:       t.output_info_cn ?? "",
+        // 담당자 — 미지정/퇴장 멤버면 null (프론트에서 "-" 처리)
+        assignMemberId:   t.asign_mber_id ?? null,
+        assignMemberName: t.asign_mber_id ? (assigneeMap.get(t.asign_mber_id) ?? null) : null,
         requirementCount: reqs.length,
         prioritySummary:  { high, medium, low },
         sortOrder:        t.sort_ordr,

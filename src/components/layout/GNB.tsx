@@ -24,6 +24,14 @@ import { useAppStore } from "@/store/appStore";
 import { authFetch } from "@/lib/authFetch";
 import type { ProjectOption } from "@/types/layout";
 
+/** GNB 프로필 드롭다운 표시용 — /api/member/profile GET 응답 중 사용하는 필드만 */
+type MyProfile = {
+  name:         string;
+  email:        string;
+  profileImage: string | null;
+  plan:         string;  // 시스템 플랜: FREE / PRO / TEAM / ENTERPRISE
+};
+
 export default function GNB() {
   const router = useRouter();
   const { currentProjectId, setCurrentProjectId, theme, toggleTheme, breadcrumb } =
@@ -46,6 +54,20 @@ export default function GNB() {
       ),
     staleTime: 60 * 1000, // 1분
   });
+
+  // 내 프로필 조회 — 아바타 이니셜/이름/이메일/플랜 표시용
+  // (프로필 설정 페이지에서 이미 동일 API 사용 → 캐시 공유)
+  const { data: myProfile } = useQuery<MyProfile>({
+    queryKey: ["member", "profile"],
+    queryFn: () =>
+      authFetch<{ data: MyProfile }>("/api/member/profile").then((res) => res.data),
+    staleTime: 5 * 60 * 1000, // 5분
+  });
+
+  // 아바타 이니셜 — 이름 첫 글자 > 이메일 첫 글자 > "?"
+  const avatarInitial = (myProfile?.name?.trim()?.[0]
+    ?? myProfile?.email?.trim()?.[0]
+    ?? "?").toUpperCase();
 
   // 현재 선택된 프로젝트 이름 계산
   const currentProject = projects.find(
@@ -277,12 +299,12 @@ export default function GNB() {
         <div ref={profileRef} style={{ position: "relative" }}>
           <button
             className="sp-menu-item"
-            title="프로필"
+            title={myProfile?.name || myProfile?.email || "프로필"}
             onClick={() => setProfileOpen((o) => !o)}
             style={{
               width: 22, height: 22,
               borderRadius: "var(--radius-full)",
-              background: "var(--color-brand-subtle)",
+              background: myProfile?.profileImage ? "transparent" : "var(--color-brand-subtle)",
               border: "1px solid var(--color-brand-border)",
               color: "var(--color-brand)",
               fontSize: "var(--text-xs)",
@@ -290,9 +312,14 @@ export default function GNB() {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              padding: 0,
+              overflow: "hidden",
             }}
           >
-            P
+            {/* 프로필 이미지 있으면 이미지, 없으면 이름 첫 글자 이니셜 */}
+            {myProfile?.profileImage
+              ? <img src={myProfile.profileImage} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              : avatarInitial}
           </button>
 
           {profileOpen && (
@@ -300,7 +327,7 @@ export default function GNB() {
               position: "absolute",
               top: "calc(100% + 6px)",
               right: 0,
-              minWidth: 160,
+              minWidth: 220,
               background: "var(--color-bg-card)",
               border: "1px solid var(--color-border-strong)",
               borderRadius: "var(--radius-card)",
@@ -309,6 +336,63 @@ export default function GNB() {
               padding: "4px 0",
               overflow: "hidden",
             }}>
+              {/* 사용자 식별 카드 — 이름·이메일·플랜 (시스템 권한) */}
+              {/* 프로젝트 역할은 여기에 노출하지 않음 — 프로젝트 전환 시 내용이 바뀌면 혼란 */}
+              <div style={{
+                padding: "10px 14px",
+                borderBottom: "1px solid var(--color-border)",
+                display: "flex", alignItems: "center", gap: 10,
+              }}>
+                <div style={{
+                  width: 34, height: 34,
+                  borderRadius: "var(--radius-full)",
+                  background: myProfile?.profileImage ? "transparent" : "var(--color-brand-subtle)",
+                  border: "1px solid var(--color-brand-border)",
+                  color: "var(--color-brand)",
+                  fontSize: "var(--text-sm)",
+                  fontWeight: 700,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  overflow: "hidden", flexShrink: 0,
+                }}>
+                  {myProfile?.profileImage
+                    ? <img src={myProfile.profileImage} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    : avatarInitial}
+                </div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    fontSize: "var(--text-md)", fontWeight: 600,
+                    color: "var(--color-text-primary)",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {myProfile?.name?.trim() || "이름 미설정"}
+                    </span>
+                    {myProfile?.plan && (
+                      <span style={{
+                        flexShrink: 0,
+                        fontSize: "var(--text-xs)",
+                        fontWeight: 600,
+                        padding: "1px 6px",
+                        borderRadius: "var(--radius-sm)",
+                        background: "var(--color-brand-subtle)",
+                        color: "var(--color-brand)",
+                        lineHeight: 1.4,
+                      }}>
+                        {myProfile.plan}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{
+                    fontSize: "var(--text-xs)",
+                    color: "var(--color-text-tertiary)",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    marginTop: 2,
+                  }}>
+                    {myProfile?.email ?? ""}
+                  </div>
+                </div>
+              </div>
               <Link
                 href="/settings/profile"
                 onClick={() => setProfileOpen(false)}

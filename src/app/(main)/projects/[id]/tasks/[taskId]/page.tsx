@@ -17,28 +17,42 @@ import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import { renderMarkdown } from "@/lib/renderMarkdown";
 import RichEditor from "@/components/ui/RichEditor";
+import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
 type TaskDetail = {
-  taskId:     string;
-  displayId:  string;
-  name:       string;
-  category:   string;
-  definition: string | null;
-  content:    string | null;
-  outputInfo: string | null;
-  rfpPage:    string | null;
+  taskId:           string;
+  displayId:        string;
+  name:             string;
+  category:         string;
+  definition:       string | null;
+  content:          string | null;
+  outputInfo:       string | null;
+  rfpPage:          string | null;
+  // 담당자 — 서버 join으로 내려옴
+  assignMemberId:   string | null;
+  assignMemberName: string | null;
 };
 
 type SaveBody = {
-  name:       string;
-  displayId:  string;
-  category:   string;
-  definition: string;
-  content:    string;
-  outputInfo: string;
-  rfpPage:    string;
+  name:            string;
+  displayId:       string;
+  category:        string;
+  definition:      string;
+  content:         string;
+  outputInfo:      string;
+  rfpPage:         string;
+  // 담당자 — "" = 미지정, 서버에서 null로 처리
+  assignMemberId:  string;
+};
+
+// 프로젝트 멤버 — 담당자 콤보박스 옵션용
+type ProjectMember = {
+  memberId: string;
+  name:     string | null;
+  email:    string;
+  role:     string;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -65,7 +79,11 @@ function TaskDetailPageInner() {
   const [form, setForm] = useState<SaveBody>({
     name: "", displayId: "", category: "NEW_DEV",
     definition: "", content: "", outputInfo: "", rfpPage: "",
+    assignMemberId: "",
   });
+
+  // 담당자 변경 이력 팝업 상태
+  const [assigneeHistoryOpen, setAssigneeHistoryOpen] = useState(false);
 
   const { setBreadcrumb } = useAppStore();
 
@@ -84,18 +102,31 @@ function TaskDetailPageInner() {
           ? renderMarkdown(rawContent)
           : rawContent;
         setForm({
-          name:       d.name,
-          displayId:  d.displayId ?? "",
-          category:   d.category,
-          definition: d.definition ?? "",
+          name:           d.name,
+          displayId:      d.displayId ?? "",
+          category:       d.category,
+          definition:     d.definition ?? "",
           content,
-          outputInfo: d.outputInfo ?? "",
-          rfpPage:    d.rfpPage ?? "",
+          outputInfo:     d.outputInfo ?? "",
+          rfpPage:        d.rfpPage ?? "",
+          assignMemberId: d.assignMemberId ?? "",
         });
         return d;
       }),
     enabled: !isNew,
   });
+
+  // ── 프로젝트 멤버 목록 (담당자 콤보박스용) ──────────────────────────────────
+  const { data: memberData } = useQuery({
+    queryKey: ["project-members", projectId],
+    queryFn:  () =>
+      authFetch<{ data: { members: ProjectMember[]; myMemberId: string } }>(
+        `/api/projects/${projectId}/members`
+      ).then((r) => r.data),
+    staleTime: 60 * 1000, // 1분
+  });
+  const members    = memberData?.members ?? [];
+  const myMemberId = memberData?.myMemberId ?? "";
 
   // ── 복사 뮤테이션 ──────────────────────────────────────────────────────────
   const copyMutation = useMutation({
@@ -278,8 +309,44 @@ function TaskDetailPageInner() {
           </FormField>
         </div>
 
-        {/* 카테고리 + RFP 페이지 번호 */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        {/* 담당자 + 카테고리 + RFP 페이지 번호 — 담당자에 넓은 공간(2fr) 할당 */}
+        {/* 담당자 라벨 옆 작은 시계 아이콘 = 변경 이력 팝업 (신규 등록 모드에서는 숨김) */}
+        {/* FormField 대신 인라인 div — <label> 안에 <button>이 있으면 라벨 빈 영역 클릭이 */}
+        {/*   브라우저 기본 동작으로 버튼에 전달됨 (라벨→내부 form control 포워딩) */}
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 16 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+              <span>담당자</span>
+              {!isNew && (
+                <button
+                  type="button"
+                  onClick={() => setAssigneeHistoryOpen(true)}
+                  title="담당자 변경 이력"
+                  style={inlineIconBtnStyle}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" strokeWidth="2"
+                       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 7v5l3 2" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            <select
+              value={form.assignMemberId}
+              onChange={(e) => handleChange("assignMemberId", e.target.value)}
+              style={selectStyle}
+            >
+              <option value="">담당자 없음</option>
+              {members.map((m) => (
+                <option key={m.memberId} value={m.memberId}>
+                  {m.name ?? m.email}
+                  {m.memberId === myMemberId ? " (나)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
           <FormField label="카테고리" required>
             <select
               value={form.category}
@@ -291,7 +358,7 @@ function TaskDetailPageInner() {
               <option value="MAINTAIN">유지보수</option>
             </select>
           </FormField>
-          <FormField label="RFP 페이지 번호">
+          <FormField label="RFP 페이지">
             <input
               type="text"
               value={form.rfpPage}
@@ -336,6 +403,16 @@ function TaskDetailPageInner() {
 
       </div>
       </div>
+
+      {/* 담당자 변경 이력 — 경량 전용 다이얼로그 (diff 없음, 타임라인만) */}
+      <AssigneeHistoryDialog
+        open={assigneeHistoryOpen}
+        onClose={() => setAssigneeHistoryOpen(false)}
+        projectId={projectId}
+        refTblNm="tb_rq_task"
+        refId={taskId}
+        currentAssigneeName={taskDetail?.assignMemberName ?? ""}
+      />
 
       {/* 삭제 확인 다이얼로그 */}
       {deleteDialogOpen && (
@@ -392,7 +469,8 @@ function TaskDetailPageInner() {
 function FormField({
   label, required, children,
 }: {
-  label:    string;
+  // ReactNode 허용 — 라벨에 아이콘 버튼(이력 등) 동반 표시용
+  label:    React.ReactNode;
   required?: boolean;
   children: React.ReactNode;
 }) {
@@ -406,6 +484,22 @@ function FormField({
     </div>
   );
 }
+
+// 라벨 옆 인라인 아이콘 버튼 — 이력 조회 등 보조 액션을 최소 면적으로 표현
+const inlineIconBtnStyle: React.CSSProperties = {
+  display:        "inline-flex",
+  alignItems:     "center",
+  justifyContent: "center",
+  width:          18,
+  height:         18,
+  padding:        0,
+  border:         "none",
+  background:     "transparent",
+  color:          "var(--color-text-tertiary)",
+  cursor:         "pointer",
+  borderRadius:   3,
+  lineHeight:     0,
+};
 
 // ── 간단한 마크다운 → HTML 변환기 (FID-00098) ────────────────────────────────
 // 외부 라이브러리 없이 기본 마크다운 요소만 지원:

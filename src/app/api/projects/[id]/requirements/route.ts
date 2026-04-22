@@ -13,13 +13,21 @@ type RouteParams = { params: Promise<{ id: string }> };
 // ─── GET: 요구사항 목록 조회 ─────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id: projectId } = await params;
+  // 담당자 필터 — "me" 또는 mberId
+  const url        = new URL(request.url);
+  const assignedTo = url.searchParams.get("assignedTo") ?? undefined;
 
   const gate = await requirePermission(request, projectId, "content.read");
   if (gate instanceof Response) return gate;
 
+  const assigneeFilter = assignedTo === "me" ? gate.mberId : (assignedTo || undefined);
+
   try {
     const requirements = await prisma.tbRqRequirement.findMany({
-      where: { prjct_id: projectId },
+      where: {
+        prjct_id: projectId,
+        ...(assigneeFilter ? { asign_mber_id: assigneeFilter } : {}),
+      },
       include: {
         task:   { select: { task_id: true, task_nm: true } },
         // 단위업무 수 집계 — 목록에 배지로 표시
@@ -31,16 +39,32 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       ],
     });
 
+    // 담당자 mberId → 이름 배치 조회 (N+1 방지)
+    const assigneeIds = [
+      ...new Set(requirements.map((r) => r.asign_mber_id).filter((v): v is string => !!v)),
+    ];
+    const assigneeMembers = assigneeIds.length > 0
+      ? await prisma.tbCmMember.findMany({
+          where:  { mber_id: { in: assigneeIds } },
+          // email_addr를 fallback으로 — mber_nm 미설정 계정도 식별 가능
+          select: { mber_id: true, mber_nm: true, email_addr: true },
+        })
+      : [];
+    const assigneeMap = new Map(assigneeMembers.map((m) => [m.mber_id, m.mber_nm || m.email_addr || null]));
+
     const items = requirements.map((r) => ({
-      requirementId: r.req_id,
-      displayId:     r.req_display_id,
-      name:          r.req_nm,
-      priority:      r.priort_code,
-      source:        r.src_code,
-      taskId:        r.task_id ?? null,
-      taskName:      r.task?.task_nm ?? "미분류",
-      unitWorkCount: r._count.unitWorks,
-      sortOrder:     r.sort_ordr,
+      requirementId:    r.req_id,
+      displayId:        r.req_display_id,
+      name:             r.req_nm,
+      priority:         r.priort_code,
+      source:           r.src_code,
+      taskId:           r.task_id ?? null,
+      taskName:         r.task?.task_nm ?? "미분류",
+      // 담당자 — 미지정/퇴장 멤버면 null
+      assignMemberId:   r.asign_mber_id ?? null,
+      assignMemberName: r.asign_mber_id ? (assigneeMap.get(r.asign_mber_id) ?? null) : null,
+      unitWorkCount:    r._count.unitWorks,
+      sortOrder:        r.sort_ordr,
     }));
 
     return apiSuccess({ items, totalCount: items.length });

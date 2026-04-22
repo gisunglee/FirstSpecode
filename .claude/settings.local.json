@@ -270,7 +270,14 @@
       "Bash(bash /tmp/check_security.sh)",
       "Bash(bash /tmp/analyze.sh)",
       "Bash(rm -v \"d:/source/FirstSpecode/src/app/api/projects/[id]/ai-tasks/[taskId]/apply/route.ts\")",
-      "Bash(rmdir \"d:/source/FirstSpecode/src/app/api/projects/[id]/ai-tasks/[taskId]/apply\")"
+      "Bash(rmdir \"d:/source/FirstSpecode/src/app/api/projects/[id]/ai-tasks/[taskId]/apply\")",
+      "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/755e9024-ccd0-455e-b98b-98cb15242969/start\" -H \"X-Worker-Key: specode-worker-dev-key\")",
+      "Bash(curl -s -X PATCH \"http://localhost:3000/api/worker/tasks/39c7fb5e-172f-4e67-bc44-dfbb16d92df8/start\" -H \"X-Worker-Key: specode-worker-dev-key\")",
+      "Bash(curl -s \"http://localhost:3000/api/worker/tasks/39c7fb5e-172f-4e67-bc44-dfbb16d92df8/files/123dd89e-5cdd-4c1f-b72b-3db4009e6358/download\" -H \"X-Worker-Key: specode-worker-dev-key\" -o \"d:/tmp/specode_task_39c7fb5e-172f-4e67-bc44-dfbb16d92df8_123dd89e-5cdd-4c1f-b72b-3db4009e6358.png\")",
+      "Bash(ls .eslintrc* eslint*)",
+      "Bash(grep -E '\"lint\":' package.json)",
+      "Bash(node --env-file=.env.local -e ' *)",
+      "Bash(grep -A 3 \"tbl_physcl_nm: string$\" d:/source/FirstSpecode/node_modules/.prisma/client/default.d.ts)"
     ]
   }
 }

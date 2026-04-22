@@ -153,8 +153,10 @@ function DetailInner() {
       try {
         const mermaid = (await import("mermaid")).default;
         mermaid.initialize({ startOnLoad: false, theme: "default" });
+        // AI 응답이 ```mermaid ... ``` fence로 감싸져 오면 파싱 실패 → fence 벗겨서 전달
+        const src = stripOuterCodeFence(artfCn, ["mermaid"]);
         // Mermaid는 같은 ID를 두 번 렌더링하면 에러 → 유니크 ID
-        const { svg } = await mermaid.render(`mm-${Date.now()}`, artfCn);
+        const { svg } = await mermaid.render(`mm-${Date.now()}`, src);
         if (mermaidRef.current) mermaidRef.current.innerHTML = svg;
       } catch (err) {
         if (mermaidRef.current) mermaidRef.current.innerHTML = `<pre style="color:#e53935">Mermaid 렌더링 오류:\n${err}</pre>`;
@@ -169,7 +171,8 @@ function DetailInner() {
       try {
         const mermaid = (await import("mermaid")).default;
         mermaid.initialize({ startOnLoad: false, theme: "default" });
-        const { svg } = await mermaid.render(`mm-full-${Date.now()}`, artfCn);
+        const src = stripOuterCodeFence(artfCn, ["mermaid"]);
+        const { svg } = await mermaid.render(`mm-full-${Date.now()}`, src);
         if (fullMermaidRef.current) fullMermaidRef.current.innerHTML = svg;
       } catch (err) {
         if (fullMermaidRef.current) fullMermaidRef.current.innerHTML = `<pre style="color:#e53935">Mermaid 렌더링 오류:\n${err}</pre>`;
@@ -535,11 +538,11 @@ function DetailInner() {
             ) : !artfCn ? (
               <div style={{ color: "#aaa", fontSize: 13, padding: 20 }}>아직 생성된 본문이 없습니다.</div>
             ) : artfFmtCode === "MD" ? (
-              <div className="sp-markdown" style={{ fontSize: 14, lineHeight: 1.8, color: "var(--color-text-primary)" }} dangerouslySetInnerHTML={{ __html: renderMarkdown(artfCn) }} />
+              <div className="sp-markdown" style={{ fontSize: 14, lineHeight: 1.8, color: "var(--color-text-primary)" }} dangerouslySetInnerHTML={{ __html: renderMarkdown(stripOuterCodeFence(artfCn, ["markdown", "md"])) }} />
             ) : artfFmtCode === "MERMAID" ? (
               <div ref={mermaidRef} />
             ) : artfFmtCode === "HTML" ? (
-              <iframe srcDoc={artfCn} sandbox="allow-scripts" style={{ width: "100%", height: "100%", border: "1px solid var(--color-border)", borderRadius: 6 }} title="HTML 미리보기" />
+              <iframe srcDoc={stripOuterCodeFence(artfCn, ["html"])} sandbox="allow-scripts" style={{ width: "100%", height: "100%", border: "1px solid var(--color-border)", borderRadius: 6 }} title="HTML 미리보기" />
             ) : null}
           </div>
         </div>
@@ -786,11 +789,11 @@ function DetailInner() {
               ) : !artfCn ? (
                 <div style={{ color: "#aaa", fontSize: 13, padding: 20 }}>아직 생성된 본문이 없습니다.</div>
               ) : artfFmtCode === "MD" ? (
-                <div className="sp-markdown" style={{ fontSize: 15, lineHeight: 1.9, color: "var(--color-text-primary)" }} dangerouslySetInnerHTML={{ __html: renderMarkdown(artfCn) }} />
+                <div className="sp-markdown" style={{ fontSize: 15, lineHeight: 1.9, color: "var(--color-text-primary)" }} dangerouslySetInnerHTML={{ __html: renderMarkdown(stripOuterCodeFence(artfCn, ["markdown", "md"])) }} />
               ) : artfFmtCode === "MERMAID" ? (
                 <div ref={fullMermaidRef} />
               ) : artfFmtCode === "HTML" ? (
-                <iframe srcDoc={artfCn} sandbox="allow-same-origin allow-scripts" style={{ width: "100%", height: "100%", border: "1px solid var(--color-border)", borderRadius: 6 }} />
+                <iframe srcDoc={stripOuterCodeFence(artfCn, ["html"])} sandbox="allow-same-origin allow-scripts" style={{ width: "100%", height: "100%", border: "1px solid var(--color-border)", borderRadius: 6 }} />
               ) : null}
             </div>
           </div>
@@ -818,6 +821,22 @@ function DetailInner() {
 function smartRender(content: string): string {
   if (!content?.trim()) return "";
   return renderMarkdown(content);
+}
+
+/**
+ * AI가 ```lang ... ``` 코드 fence로 감싸서 돌려주는 경우가 잦음 — 가장 바깥 fence만 제거.
+ * 허용 언어 태그에 매칭되는 경우에만 제거 (내부 코드블록은 건드리지 않음).
+ * 언어 태그가 없는 경우(``` ... ```)도 허용.
+ *   예) ```mermaid\ngraph TD\n``` → "graph TD"
+ */
+function stripOuterCodeFence(content: string, langs: string[]): string {
+  if (!content) return content;
+  const trimmed = content.trim();
+  const langPart = langs.map((l) => l.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  // ^```(lang|)  newline   body   newline?  ```$
+  const re = new RegExp("^```\\s*(?:" + langPart + ")?\\s*\\r?\\n([\\s\\S]*?)\\r?\\n?```\\s*$", "i");
+  const m = trimmed.match(re);
+  return m ? m[1] : content;
 }
 
 /** 날짜 → "26.4.11. 14:22" 형식 */

@@ -10,8 +10,8 @@
  *   - 삭제 모달 + ALL/TASK_ONLY 옵션 (FID-00095)
  */
 
-import { Suspense, useState, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { Suspense, useState, useEffect, useRef } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
@@ -27,6 +27,9 @@ type Task = {
   category:         string;
   rfpPageNo:        string;
   outputInfo:       string;
+  // 담당자 — 서버 join으로 내려옴. 미지정/퇴장 멤버면 null
+  assignMemberId:   string | null;
+  assignMemberName: string | null;
   requirementCount: number;
   prioritySummary:  PrioritySummary;
   sortOrder:        number;
@@ -66,21 +69,38 @@ function TaskListPageInner() {
   const projectId   = params.id;
   const queryClient = useQueryClient();
 
+  // 담당자 필터 — "all"(기본) | "me"(내 담당만). URL ?assignedTo=me 로 공유 가능
+  const searchParams = useSearchParams();
+  const [filterAssignedTo, setFilterAssignedTo] = useState<"all" | "me">(
+    searchParams.get("assignedTo") === "me" ? "me" : "all"
+  );
+
   // 로컬 순서 — 드래그 중 즉시 반영용
   const [orderedTasks, setOrderedTasks] = useState<Task[]>([]);
   const [deletingTask, setDeletingTask] = useState<Task | null>(null);
   const dragItem    = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
+  // "내 담당" 필터 URL 동기화 — 공유 URL 복원 가능
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (filterAssignedTo === "me") url.searchParams.set("assignedTo", "me");
+    else url.searchParams.delete("assignedTo");
+    window.history.replaceState(null, "", url.toString());
+  }, [filterAssignedTo]);
+
   // ── 목록 조회 ──────────────────────────────────────────────────────────────
   const { data, isLoading, error } = useQuery({
-    queryKey: ["tasks", projectId],
-    queryFn:  () =>
-      authFetch<{ data: TasksResponse }>(`/api/projects/${projectId}/tasks`)
+    queryKey: ["tasks", projectId, filterAssignedTo],
+    queryFn:  () => {
+      const qs = filterAssignedTo === "me" ? "?assignedTo=me" : "";
+      return authFetch<{ data: TasksResponse }>(`/api/projects/${projectId}/tasks${qs}`)
         .then((r) => {
           setOrderedTasks(r.data.tasks);
           return r.data;
-        }),
+        });
+    },
   });
 
   // ── 복사 ───────────────────────────────────────────────────────────────────
@@ -168,9 +188,29 @@ function TaskListPageInner() {
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
-      {/* 총 건수 */}
-      <div style={{ marginBottom: 16, fontSize: 14, color: "var(--color-text-secondary)" }}>
-        총 <strong>{totalCount}</strong>건
+      {/* 총 건수 + 담당자 필터 */}
+      <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
+          총 <strong>{totalCount}</strong>건
+        </span>
+        <div style={{ flex: 1 }} />
+        {/* 담당자 세그먼트 토글 — [전체 | 내 담당] */}
+        <div style={segmentGroupStyle}>
+          <button
+            type="button"
+            onClick={() => setFilterAssignedTo("all")}
+            style={segmentBtnStyle(filterAssignedTo === "all")}
+          >
+            전체
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterAssignedTo("me")}
+            style={segmentBtnStyle(filterAssignedTo === "me")}
+          >
+            내 담당
+          </button>
+        </div>
       </div>
 
       {/* 테이블 */}
@@ -179,10 +219,10 @@ function TaskListPageInner() {
         borderRadius: 8,
         overflow: "hidden",
       }}>
-        {/* 헤더 */}
+        {/* 헤더 — 담당자 컬럼 추가 (과업명 뒤) */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "32px 1fr 10% 80px 1.2fr 8% 12%",
+          gridTemplateColumns: "32px 1fr 110px 10% 80px 1.2fr 8% 12%",
           padding: "10px 16px",
           background: "var(--color-bg-muted)",
           borderBottom: "1px solid var(--color-border)",
@@ -193,6 +233,7 @@ function TaskListPageInner() {
         }}>
           <span />
           <span>과업명</span>
+          <span>담당자</span>
           <span style={{ textAlign: "center" }}>카테고리</span>
           <span style={{ textAlign: "center" }}>RFP 페이지</span>
           <span>산출물</span>
@@ -219,7 +260,7 @@ function TaskListPageInner() {
                 onClick={() => router.push(`/projects/${projectId}/tasks/${task.taskId}`)}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "32px 1fr 10% 80px 1.2fr 8% 12%",
+                  gridTemplateColumns: "32px 1fr 110px 10% 80px 1.2fr 8% 12%",
                   padding: "12px 16px",
                   borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
                   alignItems: "center",
@@ -245,6 +286,20 @@ function TaskListPageInner() {
                   <span style={{ fontSize: 14, fontWeight: 500, color: "var(--color-text-primary)" }}>
                     {task.name}
                   </span>
+                </div>
+
+                {/* 담당자 — 미지정/퇴장 멤버는 흐린 "-" */}
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: task.assignMemberName
+                      ? "var(--color-text-primary)"
+                      : "var(--color-text-tertiary)",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}
+                  title={task.assignMemberName ?? undefined}
+                >
+                  {task.assignMemberName ?? "-"}
                 </div>
 
                 {/* 카테고리 뱃지 */}
@@ -409,6 +464,25 @@ const primaryBtnStyle: React.CSSProperties = {
   fontWeight: 600,
   cursor: "pointer",
 };
+
+// 담당자 필터 세그먼트 토글 — 단위업무 목록과 동일 패턴
+const segmentGroupStyle: React.CSSProperties = {
+  display:      "inline-flex",
+  border:       "1px solid var(--color-border)",
+  borderRadius: 6,
+  overflow:     "hidden",
+  background:   "var(--color-bg-card)",
+};
+const segmentBtnStyle = (active: boolean): React.CSSProperties => ({
+  padding:    "7px 14px",
+  fontSize:   13,
+  fontWeight: active ? 600 : 400,
+  border:     "none",
+  background: active ? "var(--color-brand-subtle)" : "transparent",
+  color:      active ? "var(--color-brand)" : "var(--color-text-secondary)",
+  cursor:     "pointer",
+  outline:    "none",
+});
 
 const secondaryBtnStyle: React.CSSProperties = {
   padding: "7px 18px",

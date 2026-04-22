@@ -20,6 +20,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor from "@/components/ui/MarkdownEditor";
+import AiTaskAttachmentsDialog from "@/components/ui/AiTaskAttachmentsDialog";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,9 @@ type TaskDetail = {
   retryCnt?:    number;
   execAvlblDt?: string | null;
   parentTaskId?: string | null;
+  // 서버(ai-tasks/[taskId] GET)에서 내려주는 첨부파일 개수
+  // "첨부 자료 보기" 버튼 노출 판단에만 사용 — 실제 목록은 모달이 별도 조회
+  attachmentCount?: number;
 };
 
 // ── 상수 ──────────────────────────────────────────────────────────────────────
@@ -144,6 +148,9 @@ export default function AiTaskDetailDialog({
   const [rejectTab, setResultRejectTab]  = useState<"edit" | "preview">("preview");
   const [rejectMode,   setRejectMode]    = useState(false);
   const [rejectReason, setRejectReason]  = useState("");
+
+  // 첨부 자료 보기 모달 — 버튼은 attachmentCount > 0 일 때만 노출
+  const [attachDialogOpen, setAttachDialogOpen] = useState(false);
 
   // ── 뮤테이션 ───────────────────────────────────────────────────────────────
   const statusMutation = useMutation({
@@ -415,6 +422,17 @@ export default function AiTaskDetailDialog({
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, flexShrink: 0 }}>
                   <span style={panelLabelStyle}>요청 SPEC</span>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {/* 첨부 자료 보기 — 요청 시 올린 이미지/파일이 있을 때만 노출 */}
+                    {(data.attachmentCount ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setAttachDialogOpen(true)}
+                        title="요청 시 첨부된 이미지/파일 보기"
+                        style={attachBtnStyle}
+                      >
+                        📎 첨부 자료 <span style={attachCountBadgeStyle}>{data.attachmentCount}</span>
+                      </button>
+                    )}
                     <MdActionButtons content={[data.comment, data.reqCn ? `\n\n---\n\n${data.reqCn}` : ""].filter(Boolean).join("")} filename={`요청SPEC_${data.taskId.substring(0, 8)}`} />
                     <LocalTabButtons tab={reqTab} onTabChange={setReqTab} />
                   </div>
@@ -472,6 +490,16 @@ export default function AiTaskDetailDialog({
             <div style={{ height: 10 }} />
           </div>
         )}
+
+        {/* 첨부 자료 보기 — 읽기 전용 모달 (공용 컴포넌트) */}
+        {/* 이 다이얼로그 내부에 렌더해야 상세 다이얼로그와 함께 스택이 관리됨 */}
+        {attachDialogOpen && (
+          <AiTaskAttachmentsDialog
+            projectId={projectId}
+            taskId={taskId}
+            onClose={() => setAttachDialogOpen(false)}
+          />
+        )}
       </div>
     </div>
   );
@@ -500,6 +528,22 @@ const dangerBtnStyle: React.CSSProperties = {
 const panelLabelStyle: React.CSSProperties = {
   fontSize: 11, fontWeight: 700, textTransform: "uppercase",
   letterSpacing: "0.05em", color: "var(--color-text-secondary)", marginBottom: 6,
+};
+
+// ── 첨부 자료 보기 버튼 ──────────────────────────────────────────────────────
+// iconBtnStyle 과 동일 톤이지만 배지가 있어 padding·정렬을 미세 조정한 전용 스타일
+const attachBtnStyle: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5,
+  padding: "4px 10px", borderRadius: 5,
+  border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
+  color: "var(--color-text-secondary)", fontSize: 11, fontWeight: 600,
+  cursor: "pointer", flexShrink: 0,
+};
+
+const attachCountBadgeStyle: React.CSSProperties = {
+  fontSize: 10, fontWeight: 700,
+  padding: "1px 6px", borderRadius: 8,
+  background: "rgba(25,118,210,0.12)", color: "#1565c0",
 };
 
 // ── 복사 + 다운로드 아이콘 버튼 ──────────────────────────────────────────────

@@ -38,13 +38,25 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "테이블을 찾을 수 없습니다.", 404);
     }
 
+    // 담당자 이름 조회 — 없거나 퇴장 멤버면 null
+    const assignee = table.asign_mber_id
+      ? await prisma.tbCmMember.findUnique({
+          where:  { mber_id: table.asign_mber_id },
+          // email_addr를 fallback으로 — mber_nm 미설정 계정도 식별 가능
+          select: { mber_nm: true, email_addr: true },
+        })
+      : null;
+
     return apiSuccess({
-      tblId:       table.tbl_id,
-      tblPhysclNm: table.tbl_physcl_nm,
-      tblLgclNm:   table.tbl_lgcl_nm  ?? "",
-      tblDc:       table.tbl_dc       ?? "",
-      creatDt:     table.creat_dt.toISOString(),
-      mdfcnDt:     table.mdfcn_dt?.toISOString() ?? null,
+      tblId:            table.tbl_id,
+      tblPhysclNm:      table.tbl_physcl_nm,
+      tblLgclNm:        table.tbl_lgcl_nm  ?? "",
+      tblDc:            table.tbl_dc       ?? "",
+      creatDt:          table.creat_dt.toISOString(),
+      mdfcnDt:          table.mdfcn_dt?.toISOString() ?? null,
+      // 담당자 — mber_nm 우선, 없으면 email, 둘 다 없으면 null
+      assignMemberId:   table.asign_mber_id ?? null,
+      assignMemberName: assignee ? (assignee.mber_nm || assignee.email_addr || null) : null,
       columns: table.columns.map((c) => ({
         colId:       c.col_id,
         colPhysclNm: c.col_physcl_nm,
@@ -85,11 +97,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { tblPhysclNm, tblLgclNm, tblDc, columns } = body as {
-    tblPhysclNm?: string;
-    tblLgclNm?:   string;
-    tblDc?:       string;
-    columns?:     ColumnInput[];
+  const { tblPhysclNm, tblLgclNm, tblDc, columns, assignMemberId } = body as {
+    tblPhysclNm?:    string;
+    tblLgclNm?:      string;
+    tblDc?:          string;
+    columns?:        ColumnInput[];
+    assignMemberId?: string;
   };
 
   if (!tblPhysclNm?.trim()) {
@@ -105,6 +118,32 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const colList: ColumnInput[] = columns ?? [];
     const incomingIds = colList.map((c) => c.colId).filter(Boolean) as string[];
 
+    // 담당자 변경 감지 — 값이 실제로 바뀌었을 때만 별도 이력 저장 (no-op 스킵)
+    // tb_ds_design_change 재사용 (다른 엔티티와 동일 패턴)
+    // ref_tbl_nm="tb_ds_db_table", chg_rsn_cn="담당자"
+    const CHG_REASON_ASSIGNEE = "담당자";
+    const prevAssignee    = existing.asign_mber_id ?? null;
+    const nextAssignee    = assignMemberId !== undefined ? (assignMemberId || null) : prevAssignee;
+    const assigneeChanged = assignMemberId !== undefined && prevAssignee !== nextAssignee;
+
+    // 이력 저장 시 이름도 함께 기록 → 멤버 탈퇴 후에도 이력 뷰 보존
+    let assigneeNames: { before: string | null; after: string | null } = { before: null, after: null };
+    if (assigneeChanged) {
+      const ids = [prevAssignee, nextAssignee].filter((v): v is string => !!v);
+      const membersForHistory = ids.length > 0
+        ? await prisma.tbCmMember.findMany({
+            where:  { mber_id: { in: ids } },
+            // email_addr를 fallback으로 — mber_nm 미설정 계정도 이력에서 식별 가능
+            select: { mber_id: true, mber_nm: true, email_addr: true },
+          })
+        : [];
+      const nameMap = new Map(membersForHistory.map((m) => [m.mber_id, m.mber_nm || m.email_addr || null]));
+      assigneeNames = {
+        before: prevAssignee ? (nameMap.get(prevAssignee) ?? null) : null,
+        after:  nextAssignee ? (nameMap.get(nextAssignee) ?? null) : null,
+      };
+    }
+
     await prisma.$transaction(async (tx) => {
       // 변경 전 스냅샷 (이력용)
       const before = await captureTableSnapshot(tx, tableId);
@@ -116,10 +155,31 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           tbl_physcl_nm: tblPhysclNm.trim(),
           tbl_lgcl_nm:   tblLgclNm !== undefined ? (tblLgclNm?.trim() || null) : existing.tbl_lgcl_nm,
           tbl_dc:        tblDc !== undefined ? (tblDc?.trim() || null) : existing.tbl_dc,
+          asign_mber_id: nextAssignee,
           mdfcn_mber_id: gate.mberId,
           mdfcn_dt:      new Date(),
         },
       });
+
+      // 담당자 변경 이력 — 자동 저장 (값이 실제로 바뀐 경우만)
+      if (assigneeChanged) {
+        await tx.tbDsDesignChange.create({
+          data: {
+            prjct_id:      projectId,
+            ref_tbl_nm:    "tb_ds_db_table",
+            ref_id:        tableId,
+            chg_type_code: "UPDATE",
+            chg_rsn_cn:    CHG_REASON_ASSIGNEE,
+            snapshot_data: {
+              before:     prevAssignee,
+              after:      nextAssignee,
+              beforeName: assigneeNames.before,
+              afterName:  assigneeNames.after,
+            },
+            chg_mber_id: gate.mberId,
+          },
+        });
+      }
 
       // 전달되지 않은 기존 컬럼 삭제
       await tx.tbDsDbTableColumn.deleteMany({

@@ -24,15 +24,26 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     });
     if (!task) return apiError("NOT_FOUND", "과업을 찾을 수 없습니다.", 404);
 
+    // 담당자 이름 조회 — 없거나 퇴장 멤버면 null
+    const assignee = task.asign_mber_id
+      ? await prisma.tbCmMember.findUnique({
+          where:  { mber_id: task.asign_mber_id },
+          // email_addr를 fallback으로 — mber_nm 미설정 계정도 식별 가능
+          select: { mber_nm: true, email_addr: true },
+        })
+      : null;
+
     return apiSuccess({
-      taskId:     task.task_id,
-      displayId:  task.task_display_id,
-      name:       task.task_nm,
-      category:   task.ctgry_code,
-      definition: task.defn_cn    ?? null,
-      content:    task.dtl_cn     ?? null,
-      outputInfo: task.output_info_cn ?? null,
-      rfpPage:    task.rfp_page_no ?? null,
+      taskId:           task.task_id,
+      displayId:        task.task_display_id,
+      name:             task.task_nm,
+      category:         task.ctgry_code,
+      definition:       task.defn_cn        ?? null,
+      content:          task.dtl_cn         ?? null,
+      outputInfo:       task.output_info_cn ?? null,
+      rfpPage:          task.rfp_page_no    ?? null,
+      assignMemberId:   task.asign_mber_id  ?? null,
+      assignMemberName: assignee ? (assignee.mber_nm || assignee.email_addr || null) : null,
     });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/tasks/${taskId}] DB 오류:`, err);
@@ -52,11 +63,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { name, category, definition, content, outputInfo, rfpPage, displayId } = body as {
+  const { name, category, definition, content, outputInfo, rfpPage, displayId, assignMemberId } = body as {
     name?: string; category?: string;
     definition?: string; content?: string;
     outputInfo?: string; rfpPage?: string;
     displayId?: string;
+    assignMemberId?: string;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "과업명을 입력해 주세요.", 400);
@@ -68,7 +80,33 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     });
     if (!existing) return apiError("NOT_FOUND", "과업을 찾을 수 없습니다.", 404);
 
-    await prisma.tbRqTask.update({
+    // 담당자 변경 감지 — 값이 실제로 바뀌었을 때만 이력 저장 (no-op 스킵)
+    // SettingsHistoryDialog의 itemName과 정확히 일치해야 필터됨
+    const CHG_REASON_ASSIGNEE = "담당자";
+    const prevAssignee    = existing.asign_mber_id ?? null;
+    const nextAssignee    = assignMemberId !== undefined ? (assignMemberId || null) : prevAssignee;
+    const assigneeChanged = assignMemberId !== undefined && prevAssignee !== nextAssignee;
+
+    // 이력 저장 시 이름도 함께 기록 → 멤버 탈퇴 후에도 이력 뷰 보존
+    let assigneeNames: { before: string | null; after: string | null } = { before: null, after: null };
+    if (assigneeChanged) {
+      const ids = [prevAssignee, nextAssignee].filter((v): v is string => !!v);
+      const members = ids.length > 0
+        ? await prisma.tbCmMember.findMany({
+            where:  { mber_id: { in: ids } },
+            // email_addr를 fallback으로 — mber_nm 미설정 계정도 이력에서 식별 가능
+            select: { mber_id: true, mber_nm: true, email_addr: true },
+          })
+        : [];
+      const nameMap = new Map(members.map((m) => [m.mber_id, m.mber_nm || m.email_addr || null]));
+      assigneeNames = {
+        before: prevAssignee ? (nameMap.get(prevAssignee) ?? null) : null,
+        after:  nextAssignee ? (nameMap.get(nextAssignee) ?? null) : null,
+      };
+    }
+
+    // 담당자 이력이 있으면 update + history를 한 트랜잭션으로, 없으면 단건 update
+    const updateOp = prisma.tbRqTask.update({
       where: { task_id: taskId },
       data: {
         task_nm:         name.trim(),
@@ -78,9 +116,34 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         dtl_cn:          content !== undefined ? (content?.trim() || null) : existing.dtl_cn,
         output_info_cn:  outputInfo !== undefined ? (outputInfo?.trim() || null) : existing.output_info_cn,
         rfp_page_no:     rfpPage !== undefined ? (rfpPage?.trim() || null) : existing.rfp_page_no,
+        asign_mber_id:   nextAssignee,
         mdfcn_dt:        new Date(),
       },
     });
+
+    if (assigneeChanged) {
+      await prisma.$transaction([
+        updateOp,
+        prisma.tbDsDesignChange.create({
+          data: {
+            prjct_id:      projectId,
+            ref_tbl_nm:    "tb_rq_task",
+            ref_id:        taskId,
+            chg_type_code: "UPDATE",
+            chg_rsn_cn:    CHG_REASON_ASSIGNEE,
+            snapshot_data: {
+              before:     prevAssignee,
+              after:      nextAssignee,
+              beforeName: assigneeNames.before,
+              afterName:  assigneeNames.after,
+            },
+            chg_mber_id: gate.mberId,
+          },
+        }),
+      ]);
+    } else {
+      await updateOp;
+    }
 
     return apiSuccess({ ok: true });
   } catch (err) {

@@ -30,20 +30,31 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "요구사항을 찾을 수 없습니다.", 404);
     }
 
+    // 담당자 이름 조회 — 없거나 퇴장 멤버면 null
+    const assignee = req.asign_mber_id
+      ? await prisma.tbCmMember.findUnique({
+          where:  { mber_id: req.asign_mber_id },
+          // email_addr를 fallback으로 — mber_nm 미설정 계정도 식별 가능
+          select: { mber_nm: true, email_addr: true },
+        })
+      : null;
+
     return apiSuccess({
-      requirementId:   req.req_id,
-      displayId:       req.req_display_id,
-      name:            req.req_nm,
-      priority:        req.priort_code,
-      source:          req.src_code,
-      rfpPage:         req.rfp_page_no ?? "",
-      originalContent: req.orgnl_cn ?? "",
-      currentContent:  req.curncy_cn ?? "",
-      analysisMemo:    req.analy_cn ?? "",
-      detailSpec:      req.spec_cn ?? "",
-      taskId:          req.task_id ?? null,
-      taskName:        req.task?.task_nm ?? "미분류",
-      sortOrder:       req.sort_ordr ?? 0,
+      requirementId:    req.req_id,
+      displayId:        req.req_display_id,
+      name:             req.req_nm,
+      priority:         req.priort_code,
+      source:           req.src_code,
+      rfpPage:          req.rfp_page_no ?? "",
+      originalContent:  req.orgnl_cn ?? "",
+      currentContent:   req.curncy_cn ?? "",
+      analysisMemo:     req.analy_cn ?? "",
+      detailSpec:       req.spec_cn ?? "",
+      taskId:           req.task_id ?? null,
+      taskName:         req.task?.task_nm ?? "미분류",
+      assignMemberId:   req.asign_mber_id ?? null,
+      assignMemberName: assignee ? (assignee.mber_nm || assignee.email_addr || null) : null,
+      sortOrder:        req.sort_ordr ?? 0,
     });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/requirements/${reqId}] DB 오류:`, err);
@@ -66,7 +77,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   const {
     taskId, name, priority, source, rfpPage,
     originalContent, currentContent, analysisMemo, detailSpec,
-    reqDisplayId, sortOrder,
+    reqDisplayId, sortOrder, assignMemberId,
     saveHistory, versionMode, versionComment,
     saveSpecHistory, saveAnalyHistory,
   } = body as {
@@ -74,6 +85,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     rfpPage?: string; originalContent?: string; currentContent?: string;
     analysisMemo?: string; detailSpec?: string; reqDisplayId?: string;
     sortOrder?: number;
+    assignMemberId?: string;
     saveHistory?: boolean;
     versionMode?: "major" | "minor";
     versionComment?: string;
@@ -99,6 +111,31 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const oldAnalyCn   = existing.analy_cn ?? null;
     const oldSpecCn    = existing.spec_cn ?? null;
 
+    // 담당자 변경 감지 — 값이 실제로 바뀌었을 때만 자동 이력 저장 (no-op 스킵)
+    // itemName="담당자"로 SettingsHistoryDialog와 동일 문자열 사용
+    const CHG_REASON_ASSIGNEE = "담당자";
+    const prevAssignee    = existing.asign_mber_id ?? null;
+    const nextAssignee    = assignMemberId !== undefined ? (assignMemberId || null) : prevAssignee;
+    const assigneeChanged = assignMemberId !== undefined && prevAssignee !== nextAssignee;
+
+    // 담당자 변경 시 이름도 함께 저장 — 멤버 탈퇴 후에도 이력 뷰 보존
+    let assigneeNames: { before: string | null; after: string | null } = { before: null, after: null };
+    if (assigneeChanged) {
+      const ids = [prevAssignee, nextAssignee].filter((v): v is string => !!v);
+      const membersForHistory = ids.length > 0
+        ? await prisma.tbCmMember.findMany({
+            where:  { mber_id: { in: ids } },
+            // email_addr를 fallback으로 — mber_nm 미설정 계정도 이력에서 식별 가능
+            select: { mber_id: true, mber_nm: true, email_addr: true },
+          })
+        : [];
+      const nameMap = new Map(membersForHistory.map((m) => [m.mber_id, m.mber_nm || m.email_addr || null]));
+      assigneeNames = {
+        before: prevAssignee ? (nameMap.get(prevAssignee) ?? null) : null,
+        after:  nextAssignee ? (nameMap.get(nextAssignee) ?? null) : null,
+      };
+    }
+
     // ── 트랜잭션 구성 ────────────────────────────────────────────────────
     // $transaction 오버로드가 배열/함수 두 가지라 Parameters[0] 만으론 배열 타입이
     // 좁혀지지 않음 → PrismaPromise 배열로 명시
@@ -120,11 +157,34 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           curncy_cn:      currentContent !== undefined ? newCurncyCn : existing.curncy_cn,
           analy_cn:       analysisMemo !== undefined ? newAnalyCn : existing.analy_cn,
           spec_cn:        detailSpec !== undefined ? newSpecCn : existing.spec_cn,
+          asign_mber_id:  nextAssignee,
           sort_ordr:      typeof sortOrder === "number" ? sortOrder : existing.sort_ordr,
           mdfcn_dt:       new Date(),
         },
       })
     );
+
+    // 1-b. 담당자 변경 이력 (자동 저장 — saveHistory 플래그 불필요)
+    if (assigneeChanged) {
+      ops.push(
+        prisma.tbDsDesignChange.create({
+          data: {
+            prjct_id:      projectId,
+            ref_tbl_nm:    "tb_rq_requirement",
+            ref_id:        reqId,
+            chg_type_code: "UPDATE",
+            chg_rsn_cn:    CHG_REASON_ASSIGNEE,
+            snapshot_data: {
+              before:     prevAssignee,
+              after:      nextAssignee,
+              beforeName: assigneeNames.before,
+              afterName:  assigneeNames.after,
+            },
+            chg_mber_id: gate.mberId,
+          },
+        })
+      );
+    }
 
     // 2. 이력 저장 (saveHistory=true 일 때만)
     let nextVersion: string | null = null;

@@ -44,8 +44,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "단위업무를 찾을 수 없습니다.", 404);
     }
 
-    // AI 태스크 최신 상태 조회 (taskType별 최신 1건) + IMPLEMENT 스냅샷 경유 병렬 조회
-    const [aiTasks, implSnapshotRows] = await Promise.all([
+    // AI 태스크 최신 상태 + IMPLEMENT 스냅샷 + 담당자 이름 병렬 조회
+    const [aiTasks, implSnapshotRows, assignee] = await Promise.all([
       prisma.tbAiTask.findMany({
         where:   { ref_ty_code: "UNIT_WORK", ref_id: unitWorkId },
         orderBy: { req_dt: "desc" },
@@ -56,6 +56,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         orderBy: { creat_dt: "desc" },
         distinct: ["ai_task_id"],
       }),
+      // 담당자 이름 조회 — asign_mber_id가 있을 때만
+      uw.asign_mber_id
+        ? prisma.tbCmMember.findUnique({
+            where:  { mber_id: uw.asign_mber_id },
+            // email_addr를 fallback으로 — mber_nm 미설정 계정도 식별 가능
+            select: { mber_nm: true, email_addr: true },
+          })
+        : Promise.resolve(null),
     ]);
     // taskType별 최신 1건만 유지
     const aiTaskMap: Record<string, { aiTaskId: string; status: string }> = {};
@@ -80,13 +88,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     return apiSuccess({
-      unitWorkId:     uw.unit_work_id,
-      displayId:      uw.unit_work_display_id,
-      name:           uw.unit_work_nm,
-      description:    uw.unit_work_dc ?? "",
-      comment:        (uw as unknown as Record<string, unknown>).coment_cn as string ?? "",
-      assignMemberId: uw.asign_mber_id ?? null,
-      startDate:      uw.bgng_de ?? null,
+      unitWorkId:       uw.unit_work_id,
+      displayId:        uw.unit_work_display_id,
+      name:             uw.unit_work_nm,
+      description:      uw.unit_work_dc ?? "",
+      comment:          (uw as unknown as Record<string, unknown>).coment_cn as string ?? "",
+      assignMemberId:   uw.asign_mber_id ?? null,
+      // 담당자 이름 — mber_nm 우선, 없으면 email, 없으면 null (퇴장 멤버 포함)
+      assignMemberName: assignee ? (assignee.mber_nm || assignee.email_addr || null) : null,
+      startDate:        uw.bgng_de ?? null,
       endDate:        uw.end_de ?? null,
       progress:       uw.progrs_rt,
       sortOrder:      uw.sort_ordr,
@@ -146,13 +156,20 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const newDescription = description?.trim() || null;
 
+    // 담당자 변경 감지 — 값이 실제로 바뀌었을 때만 이력 저장 (no-op 스킵)
+    // SettingsHistoryDialog의 itemName과 정확히 일치해야 필터됨
+    const CHG_REASON_ASSIGNEE = "담당자";
+    const prevAssignee     = existing.asign_mber_id ?? null;
+    const nextAssignee     = assignMemberId !== undefined ? (assignMemberId || null) : prevAssignee;
+    const assigneeChanged  = assignMemberId !== undefined && prevAssignee !== nextAssignee;
+
     // 공통 update data — 미전송 필드는 기존 값 유지
     const updateData = {
       unit_work_display_id: displayId?.trim() || existing.unit_work_display_id,
       unit_work_nm:  name.trim(),
       unit_work_dc:  description !== undefined ? newDescription : existing.unit_work_dc,
       coment_cn:     comment !== undefined ? (comment?.trim() || null) : existing.coment_cn,
-      asign_mber_id: assignMemberId !== undefined ? (assignMemberId || null) : existing.asign_mber_id,
+      asign_mber_id: nextAssignee,
       bgng_de:       startDate !== undefined ? (startDate?.trim() || null) : existing.bgng_de,
       end_de:        endDate !== undefined ? (endDate?.trim() || null) : existing.end_de,
       progrs_rt:     progress ?? existing.progrs_rt,
@@ -160,14 +177,36 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       mdfcn_dt:      new Date(),
     };
 
+    // 담당자 이력 저장 시 이름도 함께 기록 → 멤버 탈퇴 후에도 이력 뷰 보존
+    // (담당자 변경이 실제로 일어났을 때만 조회 — 쿼리 불필요한 경우 스킵)
+    let assigneeNames: { before: string | null; after: string | null } = { before: null, after: null };
+    if (assigneeChanged) {
+      const ids = [prevAssignee, nextAssignee].filter((v): v is string => !!v);
+      const members = ids.length > 0
+        ? await prisma.tbCmMember.findMany({
+            where:  { mber_id: { in: ids } },
+            // email_addr를 fallback으로 — mber_nm 미설정 계정도 이력에서 식별 가능
+            select: { mber_id: true, mber_nm: true, email_addr: true },
+          })
+        : [];
+      const nameMap = new Map(members.map((m) => [m.mber_id, m.mber_nm || m.email_addr || null]));
+      assigneeNames = {
+        before: prevAssignee ? (nameMap.get(prevAssignee) ?? null) : null,
+        after:  nextAssignee ? (nameMap.get(nextAssignee) ?? null) : null,
+      };
+    }
+
+    // 트랜잭션 operations 배열로 누적 — 설명 이력(saveHistory)과 담당자 이력을 함께 원자 처리
+    const ops: Array<Promise<unknown>> = [
+      (prisma.tbDsUnitWork.update as any)({
+        where: { unit_work_id: unitWorkId },
+        data: updateData,
+      }),
+    ];
+
     if (saveHistory) {
-      // 설명 변경 이력 저장과 단위업무 수정을 트랜잭션으로 처리
-      await prisma.$transaction([
-        (prisma.tbDsUnitWork.update as any)({
-          where: { unit_work_id: unitWorkId },
-          data: updateData,
-        }),
-        // 설명 변경 이력 — tb_ds_design_change에 before/after JSON으로 저장
+      // 설명 변경 이력 — tb_ds_design_change에 before/after JSON으로 저장
+      ops.push(
         prisma.tbDsDesignChange.create({
           data: {
             prjct_id:      projectId,
@@ -181,13 +220,38 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             },
             chg_mber_id: gate.mberId,
           },
-        }),
-      ]);
+        })
+      );
+    }
+
+    if (assigneeChanged) {
+      // 담당자 변경 이력 — 자동 저장 (saveHistory와 무관).
+      // snapshot에 ID와 이름을 함께 저장 → 멤버가 퇴장해도 이력 뷰가 살아있음
+      ops.push(
+        prisma.tbDsDesignChange.create({
+          data: {
+            prjct_id:      projectId,
+            ref_tbl_nm:    "tb_ds_unit_work",
+            ref_id:        unitWorkId,
+            chg_type_code: "UPDATE",
+            chg_rsn_cn:    CHG_REASON_ASSIGNEE,
+            snapshot_data: {
+              before:     prevAssignee,
+              after:      nextAssignee,
+              beforeName: assigneeNames.before,
+              afterName:  assigneeNames.after,
+            },
+            chg_mber_id: gate.mberId,
+          },
+        })
+      );
+    }
+
+    // ops 길이에 따라 단건 update or 트랜잭션
+    if (ops.length === 1) {
+      await ops[0];
     } else {
-      await (prisma.tbDsUnitWork.update as any)({
-        where: { unit_work_id: unitWorkId },
-        data: updateData,
-      });
+      await prisma.$transaction(ops as any);
     }
 
     return apiSuccess({ unitWorkId });

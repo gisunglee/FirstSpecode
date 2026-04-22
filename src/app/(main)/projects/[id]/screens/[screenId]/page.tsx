@@ -28,6 +28,7 @@ import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import { ScreenLayoutEditor, type LayoutRow } from "@/components/ui/ScreenLayoutEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
+import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import { useAppStore } from "@/store/appStore";
 
@@ -62,6 +63,9 @@ type ScreenDetail = {
   categoryL: string;
   categoryM: string;
   categoryS: string;
+  // 담당자 — 서버 join으로 내려옴
+  assignMemberId:   string | null;
+  assignMemberName: string | null;
   unitWorkId: string | null;
   unitWorkName: string;
   areas: AreaRow[];
@@ -80,6 +84,16 @@ type SaveBody = {
   categoryS: string;
   layoutData?: string;
   saveHistory?: boolean;
+  // 담당자 — "" = 미지정, 서버에서 null 처리
+  assignMemberId: string;
+};
+
+// 프로젝트 멤버 — 담당자 콤보박스 옵션용
+type ProjectMember = {
+  memberId: string;
+  name:     string | null;
+  email:    string;
+  role:     string;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -119,7 +133,11 @@ function ScreenDetailPageInner() {
     categoryL: "",
     categoryM: "",
     categoryS: "",
+    assignMemberId: "",
   });
+
+  // 담당자 변경 이력 팝업 상태 — 설명 이력(historyViewOpen)과 별개 다이얼로그
+  const [assigneeHistoryOpen, setAssigneeHistoryOpen] = useState(false);
 
   // 레이아웃 에디터 상태 (기본: 빈 배열)
   const [layoutRows, setLayoutRows] = useState<LayoutRow[]>([]);
@@ -151,6 +169,18 @@ function ScreenDetailPageInner() {
   });
   const uwOptions = uwData ?? [];
 
+  // ── 프로젝트 멤버 목록 조회 (담당자 콤보박스용) ─────────────────────────────
+  const { data: memberData } = useQuery({
+    queryKey: ["project-members", projectId],
+    queryFn:  () =>
+      authFetch<{ data: { members: ProjectMember[]; myMemberId: string } }>(
+        `/api/projects/${projectId}/members`
+      ).then((r) => r.data),
+    staleTime: 60 * 1000, // 1분
+  });
+  const members    = memberData?.members ?? [];
+  const myMemberId = memberData?.myMemberId ?? "";
+
   // ── 기존 화면 로드 (수정 모드) ─────────────────────────────────────────────
   const { data: detail, isLoading: isDetailLoading } = useQuery({
     queryKey: ["screen", projectId, screenId],
@@ -170,6 +200,7 @@ function ScreenDetailPageInner() {
           categoryL: d.categoryL,
           categoryM: d.categoryM,
           categoryS: d.categoryS,
+          assignMemberId: d.assignMemberId ?? "",
         });
         // 설명 변경 감지를 위해 원본 값 보관
         setOriginalDescription(d.description ?? "");
@@ -398,8 +429,45 @@ function ScreenDetailPageInner() {
                 </FormField>
               </div>
 
-              {/* 화면 유형 + 정렬 순서 */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: 16 }}>
+              {/* 담당자 + 화면 유형 + 정렬 순서 — 담당자에 더 넓은 공간 */}
+              {/* 담당자 라벨 옆 작은 시계 아이콘 = 변경 이력 팝업 (신규 등록 모드에서는 숨김) */}
+              {/* FormField 대신 인라인 div — <label> 안에 <button>이 있으면 라벨 빈 영역 클릭이 */}
+              {/*   브라우저 기본 동작으로 버튼에 전달되기 때문 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 100px", gap: 16 }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                    <span>담당자</span>
+                    {!isNew && (
+                      <button
+                        type="button"
+                        onClick={() => setAssigneeHistoryOpen(true)}
+                        title="담당자 변경 이력"
+                        style={inlineIconBtnStyle}
+                      >
+                        {/* 시계(이력) 아이콘 — 14px, currentColor로 테마 대응 */}
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" strokeWidth="2"
+                             strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <circle cx="12" cy="12" r="9" />
+                          <path d="M12 7v5l3 2" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                  <select
+                    value={form.assignMemberId}
+                    onChange={(e) => handleChange("assignMemberId", e.target.value)}
+                    style={selectStyle}
+                  >
+                    <option value="">담당자 없음</option>
+                    {members.map((m) => (
+                      <option key={m.memberId} value={m.memberId}>
+                        {m.name ?? m.email}
+                        {m.memberId === myMemberId ? " (나)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <FormField label="화면 유형">
                   <select
                     value={form.type}
@@ -643,6 +711,16 @@ function ScreenDetailPageInner() {
             title="화면 설명 변경 이력"
             refTblNm="tb_ds_screen"
             refId={screenId}
+          />
+
+          {/* 담당자 변경 이력 — 경량 전용 다이얼로그 (diff 없음, 타임라인만) */}
+          <AssigneeHistoryDialog
+            open={assigneeHistoryOpen}
+            onClose={() => setAssigneeHistoryOpen(false)}
+            projectId={projectId}
+            refTblNm="tb_ds_screen"
+            refId={screenId}
+            currentAssigneeName={detail?.assignMemberName ?? ""}
           />
 
           {/* ── 도움말 팝업 ── */}
@@ -944,6 +1022,22 @@ const secondaryBtnStyle: React.CSSProperties = {
   color: "var(--color-text-primary)",
   fontSize: 14,
   cursor: "pointer",
+};
+
+// 라벨 옆 인라인 아이콘 버튼 — 이력 조회 등 보조 액션을 최소 면적으로 표현
+const inlineIconBtnStyle: React.CSSProperties = {
+  display:        "inline-flex",
+  alignItems:     "center",
+  justifyContent: "center",
+  width:          18,
+  height:         18,
+  padding:        0,
+  border:         "none",
+  background:     "transparent",
+  color:          "var(--color-text-tertiary)",
+  cursor:         "pointer",
+  borderRadius:   3,
+  lineHeight:     0,
 };
 
 const linkBtnStyle: React.CSSProperties = {

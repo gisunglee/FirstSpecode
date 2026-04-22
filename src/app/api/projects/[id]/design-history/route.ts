@@ -44,6 +44,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "refTblNm, refId, itemName 파라미터가 필요합니다.", 400);
   }
 
+  // UUID 형식 판별 (36자 하이픈 포맷) — 담당자 이력의 before/after 값이 mberId일 때 감지용
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
   try {
     const changes = await prisma.tbDsDesignChange.findMany({
       where: {
@@ -56,26 +59,55 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       take:    limit,
     });
 
-    // 변경자 이름 배치 조회
-    const memberIds = [...new Set(changes.map((c) => c.chg_mber_id).filter(Boolean))] as string[];
+    // 배치 조회할 mberId 수집 — 변경자 + snapshot의 before/after UUID 모두 포함
+    // (담당자 이력의 경우 name 필드가 null일 수 있어 UUID를 다시 해석해야 함)
+    const memberIdSet = new Set<string>();
+    for (const c of changes) {
+      if (c.chg_mber_id) memberIdSet.add(c.chg_mber_id);
+      const snap = c.snapshot_data as { before?: string | null; after?: string | null } | null;
+      if (snap?.before && UUID_RE.test(snap.before)) memberIdSet.add(snap.before);
+      if (snap?.after  && UUID_RE.test(snap.after))  memberIdSet.add(snap.after);
+    }
+    const memberIds = Array.from(memberIdSet);
     const members = memberIds.length
       ? await prisma.tbCmMember.findMany({
           where:  { mber_id: { in: memberIds } },
-          select: { mber_id: true, mber_nm: true },
+          // email_addr를 fallback으로 제공 — mber_nm 미설정 계정도 식별 가능
+          select: { mber_id: true, mber_nm: true, email_addr: true },
         })
       : [];
-    const memberMap = Object.fromEntries(members.map((m) => [m.mber_id, m.mber_nm ?? "알 수 없음"]));
+    // 이름 우선, 없으면 이메일, 둘 다 없으면 UUID 그대로
+    const memberMap = new Map(
+      members.map((m) => [m.mber_id, m.mber_nm || m.email_addr || m.mber_id])
+    );
+
+    // 값 문자열을 이름으로 해석 — UUID면 map 조회, 아니면 원본 그대로
+    function resolve(value: string | null | undefined): string {
+      if (!value) return "";
+      if (UUID_RE.test(value)) return memberMap.get(value) ?? value;
+      return value;
+    }
 
     const items = changes.map((c, idx) => {
-      // snapshot_data는 { before: string | null, after: string | null } 구조
-      const snap = c.snapshot_data as { before?: string | null; after?: string | null } | null;
+      // snapshot_data 구조:
+      //   - 기본: { before, after } — 텍스트/설명류
+      //   - 담당자 등 참조형: { before: mberId, after: mberId, beforeName, afterName }
+      //     → 이름이 저장돼 있으면 우선 사용, 없으면 UUID를 memberMap으로 해석
+      //       (멤버 탈퇴 후에도 snapshot의 이름이 있으면 보존됨)
+      const snap = c.snapshot_data as {
+        before?:     string | null;
+        after?:      string | null;
+        beforeName?: string | null;
+        afterName?:  string | null;
+      } | null;
       return {
         histId:    c.chg_id,
         version:   changes.length - idx,   // 최신 = 가장 높은 번호
-        changedBy: c.chg_mber_id ? (memberMap[c.chg_mber_id] ?? "알 수 없음") : "알 수 없음",
+        changedBy: c.chg_mber_id ? (memberMap.get(c.chg_mber_id) ?? "알 수 없음") : "알 수 없음",
         changedAt: c.chg_dt.toISOString(),
-        afterVal:  snap?.after  ?? "",
-        beforeVal: snap?.before ?? "",
+        // snapshot 이름 우선 → 그 다음 UUID 해석 → 최종적으로 원본(설명 텍스트 등)
+        afterVal:  snap?.afterName  ?? resolve(snap?.after)  ?? "",
+        beforeVal: snap?.beforeName ?? resolve(snap?.before) ?? "",
       };
     });
 

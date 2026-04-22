@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
+import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import { useAppStore } from "@/store/appStore";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
@@ -47,20 +48,22 @@ type RequirementOption = {
 type AiTaskInfo = { aiTaskId: string; status: string };
 
 type UnitWorkDetail = {
-  unitWorkId:     string;
-  displayId:      string;
-  name:           string;
-  description:    string;
-  comment:        string;
-  assignMemberId: string | null;
-  startDate:      string | null;
-  endDate:        string | null;
-  progress:       number;
-  sortOrder:      number;
-  reqId:          string;
-  reqDisplayId:   string;
-  reqName:        string;
-  aiTasks:        Record<string, AiTaskInfo>;
+  unitWorkId:       string;
+  displayId:        string;
+  name:             string;
+  description:      string;
+  comment:          string;
+  assignMemberId:   string | null;
+  // 담당자 이름 — 서버에서 join으로 내려줌. 퇴장한 멤버면 null
+  assignMemberName: string | null;
+  startDate:        string | null;
+  endDate:          string | null;
+  progress:         number;
+  sortOrder:        number;
+  reqId:            string;
+  reqDisplayId:     string;
+  reqName:          string;
+  aiTasks:          Record<string, AiTaskInfo>;
   screens: {
     screenId:  string;
     displayId: string;
@@ -68,6 +71,15 @@ type UnitWorkDetail = {
     type:      string;
     urlPath:   string;
   }[];
+};
+
+// 프로젝트 멤버 — 담당자 콤보박스 옵션용 (GET /api/projects/[id]/members)
+type ProjectMember = {
+  memberId: string;
+  name:     string | null;
+  email:    string;
+  role:     string;
+  job:      string;
 };
 
 type SaveBody = {
@@ -130,6 +142,8 @@ function UnitWorkDetailPageInner() {
 
   // 이력 조회 팝업 상태
   const [historyViewOpen, setHistoryViewOpen] = useState(false);
+  // 담당자 변경 이력 팝업 상태 — 설명 이력과 별개 다이얼로그
+  const [assigneeHistoryOpen, setAssigneeHistoryOpen] = useState(false);
 
   // 예시 팝업 상태
   const [exampleOpen, setExampleOpen] = useState(false);
@@ -144,6 +158,19 @@ function UnitWorkDetailPageInner() {
       ).then((r) => r.data.items),
   });
   const reqOptions = reqData ?? [];
+
+  // ── 프로젝트 멤버 목록 조회 (담당자 콤보박스용) ─────────────────────────────
+  // myMemberId로 본인 판별 — 프론트에서 이니셜/아이콘 등 파생 표시 가능
+  const { data: memberData } = useQuery({
+    queryKey: ["project-members", projectId],
+    queryFn:  () =>
+      authFetch<{ data: { members: ProjectMember[]; myMemberId: string } }>(
+        `/api/projects/${projectId}/members`
+      ).then((r) => r.data),
+    staleTime: 60 * 1000, // 1분
+  });
+  const members = memberData?.members ?? [];
+  const myMemberId = memberData?.myMemberId ?? "";
 
   // ── 기존 단위업무 로드 (수정 모드) ─────────────────────────────────────────
   const { data: detail, isLoading: isDetailLoading, refetch: refetchDetail } = useQuery({
@@ -657,6 +684,16 @@ function UnitWorkDetailPageInner() {
         refId={unitWorkId}
       />
 
+      {/* 담당자 변경 이력 — 경량 전용 다이얼로그 (diff 없음, 타임라인만) */}
+      <AssigneeHistoryDialog
+        open={assigneeHistoryOpen}
+        onClose={() => setAssigneeHistoryOpen(false)}
+        projectId={projectId}
+        refTblNm="tb_ds_unit_work"
+        refId={unitWorkId}
+        currentAssigneeName={detail?.assignMemberName ?? ""}
+      />
+
       {/* 타이틀 행 — full-width 배경 */}
       <div style={{
         display:      "flex",
@@ -913,7 +950,7 @@ function UnitWorkDetailPageInner() {
             </FormField>
           </div>
 
-          {/* 시작일 + 종료일 */}
+          {/* 시작일 + 종료일 — 2컬럼 */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <FormField label="시작일">
               <input
@@ -933,8 +970,45 @@ function UnitWorkDetailPageInner() {
             </FormField>
           </div>
 
-          {/* 진행률 + 정렬순서 */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {/* 담당자 + 진행률 + 정렬순서 — 담당자에 더 넓은 공간(2fr) 할당 */}
+          {/* 담당자 라벨 옆의 작은 시계 아이콘 = 변경 이력 팝업 (신규 등록 모드에서는 숨김) */}
+          {/* FormField 대신 인라인 div 사용 — <label> 요소 안에 <button>을 두면 */}
+          {/*   라벨 빈 영역 클릭이 브라우저 기본 동작으로 버튼에 전달됨 (라벨→내부 form control) */}
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 12 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                <span>담당자</span>
+                {!isNew && (
+                  <button
+                    type="button"
+                    onClick={() => setAssigneeHistoryOpen(true)}
+                    title="담당자 변경 이력"
+                    style={inlineIconBtnStyle}
+                  >
+                    {/* 시계(이력) 아이콘 — 14px, currentColor로 테마 대응 */}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" strokeWidth="2"
+                         strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M12 7v5l3 2" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              <select
+                value={form.assignMemberId ?? ""}
+                onChange={(e) => handleChange("assignMemberId", e.target.value)}
+                style={selectStyle}
+              >
+                <option value="">담당자 없음</option>
+                {members.map((m) => (
+                  <option key={m.memberId} value={m.memberId}>
+                    {m.name ?? m.email}
+                    {m.memberId === myMemberId ? " (나)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
             <FormField label="진행률 (%)">
               <input
                 type="number"
@@ -1100,6 +1174,18 @@ const inputStyle: React.CSSProperties = {
   outline:      "none",
 };
 
+// select 전용 — 브라우저 기본 화살표(두껍고 오른쪽 끝에 붙음) 제거 후 커스텀 SVG 화살표 사용
+// 과업/요구사항/화면 상세와 동일한 톤·위치
+const selectStyle: React.CSSProperties = {
+  ...inputStyle,
+  paddingRight:       "32px",
+  appearance:         "none",
+  WebkitAppearance:   "none",
+  backgroundImage:    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
+  backgroundRepeat:   "no-repeat",
+  backgroundPosition: "right 10px center",
+};
+
 const primaryBtnStyle: React.CSSProperties = {
   padding:      "8px 24px",
   borderRadius: 6,
@@ -1129,6 +1215,23 @@ const descSubBtnStyle: React.CSSProperties = {
   color:        "var(--color-text-secondary)",
   fontSize:     12,
   cursor:       "pointer",
+};
+
+// 라벨 옆 인라인 아이콘 버튼 — 테두리·배경 없음, hover 시만 색 변화
+// FormField 라벨의 보조 액션(이력 조회 등)을 최소 면적으로 표현할 때 사용
+const inlineIconBtnStyle: React.CSSProperties = {
+  display:       "inline-flex",
+  alignItems:    "center",
+  justifyContent:"center",
+  width:         18,
+  height:        18,
+  padding:       0,
+  border:        "none",
+  background:    "transparent",
+  color:         "var(--color-text-tertiary)",
+  cursor:        "pointer",
+  borderRadius:  3,
+  lineHeight:    0,
 };
 
 // ── AI 태스크 설정 ────────────────────────────────────────────────────────────

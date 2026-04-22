@@ -15,7 +15,7 @@
  *   - useRef 기반 HTML5 네이티브 드래그앤드롭
  */
 
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -36,6 +36,9 @@ type ScreenRow = {
   unitWorkName: string;
   requirementId: string | null;
   requirementName: string;
+  // 담당자 — 서버 join으로 내려옴. 미지정/퇴장 멤버면 null
+  assignMemberId:   string | null;
+  assignMemberName: string | null;
   areaCount: number;
   sortOrder: number;
   avgDesignRt: number;
@@ -76,16 +79,32 @@ function ScreensPageInner() {
   // ── 단위업무 필터 (URL ?unitWorkId=xxx 로 초기화 — 브레드크럼에서 진입 시 자동 적용) ──
   const searchParams    = useSearchParams();
   const [unitWorkFilter, setUnitWorkFilter] = useState(searchParams.get("unitWorkId") ?? "");
+  // 담당자 필터 — "all"(기본) | "me"(내 담당만). URL ?assignedTo=me 동기화
+  const [filterAssignedTo, setFilterAssignedTo] = useState<"all" | "me">(
+    searchParams.get("assignedTo") === "me" ? "me" : "all"
+  );
   // AI 구현 태스크 상세 팝업
   const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
 
+  // "내 담당" URL 동기화
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (filterAssignedTo === "me") url.searchParams.set("assignedTo", "me");
+    else url.searchParams.delete("assignedTo");
+    window.history.replaceState(null, "", url.toString());
+  }, [filterAssignedTo]);
+
   // ── 데이터 조회 — 전체 조회 후 클라이언트 필터 (드롭다운 옵션 생성용) ──
+  // 담당자는 서버 쿼리 파라미터로 전달 (URL 공유 가능, 향후 페이징 대응)
   const { data, isLoading } = useQuery({
-    queryKey: ["screens", projectId],
-    queryFn: () =>
-      authFetch<{ data: { items: ScreenRow[]; totalCount: number } }>(
-        `/api/projects/${projectId}/screens`
-      ).then((r) => r.data),
+    queryKey: ["screens", projectId, filterAssignedTo],
+    queryFn: () => {
+      const qs = filterAssignedTo === "me" ? "?assignedTo=me" : "";
+      return authFetch<{ data: { items: ScreenRow[]; totalCount: number } }>(
+        `/api/projects/${projectId}/screens${qs}`
+      ).then((r) => r.data);
+    },
   });
 
   const allItems = data?.items ?? [];
@@ -189,6 +208,23 @@ function ScreensPageInner() {
           총 {items.length}건
         </span>
         <div style={{ flex: 1 }} />
+        {/* 담당자 세그먼트 토글 — 서버 쿼리(?assignedTo=me)로 필터 */}
+        <div style={segmentGroupStyle}>
+          <button
+            type="button"
+            onClick={() => setFilterAssignedTo("all")}
+            style={segmentBtnStyle(filterAssignedTo === "all")}
+          >
+            전체
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterAssignedTo("me")}
+            style={segmentBtnStyle(filterAssignedTo === "me")}
+          >
+            내 담당
+          </button>
+        </div>
         <select
           value={unitWorkFilter}
           onChange={(e) => setUnitWorkFilter(e.target.value)}
@@ -214,6 +250,7 @@ function ScreensPageInner() {
             <div>요구사항</div>
             <div>단위업무</div>
             <div>화면명</div>
+            <div>담당자</div>
             <div>화면유형</div>
             <div style={{ textAlign: "center" }}>영역수</div>
             <div style={{ textAlign: "center" }}>정렬</div>
@@ -290,6 +327,20 @@ function ScreensPageInner() {
                     {screen.displayId}
                   </span>
                   {screen.name}
+                </div>
+
+                {/* 담당자 — 미지정/퇴장 멤버는 흐린 "-" */}
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: screen.assignMemberName
+                      ? "var(--color-text-primary)"
+                      : "var(--color-text-tertiary)",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}
+                  title={screen.assignMemberName ?? undefined}
+                >
+                  {screen.assignMemberName ?? "-"}
                 </div>
 
                 {/* 화면유형 배지 */}
@@ -550,8 +601,9 @@ function typeBadgeStyle(type: string): React.CSSProperties {
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-// 요구사항·단위업무·화면명·분류는 fr 비율, 소형 컬럼은 고정 / AI 구현 + 설구테
-const GRID_TEMPLATE = "32px 1.5fr 1.5fr 3fr 70px 48px 40px 1fr 1fr 1fr 130px 7%";
+// 요구사항·단위업무·화면명·담당자·분류는 fr 비율, 소형 컬럼은 고정 / AI 구현 + 설구테
+// 담당자 컬럼(100px)을 화면명 뒤, 화면유형 앞에 삽입
+const GRID_TEMPLATE = "32px 1.5fr 1.5fr 3fr 100px 70px 48px 40px 1fr 1fr 1fr 130px 7%";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid",
@@ -615,6 +667,25 @@ const primaryBtnStyle: React.CSSProperties = {
   fontWeight: 600,
   cursor: "pointer",
 };
+
+// 담당자 필터 세그먼트 토글 — 단위업무·과업·요구사항 목록과 동일 패턴
+const segmentGroupStyle: React.CSSProperties = {
+  display:      "inline-flex",
+  border:       "1px solid var(--color-border)",
+  borderRadius: 6,
+  overflow:     "hidden",
+  background:   "var(--color-bg-card)",
+};
+const segmentBtnStyle = (active: boolean): React.CSSProperties => ({
+  padding:    "7px 14px",
+  fontSize:   13,
+  fontWeight: active ? 600 : 400,
+  border:     "none",
+  background: active ? "var(--color-brand-subtle)" : "transparent",
+  color:      active ? "var(--color-brand)" : "var(--color-text-secondary)",
+  cursor:     "pointer",
+  outline:    "none",
+});
 
 const secondaryBtnStyle: React.CSSProperties = {
   padding: "8px 16px",

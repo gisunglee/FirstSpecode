@@ -15,8 +15,8 @@ model TbCmMember {
   mber_nm             String?
   profl_img_url       String?
   mber_sttus_code     String                    @default("UNVERIFIED")
-  plan_code           String                    @default("FREE")    // 계정 플랜 (FREE/PRO/TEAM/ENTERPRISE)
-  plan_expire_dt      DateTime?                                      // 유료 플랜 만료일 (NULL=무료/무제한)
+  plan_code           String                    @default("FREE") // 계정 플랜 (FREE/PRO/TEAM/ENTERPRISE)
+  plan_expire_dt      DateTime? // 유료 플랜 만료일 (NULL=무료/무제한)
   join_dt             DateTime                  @default(now())
   mdfcn_dt            DateTime?
   wthdrw_dt           DateTime?
@@ -167,8 +167,8 @@ model TbPjProjectInvitation {
   invt_id         String      @id @default(uuid())
   prjct_id        String
   email_addr      String
-  role_code       String      @default("MEMBER")   // OWNER/ADMIN/MEMBER/VIEWER
-  job_title_code  String      @default("ETC")      // PM/PL/DBA/DEV/DESIGNER/QA/ETC
+  role_code       String      @default("MEMBER") // OWNER/ADMIN/MEMBER/VIEWER
+  job_title_code  String      @default("ETC") // PM/PL/DBA/DEV/DESIGNER/QA/ETC
   invt_token_val  String      @unique
   invtr_mber_id   String?
   invt_sttus_code String      @default("PENDING")
@@ -185,8 +185,8 @@ model TbPjProjectMember {
   prjct_mber_id   String      @id @default(uuid())
   prjct_id        String
   mber_id         String
-  role_code       String      @default("MEMBER")   // OWNER/ADMIN/MEMBER/VIEWER (보안·접근 제어)
-  job_title_code  String      @default("ETC")      // PM/PL/DBA/DEV/DESIGNER/QA/ETC (직무·개인화)
+  role_code       String      @default("MEMBER") // OWNER/ADMIN/MEMBER/VIEWER (보안·접근 제어)
+  job_title_code  String      @default("ETC") // PM/PL/DBA/DEV/DESIGNER/QA/ETC (직무·개인화)
   join_dt         DateTime    @default(now())
   last_acces_dt   DateTime?
   mber_sttus_code String      @default("ACTIVE")
@@ -297,16 +297,17 @@ model TbDsUnitWork {
 }
 
 model TbDsScreen {
-  scrn_id         String                  @id @default(uuid())
+  scrn_id         String        @id @default(uuid())
   prjct_id        String
   unit_work_id    String?
   scrn_display_id String
-  scrn_nm         String                  @default("")
+  scrn_nm         String        @default("")
   scrn_dc         String?
-  scrn_ty_code    String                  @default("LIST")
+  scrn_ty_code    String        @default("LIST")
   url_path        String?
-  sort_ordr       Int                     @default(0)
-  creat_dt        DateTime                @default(now())
+  asign_mber_id   String? // 담당자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
+  sort_ordr       Int           @default(0)
+  creat_dt        DateTime      @default(now())
   mdfcn_dt        DateTime?
   ctgry_l_nm      String?
   ctgry_m_nm      String?
@@ -315,23 +316,9 @@ model TbDsScreen {
   layer_data_dc   String?
   coment_cn       String?
   areas           TbDsArea[]
-  unitWork        TbDsUnitWork?           @relation(fields: [unit_work_id], references: [unit_work_id])
-  descHistory     TbDsScreenDescHistory[]
+  unitWork        TbDsUnitWork? @relation(fields: [unit_work_id], references: [unit_work_id])
 
   @@map("tb_ds_screen")
-}
-
-model TbDsScreenDescHistory {
-  hist_id     String     @id @default(uuid())
-  scrn_id     String
-  prjct_id    String
-  bfr_dc      String?
-  aftr_dc     String?
-  chg_mber_id String
-  creat_dt    DateTime   @default(now())
-  screen      TbDsScreen @relation(fields: [scrn_id], references: [scrn_id], onDelete: Cascade)
-
-  @@map("tb_ds_screen_desc_history")
 }
 
 model TbDsArea {
@@ -383,6 +370,7 @@ model TbDsDbTable {
   tbl_physcl_nm String
   tbl_lgcl_nm   String?
   tbl_dc        String?
+  asign_mber_id String?                                // 담당자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
   creat_dt      DateTime            @default(now())
   mdfcn_mber_id String?
   mdfcn_dt      DateTime?           @db.Timestamp(3)
@@ -398,7 +386,7 @@ model TbDsDbTableColumn {
   col_lgcl_nm   String?
   data_ty_nm    String?
   col_dc        String?
-  ref_grp_code  String?     @db.VarChar(100)   // 참조 공통코드 그룹코드 (tb_cm_code_group.grp_code)
+  ref_grp_code  String?     @db.VarChar(100) // 참조 공통코드 그룹코드 (tb_cm_code_group.grp_code)
   sort_ordr     Int         @default(0)
   creat_dt      DateTime    @default(now())
   mdfcn_mber_id String?
@@ -417,10 +405,10 @@ model TbDsDbTableRevision {
   rev_id        String   @id @default(uuid())
   prjct_id      String
   tbl_id        String
-  rev_no        Int                                  // 해당 테이블 내 순번 (1부터)
-  chg_type_code String                               // CREATE | UPDATE | DELETE
-  chg_summary   String?                              // 자동 생성 요약
-  snapshot_data Json                                 // diff 스냅샷
+  rev_no        Int // 해당 테이블 내 순번 (1부터)
+  chg_type_code String // CREATE | UPDATE | DELETE
+  chg_summary   String? // 자동 생성 요약
+  snapshot_data Json // diff 스냅샷
   chg_mber_id   String?
   chg_dt        DateTime @default(now())
 
@@ -430,16 +418,16 @@ model TbDsDbTableRevision {
 }
 
 model TbDsColMapping {
-  mapping_id    String    @id @default(uuid()) @db.VarChar(36)
-  ref_ty_code   String    @db.VarChar(20)
-  ref_id        String    @db.VarChar(36)
-  col_id        String?   @db.VarChar(36)
-  io_se_code    String?   @db.VarChar(10)
-  ui_ty_code    String?   @db.VarChar(20)
-  use_purps_cn  String?   @db.VarChar(200)
-  col_dc        String?
-  sort_ordr     Int?      @default(0)
-  creat_dt      DateTime? @default(now()) @db.Timestamp(6)
+  mapping_id   String    @id @default(uuid()) @db.VarChar(36)
+  ref_ty_code  String    @db.VarChar(20)
+  ref_id       String    @db.VarChar(36)
+  col_id       String?   @db.VarChar(36)
+  io_se_code   String?   @db.VarChar(10)
+  ui_ty_code   String?   @db.VarChar(20)
+  use_purps_cn String?   @db.VarChar(200)
+  col_dc       String?
+  sort_ordr    Int?      @default(0)
+  creat_dt     DateTime? @default(now()) @db.Timestamp(6)
 
   @@map("tb_ds_col_mapping")
 }
@@ -463,25 +451,25 @@ model TbCmProgress {
 }
 
 model TbAiTask {
-  ai_task_id          String                @id @default(uuid())
-  prjct_id            String
-  ref_ty_code         String
-  ref_id              String
-  task_ty_code        String
-  req_cn              String?
-  coment_cn           String?
-  result_cn           String?
-  task_sttus_code     String                @default("PENDING")
-  reject_rsn_cn       String?
-  req_snapshot_data   Json?
-  parent_task_id      String?
-  retry_cnt           Int                   @default(0)
-  exec_avlbl_dt       DateTime?
-  req_mber_id         String?
-  req_dt              DateTime              @default(now())
-  compl_dt            DateTime?
-  apply_dt            DateTime?
-  implSnapshots TbSpImplSnapshot[]
+  ai_task_id        String             @id @default(uuid())
+  prjct_id          String
+  ref_ty_code       String
+  ref_id            String
+  task_ty_code      String
+  req_cn            String?
+  coment_cn         String?
+  result_cn         String?
+  task_sttus_code   String             @default("PENDING")
+  reject_rsn_cn     String?
+  req_snapshot_data Json?
+  parent_task_id    String?
+  retry_cnt         Int                @default(0)
+  exec_avlbl_dt     DateTime?
+  req_mber_id       String?
+  req_dt            DateTime           @default(now())
+  compl_dt          DateTime?
+  apply_dt          DateTime?
+  implSnapshots     TbSpImplSnapshot[]
 
   @@map("tb_ai_task")
 }
@@ -496,6 +484,7 @@ model TbRqTask {
   dtl_cn          String?
   output_info_cn  String?
   rfp_page_no     String?
+  asign_mber_id   String? // 담당자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
   sort_ordr       Int               @default(0)
   creat_dt        DateTime          @default(now())
   mdfcn_dt        DateTime?
@@ -517,6 +506,7 @@ model TbRqRequirement {
   curncy_cn      String?
   analy_cn       String?
   spec_cn        String?
+  asign_mber_id  String? // 담당자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
   sort_ordr      Int             @default(0)
   creat_dt       DateTime        @default(now())
   mdfcn_dt       DateTime?
@@ -841,14 +831,14 @@ model TbDsMemo {
 
 // ── API 키 — MCP 등 외부 클라이언트 인증용 (서비스 토큰 대체) ────────────
 model TbCmApiKey {
-  api_key_id   String     @id @default(uuid())
+  api_key_id   String    @id @default(uuid())
   mber_id      String
-  key_hash     String     @unique
-  key_prefix   String     @db.VarChar(12)
-  key_nm       String     @db.VarChar(100)
+  key_hash     String    @unique
+  key_prefix   String    @db.VarChar(12)
+  key_nm       String    @db.VarChar(100)
   last_used_dt DateTime?
   revoke_dt    DateTime?
-  creat_dt     DateTime   @default(now())
+  creat_dt     DateTime  @default(now())
 
   member TbCmMember @relation(fields: [mber_id], references: [mber_id])
 

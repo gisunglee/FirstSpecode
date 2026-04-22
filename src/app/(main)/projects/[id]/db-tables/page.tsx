@@ -16,6 +16,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
+import DdlBulkImportDialog from "@/components/ui/DdlBulkImportDialog";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,11 @@ type DbTableRow = {
   tblLgclNm:   string;
   tblDc:       string;
   creatDt:     string;
+  // 수정일 — 아직 수정된 적 없으면 null (서버가 mdfcn_dt를 내려줌)
+  mdfcnDt:     string | null;
+  // 담당자 — 서버 join으로 내려옴. 미지정/퇴장 멤버면 null
+  assignMemberId:   string | null;
+  assignMemberName: string | null;
   columnCount: number;
 };
 
@@ -57,6 +63,9 @@ function DbTablesPageInner() {
   const [newPhysNm,    setNewPhysNm]    = useState("");
   const [newLgclNm,    setNewLgclNm]    = useState("");
   const [newDc,        setNewDc]        = useState("");
+
+  // ── DDL 일괄 등록 모달 ──────────────────────────────────────────────────────
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   // ── 목록 조회 ────────────────────────────────────────────────────────────────
   const { data: rows = [], isLoading } = useQuery<DbTableRow[]>({
@@ -109,13 +118,30 @@ function DbTablesPageInner() {
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           DB 테이블 관리
         </div>
-        <button
-          onClick={() => { setCreating(true); setTimeout(() => document.getElementById("new-phys-nm")?.focus(), 50); }}
-          style={primaryBtnStyle}
-        >
-          + 신규 등록
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          {/* DDL 일괄 등록 — 여러 CREATE TABLE 을 한 번에 파싱·등록 */}
+          <button onClick={() => setBulkOpen(true)} style={bulkBtnStyle}>
+            + DDL 일괄 등록
+          </button>
+          <button
+            onClick={() => { setCreating(true); setTimeout(() => document.getElementById("new-phys-nm")?.focus(), 50); }}
+            style={primaryBtnStyle}
+          >
+            + 신규 등록
+          </button>
+        </div>
       </div>
+
+      {/* ── DDL 일괄 등록 모달 ── */}
+      {bulkOpen && (
+        <DdlBulkImportDialog
+          projectId={projectId}
+          existingPhysNms={rows.map((r) => r.tblPhysclNm)}
+          onClose={() => setBulkOpen(false)}
+          // 1건이라도 등록 성공하면 목록 무효화 (모달은 사용자가 결과 확인 후 직접 닫음)
+          onCompleted={() => qc.invalidateQueries({ queryKey: ["db-tables", projectId] })}
+        />
+      )}
 
       <div style={{ padding: "0 24px 24px" }}>
 
@@ -140,8 +166,9 @@ function DbTablesPageInner() {
             <span>물리 테이블명</span>
             <span>논리 테이블명</span>
             <span>설명</span>
+            <span>담당자</span>
             <span style={{ textAlign: "center" }}>컬럼 수</span>
-            <span>등록일</span>
+            <span>등록/수정일</span>
           </div>
 
           {/* 신규 등록 인라인 폼 */}
@@ -167,6 +194,9 @@ function DbTablesPageInner() {
                 placeholder="설명 (선택)"
                 style={inlineInputStyle}
               />
+              {/* 담당자 / 컬럼수 / 등록일 자리 — 인라인 등록 시에는 비워두고
+                  저장 후 상세 페이지에서 담당자 설정 가능 */}
+              <div />
               <div />
               <div />
               <div style={{ display: "flex", gap: 4 }}>
@@ -221,14 +251,26 @@ function DbTablesPageInner() {
                   {row.tblDc || <span style={{ color: "#bbb" }}>—</span>}
                 </span>
 
+                {/* 담당자 — 미지정/퇴장 멤버는 흐린 "-" */}
+                <span
+                  style={{
+                    fontSize: 13,
+                    color: row.assignMemberName ? "var(--color-text-primary)" : "var(--color-text-tertiary)",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}
+                  title={row.assignMemberName ?? undefined}
+                >
+                  {row.assignMemberName ?? "-"}
+                </span>
+
                 {/* 컬럼 수 */}
                 <span style={{ textAlign: "center", fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
                   {row.columnCount}
                 </span>
 
-                {/* 등록일 */}
+                {/* 등록/수정일 — 수정된 적이 있으면 mdfcnDt, 아니면 creatDt */}
                 <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
-                  {row.creatDt.slice(0, 10)}
+                  {(row.mdfcnDt ?? row.creatDt).slice(0, 10)}
                 </span>
               </div>
             ))
@@ -242,7 +284,8 @@ function DbTablesPageInner() {
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-const GRID = "minmax(160px,220px) minmax(120px,180px) 1fr 80px 100px";
+// 물리 / 논리 / 설명 / 담당자 / 컬럼수 / 등록·수정일
+const GRID = "minmax(160px,220px) minmax(120px,180px) 1fr 120px 80px 100px";
 
 const headerRowStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID,
@@ -281,6 +324,15 @@ const primaryBtnStyle: React.CSSProperties = {
   padding: "5px 14px", borderRadius: 6,
   border: "1px solid transparent",
   background: "var(--color-primary, #1976d2)", color: "#fff",
+  fontSize: 12, fontWeight: 600, cursor: "pointer",
+};
+
+// DDL 일괄 등록 — 주요 액션은 아니지만 구분을 위해 outline 스타일
+const bulkBtnStyle: React.CSSProperties = {
+  padding: "5px 14px", borderRadius: 6,
+  border: "1px solid var(--color-border)",
+  background: "var(--color-bg-card)",
+  color: "var(--color-text-primary)",
   fontSize: 12, fontWeight: 600, cursor: "pointer",
 };
 

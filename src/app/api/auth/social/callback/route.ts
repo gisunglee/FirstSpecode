@@ -102,7 +102,11 @@ export async function POST(request: NextRequest) {
       const userData = await userRes.json();
       provdrUserId   = userData.sub;
       provdrEmail    = userData.email    ?? null;
-      provdrName     = userData.name     ?? null;
+      // Google 이름 우선순위: name → given_name+family_name 조합
+      // (비즈니스 계정 등에서 name이 비어 오는 케이스 방어)
+      // 최종 fallback(이메일 앞자리)은 NEW 가입 블록에서 일괄 처리한다.
+      const combinedName = [userData.given_name, userData.family_name].filter(Boolean).join(" ");
+      provdrName     = (userData.name as string | undefined) || combinedName || null;
       provdrImageUrl = userData.picture  ?? null;
 
     } else {
@@ -134,6 +138,10 @@ export async function POST(request: NextRequest) {
       const userData = await userRes.json();
       provdrUserId   = String(userData.id);
       provdrEmail    = userData.email ?? null;
+      // GitHub 이름 우선순위: name(표시 이름) → login(아이디)
+      // 표시 이름을 설정하지 않은 사용자도 많아 login을 fallback으로 사용
+      provdrName     = userData.name ?? userData.login ?? null;
+      provdrImageUrl = userData.avatar_url ?? null;
 
       // GitHub 이메일이 비공개인 경우 emails 엔드포인트로 보완
       if (!provdrEmail) {
@@ -237,12 +245,19 @@ export async function POST(request: NextRequest) {
     const rtHash  = hashRefreshToken(rt);
     const rtExpiry = refreshTokenExpiryDate();
 
+    // Provider가 이름을 주지 않은 경우(예: Google 계정에 이름 미설정,
+    // GitHub 표시 이름 없음) 이메일 앞자리를 대체 회원명으로 사용한다.
+    // 회원명이 NULL이면 GNB/프로필 등 화면에서 공백으로 보이는 UX 이슈가 발생하므로
+    // 항상 값이 채워지도록 보장한다.
+    const fallbackName = provdrEmail!.split("@")[0];
+    const mberNm       = provdrName?.trim() || fallbackName;
+
     const newMember = await prisma.$transaction(async (tx) => {
       const member = await tx.tbCmMember.create({
         data: {
           email_addr:    provdrEmail!,
           mber_sttus_code: "ACTIVE",
-          ...(provdrName     && { mber_nm:       provdrName }),
+          mber_nm:       mberNm,
           ...(provdrImageUrl && { profl_img_url: provdrImageUrl }),
         },
       });

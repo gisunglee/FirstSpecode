@@ -10,7 +10,7 @@
  *   - 과업 상세 링크 이동 (FID-00100)
  */
 
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -19,15 +19,18 @@ import { authFetch } from "@/lib/authFetch";
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
 type RequirementRow = {
-  requirementId: string;
-  displayId:     string;
-  name:          string;
-  priority:      string;
-  source:        string;
-  taskId:        string | null;
-  taskName:      string;
-  unitWorkCount: number;
-  sortOrder:     number;
+  requirementId:    string;
+  displayId:        string;
+  name:             string;
+  priority:         string;
+  source:           string;
+  taskId:           string | null;
+  taskName:         string;
+  // 담당자 — 서버 join으로 내려옴. 미지정/퇴장 멤버면 null
+  assignMemberId:   string | null;
+  assignMemberName: string | null;
+  unitWorkCount:    number;
+  sortOrder:        number;
 };
 
 // 과업 필터 드롭다운 옵션
@@ -58,6 +61,19 @@ function RequirementsPageInner() {
   const initialTaskFilter = searchParams.get("taskId") ?? "";
   const [taskFilter, setTaskFilter] = useState(initialTaskFilter);
   const [keyword, setKeyword]       = useState("");
+  // 담당자 필터 — "all"(기본) | "me"(내 담당만). URL ?assignedTo=me 로 공유 가능
+  const [filterAssignedTo, setFilterAssignedTo] = useState<"all" | "me">(
+    searchParams.get("assignedTo") === "me" ? "me" : "all"
+  );
+
+  // "내 담당" 필터 URL 동기화 — 공유 URL 복원 가능
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (filterAssignedTo === "me") url.searchParams.set("assignedTo", "me");
+    else url.searchParams.delete("assignedTo");
+    window.history.replaceState(null, "", url.toString());
+  }, [filterAssignedTo]);
 
   // 삭제 다이얼로그 상태
   const [deleteTarget, setDeleteTarget] = useState<RequirementRow | null>(null);
@@ -78,11 +94,13 @@ function RequirementsPageInner() {
 
   // ── 데이터 조회 ────────────────────────────────────────────────────────────
   const { data, isLoading, error } = useQuery({
-    queryKey: ["requirements", projectId],
-    queryFn:  () =>
-      authFetch<{ data: { items: RequirementRow[]; totalCount: number } }>(
-        `/api/projects/${projectId}/requirements`
-      ).then((r) => r.data),
+    queryKey: ["requirements", projectId, filterAssignedTo],
+    queryFn:  () => {
+      const qs = filterAssignedTo === "me" ? "?assignedTo=me" : "";
+      return authFetch<{ data: { items: RequirementRow[]; totalCount: number } }>(
+        `/api/projects/${projectId}/requirements${qs}`
+      ).then((r) => r.data);
+    },
   });
   
   const isError = !!error;
@@ -177,6 +195,23 @@ function RequirementsPageInner() {
           총 {totalCount}건{isFiltered && allItems.length !== totalCount && ` (전체 ${allItems.length}건)`}
         </span>
         <div style={{ flex: 1 }} />
+        {/* 담당자 세그먼트 토글 — 서버 쿼리 파라미터(?assignedTo=me)로 필터 */}
+        <div style={segmentGroupStyle}>
+          <button
+            type="button"
+            onClick={() => setFilterAssignedTo("all")}
+            style={segmentBtnStyle(filterAssignedTo === "all")}
+          >
+            전체
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterAssignedTo("me")}
+            style={segmentBtnStyle(filterAssignedTo === "me")}
+          >
+            내 담당
+          </button>
+        </div>
         <input
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
@@ -215,6 +250,7 @@ function RequirementsPageInner() {
             <div />
             <div>과업명</div>
             <div>요구사항명</div>
+            <div>담당자</div>
             <div>우선순위</div>
             <div>출처</div>
             <div style={{ textAlign: "center" }}>단위업무</div>
@@ -268,6 +304,20 @@ function RequirementsPageInner() {
                     {req.displayId}
                   </span>
                   {req.name}
+                </div>
+
+                {/* 담당자 — 미지정/퇴장 멤버는 흐린 "-" */}
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: req.assignMemberName
+                      ? "var(--color-text-primary)"
+                      : "var(--color-text-tertiary)",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}
+                  title={req.assignMemberName ?? undefined}
+                >
+                  {req.assignMemberName ?? "-"}
                 </div>
 
                 {/* 우선순위 배지 */}
@@ -457,7 +507,8 @@ function sourceBadgeStyle(source: string): React.CSSProperties {
 
 // ── 스타일 상수 ──────────────────────────────────────────────────────────────
 
-const GRID_TEMPLATE = "32px 20% 1fr 8% 7% 8% 5%";
+// 드래그핸들 / 과업명 / 요구사항명 / 담당자 / 우선순위 / 출처 / 단위업무 / 정렬
+const GRID_TEMPLATE = "32px 18% 1fr 110px 8% 7% 8% 5%";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",
@@ -504,6 +555,25 @@ const primaryBtnStyle: React.CSSProperties = {
   fontWeight:   600,
   cursor:       "pointer",
 };
+
+// 담당자 필터 세그먼트 토글 — 단위업무·과업 목록과 동일 패턴
+const segmentGroupStyle: React.CSSProperties = {
+  display:      "inline-flex",
+  border:       "1px solid var(--color-border)",
+  borderRadius: 6,
+  overflow:     "hidden",
+  background:   "var(--color-bg-card)",
+};
+const segmentBtnStyle = (active: boolean): React.CSSProperties => ({
+  padding:    "7px 14px",
+  fontSize:   13,
+  fontWeight: active ? 600 : 400,
+  border:     "none",
+  background: active ? "var(--color-brand-subtle)" : "transparent",
+  color:      active ? "var(--color-brand)" : "var(--color-text-secondary)",
+  cursor:     "pointer",
+  outline:    "none",
+});
 
 // 필터 바 — 기능 정의 목록과 동일 규격
 const filterSelectStyle: React.CSSProperties = {

@@ -18,15 +18,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id: projectId } = await params;
   const url        = new URL(request.url);
   const unitWorkId = url.searchParams.get("unitWorkId") ?? undefined;
+  // 담당자 필터 — "me" 또는 mberId
+  const assignedTo = url.searchParams.get("assignedTo") ?? undefined;
 
   const gate = await requirePermission(request, projectId, "content.read");
   if (gate instanceof Response) return gate;
+
+  // assignedTo="me" → 로그인 사용자 mberId, 그 외 truthy 값은 그대로
+  const assigneeFilter = assignedTo === "me" ? gate.mberId : (assignedTo || undefined);
 
   try {
     const screens = await prisma.tbDsScreen.findMany({
       where: {
         prjct_id: projectId,
         ...(unitWorkId ? { unit_work_id: unitWorkId } : {}),
+        ...(assigneeFilter ? { asign_mber_id: assigneeFilter } : {}),
       },
       include: {
         unitWork: {
@@ -82,6 +88,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }]));
     }
 
+    // 담당자 mberId → 이름 배치 조회 (N+1 방지)
+    const assigneeIds = [
+      ...new Set(screens.map((s) => s.asign_mber_id).filter((v): v is string => !!v)),
+    ];
+    const assigneeMembers = assigneeIds.length > 0
+      ? await prisma.tbCmMember.findMany({
+          where:  { mber_id: { in: assigneeIds } },
+          // email_addr를 fallback으로 — mber_nm 미설정 계정도 식별 가능
+          select: { mber_id: true, mber_nm: true, email_addr: true },
+        })
+      : [];
+    const assigneeMap = new Map(assigneeMembers.map((m) => [m.mber_id, m.mber_nm || m.email_addr || null]));
+
     // ── AI 구현 요청 정보 — 화면 단위 스냅샷 → IMPLEMENT 태스크 최신 1건 ─────
     const implTaskMap = new Map<string, { aiTaskId: string; status: string; requestedAt: Date }>();
     if (screens.length > 0) {
@@ -117,15 +136,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       const prog = progMap.get(s.scrn_id);
       const impl = implTaskMap.get(s.scrn_id);
       return {
-        screenId:        s.scrn_id,
-        displayId:       s.scrn_display_id,
-        name:            s.scrn_nm,
-        type:            s.scrn_ty_code,
-        categoryL:       s.ctgry_l_nm ?? "",
-        categoryM:       s.ctgry_m_nm ?? "",
-        categoryS:       s.ctgry_s_nm ?? "",
-        unitWorkId:      s.unit_work_id ?? null,
-        unitWorkName:    s.unitWork?.unit_work_nm ?? "미분류",
+        screenId:         s.scrn_id,
+        displayId:        s.scrn_display_id,
+        name:             s.scrn_nm,
+        type:             s.scrn_ty_code,
+        categoryL:        s.ctgry_l_nm ?? "",
+        categoryM:        s.ctgry_m_nm ?? "",
+        categoryS:        s.ctgry_s_nm ?? "",
+        unitWorkId:       s.unit_work_id ?? null,
+        unitWorkName:     s.unitWork?.unit_work_nm ?? "미분류",
+        // 담당자 — 미지정/퇴장 멤버면 null
+        assignMemberId:   s.asign_mber_id ?? null,
+        assignMemberName: s.asign_mber_id ? (assigneeMap.get(s.asign_mber_id) ?? null) : null,
         requirementId:   s.unitWork?.requirement?.req_id ?? null,
         requirementName: s.unitWork?.requirement
           ? s.unitWork.requirement.req_nm

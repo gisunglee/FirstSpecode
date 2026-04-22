@@ -17,9 +17,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id: projectId } = await params;
   const url   = new URL(request.url);
   const reqId = url.searchParams.get("reqId") ?? undefined;
+  // 담당자 필터 — "me"는 로그인 사용자, 그 외 값은 해당 mberId로 필터
+  // URL 공유를 위해 서버 쿼리 파라미터로 설계 (클라이언트 필터 대신)
+  const assignedTo = url.searchParams.get("assignedTo") ?? undefined;
 
   const gate = await requirePermission(request, projectId, "content.read");
   if (gate instanceof Response) return gate;
+
+  // assignedTo="me" → 로그인 사용자 mberId로 치환, 그 외 truthy 값은 그대로 사용
+  const assigneeFilter = assignedTo === "me" ? gate.mberId : (assignedTo || undefined);
 
   try {
     const unitWorks = await prisma.tbDsUnitWork.findMany({
@@ -27,6 +33,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         prjct_id: projectId,
         // reqId 있으면 해당 요구사항으로 필터
         ...(reqId ? { req_id: reqId } : {}),
+        // assignedTo 있으면 담당자로 필터
+        ...(assigneeFilter ? { asign_mber_id: assigneeFilter } : {}),
       },
       include: {
         requirement: { select: { req_id: true, req_display_id: true, req_nm: true } },
@@ -40,8 +48,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const unitWorkIds = unitWorks.map((uw) => uw.unit_work_id);
 
-    // 진척률 + IMPLEMENT 스냅샷을 병렬 조회 (N+1 방지)
-    const [progressRecords, implSnapshots] = await Promise.all([
+    // 담당자 mberId → 이름 매핑용 — null/중복 제거
+    const assigneeIds = [
+      ...new Set(unitWorks.map((u) => u.asign_mber_id).filter((v): v is string => !!v)),
+    ];
+
+    // 진척률 + IMPLEMENT 스냅샷 + 담당자 이름을 병렬 조회 (N+1 방지)
+    const [progressRecords, implSnapshots, assigneeMembers] = await Promise.all([
       unitWorkIds.length > 0
         ? prisma.tbCmProgress.findMany({
             where:  { ref_tbl_nm: "tb_ds_unit_work", ref_id: { in: unitWorkIds } },
@@ -55,8 +68,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             orderBy: { creat_dt: "desc" },
           })
         : Promise.resolve([]),
+      assigneeIds.length > 0
+        ? prisma.tbCmMember.findMany({
+            where:  { mber_id: { in: assigneeIds } },
+            // email_addr를 fallback으로 — mber_nm 미설정 계정도 식별 가능
+            select: { mber_id: true, mber_nm: true, email_addr: true },
+          })
+        : Promise.resolve([]),
     ]);
     const progressMap = new Map(progressRecords.map((p) => [p.ref_id, p]));
+    // 담당자 이름 맵 — 이름 우선, 없으면 이메일, 둘 다 없으면 null
+    const assigneeMap = new Map(assigneeMembers.map((m) => [m.mber_id, m.mber_nm || m.email_addr || null]));
 
     // ── 단위업무별 IMPLEMENT 태스크 최신 1건 매핑 ────────────────────────
     // 스냅샷 → ai_task_id 수집 → tbAiTask 일괄 조회 (taskType=IMPLEMENT) → 단위업무별 최신 1건
@@ -90,7 +112,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         displayId:     uw.unit_work_display_id,
         name:          uw.unit_work_nm,
         description:   uw.unit_work_dc ?? "",
-        assignMemberId: uw.asign_mber_id ?? null,
+        assignMemberId:   uw.asign_mber_id ?? null,
+        // 담당자 이름 — 없거나 퇴장한 멤버면 null (프론트에서 "-" 처리)
+        assignMemberName: uw.asign_mber_id ? (assigneeMap.get(uw.asign_mber_id) ?? null) : null,
         startDate:     uw.bgng_de ?? null,
         endDate:       uw.end_de ?? null,
         progress:      uw.progrs_rt,

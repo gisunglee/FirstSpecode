@@ -194,7 +194,7 @@ function FunctionDetailPageInner() {
     } else if (data) {
       const d = data as unknown as {
         unitWorkId?: string | null; unitWorkDisplayId?: string | null; unitWorkName?: string;
-        screenId?: string | null;   screenDisplayId?: string | null;   screenName?: string;
+        screenId?: string | null; screenDisplayId?: string | null; screenName?: string;
       };
       const items = [
         // 단위업무
@@ -301,22 +301,24 @@ function FunctionDetailPageInner() {
   const adjustUnitWorkMutation = useMutation({
     mutationFn: async ({ uwId, startDate, endDate }: { uwId: string; startDate: string | null; endDate: string | null }) => {
       // 단위업무 PUT은 name이 필수이므로 먼저 detail GET → 전체 필드를 그대로 PUT
-      const uw = await authFetch<{ data: {
-        name: string; description: string; comment?: string; assignMemberId: string | null;
-        startDate: string | null; endDate: string | null; progress: number; sortOrder: number;
-      } }>(`/api/projects/${projectId}/unit-works/${uwId}`).then((r) => r.data);
+      const uw = await authFetch<{
+        data: {
+          name: string; description: string; comment?: string; assignMemberId: string | null;
+          startDate: string | null; endDate: string | null; progress: number; sortOrder: number;
+        }
+      }>(`/api/projects/${projectId}/unit-works/${uwId}`).then((r) => r.data);
 
       return authFetch(`/api/projects/${projectId}/unit-works/${uwId}`, {
         method: "PUT",
         body: JSON.stringify({
-          name:           uw.name,
-          description:    uw.description,
-          comment:        uw.comment,
+          name: uw.name,
+          description: uw.description,
+          comment: uw.comment,
           assignMemberId: uw.assignMemberId,
-          progress:       uw.progress,
-          sortOrder:      uw.sortOrder,
-          startDate:      startDate ?? uw.startDate,
-          endDate:        endDate ?? uw.endDate,
+          progress: uw.progress,
+          sortOrder: uw.sortOrder,
+          startDate: startDate ?? uw.startDate,
+          endDate: endDate ?? uw.endDate,
         }),
       });
     },
@@ -339,9 +341,9 @@ function FunctionDetailPageInner() {
     if (!d.unitWorkId) return null;
 
     const fnStart = implStartDate || null;
-    const fnEnd   = implEndDate   || null;
+    const fnEnd = implEndDate || null;
     const uwStart = d.unitWorkStartDate || null;
-    const uwEnd   = d.unitWorkEndDate   || null;
+    const uwEnd = d.unitWorkEndDate || null;
 
     const messages: string[] = [];
     let newUwStart: string | null = null;
@@ -407,17 +409,17 @@ function FunctionDetailPageInner() {
   const aiMutation = useMutation({
     mutationFn: async ({ taskType }: { taskType: string }) => {
       const fd = new FormData();
-      fd.append("taskType",  taskType);
+      fd.append("taskType", taskType);
       fd.append("coment_cn", commentCn.trim());
-      fd.append("req_cn",    description.trim());
+      fd.append("req_cn", description.trim());
       // 하위 호환성 — 일부 코드 경로에서 "comment" 키를 읽을 수 있음
-      fd.append("comment",   commentCn.trim());
+      fd.append("comment", commentCn.trim());
       aiPickedFiles.forEach((f) => fd.append("files", f));
 
-      const at  = typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
+      const at = typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
       const res = await fetch(`/api/projects/${projectId}/functions/${functionId}/ai`, {
-        method:  "POST",
-        body:    fd,
+        method: "POST",
+        body: fd,
         headers: at ? { Authorization: `Bearer ${at}` } : {},
       });
       if (!res.ok) {
@@ -1167,6 +1169,10 @@ function FunctionDetailPageInner() {
                 onChange={setAiPickedFiles}
                 disabled={aiMutation.isPending}
               />
+              {/* 첨부 이미지 보존 기간 안내 — 사용자가 영구 보관으로 오해하지 않도록 명시 */}
+              <div style={{ marginTop: 6, fontSize: 11, color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
+                ※ 첨부한 이미지는 일정 기간이 지난 후 삭제됩니다.
+              </div>
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
@@ -1353,9 +1359,9 @@ function FunctionDetailPageInner() {
               <button
                 onClick={() => {
                   adjustUnitWorkMutation.mutate({
-                    uwId:      periodAlert.uwId,
+                    uwId: periodAlert.uwId,
                     startDate: periodAlert.newStart,
-                    endDate:   periodAlert.newEnd,
+                    endDate: periodAlert.newEnd,
                   });
                   setPeriodAlert(null);
                 }}
@@ -1413,8 +1419,8 @@ function FunctionDetailPageInner() {
 // ── AI 태스크 설정 ────────────────────────────────────────────────────────────
 
 const AI_TASK_CONFIGS = [
-  { taskType: "DESIGN",  label: "AI 설계",   desc: "자유 형식 설명 → 표준 양식 재구성",            icon: { bg: "#e8eaf6", emoji: "⊞" }, hasHelp: true  },
-  { taskType: "INSPECT", label: "AI 점검",   desc: "6가지 관점 설계 검토\n(같은 영역 기능 기준)",  icon: { bg: "#e8f5e9", emoji: "✓" }, hasHelp: true  },
+  { taskType: "DESIGN", label: "AI 설계", desc: "자유 형식 설명 → 표준 양식 재구성", icon: { bg: "#e8eaf6", emoji: "⊞" }, hasHelp: true },
+  { taskType: "INSPECT", label: "AI 점검", desc: "6가지 관점 설계 검토\n(같은 영역 기능 기준)", icon: { bg: "#e8f5e9", emoji: "✓" }, hasHelp: true },
 ];
 
 // 도움말 팝업 내용 — taskType별 정의

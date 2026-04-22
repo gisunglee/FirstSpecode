@@ -25,23 +25,25 @@ import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
 type UnitWorkRow = {
-  unitWorkId:    string;
-  displayId:     string;
-  name:          string;
-  description:   string;
-  assignMemberId: string | null;
-  startDate:     string | null;
-  endDate:       string | null;
-  progress:      number;
-  sortOrder:     number;
-  reqId:         string;
-  reqDisplayId:  string;
-  reqName:       string;
-  screenCount:   number;
-  analyRt:       number;
-  designRt:      number;
-  implRt:        number;
-  testRt:        number;
+  unitWorkId:       string;
+  displayId:        string;
+  name:             string;
+  description:      string;
+  assignMemberId:   string | null;
+  // 담당자 이름 — 서버 join으로 내려옴. 미지정/퇴장 멤버면 null
+  assignMemberName: string | null;
+  startDate:        string | null;
+  endDate:          string | null;
+  progress:         number;
+  sortOrder:        number;
+  reqId:            string;
+  reqDisplayId:     string;
+  reqName:          string;
+  screenCount:      number;
+  analyRt:          number;
+  designRt:         number;
+  implRt:           number;
+  testRt:           number;
   // AI 구현 요청 정보 (스냅샷 → IMPLEMENT 태스크 최신 1건). 없으면 null
   implTask: { aiTaskId: string; status: string; requestedAt: string } | null;
 };
@@ -74,6 +76,11 @@ function UnitWorksPageInner() {
   // URL 쿼리 ?reqId=xxx 로 초기화 (상세 페이지 브레드크럼에서 진입 시 해당 요구사항으로 자동 필터)
   const searchParams = useSearchParams();
   const [filterReqId, setFilterReqId] = useState(searchParams.get("reqId") ?? "");
+  // 담당자 필터 — "all"(기본) | "me"(내 담당만)
+  // URL ?assignedTo=me 로 공유 가능. 기본값 "all" — PM/리드가 전체를 먼저 보게
+  const [filterAssignedTo, setFilterAssignedTo] = useState<"all" | "me">(
+    searchParams.get("assignedTo") === "me" ? "me" : "all"
+  );
   // AI 구현 태스크 상세 팝업
   const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
 
@@ -106,6 +113,19 @@ function UnitWorksPageInner() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  // "내 담당" 필터 URL 동기화 — 공유 URL 복원 가능
+  // replaceState로 라우터 네비게이션 없이 URL만 갱신 (스크롤/히스토리 영향 최소화)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (filterAssignedTo === "me") {
+      url.searchParams.set("assignedTo", "me");
+    } else {
+      url.searchParams.delete("assignedTo");
+    }
+    window.history.replaceState(null, "", url.toString());
+  }, [filterAssignedTo]);
+
   // (인라인 수정 제거 — 상세 페이지에서 수정)
 
   // ── 드래그 상태 ────────────────────────────────────────────────────────────
@@ -114,11 +134,15 @@ function UnitWorksPageInner() {
 
   // ── 단위업무 목록 조회 ──────────────────────────────────────────────────────
   const { data, isLoading } = useQuery({
-    queryKey: ["unit-works", projectId, filterReqId],
+    queryKey: ["unit-works", projectId, filterReqId, filterAssignedTo],
     queryFn:  () => {
-      const qs = filterReqId ? `?reqId=${filterReqId}` : "";
+      // 여러 필터를 안전하게 조합하기 위해 URLSearchParams 사용
+      const qs = new URLSearchParams();
+      if (filterReqId) qs.set("reqId", filterReqId);
+      if (filterAssignedTo === "me") qs.set("assignedTo", "me");
+      const qsString = qs.toString();
       return authFetch<{ data: { items: UnitWorkRow[]; totalCount: number } }>(
-        `/api/projects/${projectId}/unit-works${qs}`
+        `/api/projects/${projectId}/unit-works${qsString ? `?${qsString}` : ""}`
       ).then((r) => r.data);
     },
   });
@@ -413,6 +437,23 @@ function UnitWorksPageInner() {
           총 {items.length}건
         </span>
         <div style={{ flex: 1 }} />
+        {/* 담당자 세그먼트 토글 — 요구사항 셀렉트 왼쪽에 배치 */}
+        <div style={segmentGroupStyle}>
+          <button
+            type="button"
+            onClick={() => setFilterAssignedTo("all")}
+            style={segmentBtnStyle(filterAssignedTo === "all")}
+          >
+            전체
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterAssignedTo("me")}
+            style={segmentBtnStyle(filterAssignedTo === "me")}
+          >
+            내 담당
+          </button>
+        </div>
         <select
           value={filterReqId}
           onChange={(e) => setFilterReqId(e.target.value)}
@@ -440,6 +481,7 @@ function UnitWorksPageInner() {
             <div style={{ textAlign: "center" }}>순서</div>
             <div>요구사항</div>
             <div>단위업무명</div>
+            <div>담당자</div>
             <div>기간</div>
             <div style={{ textAlign: "center" }}>진행률</div>
             <div style={{ textAlign: "center" }}>화면수</div>
@@ -515,6 +557,22 @@ function UnitWorksPageInner() {
                     ✓ 완료
                   </span>
                 )}
+              </div>
+
+              {/* 담당자 — 미지정은 흐린 "-" 표시. 퇴장한 멤버는 서버에서 null 내려줌 */}
+              <div
+                style={{
+                  fontSize: 13,
+                  color: uw.assignMemberName
+                    ? "var(--color-text-primary)"
+                    : "var(--color-text-tertiary)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+                title={uw.assignMemberName ?? undefined}
+              >
+                {uw.assignMemberName ?? "-"}
               </div>
 
               {/* 기간 */}
@@ -921,8 +979,9 @@ function DeleteConfirmDialog({
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-// 드래그핸들 / 순서 / 요구사항 / 단위업무명(flex) / 기간 / 진행률 / 화면수 / AI구현 / 분설구테
-const GRID_TEMPLATE = "28px 44px 22% 1fr 16% 80px 56px 130px 110px";
+// 드래그핸들 / 순서 / 요구사항 / 단위업무명(flex) / 담당자 / 기간 / 진행률 / 화면수 / AI구현 / 분설구테
+// 기간 16%→14% 로 축소해 담당자 110px 확보
+const GRID_TEMPLATE = "28px 44px 22% 1fr 110px 14% 80px 56px 130px 110px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",
@@ -970,6 +1029,27 @@ const selectStyle: React.CSSProperties = {
   backgroundRepeat:   "no-repeat",
   backgroundPosition: "right 10px center",
 };
+
+// 담당자 필터 세그먼트 — filterSelectStyle과 동일 높이로 정렬
+const segmentGroupStyle: React.CSSProperties = {
+  display:      "inline-flex",
+  border:       "1px solid var(--color-border)",
+  borderRadius: 6,
+  overflow:     "hidden",
+  background:   "var(--color-bg-card)",
+};
+
+// 활성 탭은 브랜드색 배경, 비활성은 투명 — 토큰만 사용
+const segmentBtnStyle = (active: boolean): React.CSSProperties => ({
+  padding:    "7px 14px",
+  fontSize:   13,
+  fontWeight: active ? 600 : 400,
+  border:     "none",
+  background: active ? "var(--color-brand-subtle)" : "transparent",
+  color:      active ? "var(--color-brand)" : "var(--color-text-secondary)",
+  cursor:     "pointer",
+  outline:    "none",
+});
 
 // 기능 정의 목록과 동일한 필터 셀렉트 스타일 (4개 목록 페이지 공통)
 const filterSelectStyle: React.CSSProperties = {

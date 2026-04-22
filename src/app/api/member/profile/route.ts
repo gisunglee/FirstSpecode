@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
         email_addr:    true,
         profl_img_url: true,
         pswd_hash:     true,
+        plan_code:     true,   // 시스템 플랜 (FREE/PRO/TEAM/ENTERPRISE) — GNB 프로필 배지용
         socialAccounts: {
           select: { provdr_code: true },
         },
@@ -41,6 +42,7 @@ export async function GET(request: NextRequest) {
       name:         member.mber_nm ?? "",
       email:        member.email_addr ?? "",
       profileImage: member.profl_img_url ?? null,
+      plan:         member.plan_code ?? "FREE",
       hasPassword:  member.pswd_hash !== null,
       hasSocialAccounts: {
         google: linkedProviders.includes("google"),
