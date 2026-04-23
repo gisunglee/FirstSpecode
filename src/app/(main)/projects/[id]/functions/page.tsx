@@ -692,7 +692,8 @@ function AiDot({ label, taskInfo, onClick }: {
       title={title}
       onClick={() => active && taskInfo && onClick(taskInfo.taskId)}
       style={{
-        width: 26, height: 26, borderRadius: "50%",
+        // 다른 목록 페이지의 배지(약 20~22px)와 세로 높이를 맞춰 row 간 통일감 유지.
+        width: 22, height: 22, borderRadius: "50%",
         border: active ? `2px solid ${colorCfg!.border}` : "2px solid #d0d0d0",
         background: active ? colorCfg!.bg : "#f0f0f0",
         cursor: active ? "pointer" : "default",

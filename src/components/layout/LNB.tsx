@@ -1,237 +1,281 @@
 "use client";
 
 /**
- * LNB — 좌측 사이드바 내비게이션 (AR-00095)
+ * LNB — 좌측 사이드바 (2-Pane: 아이콘 레일 + 서브 패널)
  *
  * 역할:
- *   - NAVIGATION / SYSTEM 두 섹션으로 메뉴 구성
- *   - 현재 pathname 기반 active 메뉴 표시 (FID-00204)
- *   - 토글 버튼으로 접힘/펼침 (sidebarCollapsed 전역 상태)
- *   - 접힌 상태에서 아이콘 hover 시 툴팁 표시 (components.css)
- *   - 역할별 메뉴 필터링 (UW-00011):
+ *   - 좌측 좁은 레일에 그룹 아이콘을 세로로 나열
+ *   - 레일 아이콘 클릭 시 우측 서브 패널이 그 그룹의 메뉴로 즉시 교체
+ *   - 현재 URL 경로 → 자동으로 활성 그룹 판별 (예: /functions → "설계" 그룹)
+ *   - 사용자가 수동으로 다른 그룹을 펼친 경우, 마지막 선택을 sessionStorage에 보관
+ *     → URL이 그 그룹 안에 머물러 있는 동안에는 사용자 선택 유지
+ *     → URL이 다른 그룹으로 넘어가면 자동으로 그쪽 그룹 활성화
+ *   - 사이드바 접힘(sidebarCollapsed): 서브 패널만 숨김, 레일은 항상 노출
+ *   - 역할 기반 메뉴 필터:
  *       OWNER/ADMIN → 멤버 관리 + 프로젝트 설정 모두 노출
  *       PM/DESIGNER/DEVELOPER → 프로젝트 설정만 노출, 멤버 관리 숨김
- *       VIEWER → System 섹션 전체 숨김
+ *       VIEWER → 설정/환경설정/멤버 관리 모두 숨김
  *
- * 주요 기술:
- *   - Next.js usePathname: active 메뉴 판별
- *   - Zustand: sidebarCollapsed, currentProjectId
- *   - useMyRole: 역할 기반 메뉴 제어
+ * 디자인:
+ *   - 모든 아이콘은 menuIcons.tsx 의 모노크롬 SVG (currentColor 상속)
+ *   - 텍스트 크기: 그룹 타이틀 14px, 항목 13px, 레일 라벨 10px
  */
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "@/store/appStore";
 import { useMyRole } from "@/hooks/useMyRole";
+import { MenuIcon, type MenuIconKey } from "./menuIcons";
 
-// 메뉴 아이템 정의
+// ── 타입 ──────────────────────────────────────────────────────────────────────
+
 type MenuItem = {
   label: string;
   href: string;
-  icon: string; // 임시 이모지 아이콘 — lucide-react 도입 후 교체 예정
+  icon: MenuIconKey;
 };
+
+type MenuGroup = {
+  key: string;          // sessionStorage / 활성 판별용 고유키
+  label: string;        // 서브 패널 상단 타이틀
+  icon: MenuIconKey;    // 레일 아이콘
+  items: MenuItem[];
+};
+
+// ── 활성 그룹 sessionStorage 키 ──────────────────────────────────────────────
+const STORAGE_KEY = "specode-lnb-active-group";
 
 export default function LNB() {
   const pathname = usePathname();
   const { sidebarCollapsed, toggleSidebar, currentProjectId } = useAppStore();
   const { canManageMembers, canAccessSettings } = useMyRole(currentProjectId);
 
-  // 프로젝트별 경로 — currentProjectId 없으면 "#"으로 비활성
+  // 프로젝트 베이스 경로 — 미선택 시 null → 해당 메뉴들은 비활성 처리
   const pBase = currentProjectId ? `/projects/${currentProjectId}` : null;
-  const tasksHref = pBase ? `${pBase}/tasks` : "#";
-  const requirementsHref = pBase ? `${pBase}/requirements` : "#";
-  const userStoriesHref = pBase ? `${pBase}/user-stories` : "#";
-  const unitWorksHref = pBase ? `${pBase}/unit-works` : "#";
-  const baselineHref = pBase ? `${pBase}/baseline` : "#";
-  const screensHref = pBase ? `${pBase}/screens` : "#";
-  const areasHref = pBase ? `${pBase}/areas` : "#";
-  const functionsHref = pBase ? `${pBase}/functions` : "#";
-  const planStudioHref = pBase ? `${pBase}/plan-studio` : "#";
-  const dbTablesHref = pBase ? `${pBase}/db-tables` : "#";
-  const designChangesHref = pBase ? `${pBase}/design-changes` : "#";
-  const referenceInfoHref = pBase ? `${pBase}/reference-info` : "#";
-  const aiTasksHref = pBase ? `${pBase}/ai-tasks` : "#";
-  const promptTemplatesHref = pBase ? `${pBase}/prompt-templates` : "#";
-  const reviewsHref = pBase ? `${pBase}/reviews` : "#";
-  const memosHref = pBase ? `${pBase}/memos` : "#";
-  const standardGuidesHref = pBase ? `${pBase}/standard-guides` : "#";
-  const planningHref = pBase ? `${pBase}/planning` : "#";
-  const aiImportHref = pBase ? `${pBase}/planning/ai-import` : "#";
-  const designImportHref = pBase ? `${pBase}/design-import` : "#";
-  const graphViewHref = pBase ? `${pBase}/graph` : "#";
-  const commonCodesHref = pBase ? `${pBase}/common-codes` : "#";
-  const configsHref = pBase ? `${pBase}/configs` : "#";
-  const settingsHref = pBase ? `${pBase}/settings` : "#";
-  const membersHref = pBase ? `${pBase}/members` : "#";
 
-  // ── 메뉴 그룹 구조 ───────────────────────────────────────────────────────
-  // 대시보드는 최상단 단독, 이후 분석 / 설계 / 기타 설계 / AI 작업실 / 도움창고 / 프로젝트 / 환경설정
-  type GroupItem = MenuItem & { isActive: boolean };
-  type MenuGroup = { title: string; items: GroupItem[] };
+  // ── 메뉴 그룹 정의 ─────────────────────────────────────────────────────────
+  // useMemo: pathname/role 의존이 아니므로 pBase 변경 시에만 재계산
+  const groups = useMemo<MenuGroup[]>(() => {
+    // 프로젝트 미선택 시에도 보이는 항목 (대시보드/프로젝트 목록/개인 설정)
+    // 그 외는 pBase 가 있을 때만 href 생성, 없으면 "#" 으로 비활성
+    const p = (sub: string) => (pBase ? `${pBase}${sub}` : "#");
 
-  // 분석
-  const analysisGroup: MenuGroup = {
-    title: "분석",
-    items: [
-      { label: "과업", href: tasksHref, icon: "📌", isActive: !!pBase && pathname.startsWith(`${pBase}/tasks`) },
-      { label: "요구사항", href: requirementsHref, icon: "📋", isActive: !!pBase && pathname.startsWith(`${pBase}/requirements`) },
-      { label: "사용자스토리", href: userStoriesHref, icon: "📖", isActive: !!pBase && pathname.startsWith(`${pBase}/user-stories`) },
-      { label: "요구사항 확정", href: baselineHref, icon: "🏁", isActive: !!pBase && pathname.startsWith(`${pBase}/baseline`) },
-    ],
-  };
+    const list: MenuGroup[] = [
+      {
+        key: "dashboard",
+        label: "대시보드",
+        icon: "g_dashboard",
+        items: [
+          { label: "대시보드", href: "/dashboard", icon: "i_dashboard" },
+        ],
+      },
+      {
+        key: "project",
+        label: "프로젝트",
+        icon: "g_project",
+        items: [
+          { label: "프로젝트 목록", href: "/projects", icon: "i_projectList" },
+          // 권한 체크 — canAccessSettings && pBase 일 때만 노출
+          ...(canAccessSettings && pBase
+            ? [{ label: "프로젝트 설정", href: p("/settings"), icon: "i_projectSettings" as MenuIconKey }]
+            : []),
+          ...(canManageMembers && pBase
+            ? [{ label: "멤버 관리", href: p("/members"), icon: "i_members" as MenuIconKey }]
+            : []),
+          { label: "개인 설정", href: "/settings/profile", icon: "i_profile" },
+          ...(canAccessSettings && pBase
+            ? [{ label: "환경설정", href: p("/configs"), icon: "i_envSettings" as MenuIconKey }]
+            : []),
+        ],
+      },
+      {
+        key: "analysis",
+        label: "분석",
+        icon: "g_analysis",
+        items: [
+          { label: "과업",              href: p("/tasks"),         icon: "i_task" },
+          { label: "요구사항",          href: p("/requirements"),  icon: "i_requirement" },
+          { label: "사용자스토리",      href: p("/user-stories"),  icon: "i_userStory" },
+          { label: "요구사항 확정",     href: p("/baseline"),      icon: "i_baseline" },
+          { label: "요구분석 일괄 편집", href: p("/planning"),     icon: "i_planningBatch" },
+          { label: "기획실",            href: p("/plan-studio"),   icon: "i_planStudio" },
+        ],
+      },
+      {
+        key: "design",
+        label: "설계",
+        icon: "g_design",
+        items: [
+          { label: "단위업무",  href: p("/unit-works"), icon: "i_unitWork" },
+          { label: "화면설계",  href: p("/screens"),    icon: "i_screen" },
+          { label: "영역설계",  href: p("/areas"),      icon: "i_area" },
+          { label: "기능설계",  href: p("/functions"),  icon: "i_function" },
+          { label: "DB 테이블", href: p("/db-tables"),  icon: "i_dbTable" },
+        ],
+      },
+      {
+        key: "common",
+        label: "공통 설계",
+        icon: "g_common",
+        items: [
+          { label: "표준 가이드", href: p("/standard-guides"), icon: "i_standardGuide" },
+          { label: "공통코드",    href: p("/common-codes"),    icon: "i_commonCode" },
+          { label: "기준 정보",   href: p("/reference-info"),  icon: "i_referenceInfo" },
+        ],
+      },
+      {
+        key: "ai",
+        label: "AI 작업실",
+        icon: "g_ai",
+        items: [
+          { label: "AI 태스크",     href: p("/ai-tasks"),           icon: "i_aiTask" },
+          { label: "기획 가져오기", href: p("/planning/ai-import"), icon: "i_planImport" },
+          { label: "설계 가져오기", href: p("/design-import"),      icon: "i_designImport" },
+          { label: "프롬프트 관리", href: p("/prompt-templates"),   icon: "i_promptTemplate" },
+        ],
+      },
+      {
+        key: "help",
+        label: "도움창고",
+        icon: "g_help",
+        items: [
+          { label: "리뷰 요청", href: p("/reviews"), icon: "i_review" },
+          { label: "메모",      href: p("/memos"),   icon: "i_memo" },
+        ],
+      },
+      {
+        key: "data",
+        label: "데이터 조회",
+        icon: "g_data",
+        items: [
+          { label: "그래프 뷰",        href: p("/graph"),          icon: "i_graph" },
+          { label: "설계 변경 이력",   href: p("/design-changes"), icon: "i_changeLog" },
+          { label: "Diff 테스트",      href: "/test/diff-prompt",  icon: "i_diffTest" },
+        ],
+      },
+    ];
 
-  // 설계
-  const designGroup: MenuGroup = {
-    title: "설계",
-    items: [
-      { label: "단위업무", href: unitWorksHref, icon: "🧱", isActive: !!pBase && pathname.startsWith(`${pBase}/unit-works`) },
-      { label: "화면설계", href: screensHref, icon: "🖼", isActive: !!pBase && pathname.startsWith(`${pBase}/screens`) },
-      { label: "영역설계", href: areasHref, icon: "📦", isActive: !!pBase && pathname.startsWith(`${pBase}/areas`) },
-      { label: "기능설계", href: functionsHref, icon: "⚙", isActive: !!pBase && pathname.startsWith(`${pBase}/functions`) },
-      { label: "DB 테이블", href: dbTablesHref, icon: "🗄", isActive: !!pBase && pathname.startsWith(`${pBase}/db-tables`) },
-    ],
-  };
+    // 빈 그룹은 표시하지 않음 (예: VIEWER는 프로젝트 그룹의 항목 일부만 남거나 비어있을 수 있음)
+    return list.filter((g) => g.items.length > 0);
+  }, [pBase, canAccessSettings, canManageMembers]);
 
-  // 기타 설계
-  const extraDesignGroup: MenuGroup = {
-    title: "기타 설계",
-    items: [
-      ...(pBase ? [{ label: "공통코드", href: commonCodesHref, icon: "🏷", isActive: pathname.startsWith(commonCodesHref) }] : []),
-      ...(pBase ? [{ label: "기준 정보", href: referenceInfoHref, icon: "📑", isActive: pathname.startsWith(referenceInfoHref) }] : []),
-    ],
-  };
+  // ── URL 기반 자동 활성 그룹 판별 ────────────────────────────────────────────
+  // /projects/:id/functions/* → "design" 그룹
+  // /dashboard → "dashboard" 그룹 등
+  // 가장 긴 일치(prefix)를 우선 — "/planning" vs "/planning/ai-import" 충돌 방지
+  const groupByUrl = useMemo<string | null>(() => {
+    let bestKey: string | null = null;
+    let bestLen = 0;
+    for (const g of groups) {
+      for (const it of g.items) {
+        if (it.href === "#") continue;
+        // 정확 일치 또는 prefix + "/" 로 시작
+        const matches =
+          pathname === it.href || pathname.startsWith(it.href + "/");
+        if (matches && it.href.length > bestLen) {
+          bestKey = g.key;
+          bestLen = it.href.length;
+        }
+      }
+    }
+    return bestKey;
+  }, [pathname, groups]);
 
-  // AI 작업실
-  const aiStudioGroup: MenuGroup = {
-    title: "AI 작업실",
-    items: [
-      { label: "AI 태스크", href: aiTasksHref, icon: "✨", isActive: !!pBase && pathname.startsWith(`${pBase}/ai-tasks`) },
-      { label: "프롬프트 관리", href: promptTemplatesHref, icon: "📝", isActive: !!pBase && pathname.startsWith(`${pBase}/prompt-templates`) },
-      { label: "기획 가져오기", href: aiImportHref, icon: "📥", isActive: !!pBase && pathname.startsWith(`${pBase}/planning/ai-import`) },
-      { label: "설계 가져오기", href: designImportHref, icon: "🏗", isActive: !!pBase && pathname.startsWith(`${pBase}/design-import`) },
-    ],
-  };
+  // ── 활성 그룹 상태 ─────────────────────────────────────────────────────────
+  // 우선순위: URL이 어떤 그룹에 매칭되면 → 그 그룹
+  //          매칭되지 않으면 → sessionStorage에 마지막으로 선택한 그룹
+  //          그것도 없으면 → 첫 그룹 (dashboard)
+  const [activeKey, setActiveKey] = useState<string>(() => {
+    if (typeof window === "undefined") return "dashboard";
+    const saved = sessionStorage.getItem(STORAGE_KEY);
+    return saved || "dashboard";
+  });
 
-  // 도움창고
-  const helperGroup: MenuGroup = {
-    title: "도움창고",
-    items: [
-      { label: "요구분석 일괄 편집", href: planningHref, icon: "📅", isActive: !!pBase && pathname.startsWith(`${pBase}/planning`) && !pathname.startsWith(`${pBase}/planning/ai-import`) },
-      { label: "기획실", href: planStudioHref, icon: "🎨", isActive: !!pBase && pathname.startsWith(`${pBase}/plan-studio`) },
-      { label: "리뷰 요청", href: reviewsHref, icon: "💬", isActive: !!pBase && pathname.startsWith(`${pBase}/reviews`) },
-      { label: "표준 가이드", href: standardGuidesHref, icon: "📘", isActive: !!pBase && pathname.startsWith(`${pBase}/standard-guides`) },
-      { label: "메모", href: memosHref, icon: "🗒", isActive: !!pBase && pathname.startsWith(`${pBase}/memos`) },
-      // 실험: 프로젝트 계층을 그래프로 시각화 (UX 테스트 중)
-      { label: "그래프 뷰 ✨", href: graphViewHref, icon: "🕸", isActive: !!pBase && pathname.startsWith(`${pBase}/graph`) },
-    ],
-  };
+  // URL이 바뀌어 자동 매칭된 그룹이 있다면 그것을 활성으로 동기화
+  useEffect(() => {
+    if (groupByUrl && groupByUrl !== activeKey) {
+      setActiveKey(groupByUrl);
+    }
+    // groupByUrl 만 의존 — activeKey 변동에 의해 다시 트리거되지 않도록 함
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupByUrl]);
 
-  // 데이터 조회
-  const dataViewGroup: MenuGroup = {
-    title: "데이터 조회",
-    items: [
-      { label: "설계 변경 이력", href: designChangesHref, icon: "📜", isActive: !!pBase && pathname.startsWith(`${pBase}/design-changes`) },
-    ],
-  };
+  // 사용자가 수동으로 그룹을 바꿀 때만 호출 — sessionStorage에 영속화
+  function selectGroup(key: string) {
+    setActiveKey(key);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(STORAGE_KEY, key);
+    }
+  }
 
-  // 프로젝트
-  const projectGroup: MenuGroup = {
-    title: "프로젝트",
-    items: [
-      { label: "프로젝트", href: "/projects", icon: "📂", isActive: pathname === "/projects" },
-      ...(canAccessSettings && pBase ? [{ label: "프로젝트 설정", href: settingsHref, icon: "⚙️", isActive: pathname.startsWith(settingsHref) }] : []),
-      ...(canManageMembers && pBase ? [{ label: "멤버 관리", href: membersHref, icon: "👥", isActive: pathname.startsWith(membersHref) }] : []),
-      { label: "개인 설정", href: "/settings/profile", icon: "👤", isActive: pathname.startsWith("/settings/profile") },
-    ],
-  };
-
-  // 환경설정
-  const configGroup: MenuGroup = {
-    title: "환경설정",
-    items: [
-      ...(canAccessSettings && pBase ? [{ label: "환경설정", href: configsHref, icon: "🔧", isActive: pathname.startsWith(configsHref) }] : []),
-    ],
-  };
-
-  // 빈 그룹은 표시하지 않음 (환경설정 → 데이터 조회 순서)
-  const menuGroups: MenuGroup[] = [
-    analysisGroup, designGroup, extraDesignGroup, aiStudioGroup, helperGroup, projectGroup, configGroup, dataViewGroup,
-  ].filter((g) => g.items.length > 0);
-
-  // 대시보드 (최상단 단독)
-  const dashboardItem: GroupItem = {
-    label: "대시보드", href: "/dashboard", icon: "◉", isActive: pathname.startsWith("/dashboard"),
-  };
-
-  // 테스트 메뉴 (하단 별도)
-  const testItem: GroupItem = {
-    label: "Diff 테스트", href: "/test/diff-prompt", icon: "🧪", isActive: pathname.startsWith("/test/diff-prompt"),
-  };
+  // 현재 활성 그룹 객체 — activeKey가 사라진 그룹을 가리키면 첫 그룹 사용
+  const activeGroup = groups.find((g) => g.key === activeKey) ?? groups[0];
 
   return (
-    // 토글 버튼이 nav 바깥으로 삐져나오므로 overflow-x: hidden 없는 wrapper로 감쌈
-    // nav에 overflow-x: hidden이 있으면 right: -13px 위치의 버튼이 잘림
     <div className={`sp-sidebar-wrapper${sidebarCollapsed ? " is-collapsed" : ""}`}>
-      {/* 접힘/펼침 토글 버튼 — nav 바깥(wrapper 기준)에 위치해야 잘리지 않음 */}
+      {/* 접힘/펼침 토글 — 서브 패널의 우측 가장자리에 위치
+          collapsed 상태에서는 토글이 레일 우측 끝에 위치 (CSS에서 처리) */}
       <button
         className="sp-sidebar-toggle"
         onClick={toggleSidebar}
         title={sidebarCollapsed ? "사이드바 펼치기" : "사이드바 접기"}
       >
-        {/* 화살표 SVG — CSS에서 is-collapsed 시 180도 회전 */}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
           <path d="M15 18l-6-6 6-6" />
         </svg>
       </button>
 
-      <nav className={`sp-sidebar${sidebarCollapsed ? " is-collapsed" : ""}`}>
-        {/* 대시보드 — 그룹 외 최상단 단독 */}
-        <div className="sp-sidebar-section">
-          <SidebarLink item={dashboardItem} isActive={dashboardItem.isActive} />
-        </div>
+      {/* ── 좌측 레일: 그룹 아이콘 ─────────────────────────────────────────── */}
+      <nav className="sp-rail" aria-label="그룹 메뉴">
+        {groups.map((g) => {
+          const isActive = g.key === activeKey;
+          return (
+            <button
+              key={g.key}
+              className={`sp-rail-item${isActive ? " is-active" : ""}`}
+              onClick={() => selectGroup(g.key)}
+              title={g.label}
+            >
+              <MenuIcon name={g.icon} size={20} />
+              <span className="sp-rail-label">{g.label}</span>
+            </button>
+          );
+        })}
+      </nav>
 
-        {/* 그룹별 메뉴 */}
-        {menuGroups.map((group) => (
-          <div key={group.title} className="sp-sidebar-section">
-            <div className="sp-sidebar-title">{group.title}</div>
-            {group.items.map((item) => (
-              <SidebarLink key={item.label} item={item} isActive={item.isActive} />
+      {/* ── 우측 서브 패널: 활성 그룹의 메뉴 목록 ──────────────────────────── */}
+      {!sidebarCollapsed && activeGroup && (
+        <nav className="sp-subpane" aria-label={`${activeGroup.label} 메뉴`}>
+          <div className="sp-subpane-title">{activeGroup.label}</div>
+          <div className="sp-subpane-items">
+            {activeGroup.items.map((it) => (
+              <SubItem
+                key={it.label}
+                item={it}
+                isActive={
+                  it.href !== "#" &&
+                  (pathname === it.href || pathname.startsWith(it.href + "/"))
+                }
+              />
             ))}
           </div>
-        ))}
-
-        {/* 테스트 메뉴 — 프로젝트 무관 */}
-        <div className="sp-sidebar-section">
-          <SidebarLink item={testItem} isActive={testItem.isActive} />
-        </div>
-      </nav>
+        </nav>
+      )}
     </div>
   );
 }
 
-// ── SidebarLink 분리 — 같은 패턴이 2곳 이상이므로 컴포넌트 추출
-function SidebarLink({
-  item,
-  isActive,
-}: {
-  item: MenuItem;
-  isActive: boolean;
-}) {
-  // href="#" 인 항목은 프로젝트 미선택 상태 → 클릭 시 이동 차단
+// ── 서브 패널 항목 (Link) ─────────────────────────────────────────────────────
+function SubItem({ item, isActive }: { item: MenuItem; isActive: boolean }) {
   const isDisabled = item.href === "#";
-
   return (
     <Link
       href={item.href}
-      className={`sp-sidebar-item${isActive ? " is-active" : ""}${isDisabled ? " is-disabled" : ""}`}
-      data-label={item.label} // 접힌 상태에서 CSS tooltip에 사용
+      className={`sp-subpane-item${isActive ? " is-active" : ""}${isDisabled ? " is-disabled" : ""}`}
       onClick={isDisabled ? (e) => e.preventDefault() : undefined}
-      style={isDisabled ? { opacity: 0.4, cursor: "not-allowed", pointerEvents: "none" } : undefined}
     >
-      {/* 아이콘 — SVG 자리에 이모지 임시 사용 (textAnchor로 가로 중앙 정렬) */}
-      <svg viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
-        <text x="12" y="18" fontSize="14" fill="currentColor" textAnchor="middle">{item.icon}</text>
-      </svg>
+      <MenuIcon name={item.icon} size={15} />
       <span>{item.label}</span>
     </Link>
   );

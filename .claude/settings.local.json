@@ -284,7 +284,9 @@
       "Bash(echo \"exit=$?\")",
       "Bash(tasklist)",
       "Bash(echo \"EXIT=$?\")",
-      "Bash(xargs -I{} grep -l \"tbSgStdGuide\" {})"
+      "Bash(xargs -I{} grep -l \"tbSgStdGuide\" {})",
+      "Bash(grep -rEn \"throw\\\\s*$|throw\\\\s*;|reject\\\\s*\\\\\\(\\\\s*\\\\\\)|Promise\\\\.reject\\\\\\(\\\\s*\\\\\\)\" src/)",
+      "Bash(git stash *)"
     ]
   }
 }
