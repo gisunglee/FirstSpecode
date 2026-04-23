@@ -51,7 +51,7 @@ type DbTableDetail = {
   creatDt: string;
   mdfcnDt: string | null;
   // 담당자 — 서버 join으로 내려옴
-  assignMemberId:   string | null;
+  assignMemberId: string | null;
   assignMemberName: string | null;
   columns: {
     colId: string;
@@ -68,9 +68,9 @@ type DbTableDetail = {
 // 프로젝트 멤버 — 담당자 콤보박스 옵션용
 type ProjectMember = {
   memberId: string;
-  name:     string | null;
-  email:    string;
-  role:     string;
+  name: string | null;
+  email: string;
+  role: string;
 };
 
 let _keySeq = 0;
@@ -149,13 +149,13 @@ function DbTableDetailPageInner() {
   // 프로젝트 멤버 목록 (담당자 콤보박스용)
   const { data: memberData } = useQuery({
     queryKey: ["project-members", projectId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: { members: ProjectMember[]; myMemberId: string } }>(
         `/api/projects/${projectId}/members`
       ).then((r) => r.data),
     staleTime: 60 * 1000, // 1분
   });
-  const members    = memberData?.members ?? [];
+  const members = memberData?.members ?? [];
   const myMemberId = memberData?.myMemberId ?? "";
 
   // 매핑 인사이트 — 컬럼별 사용 통계 (미사용 배지 + 아래 UsageSection 공유)
@@ -434,8 +434,8 @@ function DbTableDetailPageInner() {
                   >
                     {/* 시계(이력) 아이콘 — 14px, currentColor로 테마 대응 */}
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" strokeWidth="2"
-                         strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      stroke="currentColor" strokeWidth="2"
+                      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <circle cx="12" cy="12" r="9" />
                       <path d="M12 7v5l3 2" />
                     </svg>
@@ -500,6 +500,27 @@ function DbTableDetailPageInner() {
             </div>
           </div>
 
+          {/* 안내 배너 — 컬럼 변경이 이 컬럼을 참조하는 기능설계의 매핑 정보에도
+              그대로 반영된다는 사실을 한 줄로 짧게 알린다. */}
+          <div
+            role="note"
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "8px 12px", marginBottom: 10,
+              background: "#fff8e1",
+              border: "1px solid #ffe082",
+              borderLeft: "3px solid #f59e0b",
+              borderRadius: 6,
+              fontSize: 12, lineHeight: 1.5,
+              color: "#7a4f01",
+            }}
+          >
+            <span style={{ fontSize: 14, lineHeight: 1 }}>⚠️</span>
+            <span>
+              컬럼 정보를 수정하면 이 컬럼을 <strong>참조하는 기능설계의 컬럼 매핑 정보</strong>에도 즉각 반영됩니다.
+            </span>
+          </div>
+
           <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
             {/* 헤더 */}
             <div style={{ ...colHeaderStyle, flexShrink: 0 }}>
@@ -541,92 +562,92 @@ function DbTableDetailPageInner() {
                   // · box-shadow inset 으로 좌측 3px 오렌지 띠 → 레이아웃 영향 없음
                   const isUnused = !!col.colId && !columnUsage[col.colId];
                   return (
-                  <div
-                    key={col._key}
-                    // 드래그는 핸들(⋮⋮)을 mousedown 했을 때만 활성화됨
-                    draggable={dragHandleIdx === idx}
-                    onDragStart={() => handleDragStart(idx)}
-                    onDragEnter={() => handleDragEnter(idx)}
-                    onDragEnd={() => { handleDragEnd(); setDragHandleIdx(null); }}
-                    onDragOver={(e) => e.preventDefault()}
-                    title={isUnused ? "이 컬럼은 아직 어떤 기능/영역/화면에서도 매핑되지 않았습니다." : undefined}
-                    style={{
-                      ...colRowStyle,
-                      borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-                      background: col.colId ? "var(--color-bg-card)" : "#fffbeb",
-                      // 미사용 컬럼 표시 — warning semantic 토큰 사용 (3테마 대응)
-                      boxShadow:  isUnused ? "inset 3px 0 0 var(--color-warning)" : "none",
-                    }}
-                  >
                     <div
-                      // 핸들에서만 드래그 시작 — mouseup/drag 종료 시 해제
-                      onMouseDown={() => setDragHandleIdx(idx)}
-                      onMouseUp={() => setDragHandleIdx(null)}
-                      style={{ cursor: "grab", color: "#ccc", userSelect: "none", textAlign: "center", fontSize: 14 }}
+                      key={col._key}
+                      // 드래그는 핸들(⋮⋮)을 mousedown 했을 때만 활성화됨
+                      draggable={dragHandleIdx === idx}
+                      onDragStart={() => handleDragStart(idx)}
+                      onDragEnter={() => handleDragEnter(idx)}
+                      onDragEnd={() => { handleDragEnd(); setDragHandleIdx(null); }}
+                      onDragOver={(e) => e.preventDefault()}
+                      title={isUnused ? "이 컬럼은 아직 어떤 기능/영역/화면에서도 매핑되지 않았습니다." : undefined}
+                      style={{
+                        ...colRowStyle,
+                        borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+                        background: col.colId ? "var(--color-bg-card)" : "#fffbeb",
+                        // 미사용 컬럼 표시 — warning semantic 토큰 사용 (3테마 대응)
+                        boxShadow: isUnused ? "inset 3px 0 0 var(--color-warning)" : "none",
+                      }}
                     >
-                      ⋮⋮
-                    </div>
-                    <input
-                      value={col.colPhysclNm}
-                      onChange={(e) => updateCol(col._key, "colPhysclNm", e.target.value)}
-                      placeholder="col_name"
-                      style={{ ...colInputStyle, fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace", fontWeight: 400 }}
-                    />
-                    <input
-                      value={col.colLgclNm}
-                      onChange={(e) => updateCol(col._key, "colLgclNm", e.target.value)}
-                      placeholder="컬럼 논리명"
-                      style={colInputStyle}
-                    />
-                    <input
-                      value={col.dataTyNm}
-                      onChange={(e) => updateCol(col._key, "dataTyNm", e.target.value)}
-                      placeholder="VARCHAR(100)"
-                      style={{ ...colInputStyle, fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace" }}
-                    />
-                    <input
-                      value={col.colDc}
-                      onChange={(e) => updateCol(col._key, "colDc", e.target.value)}
-                      placeholder="설명"
-                      style={{ ...colInputStyle, fontFamily: "'Pretendard','Noto Sans KR',sans-serif" }}
-                    />
-                    {/* 코드 — 공통코드 그룹 검색 드롭다운 */}
-                    <CodeGroupSelect
-                      value={col.refGrpCode}
-                      options={codeGroups ?? []}
-                      onChange={(v) => updateCol(col._key, "refGrpCode", v)}
-                    />
-                    {/* 액션 버튼 세트 — 사용처 보기(저장된 컬럼만) + 삭제
+                      <div
+                        // 핸들에서만 드래그 시작 — mouseup/drag 종료 시 해제
+                        onMouseDown={() => setDragHandleIdx(idx)}
+                        onMouseUp={() => setDragHandleIdx(null)}
+                        style={{ cursor: "grab", color: "#ccc", userSelect: "none", textAlign: "center", fontSize: 14 }}
+                      >
+                        ⋮⋮
+                      </div>
+                      <input
+                        value={col.colPhysclNm}
+                        onChange={(e) => updateCol(col._key, "colPhysclNm", e.target.value)}
+                        placeholder="col_name"
+                        style={{ ...colInputStyle, fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace", fontWeight: 400 }}
+                      />
+                      <input
+                        value={col.colLgclNm}
+                        onChange={(e) => updateCol(col._key, "colLgclNm", e.target.value)}
+                        placeholder="컬럼 논리명"
+                        style={colInputStyle}
+                      />
+                      <input
+                        value={col.dataTyNm}
+                        onChange={(e) => updateCol(col._key, "dataTyNm", e.target.value)}
+                        placeholder="VARCHAR(100)"
+                        style={{ ...colInputStyle, fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace" }}
+                      />
+                      <input
+                        value={col.colDc}
+                        onChange={(e) => updateCol(col._key, "colDc", e.target.value)}
+                        placeholder="설명"
+                        style={{ ...colInputStyle, fontFamily: "'Pretendard','Noto Sans KR',sans-serif" }}
+                      />
+                      {/* 코드 — 공통코드 그룹 검색 드롭다운 */}
+                      <CodeGroupSelect
+                        value={col.refGrpCode}
+                        options={codeGroups ?? []}
+                        onChange={(v) => updateCol(col._key, "refGrpCode", v)}
+                      />
+                      {/* 액션 버튼 세트 — 사용처 보기(저장된 컬럼만) + 삭제
                         · 사용처 버튼은 col.colId 있을 때만 의미 있음
                         · 매핑이 있는 컬럼은 강조색(🔎), 미사용은 연한 회색 아이콘 */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
-                      {col.colId && (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
+                        {col.colId && (
+                          <button
+                            type="button"
+                            onClick={() => col.colId && setUsageDialogColId(col.colId)}
+                            title={
+                              columnUsage[col.colId]
+                                ? `이 컬럼의 사용처 보기 (매핑 ${columnUsage[col.colId]!.total}건)`
+                                : "이 컬럼의 사용처 보기 (현재 매핑 없음)"
+                            }
+                            style={{
+                              background: "none", border: "none", cursor: "pointer",
+                              fontSize: 13, padding: "0 3px", lineHeight: 1,
+                              opacity: columnUsage[col.colId] ? 1 : 0.4,
+                            }}
+                          >
+                            🔎
+                          </button>
+                        )}
                         <button
-                          type="button"
-                          onClick={() => col.colId && setUsageDialogColId(col.colId)}
-                          title={
-                            columnUsage[col.colId]
-                              ? `이 컬럼의 사용처 보기 (매핑 ${columnUsage[col.colId]!.total}건)`
-                              : "이 컬럼의 사용처 보기 (현재 매핑 없음)"
-                          }
-                          style={{
-                            background: "none", border: "none", cursor: "pointer",
-                            fontSize: 13, padding: "0 3px", lineHeight: 1,
-                            opacity: columnUsage[col.colId] ? 1 : 0.4,
-                          }}
+                          onClick={() => removeColumn(col._key)}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "#e57373", fontSize: 16, padding: "0 4px", lineHeight: 1 }}
+                          title="컬럼 삭제"
                         >
-                          🔎
+                          ✕
                         </button>
-                      )}
-                      <button
-                        onClick={() => removeColumn(col._key)}
-                        style={{ background: "none", border: "none", cursor: "pointer", color: "#e57373", fontSize: 16, padding: "0 4px", lineHeight: 1 }}
-                        title="컬럼 삭제"
-                      >
-                        ✕
-                      </button>
+                      </div>
                     </div>
-                  </div>
                   );
                 })
               )}
@@ -759,8 +780,8 @@ function DbTableDetailPageInner() {
         colCount={cols.length}
         impact={usageData ? {
           functionCount: usageData.summary.functionCount,
-          areaCount:     usageData.summary.areaCount,
-          screenCount:   usageData.summary.screenCount,
+          areaCount: usageData.summary.areaCount,
+          screenCount: usageData.summary.screenCount,
         } : undefined}
         onClose={() => setDeleteConfirm(false)}
         onConfirm={() => deleteMutation.mutate()}
@@ -809,28 +830,28 @@ const inputStyle: React.CSSProperties = {
 // select 전용 — 브라우저 기본 화살표(두껍고 오른쪽 끝에 붙음) 제거 후 커스텀 SVG 화살표 사용
 const selectStyle: React.CSSProperties = {
   ...inputStyle,
-  paddingRight:       "32px",
-  appearance:         "none",
-  WebkitAppearance:   "none",
-  backgroundImage:    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
-  backgroundRepeat:   "no-repeat",
+  paddingRight: "32px",
+  appearance: "none",
+  WebkitAppearance: "none",
+  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
+  backgroundRepeat: "no-repeat",
   backgroundPosition: "right 10px center",
 };
 
 // 라벨 옆 인라인 아이콘 버튼 — 이력 조회 등 보조 액션을 최소 면적으로 표현
 const inlineIconBtnStyle: React.CSSProperties = {
-  display:        "inline-flex",
-  alignItems:     "center",
+  display: "inline-flex",
+  alignItems: "center",
   justifyContent: "center",
-  width:          18,
-  height:         18,
-  padding:        0,
-  border:         "none",
-  background:     "transparent",
-  color:          "var(--color-text-tertiary)",
-  cursor:         "pointer",
-  borderRadius:   3,
-  lineHeight:     0,
+  width: 18,
+  height: 18,
+  padding: 0,
+  border: "none",
+  background: "transparent",
+  color: "var(--color-text-tertiary)",
+  cursor: "pointer",
+  borderRadius: 3,
+  lineHeight: 0,
 };
 
 const colHeaderStyle: React.CSSProperties = {

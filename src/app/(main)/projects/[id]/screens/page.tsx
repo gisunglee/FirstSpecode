@@ -39,7 +39,7 @@ type ScreenRow = {
   requirementId: string | null;
   requirementName: string;
   // 담당자 — 서버 join으로 내려옴. 미지정/퇴장 멤버면 null
-  assignMemberId:   string | null;
+  assignMemberId: string | null;
   assignMemberName: string | null;
   areaCount: number;
   sortOrder: number;
@@ -73,25 +73,25 @@ function ScreensPageInner() {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   // ── 드래그 상태 ────────────────────────────────────────────────────────────
-  const dragItem           = useRef<number | null>(null);
-  const dragOverItem       = useRef<number | null>(null);
+  const dragItem = useRef<number | null>(null);
+  const dragOverItem = useRef<number | null>(null);
   // 드래그 중인 화면의 unitWorkId — 같은 단위업무 내에서만 순서 변경 허용
   const dragItemUnitWorkId = useRef<string | null>(null);
 
   // ── 단위업무 필터 (URL ?unitWorkId=xxx 로 초기화 — 브레드크럼에서 진입 시 자동 적용) ──
-  const searchParams    = useSearchParams();
+  const searchParams = useSearchParams();
   const [unitWorkFilter, setUnitWorkFilter] = useState(searchParams.get("unitWorkId") ?? "");
   // 담당자 필터 — 전역 appStore.myAssigneeMode 구독 (GNB 토글과 양방향 바인딩)
-  const filterAssignedTo  = useAppStore((s) => s.myAssigneeMode);
+  const filterAssignedTo = useAppStore((s) => s.myAssigneeMode);
   const setMyAssigneeMode = useAppStore((s) => s.setMyAssigneeMode);
-  const hasLoadedProfile  = useAppStore((s) => s._hasLoadedProfile);
+  const hasLoadedProfile = useAppStore((s) => s._hasLoadedProfile);
   // 페이지 세그먼트 토글 클릭 → 전역 state + DB 저장 + 실패 시 롤백
   function setFilterAssignedTo(next: "all" | "me") {
     const prev = filterAssignedTo;
     setMyAssigneeMode(next);
     authFetch("/api/member/profile/assignee-view", {
       method: "PATCH",
-      body:   JSON.stringify({ mode: next }),
+      body: JSON.stringify({ mode: next }),
     }).catch((err: Error) => {
       setMyAssigneeMode(prev);
       toast.error("설정 저장 실패: " + err.message);
@@ -124,7 +124,7 @@ function ScreensPageInner() {
   // 프로젝트 멤버 목록 — 담당자 드롭다운 옵션용
   const { data: memberData } = useQuery({
     queryKey: ["project-members", projectId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: { members: Array<{ memberId: string; name: string | null; email: string }> } }>(
         `/api/projects/${projectId}/members`
       ).then((r) => r.data),
@@ -176,7 +176,7 @@ function ScreensPageInner() {
 
   // ── 드래그 핸들러 ──────────────────────────────────────────────────────────
   function handleDragStart(index: number) {
-    dragItem.current           = index;
+    dragItem.current = index;
     dragItemUnitWorkId.current = items[index]?.unitWorkId ?? null;
   }
 
@@ -188,10 +188,10 @@ function ScreensPageInner() {
 
   function handleDragEnd() {
     const from = dragItem.current;
-    const to   = dragOverItem.current;
+    const to = dragOverItem.current;
 
-    dragItem.current           = null;
-    dragOverItem.current       = null;
+    dragItem.current = null;
+    dragOverItem.current = null;
     dragItemUnitWorkId.current = null;
 
     if (from === null || to === null || from === to) return;
@@ -244,240 +244,256 @@ function ScreensPageInner() {
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
-      {/* 총 건수 + 필터 (오른쪽 정렬) */}
-      <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
-          총 {items.length}건
-        </span>
-        <div style={{ flex: 1 }} />
-        {/* 담당자 드롭다운 — 특정 멤버 필터 (드롭다운이 우선, 세그먼트와 공존) */}
-        <select
-          value={filterMember}
-          onChange={(e) => setFilterMember(e.target.value)}
-          style={filterSelectStyle}
-        >
-          <option value="">담당자 전체</option>
-          {members.map((m) => (
-            <option key={m.memberId} value={m.memberId}>
-              {m.name ?? m.email}
-            </option>
-          ))}
-        </select>
-        {/* 담당자 세그먼트 토글 — 서버 쿼리(?assignedTo=me)로 필터 */}
-        <div style={segmentGroupStyle}>
-          <button
-            type="button"
-            onClick={() => setFilterAssignedTo("all")}
-            style={segmentBtnStyle(filterAssignedTo === "all")}
+        {/* 총 건수 + 필터 (오른쪽 정렬) */}
+        <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
+            총 {items.length}건
+          </span>
+          <div style={{ flex: 1 }} />
+          {/* 담당자 드롭다운 — 특정 멤버 필터 (드롭다운이 우선, 세그먼트와 공존) */}
+          <select
+            value={filterMember}
+            onChange={(e) => setFilterMember(e.target.value)}
+            style={filterSelectStyle}
           >
-            전체
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilterAssignedTo("me")}
-            style={segmentBtnStyle(filterAssignedTo === "me")}
-          >
-            내 담당
-          </button>
-        </div>
-        <select
-          value={unitWorkFilter}
-          onChange={(e) => setUnitWorkFilter(e.target.value)}
-          style={filterSelectStyle}
-        >
-          <option value="">단위업무 전체</option>
-          {unitWorkOptions.map((opt) => (
-            <option key={opt.id} value={opt.id}>{opt.name}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* 목록 */}
-      {items.length === 0 ? (
-        <div style={{ padding: "60px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-          등록된 화면이 없습니다.
-        </div>
-      ) : (
-        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-          {/* 헤더 행 */}
-          <div style={gridHeaderStyle}>
-            <div />
-            <div>요구사항</div>
-            <div>단위업무</div>
-            <div>화면명</div>
-            <div>담당자</div>
-            <div>화면유형</div>
-            <div style={{ textAlign: "center" }}>영역수</div>
-            <div style={{ textAlign: "center" }}>정렬</div>
-            <div>대분류</div>
-            <div>중분류</div>
-            <div>소분류</div>
-            <div style={{ textAlign: "center" }}>AI 구현</div>
-            <div style={{ textAlign: "center" }}>설/구/테</div>
+            <option value="">담당자 전체</option>
+            {members.map((m) => (
+              <option key={m.memberId} value={m.memberId}>
+                {m.name ?? m.email}
+              </option>
+            ))}
+          </select>
+          {/* 담당자 세그먼트 토글 — 서버 쿼리(?assignedTo=me)로 필터 */}
+          <div style={segmentGroupStyle}>
+            <button
+              type="button"
+              onClick={() => setFilterAssignedTo("all")}
+              style={segmentBtnStyle(filterAssignedTo === "all")}
+            >
+              전체
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterAssignedTo("me")}
+              style={segmentBtnStyle(filterAssignedTo === "me")}
+            >
+              내 담당
+            </button>
           </div>
-
-          {items.map((screen, idx) => {
-            const isFirstReq = idx === 0 || items[idx - 1].requirementId !== screen.requirementId;
-            const isLastOfReq = idx === items.length - 1 || items[idx + 1].requirementId !== screen.requirementId;
-
-            return (
-              <div
-                key={screen.screenId}
-                draggable
-                onDragStart={() => handleDragStart(idx)}
-                onDragEnter={() => handleDragEnter(idx)}
-                onDragEnd={handleDragEnd}
-                onDragOver={(e) => e.preventDefault()}
-                onClick={() => router.push(`/projects/${projectId}/screens/${screen.screenId}`)}
-                onMouseEnter={() => setHoveredId(screen.screenId)}
-                onMouseLeave={() => setHoveredId(null)}
-                style={{
-                  ...gridRowStyle,
-                  borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-                  borderBottom: isLastOfReq ? "1px solid var(--color-border)" : "none",
-                  background: hoveredId === screen.screenId ? "var(--color-bg-hover, rgba(99,102,241,0.06))" : "var(--color-bg-card)",
-                  borderLeft: hoveredId === screen.screenId ? "3px solid var(--color-primary, #6366f1)" : "3px solid transparent",
-                  paddingLeft: 13,
-                }}
-              >
-                {/* 드래그 핸들 */}
-                <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
-
-                {/* 요구사항 (첫 행에만 표시) */}
-                <div onClick={(e) => e.stopPropagation()}>
-                  {isFirstReq ? (
-                    screen.requirementId ? (
-                      <button
-                        onClick={() => router.push(`/projects/${projectId}/requirements/${screen.requirementId}`)}
-                        style={linkBtnStyle}
-                      >
-                        {screen.requirementName}
-                      </button>
-                    ) : (
-                      <span style={{ color: "#aaa", fontSize: 13 }}>미분류</span>
-                    )
-                  ) : null}
-                </div>
-
-                {/* 단위업무명 — 같은 unitWorkId이면 첫 행에만 표시 */}
-                <div onClick={(e) => e.stopPropagation()}>
-                  {items[idx - 1]?.unitWorkId === screen.unitWorkId && screen.unitWorkId
-                    ? null
-                    : screen.unitWorkId ? (
-                      <button
-                        onClick={() => router.push(`/projects/${projectId}/unit-works/${screen.unitWorkId}`)}
-                        style={linkBtnStyle}
-                      >
-                        {screen.unitWorkName}
-                      </button>
-                    ) : (
-                      <span style={{ color: "#aaa", fontSize: 13 }}>미분류</span>
-                    )
-                  }
-                </div>
-
-                {/* 화면명 */}
-                <div style={{ fontSize: 14, fontWeight: 500 }}>
-                  <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
-                    {screen.displayId}
-                  </span>
-                  {screen.name}
-                </div>
-
-                {/* 담당자 — 미지정/퇴장 멤버는 흐린 "-" */}
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: screen.assignMemberName
-                      ? "var(--color-text-primary)"
-                      : "var(--color-text-tertiary)",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  }}
-                  title={screen.assignMemberName ?? undefined}
-                >
-                  {screen.assignMemberName ?? "-"}
-                </div>
-
-                {/* 화면유형 배지 */}
-                <div>
-                  <span style={typeBadgeStyle(screen.type)}>
-                    {screen.type}
-                  </span>
-                </div>
-
-                {/* 영역 수 */}
-                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
-                  {screen.areaCount}
-                </div>
-
-                {/* 정렬순서 */}
-                <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>
-                  {screen.sortOrder}
-                </div>
-
-                {/* 대분류 */}
-                <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {screen.categoryL || "-"}
-                </div>
-
-                {/* 중분류 */}
-                <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {screen.categoryM || "-"}
-                </div>
-
-                {/* 소분류 */}
-                <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {screen.categoryS || "-"}
-                </div>
-
-                {/* AI 구현 — 스냅샷 경유 IMPLEMENT 태스크 최신 1건 */}
-                <div
-                  style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {screen.implTask ? (
-                    <button
-                      onClick={() => setAiDetailTaskId(screen.implTask!.aiTaskId)}
-                      title="AI 구현 태스크 상세"
-                      style={{
-                        display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                        background: "transparent", border: "none", padding: 0, cursor: "pointer",
-                      }}
-                    >
-                      <span style={implStatusBadgeStyle(screen.implTask.status)}>
-                        {AI_TASK_STATUS_LABEL[screen.implTask.status as AiTaskStatus] ?? screen.implTask.status}
-                      </span>
-                      <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>
-                        {formatRequestedAt(screen.implTask.requestedAt)}
-                      </span>
-                    </button>
-                  ) : (
-                    <span style={{ color: "#ccc", fontSize: 13 }}>—</span>
-                  )}
-                </div>
-
-                {/* 설/구/테 평균 진행률 */}
-                <div style={{ display: "flex", gap: 4, justifyContent: "center", fontSize: 11 }}>
-                  {[
-                    { val: screen.avgDesignRt, color: "#1565c0" },
-                    { val: screen.avgImplRt,   color: "#2e7d32" },
-                    { val: screen.avgTestRt,   color: "#6a1b9a" },
-                  ].map(({ val, color }, i) => (
-                    <span key={i} style={{
-                      color, fontWeight: 600,
-                      background: val === 100 ? `${color}14` : "transparent",
-                      borderRadius: 3, padding: "1px 3px",
-                    }}>
-                      {val}%
-                    </span>
-                  ))}
-                </div>
-
-              </div>
-            );
-          })}
+          <select
+            value={unitWorkFilter}
+            onChange={(e) => setUnitWorkFilter(e.target.value)}
+            style={filterSelectStyle}
+          >
+            <option value="">단위업무 전체</option>
+            {unitWorkOptions.map((opt) => (
+              <option key={opt.id} value={opt.id}>{opt.name}</option>
+            ))}
+          </select>
         </div>
-      )}
+
+        {/* 목록 */}
+        {items.length === 0 ? (
+          <div style={{ padding: "60px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+            등록된 화면이 없습니다.
+          </div>
+        ) : (
+          <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+            {/* 헤더 행 */}
+            <div style={gridHeaderStyle}>
+              <div />
+              <div>요구사항 명</div>
+              <div>단위업무 명</div>
+              <div>화면 명</div>
+              <div>담당자</div>
+              <div>화면유형</div>
+              <div style={{ textAlign: "center" }}>영역수</div>
+              <div style={{ textAlign: "center" }}>정렬</div>
+              <div>대분류</div>
+              <div>중분류</div>
+              <div>소분류</div>
+              <div style={{ textAlign: "center" }}>AI 구현</div>
+              <div style={{ textAlign: "center" }}>설/구/테</div>
+            </div>
+
+            {items.map((screen, idx) => {
+              const isFirstReq = idx === 0 || items[idx - 1].requirementId !== screen.requirementId;
+              const isLastOfReq = idx === items.length - 1 || items[idx + 1].requirementId !== screen.requirementId;
+
+              return (
+                <div
+                  key={screen.screenId}
+                  draggable
+                  onDragStart={() => handleDragStart(idx)}
+                  onDragEnter={() => handleDragEnter(idx)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(e) => e.preventDefault()}
+                  onClick={() => router.push(`/projects/${projectId}/screens/${screen.screenId}`)}
+                  onMouseEnter={() => setHoveredId(screen.screenId)}
+                  onMouseLeave={() => setHoveredId(null)}
+                  style={{
+                    ...gridRowStyle,
+                    borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+                    borderBottom: isLastOfReq ? "1px solid var(--color-border)" : "none",
+                    background: hoveredId === screen.screenId ? "var(--color-bg-hover, rgba(99,102,241,0.06))" : "var(--color-bg-card)",
+                    borderLeft: hoveredId === screen.screenId ? "3px solid var(--color-primary, #6366f1)" : "3px solid transparent",
+                    paddingLeft: 13,
+                  }}
+                >
+                  {/* 드래그 핸들 */}
+                  <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
+
+                  {/* 요구사항 (첫 행에만 표시) */}
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                    title={isFirstReq ? screen.requirementName : undefined}
+                  >
+                    {isFirstReq ? (
+                      screen.requirementId ? (
+                        <button
+                          onClick={() => router.push(`/projects/${projectId}/requirements/${screen.requirementId}`)}
+                          style={linkBtnStyle}
+                        >
+                          {screen.requirementName}
+                        </button>
+                      ) : (
+                        <span style={{ color: "#aaa", fontSize: 13 }}>미분류</span>
+                      )
+                    ) : null}
+                  </div>
+
+                  {/* 단위업무명 — 같은 unitWorkId이면 첫 행에만 표시 */}
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                    title={screen.unitWorkName}
+                  >
+                    {items[idx - 1]?.unitWorkId === screen.unitWorkId && screen.unitWorkId
+                      ? null
+                      : screen.unitWorkId ? (
+                        <button
+                          onClick={() => router.push(`/projects/${projectId}/unit-works/${screen.unitWorkId}`)}
+                          style={linkBtnStyle}
+                        >
+                          {screen.unitWorkName}
+                        </button>
+                      ) : (
+                        <span style={{ color: "#aaa", fontSize: 13 }}>미분류</span>
+                      )
+                    }
+                  </div>
+
+                  {/* 화면명 */}
+                  <div
+                    style={{
+                      fontSize: 14, fontWeight: 500,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}
+                    title={`${screen.displayId} ${screen.name}`}
+                  >
+                    <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
+                      {screen.displayId}
+                    </span>
+                    {screen.name}
+                  </div>
+
+                  {/* 담당자 — 미지정/퇴장 멤버는 흐린 "-" */}
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: screen.assignMemberName
+                        ? "var(--color-text-primary)"
+                        : "var(--color-text-tertiary)",
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}
+                    title={screen.assignMemberName ?? undefined}
+                  >
+                    {screen.assignMemberName ?? "-"}
+                  </div>
+
+                  {/* 화면유형 배지 */}
+                  <div>
+                    <span style={typeBadgeStyle(screen.type)}>
+                      {screen.type}
+                    </span>
+                  </div>
+
+                  {/* 영역 수 */}
+                  <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
+                    {screen.areaCount}
+                  </div>
+
+                  {/* 정렬순서 */}
+                  <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>
+                    {screen.sortOrder}
+                  </div>
+
+                  {/* 대분류 */}
+                  <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {screen.categoryL || "-"}
+                  </div>
+
+                  {/* 중분류 */}
+                  <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {screen.categoryM || "-"}
+                  </div>
+
+                  {/* 소분류 */}
+                  <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {screen.categoryS || "-"}
+                  </div>
+
+                  {/* AI 구현 — 스냅샷 경유 IMPLEMENT 태스크 최신 1건.
+                    배지 + 시간을 한 줄(flex row)로 배치해 row 전체 높이가 늘어나지 않도록 함. */}
+                  <div
+                    style={{ display: "flex", justifyContent: "center" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {screen.implTask ? (
+                      <button
+                        onClick={() => setAiDetailTaskId(screen.implTask!.aiTaskId)}
+                        title={`AI 구현 태스크 · ${formatRequestedAt(screen.implTask.requestedAt)}`}
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: 6,
+                          background: "transparent", border: "none", padding: 0, cursor: "pointer",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <span style={implStatusBadgeStyle(screen.implTask.status)}>
+                          {AI_TASK_STATUS_LABEL[screen.implTask.status as AiTaskStatus] ?? screen.implTask.status}
+                        </span>
+                        <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>
+                          {formatRequestedAt(screen.implTask.requestedAt)}
+                        </span>
+                      </button>
+                    ) : (
+                      <span style={{ color: "#ccc", fontSize: 13 }}>—</span>
+                    )}
+                  </div>
+
+                  {/* 설/구/테 평균 진행률 */}
+                  <div style={{ display: "flex", gap: 4, justifyContent: "center", fontSize: 11 }}>
+                    {[
+                      { val: screen.avgDesignRt, color: "#1565c0" },
+                      { val: screen.avgImplRt, color: "#2e7d32" },
+                      { val: screen.avgTestRt, color: "#6a1b9a" },
+                    ].map(({ val, color }, i) => (
+                      <span key={i} style={{
+                        color, fontWeight: 600,
+                        background: val === 100 ? `${color}14` : "transparent",
+                        borderRadius: 3, padding: "1px 3px",
+                      }}>
+                        {val}%
+                      </span>
+                    ))}
+                  </div>
+
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* PID-00045 삭제 확인 팝업 */}
@@ -640,12 +656,13 @@ function typeBadgeStyle(type: string): React.CSSProperties {
 
 // 요구사항·단위업무·화면명·담당자·분류는 fr 비율, 소형 컬럼은 고정 / AI 구현 + 설구테
 // 담당자 컬럼(100px)을 화면명 뒤, 화면유형 앞에 삽입
-const GRID_TEMPLATE = "32px 1.5fr 1.5fr 3fr 100px 70px 48px 40px 1fr 1fr 1fr 130px 7%";
+// AI 구현 컬럼은 "배지 + 시간(MM-DD HH:mm)"을 한 줄에 담도록 150px로 여유 확보
+const GRID_TEMPLATE = "32px 1.5fr 1.5fr 3fr 100px 70px 48px 40px 1fr 1fr 1fr 150px 7%";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: GRID_TEMPLATE,
-  gap: 12,
+  gap: 10,
   padding: "10px 16px",
   background: "var(--color-bg-muted)",
   fontSize: 12,
@@ -655,10 +672,12 @@ const gridHeaderStyle: React.CSSProperties = {
   alignItems: "center",
 };
 
+// row 높이를 컴팩트하게 — 데이터량이 많은 페이지 특성상 좁게 유지.
+// AI 구현 컬럼처럼 2줄 내용이 있어도 전체 row가 뜨지 않도록 셀별로 nowrap 강제.
 const gridRowStyle: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: GRID_TEMPLATE,
-  gap: 12,
+  gap: 10,
   padding: "12px 16px",
   alignItems: "center",
   background: "var(--color-bg-card)",
@@ -678,20 +697,20 @@ const linkBtnStyle: React.CSSProperties = {
 };
 
 const filterSelectStyle: React.CSSProperties = {
-  padding:            "7px 32px 7px 12px",
-  borderRadius:       6,
-  border:             "1px solid var(--color-border)",
-  fontSize:           13,
-  background:         "var(--color-bg-card)",
-  color:              "var(--color-text-primary)",
-  cursor:             "pointer",
-  outline:            "none",
-  appearance:         "none",
-  WebkitAppearance:   "none",
-  backgroundImage:    `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
-  backgroundRepeat:   "no-repeat",
+  padding: "7px 32px 7px 12px",
+  borderRadius: 6,
+  border: "1px solid var(--color-border)",
+  fontSize: 13,
+  background: "var(--color-bg-card)",
+  color: "var(--color-text-primary)",
+  cursor: "pointer",
+  outline: "none",
+  appearance: "none",
+  WebkitAppearance: "none",
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+  backgroundRepeat: "no-repeat",
   backgroundPosition: "right 10px center",
-  minWidth:           160,
+  minWidth: 160,
 };
 
 const primaryBtnStyle: React.CSSProperties = {
@@ -707,21 +726,21 @@ const primaryBtnStyle: React.CSSProperties = {
 
 // 담당자 필터 세그먼트 토글 — 단위업무·과업·요구사항 목록과 동일 패턴
 const segmentGroupStyle: React.CSSProperties = {
-  display:      "inline-flex",
-  border:       "1px solid var(--color-border)",
+  display: "inline-flex",
+  border: "1px solid var(--color-border)",
   borderRadius: 6,
-  overflow:     "hidden",
-  background:   "var(--color-bg-card)",
+  overflow: "hidden",
+  background: "var(--color-bg-card)",
 };
 const segmentBtnStyle = (active: boolean): React.CSSProperties => ({
-  padding:    "7px 14px",
-  fontSize:   13,
+  padding: "7px 14px",
+  fontSize: 13,
   fontWeight: active ? 600 : 400,
-  border:     "none",
+  border: "none",
   background: active ? "var(--color-brand-subtle)" : "transparent",
-  color:      active ? "var(--color-brand)" : "var(--color-text-secondary)",
-  cursor:     "pointer",
-  outline:    "none",
+  color: active ? "var(--color-brand)" : "var(--color-text-secondary)",
+  cursor: "pointer",
+  outline: "none",
 });
 
 const secondaryBtnStyle: React.CSSProperties = {

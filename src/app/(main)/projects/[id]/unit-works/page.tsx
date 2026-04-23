@@ -655,18 +655,20 @@ function UnitWorksPageInner() {
                 {uw.screenCount}
               </div>
 
-              {/* AI 구현 — 스냅샷 경유 IMPLEMENT 태스크 최신 1건 */}
+              {/* AI 구현 — 스냅샷 경유 IMPLEMENT 태스크 최신 1건.
+                  배지 + 시간을 한 줄(flex row)로 배치해 row 전체 높이가 늘어나지 않도록 함. */}
               <div
-                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}
+                style={{ display: "flex", justifyContent: "center" }}
                 onClick={(e) => e.stopPropagation()}
               >
                 {uw.implTask ? (
                   <button
                     onClick={() => setAiDetailTaskId(uw.implTask!.aiTaskId)}
-                    title="AI 구현 태스크 상세"
+                    title={`AI 구현 태스크 · ${formatRequestedAt(uw.implTask.requestedAt)}`}
                     style={{
-                      display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                      display: "inline-flex", alignItems: "center", gap: 6,
                       background: "transparent", border: "none", padding: 0, cursor: "pointer",
+                      whiteSpace: "nowrap",
                     }}
                   >
                     <span style={implStatusBadgeStyle(uw.implTask.status)}>
@@ -1019,7 +1021,8 @@ function DeleteConfirmDialog({
 
 // 드래그핸들 / 순서 / 요구사항 / 단위업무명(flex) / 담당자 / 기간 / 진행률 / 화면수 / AI구현 / 분설구테
 // 기간 16%→14% 로 축소해 담당자 110px 확보
-const GRID_TEMPLATE = "28px 44px 22% 1fr 110px 14% 80px 56px 130px 110px";
+// AI 구현 컬럼은 "배지 + 시간(MM-DD HH:mm)"을 한 줄에 담도록 150px 확보
+const GRID_TEMPLATE = "28px 44px 22% 1fr 110px 14% 80px 56px 150px 110px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",

@@ -24,26 +24,26 @@ import type { IoProfile } from "@/lib/dbTableUsage";
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
 type DbTableRow = {
-  tblId:       string;
+  tblId: string;
   tblPhysclNm: string;
-  tblLgclNm:   string;
-  tblDc:       string;
-  creatDt:     string;
+  tblLgclNm: string;
+  tblDc: string;
+  creatDt: string;
   // 수정일 — 아직 수정된 적 없으면 null (서버가 mdfcn_dt를 내려줌)
-  mdfcnDt:     string | null;
+  mdfcnDt: string | null;
   // 담당자 — 서버 join으로 내려옴. 미지정/퇴장 멤버면 null
-  assignMemberId:   string | null;
+  assignMemberId: string | null;
   assignMemberName: string | null;
-  columnCount:      number;
+  columnCount: number;
   // 이 테이블의 컬럼을 사용하는 distinct 기능 수 (매핑 인사이트 Phase 1)
   // 0 이면 "아직 설계에서 참조되지 않은 테이블" 로 해석 가능 → 회색 처리
-  functionCount:    number;
+  functionCount: number;
   // Phase 2 추가 — 매핑된 적 있는 컬럼 수 (커버리지 계산용)
-  usedColCount:     number;
+  usedColCount: number;
   // Phase 2 추가 — IO 프로필 분류 (READ_HEAVY / WRITE_HEAVY / MIXED / NONE)
-  ioProfile:        IoProfile;
+  ioProfile: IoProfile;
   // Phase 3 추가 — 마지막 매핑 저장 시각 (ISO). 매핑 없으면 null.
-  lastUsedDt:       string | null;
+  lastUsedDt: string | null;
 };
 
 // ── 상수 ──────────────────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ type InsightFilter = "all" | "unused" | "low" | "hot" | "stale";
 //  - 오래됨: 마지막 매핑 저장이 STALE_DAYS 일 이상 전
 const LOW_COVERAGE_THRESHOLD = 30;
 const HOT_FUNCTION_THRESHOLD = 5;
-const STALE_DAYS             = 90;
+const STALE_DAYS = 90;
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
 
@@ -71,10 +71,10 @@ export default function DbTablesPage() {
 }
 
 function DbTablesPageInner() {
-  const params      = useParams<{ id: string }>();
-  const router      = useRouter();
-  const qc          = useQueryClient();
-  const projectId   = params.id;
+  const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const qc = useQueryClient();
+  const projectId = params.id;
   const { setBreadcrumb } = useAppStore();
 
   useEffect(() => {
@@ -92,16 +92,16 @@ function DbTablesPageInner() {
   const [insightFilter, setInsightFilter] = useState<InsightFilter>("all");
 
   // 담당자 필터 — 전역 appStore.myAssigneeMode 구독 (GNB 토글과 양방향 바인딩)
-  const filterAssignedTo  = useAppStore((s) => s.myAssigneeMode);
+  const filterAssignedTo = useAppStore((s) => s.myAssigneeMode);
   const setMyAssigneeMode = useAppStore((s) => s.setMyAssigneeMode);
-  const hasLoadedProfile  = useAppStore((s) => s._hasLoadedProfile);
+  const hasLoadedProfile = useAppStore((s) => s._hasLoadedProfile);
   // 페이지 세그먼트 토글 클릭 → 전역 state + DB 저장 + 실패 시 롤백
   function setFilterAssignedTo(next: "all" | "me") {
     const prev = filterAssignedTo;
     setMyAssigneeMode(next);
     authFetch("/api/member/profile/assignee-view", {
       method: "PATCH",
-      body:   JSON.stringify({ mode: next }),
+      body: JSON.stringify({ mode: next }),
     }).catch((err: Error) => {
       setMyAssigneeMode(prev);
       toast.error("설정 저장 실패: " + err.message);
@@ -109,10 +109,10 @@ function DbTablesPageInner() {
   }
 
   // ── 신규 등록 인라인 폼 ──────────────────────────────────────────────────────
-  const [creating,     setCreating]     = useState(false);
-  const [newPhysNm,    setNewPhysNm]    = useState("");
-  const [newLgclNm,    setNewLgclNm]    = useState("");
-  const [newDc,        setNewDc]        = useState("");
+  const [creating, setCreating] = useState(false);
+  const [newPhysNm, setNewPhysNm] = useState("");
+  const [newLgclNm, setNewLgclNm] = useState("");
+  const [newDc, setNewDc] = useState("");
 
   // ── DDL 일괄 등록 모달 ──────────────────────────────────────────────────────
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -121,7 +121,7 @@ function DbTablesPageInner() {
   // 프로필 로드 전에는 쿼리 지연 → 첫 렌더 플리커 방지
   const { data: rows = [], isLoading } = useQuery<DbTableRow[]>({
     queryKey: ["db-tables", projectId, filterAssignedTo],
-    queryFn:  () => {
+    queryFn: () => {
       const qs = filterAssignedTo === "me" ? "?assignedTo=me" : "";
       return authFetch<{ data: DbTableRow[] }>(`/api/projects/${projectId}/db-tables${qs}`)
         .then((r) => r.data);
@@ -134,7 +134,7 @@ function DbTablesPageInner() {
     mutationFn: (body: { tblPhysclNm: string; tblLgclNm: string; tblDc: string }) =>
       authFetch<{ data: { tblId: string } }>(`/api/projects/${projectId}/db-tables`, {
         method: "POST",
-        body:   JSON.stringify(body),
+        body: JSON.stringify(body),
       }),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["db-tables", projectId] });
@@ -239,11 +239,11 @@ function DbTablesPageInner() {
               전체/미사용/저활용/핫 · 검색/담당자 필터와 교집합으로 동작 */}
           <div style={{ display: "inline-flex", gap: 4 }}>
             {([
-              { key: "all",    label: "전체",    tip: "모든 테이블" },
-              { key: "unused", label: "미사용",  tip: "매핑이 전혀 없는 테이블 (정리 대상 후보)" },
-              { key: "low",    label: "저활용",  tip: `컬럼 활용률 < ${LOW_COVERAGE_THRESHOLD}% (설계 누락 의심)` },
-              { key: "hot",    label: "핫",      tip: `기능 연결 ${HOT_FUNCTION_THRESHOLD}개 이상 (핵심 테이블)` },
-              { key: "stale",  label: "오래됨",  tip: `마지막 매핑 저장이 ${STALE_DAYS}일 이상 지난 테이블 (데드 후보)` },
+              { key: "all", label: "전체", tip: "모든 테이블" },
+              { key: "unused", label: "미사용", tip: "매핑이 전혀 없는 테이블 (정리 대상 후보)" },
+              { key: "low", label: "저활용", tip: `컬럼 활용률 < ${LOW_COVERAGE_THRESHOLD}% (설계 누락 의심)` },
+              { key: "hot", label: "핫", tip: `기능 연결 ${HOT_FUNCTION_THRESHOLD}개 이상 (핵심 테이블)` },
+              { key: "stale", label: "오래됨", tip: `마지막 매핑 저장이 ${STALE_DAYS}일 이상 지난 테이블 (데드 후보)` },
             ] as const).map((chip) => {
               const active = insightFilter === chip.key;
               return (
@@ -253,11 +253,11 @@ function DbTablesPageInner() {
                   onClick={() => setInsightFilter(chip.key)}
                   title={chip.tip}
                   style={{
-                    padding:    "4px 10px",
+                    padding: "4px 10px",
                     borderRadius: 999,
-                    border:     `1px solid ${active ? "var(--color-primary, #1976d2)" : "var(--color-border)"}`,
+                    border: `1px solid ${active ? "var(--color-primary, #1976d2)" : "var(--color-border)"}`,
                     background: active ? "var(--color-primary, #1976d2)" : "var(--color-bg-card)",
-                    color:      active ? "#fff" : "var(--color-text-primary)",
+                    color: active ? "#fff" : "var(--color-text-primary)",
                     fontSize: 12, fontWeight: 600, cursor: "pointer",
                   }}
                 >
@@ -425,7 +425,7 @@ function DbTablesPageInner() {
                 <span
                   style={{
                     textAlign: "center",
-                    fontSize:  13,
+                    fontSize: 13,
                     fontWeight: row.functionCount > 0 ? 700 : 400,
                     color: row.functionCount > 0
                       ? "var(--color-primary, #1976d2)"
@@ -516,21 +516,21 @@ const bulkBtnStyle: React.CSSProperties = {
 
 // 담당자 필터 세그먼트 토글 — 다른 4개 목록과 동일 패턴
 const segmentGroupStyle: React.CSSProperties = {
-  display:      "inline-flex",
-  border:       "1px solid var(--color-border)",
+  display: "inline-flex",
+  border: "1px solid var(--color-border)",
   borderRadius: 6,
-  overflow:     "hidden",
-  background:   "var(--color-bg-card)",
+  overflow: "hidden",
+  background: "var(--color-bg-card)",
 };
 const segmentBtnStyle = (active: boolean): React.CSSProperties => ({
-  padding:    "7px 14px",
-  fontSize:   13,
+  padding: "7px 14px",
+  fontSize: 13,
   fontWeight: active ? 600 : 400,
-  border:     "none",
+  border: "none",
   background: active ? "var(--color-brand-subtle)" : "transparent",
-  color:      active ? "var(--color-brand)" : "var(--color-text-secondary)",
-  cursor:     "pointer",
-  outline:    "none",
+  color: active ? "var(--color-brand)" : "var(--color-text-secondary)",
+  cursor: "pointer",
+  outline: "none",
 });
 
 const saveBtnStyle: React.CSSProperties = {

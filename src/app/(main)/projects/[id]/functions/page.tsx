@@ -29,32 +29,32 @@ import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 type AiTaskInfo = { taskId: string; status: string } | null;
 
 type FuncRow = {
-  funcId:          string;
-  displayId:       string;
-  name:            string;
-  type:            string;
-  priority:        string;
-  complexity:      string;
-  effort:          string;
-  sortOrder:       number;
-  areaId:          string | null;
-  assignMemberId:  string | null;
-  areaName:        string;
-  areaDisplayId:   string | null;
-  areaSortOrder:   number;
-  screenId:        string | null;
-  screenName:      string;
+  funcId: string;
+  displayId: string;
+  name: string;
+  type: string;
+  priority: string;
+  complexity: string;
+  effort: string;
+  sortOrder: number;
+  areaId: string | null;
+  assignMemberId: string | null;
+  areaName: string;
+  areaDisplayId: string | null;
+  areaSortOrder: number;
+  screenId: string | null;
+  screenName: string;
   screenDisplayId: string | null;
-  unitWorkId:      string | null;
-  unitWorkName:    string;
-  aiDesign:        AiTaskInfo;
-  aiInspect:       AiTaskInfo;
-  designRt:        number;
-  implRt:          number;
-  testRt:          number;
-  ctgryL:          string | null;
-  ctgryM:          string | null;
-  ctgryS:          string | null;
+  unitWorkId: string | null;
+  unitWorkName: string;
+  aiDesign: AiTaskInfo;
+  aiInspect: AiTaskInfo;
+  designRt: number;
+  implRt: number;
+  testRt: number;
+  ctgryL: string | null;
+  ctgryM: string | null;
+  ctgryS: string | null;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -70,11 +70,11 @@ export default function FunctionsPage() {
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 
 function FunctionsPageInner() {
-  const params       = useParams<{ id: string }>();
-  const router       = useRouter();
+  const params = useParams<{ id: string }>();
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const queryClient  = useQueryClient();
-  const projectId    = params.id;
+  const queryClient = useQueryClient();
+  const projectId = params.id;
   const areaIdFilter = searchParams.get("areaId") ?? undefined;
 
   // AI 태스크 상세 팝업
@@ -83,7 +83,7 @@ function FunctionsPageInner() {
 
   // 인라인 편집 상태: { funcId, field } or null
   const [editingCell, setEditingCell] = useState<{ funcId: string; field: "complexity" | "effort" } | null>(null);
-  const [editValue,   setEditValue]   = useState("");
+  const [editValue, setEditValue] = useState("");
   // 정렬순서 직접 입력 상태: { funcId → sortOrder }
   const [sortEdits, setSortEdits] = useState<Record<string, number>>({});
 
@@ -92,9 +92,9 @@ function FunctionsPageInner() {
 
   // 검색 필터
   const [unitWorkFilter, setUnitWorkFilter] = useState("");
-  const [screenFilter,   setScreenFilter]   = useState("");
-  const [areaFilter,     setAreaFilter]     = useState("");
-  const [memberFilter,   setMemberFilter]   = useState("");
+  const [screenFilter, setScreenFilter] = useState("");
+  const [areaFilter, setAreaFilter] = useState("");
+  const [memberFilter, setMemberFilter] = useState("");
 
   function handleUnitWorkChange(val: string) {
     setUnitWorkFilter(val);
@@ -102,7 +102,7 @@ function FunctionsPageInner() {
     setAreaFilter("");
   }
 
-  const dragItem     = useRef<number | null>(null);
+  const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
   // ── 데이터 조회 ────────────────────────────────────────────────────────────
@@ -122,7 +122,7 @@ function FunctionsPageInner() {
 
   const { data: membersData } = useQuery({
     queryKey: ["members", projectId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: { members: { memberId: string; name: string | null; email: string }[] } }>(
         `/api/projects/${projectId}/members`
       ).then((r) => r.data.members),
@@ -178,10 +178,10 @@ function FunctionsPageInner() {
   // 클라이언트 필터링
   const filteredItems = (viewMode === "category" ? categorySortedItems : items).filter(
     (f) =>
-      (!unitWorkFilter || f.unitWorkId     === unitWorkFilter) &&
-      (!screenFilter   || f.screenId       === screenFilter)   &&
-      (!areaFilter     || f.areaId         === areaFilter)     &&
-      (!memberFilter   || f.assignMemberId === memberFilter)
+      (!unitWorkFilter || f.unitWorkId === unitWorkFilter) &&
+      (!screenFilter || f.screenId === screenFilter) &&
+      (!areaFilter || f.areaId === areaFilter) &&
+      (!memberFilter || f.assignMemberId === memberFilter)
   );
 
   // ── 순서 변경 ──────────────────────────────────────────────────────────────
@@ -189,7 +189,7 @@ function FunctionsPageInner() {
     mutationFn: (orders: { funcId: string; sortOrder: number }[]) =>
       authFetch(`/api/projects/${projectId}/functions/sort`, {
         method: "PUT",
-        body:   JSON.stringify({ orders }),
+        body: JSON.stringify({ orders }),
       }),
     onSuccess: () => {
       setSortEdits({});
@@ -205,7 +205,7 @@ function FunctionsPageInner() {
   function handleDragEnter(idx: number) { dragOverItem.current = idx; }
   function handleDragEnd() {
     const from = dragItem.current;
-    const to   = dragOverItem.current;
+    const to = dragOverItem.current;
     dragItem.current = null;
     dragOverItem.current = null;
     if (from === null || to === null || from === to) return;
@@ -229,7 +229,7 @@ function FunctionsPageInner() {
     mutationFn: ({ funcId, field, value }: { funcId: string; field: string; value: string }) =>
       authFetch(`/api/projects/${projectId}/functions/${funcId}/inline`, {
         method: "PATCH",
-        body:   JSON.stringify({ field, value }),
+        body: JSON.stringify({ field, value }),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey });
@@ -315,7 +315,8 @@ function FunctionsPageInner() {
       </div>
 
       {/* 총 건수 + 검색 필터 바 (오른쪽 정렬) */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 24px 14px" }}>
+      {/* padding-bottom 16 — 다른 목록(단위업무/화면/영역)의 필터 bottom 간격과 통일 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 24px 16px" }}>
         <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
           총 {filteredItems.length}건{filteredItems.length !== items.length && ` (전체 ${items.length}건)`}
         </span>
@@ -376,258 +377,258 @@ function FunctionsPageInner() {
         </div>
       ) : (
         <div style={{ padding: "0 24px 24px" }}>
-        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-          <div style={{ ...gridHeaderStyle, gridTemplateColumns: viewMode === "category" ? GRID_TEMPLATE_CATEGORY : GRID_TEMPLATE }}>
-            <div />
-            {viewMode === "category" ? (
-              <>
-                <div>대분류</div>
-                <div>중분류</div>
-                <div>소분류</div>
-              </>
-            ) : (
-              <>
-                <div>단위업무</div>
-                <div>화면</div>
-                <div>영역</div>
-              </>
-            )}
-            <div>기능명</div>
-            <div style={{ textAlign: "center" }}>정렬</div>
-            <div>유형</div>
-            <div>복잡도</div>
-            <div>공수</div>
-            <div style={{ textAlign: "center" }}>AI</div>
-            <div style={{ textAlign: "center", paddingLeft: 8 }}>설/구/테</div>
-          </div>
+          <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+            <div style={{ ...gridHeaderStyle, gridTemplateColumns: viewMode === "category" ? GRID_TEMPLATE_CATEGORY : GRID_TEMPLATE }}>
+              <div />
+              {viewMode === "category" ? (
+                <>
+                  <div>대분류</div>
+                  <div>중분류</div>
+                  <div>소분류</div>
+                </>
+              ) : (
+                <>
+                  <div>단위업무 명</div>
+                  <div>화면 명</div>
+                  <div>영역 명</div>
+                </>
+              )}
+              <div>기능명</div>
+              <div style={{ textAlign: "center" }}>정렬</div>
+              <div>유형</div>
+              <div>복잡도</div>
+              <div>공수</div>
+              <div style={{ textAlign: "center" }}>AI</div>
+              <div style={{ textAlign: "center", paddingLeft: 8 }}>설/구/테</div>
+            </div>
 
-          {filteredItems.map((fn, idx) => {
-            const prev = filteredItems[idx - 1];
-            // 이전 행과 같은 값이면 셀 숨김 (계층 그룹핑 효과)
-            const showUnitWork = idx === 0 || (viewMode === "category" ? fn.ctgryL !== prev.ctgryL : fn.unitWorkId !== prev.unitWorkId);
-            const showScreen   = idx === 0 || (viewMode === "category" ? (fn.ctgryL !== prev.ctgryL || fn.ctgryM !== prev.ctgryM) : fn.screenId !== prev.screenId);
-            const showArea     = idx === 0 || (viewMode === "category" ? (fn.ctgryL !== prev.ctgryL || fn.ctgryM !== prev.ctgryM || fn.ctgryS !== prev.ctgryS) : fn.areaId !== prev.areaId);
+            {filteredItems.map((fn, idx) => {
+              const prev = filteredItems[idx - 1];
+              // 이전 행과 같은 값이면 셀 숨김 (계층 그룹핑 효과)
+              const showUnitWork = idx === 0 || (viewMode === "category" ? fn.ctgryL !== prev.ctgryL : fn.unitWorkId !== prev.unitWorkId);
+              const showScreen = idx === 0 || (viewMode === "category" ? (fn.ctgryL !== prev.ctgryL || fn.ctgryM !== prev.ctgryM) : fn.screenId !== prev.screenId);
+              const showArea = idx === 0 || (viewMode === "category" ? (fn.ctgryL !== prev.ctgryL || fn.ctgryM !== prev.ctgryM || fn.ctgryS !== prev.ctgryS) : fn.areaId !== prev.areaId);
 
-            return (
-              <div
-                key={fn.funcId}
-                draggable
-                onDragStart={() => handleDragStart(idx)}
-                onDragEnter={() => handleDragEnter(idx)}
-                onDragEnd={handleDragEnd}
-                onDragOver={(e) => e.preventDefault()}
-                onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
-                onMouseEnter={() => setHoveredId(fn.funcId)}
-                onMouseLeave={() => setHoveredId(null)}
-                style={{
-                  ...gridRowStyle,
-                  gridTemplateColumns: viewMode === "category" ? GRID_TEMPLATE_CATEGORY : GRID_TEMPLATE,
-                  borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-                  background: hoveredId === fn.funcId
-                    ? (fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100
+              return (
+                <div
+                  key={fn.funcId}
+                  draggable
+                  onDragStart={() => handleDragStart(idx)}
+                  onDragEnter={() => handleDragEnter(idx)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(e) => e.preventDefault()}
+                  onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
+                  onMouseEnter={() => setHoveredId(fn.funcId)}
+                  onMouseLeave={() => setHoveredId(null)}
+                  style={{
+                    ...gridRowStyle,
+                    gridTemplateColumns: viewMode === "category" ? GRID_TEMPLATE_CATEGORY : GRID_TEMPLATE,
+                    borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+                    background: hoveredId === fn.funcId
+                      ? (fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100
                         ? "rgba(34,197,94,0.10)"
                         : "var(--color-bg-hover, rgba(99,102,241,0.06))")
-                    : (fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100
+                      : (fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100
                         ? "rgba(34,197,94,0.04)"
                         : "var(--color-bg-card)"),
-                  borderLeft: fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100
-                    ? "3px solid #22c55e"
-                    : hoveredId === fn.funcId ? "3px solid var(--color-primary, #6366f1)" : "3px solid transparent",
-                  paddingLeft: 13,
-                }}
-              >
-                <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
+                    borderLeft: fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100
+                      ? "3px solid #22c55e"
+                      : hoveredId === fn.funcId ? "3px solid var(--color-primary, #6366f1)" : "3px solid transparent",
+                    paddingLeft: 13,
+                  }}
+                >
+                  <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
 
-                {viewMode === "category" ? (
-                  <>
-                    {/* 대분류 */}
-                    <div style={{ fontSize: 13, color: "var(--color-text-primary)", fontWeight: showUnitWork ? 600 : 400 }}>
-                      {showUnitWork ? (fn.ctgryL ?? <span style={{ color: "#ccc" }}>-</span>) : ""}
-                    </div>
-                    {/* 중분류 */}
-                    <div style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
-                      {showScreen ? (fn.ctgryM ?? <span style={{ color: "#ccc" }}>-</span>) : ""}
-                    </div>
-                    {/* 소분류 */}
-                    <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-                      {showArea ? (fn.ctgryS ?? <span style={{ color: "#ccc" }}>-</span>) : ""}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {/* 단위업무명 (클릭 → 단위업무 상세, 행 클릭과 분리) */}
-                    <div onClick={(e) => e.stopPropagation()}>
-                      {showUnitWork ? (
-                        fn.unitWorkId ? (
-                          <button onClick={() => router.push(`/projects/${projectId}/unit-works/${fn.unitWorkId}`)} style={linkBtnStyle}>
-                            {fn.unitWorkName}
-                          </button>
-                        ) : (
-                          <span style={{ color: "#ccc", fontSize: 13 }}>-</span>
-                        )
-                      ) : ""}
-                    </div>
-
-                    {/* 화면명 (클릭 → 화면 상세, 행 클릭과 분리) */}
-                    <div onClick={(e) => e.stopPropagation()}>
-                      {showScreen ? (
-                        fn.screenId ? (
-                          <button onClick={() => router.push(`/projects/${projectId}/screens/${fn.screenId}`)} style={linkBtnStyle}>
-                            {fn.screenName}
-                          </button>
-                        ) : (
-                          <span style={{ color: "#ccc", fontSize: 13 }}>-</span>
-                        )
-                      ) : ""}
-                    </div>
-                  </>
-                )}
-
-                {/* 영역명 (클릭 → 영역 상세, 행 클릭과 분리) */}
-                <div onClick={(e) => e.stopPropagation()}>
-                  {showArea ? (
-                    fn.areaId ? (
-                      <button
-                        onClick={() => router.push(`/projects/${projectId}/areas/${fn.areaId}`)}
-                        style={linkBtnStyle}
-                      >
-                        {fn.areaName}
-                      </button>
-                    ) : (
-                      <span style={{ color: "#ccc", fontSize: 13 }}>-</span>
-                    )
-                  ) : ""}
-                </div>
-
-                {/* 기능명 */}
-                <div style={{ fontSize: 14, fontWeight: 500, display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ color: "var(--color-text-secondary)", fontSize: 11 }}>
-                    {fn.displayId}
-                  </span>
-                  {fn.name}
-                  {fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100 && (
-                    <span style={{
-                      fontSize: 11, fontWeight: 600, color: "#16a34a",
-                      background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)",
-                      borderRadius: 4, padding: "1px 7px", whiteSpace: "nowrap",
-                    }}>
-                      ✓ 완료
-                    </span>
-                  )}
-                </div>
-
-                {/* 정렬순서 — 직접 입력 가능 */}
-                <div onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="number"
-                    value={sortEdits[fn.funcId] ?? fn.sortOrder}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value);
-                      if (!isNaN(v)) setSortEdits((prev) => ({ ...prev, [fn.funcId]: v }));
-                    }}
-                    style={{
-                      width: 44, textAlign: "center", fontSize: 12,
-                      padding: "2px 4px", borderRadius: 4,
-                      border: "1px solid var(--color-border)",
-                      background: sortEdits[fn.funcId] !== undefined
-                        ? "var(--color-bg-muted)"
-                        : "var(--color-bg-card)",
-                      color: "var(--color-text-primary)",
-                      outline: "none",
-                    }}
-                  />
-                </div>
-
-                {/* 유형 배지 */}
-                <div>
-                  <span style={typeBadgeStyle(fn.type)}>{fn.type}</span>
-                </div>
-
-                {/* 복잡도 인라인 편집 (FID-00168) */}
-                <div onClick={(e) => e.stopPropagation()}>
-                  {editingCell?.funcId === fn.funcId && editingCell.field === "complexity" ? (
-                    <select
-                      autoFocus
-                      value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      onBlur={() => commitEdit(fn.funcId, "complexity")}
-                      style={{ fontSize: 12, padding: "2px 4px", borderRadius: 4, border: "1px solid var(--color-border)" }}
-                    >
-                      <option value="HIGH">HIGH</option>
-                      <option value="MEDIUM">MEDIUM</option>
-                      <option value="LOW">LOW</option>
-                    </select>
+                  {viewMode === "category" ? (
+                    <>
+                      {/* 대분류 */}
+                      <div style={{ fontSize: 13, color: "var(--color-text-primary)", fontWeight: showUnitWork ? 600 : 400 }}>
+                        {showUnitWork ? (fn.ctgryL ?? <span style={{ color: "#ccc" }}>-</span>) : ""}
+                      </div>
+                      {/* 중분류 */}
+                      <div style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
+                        {showScreen ? (fn.ctgryM ?? <span style={{ color: "#ccc" }}>-</span>) : ""}
+                      </div>
+                      {/* 소분류 */}
+                      <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                        {showArea ? (fn.ctgryS ?? <span style={{ color: "#ccc" }}>-</span>) : ""}
+                      </div>
+                    </>
                   ) : (
-                    <span
-                      onClick={() => startEdit(fn.funcId, "complexity", fn.complexity)}
-                      style={{ ...complexityBadgeStyle(fn.complexity), cursor: "pointer" }}
-                      title="클릭하여 편집"
-                    >
-                      {fn.complexity}
-                    </span>
-                  )}
-                </div>
+                    <>
+                      {/* 단위업무명 (클릭 → 단위업무 상세, 행 클릭과 분리) */}
+                      <div onClick={(e) => e.stopPropagation()}>
+                        {showUnitWork ? (
+                          fn.unitWorkId ? (
+                            <button onClick={() => router.push(`/projects/${projectId}/unit-works/${fn.unitWorkId}`)} style={linkBtnStyle}>
+                              {fn.unitWorkName}
+                            </button>
+                          ) : (
+                            <span style={{ color: "#ccc", fontSize: 13 }}>-</span>
+                          )
+                        ) : ""}
+                      </div>
 
-                {/* 공수 인라인 편집 (FID-00169) */}
-                <div onClick={(e) => e.stopPropagation()}>
-                  {editingCell?.funcId === fn.funcId && editingCell.field === "effort" ? (
+                      {/* 화면명 (클릭 → 화면 상세, 행 클릭과 분리) */}
+                      <div onClick={(e) => e.stopPropagation()}>
+                        {showScreen ? (
+                          fn.screenId ? (
+                            <button onClick={() => router.push(`/projects/${projectId}/screens/${fn.screenId}`)} style={linkBtnStyle}>
+                              {fn.screenName}
+                            </button>
+                          ) : (
+                            <span style={{ color: "#ccc", fontSize: 13 }}>-</span>
+                          )
+                        ) : ""}
+                      </div>
+                    </>
+                  )}
+
+                  {/* 영역명 (클릭 → 영역 상세, 행 클릭과 분리) */}
+                  <div onClick={(e) => e.stopPropagation()}>
+                    {showArea ? (
+                      fn.areaId ? (
+                        <button
+                          onClick={() => router.push(`/projects/${projectId}/areas/${fn.areaId}`)}
+                          style={linkBtnStyle}
+                        >
+                          {fn.areaName}
+                        </button>
+                      ) : (
+                        <span style={{ color: "#ccc", fontSize: 13 }}>-</span>
+                      )
+                    ) : ""}
+                  </div>
+
+                  {/* 기능명 */}
+                  <div style={{ fontSize: 14, fontWeight: 500, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ color: "var(--color-text-secondary)", fontSize: 11 }}>
+                      {fn.displayId}
+                    </span>
+                    {fn.name}
+                    {fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100 && (
+                      <span style={{
+                        fontSize: 11, fontWeight: 600, color: "#16a34a",
+                        background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)",
+                        borderRadius: 4, padding: "1px 7px", whiteSpace: "nowrap",
+                      }}>
+                        ✓ 완료
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 정렬순서 — 직접 입력 가능 */}
+                  <div onClick={(e) => e.stopPropagation()}>
                     <input
-                      autoFocus
-                      type="text"
-                      value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      onBlur={() => commitEdit(fn.funcId, "effort")}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") commitEdit(fn.funcId, "effort");
-                        if (e.key === "Escape") setEditingCell(null);
+                      type="number"
+                      value={sortEdits[fn.funcId] ?? fn.sortOrder}
+                      onChange={(e) => {
+                        const v = parseInt(e.target.value);
+                        if (!isNaN(v)) setSortEdits((prev) => ({ ...prev, [fn.funcId]: v }));
                       }}
-                      placeholder="예: 2h"
-                      style={{ width: 60, fontSize: 12, padding: "2px 4px", borderRadius: 4, border: "1px solid var(--color-border)" }}
+                      style={{
+                        width: 44, textAlign: "center", fontSize: 12,
+                        padding: "2px 4px", borderRadius: 4,
+                        border: "1px solid var(--color-border)",
+                        background: sortEdits[fn.funcId] !== undefined
+                          ? "var(--color-bg-muted)"
+                          : "var(--color-bg-card)",
+                        color: "var(--color-text-primary)",
+                        outline: "none",
+                      }}
                     />
+                  </div>
+
+                  {/* 유형 배지 */}
+                  <div>
+                    <span style={typeBadgeStyle(fn.type)}>{fn.type}</span>
+                  </div>
+
+                  {/* 복잡도 인라인 편집 (FID-00168) */}
+                  <div onClick={(e) => e.stopPropagation()}>
+                    {editingCell?.funcId === fn.funcId && editingCell.field === "complexity" ? (
+                      <select
+                        autoFocus
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onBlur={() => commitEdit(fn.funcId, "complexity")}
+                        style={{ fontSize: 12, padding: "2px 4px", borderRadius: 4, border: "1px solid var(--color-border)" }}
+                      >
+                        <option value="HIGH">HIGH</option>
+                        <option value="MEDIUM">MEDIUM</option>
+                        <option value="LOW">LOW</option>
+                      </select>
+                    ) : (
+                      <span
+                        onClick={() => startEdit(fn.funcId, "complexity", fn.complexity)}
+                        style={{ ...complexityBadgeStyle(fn.complexity), cursor: "pointer" }}
+                        title="클릭하여 편집"
+                      >
+                        {fn.complexity}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 공수 인라인 편집 (FID-00169) */}
+                  <div onClick={(e) => e.stopPropagation()}>
+                    {editingCell?.funcId === fn.funcId && editingCell.field === "effort" ? (
+                      <input
+                        autoFocus
+                        type="text"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onBlur={() => commitEdit(fn.funcId, "effort")}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") commitEdit(fn.funcId, "effort");
+                          if (e.key === "Escape") setEditingCell(null);
+                        }}
+                        placeholder="예: 2h"
+                        style={{ width: 60, fontSize: 12, padding: "2px 4px", borderRadius: 4, border: "1px solid var(--color-border)" }}
+                      />
+                    ) : (
+                      <span
+                        onClick={() => startEdit(fn.funcId, "effort", fn.effort)}
+                        style={{ fontSize: 13, cursor: "pointer", color: fn.effort ? "var(--color-text-primary)" : "#aaa" }}
+                        title="클릭하여 편집"
+                      >
+                        {fn.effort || "-"}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* AI 진행 현황 인디케이터 */}
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "center" }} onClick={(e) => e.stopPropagation()}>
+                    <AiDot label="설" taskInfo={fn.aiDesign} onClick={(id) => setAiDetailTaskId(id)} />
+                    <AiDot label="검" taskInfo={fn.aiInspect} onClick={(id) => setAiDetailTaskId(id)} />
+                  </div>
+
+                  {/* 설계/구현/테스트 비율 */}
+                  {fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100 ? (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingLeft: 8 }}>
+                      <span style={{
+                        background: "linear-gradient(90deg, #1565c0, #2e7d32, #6a1b9a)",
+                        color: "#fff",
+                        borderRadius: 6,
+                        padding: "2px 8px",
+                        fontSize: 11,
+                        fontWeight: 800,
+                        letterSpacing: "0.5px",
+                        whiteSpace: "nowrap",
+                      }}>
+                        100점 🎉
+                      </span>
+                    </div>
                   ) : (
-                    <span
-                      onClick={() => startEdit(fn.funcId, "effort", fn.effort)}
-                      style={{ fontSize: 13, cursor: "pointer", color: fn.effort ? "var(--color-text-primary)" : "#aaa" }}
-                      title="클릭하여 편집"
-                    >
-                      {fn.effort || "-"}
-                    </span>
+                    <div style={{ display: "flex", gap: 3, alignItems: "center", justifyContent: "center", paddingLeft: 8 }}>
+                      <RatioChip label="설" value={fn.designRt} color="#1565c0" />
+                      <RatioChip label="구" value={fn.implRt} color="#2e7d32" />
+                      <RatioChip label="테" value={fn.testRt} color="#6a1b9a" />
+                    </div>
                   )}
                 </div>
-
-                {/* AI 진행 현황 인디케이터 */}
-                <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "center" }} onClick={(e) => e.stopPropagation()}>
-                  <AiDot label="설" taskInfo={fn.aiDesign}  onClick={(id) => setAiDetailTaskId(id)} />
-                  <AiDot label="검" taskInfo={fn.aiInspect} onClick={(id) => setAiDetailTaskId(id)} />
-                </div>
-
-                {/* 설계/구현/테스트 비율 */}
-                {fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100 ? (
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingLeft: 8 }}>
-                    <span style={{
-                      background: "linear-gradient(90deg, #1565c0, #2e7d32, #6a1b9a)",
-                      color: "#fff",
-                      borderRadius: 6,
-                      padding: "2px 8px",
-                      fontSize: 11,
-                      fontWeight: 800,
-                      letterSpacing: "0.5px",
-                      whiteSpace: "nowrap",
-                    }}>
-                      100점 🎉
-                    </span>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", gap: 3, alignItems: "center", justifyContent: "center", paddingLeft: 8 }}>
-                    <RatioChip label="설" value={fn.designRt} color="#1565c0" />
-                    <RatioChip label="구" value={fn.implRt}   color="#2e7d32" />
-                    <RatioChip label="테" value={fn.testRt}   color="#6a1b9a" />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -667,24 +668,24 @@ function RatioChip({ label, value, color }: { label: string; value: number; colo
 // ── AI 인디케이터 동그라미 ─────────────────────────────────────────────────────
 
 const AI_DOT_COLORS: Record<string, { bg: string; border: string; text: string; label: string }> = {
-  DONE:        { bg: "#1976d2", border: "#1565c0", text: "#fff", label: "완료" },
-  APPLIED:     { bg: "#2e7d32", border: "#1b5e20", text: "#fff", label: "적용됨" },
-  REJECTED:    { bg: "#c62828", border: "#b71c1c", text: "#fff", label: "반려됨" },
-  FAILED:      { bg: "#e65100", border: "#bf360c", text: "#fff", label: "실패" },
-  TIMEOUT:     { bg: "#e65100", border: "#bf360c", text: "#fff", label: "타임아웃" },
+  DONE: { bg: "#1976d2", border: "#1565c0", text: "#fff", label: "완료" },
+  APPLIED: { bg: "#2e7d32", border: "#1b5e20", text: "#fff", label: "적용됨" },
+  REJECTED: { bg: "#c62828", border: "#b71c1c", text: "#fff", label: "반려됨" },
+  FAILED: { bg: "#e65100", border: "#bf360c", text: "#fff", label: "실패" },
+  TIMEOUT: { bg: "#e65100", border: "#bf360c", text: "#fff", label: "타임아웃" },
   IN_PROGRESS: { bg: "#f59e0b", border: "#d97706", text: "#fff", label: "진행중" },
-  PENDING:     { bg: "#9e9e9e", border: "#757575", text: "#fff", label: "대기중" },
+  PENDING: { bg: "#9e9e9e", border: "#757575", text: "#fff", label: "대기중" },
 };
 
 function AiDot({ label, taskInfo, onClick }: {
-  label:    string;
+  label: string;
   taskInfo: AiTaskInfo;
-  onClick:  (taskId: string) => void;
+  onClick: (taskId: string) => void;
 }) {
-  const active    = taskInfo !== null;
-  const colorCfg  = taskInfo ? (AI_DOT_COLORS[taskInfo.status] ?? AI_DOT_COLORS.DONE) : null;
+  const active = taskInfo !== null;
+  const colorCfg = taskInfo ? (AI_DOT_COLORS[taskInfo.status] ?? AI_DOT_COLORS.DONE) : null;
   const fullLabel = label === "설" ? "설계" : "점검";
-  const title     = active ? `AI ${fullLabel}: ${colorCfg?.label}` : `AI ${fullLabel} 미진행`;
+  const title = active ? `AI ${fullLabel}: ${colorCfg?.label}` : `AI ${fullLabel} 미진행`;
 
   return (
     <button
@@ -730,9 +731,9 @@ function typeBadgeStyle(type: string): React.CSSProperties {
 
 function complexityBadgeStyle(c: string): React.CSSProperties {
   const map: Record<string, { bg: string; color: string }> = {
-    HIGH:   { bg: "#fce4ec", color: "#880e4f" },
+    HIGH: { bg: "#fce4ec", color: "#880e4f" },
     MEDIUM: { bg: "#fff3e0", color: "#e65100" },
-    LOW:    { bg: "#e8f5e9", color: "#2e7d32" },
+    LOW: { bg: "#e8f5e9", color: "#2e7d32" },
   };
   const s = map[c] ?? { bg: "#f5f5f5", color: "#555" };
   return { display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, ...s };
@@ -740,7 +741,7 @@ function complexityBadgeStyle(c: string): React.CSSProperties {
 
 
 // 단위업무·화면·영역·기능명은 fr로 비율 분배, 나머지 소형 컬럼은 고정
-const GRID_TEMPLATE          = "32px 1.5fr 2fr 2fr 4fr 44px 65px 75px 55px 60px 90px";
+const GRID_TEMPLATE = "32px 1.5fr 2fr 2fr 4fr 44px 65px 75px 55px 60px 90px";
 const GRID_TEMPLATE_CATEGORY = "32px 1.5fr 1.5fr 1.5fr 4fr 44px 65px 75px 55px 60px 90px";
 
 const gridHeaderStyle: React.CSSProperties = {
@@ -751,7 +752,7 @@ const gridHeaderStyle: React.CSSProperties = {
 };
 const gridRowStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID_TEMPLATE, gap: 8,
-  padding: "10px 16px", alignItems: "center",
+  padding: "12px 16px", alignItems: "center",
   background: "var(--color-bg-card)", transition: "background 0.1s",
   cursor: "pointer",
 };
@@ -771,18 +772,18 @@ const secondaryBtnStyle: React.CSSProperties = {
   color: "var(--color-text-primary)", fontSize: 14, cursor: "pointer",
 };
 const filterSelectStyle: React.CSSProperties = {
-  padding:            "7px 32px 7px 12px",
-  borderRadius:       6,
-  border:             "1px solid var(--color-border)",
-  fontSize:           13,
-  background:         "var(--color-bg-card)",
-  color:              "var(--color-text-primary)",
-  cursor:             "pointer",
-  outline:            "none",
-  appearance:         "none",
-  WebkitAppearance:   "none",
-  backgroundImage:    `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
-  backgroundRepeat:   "no-repeat",
+  padding: "7px 32px 7px 12px",
+  borderRadius: 6,
+  border: "1px solid var(--color-border)",
+  fontSize: 13,
+  background: "var(--color-bg-card)",
+  color: "var(--color-text-primary)",
+  cursor: "pointer",
+  outline: "none",
+  appearance: "none",
+  WebkitAppearance: "none",
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+  backgroundRepeat: "no-repeat",
   backgroundPosition: "right 10px center",
-  minWidth:           160,
+  minWidth: 160,
 };
