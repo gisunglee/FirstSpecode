@@ -85,6 +85,16 @@
 * 리뷰 시스템: **`tb_ds_review_request`**, **`tb_ds_review_comment`**
 * 설계 변경/매핑: **`tb_ds_design_change`**, **`tb_ds_col_mapping`**
 
-## 6. 특수 목적 (Diff Test)
+## 6. 표준 가이드 (Standard Guide)
+* **`tb_sg_std_guide`** (표준 가이드 문서 — UW-00030)
+  * `guide_id` (v36, PK): 가이드 UUID
+  * `prjct_id` (v36, NN): 프로젝트 ID
+  * `guide_ctgry_code` (v20, NN): 카테고리 (UI/DATA/AUTH/API/COMMON/SECURITY/FILE/ERROR/BATCH/REPORT)
+  * `guide_sj` (v200, NN): 제목
+  * `guide_cn` (t): 본문 (마크다운)
+  * `use_yn` (b1, NN): Y=활성, N=소프트 삭제 (기본 Y)
+  * 인덱스: (prjct_id, use_yn, mdfcn_dt DESC, creat_dt DESC), (prjct_id, guide_ctgry_code, use_yn)
+
+## 7. 특수 목적 (Diff Test)
 * **`tb_sp_diff_test_master`** & **`tb_sp_diff_test_node`**
   * `diff_prompt_md` (t), `diff_summary_json` (jsonb), `chg_mode_code` 등 프롬프트 변경점 추적 용도

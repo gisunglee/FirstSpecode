@@ -20,11 +20,18 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { useAppStore } from "@/store/appStore";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
+import {
+  type AiTaskStatus,
+  AI_TASK_STATUS_LABEL, AI_TASK_STATUS_BADGE, AI_TASK_TYPE_LABEL,
+} from "@/constants/codes";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
+// TaskStatus 는 공용 AiTaskStatus 사용. TaskType/RefType 은 이 페이지 특성상
+// Plan Studio 산출물 구분(IA/JOURNEY/FLOW/ERD/PROCESS) 까지 필터에 나오므로 로컬 확장 유지.
 
-type TaskStatus = "PENDING" | "IN_PROGRESS" | "DONE" | "APPLIED" | "REJECTED" | "FAILED" | "TIMEOUT";
+type TaskStatus = AiTaskStatus;
 type TaskType   = "INSPECT" | "DESIGN" | "IMPLEMENT" | "PRE_IMPL" | "MOCKUP" | "IMPACT" | "CUSTOM" | "IA" | "JOURNEY" | "FLOW" | "ERD" | "PROCESS";
 type RefType    = "AREA" | "FUNCTION" | "UNIT_WORK" | "PLAN_STUDIO_ARTF";
 
@@ -53,25 +60,14 @@ type TaskRow = {
 };
 
 // ── 상수 ──────────────────────────────────────────────────────────────────────
-
-const STATUS_LABELS: Record<TaskStatus, string> = {
-  PENDING:     "대기",
-  IN_PROGRESS: "처리중",
-  DONE:        "완료",
-  APPLIED:     "반영됨",
-  REJECTED:    "반려",
-  FAILED:      "실패",
-  TIMEOUT:     "시간초과",
-};
+// 상태 라벨/배지는 공용 codes 모듈 사용. 타입 라벨은 Plan Studio 구분까지 포함해 로컬 확장.
 
 const TASK_TYPE_LABELS: Record<TaskType, string> = {
-  INSPECT:   "명세 검토",
-  DESIGN:    "설계",
-  IMPLEMENT: "구현",
+  // AI 태스크 공용 — codes.ts 와 동일 문구로 유지
+  ...AI_TASK_TYPE_LABEL,
+  // PRE_IMPL 은 이 페이지에서 "선 구현 적용"으로 표기 (공용 "선 구현"보다 풀 네임이 필요)
   PRE_IMPL:  "선 구현 적용",
-  MOCKUP:    "목업",
-  IMPACT:    "영향도 분석",
-  CUSTOM:    "자유 요청",
+  // Plan Studio 산출물 구분
   IA:        "정보구조도",
   JOURNEY:   "사용자여정",
   FLOW:      "화면흐름",
@@ -82,16 +78,7 @@ const TASK_TYPE_LABELS: Record<TaskType, string> = {
 // ── 배지 스타일 함수 ─────────────────────────────────────────────────────────
 
 function statusBadgeStyle(status: TaskStatus): React.CSSProperties {
-  const colors: Record<TaskStatus, { bg: string; color: string }> = {
-    PENDING:     { bg: "#f5f5f5", color: "#666666" },
-    IN_PROGRESS: { bg: "#e3f2fd", color: "#1565c0" },
-    DONE:        { bg: "#e8f5e9", color: "#2e7d32" },
-    APPLIED:     { bg: "#e8eaf6", color: "#283593" },
-    REJECTED:    { bg: "#fff3e0", color: "#e65100" },
-    FAILED:      { bg: "#ffebee", color: "#c62828" },
-    TIMEOUT:     { bg: "#fff3e0", color: "#e65100" },
-  };
-  const c = colors[status] ?? { bg: "#f5f5f5", color: "#555" };
+  const c = AI_TASK_STATUS_BADGE[status] ?? { bg: "#f5f5f5", fg: "#555" };
   return {
     display:      "inline-block",
     padding:      "2px 8px",
@@ -99,8 +86,8 @@ function statusBadgeStyle(status: TaskStatus): React.CSSProperties {
     fontSize:     11,
     fontWeight:   700,
     background:   c.bg,
-    color:        c.color,
-    border:       `1px solid ${c.color}20`,
+    color:        c.fg,
+    border:       `1px solid ${c.fg}20`,
   };
 }
 
@@ -223,6 +210,29 @@ function AiTasksPageInner() {
   const [page,           setPage]           = useState(1);
   const PAGE_SIZE = usePageSize();
 
+  // ── 전역 "내꺼만 보기" 모드 — GNB 토글과 양방향 바인딩 ─────────────────────
+  // AI 태스크에서는 "요청자" 기반 필터로 동작 (다른 엔티티의 "담당자" 대응)
+  const myAssigneeMode    = useAppStore((s) => s.myAssigneeMode);
+  const setMyAssigneeMode = useAppStore((s) => s.setMyAssigneeMode);
+  const hasLoadedProfile  = useAppStore((s) => s._hasLoadedProfile);
+  // 세그먼트 토글 클릭 → 전역 state + DB 저장 + 실패 시 롤백
+  function setMyMode(next: "all" | "me") {
+    const prev = myAssigneeMode;
+    setMyAssigneeMode(next);
+    authFetch("/api/member/profile/assignee-view", {
+      method: "PATCH",
+      body:   JSON.stringify({ mode: next }),
+    }).catch((err: Error) => {
+      setMyAssigneeMode(prev);
+      toast.error("설정 저장 실패: " + err.message);
+    });
+  }
+  // 실제 요청자 필터 값 계산:
+  //   - 드롭다운에서 특정 멤버 선택 → 그 값이 우선 (구체적 필터)
+  //   - 드롭다운 "요청자 전체"(=빈값) + 전역 ON → "me" (서버가 로그인 사용자로 치환)
+  //   - 그 외 → undefined (필터 없음)
+  const effectiveReqMberId = filterMember || (myAssigneeMode === "me" ? "me" : "");
+
   // ── 멤버 목록 (필터 셀렉트용) ─────────────────────────────────────────────
   const { data: membersData } = useQuery({
     queryKey: ["members", projectId],
@@ -240,14 +250,15 @@ function AiTasksPageInner() {
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
 
   // ── 데이터 조회 ────────────────────────────────────────────────────────────
+  // 프로필 로드 전에는 쿼리 지연 → 첫 렌더 플리커 방지 (GNB 토글 상태 확정 대기)
   const { data, isLoading } = useQuery({
-    queryKey: ["ai-tasks", projectId, filterStatus, filterTaskType, filterRefType, filterMember, page],
+    queryKey: ["ai-tasks", projectId, filterStatus, filterTaskType, filterRefType, effectiveReqMberId, page],
     queryFn: () => {
       const sp = new URLSearchParams();
-      if (filterStatus)   sp.set("status",     filterStatus);
-      if (filterTaskType) sp.set("taskType",   filterTaskType);
-      if (filterRefType)  sp.set("refType",    filterRefType);
-      if (filterMember)   sp.set("reqMberId",  filterMember);
+      if (filterStatus)        sp.set("status",     filterStatus);
+      if (filterTaskType)      sp.set("taskType",   filterTaskType);
+      if (filterRefType)       sp.set("refType",    filterRefType);
+      if (effectiveReqMberId)  sp.set("reqMberId",  effectiveReqMberId);
       sp.set("page",     String(page));
       sp.set("pageSize", String(PAGE_SIZE));
       return authFetch<{ data: { items: TaskRow[]; totalCount: number; page: number; pageSize: number; pageCount: number } }>(
@@ -258,6 +269,7 @@ function AiTasksPageInner() {
       const items = (query.state.data as { items: TaskRow[] } | undefined)?.items ?? [];
       return items.some((t) => t.status === "IN_PROGRESS") ? 10_000 : false;
     },
+    enabled: hasLoadedProfile,
   });
 
   const items      = data?.items      ?? [];
@@ -366,6 +378,24 @@ function AiTasksPageInner() {
             ))}
           </select>
           <div style={{ flex: 1 }} />
+          {/* "내 요청" 세그먼트 토글 — GNB 전역 토글과 양방향 바인딩 */}
+          {/* 요청자 드롭다운에서 특정 멤버 선택 시 그 값이 우선 (구체적 필터) */}
+          <div style={segmentGroupStyle}>
+            <button
+              type="button"
+              onClick={() => setMyMode("all")}
+              style={segmentBtnStyle(myAssigneeMode === "all")}
+            >
+              전체
+            </button>
+            <button
+              type="button"
+              onClick={() => setMyMode("me")}
+              style={segmentBtnStyle(myAssigneeMode === "me")}
+            >
+              내 요청
+            </button>
+          </div>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -451,7 +481,7 @@ function AiTasksPageInner() {
                     {row.retryCnt > 0 ? `${row.retryCnt}회` : "—"}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                    <span style={statusBadgeStyle(row.status)}>{STATUS_LABELS[row.status]}</span>
+                    <span style={statusBadgeStyle(row.status)}>{AI_TASK_STATUS_LABEL[row.status]}</span>
                     {["FAILED", "REJECTED", "TIMEOUT"].includes(row.status) && (
                       <button
                         title="재요청 — 새 태스크 생성"
@@ -665,6 +695,25 @@ const filterSelectStyle: React.CSSProperties = {
   backgroundRepeat:   "no-repeat",
   backgroundPosition: "right 10px center",
 };
+
+// "내 요청" 세그먼트 토글 — 다른 목록 페이지와 동일 톤
+const segmentGroupStyle: React.CSSProperties = {
+  display:      "inline-flex",
+  border:       "1px solid var(--color-border)",
+  borderRadius: 6,
+  overflow:     "hidden",
+  background:   "var(--color-bg-card)",
+};
+const segmentBtnStyle = (active: boolean): React.CSSProperties => ({
+  padding:    "7px 14px",
+  fontSize:   13,
+  fontWeight: active ? 600 : 400,
+  border:     "none",
+  background: active ? "var(--color-brand-subtle)" : "transparent",
+  color:      active ? "var(--color-brand)" : "var(--color-text-secondary)",
+  cursor:     "pointer",
+  outline:    "none",
+});
 
 const linkBtnStyle: React.CSSProperties = {
   background:     "none",

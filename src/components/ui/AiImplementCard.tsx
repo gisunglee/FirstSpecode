@@ -26,28 +26,9 @@ import ImplTargetDialog from "@/components/ui/ImplTargetDialog";
 import ImplRequestPopup from "@/components/ui/ImplRequestPopup";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
-
-// ── 상수 ──────────────────────────────────────────────────────────────────────
-
-const STATUS_DOT: Record<string, string> = {
-  PENDING: "#f57c00",
-  IN_PROGRESS: "#1565c0",
-  DONE: "#2e7d32",
-  APPLIED: "#6a1b9a",
-  REJECTED: "#c62828",
-  FAILED: "#c62828",
-  TIMEOUT: "#757575",
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  PENDING: "대기 중",
-  IN_PROGRESS: "처리 중",
-  DONE: "완료",
-  APPLIED: "적용됨",
-  REJECTED: "반려",
-  FAILED: "실패",
-  TIMEOUT: "시간 초과",
-};
+// 상태 라벨·도트 색상은 공용 상수(@/constants/codes) 사용
+// 개별 파일마다 "대기/대기 중/대기중" 등으로 라벨이 흩어져 있던 문제를 제거
+import { type AiTaskStatus, AI_TASK_STATUS_LABEL, AI_TASK_STATUS_DOT } from "@/constants/codes";
 
 type NodeType = "UNIT_WORK" | "SCREEN" | "AREA" | "FUNCTION";
 
@@ -69,8 +50,9 @@ export default function AiImplementCard({ projectId, refType, refId, implInfo, o
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  const dotColor = implInfo ? (STATUS_DOT[implInfo.status] ?? "#ccc") : "#ccc";
-  const statusLabel = implInfo ? (STATUS_LABEL[implInfo.status] ?? implInfo.status) : "-";
+  // implInfo.status 가 AiTaskStatus 범위 밖일 가능성 대비해 as 캐스팅 + 폴백 유지
+  const dotColor    = implInfo ? (AI_TASK_STATUS_DOT[implInfo.status as AiTaskStatus]   ?? "#ccc") : "#ccc";
+  const statusLabel = implInfo ? (AI_TASK_STATUS_LABEL[implInfo.status as AiTaskStatus] ?? implInfo.status) : "-";
 
   return (
     <>

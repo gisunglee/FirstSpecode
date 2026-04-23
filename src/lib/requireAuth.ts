@@ -19,7 +19,17 @@ import { verifyAccessToken, hashApiKey } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/apiResponse";
 
-export type AuthPayload = { mberId: string; email: string };
+/**
+ * sesnId는 JWT 경로에서만 채워진다(= 로그인·소셜·이메일 인증·토큰 갱신).
+ *   - API 키 인증 경로는 세션 개념이 없어 undefined.
+ *   - 30분 만료 이전에 배포된 구(舊) AT에도 없을 수 있으므로 optional.
+ * 민감 API에서만 존재 여부를 확인해 세션 활성 검증에 사용한다.
+ */
+export type AuthPayload = {
+  mberId: string;
+  email:  string;
+  sesnId?: string;
+};
 
 /**
  * AT 또는 API 키 검증 — 성공 시 페이로드, 실패 시 401 Response 반환
@@ -75,5 +85,9 @@ export async function requireAuth(request: NextRequest): Promise<AuthPayload | R
     return apiError("TOKEN_EXPIRED", "인증이 만료되었습니다. 다시 로그인해 주세요.", 401);
   }
 
-  return payload;
+  return {
+    mberId: payload.mberId,
+    email:  payload.email,
+    sesnId: payload.sesnId,
+  };
 }

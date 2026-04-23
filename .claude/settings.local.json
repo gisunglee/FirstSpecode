@@ -277,7 +277,14 @@
       "Bash(ls .eslintrc* eslint*)",
       "Bash(grep -E '\"lint\":' package.json)",
       "Bash(node --env-file=.env.local -e ' *)",
-      "Bash(grep -A 3 \"tbl_physcl_nm: string$\" d:/source/FirstSpecode/node_modules/.prisma/client/default.d.ts)"
+      "Bash(grep -A 3 \"tbl_physcl_nm: string$\" d:/source/FirstSpecode/node_modules/.prisma/client/default.d.ts)",
+      "Bash(xargs wc *)",
+      "Bash(wait blzg30ft7 *)",
+      "Bash(cat C:\\\\\\\\Users\\\\\\\\USER\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\d--source-FirstSpecode\\\\\\\\a3310486-a34f-47cb-b324-378a004007bc\\\\\\\\tasks\\\\\\\\blzg30ft7.output)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(tasklist)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(xargs -I{} grep -l \"tbSgStdGuide\" {})"
     ]
   }
 }

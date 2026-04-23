@@ -36,6 +36,7 @@ import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
 import AiImplementCard from "@/components/ui/AiImplementCard";
 import AiTaskFilePicker from "@/components/ui/AiTaskFilePicker";
+import { type AiTaskStatus, AI_TASK_STATUS_LABEL, AI_TASK_STATUS_DOT } from "@/constants/codes";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -767,8 +768,8 @@ function UnitWorkDetailPageInner() {
                       const isMutationPending = aiMutation.isPending && aiMutation.variables?.taskType === taskType;
                       const isSpinning        = isMutationPending || !!(info && ["PENDING", "IN_PROGRESS"].includes(info.status));
                       const hasDone           = !!(info && ["DONE", "APPLIED", "REJECTED", "FAILED"].includes(info.status));
-                      const dotColor          = info ? (AI_STATUS_DOT[info.status] ?? "#ccc") : "#ccc";
-                      const statusLabel       = isMutationPending && !info ? "대기 중..." : info ? (AI_STATUS_LABEL[info.status] ?? info.status) : "-";
+                      const dotColor          = info ? (AI_TASK_STATUS_DOT[info.status as AiTaskStatus] ?? "#ccc") : "#ccc";
+                      const statusLabel       = isMutationPending && !info ? "대기 중..." : info ? (AI_TASK_STATUS_LABEL[info.status as AiTaskStatus] ?? info.status) : "-";
 
                       return (
                         <div key={taskType} className="uw-ai-task-card" style={{
@@ -1241,25 +1242,9 @@ const UW_AI_TASK_CONFIGS = [
   { taskType: "INSPECT", label: "AI 점검",  desc: "전체 화면·영역·기능\ntop-down 점검", icon: { bg: "#e8f5e9", emoji: "✓" } },
 ] as const;
 
-const AI_STATUS_LABEL: Record<string, string> = {
-  PENDING:     "대기 중",
-  IN_PROGRESS: "진행 중",
-  DONE:        "완료",
-  APPLIED:     "적용됨",
-  REJECTED:    "반려됨",
-  FAILED:      "실패",
-  TIMEOUT:     "타임아웃",
-};
-
-const AI_STATUS_DOT: Record<string, string> = {
-  PENDING:     "#f59e0b",
-  IN_PROGRESS: "#f59e0b",
-  DONE:        "#22c55e",
-  APPLIED:     "#1976d2",
-  REJECTED:    "#c62828",
-  FAILED:      "#e65100",
-  TIMEOUT:     "#e65100",
-};
+// AI 상태 라벨/도트 색상은 공용 codes 모듈(@/constants/codes) 사용
+// 기존 로컬 정의는 "대기 중/진행 중/적용됨/반려됨/타임아웃" + Tailwind 팔레트(#f59e0b 등)로
+// 다른 화면과 완전히 엇갈린 상태였음 → 일관된 팔레트(AI_TASK_STATUS_DOT)로 통일
 
 const aiMiniBtn: React.CSSProperties = {
   fontSize: 11, padding: "3px 8px", borderRadius: 5, cursor: "pointer",

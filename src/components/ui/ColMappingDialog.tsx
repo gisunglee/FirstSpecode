@@ -16,6 +16,7 @@
  */
 
 import { useState, useEffect, useRef } from "react";
+import { flushSync } from "react-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
@@ -241,6 +242,11 @@ export default function ColMappingDialog({
   const dragKey     = useRef<string | null>(null);
   const dragOverKey = useRef<string | null>(null);
 
+  // 햄버거 핸들을 mousedown 한 순간에만 해당 row를 draggable=true로 활성화한다.
+  // 이렇게 하지 않으면 행 전체가 항상 draggable이어서, 셀 내부 텍스트를 드래그로
+  // 선택하려 해도 행 자체가 드래그되어 텍스트 선택/포커스가 불가능해진다.
+  const [dragHandleKey, setDragHandleKey] = useState<string | null>(null);
+
   function handleDragStart(key: string) { dragKey.current = key; }
   function handleDragEnter(key: string) { dragOverKey.current = key; }
   function handleDragEnd() {
@@ -248,6 +254,7 @@ export default function ColMappingDialog({
     const to   = rows.findIndex((r) => r._key === dragOverKey.current);
     dragKey.current     = null;
     dragOverKey.current = null;
+    setDragHandleKey(null);
     if (from < 0 || to < 0 || from === to) return;
 
     const reordered = [...rows];
@@ -501,7 +508,8 @@ export default function ColMappingDialog({
               return visibleRows.map((row, idx) => (
                 <div
                   key={row._key}
-                  draggable
+                  // 햄버거 핸들에서 mousedown 된 row만 draggable=true 가 되어 드래그 가능
+                  draggable={dragHandleKey === row._key}
                   onDragStart={() => handleDragStart(row._key)}
                   onDragEnter={() => handleDragEnter(row._key)}
                   onDragEnd={handleDragEnd}
@@ -512,8 +520,14 @@ export default function ColMappingDialog({
                     background: idx % 2 === 1 ? "#fafafa" : "var(--color-bg-card)",
                   }}
                 >
-                  {/* 드래그 핸들 */}
-                  <div style={{ width: 20, color: "#bbb", cursor: "grab", userSelect: "none", textAlign: "center", fontSize: 14, flexShrink: 0 }}>
+                  {/* 드래그 핸들 — mousedown 시점에 draggable 활성화
+                      flushSync 로 동기 렌더 강제: 같은 마우스 액션 안에서
+                      draggable=true 가 적용되어야 dragstart 이벤트가 발생함 */}
+                  <div
+                    onMouseDown={() => flushSync(() => setDragHandleKey(row._key))}
+                    onMouseUp={() => setDragHandleKey(null)}
+                    style={{ width: 20, color: "#bbb", cursor: "grab", userSelect: "none", textAlign: "center", fontSize: 14, flexShrink: 0 }}
+                  >
                     ☰
                   </div>
 

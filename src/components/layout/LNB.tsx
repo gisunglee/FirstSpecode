@@ -54,6 +54,7 @@ export default function LNB() {
   const promptTemplatesHref = pBase ? `${pBase}/prompt-templates` : "#";
   const reviewsHref = pBase ? `${pBase}/reviews` : "#";
   const memosHref = pBase ? `${pBase}/memos` : "#";
+  const standardGuidesHref = pBase ? `${pBase}/standard-guides` : "#";
   const planningHref = pBase ? `${pBase}/planning` : "#";
   const aiImportHref = pBase ? `${pBase}/planning/ai-import` : "#";
   const designImportHref = pBase ? `${pBase}/design-import` : "#";
@@ -118,6 +119,7 @@ export default function LNB() {
       { label: "요구분석 일괄 편집", href: planningHref, icon: "📅", isActive: !!pBase && pathname.startsWith(`${pBase}/planning`) && !pathname.startsWith(`${pBase}/planning/ai-import`) },
       { label: "기획실", href: planStudioHref, icon: "🎨", isActive: !!pBase && pathname.startsWith(`${pBase}/plan-studio`) },
       { label: "리뷰 요청", href: reviewsHref, icon: "💬", isActive: !!pBase && pathname.startsWith(`${pBase}/reviews`) },
+      { label: "표준 가이드", href: standardGuidesHref, icon: "📘", isActive: !!pBase && pathname.startsWith(`${pBase}/standard-guides`) },
       { label: "메모", href: memosHref, icon: "🗒", isActive: !!pBase && pathname.startsWith(`${pBase}/memos`) },
       // 실험: 프로젝트 계층을 그래프로 시각화 (UX 테스트 중)
       { label: "그래프 뷰 ✨", href: graphViewHref, icon: "🕸", isActive: !!pBase && pathname.startsWith(`${pBase}/graph`) },

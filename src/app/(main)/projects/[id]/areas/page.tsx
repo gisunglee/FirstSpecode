@@ -21,6 +21,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
+import { type AiTaskStatus, AI_TASK_STATUS_LABEL, AI_TASK_STATUS_BADGE } from "@/constants/codes";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -357,7 +358,7 @@ function AreasPageInner() {
                     }}
                   >
                     <span style={implStatusBadgeStyle(area.implTask.status)}>
-                      {AI_STATUS_LABEL[area.implTask.status] ?? area.implTask.status}
+                      {AI_TASK_STATUS_LABEL[area.implTask.status as AiTaskStatus] ?? area.implTask.status}
                     </span>
                     <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>
                       {formatRequestedAt(area.implTask.requestedAt)}
@@ -530,32 +531,14 @@ function typeBadgeStyle(type: string): React.CSSProperties {
   };
 }
 
-// ── AI 태스크 상태 라벨 + 배지 스타일 (AI 구현 컬럼용) ─────────────────────
-const AI_STATUS_LABEL: Record<string, string> = {
-  PENDING:     "대기",
-  IN_PROGRESS: "처리중",
-  DONE:        "완료",
-  APPLIED:     "반영됨",
-  REJECTED:    "반려",
-  FAILED:      "실패",
-  TIMEOUT:     "시간초과",
-};
-
-const AI_STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-  PENDING:     { bg: "#f5f5f5", color: "#666" },
-  IN_PROGRESS: { bg: "#e3f2fd", color: "#1565c0" },
-  DONE:        { bg: "#e8f5e9", color: "#2e7d32" },
-  APPLIED:     { bg: "#e8eaf6", color: "#283593" },
-  REJECTED:    { bg: "#fff3e0", color: "#e65100" },
-  FAILED:      { bg: "#ffebee", color: "#c62828" },
-  TIMEOUT:     { bg: "#fff3e0", color: "#e65100" },
-};
+// ── AI 태스크 상태 배지 스타일 (AI 구현 컬럼용) ─────────────────────
+// 상태 라벨·색상은 공용 codes 모듈(@/constants/codes)에서 가져옴
 
 function implStatusBadgeStyle(status: string): React.CSSProperties {
-  const c = AI_STATUS_COLORS[status] ?? { bg: "#f5f5f5", color: "#555" };
+  const c = AI_TASK_STATUS_BADGE[status as AiTaskStatus] ?? { bg: "#f5f5f5", fg: "#555" };
   return {
     display: "inline-block", padding: "2px 8px", borderRadius: 4,
-    fontSize: 11, fontWeight: 700, background: c.bg, color: c.color,
+    fontSize: 11, fontWeight: 700, background: c.bg, color: c.fg,
     whiteSpace: "nowrap",
   };
 }

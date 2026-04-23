@@ -17,6 +17,7 @@ model TbCmMember {
   mber_sttus_code     String                    @default("UNVERIFIED")
   plan_code           String                    @default("FREE") // 계정 플랜 (FREE/PRO/TEAM/ENTERPRISE)
   plan_expire_dt      DateTime? // 유료 플랜 만료일 (NULL=무료/무제한)
+  asignee_view_mode   String                    @default("all") // 전역 담당자 필터 모드: all | me
   join_dt             DateTime                  @default(now())
   mdfcn_dt            DateTime?
   wthdrw_dt           DateTime?
@@ -829,6 +830,29 @@ model TbDsMemo {
   @@map("tb_ds_memo")
 }
 
+// ── 표준 가이드 — 프로젝트별 AI 제약사항/규칙 문서 (UW-00030) ──────────────
+// 향후 MCP tool 노출과 /run-ai-task 프롬프트 자동 주입의 데이터 소스로 사용됨
+model TbSgStdGuide {
+  guide_id          String    @id @default(uuid())
+  prjct_id          String
+  // 카테고리: UI|DATA|AUTH|API|COMMON|SECURITY|FILE|ERROR|BATCH|REPORT
+  // enum 값은 src/constants/codes.ts 의 GuideCategory 와 동기화
+  guide_ctgry_code  String
+  guide_sj          String    @default("")
+  guide_cn          String?
+  // 사용여부 — Y=사용중(AI가 이 가이드를 참조) / N=미사용(보관만, AI에 전달 안 함)
+  // 삭제는 물리 삭제로 별도 처리 — use_yn은 "사용중/미사용" 비즈니스 속성 전용
+  use_yn            String    @default("Y") @db.Char(1)
+  creat_mber_id     String
+  creat_dt          DateTime  @default(now())
+  mdfr_mber_id      String?
+  mdfcn_dt          DateTime?
+
+  @@index([prjct_id, use_yn, mdfcn_dt(sort: Desc), creat_dt(sort: Desc)], map: "tb_sg_std_guide_prjct_dt_idx")
+  @@index([prjct_id, guide_ctgry_code, use_yn],                          map: "tb_sg_std_guide_ctgry_idx")
+  @@map("tb_sg_std_guide")
+}
+
 // ── API 키 — MCP 등 외부 클라이언트 인증용 (서비스 토큰 대체) ────────────
 model TbCmApiKey {
   api_key_id   String    @id @default(uuid())
@@ -844,6 +868,20 @@ model TbCmApiKey {
 
   @@index([mber_id], map: "idx_api_key_mber")
   @@map("tb_cm_api_key")
+}
+
+// Rate Limit 카운터 — 인증 엔드포인트(로그인/가입/재설정/토큰갱신) 남용 방어용.
+// Fixed Window Counter: src/lib/rateLimit.ts 의 checkRateLimit 헬퍼에서 upsert.
+// 키 포맷: "<ENDPOINT>_<DIMENSION>:<value>" (예: LOGIN_IP:1.2.3.4)
+model TbCmRateLimit {
+  rate_key_val    String   @id @db.VarChar(200)
+  window_start_dt DateTime
+  req_cnt         Int      @default(0)
+  creat_dt        DateTime @default(now())
+  updt_dt         DateTime @default(now())
+
+  @@index([window_start_dt], map: "tb_cm_rate_limit_window_idx")
+  @@map("tb_cm_rate_limit")
 }
 
 // ── 구현요청 스냅샷 — 각 계층의 _dc 내용을 요청 시점에 저장 (diff 추적용) ──

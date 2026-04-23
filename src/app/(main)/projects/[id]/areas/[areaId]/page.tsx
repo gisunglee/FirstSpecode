@@ -33,6 +33,7 @@ import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEdit
 import { ScreenLayoutEditor, type LayoutRow } from "@/components/ui/ScreenLayoutEditor";
 import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
 import AiTaskFilePicker from "@/components/ui/AiTaskFilePicker";
+import { type AiTaskStatus, AI_TASK_STATUS_LABEL, AI_TASK_STATUS_DOT } from "@/constants/codes";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
@@ -732,10 +733,10 @@ function AreaDetailPageInner() {
                   const inspectInfo   = data?.aiTasks?.[taskType];
                   const isMutPending  = aiMutation.isPending && aiMutation.variables?.taskType === taskType;
                   const isSpinning    = isMutPending || !!(inspectInfo && ["PENDING", "IN_PROGRESS"].includes(inspectInfo.status));
-                  const dotColor      = inspectInfo ? (AREA_AI_STATUS_DOT[inspectInfo.status] ?? "#ccc") : "#ccc";
+                  const dotColor      = inspectInfo ? (AI_TASK_STATUS_DOT[inspectInfo.status as AiTaskStatus] ?? "#ccc") : "#ccc";
                   const statusLabel   = isMutPending && !inspectInfo
                     ? "대기 중..."
-                    : inspectInfo ? (AREA_AI_STATUS_LABEL[inspectInfo.status] ?? inspectInfo.status) : "-";
+                    : inspectInfo ? (AI_TASK_STATUS_LABEL[inspectInfo.status as AiTaskStatus] ?? inspectInfo.status) : "-";
 
                   return (
                     <div style={{
@@ -1399,27 +1400,9 @@ const AREA_AI_INSPECT_CONFIG = {
   icon:     { bg: "#e8f5e9", emoji: "✓" },
 };
 
-// 상태별 도트 색상
-const AREA_AI_STATUS_DOT: Record<string, string> = {
-  PENDING:     "#f57c00",
-  IN_PROGRESS: "#1565c0",
-  DONE:        "#2e7d32",
-  APPLIED:     "#6a1b9a",
-  REJECTED:    "#c62828",
-  FAILED:      "#c62828",
-  TIMEOUT:     "#757575",
-};
-
-// 상태별 한글 레이블
-const AREA_AI_STATUS_LABEL: Record<string, string> = {
-  PENDING:     "대기 중",
-  IN_PROGRESS: "처리 중",
-  DONE:        "완료",
-  APPLIED:     "적용됨",
-  REJECTED:    "반려",
-  FAILED:      "실패",
-  TIMEOUT:     "시간 초과",
-};
+// 상태별 도트 색상/라벨은 공용 codes 모듈(@/constants/codes) 사용
+// 기존 로컬 정의(AREA_AI_STATUS_DOT/LABEL)는 "대기 중/처리 중/적용됨/시간 초과" 등으로
+// 다른 화면과 라벨이 엇갈렸으므로 통일 목적으로 제거
 
 // AI 카드 내 미니 버튼 공통 스타일
 const areaAiMiniBtn: React.CSSProperties = {

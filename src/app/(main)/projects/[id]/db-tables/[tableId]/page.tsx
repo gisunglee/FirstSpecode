@@ -18,9 +18,18 @@ import RevisionList from "@/components/db-table/RevisionList";
 import RevisionDiffDialog from "@/components/db-table/RevisionDiffDialog";
 import RevisionListDialog from "@/components/db-table/RevisionListDialog";
 import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
-// 공용 DDL 파서로 교체 — 기존 내부 parseDdl 와 동일 인터페이스의 parseSingleDdl 사용
-// 블록 주석 /* */ 지원, COMMENT ON TABLE 지원 등 개선이 자동 적용됨
-import { parseSingleDdl, type ParsedCol } from "@/lib/ddlParser";
+// 매핑 인사이트 Phase 1 — "사용 현황" 섹션 + 컬럼별 미사용 배지용 훅
+import TableUsageSection, { useTableUsage } from "@/components/db-table/TableUsageSection";
+// 매핑 인사이트 Phase 2 — 컬럼 클릭 드릴다운 팝업
+import ColumnUsageDialog from "@/components/db-table/ColumnUsageDialog";
+// 리팩토링 — 공통코드 그룹 검색 드롭다운 분리 (이 파일 1100줄+ 축소 목적)
+import CodeGroupSelect, { type CodeGroupOption } from "@/components/db-table/CodeGroupSelect";
+// 리팩토링 — ADD DDL 팝업 분리 (파싱 단계 / 확인 단계 JSX + 자체 상태 캡슐화)
+import AddDdlDialog from "@/components/db-table/AddDdlDialog";
+// 리팩토링 — 경량 확인 다이얼로그 2종 (논리명 경고, 삭제 확인+영향도)
+import { LgclNameWarnDialog, DeleteTableConfirmDialog } from "@/components/db-table/DbTableDialogs";
+// ParsedCol 타입만 사용 (파싱 자체는 AddDdlDialog 내부가 담당)
+import { type ParsedCol } from "@/lib/ddlParser";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -32,11 +41,6 @@ type ColDraft = {
   dataTyNm: string;
   colDc: string;
   refGrpCode: string;
-};
-
-type CodeGroupOption = {
-  grpCode: string;
-  grpCodeNm: string;
 };
 
 type DbTableDetail = {
@@ -117,9 +121,8 @@ function DbTableDetailPageInner() {
   const [cols, setCols] = useState<ColDraft[]>([]);
 
   // ── ADD DDL 팝업 상태 ──────────────────────────────────────────────────────
+  // ddlText/ddlParsed 는 AddDdlDialog 내부로 이관 → 여기서는 open 여부만 관리
   const [ddlOpen, setDdlOpen] = useState(false);
-  const [ddlText, setDdlText] = useState("");
-  const [ddlParsed, setDdlParsed] = useState<ParsedCol[] | null>(null);
 
   // ── 드래그 상태 ─────────────────────────────────────────────────────────────
   const dragIdx = useRef<number | null>(null);
@@ -154,6 +157,14 @@ function DbTableDetailPageInner() {
   });
   const members    = memberData?.members ?? [];
   const myMemberId = memberData?.myMemberId ?? "";
+
+  // 매핑 인사이트 — 컬럼별 사용 통계 (미사용 배지 + 아래 UsageSection 공유)
+  // 같은 queryKey 사용 → TableUsageSection 과 쿼리 dedupe
+  const { data: usageData } = useTableUsage(projectId, tableId);
+  const columnUsage = usageData?.columnUsage ?? {};
+
+  // 컬럼 드릴다운 팝업 대상 (Phase 2) — null 이면 팝업 닫힘
+  const [usageDialogColId, setUsageDialogColId] = useState<string | null>(null);
 
   useEffect(() => {
     if (data) {
@@ -223,6 +234,8 @@ function DbTableDetailPageInner() {
     onSuccess: (savedId) => {
       qc.invalidateQueries({ queryKey: ["db-tables", projectId] });
       qc.invalidateQueries({ queryKey: ["db-table", projectId, savedId] });
+      // 컬럼 삭제/추가는 매핑 유효성에 영향 → 사용 현황도 함께 갱신
+      qc.invalidateQueries({ queryKey: ["db-table-usage", projectId, savedId] });
       toast.success("저장되었습니다.");
       if (isNew) router.replace(`/projects/${projectId}/db-tables/${savedId}`);
     },
@@ -265,21 +278,11 @@ function DbTableDetailPageInner() {
     dragIdx.current = dragOverIdx.current = null;
   }
 
-  // ── DDL 파싱 처리 ───────────────────────────────────────────────────────────
-  // 공용 파서(parseSingleDdl)는 여러 CREATE TABLE 이 포함되어 있어도 첫 번째 블록의 컬럼만 반환.
-  // 블록 주석(/* */)·COMMENT ON TABLE·앞줄 단독 주석 등 확장된 패턴을 자동 지원.
-  function handleDdlParse() {
-    const parsed = parseSingleDdl(ddlText);
-    if (parsed.length === 0) {
-      toast.error("컬럼을 파싱할 수 없습니다. CREATE TABLE 문을 확인해 주세요.");
-      return;
-    }
-    setDdlParsed(parsed);
-  }
-
-  function handleDdlApply() {
-    if (!ddlParsed) return;
-    const newCols: ColDraft[] = ddlParsed.map((p) => ({
+  // ── DDL 등록 처리 ───────────────────────────────────────────────────────────
+  // 파싱/입력/확인 단계는 AddDdlDialog 내부가 담당.
+  // 여기서는 "최종 확정된 컬럼 배열을 현재 컬럼 리스트에 덧붙인다" 만 책임진다.
+  function handleDdlApply(parsed: ParsedCol[]) {
+    const newCols: ColDraft[] = parsed.map((p) => ({
       _key: nextKey(),
       colPhysclNm: p.colPhysclNm,
       colLgclNm: p.colLgclNm,
@@ -288,10 +291,6 @@ function DbTableDetailPageInner() {
       refGrpCode: "",
     }));
     setCols((prev) => [...prev, ...newCols]);
-    toast.success(`${ddlParsed.length}개 컬럼을 추가했습니다.`);
-    setDdlOpen(false);
-    setDdlText("");
-    setDdlParsed(null);
   }
 
   // 도움말 팝업
@@ -343,7 +342,7 @@ function DbTableDetailPageInner() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", padding: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", padding: 0 }}>
 
       {/* ── 헤더 ── */}
       <div style={{
@@ -381,7 +380,10 @@ function DbTableDetailPageInner() {
       </div>
 
       {/* ── 본문 ── */}
-      <div style={{ flex: 1, minHeight: 0, overflow: "hidden", padding: "20px 24px 20px", display: "flex", flexDirection: "column", gap: 16, maxWidth: 1200 }}>
+      {/* 본문 래퍼 — Phase 1 이후 UsageSection/변경이력 섹션이 추가되면서
+          과거의 "컬럼 목록만 내부 스크롤" 구조가 공간 경쟁을 일으켜 컬럼 목록이 0 높이로 접힘.
+          페이지 전체 스크롤 방식으로 전환 (overflow:hidden 제거, flex:1 제거). */}
+      <div style={{ padding: "20px 24px 20px", display: "flex", flexDirection: "column", gap: 16, maxWidth: 1200 }}>
 
         {/* ── 테이블 기본 정보 ── */}
         <section style={{ ...sectionStyle, flexShrink: 0 }}>
@@ -468,8 +470,10 @@ function DbTableDetailPageInner() {
           </div>
         </section>
 
-        {/* ── 컬럼 목록 ── */}
-        <section style={{ ...sectionStyle, flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        {/* ── 컬럼 목록 ──
+            flex:1 제거 — 자연 높이로 렌더링되어야 페이지 전체 스크롤에 자연스럽게 편입된다.
+            컬럼이 매우 많은 테이블은 페이지 스크롤로 대응. */}
+        <section style={sectionStyle}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
             <div style={sectionTitleStyle}>
               컬럼 목록
@@ -480,7 +484,7 @@ function DbTableDetailPageInner() {
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               {/* ADD DDL */}
               <button
-                onClick={() => { setDdlOpen(true); setDdlParsed(null); setDdlText(""); }}
+                onClick={() => setDdlOpen(true)}
                 style={ddlBtnStyle}
               >
                 ADD DDL
@@ -496,7 +500,7 @@ function DbTableDetailPageInner() {
             </div>
           </div>
 
-          <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+          <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
             {/* 헤더 */}
             <div style={{ ...colHeaderStyle, flexShrink: 0 }}>
               <div />
@@ -524,13 +528,19 @@ function DbTableDetailPageInner() {
               <div />
             </div>
 
-            <div style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
+            {/* 컬럼 행 컨테이너 — 자연 높이 (페이지 전체 스크롤에 편입) */}
+            <div>
               {cols.length === 0 ? (
                 <div style={{ padding: "32px 0", textAlign: "center", color: "#bbb", fontSize: 13 }}>
                   컬럼을 추가해 주세요.
                 </div>
               ) : (
-                cols.map((col, idx) => (
+                cols.map((col, idx) => {
+                  // 매핑 인사이트 — 저장된 컬럼 중 col_mapping 에서 참조된 적이 없는 "미사용 컬럼"
+                  // · col.colId 없음(=새로 추가/미저장)은 #fffbeb 배경과 개념이 달라 제외
+                  // · box-shadow inset 으로 좌측 3px 오렌지 띠 → 레이아웃 영향 없음
+                  const isUnused = !!col.colId && !columnUsage[col.colId];
+                  return (
                   <div
                     key={col._key}
                     // 드래그는 핸들(⋮⋮)을 mousedown 했을 때만 활성화됨
@@ -539,10 +549,13 @@ function DbTableDetailPageInner() {
                     onDragEnter={() => handleDragEnter(idx)}
                     onDragEnd={() => { handleDragEnd(); setDragHandleIdx(null); }}
                     onDragOver={(e) => e.preventDefault()}
+                    title={isUnused ? "이 컬럼은 아직 어떤 기능/영역/화면에서도 매핑되지 않았습니다." : undefined}
                     style={{
                       ...colRowStyle,
                       borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
                       background: col.colId ? "var(--color-bg-card)" : "#fffbeb",
+                      // 미사용 컬럼 표시 — warning semantic 토큰 사용 (3테마 대응)
+                      boxShadow:  isUnused ? "inset 3px 0 0 var(--color-warning)" : "none",
                     }}
                   >
                     <div
@@ -583,15 +596,39 @@ function DbTableDetailPageInner() {
                       options={codeGroups ?? []}
                       onChange={(v) => updateCol(col._key, "refGrpCode", v)}
                     />
-                    <button
-                      onClick={() => removeColumn(col._key)}
-                      style={{ background: "none", border: "none", cursor: "pointer", color: "#e57373", fontSize: 16, padding: "0 4px", lineHeight: 1 }}
-                      title="컬럼 삭제"
-                    >
-                      ✕
-                    </button>
+                    {/* 액션 버튼 세트 — 사용처 보기(저장된 컬럼만) + 삭제
+                        · 사용처 버튼은 col.colId 있을 때만 의미 있음
+                        · 매핑이 있는 컬럼은 강조색(🔎), 미사용은 연한 회색 아이콘 */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
+                      {col.colId && (
+                        <button
+                          type="button"
+                          onClick={() => col.colId && setUsageDialogColId(col.colId)}
+                          title={
+                            columnUsage[col.colId]
+                              ? `이 컬럼의 사용처 보기 (매핑 ${columnUsage[col.colId]!.total}건)`
+                              : "이 컬럼의 사용처 보기 (현재 매핑 없음)"
+                          }
+                          style={{
+                            background: "none", border: "none", cursor: "pointer",
+                            fontSize: 13, padding: "0 3px", lineHeight: 1,
+                            opacity: columnUsage[col.colId] ? 1 : 0.4,
+                          }}
+                        >
+                          🔎
+                        </button>
+                      )}
+                      <button
+                        onClick={() => removeColumn(col._key)}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "#e57373", fontSize: 16, padding: "0 4px", lineHeight: 1 }}
+                        title="컬럼 삭제"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -602,6 +639,13 @@ function DbTableDetailPageInner() {
             </p>
           )}
         </section>
+
+        {/* ── 사용 현황 (매핑 인사이트 Phase 1) ──
+            · 신규 등록 중에는 tableId 가 없어서 숨김
+            · 섹션 내부에서 자체 로딩/빈 상태 처리 */}
+        {!isNew && data && (
+          <TableUsageSection projectId={projectId} tableId={tableId} />
+        )}
 
         {/* ── 변경 이력 (최근 5건 · 인라인) ── */}
         {!isNew && data && (
@@ -658,84 +702,23 @@ function DbTableDetailPageInner() {
         currentAssigneeName={data?.assignMemberName ?? ""}
       />
 
-      {/* ── ADD DDL 팝업 ── */}
-      {ddlOpen && (
-        <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
-          onClick={() => { setDdlOpen(false); setDdlParsed(null); }}
-        >
-          <div
-            style={{ width: 560, height: "70vh", maxHeight: "85vh", background: "var(--color-bg-card)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", overflow: "hidden" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* 팝업 헤더 */}
-            <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-              <span style={{ fontSize: 15, fontWeight: 700 }}>ADD DDL</span>
-              <button onClick={() => { setDdlOpen(false); setDdlParsed(null); }} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#999", lineHeight: 1 }}>✕</button>
-            </div>
-
-            {ddlParsed === null ? (
-              /* 입력 단계 */
-              <>
-                <div style={{ flex: 1, padding: "14px 20px", display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
-                  <label style={{ fontSize: 12, color: "var(--color-text-secondary)", fontWeight: 600 }}>
-                    CREATE TABLE 문을 입력하세요.
-                    <span style={{ fontWeight: 400, marginLeft: 6 }}>Oracle / MySQL / PostgreSQL 모두 지원</span>
-                  </label>
-                  <textarea
-                    value={ddlText}
-                    onChange={(e) => setDdlText(e.target.value)}
-                    placeholder={"CREATE TABLE tb_example (\n  col_id VARCHAR(36) NOT NULL,\n  col_nm VARCHAR(200),\n  PRIMARY KEY (col_id)\n);"}
-                    style={{
-                      flex: 1, resize: "none", padding: "10px 12px",
-                      border: "1px solid var(--color-border)", borderRadius: 6,
-                      fontSize: 12,
-                      fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace",
-                      background: "var(--color-bg-muted)",
-                      color: "var(--color-text-primary)",
-                      lineHeight: 1.6, outline: "none",
-                    }}
-                    autoFocus
-                  />
-                </div>
-                <div style={{ padding: "12px 20px", borderTop: "1px solid var(--color-border)", display: "flex", justifyContent: "flex-end", gap: 8, flexShrink: 0 }}>
-                  <button onClick={() => setDdlOpen(false)} style={secondaryBtnStyle}>취소</button>
-                  <button onClick={handleDdlParse} disabled={!ddlText.trim()} style={primaryBtnStyle}>파싱하기</button>
-                </div>
-              </>
-            ) : (
-              /* 확인 단계 */
-              <>
-                <div style={{ flex: 1, padding: "14px 20px", display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 4, flexShrink: 0 }}>
-                    {ddlParsed.length}개 컬럼을 파싱했습니다. 등록하시겠습니까?
-                  </div>
-                  <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "6px 12px", background: "var(--color-bg-muted)", fontSize: 11, fontWeight: 700, color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
-                      <div>물리 컬럼명</div>
-                      <div>논리 컬럼명</div>
-                      <div>데이터 타입</div>
-                    </div>
-                    <div style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
-                      {ddlParsed.map((p, i) => (
-                        <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: "5px 12px", borderTop: i === 0 ? "none" : "1px solid var(--color-border)", fontSize: 12 }}>
-                          <span style={{ fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace", fontWeight: 600, color: "var(--color-text-primary)" }}>{p.colPhysclNm}</span>
-                          <span style={{ color: p.colLgclNm ? "var(--color-text-primary)" : "#bbb" }}>{p.colLgclNm || "—"}</span>
-                          <span style={{ fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace", color: "var(--color-text-secondary)" }}>{p.dataTyNm}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div style={{ padding: "12px 20px", borderTop: "1px solid var(--color-border)", display: "flex", justifyContent: "flex-end", gap: 8, flexShrink: 0 }}>
-                  <button onClick={() => setDdlParsed(null)} style={secondaryBtnStyle}>다시 입력</button>
-                  <button onClick={handleDdlApply} style={primaryBtnStyle}>등록</button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+      {/* 컬럼 사용처 드릴다운 (Phase 2) — 🔎 버튼 클릭 시 표시 */}
+      {usageDialogColId && (
+        <ColumnUsageDialog
+          open={true}
+          onClose={() => setUsageDialogColId(null)}
+          projectId={projectId}
+          tableId={tableId}
+          colId={usageDialogColId}
+        />
       )}
+
+      {/* ── ADD DDL 팝업 (분리 컴포넌트) ── */}
+      <AddDdlDialog
+        open={ddlOpen}
+        onClose={() => setDdlOpen(false)}
+        onApply={handleDdlApply}
+      />
 
       {/* ── 공통 코드 도움말 팝업 ── */}
       {helpOpen && (
@@ -761,197 +744,38 @@ function DbTableDetailPageInner() {
         </div>
       )}
 
-      {/* ── 논리 컬럼명 누락 경고 다이얼로그 ── */}
-      {lgclWarnOpen && (
-        <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
-          onClick={() => setLgclWarnOpen(false)}
-        >
-          <div style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "28px 32px", minWidth: 360, maxWidth: 440, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }} onClick={(e) => e.stopPropagation()}>
-            <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700 }}>논리 컬럼명 누락</p>
-            <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-              논리 컬럼명이 없는 컬럼이 <strong style={{ color: "#e65100" }}>{lgclWarnCount}개</strong> 있습니다.<br />
-              나중에 입력하고, 지금은 이대로 저장하시겠습니까?
-            </p>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button
-                style={{ padding: "6px 16px", borderRadius: 6, border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: 13, cursor: "pointer" }}
-                onClick={() => setLgclWarnOpen(false)}
-              >
-                취소
-              </button>
-              <button
-                style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "rgba(103,80,164,1)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-                onClick={() => { setLgclWarnOpen(false); saveMutation.mutate(); }}
-              >
-                저장
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── 삭제 확인 다이얼로그 ── */}
-      {deleteConfirm && (
-        <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
-          onClick={() => setDeleteConfirm(false)}
-        >
-          <div style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "28px 32px", minWidth: 360, maxWidth: 440, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }} onClick={(e) => e.stopPropagation()}>
-            <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700 }}>테이블을 삭제하시겠습니까?</p>
-            <p style={{ margin: "0 0 6px", fontSize: 14, color: "var(--color-text-secondary)" }}>
-              <code style={{ fontFamily: "monospace", background: "var(--color-bg-muted)", padding: "1px 6px", borderRadius: 4 }}>
-                {physNm}
-              </code>
-            </p>
-            {cols.length > 0 && (
-              <p style={{ margin: "0 0 0", fontSize: 12, color: "#e57373" }}>
-                ⚠ 하위 컬럼 {cols.length}개도 함께 삭제됩니다.
-              </p>
-            )}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>
-              <button
-                style={{ padding: "6px 16px", borderRadius: 6, border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: 13, cursor: "pointer" }}
-                onClick={() => setDeleteConfirm(false)}
-                disabled={deleteMutation.isPending}
-              >
-                취소
-              </button>
-              <button
-                style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "#e53935", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-                onClick={() => deleteMutation.mutate()}
-                disabled={deleteMutation.isPending}
-              >
-                {deleteMutation.isPending ? "삭제 중..." : "삭제"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── 논리 컬럼명 누락 경고 다이얼로그 (분리 컴포넌트) ── */}
+      <LgclNameWarnDialog
+        open={lgclWarnOpen}
+        missing={lgclWarnCount}
+        onClose={() => setLgclWarnOpen(false)}
+        onConfirm={() => { setLgclWarnOpen(false); saveMutation.mutate(); }}
+        busy={saveMutation.isPending}
+      />
+      {/* ── 삭제 확인 다이얼로그 (분리 컴포넌트, Phase 2 영향도 경고 포함) ── */}
+      <DeleteTableConfirmDialog
+        open={deleteConfirm}
+        tableName={physNm}
+        colCount={cols.length}
+        impact={usageData ? {
+          functionCount: usageData.summary.functionCount,
+          areaCount:     usageData.summary.areaCount,
+          screenCount:   usageData.summary.screenCount,
+        } : undefined}
+        onClose={() => setDeleteConfirm(false)}
+        onConfirm={() => deleteMutation.mutate()}
+        busy={deleteMutation.isPending}
+      />
     </div>
   );
 }
 
-// ── 코드 그룹 검색 드롭다운 ───────────────────────────────────────────────────
-// 클릭 → 검색 입력 + 필터링된 목록 → 선택 → grp_code 저장
-
-function CodeGroupSelect({
-  value,
-  options,
-  onChange,
-}: {
-  value: string;
-  options: CodeGroupOption[];
-  onChange: (grpCode: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
-
-  // 선택된 그룹명 표시
-  const selected = options.find((o) => o.grpCode === value);
-
-  // 검색 필터링
-  const filtered = options.filter((o) =>
-    !search ||
-    o.grpCode.toLowerCase().includes(search.toLowerCase()) ||
-    o.grpCodeNm.toLowerCase().includes(search.toLowerCase())
-  );
-
-  // 외부 클릭 시 닫기
-  useEffect(() => {
-    if (!open) return;
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  return (
-    <div ref={ref} style={{ position: "relative" }}>
-      {/* 표시 영역 — 클릭하면 드롭다운 토글 */}
-      <div
-        onClick={() => { setOpen(!open); setSearch(""); }}
-        style={{
-          ...colInputStyle,
-          cursor: "pointer",
-          display: "flex", alignItems: "center", gap: 4,
-          overflow: "hidden", whiteSpace: "nowrap",
-          minHeight: 28,
-        }}
-      >
-        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", color: selected ? "var(--color-text-primary)" : "#bbb", fontSize: 12 }}>
-          {selected ? selected.grpCodeNm : ""}
-        </span>
-        {/* 클리어 버튼 */}
-        {value && (
-          <span
-            onClick={(e) => { e.stopPropagation(); onChange(""); }}
-            style={{ color: "#999", fontSize: 12, cursor: "pointer", flexShrink: 0 }}
-          >
-            ✕
-          </span>
-        )}
-      </div>
-
-      {/* 드롭다운 */}
-      {open && (
-        <div style={{
-          position: "absolute", top: "100%", right: 0, zIndex: 100,
-          width: 280, maxHeight: 240,
-          background: "var(--color-bg-card)", border: "1px solid var(--color-border)",
-          borderRadius: 6, boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
-          display: "flex", flexDirection: "column",
-        }}>
-          {/* 검색 입력 */}
-          <input
-            autoFocus
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="코드 그룹 검색..."
-            style={{
-              padding: "6px 10px", border: "none", borderBottom: "1px solid var(--color-border)",
-              outline: "none", fontSize: 12, background: "var(--color-bg-muted)",
-              color: "var(--color-text-primary)",
-            }}
-          />
-          {/* 목록 */}
-          <div style={{ overflowY: "auto", flex: 1 }}>
-            {filtered.length === 0 ? (
-              <div style={{ padding: "12px", textAlign: "center", color: "#bbb", fontSize: 11 }}>
-                검색 결과 없음
-              </div>
-            ) : (
-              filtered.map((o) => (
-                <div
-                  key={o.grpCode}
-                  onClick={() => { onChange(o.grpCode); setOpen(false); }}
-                  style={{
-                    padding: "5px 10px", cursor: "pointer", fontSize: 12,
-                    background: o.grpCode === value ? "rgba(103,80,164,0.08)" : "transparent",
-                    borderBottom: "1px solid var(--color-border)",
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-bg-hover, #f5f7ff)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = o.grpCode === value ? "rgba(103,80,164,0.08)" : "transparent"; }}
-                >
-                  <span style={{ fontWeight: 600, color: "rgba(103,80,164,0.9)", marginRight: 6, fontFamily: "'JetBrains Mono','Consolas',monospace", fontSize: 11 }}>
-                    {o.grpCode}
-                  </span>
-                  <span style={{ color: "var(--color-text-primary)" }}>{o.grpCodeNm}</span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+// CodeGroupSelect 는 @/components/db-table/CodeGroupSelect 로 분리 이관됨.
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-const COL_GRID = "28px 1fr 1fr 140px 1fr 160px 36px";
+// 핸들 / 물리명 / 논리명 / 데이터타입 / 설명 / 공통코드 / 액션(사용처+삭제)
+const COL_GRID = "28px 1fr 1fr 140px 1fr 160px 64px";
 
 const sectionStyle: React.CSSProperties = {
   background: "var(--color-bg-card)",

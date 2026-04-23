@@ -10,6 +10,7 @@
     "db:studio": "dotenv -e .env.local -- prisma studio",
     "db:generate": "dotenv -e .env.local -- prisma generate",
     "test:ddl": "npx tsx scripts/test-ddl-parser.ts && npx tsx scripts/test-ddl-parser-2.ts",
+    "test:codes": "npx tsx scripts/test-codes.ts",
     "postinstall": "node -e \"const fs=require('fs'),f='node_modules/@excalidraw/excalidraw/dist/dev/index.css';if(fs.existsSync(f)){const c=fs.readFileSync(f,'utf8');fs.writeFileSync(f,c.replace(/\\/\\*#\\s*sourceMappingURL=[^*]*\\*\\//g,''));}\""
   },
   "keywords": [],

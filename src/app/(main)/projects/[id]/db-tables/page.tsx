@@ -17,6 +17,9 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import DdlBulkImportDialog from "@/components/ui/DdlBulkImportDialog";
+// 매핑 인사이트 Phase 2 — IO 프로필 아이콘, 커버리지 텍스트 배지
+import { IoProfileIcon, CoverageText } from "@/components/db-table/TableInsightBadges";
+import type { IoProfile } from "@/lib/dbTableUsage";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -31,8 +34,31 @@ type DbTableRow = {
   // 담당자 — 서버 join으로 내려옴. 미지정/퇴장 멤버면 null
   assignMemberId:   string | null;
   assignMemberName: string | null;
-  columnCount: number;
+  columnCount:      number;
+  // 이 테이블의 컬럼을 사용하는 distinct 기능 수 (매핑 인사이트 Phase 1)
+  // 0 이면 "아직 설계에서 참조되지 않은 테이블" 로 해석 가능 → 회색 처리
+  functionCount:    number;
+  // Phase 2 추가 — 매핑된 적 있는 컬럼 수 (커버리지 계산용)
+  usedColCount:     number;
+  // Phase 2 추가 — IO 프로필 분류 (READ_HEAVY / WRITE_HEAVY / MIXED / NONE)
+  ioProfile:        IoProfile;
+  // Phase 3 추가 — 마지막 매핑 저장 시각 (ISO). 매핑 없으면 null.
+  lastUsedDt:       string | null;
 };
+
+// ── 상수 ──────────────────────────────────────────────────────────────────────
+
+// 클라이언트 사이드 인사이트 필터 — URL 파라미터 대신 페이지 내부 state 로 유지
+// (같은 목록을 다른 관점으로 볼 뿐이라 URL 공유까진 불필요하다고 판단)
+type InsightFilter = "all" | "unused" | "low" | "hot" | "stale";
+
+// 임계값 (필요 시 상수 튜닝으로 정책 조정)
+//  - 저활용:  커버리지 < 30% (컬럼은 있는데 대부분 안 쓰임)
+//  - 핫:     functionCount >= 5 (특정 테이블을 여러 기능이 공통 사용)
+//  - 오래됨: 마지막 매핑 저장이 STALE_DAYS 일 이상 전
+const LOW_COVERAGE_THRESHOLD = 30;
+const HOT_FUNCTION_THRESHOLD = 5;
+const STALE_DAYS             = 90;
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
 
@@ -58,6 +84,30 @@ function DbTablesPageInner() {
 
   const [search, setSearch] = useState("");
 
+  // 매핑 인사이트 필터 — Phase 2
+  //   · all:    전체
+  //   · unused: 매핑 자체가 없는 테이블 (ioProfile=NONE)
+  //   · low:    컬럼이 있는데 커버리지 < 30% (설계 누락 의심)
+  //   · hot:    기능 연결 수가 임계치 이상 (핵심 테이블)
+  const [insightFilter, setInsightFilter] = useState<InsightFilter>("all");
+
+  // 담당자 필터 — 전역 appStore.myAssigneeMode 구독 (GNB 토글과 양방향 바인딩)
+  const filterAssignedTo  = useAppStore((s) => s.myAssigneeMode);
+  const setMyAssigneeMode = useAppStore((s) => s.setMyAssigneeMode);
+  const hasLoadedProfile  = useAppStore((s) => s._hasLoadedProfile);
+  // 페이지 세그먼트 토글 클릭 → 전역 state + DB 저장 + 실패 시 롤백
+  function setFilterAssignedTo(next: "all" | "me") {
+    const prev = filterAssignedTo;
+    setMyAssigneeMode(next);
+    authFetch("/api/member/profile/assignee-view", {
+      method: "PATCH",
+      body:   JSON.stringify({ mode: next }),
+    }).catch((err: Error) => {
+      setMyAssigneeMode(prev);
+      toast.error("설정 저장 실패: " + err.message);
+    });
+  }
+
   // ── 신규 등록 인라인 폼 ──────────────────────────────────────────────────────
   const [creating,     setCreating]     = useState(false);
   const [newPhysNm,    setNewPhysNm]    = useState("");
@@ -68,11 +118,15 @@ function DbTablesPageInner() {
   const [bulkOpen, setBulkOpen] = useState(false);
 
   // ── 목록 조회 ────────────────────────────────────────────────────────────────
+  // 프로필 로드 전에는 쿼리 지연 → 첫 렌더 플리커 방지
   const { data: rows = [], isLoading } = useQuery<DbTableRow[]>({
-    queryKey: ["db-tables", projectId],
-    queryFn:  () =>
-      authFetch<{ data: DbTableRow[] }>(`/api/projects/${projectId}/db-tables`)
-        .then((r) => r.data),
+    queryKey: ["db-tables", projectId, filterAssignedTo],
+    queryFn:  () => {
+      const qs = filterAssignedTo === "me" ? "?assignedTo=me" : "";
+      return authFetch<{ data: DbTableRow[] }>(`/api/projects/${projectId}/db-tables${qs}`)
+        .then((r) => r.data);
+    },
+    enabled: hasLoadedProfile,
   });
 
   // ── 생성 뮤테이션 ────────────────────────────────────────────────────────────
@@ -93,11 +147,38 @@ function DbTablesPageInner() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const filtered = rows.filter(
-    (r) =>
-      r.tblPhysclNm.toLowerCase().includes(search.toLowerCase()) ||
-      r.tblLgclNm.toLowerCase().includes(search.toLowerCase())
-  );
+  // 검색어 + 인사이트 필터를 동시에 적용
+  // 인사이트 필터는 "관점 전환" 이므로 검색과 교집합으로 동작
+  const filtered = rows.filter((r) => {
+    // 1) 검색어
+    const q = search.toLowerCase();
+    if (q && !r.tblPhysclNm.toLowerCase().includes(q) && !r.tblLgclNm.toLowerCase().includes(q)) {
+      return false;
+    }
+    // 2) 인사이트 필터
+    if (insightFilter === "unused") {
+      // 매핑이 전혀 없는 테이블 (IO 분류 기준) — 정리 대상 후보
+      return r.ioProfile === "NONE";
+    }
+    if (insightFilter === "low") {
+      // 컬럼은 있는데 활용률이 낮음 (설계 누락 의심)
+      // 0 컬럼 테이블은 계산 불능이라 제외
+      if (r.columnCount === 0) return false;
+      const coverage = (r.usedColCount / r.columnCount) * 100;
+      return coverage > 0 && coverage < LOW_COVERAGE_THRESHOLD;
+    }
+    if (insightFilter === "hot") {
+      return r.functionCount >= HOT_FUNCTION_THRESHOLD;
+    }
+    if (insightFilter === "stale") {
+      // 매핑이 있으면서 마지막 저장이 STALE_DAYS 이상 전인 테이블
+      // (매핑이 없는 테이블은 "unused" 필터 대상 — 여기선 제외)
+      if (!r.lastUsedDt) return false;
+      const ageMs = Date.now() - new Date(r.lastUsedDt).getTime();
+      return ageMs >= STALE_DAYS * 24 * 60 * 60 * 1000;
+    }
+    return true;
+  });
 
   function handleCreate() {
     if (!newPhysNm.trim()) { toast.error("물리 테이블명을 입력해 주세요."); return; }
@@ -145,17 +226,68 @@ function DbTablesPageInner() {
 
       <div style={{ padding: "0 24px 24px" }}>
 
-        {/* ── 검색 + 건수 ── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        {/* ── 검색 + 인사이트 필터 + 건수 + 담당자 필터 ── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="테이블명 검색..."
             style={{ ...inputStyle, width: 280 }}
           />
+
+          {/* 인사이트 필터 칩 — Phase 2
+              전체/미사용/저활용/핫 · 검색/담당자 필터와 교집합으로 동작 */}
+          <div style={{ display: "inline-flex", gap: 4 }}>
+            {([
+              { key: "all",    label: "전체",    tip: "모든 테이블" },
+              { key: "unused", label: "미사용",  tip: "매핑이 전혀 없는 테이블 (정리 대상 후보)" },
+              { key: "low",    label: "저활용",  tip: `컬럼 활용률 < ${LOW_COVERAGE_THRESHOLD}% (설계 누락 의심)` },
+              { key: "hot",    label: "핫",      tip: `기능 연결 ${HOT_FUNCTION_THRESHOLD}개 이상 (핵심 테이블)` },
+              { key: "stale",  label: "오래됨",  tip: `마지막 매핑 저장이 ${STALE_DAYS}일 이상 지난 테이블 (데드 후보)` },
+            ] as const).map((chip) => {
+              const active = insightFilter === chip.key;
+              return (
+                <button
+                  key={chip.key}
+                  type="button"
+                  onClick={() => setInsightFilter(chip.key)}
+                  title={chip.tip}
+                  style={{
+                    padding:    "4px 10px",
+                    borderRadius: 999,
+                    border:     `1px solid ${active ? "var(--color-primary, #1976d2)" : "var(--color-border)"}`,
+                    background: active ? "var(--color-primary, #1976d2)" : "var(--color-bg-card)",
+                    color:      active ? "#fff" : "var(--color-text-primary)",
+                    fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
+          </div>
+
           <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
             총 <strong>{filtered.length}</strong>건
           </span>
+          <div style={{ flex: 1 }} />
+          {/* 담당자 세그먼트 토글 — GNB 전역 토글과 양방향 바인딩 */}
+          <div style={segmentGroupStyle}>
+            <button
+              type="button"
+              onClick={() => setFilterAssignedTo("all")}
+              style={segmentBtnStyle(filterAssignedTo === "all")}
+            >
+              전체
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterAssignedTo("me")}
+              style={segmentBtnStyle(filterAssignedTo === "me")}
+            >
+              내 담당
+            </button>
+          </div>
         </div>
 
         {/* ── 테이블 ── */}
@@ -168,6 +300,18 @@ function DbTablesPageInner() {
             <span>설명</span>
             <span>담당자</span>
             <span style={{ textAlign: "center" }}>컬럼 수</span>
+            {/* Phase 2 — 컬럼 활용률 */}
+            <span style={{ textAlign: "center" }} title="매핑된 컬럼 비율 (usedColCount / columnCount)">
+              활용률
+            </span>
+            {/* 기능 연결수 — 이 테이블을 사용하는 distinct 기능 수 (매핑 인사이트) */}
+            <span style={{ textAlign: "center" }} title="이 테이블의 컬럼을 사용하는 기능의 수">
+              기능 연결
+            </span>
+            {/* Phase 2 — IO 프로필 아이콘 (조회/저장/혼합) */}
+            <span style={{ textAlign: "center" }} title="IO 프로필: 조회 위주(🔍) / 저장 위주(✏️) / 혼합(🔄)">
+              IO
+            </span>
             <span>등록/수정일</span>
           </div>
 
@@ -194,8 +338,11 @@ function DbTablesPageInner() {
                 placeholder="설명 (선택)"
                 style={inlineInputStyle}
               />
-              {/* 담당자 / 컬럼수 / 등록일 자리 — 인라인 등록 시에는 비워두고
-                  저장 후 상세 페이지에서 담당자 설정 가능 */}
+              {/* 담당자 / 컬럼수 / 활용률 / 기능 연결 / IO / 등록일 자리 — 인라인 등록 시에는 모두 비움
+                  (신규 테이블은 매핑이 없으므로 인사이트 값은 모두 기본값) */}
+              <div />
+              <div />
+              <div />
               <div />
               <div />
               <div />
@@ -268,6 +415,36 @@ function DbTablesPageInner() {
                   {row.columnCount}
                 </span>
 
+                {/* 활용률 — Phase 2. 매핑된 컬럼 / 전체 컬럼 */}
+                <span style={{ textAlign: "center" }}>
+                  <CoverageText used={row.usedColCount} total={row.columnCount} />
+                </span>
+
+                {/* 기능 연결수 (매핑 인사이트) — 0 이면 "아직 참조되지 않음" 으로 회색 처리.
+                    많이 연결될수록 핵심 테이블이라는 시각적 힌트를 주기 위해 강조 색상 사용 */}
+                <span
+                  style={{
+                    textAlign: "center",
+                    fontSize:  13,
+                    fontWeight: row.functionCount > 0 ? 700 : 400,
+                    color: row.functionCount > 0
+                      ? "var(--color-primary, #1976d2)"
+                      : "var(--color-text-tertiary, #bbb)",
+                  }}
+                  title={
+                    row.functionCount === 0
+                      ? "이 테이블은 아직 어떤 기능에서도 컬럼 매핑되지 않았습니다."
+                      : `${row.functionCount}개 기능이 이 테이블의 컬럼을 사용합니다.`
+                  }
+                >
+                  {row.functionCount}
+                </span>
+
+                {/* IO 프로필 — Phase 2 */}
+                <span style={{ textAlign: "center" }}>
+                  <IoProfileIcon profile={row.ioProfile} />
+                </span>
+
                 {/* 등록/수정일 — 수정된 적이 있으면 mdfcnDt, 아니면 creatDt */}
                 <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
                   {(row.mdfcnDt ?? row.creatDt).slice(0, 10)}
@@ -284,8 +461,9 @@ function DbTablesPageInner() {
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-// 물리 / 논리 / 설명 / 담당자 / 컬럼수 / 등록·수정일
-const GRID = "minmax(160px,220px) minmax(120px,180px) 1fr 120px 80px 100px";
+// 물리 / 논리 / 설명 / 담당자 / 컬럼수 / 활용률 / 기능연결 / IO / 등록·수정일
+const GRID =
+  "minmax(160px,220px) minmax(120px,180px) 1fr 120px 72px 100px 80px 48px 100px";
 
 const headerRowStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID,
@@ -335,6 +513,25 @@ const bulkBtnStyle: React.CSSProperties = {
   color: "var(--color-text-primary)",
   fontSize: 12, fontWeight: 600, cursor: "pointer",
 };
+
+// 담당자 필터 세그먼트 토글 — 다른 4개 목록과 동일 패턴
+const segmentGroupStyle: React.CSSProperties = {
+  display:      "inline-flex",
+  border:       "1px solid var(--color-border)",
+  borderRadius: 6,
+  overflow:     "hidden",
+  background:   "var(--color-bg-card)",
+};
+const segmentBtnStyle = (active: boolean): React.CSSProperties => ({
+  padding:    "7px 14px",
+  fontSize:   13,
+  fontWeight: active ? 600 : 400,
+  border:     "none",
+  background: active ? "var(--color-brand-subtle)" : "transparent",
+  color:      active ? "var(--color-brand)" : "var(--color-text-secondary)",
+  cursor:     "pointer",
+  outline:    "none",
+});
 
 const saveBtnStyle: React.CSSProperties = {
   padding: "3px 10px", borderRadius: 4,

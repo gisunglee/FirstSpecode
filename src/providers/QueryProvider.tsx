@@ -32,6 +32,11 @@ export default function QueryProvider({ children }: Props) {
             refetchOnWindowFocus: false,
             // 에러 발생 시 재시도 횟수 (기본 3 → 1로 줄여 빠른 에러 표시)
             retry: 1,
+            // 기본 staleTime 30초
+            // 페이지 이동·재마운트 시 30초 이내면 캐시를 신선한 것으로 간주하고 재조회하지 않음
+            // 변경 직후 최신화가 필요한 경우는 mutation의 onSuccess에서 invalidateQueries 호출(기존 패턴 유지)
+            // 실시간성이 필요한 개별 쿼리는 staleTime: 0 을 명시하여 override
+            staleTime: 30_000,
           },
         },
       })

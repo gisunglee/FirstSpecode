@@ -15,6 +15,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -61,10 +62,22 @@ function RequirementsPageInner() {
   const initialTaskFilter = searchParams.get("taskId") ?? "";
   const [taskFilter, setTaskFilter] = useState(initialTaskFilter);
   const [keyword, setKeyword]       = useState("");
-  // 담당자 필터 — "all"(기본) | "me"(내 담당만). URL ?assignedTo=me 로 공유 가능
-  const [filterAssignedTo, setFilterAssignedTo] = useState<"all" | "me">(
-    searchParams.get("assignedTo") === "me" ? "me" : "all"
-  );
+  // 담당자 필터 — 전역 appStore.myAssigneeMode 구독 (GNB 토글과 양방향 바인딩)
+  const filterAssignedTo  = useAppStore((s) => s.myAssigneeMode);
+  const setMyAssigneeMode = useAppStore((s) => s.setMyAssigneeMode);
+  const hasLoadedProfile  = useAppStore((s) => s._hasLoadedProfile);
+  // 페이지 세그먼트 토글 클릭 → 전역 state + DB 저장 + 실패 시 롤백
+  function setFilterAssignedTo(next: "all" | "me") {
+    const prev = filterAssignedTo;
+    setMyAssigneeMode(next);
+    authFetch("/api/member/profile/assignee-view", {
+      method: "PATCH",
+      body:   JSON.stringify({ mode: next }),
+    }).catch((err: Error) => {
+      setMyAssigneeMode(prev);
+      toast.error("설정 저장 실패: " + err.message);
+    });
+  }
 
   // "내 담당" 필터 URL 동기화 — 공유 URL 복원 가능
   useEffect(() => {
@@ -75,8 +88,34 @@ function RequirementsPageInner() {
     window.history.replaceState(null, "", url.toString());
   }, [filterAssignedTo]);
 
+  // URL ?assignedTo=me 진입 시 — 프로필 로드 후 전역 state에도 반영(DB 저장)
+  useEffect(() => {
+    if (!hasLoadedProfile) return;
+    if (searchParams.get("assignedTo") === "me" && filterAssignedTo !== "me") {
+      setFilterAssignedTo("me");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasLoadedProfile]);
+
   // 삭제 다이얼로그 상태
   const [deleteTarget, setDeleteTarget] = useState<RequirementRow | null>(null);
+
+  // 담당자 드롭다운 — 특정 멤버 필터. "" = 담당자 전체 (드롭다운이 세그먼트보다 우선)
+  const [filterMember, setFilterMember] = useState<string>("");
+
+  // 프로젝트 멤버 목록 — 담당자 드롭다운 옵션용
+  const { data: memberData } = useQuery({
+    queryKey: ["project-members", projectId],
+    queryFn:  () =>
+      authFetch<{ data: { members: Array<{ memberId: string; name: string | null; email: string }> } }>(
+        `/api/projects/${projectId}/members`
+      ).then((r) => r.data),
+    staleTime: 60 * 1000,
+  });
+  const members = memberData?.members ?? [];
+
+  // 실제 서버로 보낼 assignedTo 값 — 드롭다운 우선, 없으면 전역 모드
+  const effectiveAssignedTo = filterMember || (filterAssignedTo === "me" ? "me" : "");
 
   // ── 과업 옵션 조회 (필터 드롭다운용) ──────────────────────────────────────
   const { data: tasksData } = useQuery({
@@ -93,14 +132,16 @@ function RequirementsPageInner() {
   const dragOverItem = useRef<number | null>(null);
 
   // ── 데이터 조회 ────────────────────────────────────────────────────────────
+  // 프로필 로드 전에는 쿼리 지연 → 첫 렌더 플리커 방지
   const { data, isLoading, error } = useQuery({
-    queryKey: ["requirements", projectId, filterAssignedTo],
+    queryKey: ["requirements", projectId, effectiveAssignedTo],
     queryFn:  () => {
-      const qs = filterAssignedTo === "me" ? "?assignedTo=me" : "";
+      const qs = effectiveAssignedTo ? `?assignedTo=${encodeURIComponent(effectiveAssignedTo)}` : "";
       return authFetch<{ data: { items: RequirementRow[]; totalCount: number } }>(
         `/api/projects/${projectId}/requirements${qs}`
       ).then((r) => r.data);
     },
+    enabled: hasLoadedProfile,
   });
   
   const isError = !!error;
@@ -195,6 +236,19 @@ function RequirementsPageInner() {
           총 {totalCount}건{isFiltered && allItems.length !== totalCount && ` (전체 ${allItems.length}건)`}
         </span>
         <div style={{ flex: 1 }} />
+        {/* 담당자 드롭다운 — 특정 멤버 필터 (드롭다운이 우선, 세그먼트와 공존) */}
+        <select
+          value={filterMember}
+          onChange={(e) => setFilterMember(e.target.value)}
+          style={filterSelectStyle}
+        >
+          <option value="">담당자 전체</option>
+          {members.map((m) => (
+            <option key={m.memberId} value={m.memberId}>
+              {m.name ?? m.email}
+            </option>
+          ))}
+        </select>
         {/* 담당자 세그먼트 토글 — 서버 쿼리 파라미터(?assignedTo=me)로 필터 */}
         <div style={segmentGroupStyle}>
           <button

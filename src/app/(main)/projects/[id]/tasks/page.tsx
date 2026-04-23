@@ -15,6 +15,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -69,11 +70,44 @@ function TaskListPageInner() {
   const projectId   = params.id;
   const queryClient = useQueryClient();
 
-  // 담당자 필터 — "all"(기본) | "me"(내 담당만). URL ?assignedTo=me 로 공유 가능
-  const searchParams = useSearchParams();
-  const [filterAssignedTo, setFilterAssignedTo] = useState<"all" | "me">(
-    searchParams.get("assignedTo") === "me" ? "me" : "all"
-  );
+  // 담당자 필터 — 전역 appStore.myAssigneeMode 구독 (GNB 토글과 양방향 바인딩)
+  const searchParams     = useSearchParams();
+  const filterAssignedTo = useAppStore((s) => s.myAssigneeMode);
+  const setMyAssigneeMode   = useAppStore((s) => s.setMyAssigneeMode);
+  const hasLoadedProfile    = useAppStore((s) => s._hasLoadedProfile);
+  // 페이지 세그먼트 토글 클릭 → 전역 state + DB 저장 + 실패 시 롤백
+  function setFilterAssignedTo(next: "all" | "me") {
+    const prev = filterAssignedTo;
+    setMyAssigneeMode(next);
+    authFetch("/api/member/profile/assignee-view", {
+      method: "PATCH",
+      body:   JSON.stringify({ mode: next }),
+    }).catch((err: Error) => {
+      setMyAssigneeMode(prev);
+      toast.error("설정 저장 실패: " + err.message);
+    });
+  }
+
+  // 담당자 드롭다운 — 특정 멤버 필터. "" = 담당자 전체
+  // 드롭다운이 우선(구체적 필터), 드롭다운이 빈값일 때만 세그먼트(전역 모드) 반영
+  const [filterMember, setFilterMember] = useState<string>("");
+
+  // 프로젝트 멤버 목록 — 담당자 드롭다운 옵션용
+  const { data: memberData } = useQuery({
+    queryKey: ["project-members", projectId],
+    queryFn:  () =>
+      authFetch<{ data: { members: Array<{ memberId: string; name: string | null; email: string }> } }>(
+        `/api/projects/${projectId}/members`
+      ).then((r) => r.data),
+    staleTime: 60 * 1000,
+  });
+  const members = memberData?.members ?? [];
+
+  // 실제 서버로 보낼 assignedTo 값:
+  //   - 드롭다운 특정 멤버 선택 → 그 mberId (구체적 필터 우선)
+  //   - 드롭다운 "담당자 전체" + 세그먼트 "내 담당" → "me"
+  //   - 그 외 → undefined
+  const effectiveAssignedTo = filterMember || (filterAssignedTo === "me" ? "me" : "");
 
   // 로컬 순서 — 드래그 중 즉시 반영용
   const [orderedTasks, setOrderedTasks] = useState<Task[]>([]);
@@ -90,17 +124,28 @@ function TaskListPageInner() {
     window.history.replaceState(null, "", url.toString());
   }, [filterAssignedTo]);
 
+  // URL ?assignedTo=me 로 진입한 경우 — 프로필 로드 후 전역 state에도 반영(DB 저장)
+  useEffect(() => {
+    if (!hasLoadedProfile) return;
+    if (searchParams.get("assignedTo") === "me" && filterAssignedTo !== "me") {
+      setFilterAssignedTo("me");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasLoadedProfile]);
+
   // ── 목록 조회 ──────────────────────────────────────────────────────────────
+  // 프로필 로드 전에는 쿼리 지연 → 첫 렌더 플리커 방지
   const { data, isLoading, error } = useQuery({
-    queryKey: ["tasks", projectId, filterAssignedTo],
+    queryKey: ["tasks", projectId, effectiveAssignedTo],
     queryFn:  () => {
-      const qs = filterAssignedTo === "me" ? "?assignedTo=me" : "";
+      const qs = effectiveAssignedTo ? `?assignedTo=${encodeURIComponent(effectiveAssignedTo)}` : "";
       return authFetch<{ data: TasksResponse }>(`/api/projects/${projectId}/tasks${qs}`)
         .then((r) => {
           setOrderedTasks(r.data.tasks);
           return r.data;
         });
     },
+    enabled: hasLoadedProfile,
   });
 
   // ── 복사 ───────────────────────────────────────────────────────────────────
@@ -194,6 +239,19 @@ function TaskListPageInner() {
           총 <strong>{totalCount}</strong>건
         </span>
         <div style={{ flex: 1 }} />
+        {/* 담당자 드롭다운 — 특정 멤버 필터 (드롭다운이 우선, 세그먼트와 공존) */}
+        <select
+          value={filterMember}
+          onChange={(e) => setFilterMember(e.target.value)}
+          style={filterSelectStyle}
+        >
+          <option value="">담당자 전체</option>
+          {members.map((m) => (
+            <option key={m.memberId} value={m.memberId}>
+              {m.name ?? m.email}
+            </option>
+          ))}
+        </select>
         {/* 담당자 세그먼트 토글 — [전체 | 내 담당] */}
         <div style={segmentGroupStyle}>
           <button
@@ -463,6 +521,24 @@ const primaryBtnStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
   cursor: "pointer",
+};
+
+// 담당자 필터 드롭다운 — 다른 목록과 동일 톤
+const filterSelectStyle: React.CSSProperties = {
+  padding:            "7px 32px 7px 12px",
+  borderRadius:       6,
+  border:             "1px solid var(--color-border)",
+  fontSize:           13,
+  background:         "var(--color-bg-card)",
+  color:              "var(--color-text-primary)",
+  cursor:             "pointer",
+  outline:            "none",
+  appearance:         "none",
+  WebkitAppearance:   "none",
+  backgroundImage:    `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+  backgroundRepeat:   "no-repeat",
+  backgroundPosition: "right 10px center",
+  minWidth:           140,
 };
 
 // 담당자 필터 세그먼트 토글 — 단위업무 목록과 동일 패턴

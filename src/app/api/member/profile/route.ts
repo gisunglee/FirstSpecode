@@ -20,11 +20,12 @@ export async function GET(request: NextRequest) {
     const member = await prisma.tbCmMember.findUnique({
       where:  { mber_id: auth.mberId },
       select: {
-        mber_nm:       true,
-        email_addr:    true,
-        profl_img_url: true,
-        pswd_hash:     true,
-        plan_code:     true,   // 시스템 플랜 (FREE/PRO/TEAM/ENTERPRISE) — GNB 프로필 배지용
+        mber_nm:           true,
+        email_addr:        true,
+        profl_img_url:     true,
+        pswd_hash:         true,
+        plan_code:         true,   // 시스템 플랜 (FREE/PRO/TEAM/ENTERPRISE) — GNB 프로필 배지용
+        asignee_view_mode: true,   // 전역 담당자 필터 모드 (all | me) — GNB 토글 상태
         socialAccounts: {
           select: { provdr_code: true },
         },
@@ -39,11 +40,12 @@ export async function GET(request: NextRequest) {
     const linkedProviders = member.socialAccounts.map((s) => s.provdr_code.toLowerCase());
 
     return apiSuccess({
-      name:         member.mber_nm ?? "",
-      email:        member.email_addr ?? "",
-      profileImage: member.profl_img_url ?? null,
-      plan:         member.plan_code ?? "FREE",
-      hasPassword:  member.pswd_hash !== null,
+      name:             member.mber_nm ?? "",
+      email:            member.email_addr ?? "",
+      profileImage:     member.profl_img_url ?? null,
+      plan:             member.plan_code ?? "FREE",
+      assigneeViewMode: member.asignee_view_mode ?? "all",
+      hasPassword:      member.pswd_hash !== null,
       hasSocialAccounts: {
         google: linkedProviders.includes("google"),
         github: linkedProviders.includes("github"),

@@ -26,7 +26,10 @@ import nodemailer from "nodemailer";
 const BCRYPT_ROUNDS = 12;
 
 // JWT 액세스 토큰 만료 시간
-const ACCESS_TOKEN_EXPIRES = "1h";
+// 30분: 로그아웃 즉시성과 refresh 빈도 사이의 균형점
+//   - 너무 짧으면 설계 도구 특성상 "생각 시간" 후 복귀할 때마다 갱신 지연(100~200ms)
+//   - 너무 길면 로그아웃 후에도 토큰이 오래 살아있어 보안 리스크
+const ACCESS_TOKEN_EXPIRES = "30m";
 
 // 리프레시 토큰 만료 일수
 export const REFRESH_TOKEN_EXPIRES_DAYS = 10;
@@ -60,17 +63,25 @@ function getJwtSecret(): string {
   return secret;
 }
 
+/** JWT 액세스 토큰 페이로드
+ *  sesnId는 세션 기반 강제 로그아웃(관리자 기능, 민감 API)에 쓰인다.
+ *  과거 발급된 AT나 API 키 인증 경로에서는 undefined일 수 있으므로 optional.
+ */
+export type AccessTokenPayload = {
+  mberId: string;
+  email:  string;
+  sesnId?: string;
+};
+
 /** JWT 액세스 토큰 발급 */
-export function signAccessToken(payload: { mberId: string; email: string }): string {
+export function signAccessToken(payload: AccessTokenPayload): string {
   return jwt.sign(payload, getJwtSecret(), { expiresIn: ACCESS_TOKEN_EXPIRES });
 }
 
 /** JWT 액세스 토큰 검증 — 실패 시 null 반환 */
-export function verifyAccessToken(
-  token: string
-): { mberId: string; email: string } | null {
+export function verifyAccessToken(token: string): AccessTokenPayload | null {
   try {
-    return jwt.verify(token, getJwtSecret()) as { mberId: string; email: string };
+    return jwt.verify(token, getJwtSecret()) as AccessTokenPayload;
   } catch {
     return null;
   }

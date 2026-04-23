@@ -22,10 +22,10 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import { useEffect } from "react";
+import { type PromptTemplateTaskType, PROMPT_TEMPLATE_TASK_TYPE_LABEL } from "@/constants/codes";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
-type TaskType = "INSPECT" | "DESIGN" | "IMPLEMENT" | "TEST" | "MOCKUP" | "IMPACT" | "CUSTOM";
 type RefType  = "AREA" | "FUNCTION";
 
 type TemplateRow = {
@@ -33,7 +33,7 @@ type TemplateRow = {
   projectId:  string | null;
   isSystem:   boolean;
   tmplNm:     string;
-  taskTyCode: TaskType;
+  taskTyCode: PromptTemplateTaskType;
   refTyCode:  RefType | null;
   tmplDc:     string;
   useYn:      string;
@@ -45,17 +45,8 @@ type TemplateRow = {
 };
 
 // ── 상수 ──────────────────────────────────────────────────────────────────────
-
-const TASK_TYPE_LABELS: Record<TaskType, string> = {
-  DESIGN:    "설계",
-  INSPECT:   "명세 검토",
-  IMPACT:    "영향도 분석",
-  IMPLEMENT: "구현",
-  TEST:      "테스트",
-  // 폐기 유형 — 기존 데이터 표시용
-  MOCKUP:    "목업",
-  CUSTOM:    "자유 요청",
-};
+// 태스크 타입 라벨은 공용 PROMPT_TEMPLATE_TASK_TYPE_LABEL 사용.
+// RefType 라벨은 이 페이지에서 "영역 설계/기능 설계" 식 접미사가 붙어 있어 공용(영역/기능)과 다름 → 로컬 유지.
 
 const REF_TYPE_LABELS: Record<string, string> = {
   AREA:      "영역 설계",
@@ -63,7 +54,7 @@ const REF_TYPE_LABELS: Record<string, string> = {
   UNIT_WORK: "단위업무",
 };
 
-const taskTypeBadgeColors: Record<TaskType, { bg: string; color: string }> = {
+const taskTypeBadgeColors: Record<PromptTemplateTaskType, { bg: string; color: string }> = {
   DESIGN:    { bg: "#f3e5f5", color: "#6a1b9a" },
   INSPECT:   { bg: "#e3f2fd", color: "#1565c0" },
   IMPACT:    { bg: "#fff3e0", color: "#e65100" },
@@ -72,6 +63,7 @@ const taskTypeBadgeColors: Record<TaskType, { bg: string; color: string }> = {
   // 폐기 유형 — 회색으로 표시
   MOCKUP:    { bg: "#f5f5f5", color: "#9e9e9e" },
   CUSTOM:    { bg: "#f5f5f5", color: "#9e9e9e" },
+  PRE_IMPL:  { bg: "#f5f5f5", color: "#9e9e9e" },
 };
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
@@ -161,7 +153,7 @@ function PromptTemplatesPageInner() {
             style={filterSelectStyle}
           >
             <option value="">전체 유형</option>
-            {Object.entries(TASK_TYPE_LABELS).map(([k, v]) => (
+            {Object.entries(PROMPT_TEMPLATE_TASK_TYPE_LABEL).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
             ))}
           </select>
@@ -303,7 +295,7 @@ function PromptTemplatesPageInner() {
                       borderRadius: 4, fontSize: 11, fontWeight: 600,
                       background: tc.bg, color: tc.color, whiteSpace: "nowrap",
                     }}>
-                      {TASK_TYPE_LABELS[row.taskTyCode] ?? row.taskTyCode}
+                      {PROMPT_TEMPLATE_TASK_TYPE_LABEL[row.taskTyCode] ?? row.taskTyCode}
                     </span>
                   </div>
 

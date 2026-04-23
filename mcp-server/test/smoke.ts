@@ -178,10 +178,61 @@ await test("get_function", async () => {
 
 console.log("\n── DB 테이블 ─────────────────────────────");
 
+let dbTableId:  string | undefined;
+let dbColId:    string | undefined;
+
 await test("list_db_tables", async () => {
   const data: any = await specodeFetch(`/api/projects/${PROJECT_ID}/db-tables`);
-  // db-tables API는 items 또는 배열을 반환할 수 있음
+  // db-tables API는 data 배열을 반환 (apiSuccess(arr) → { data: arr })
   if (!data) throw new Error("응답이 비어있음");
+  if (!Array.isArray(data)) throw new Error(`응답이 배열이 아님: ${typeof data}`);
+
+  // 매핑 인사이트 Phase 1~3 필드 존재 검증 (테이블이 1건 이상일 때만)
+  if (data.length > 0) {
+    const first = data[0];
+    for (const field of ["functionCount", "usedColCount", "ioProfile", "lastUsedDt"]) {
+      if (!(field in first)) {
+        throw new Error(`매핑 인사이트 필드 누락: ${field}. 받은 키: ${Object.keys(first).join(", ")}`);
+      }
+    }
+    dbTableId = first.tblId;
+  }
+});
+
+await test("get_db_table", async () => {
+  if (!dbTableId) throw new Error("테스트 데이터 없음 (DB 테이블이 0건)");
+  const data: any = await specodeFetch(`/api/projects/${PROJECT_ID}/db-tables/${dbTableId}`);
+  assertField(data, "tblId");
+  // columns 배열에서 colId 하나 확보 (다음 테스트에서 사용)
+  if (Array.isArray(data.columns) && data.columns.length > 0) {
+    dbColId = data.columns[0].colId;
+  }
+});
+
+await test("get_db_table_usage", async () => {
+  if (!dbTableId) throw new Error("테스트 데이터 없음 (DB 테이블이 0건)");
+  const data: any = await specodeFetch(`/api/projects/${PROJECT_ID}/db-tables/${dbTableId}/usage`);
+  assertField(data, "summary");
+  assertField(data, "usedBy");
+  assertField(data, "columnUsage");
+  // Phase 3 필드 검증
+  if (!data.summary.ioTotals || typeof data.summary.ioTotals !== "object") {
+    throw new Error("summary.ioTotals 누락");
+  }
+  if (!("lastUsedDt" in data.summary)) {
+    throw new Error("summary.lastUsedDt 누락");
+  }
+});
+
+await test("get_db_column_usage", async () => {
+  if (!dbTableId) throw new Error("테스트 데이터 없음 (DB 테이블이 0건)");
+  if (!dbColId)   throw new Error("테스트 데이터 없음 (컬럼이 0건)");
+  const data: any = await specodeFetch(
+    `/api/projects/${PROJECT_ID}/db-tables/${dbTableId}/columns/${dbColId}/usage`
+  );
+  assertField(data, "column");
+  assertField(data, "items");
+  if (!Array.isArray(data.items)) throw new Error("items 가 배열이 아님");
 });
 
 // ─── 결과 요약 ───────────────────────────────────────────────────

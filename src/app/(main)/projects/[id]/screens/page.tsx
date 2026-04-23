@@ -21,6 +21,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
+import { type AiTaskStatus, AI_TASK_STATUS_LABEL, AI_TASK_STATUS_BADGE } from "@/constants/codes";
+import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -79,10 +81,22 @@ function ScreensPageInner() {
   // ── 단위업무 필터 (URL ?unitWorkId=xxx 로 초기화 — 브레드크럼에서 진입 시 자동 적용) ──
   const searchParams    = useSearchParams();
   const [unitWorkFilter, setUnitWorkFilter] = useState(searchParams.get("unitWorkId") ?? "");
-  // 담당자 필터 — "all"(기본) | "me"(내 담당만). URL ?assignedTo=me 동기화
-  const [filterAssignedTo, setFilterAssignedTo] = useState<"all" | "me">(
-    searchParams.get("assignedTo") === "me" ? "me" : "all"
-  );
+  // 담당자 필터 — 전역 appStore.myAssigneeMode 구독 (GNB 토글과 양방향 바인딩)
+  const filterAssignedTo  = useAppStore((s) => s.myAssigneeMode);
+  const setMyAssigneeMode = useAppStore((s) => s.setMyAssigneeMode);
+  const hasLoadedProfile  = useAppStore((s) => s._hasLoadedProfile);
+  // 페이지 세그먼트 토글 클릭 → 전역 state + DB 저장 + 실패 시 롤백
+  function setFilterAssignedTo(next: "all" | "me") {
+    const prev = filterAssignedTo;
+    setMyAssigneeMode(next);
+    authFetch("/api/member/profile/assignee-view", {
+      method: "PATCH",
+      body:   JSON.stringify({ mode: next }),
+    }).catch((err: Error) => {
+      setMyAssigneeMode(prev);
+      toast.error("설정 저장 실패: " + err.message);
+    });
+  }
   // AI 구현 태스크 상세 팝업
   const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
 
@@ -95,16 +109,44 @@ function ScreensPageInner() {
     window.history.replaceState(null, "", url.toString());
   }, [filterAssignedTo]);
 
+  // URL ?assignedTo=me 진입 시 — 프로필 로드 후 전역 state에도 반영(DB 저장)
+  useEffect(() => {
+    if (!hasLoadedProfile) return;
+    if (searchParams.get("assignedTo") === "me" && filterAssignedTo !== "me") {
+      setFilterAssignedTo("me");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasLoadedProfile]);
+
+  // 담당자 드롭다운 — 특정 멤버 필터. "" = 담당자 전체 (드롭다운이 세그먼트보다 우선)
+  const [filterMember, setFilterMember] = useState<string>("");
+
+  // 프로젝트 멤버 목록 — 담당자 드롭다운 옵션용
+  const { data: memberData } = useQuery({
+    queryKey: ["project-members", projectId],
+    queryFn:  () =>
+      authFetch<{ data: { members: Array<{ memberId: string; name: string | null; email: string }> } }>(
+        `/api/projects/${projectId}/members`
+      ).then((r) => r.data),
+    staleTime: 60 * 1000,
+  });
+  const members = memberData?.members ?? [];
+
+  // 실제 서버로 보낼 assignedTo 값 — 드롭다운 우선, 없으면 전역 모드
+  const effectiveAssignedTo = filterMember || (filterAssignedTo === "me" ? "me" : "");
+
   // ── 데이터 조회 — 전체 조회 후 클라이언트 필터 (드롭다운 옵션 생성용) ──
   // 담당자는 서버 쿼리 파라미터로 전달 (URL 공유 가능, 향후 페이징 대응)
+  // 프로필 로드 전에는 쿼리 지연 → 첫 렌더 플리커 방지
   const { data, isLoading } = useQuery({
-    queryKey: ["screens", projectId, filterAssignedTo],
+    queryKey: ["screens", projectId, effectiveAssignedTo],
     queryFn: () => {
-      const qs = filterAssignedTo === "me" ? "?assignedTo=me" : "";
+      const qs = effectiveAssignedTo ? `?assignedTo=${encodeURIComponent(effectiveAssignedTo)}` : "";
       return authFetch<{ data: { items: ScreenRow[]; totalCount: number } }>(
         `/api/projects/${projectId}/screens${qs}`
       ).then((r) => r.data);
     },
+    enabled: hasLoadedProfile,
   });
 
   const allItems = data?.items ?? [];
@@ -208,6 +250,19 @@ function ScreensPageInner() {
           총 {items.length}건
         </span>
         <div style={{ flex: 1 }} />
+        {/* 담당자 드롭다운 — 특정 멤버 필터 (드롭다운이 우선, 세그먼트와 공존) */}
+        <select
+          value={filterMember}
+          onChange={(e) => setFilterMember(e.target.value)}
+          style={filterSelectStyle}
+        >
+          <option value="">담당자 전체</option>
+          {members.map((m) => (
+            <option key={m.memberId} value={m.memberId}>
+              {m.name ?? m.email}
+            </option>
+          ))}
+        </select>
         {/* 담당자 세그먼트 토글 — 서버 쿼리(?assignedTo=me)로 필터 */}
         <div style={segmentGroupStyle}>
           <button
@@ -390,7 +445,7 @@ function ScreensPageInner() {
                       }}
                     >
                       <span style={implStatusBadgeStyle(screen.implTask.status)}>
-                        {AI_STATUS_LABEL[screen.implTask.status] ?? screen.implTask.status}
+                        {AI_TASK_STATUS_LABEL[screen.implTask.status as AiTaskStatus] ?? screen.implTask.status}
                       </span>
                       <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>
                         {formatRequestedAt(screen.implTask.requestedAt)}
@@ -450,32 +505,14 @@ function ScreensPageInner() {
   );
 }
 
-// ── AI 태스크 상태 라벨 + 배지 스타일 (AI 구현 컬럼용) ─────────────────────
-const AI_STATUS_LABEL: Record<string, string> = {
-  PENDING:     "대기",
-  IN_PROGRESS: "처리중",
-  DONE:        "완료",
-  APPLIED:     "반영됨",
-  REJECTED:    "반려",
-  FAILED:      "실패",
-  TIMEOUT:     "시간초과",
-};
-
-const AI_STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-  PENDING:     { bg: "#f5f5f5", color: "#666" },
-  IN_PROGRESS: { bg: "#e3f2fd", color: "#1565c0" },
-  DONE:        { bg: "#e8f5e9", color: "#2e7d32" },
-  APPLIED:     { bg: "#e8eaf6", color: "#283593" },
-  REJECTED:    { bg: "#fff3e0", color: "#e65100" },
-  FAILED:      { bg: "#ffebee", color: "#c62828" },
-  TIMEOUT:     { bg: "#fff3e0", color: "#e65100" },
-};
+// ── AI 태스크 상태 배지 스타일 (AI 구현 컬럼용) ─────────────────────
+// 상태 라벨·색상은 공용 codes 모듈 사용
 
 function implStatusBadgeStyle(status: string): React.CSSProperties {
-  const c = AI_STATUS_COLORS[status] ?? { bg: "#f5f5f5", color: "#555" };
+  const c = AI_TASK_STATUS_BADGE[status as AiTaskStatus] ?? { bg: "#f5f5f5", fg: "#555" };
   return {
     display: "inline-block", padding: "2px 8px", borderRadius: 4,
-    fontSize: 11, fontWeight: 700, background: c.bg, color: c.color,
+    fontSize: 11, fontWeight: 700, background: c.bg, color: c.fg,
     whiteSpace: "nowrap",
   };
 }

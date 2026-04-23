@@ -26,16 +26,21 @@ import type { ProjectOption } from "@/types/layout";
 
 /** GNB 프로필 드롭다운 표시용 — /api/member/profile GET 응답 중 사용하는 필드만 */
 type MyProfile = {
-  name:         string;
-  email:        string;
-  profileImage: string | null;
-  plan:         string;  // 시스템 플랜: FREE / PRO / TEAM / ENTERPRISE
+  name:             string;
+  email:            string;
+  profileImage:     string | null;
+  plan:             string;  // 시스템 플랜: FREE / PRO / TEAM / ENTERPRISE
+  assigneeViewMode: "all" | "me";  // 전역 담당자 필터 모드 — GNB 토글 초기값
 };
 
 export default function GNB() {
   const router = useRouter();
   const { currentProjectId, setCurrentProjectId, theme, toggleTheme, breadcrumb } =
     useAppStore();
+  // 전역 "내 담당" 모드 — 서버(DB)에서 로드, GNB 토글로 변경
+  const myAssigneeMode      = useAppStore((s) => s.myAssigneeMode);
+  const setMyAssigneeMode   = useAppStore((s) => s.setMyAssigneeMode);
+  const setHasLoadedProfile = useAppStore((s) => s.setHasLoadedProfile);
 
   // 프로젝트 드롭다운 열림 상태
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -64,10 +69,33 @@ export default function GNB() {
     staleTime: 5 * 60 * 1000, // 5분
   });
 
+  // 프로필 도착 시 전역 myAssigneeMode 동기화 + 로드 완료 플래그 세팅
+  // → 5개 목록 페이지의 useQuery가 _hasLoadedProfile을 기다려 쿼리 지연(플리커 방지)
+  useEffect(() => {
+    if (myProfile) {
+      setMyAssigneeMode(myProfile.assigneeViewMode ?? "all");
+      setHasLoadedProfile(true);
+    }
+  }, [myProfile, setMyAssigneeMode, setHasLoadedProfile]);
+
   // 아바타 이니셜 — 이름 첫 글자 > 이메일 첫 글자 > "?"
   const avatarInitial = (myProfile?.name?.trim()?.[0]
     ?? myProfile?.email?.trim()?.[0]
     ?? "?").toUpperCase();
+
+  // 전역 "내 담당" 모드 토글 — 낙관적 업데이트 + 서버 PATCH + 실패 시 롤백
+  function toggleMyAssigneeMode() {
+    const prev = myAssigneeMode;
+    const next: "all" | "me" = prev === "me" ? "all" : "me";
+    setMyAssigneeMode(next);
+    authFetch("/api/member/profile/assignee-view", {
+      method: "PATCH",
+      body:   JSON.stringify({ mode: next }),
+    }).catch((err: Error) => {
+      setMyAssigneeMode(prev);
+      toast.error("설정 저장 실패: " + err.message);
+    });
+  }
 
   // 현재 선택된 프로젝트 이름 계산
   const currentProject = projects.find(
@@ -278,6 +306,35 @@ export default function GNB() {
           style={{ fontSize: 14, padding: "2px 8px" }}
         >
           {theme === "light" ? "☾" : "☀"}
+        </button>
+
+        {/* "내 담당 모드" 토글 — 담당자 있는 모든 목록(단위업무/과업/요구사항/화면/DB 테이블)에 적용 */}
+        {/* ON 상태는 브랜드색 배경으로 강조, OFF는 흐린 아이콘 */}
+        <button
+          className="sp-menu-item"
+          onClick={toggleMyAssigneeMode}
+          title={myAssigneeMode === "me"
+            ? "내 담당 모드 (켜짐) — 클릭하여 끄기"
+            : "내 담당만 보기 (꺼짐) — 클릭하여 켜기"}
+          aria-pressed={myAssigneeMode === "me"}
+          style={{
+            padding:      "2px 6px",
+            display:      "inline-flex",
+            alignItems:   "center",
+            justifyContent:"center",
+            borderRadius: "var(--radius-sm)",
+            background:   myAssigneeMode === "me" ? "var(--color-brand-subtle)" : "transparent",
+            color:        myAssigneeMode === "me" ? "var(--color-brand)" : "var(--color-text-secondary)",
+            border:       myAssigneeMode === "me" ? "1px solid var(--color-brand-border)" : "1px solid transparent",
+          }}
+        >
+          {/* 사람 아이콘 (user outline) — 14px, currentColor로 테마 대응 */}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" strokeWidth="2"
+               strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
         </button>
 
         {/* AI 요약 버튼 (플레이스홀더) */}

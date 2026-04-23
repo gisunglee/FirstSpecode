@@ -21,11 +21,12 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import { useAppStore } from "@/store/appStore";
+import { type PromptTemplateTaskType, type PromptTemplateRefType } from "@/constants/codes";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
-type TaskType = "INSPECT" | "DESIGN" | "IMPLEMENT" | "TEST" | "MOCKUP" | "IMPACT" | "CUSTOM";
-type RefType = "AREA" | "FUNCTION" | "UNIT_WORK" | "SCREEN";
+type TaskType = PromptTemplateTaskType;
+type RefType  = PromptTemplateRefType;
 
 type TemplateDetail = {
   tmplId: string;

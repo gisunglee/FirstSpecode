@@ -211,16 +211,17 @@ export async function POST(request: NextRequest) {
       const rtHash  = hashRefreshToken(rt);
       const rtExpiry = refreshTokenExpiryDate();
 
-      await prisma.$transaction(async (tx) => {
+      const sesnId = await prisma.$transaction(async (tx) => {
         const sesn = await tx.tbCmMemberSession.create({
           data: { mber_id: existingSocial.mber_id, device_info_cn: userAgent, ip_addr: ipAddr },
         });
         await tx.tbCmRefreshToken.create({
           data: { mber_id: existingSocial.mber_id, token_hash_val: rtHash, expiry_dt: rtExpiry, sesn_id: sesn.sesn_id },
         });
+        return sesn.sesn_id;
       });
 
-      const at  = signAccessToken({ mberId: existingSocial.mber_id, email: existingSocial.member.email_addr ?? "" });
+      const at  = signAccessToken({ mberId: existingSocial.mber_id, email: existingSocial.member.email_addr ?? "", sesnId });
       const res = NextResponse.json({ data: { resultType: "EXISTING", accessToken: at, refreshToken: rt, redirectTo } });
       res.cookies.delete("oauth_state");
       return res;
@@ -252,7 +253,7 @@ export async function POST(request: NextRequest) {
     const fallbackName = provdrEmail!.split("@")[0];
     const mberNm       = provdrName?.trim() || fallbackName;
 
-    const newMember = await prisma.$transaction(async (tx) => {
+    const { newMember, sesnId } = await prisma.$transaction(async (tx) => {
       const member = await tx.tbCmMember.create({
         data: {
           email_addr:    provdrEmail!,
@@ -275,10 +276,10 @@ export async function POST(request: NextRequest) {
       await tx.tbCmRefreshToken.create({
         data: { mber_id: member.mber_id, token_hash_val: rtHash, expiry_dt: rtExpiry, sesn_id: sesn.sesn_id },
       });
-      return member;
+      return { newMember: member, sesnId: sesn.sesn_id };
     });
 
-    const at  = signAccessToken({ mberId: newMember.mber_id, email: provdrEmail! });
+    const at  = signAccessToken({ mberId: newMember.mber_id, email: provdrEmail!, sesnId });
     const res = NextResponse.json({ data: { resultType: "NEW", accessToken: at, refreshToken: rt, redirectTo } });
     res.cookies.delete("oauth_state");
     return res;

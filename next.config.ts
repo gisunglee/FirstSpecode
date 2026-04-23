@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { getSecurityHeaders } from "./src/lib/securityHeaders";
 
 const nextConfig: NextConfig = {
   experimental: {
@@ -7,6 +8,18 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "10mb",
     },
+  },
+
+  // 전역 보안 헤더 — CSP/HSTS/X-Frame-Options/Referrer-Policy 등.
+  // 정의는 src/lib/securityHeaders.ts, 모든 경로에 적용.
+  // XSS/클릭재킹/프로토콜 다운그레이드/MIME 스니핑 방어.
+  async headers() {
+    return [
+      {
+        source:  "/:path*",
+        headers: getSecurityHeaders(),
+      },
+    ];
   },
 };
 

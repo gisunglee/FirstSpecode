@@ -88,12 +88,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       };
     }
 
+    // reqMberId="me"는 로그인 사용자로 치환 — 다른 엔티티(assignedTo)와 동일한 "내꺼" 패턴
+    const reqMberIdFilter = reqMberId === "me" ? auth.mberId : reqMberId;
+
     const where = {
       prjct_id: projectId,
       ...(status ? { task_sttus_code: status } : {}),
       ...taskTypeFilter,
       ...implWhereFilter,
-      ...(reqMberId ? { req_mber_id:     reqMberId }  : {}),
+      ...(reqMberIdFilter ? { req_mber_id: reqMberIdFilter } : {}),
     };
 
     const [totalCount, tasks] = await Promise.all([

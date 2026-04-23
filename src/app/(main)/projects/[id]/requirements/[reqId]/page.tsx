@@ -18,7 +18,10 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { renderMarkdown } from "@/lib/renderMarkdown";
 import { useAppStore } from "@/store/appStore";
-import RichEditor from "@/components/ui/RichEditor";
+import dynamic from "next/dynamic";
+// TipTap 번들(≈수백 KB)이 초기 페이지 로드에 포함되지 않도록 dynamic import
+// 탭 전환/모달 오픈 등 실제 편집이 시작되는 시점에 청크가 다운로드됨
+const RichEditor = dynamic(() => import("@/components/ui/RichEditor"), { ssr: false });
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";

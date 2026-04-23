@@ -32,6 +32,7 @@ import ColMappingDialog from "@/components/ui/ColMappingDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
 import AiTaskFilePicker from "@/components/ui/AiTaskFilePicker";
+import { type AiTaskStatus, AI_TASK_STATUS_LABEL, AI_TASK_STATUS_DOT } from "@/constants/codes";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import AiImplementCard from "@/components/ui/AiImplementCard";
 import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
@@ -569,15 +570,15 @@ function FunctionDetailPageInner() {
                       const isSpinning = isMutationPending
                         || !!(info && ["PENDING", "IN_PROGRESS"].includes(info.status));
                       // 도트 색상: 미호출이면 회색
-                      const dotColor = info ? (AI_STATUS_DOT[info.status] ?? "#ccc") : "#ccc";
+                      const dotColor = info ? (AI_TASK_STATUS_DOT[info.status as AiTaskStatus] ?? "#ccc") : "#ccc";
                       // 표시 레이블 결정
                       // - 미호출 + 요청 전송 중: "대기 중..."
                       // - 미호출: "-"
-                      // - 상태 있음: AI_STATUS_LABEL 매핑
+                      // - 상태 있음: AI_TASK_STATUS_LABEL 매핑
                       const statusLabel = isMutationPending && !info
                         ? "대기 중..."
                         : info
-                          ? (AI_STATUS_LABEL[info.status] ?? info.status)
+                          ? (AI_TASK_STATUS_LABEL[info.status as AiTaskStatus] ?? info.status)
                           : "-";
 
                       function handleRun() {
@@ -1457,27 +1458,8 @@ const AI_HELP_CONTENT: Record<string, { title: string; sections: { heading: stri
   },
 };
 
-// 상태별 도트 색상 — 버튼 내부에 인라인으로 표시
-const AI_STATUS_DOT: Record<string, string> = {
-  PENDING: "#f57c00",
-  IN_PROGRESS: "#1565c0",
-  DONE: "#2e7d32",
-  APPLIED: "#6a1b9a",
-  REJECTED: "#c62828",
-  FAILED: "#c62828",
-  TIMEOUT: "#757575",
-};
-
-// 상태별 한글 레이블 — 버튼 tooltip에 표시
-const AI_STATUS_LABEL: Record<string, string> = {
-  PENDING: "대기 중",
-  IN_PROGRESS: "처리 중",
-  DONE: "완료",
-  APPLIED: "적용됨",
-  REJECTED: "반려",
-  FAILED: "실패",
-  TIMEOUT: "시간 초과",
-};
+// 상태별 도트 색상/라벨은 공용 codes 모듈(@/constants/codes) 사용
+// 기존 로컬 정의는 "대기 중/처리 중/적용됨/시간 초과" 등 공백·표기 불일치가 있어 통일 목적으로 제거
 
 // ── 설명 예시 / 템플릿 ────────────────────────────────────────────────────────
 

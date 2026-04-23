@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     const rtHash  = hashRefreshToken(rt);
     const rtExpiry = refreshTokenExpiryDate();
 
-    await prisma.$transaction(async (tx) => {
+    const sesnId = await prisma.$transaction(async (tx) => {
       // 소셜 계정 연동
       await tx.tbCmSocialAccount.create({
         data: {
@@ -100,9 +100,11 @@ export async function POST(request: NextRequest) {
       await tx.tbCmRefreshToken.create({
         data: { mber_id: member.mber_id, token_hash_val: rtHash, expiry_dt: rtExpiry, sesn_id: sesn.sesn_id },
       });
+
+      return sesn.sesn_id;
     });
 
-    const accessToken = signAccessToken({ mberId: member.mber_id, email });
+    const accessToken = signAccessToken({ mberId: member.mber_id, email, sesnId });
 
     return apiSuccess({ accessToken, refreshToken: rt });
 

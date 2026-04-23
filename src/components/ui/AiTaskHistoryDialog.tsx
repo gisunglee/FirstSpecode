@@ -20,16 +20,17 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
+import {
+  type AiTaskStatus, type AiTaskType,
+  AI_TASK_STATUS_LABEL, AI_TASK_STATUS_BADGE, AI_TASK_TYPE_LABEL,
+} from "@/constants/codes";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
-type TaskStatus = "PENDING" | "IN_PROGRESS" | "DONE" | "APPLIED" | "REJECTED" | "FAILED" | "TIMEOUT";
-type TaskType   = "INSPECT" | "DESIGN" | "IMPLEMENT" | "PRE_IMPL" | "MOCKUP" | "IMPACT" | "CUSTOM";
-
 type TaskRow = {
   taskId:      string;
-  taskType:    TaskType;
-  status:      TaskStatus;
+  taskType:    AiTaskType;
+  status:      AiTaskStatus;
   comment:     string;
   requestedAt: string;
   completedAt: string | null;
@@ -39,29 +40,11 @@ type TaskRow = {
 };
 
 // ── 상수 ──────────────────────────────────────────────────────────────────────
+// 이 파일에만 있던 PRE_IMPL 라벨 "선 구현 적용"은 공용 "선 구현"과 다르므로 주석으로 남김.
+// 공용으로 통일 (AI_TASK_TYPE_LABEL.PRE_IMPL = "선 구현")
 
-const STATUS_LABELS: Record<TaskStatus, string> = {
-  PENDING:     "대기",
-  IN_PROGRESS: "처리중",
-  DONE:        "완료",
-  APPLIED:     "반영됨",
-  REJECTED:    "반려",
-  FAILED:      "실패",
-  TIMEOUT:     "시간초과",
-};
-
-const TASK_TYPE_LABELS: Record<TaskType, string> = {
-  INSPECT:   "명세 검토",
-  DESIGN:    "설계",
-  IMPLEMENT: "구현",
-  PRE_IMPL:  "선 구현 적용",
-  MOCKUP:    "목업",
-  IMPACT:    "영향도 분석",
-  CUSTOM:    "자유 요청",
-};
-
-// 작업유형별 배지 색상
-const TASK_TYPE_BADGE: Record<TaskType, { bg: string; color: string }> = {
+// 작업유형별 배지 색상 — 이 파일 전용. 공용화 여지 있으나 아직 AiTaskDetailDialog 와만 겹쳐 일단 유지.
+const TASK_TYPE_BADGE: Record<AiTaskType, { bg: string; color: string }> = {
   INSPECT:   { bg: "#f5f5f5", color: "#616161" },
   DESIGN:    { bg: "#e8eaf6", color: "#3f51b5" },
   IMPLEMENT: { bg: "#fce4ec", color: "#c62828" },
@@ -73,21 +56,12 @@ const TASK_TYPE_BADGE: Record<TaskType, { bg: string; color: string }> = {
 
 // ── 배지 스타일 ───────────────────────────────────────────────────────────────
 
-function statusBadgeStyle(status: TaskStatus): React.CSSProperties {
-  const colors: Record<TaskStatus, { bg: string; color: string }> = {
-    PENDING:     { bg: "#f5f5f5", color: "#666666" },
-    IN_PROGRESS: { bg: "#e3f2fd", color: "#1565c0" },
-    DONE:        { bg: "#e8f5e9", color: "#2e7d32" },
-    APPLIED:     { bg: "#e8eaf6", color: "#283593" },
-    REJECTED:    { bg: "#fff3e0", color: "#e65100" },
-    FAILED:      { bg: "#ffebee", color: "#c62828" },
-    TIMEOUT:     { bg: "#fff3e0", color: "#e65100" },
-  };
-  const c = colors[status] ?? { bg: "#f5f5f5", color: "#555" };
+function statusBadgeStyle(status: AiTaskStatus): React.CSSProperties {
+  const c = AI_TASK_STATUS_BADGE[status] ?? { bg: "#f5f5f5", fg: "#555" };
   return {
     display: "inline-block", padding: "2px 8px", borderRadius: 4,
     fontSize: 11, fontWeight: 700,
-    background: c.bg, color: c.color, border: `1px solid ${c.color}20`,
+    background: c.bg, color: c.fg, border: `1px solid ${c.fg}20`,
   };
 }
 
@@ -122,7 +96,7 @@ export default function AiTaskHistoryDialog({
   projectId: string;
   refType:   "AREA" | "FUNCTION" | "UNIT_WORK";
   refId:     string;
-  taskType:  TaskType;
+  taskType:  AiTaskType;
   onClose:   () => void;
 }) {
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
@@ -181,7 +155,7 @@ export default function AiTaskHistoryDialog({
                 marginLeft: 10, padding: "2px 8px", borderRadius: 4,
                 fontSize: 11, fontWeight: 700, background: "#e8eaf6", color: "#3f51b5",
               }}>
-                {TASK_TYPE_LABELS[taskType]}
+                {AI_TASK_TYPE_LABEL[taskType]}
               </span>
             </div>
             <button
@@ -240,7 +214,7 @@ export default function AiTaskHistoryDialog({
                       >
                         {/* 1행 — 상태 + 작업유형 + 요청일시 + 완료일시/소요 + 재시도 + 요청자 */}
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
-                          <span style={statusBadgeStyle(row.status)}>{STATUS_LABELS[row.status]}</span>
+                          <span style={statusBadgeStyle(row.status)}>{AI_TASK_STATUS_LABEL[row.status]}</span>
                           {/* 작업유형 배지 — 구현/선 구현 적용 구분 */}
                           <span style={{
                             display: "inline-block", padding: "2px 8px", borderRadius: 4,
@@ -248,7 +222,7 @@ export default function AiTaskHistoryDialog({
                             background: typeBadge.bg, color: typeBadge.color,
                             border: `1px solid ${typeBadge.color}20`,
                           }}>
-                            {TASK_TYPE_LABELS[row.taskType]}
+                            {AI_TASK_TYPE_LABEL[row.taskType]}
                           </span>
                           <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)" }}>
                             {formatDatetime(row.requestedAt)}

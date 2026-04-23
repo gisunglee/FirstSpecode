@@ -16,6 +16,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { JOB_CODES, JOB_LABEL, type JobCode } from "@/lib/permissions";
+import { type InvitationStatus, INVITATION_STATUS_LABEL, INVITATION_STATUS_COLOR } from "@/constants/codes";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────
 type InvitationItem = {
@@ -23,7 +24,7 @@ type InvitationItem = {
   email:        string;
   role:         string;
   job:          string;  // 신규
-  status:       string;  // PENDING | ACCEPTED | EXPIRED | CANCELLED
+  status:       InvitationStatus;  // PENDING | ACCEPTED | EXPIRED | CANCELLED
   invitedAt:    string;
   expiresAt:    string;
 };
@@ -35,30 +36,20 @@ function formatDate(d: string) {
   return new Date(d).toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  PENDING:   "대기중",
-  ACCEPTED:  "수락",
-  EXPIRED:   "만료",
-  CANCELLED: "취소",
-};
-const STATUS_COLOR: Record<string, string> = {
-  PENDING:   "var(--color-brand)",
-  ACCEPTED:  "var(--color-success, #22c55e)",
-  EXPIRED:   "var(--color-text-tertiary)",
-  CANCELLED: "var(--color-error)",
-};
-
+// 라벨·색상은 공용 codes 모듈(@/constants/codes) 사용
 function StatusBadge({ status }: { status: string }) {
+  const color = INVITATION_STATUS_COLOR[status as InvitationStatus] ?? "var(--color-text-secondary)";
+  const label = INVITATION_STATUS_LABEL[status as InvitationStatus] ?? status;
   return (
     <span style={{
       display: "inline-block", padding: "1px 8px",
       fontSize: "var(--text-xs)", fontWeight: 600,
       borderRadius: "var(--radius-full)",
-      background: `color-mix(in srgb, ${STATUS_COLOR[status] ?? "gray"} 15%, transparent)`,
-      color: STATUS_COLOR[status] ?? "var(--color-text-secondary)",
-      border: `1px solid color-mix(in srgb, ${STATUS_COLOR[status] ?? "gray"} 30%, transparent)`,
+      background: `color-mix(in srgb, ${color} 15%, transparent)`,
+      color,
+      border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
     }}>
-      {STATUS_LABEL[status] ?? status}
+      {label}
     </span>
   );
 }

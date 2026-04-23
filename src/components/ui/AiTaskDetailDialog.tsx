@@ -21,21 +21,22 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor from "@/components/ui/MarkdownEditor";
 import AiTaskAttachmentsDialog from "@/components/ui/AiTaskAttachmentsDialog";
+import {
+  type AiTaskStatus, type AiTaskType, type AiRefType,
+  AI_TASK_STATUS_LABEL, AI_TASK_STATUS_BADGE, AI_TASK_TYPE_LABEL,
+} from "@/constants/codes";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
-
-type TaskStatus = "PENDING" | "IN_PROGRESS" | "DONE" | "APPLIED" | "REJECTED" | "FAILED" | "TIMEOUT";
-type TaskType   = "INSPECT" | "DESIGN" | "IMPLEMENT" | "MOCKUP" | "IMPACT" | "CUSTOM";
-type RefType    = "AREA" | "FUNCTION" | "PLAN_STUDIO_ARTF";
+// 공용 codes 모듈에서 타입 import — 로컬 중복 정의 제거
 
 type TaskDetail = {
   taskId:       string;
-  taskType:     TaskType;
-  refType:      RefType;
+  taskType:     AiTaskType;
+  refType:      AiRefType;
   refId:        string;
   refName:      string;
   refDisplayId: string;
-  status:       TaskStatus;
+  status:       AiTaskStatus;
   comment:      string;
   reqCn:        string;
   resultCn:     string;
@@ -55,55 +56,29 @@ type TaskDetail = {
   attachmentCount?: number;
 };
 
-// ── 상수 ──────────────────────────────────────────────────────────────────────
-
-const STATUS_LABELS: Record<TaskStatus, string> = {
-  PENDING:     "대기",
-  IN_PROGRESS: "처리중",
-  DONE:        "완료",
-  APPLIED:     "반영됨",
-  REJECTED:    "반려",
-  FAILED:      "실패",
-  TIMEOUT:     "시간초과",
-};
-
-const TASK_TYPE_LABELS: Record<TaskType, string> = {
-  INSPECT:   "명세 검토",
-  DESIGN:    "설계",
-  IMPLEMENT: "구현",
-  MOCKUP:    "목업",
-  IMPACT:    "영향도 분석",
-  CUSTOM:    "자유 요청",
-};
-
 // ── 배지 스타일 ───────────────────────────────────────────────────────────────
+// 상태 라벨·색상은 공용 codes 모듈에서 가져옴 (AI_TASK_STATUS_LABEL, AI_TASK_STATUS_BADGE)
+// 태스크 타입 배지 색상은 이 파일 전용이므로 로컬 유지 (공용화는 아직 불필요)
 
-function statusBadgeStyle(status: TaskStatus): React.CSSProperties {
-  const colors: Record<TaskStatus, { bg: string; color: string }> = {
-    PENDING:     { bg: "#f5f5f5", color: "#666666" },
-    IN_PROGRESS: { bg: "#e3f2fd", color: "#1565c0" },
-    DONE:        { bg: "#e8f5e9", color: "#2e7d32" },
-    APPLIED:     { bg: "#e8eaf6", color: "#283593" },
-    REJECTED:    { bg: "#fff3e0", color: "#e65100" },
-    FAILED:      { bg: "#ffebee", color: "#c62828" },
-    TIMEOUT:     { bg: "#fff3e0", color: "#e65100" },
-  };
-  const c = colors[status] ?? { bg: "#f5f5f5", color: "#555" };
+function statusBadgeStyle(status: AiTaskStatus): React.CSSProperties {
+  const c = AI_TASK_STATUS_BADGE[status] ?? { bg: "#f5f5f5", fg: "#555" };
   return {
     display: "inline-block", padding: "2px 8px", borderRadius: 4,
     fontSize: 11, fontWeight: 700,
-    background: c.bg, color: c.color, border: `1px solid ${c.color}20`,
+    background: c.bg, color: c.fg, border: `1px solid ${c.fg}20`,
   };
 }
 
-function taskTypeBadgeStyle(type: TaskType): React.CSSProperties {
-  const colors: Record<TaskType, { bg: string; color: string }> = {
+function taskTypeBadgeStyle(type: AiTaskType): React.CSSProperties {
+  // INSPECT/DESIGN/IMPLEMENT/MOCKUP/IMPACT/CUSTOM/PRE_IMPL 7개 모두 대응
+  const colors: Record<AiTaskType, { bg: string; color: string }> = {
     INSPECT:   { bg: "#f5f5f5",  color: "#616161" },
     DESIGN:    { bg: "#e8eaf6",  color: "#3f51b5" },
     IMPLEMENT: { bg: "#fce4ec",  color: "#c62828" },
     MOCKUP:    { bg: "#f1f8e9",  color: "#558b2f" },
     IMPACT:    { bg: "#fff3e0",  color: "#ef6c00" },
     CUSTOM:    { bg: "#f5f5f5",  color: "#757575" },
+    PRE_IMPL:  { bg: "#e0f7fa",  color: "#00838f" },
   };
   const c = colors[type] ?? { bg: "#f5f5f5", color: "#555" };
   return {
@@ -308,8 +283,8 @@ export default function AiTaskDetailDialog({
               flexWrap: "wrap", background: "var(--color-bg-card)", flexShrink: 0,
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={taskTypeBadgeStyle(data.taskType)}>{TASK_TYPE_LABELS[data.taskType]}</span>
-                <span style={statusBadgeStyle(data.status)}>{STATUS_LABELS[data.status]}</span>
+                <span style={taskTypeBadgeStyle(data.taskType)}>{AI_TASK_TYPE_LABEL[data.taskType]}</span>
+                <span style={statusBadgeStyle(data.status)}>{AI_TASK_STATUS_LABEL[data.status]}</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 4 }}>
                   {data.refDisplayId && (
                     <span style={{ fontSize: 15, fontWeight: 600, color: "var(--color-primary)" }}>{data.refDisplayId}</span>

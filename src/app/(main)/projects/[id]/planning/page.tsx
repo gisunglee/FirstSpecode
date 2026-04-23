@@ -16,7 +16,9 @@ import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
-import RichEditor from "@/components/ui/RichEditor";
+import dynamic from "next/dynamic";
+// TipTap 번들이 초기 로드에 포함되지 않도록 dynamic import
+const RichEditor = dynamic(() => import("@/components/ui/RichEditor"), { ssr: false });
 import MarkdownEditor from "@/components/ui/MarkdownEditor";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────

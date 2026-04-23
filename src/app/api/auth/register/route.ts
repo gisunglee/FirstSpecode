@@ -12,6 +12,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import {
   hashPassword,
   generateVerifyToken,
@@ -23,6 +24,10 @@ import {
 const PASSWORD_REGEX = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// 가입 봇/인증메일 폭탄 방어 — 동일 IP에서 시간당 5회까지
+const REGISTER_IP_LIMIT      = 5;
+const REGISTER_IP_WINDOW_SEC = 3600;
+
 export async function POST(request: NextRequest) {
   let body: unknown;
   try {
@@ -33,6 +38,23 @@ export async function POST(request: NextRequest) {
 
   if (!body || typeof body !== "object") {
     return apiError("VALIDATION_ERROR", "요청 본문이 올바르지 않습니다.", 400);
+  }
+
+  // IP 기반 가입 Rate Limit — 봇 가입/인증메일 폭탄 차단
+  const ipAddr = getClientIp(request);
+  const rl = await checkRateLimit({
+    key:       `REGISTER_IP:${ipAddr}`,
+    limit:     REGISTER_IP_LIMIT,
+    windowSec: REGISTER_IP_WINDOW_SEC,
+  });
+  if (!rl.ok) {
+    return apiError(
+      "RATE_LIMITED",
+      "가입 시도가 너무 잦습니다. 잠시 후 다시 시도해 주세요.",
+      429,
+      { retryAfter: rl.retryAfter },
+      { "Retry-After": String(rl.retryAfter) }
+    );
   }
 
   const { email, password } = body as Record<string, unknown>;

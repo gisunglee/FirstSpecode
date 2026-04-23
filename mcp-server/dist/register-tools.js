@@ -4,7 +4,7 @@
  * 역할:
  *   - McpServer 인스턴스에 SPECODE 도구들을 등록
  *
- * 도구 카테고리 (38개):
+ * 도구 카테고리 (40개):
  *   [프로젝트]     list_projects, get_project
  *   [기획-과업]    list_tasks, get_task, create_task, update_task, delete_task
  *   [기획-요구사항] list_requirements, get_requirement, create_requirement, update_requirement, delete_requirement
@@ -14,7 +14,7 @@
  *   [설계-화면]    list_screens, get_screen, create_screen, update_screen, delete_screen
  *   [설계-영역]    list_areas, get_area, create_area, update_area, delete_area
  *   [설계-기능]    list_functions, get_function, create_function, update_function, delete_function
- *   [DB]           list_db_tables, get_db_table
+ *   [DB]           list_db_tables, get_db_table, get_db_table_usage, get_db_column_usage
  *
  * 계층 관계:
  *   기획: 과업(Task) → 요구사항(Requirement) → 사용자스토리(UserStory)
@@ -659,7 +659,10 @@ export function registerTools(server) {
     // ═══════════════════════════════════════════════════════════════
     // 10. DB 테이블
     // ═══════════════════════════════════════════════════════════════
-    server.tool("list_db_tables", "DB 테이블 목록 조회 — 프로젝트에 등록된 데이터베이스 테이블 목록을 반환합니다", {
+    server.tool("list_db_tables", "DB 테이블 목록 조회 — 프로젝트에 등록된 데이터베이스 테이블 목록을 반환합니다. " +
+        "매핑 인사이트 필드 포함: functionCount(이 테이블을 쓰는 기능 수), " +
+        "usedColCount(매핑된 컬럼 수), ioProfile(READ_HEAVY|WRITE_HEAVY|MIXED|NONE), " +
+        "lastUsedDt(가장 최근 매핑 저장 시각, ISO)", {
         projectId: z.string().describe("프로젝트 ID"),
     }, async ({ projectId }) => {
         try {
@@ -676,6 +679,34 @@ export function registerTools(server) {
     }, async ({ projectId, tableId }) => {
         try {
             const data = await specodeFetch(`/api/projects/${projectId}/db-tables/${tableId}`);
+            return textResult(data);
+        }
+        catch (err) {
+            return errorResult(err);
+        }
+    });
+    server.tool("get_db_table_usage", "DB 테이블 사용 현황 조회 — 이 테이블을 참조하는 기능/영역/화면 목록과 " +
+        "컬럼별 사용 통계, IO 분포, 마지막 매핑 시각을 반환합니다. " +
+        "매핑 인사이트 드릴다운에 사용", {
+        projectId: z.string().describe("프로젝트 ID"),
+        tableId: z.string().describe("테이블 ID"),
+    }, async ({ projectId, tableId }) => {
+        try {
+            const data = await specodeFetch(`/api/projects/${projectId}/db-tables/${tableId}/usage`);
+            return textResult(data);
+        }
+        catch (err) {
+            return errorResult(err);
+        }
+    });
+    server.tool("get_db_column_usage", "DB 컬럼 사용처 드릴다운 — 단일 컬럼이 어떤 기능/영역/화면에서 " +
+        "INPUT/OUTPUT/INOUT 으로 쓰이는지 매핑 목록을 반환합니다", {
+        projectId: z.string().describe("프로젝트 ID"),
+        tableId: z.string().describe("테이블 ID"),
+        colId: z.string().describe("컬럼 ID"),
+    }, async ({ projectId, tableId, colId }) => {
+        try {
+            const data = await specodeFetch(`/api/projects/${projectId}/db-tables/${tableId}/columns/${colId}/usage`);
             return textResult(data);
         }
         catch (err) {

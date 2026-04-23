@@ -19,6 +19,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import {
   verifyPassword,
   signAccessToken,
@@ -31,6 +32,12 @@ import {
 const MAX_FAIL_COUNT = 5;
 // 계정 잠금 지속 시간 (밀리초) — 1시간
 const LOCK_DURATION_MS = 60 * 60 * 1000;
+
+// IP별 로그인 시도 Rate Limit — 이메일 회전 공격 방어
+//   이메일별 5회 잠금(MAX_FAIL_COUNT)은 여전히 유지됨.
+//   이 제한은 한 IP가 여러 이메일로 돌려가며 공격하는 패턴을 막기 위함.
+const LOGIN_IP_LIMIT       = 20;
+const LOGIN_IP_WINDOW_SEC  = 600; // 10분
 
 export async function POST(request: NextRequest) {
   let body: unknown;
@@ -51,10 +58,24 @@ export async function POST(request: NextRequest) {
   }
 
   // 클라이언트 IP, User-Agent (세션 기록용)
-  const ipAddr    = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-                 ?? request.headers.get("x-real-ip")
-                 ?? "unknown";
+  const ipAddr    = getClientIp(request);
   const userAgent = request.headers.get("user-agent") ?? "unknown";
+
+  // ⓪ IP별 Rate Limit — 이메일/PW 검증 진입 전에 선차단
+  const rl = await checkRateLimit({
+    key:       `LOGIN_IP:${ipAddr}`,
+    limit:     LOGIN_IP_LIMIT,
+    windowSec: LOGIN_IP_WINDOW_SEC,
+  });
+  if (!rl.ok) {
+    return apiError(
+      "RATE_LIMITED",
+      "너무 많은 로그인 시도가 감지되었습니다. 잠시 후 다시 시도해 주세요.",
+      429,
+      { retryAfter: rl.retryAfter },
+      { "Retry-After": String(rl.retryAfter) }
+    );
+  }
 
   try {
     // ① 회원 조회 — 없으면 보안상 동일 메시지 반환 (이메일 존재 여부 노출 방지)
@@ -173,7 +194,9 @@ export async function POST(request: NextRequest) {
     const autoLoginYn      = rememberMe === true ? "Y" : "N";
     const rtExpiry         = refreshTokenExpiryDate();
 
-    await prisma.$transaction(async (tx) => {
+    // 세션을 먼저 만들고 그 sesn_id를 AT 페이로드에 박아야
+    // 추후 강제 로그아웃/민감 API에서 세션 활성 여부를 판별할 수 있다.
+    const sesnId = await prisma.$transaction(async (tx) => {
       // 성공 시도 기록
       await tx.tbCmLoginAttempt.create({
         data: {
@@ -202,9 +225,11 @@ export async function POST(request: NextRequest) {
           sesn_id:        sesn.sesn_id,
         },
       });
+
+      return sesn.sesn_id;
     });
 
-    const accessToken = signAccessToken({ mberId: member.mber_id, email });
+    const accessToken = signAccessToken({ mberId: member.mber_id, email, sesnId });
 
     return apiSuccess({ accessToken, refreshToken: refreshTokenRaw });
 
