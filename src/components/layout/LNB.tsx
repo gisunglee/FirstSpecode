@@ -34,6 +34,9 @@ type MenuItem = {
   label: string;
   href: string;
   icon: MenuIconKey;
+  // 상위 항목의 하위로 보이도록 살짝 들여쓰는 표시 (ex: 영역은 화면의 세부 구성)
+  // 혼동 쌍(화면↔영역)에만 제한적으로 사용. 전체 계층 트리화는 과하므로 의도적 최소 개입
+  indent?: boolean;
 };
 
 type MenuGroup = {
@@ -108,10 +111,11 @@ export default function LNB() {
         label: "설계",
         icon: "g_design",
         // 라벨은 그룹 이름("설계")과 중복되는 접미사를 뗌 — "화면설계" → "화면"
+        // "영역"은 화면의 세부 구성이라는 힌트를 주기 위해 살짝 들여씀 (indent: true)
         items: [
           { label: "단위업무",  href: p("/unit-works"), icon: "i_unitWork" },
           { label: "화면",      href: p("/screens"),    icon: "i_screen" },
-          { label: "영역",      href: p("/areas"),      icon: "i_area" },
+          { label: "영역",      href: p("/areas"),      icon: "i_area", indent: true },
           { label: "기능",      href: p("/functions"),  icon: "i_function" },
           { label: "DB 테이블", href: p("/db-tables"),  icon: "i_dbTable" },
         ],
@@ -278,7 +282,7 @@ function SubItem({ item, isActive }: { item: MenuItem; isActive: boolean }) {
   return (
     <Link
       href={item.href}
-      className={`sp-subpane-item${isActive ? " is-active" : ""}${isDisabled ? " is-disabled" : ""}`}
+      className={`sp-subpane-item${isActive ? " is-active" : ""}${isDisabled ? " is-disabled" : ""}${item.indent ? " is-indented" : ""}`}
       onClick={isDisabled ? (e) => e.preventDefault() : undefined}
     >
       <MenuIcon name={item.icon} size={15} />

@@ -184,14 +184,12 @@ function DbTableDetailPageInner() {
     }
   }, [data]);
 
+  // DB 테이블 상세는 브레드크럼 표시 생략 — 헤더에 "DB 테이블 상세"와 물리명이 이미 있고
+  // LNB에서도 설계 > DB 테이블 위치가 명확해 중복 안내가 됨
   useEffect(() => {
-    const label = isNew ? "신규 등록" : (data?.tblPhysclNm ?? "편집");
-    setBreadcrumb([
-      { label: "DB 테이블", href: `/projects/${projectId}/db-tables` },
-      { label },
-    ]);
+    setBreadcrumb([]);
     return () => setBreadcrumb([]);
-  }, [projectId, isNew, data?.tblPhysclNm, setBreadcrumb]);
+  }, [setBreadcrumb]);
 
   // ── 저장 뮤테이션 ────────────────────────────────────────────────────────────
   const saveMutation = useMutation({

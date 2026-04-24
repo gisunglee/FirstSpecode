@@ -77,8 +77,9 @@ function DbTablesPageInner() {
   const projectId = params.id;
   const { setBreadcrumb } = useAppStore();
 
+  // DB 테이블은 브레드크럼 생략 — LNB + 페이지 헤더로 위치 안내 충분
   useEffect(() => {
-    setBreadcrumb([{ label: "DB 테이블" }]);
+    setBreadcrumb([]);
     return () => setBreadcrumb([]);
   }, [setBreadcrumb]);
 

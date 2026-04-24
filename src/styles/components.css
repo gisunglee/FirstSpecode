@@ -345,6 +345,12 @@ body {
   pointer-events: none;
 }
 
+/* 하위 개념 힌트 — 혼동 쌍(예: 화면 ↔ 영역)에서 하위 쪽만 살짝 들여씀.
+   전체 계층 트리화는 과하다고 판단, 혼동 해소 목적으로만 최소 적용. */
+.sp-subpane-item.is-indented {
+  padding-left: 26px; /* 기본 14 + 12 추가 = 자연스러운 한 단계 들여쓰기 */
+}
+
 /* collapsed 상태 — 서브 패널만 숨김 (레일은 그대로 노출)
    토글 버튼은 wrapper 우측 가장자리에 absolute로 떠있음 */
 .sp-sidebar-wrapper.is-collapsed .sp-subpane {

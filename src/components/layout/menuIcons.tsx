@@ -4,14 +4,23 @@
  * 디자인 원칙:
  *   - 단색(currentColor) — 부모 텍스트 색을 그대로 따라감 (테마 자동 대응)
  *   - 라인 스트로크 스타일로 통일 (lucide 계열)
- *   - 24×24 viewBox, strokeWidth 1.7
+ *   - 24×24 viewBox
  *   - 그룹별/메뉴별 의미 매칭에 우선, 시각적 일관성 유지
  *
  * 아이콘 외부 라이브러리(lucide-react) 미도입:
  *   - 의존성 추가 없이 SPECODE만 쓸 30여 개 아이콘만 인라인으로 보유
+ *
+ * 획 두께 조정 이력:
+ *   - 초기값 1.7 (얇고 미니멀) → 1.7 에서는 "가늘어 흐려 보인다" 피드백
+ *   - 현재 값 2.0 (한 단계 굵게. 배경 대비 가독성↑, 전체 미니멀 톤 유지)
+ *   - 롤백하려면 아래 ICON_STROKE_WIDTH 값을 1.7 로 변경 (한 줄)
  */
 
 import type { ReactNode } from "react";
+
+// 아이콘 획 두께 — 모든 메뉴 아이콘에 일괄 적용되는 단일 진실 공급원
+// 수정 시 전체 아이콘에 즉시 반영되므로 미세 튜닝 용이.
+const ICON_STROKE_WIDTH = 2.0;
 
 // ── 공통 SVG 래퍼 ─────────────────────────────────────────────────────────────
 function S({ children, size = 18 }: { children: ReactNode; size?: number }) {
@@ -22,7 +31,7 @@ function S({ children, size = 18 }: { children: ReactNode; size?: number }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.7}
+      strokeWidth={ICON_STROKE_WIDTH}
       strokeLinecap="round"
       strokeLinejoin="round"
       style={{ flexShrink: 0 }}
