@@ -121,6 +121,12 @@ function ScreensPageInner() {
   // 담당자 드롭다운 — 특정 멤버 필터. "" = 담당자 전체 (드롭다운이 세그먼트보다 우선)
   const [filterMember, setFilterMember] = useState<string>("");
 
+  // 뷰 모드 — "default": 서버가 내려준 요구사항/단위업무/sortOrder 순서 그대로
+  //          "category": 대분류 → 중분류 → 소분류 → 화면명 텍스트 정렬
+  // 주의: 컬럼 구조는 두 모드 모두 동일 (과거 컬럼을 왼쪽으로 이동시키던 방식이
+  //       레이아웃을 깨뜨려 제거됨. 지금은 정렬 기준만 바꾼다).
+  const [viewMode, setViewMode] = useState<"default" | "category">("default");
+
   // 프로젝트 멤버 목록 — 담당자 드롭다운 옵션용
   const { data: memberData } = useQuery({
     queryKey: ["project-members", projectId],
@@ -157,9 +163,28 @@ function ScreensPageInner() {
   ).map(([id, name]) => ({ id: id!, name }));
 
   // 필터 적용
-  const items = unitWorkFilter
+  const filtered = unitWorkFilter
     ? allItems.filter((s) => s.unitWorkId === unitWorkFilter)
     : allItems;
+
+  // 뷰 모드별 정렬
+  //   default  — 서버 응답 순서 유지 (요구사항/단위업무 그룹핑 + sortOrder)
+  //   category — 대 → 중 → 소 → 화면명 순 텍스트 정렬 (localeCompare "ko")
+  //             빈 값은 ""로 취급되어 앞쪽에 모임.
+  const items = viewMode === "category"
+    ? [...filtered].sort((a, b) => {
+        const lA = a.categoryL ?? "", lB = b.categoryL ?? "";
+        if (lA !== lB) return lA.localeCompare(lB, "ko");
+        const mA = a.categoryM ?? "", mB = b.categoryM ?? "";
+        if (mA !== mB) return mA.localeCompare(mB, "ko");
+        const sA = a.categoryS ?? "", sB = b.categoryS ?? "";
+        if (sA !== sB) return sA.localeCompare(sB, "ko");
+        return a.name.localeCompare(b.name, "ko");
+      })
+    : filtered;
+
+  // 분류순 모드에서는 드래그/그룹핑 의미가 사라지므로 비활성
+  const isCategoryView = viewMode === "category";
 
   // ── 순서 변경 뮤테이션 ──────────────────────────────────────────────────────
   const sortMutation = useMutation({
@@ -290,6 +315,24 @@ function ScreensPageInner() {
               <option key={opt.id} value={opt.id}>{opt.name}</option>
             ))}
           </select>
+
+          {/* 뷰 모드 토글 — 정렬순(기본) / 분류순(대·중·소 텍스트 정렬) */}
+          <div style={segmentGroupStyle}>
+            <button
+              type="button"
+              onClick={() => setViewMode("default")}
+              style={segmentBtnStyle(viewMode === "default")}
+            >
+              정렬순
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("category")}
+              style={segmentBtnStyle(viewMode === "category")}
+            >
+              분류순
+            </button>
+          </div>
         </div>
 
         {/* 목록 */}
@@ -317,16 +360,22 @@ function ScreensPageInner() {
             </div>
 
             {items.map((screen, idx) => {
-              const isFirstReq = idx === 0 || items[idx - 1].requirementId !== screen.requirementId;
-              const isLastOfReq = idx === items.length - 1 || items[idx + 1].requirementId !== screen.requirementId;
+              // 분류순 모드에선 정렬 기준이 대/중/소라 요구사항·단위업무 그룹 경계가 의미 없음
+              //   → 매 행에 요구사항·단위업무명을 반복 표시하고, 행 구분선도 모두 그어준다.
+              const isFirstReq = isCategoryView
+                ? true
+                : (idx === 0 || items[idx - 1].requirementId !== screen.requirementId);
+              const isLastOfReq = isCategoryView
+                ? true
+                : (idx === items.length - 1 || items[idx + 1].requirementId !== screen.requirementId);
 
               return (
                 <div
                   key={screen.screenId}
-                  draggable
-                  onDragStart={() => handleDragStart(idx)}
-                  onDragEnter={() => handleDragEnter(idx)}
-                  onDragEnd={handleDragEnd}
+                  // draggable은 핸들(☰)에만 부여 — row 본문 클릭이 예상치 못한 드래그로 인식되어
+                  // 순서 변경 캐시와 뒤엉켜 잘못된 상세로 이동하던 문제를 원천 차단.
+                  // row에는 drop target용 이벤트만 유지.
+                  onDragEnter={() => !isCategoryView && handleDragEnter(idx)}
                   onDragOver={(e) => e.preventDefault()}
                   onClick={() => router.push(`/projects/${projectId}/screens/${screen.screenId}`)}
                   onMouseEnter={() => setHoveredId(screen.screenId)}
@@ -340,8 +389,21 @@ function ScreensPageInner() {
                     paddingLeft: 13,
                   }}
                 >
-                  {/* 드래그 핸들 */}
-                  <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
+                  {/* 드래그 핸들 — 이 요소에만 draggable 부여. 분류순 모드에선 완전 비활성. */}
+                  <div
+                    draggable={!isCategoryView}
+                    onDragStart={(e) => {
+                      if (isCategoryView) { e.preventDefault(); return; }
+                      handleDragStart(idx);
+                    }}
+                    onDragEnd={() => !isCategoryView && handleDragEnd()}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      cursor: isCategoryView ? "default" : "grab",
+                      color: "#aaa", userSelect: "none", paddingLeft: 4,
+                      opacity: isCategoryView ? 0.3 : 1,
+                    }}
+                  >☰</div>
 
                   {/* 요구사항 (첫 행에만 표시) */}
                   <div
@@ -363,13 +425,14 @@ function ScreensPageInner() {
                     ) : null}
                   </div>
 
-                  {/* 단위업무명 — 같은 unitWorkId이면 첫 행에만 표시 */}
+                  {/* 단위업무명 — default 모드에선 같은 unitWorkId 연속 행은 첫 행에만,
+                      category 모드에선 정렬이 섞이므로 항상 표시 */}
                   <div
                     onClick={(e) => e.stopPropagation()}
                     style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                     title={screen.unitWorkName}
                   >
-                    {items[idx - 1]?.unitWorkId === screen.unitWorkId && screen.unitWorkId
+                    {!isCategoryView && items[idx - 1]?.unitWorkId === screen.unitWorkId && screen.unitWorkId
                       ? null
                       : screen.unitWorkId ? (
                         <button

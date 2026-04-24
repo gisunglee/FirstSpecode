@@ -36,6 +36,8 @@ type AppState = {
   // 프로필 로드 완료 플래그 — 프로필에서 myAssigneeMode를 받아오기 전까지
   //   각 목록 페이지가 useQuery를 지연시켜 플리커를 방지
   _hasLoadedProfile: boolean;
+  // 전역 검색 다이얼로그 열림 여부 — GNB 돋보기 버튼과 Ctrl+K 단축키가 토글
+  globalSearchOpen: boolean;
 };
 
 type AppActions = {
@@ -47,6 +49,8 @@ type AppActions = {
   setBreadcrumb: (items: BreadcrumbItem[]) => void;
   setMyAssigneeMode: (mode: AssigneeMode) => void;
   setHasLoadedProfile: (loaded: boolean) => void;
+  setGlobalSearchOpen: (open: boolean) => void;
+  toggleGlobalSearch: () => void;
 };
 
 // theme와 sidebarCollapsed만 persist — projectId는 세션 초기화 시 재선택
@@ -60,11 +64,14 @@ export const useAppStore = create<AppState & AppActions>()(
       breadcrumb: [],
       myAssigneeMode: "all",
       _hasLoadedProfile: false,
+      globalSearchOpen: false,
 
       setCurrentProjectId: (id) => set({ currentProjectId: id }),
       setBreadcrumb: (items) => set({ breadcrumb: items }),
       setMyAssigneeMode: (mode) => set({ myAssigneeMode: mode }),
       setHasLoadedProfile: (loaded) => set({ _hasLoadedProfile: loaded }),
+      setGlobalSearchOpen: (open) => set({ globalSearchOpen: open }),
+      toggleGlobalSearch: () => set((s) => ({ globalSearchOpen: !s.globalSearchOpen })),
 
       setTheme: (theme) => {
         // document에 data-theme 반영 (CSS 토큰 전환 트리거)

@@ -182,36 +182,46 @@ function ScreenDetailPageInner() {
   const myMemberId = memberData?.myMemberId ?? "";
 
   // ── 기존 화면 로드 (수정 모드) ─────────────────────────────────────────────
+  //
+  // ⚠️ 중요: queryFn 안에서 setState를 호출하지 않는다.
+  //   TanStack Query는 동일 queryKey에 대해 캐시 hit 시 queryFn을 재실행하지 않으므로
+  //   queryFn 내부의 setState는 "뒤로 가기 → 동일 row 재진입" 시 실행되지 않아
+  //   form이 빈 상태로 남아 "조회 안됨"처럼 보이는 버그가 발생한다.
+  //   대신 아래 useEffect에서 detail 변경을 감지해 form을 동기화한다.
   const { data: detail, isLoading: isDetailLoading } = useQuery({
     queryKey: ["screen", projectId, screenId],
     queryFn: () =>
       authFetch<{ data: ScreenDetail }>(
         `/api/projects/${projectId}/screens/${screenId}`
-      ).then((r) => {
-        const d = r.data;
-        setForm({
-          unitWorkId: d.unitWorkId ?? undefined,
-          displayId: d.displayId ?? "",
-          name: d.name,
-          description: d.description ?? "",
-          comment: d.comment ?? "",
-          type: d.type,
-          sortOrder: d.sortOrder,
-          categoryL: d.categoryL,
-          categoryM: d.categoryM,
-          categoryS: d.categoryS,
-          assignMemberId: d.assignMemberId ?? "",
-        });
-        // 설명 변경 감지를 위해 원본 값 보관
-        setOriginalDescription(d.description ?? "");
-        // 저장된 레이아웃 데이터 복원
-        if (d.layoutData) {
-          try { setLayoutRows(JSON.parse(d.layoutData)); } catch { /* 잘못된 JSON 무시 */ }
-        }
-        return d;
-      }),
+      ).then((r) => r.data),
     enabled: !isNew,
   });
+
+  // detail이 로드되거나 다른 screenId로 바뀌면 폼/레이아웃을 항상 동기화.
+  //   캐시 hit(재방문) 시에도 detail은 바로 값이 들어와 이 효과가 재실행되므로
+  //   "동일 row 재진입" 케이스에서 폼이 비어 보이는 문제를 원천 차단한다.
+  useEffect(() => {
+    if (!detail) return;
+    setForm({
+      unitWorkId:     detail.unitWorkId ?? undefined,
+      displayId:      detail.displayId ?? "",
+      name:           detail.name,
+      description:    detail.description ?? "",
+      comment:        detail.comment ?? "",
+      type:           detail.type,
+      sortOrder:      detail.sortOrder,
+      categoryL:      detail.categoryL,
+      categoryM:      detail.categoryM,
+      categoryS:      detail.categoryS,
+      assignMemberId: detail.assignMemberId ?? "",
+    });
+    setOriginalDescription(detail.description ?? "");
+    if (detail.layoutData) {
+      try { setLayoutRows(JSON.parse(detail.layoutData)); } catch { /* 잘못된 JSON 무시 */ }
+    } else {
+      setLayoutRows([]);
+    }
+  }, [detail]);
 
   // ── 삭제 상태 / 뮤테이션 ─────────────────────────────────────────────────
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);

@@ -41,6 +41,8 @@ export default function GNB() {
   const myAssigneeMode      = useAppStore((s) => s.myAssigneeMode);
   const setMyAssigneeMode   = useAppStore((s) => s.setMyAssigneeMode);
   const setHasLoadedProfile = useAppStore((s) => s.setHasLoadedProfile);
+  // 전역 검색 — 돋보기 버튼 클릭 시 GlobalSearchDialog 오픈
+  const setGlobalSearchOpen = useAppStore((s) => s.setGlobalSearchOpen);
 
   // 프로젝트 드롭다운 열림 상태
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -337,19 +339,19 @@ export default function GNB() {
           </svg>
         </button>
 
-        {/* AI 요약 버튼 (플레이스홀더) */}
-        <button className="sp-menu-item" title="AI 프로젝트 요약 브리핑">
-          ✨
-        </button>
-
-        {/* 알림 (플레이스홀더) */}
-        <button className="sp-menu-item" title="알림">
-          🔔
-        </button>
-
-        {/* 설정 (플레이스홀더) */}
-        <button className="sp-menu-item" title="설정">
-          ⚙️
+        {/* 전역 검색 — 돋보기 아이콘, Ctrl+K 단축키로도 열림 (GlobalSearchDialog 참고) */}
+        <button
+          className="sp-menu-item"
+          title="전역 검색 (Ctrl+K)"
+          onClick={() => setGlobalSearchOpen(true)}
+          style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px" }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" strokeWidth="2"
+               strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
         </button>
 
         {/* 프로필 아바타 + 드롭다운 */}

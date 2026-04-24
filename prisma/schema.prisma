@@ -294,6 +294,7 @@ model TbDsUnitWork {
   screens              TbDsScreen[]
   requirement          TbRqRequirement @relation(fields: [req_id], references: [req_id])
 
+  @@index([prjct_id], map: "tb_ds_unit_work_prjct_idx")
   @@map("tb_ds_unit_work")
 }
 
@@ -319,6 +320,7 @@ model TbDsScreen {
   areas           TbDsArea[]
   unitWork        TbDsUnitWork? @relation(fields: [unit_work_id], references: [unit_work_id])
 
+  @@index([prjct_id], map: "tb_ds_screen_prjct_idx")
   @@map("tb_ds_screen")
 }
 
@@ -339,6 +341,7 @@ model TbDsArea {
   screen          TbDsScreen?    @relation(fields: [scrn_id], references: [scrn_id])
   functions       TbDsFunction[]
 
+  @@index([prjct_id], map: "tb_ds_area_prjct_idx")
   @@map("tb_ds_area")
 }
 
@@ -362,6 +365,7 @@ model TbDsFunction {
   coment_cn       String?
   area            TbDsArea? @relation(fields: [area_id], references: [area_id])
 
+  @@index([prjct_id], map: "tb_ds_function_prjct_idx")
   @@map("tb_ds_function")
 }
 
@@ -377,6 +381,7 @@ model TbDsDbTable {
   mdfcn_dt      DateTime?           @db.Timestamp(3)
   columns       TbDsDbTableColumn[]
 
+  @@index([prjct_id], map: "tb_ds_db_table_prjct_idx")
   @@map("tb_ds_db_table")
 }
 
@@ -491,6 +496,7 @@ model TbRqTask {
   mdfcn_dt        DateTime?
   requirements    TbRqRequirement[]
 
+  @@index([prjct_id], map: "tb_rq_task_prjct_idx")
   @@map("tb_rq_task")
 }
 
@@ -515,6 +521,7 @@ model TbRqRequirement {
   task           TbRqTask?       @relation(fields: [task_id], references: [task_id])
   userStories    TbRqUserStory[]
 
+  @@index([prjct_id], map: "tb_rq_requirement_prjct_idx")
   @@map("tb_rq_requirement")
 }
 

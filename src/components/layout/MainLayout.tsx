@@ -31,9 +31,11 @@ import { toast } from "sonner";
 import GNB from "./GNB";
 import LNB from "./LNB";
 import StatusBar from "./StatusBar";
+import GlobalSearchDialog from "@/components/search/GlobalSearchDialog";
 import { useAppStore } from "@/store/appStore";
 import { authFetch } from "@/lib/authFetch";
 import { useTripleClickSidebarToggle } from "@/hooks/useTripleClickSidebarToggle";
+import { useGlobalSearchShortcut } from "@/hooks/useGlobalSearchShortcut";
 
 type RemovalNotice = {
   noticeId:    string;
@@ -52,6 +54,9 @@ export default function MainLayout({
 
   // 어디서든 빠르게 3연타 클릭하면 사이드바 접기/펼치기
   useTripleClickSidebarToggle();
+
+  // 어디서든 Ctrl+K (Mac: Cmd+K) 로 전역 검색 토글
+  useGlobalSearchShortcut();
 
   // 인증 상태 — 토큰 확인 전까지 화면 미표시 (레이아웃 flash 방지)
   const [authChecked, setAuthChecked] = useState(false);
@@ -144,6 +149,9 @@ export default function MainLayout({
 
       {/* 하단 StatusBar */}
       <StatusBar />
+
+      {/* 전역 검색 다이얼로그 — GNB 돋보기/Ctrl+K 로 토글. 내부에서 open 상태 구독 */}
+      <GlobalSearchDialog />
 
       {/* PID-00027 제거 안내 모달 */}
       {modalVisible && notices.length > 0 && (

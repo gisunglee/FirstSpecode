@@ -48,7 +48,7 @@ const STORAGE_KEY = "specode-lnb-active-group";
 
 export default function LNB() {
   const pathname = usePathname();
-  const { sidebarCollapsed, toggleSidebar, currentProjectId } = useAppStore();
+  const { sidebarCollapsed, toggleSidebar, setSidebarCollapsed, currentProjectId } = useAppStore();
   const { canManageMembers, canAccessSettings } = useMyRole(currentProjectId);
 
   // 프로젝트 베이스 경로 — 미선택 시 null → 해당 메뉴들은 비활성 처리
@@ -74,15 +74,16 @@ export default function LNB() {
         key: "project",
         label: "프로젝트",
         icon: "g_project",
+        // 라벨은 그룹 이름("프로젝트")과 중복되는 접두사를 뗌 — "프로젝트 목록" → "목록"
         items: [
-          { label: "프로젝트 목록", href: "/projects", icon: "i_projectList" },
-          // 권한 체크 — canAccessSettings && pBase 일 때만 노출
+          { label: "목록", href: "/projects", icon: "i_projectList" },
           ...(canAccessSettings && pBase
-            ? [{ label: "프로젝트 설정", href: p("/settings"), icon: "i_projectSettings" as MenuIconKey }]
+            ? [{ label: "설정", href: p("/settings"), icon: "i_projectSettings" as MenuIconKey }]
             : []),
           ...(canManageMembers && pBase
-            ? [{ label: "멤버 관리", href: p("/members"), icon: "i_members" as MenuIconKey }]
+            ? [{ label: "멤버", href: p("/members"), icon: "i_members" as MenuIconKey }]
             : []),
+          // "개인 설정"/"환경설정"은 프로젝트와 무관한 항목이라 구별을 위해 유지
           { label: "개인 설정", href: "/settings/profile", icon: "i_profile" },
           ...(canAccessSettings && pBase
             ? [{ label: "환경설정", href: p("/configs"), icon: "i_envSettings" as MenuIconKey }]
@@ -106,11 +107,12 @@ export default function LNB() {
         key: "design",
         label: "설계",
         icon: "g_design",
+        // 라벨은 그룹 이름("설계")과 중복되는 접미사를 뗌 — "화면설계" → "화면"
         items: [
           { label: "단위업무",  href: p("/unit-works"), icon: "i_unitWork" },
-          { label: "화면설계",  href: p("/screens"),    icon: "i_screen" },
-          { label: "영역설계",  href: p("/areas"),      icon: "i_area" },
-          { label: "기능설계",  href: p("/functions"),  icon: "i_function" },
+          { label: "화면",      href: p("/screens"),    icon: "i_screen" },
+          { label: "영역",      href: p("/areas"),      icon: "i_area" },
+          { label: "기능",      href: p("/functions"),  icon: "i_function" },
           { label: "DB 테이블", href: p("/db-tables"),  icon: "i_dbTable" },
         ],
       },
@@ -207,6 +209,10 @@ export default function LNB() {
     if (typeof window !== "undefined") {
       sessionStorage.setItem(STORAGE_KEY, key);
     }
+    // 사이드바가 접혀 있으면 자동으로 펼쳐 서브 패널을 드러냄.
+    // 레일 아이콘만 보이던 상태에서 클릭 의도는 "해당 그룹 메뉴 열기"이므로
+    // 한 번 더 토글 버튼을 누르게 하는 것은 불필요한 단계.
+    if (sidebarCollapsed) setSidebarCollapsed(false);
   }
 
   // 현재 활성 그룹 객체 — activeKey가 사라진 그룹을 가리키면 첫 그룹 사용
