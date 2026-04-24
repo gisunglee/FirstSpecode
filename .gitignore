@@ -29,6 +29,11 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+# MCP 클라이언트 설정 — Authorization Bearer 토큰이 포함되므로 커밋 금지
+# 팀 공유용 템플릿은 .mcp.json.example 로 관리
+.mcp.json
+.mcp.json.stdio-backup
+
 # vercel
 .vercel
 

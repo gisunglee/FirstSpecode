@@ -19,6 +19,9 @@ export function useGlobalSearchShortcut() {
 
   useEffect(() => {
     function handler(e: KeyboardEvent) {
+      // 패스워드 매니저/IME/오토필이 e.key 없는 합성 이벤트를 쏘는 케이스가 있어
+      // toLowerCase 호출 전 방어 (없으면 비밀번호 입력창 등에서 TypeError 발생)
+      if (typeof e.key !== "string") return;
       // Ctrl+K / Cmd+K — 대소문자 무시
       const key = e.key.toLowerCase();
       const isShortcut = (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && key === "k";

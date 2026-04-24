@@ -3,21 +3,30 @@
 /**
  * ProfileSettingsPage — 프로필 설정 (PID-00012)
  *
- * 역할:
- *   - 기본정보 탭: 프로필 이미지·이름 변경, 이메일 변경 요청
- *   - 보안 탭: 비밀번호 변경 (소셜 전용 계정은 현재 비밀번호 미표시)
- *   - 소셜연동 탭: Google·GitHub 연동·해제
+ * 역할 (2026-04-24 탭 2개로 정리):
+ *   - [프로필 정보] 탭: 프로필 이미지·이름·이메일 변경 + 추가 설정 진입(보안/소셜연동 모달)
+ *   - [MCP 키 관리] 탭: 외부 AI 클라이언트용 MCP 키 발급/관리
  *
- * URL: /settings/profile?tab=basic|security|social
+ * 모달 (탭 콘텐츠가 가벼워 모달로 분리):
+ *   - 보안:    비밀번호 변경 + 회원 탈퇴 링크
+ *   - 소셜연동: Google·GitHub 연동/해제
+ *
+ * URL: /settings/profile?tab=profile|api-keys
+ *      ?linked=1 진입 시 소셜연동 모달 자동 오픈 (소셜 콜백 후속)
  */
 
 import { useCallback, useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
+import McpKeyManager from "@/components/mcp-keys/McpKeyManager";
 
 // ─── 타입 ────────────────────────────────────────────────────────────────
-type Tab = "basic" | "security" | "social" | "api-keys";
+// 2026-04-24 탭 정리: 4개 → 2개
+//   - "profile"   : 기본정보 + (보안/소셜연동은 안에서 모달로 진입)
+//   - "api-keys"  : MCP 키 관리
+// 보안 탭은 비번 변경 폼만 있어 휑하고, 소셜연동도 카드 2개라 탭으로 두기엔 가벼움
+type Tab = "profile" | "api-keys";
 
 interface ProfileData {
   name:         string;
@@ -52,17 +61,25 @@ export default function ProfileSettingsPage() {
 function ProfileSettingsInner() {
   const router       = useRouter();
   const searchParams = useSearchParams();
-  const tabParam     = searchParams.get("tab") as Tab | null;
+  const tabParam     = searchParams.get("tab");
 
-  const [activeTab,  setActiveTab]  = useState<Tab>(tabParam ?? "basic");
+  // 유효 탭만 허용 (구 ?tab=basic/security/social 링크는 모두 profile 로 폴백)
+  const initialTab: Tab = tabParam === "api-keys" ? "api-keys" : "profile";
+  const [activeTab,  setActiveTab]  = useState<Tab>(initialTab);
   const [profile,    setProfile]    = useState<ProfileData | null>(null);
   const [loading,    setLoading]    = useState(true);
 
+  // 보안/소셜연동 모달 — 탭이 사라지면서 모달로 이동 (탭 콘텐츠가 너무 가벼웠음)
+  const [securityOpen, setSecurityOpen] = useState(false);
+  const [socialOpen,   setSocialOpen]   = useState(false);
+
   // 연동 완료 토스트 (콜백 페이지에서 ?linked=1로 이동 시)
+  // 콜백 후엔 소셜연동 모달을 자동으로 열어서 "어디서 결과가 반영됐는지" 보이게 함
   useEffect(() => {
     if (searchParams.get("linked") === "1") {
       toast.success("소셜 계정이 연동되었습니다.");
-      router.replace("/settings/profile?tab=social");
+      router.replace("/settings/profile");
+      setSocialOpen(true);
     }
   }, [searchParams, router]);
 
@@ -95,10 +112,10 @@ function ProfileSettingsInner() {
       </div>
 
       <div style={{ padding: "0 24px 24px", maxWidth: 640 }}>
-      {/* 탭 네비게이션 */}
+      {/* 탭 네비게이션 — 2개 (프로필 정보 / MCP 키 관리) */}
       <div style={{ display: "flex", gap: 4, borderBottom: "1px solid var(--color-border)", marginBottom: 32 }}>
-        {(["basic", "security", "social", "api-keys"] as Tab[]).map((tab) => {
-          const labels: Record<Tab, string> = { basic: "기본정보", security: "보안", social: "소셜연동", "api-keys": "API 키" };
+        {(["profile", "api-keys"] as Tab[]).map((tab) => {
+          const labels: Record<Tab, string> = { profile: "프로필 정보", "api-keys": "MCP 키 관리" };
           return (
             <button
               key={tab}
@@ -123,25 +140,142 @@ function ProfileSettingsInner() {
 
       {/* 탭 콘텐츠 카드 */}
       <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, padding: "24px 28px", background: "var(--color-bg-card)" }}>
-        {activeTab === "basic"    && <BasicTab    profile={profile} onRefresh={fetchProfile} />}
-        {activeTab === "security" && <SecurityTab hasPassword={profile.hasPassword} />}
-        {activeTab === "social"   && <SocialTab   social={profile.hasSocialAccounts} hasPassword={profile.hasPassword} onRefresh={fetchProfile} />}
-        {activeTab === "api-keys" && <ApiKeysTab />}
+        {activeTab === "profile" && (
+          <>
+            <BasicTab profile={profile} onRefresh={fetchProfile} />
+            {/* 추가 설정 — 보안/소셜연동을 모달로 진입. 콘텐츠가 가벼워 탭으로 두지 않음 */}
+            <div style={{ marginTop: 28, paddingTop: 20, borderTop: "1px solid var(--color-border)" }}>
+              <h4 style={{ margin: "0 0 12px", fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--color-text-secondary)" }}>
+                추가 설정
+              </h4>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => setSecurityOpen(true)}
+                  style={inlineActionBtn}
+                >
+                  🔒 보안 (비밀번호 변경)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSocialOpen(true)}
+                  style={inlineActionBtn}
+                >
+                  🔗 소셜연동
+                </button>
+              </div>
+            </div>
+            {/* 회원 탈퇴 — 위험 액션이라 카드 맨 아래 작게 우측 정렬로 표시 (잘 안 보이도록 의도) */}
+            <div style={{ marginTop: 32, paddingTop: 14, borderTop: "1px solid var(--color-border)", display: "flex", justifyContent: "flex-end" }}>
+              <Link
+                href="/settings/account/withdraw"
+                style={{
+                  fontSize: "var(--text-xs)",
+                  color: "var(--color-text-tertiary)",
+                  textDecoration: "underline",
+                  textUnderlineOffset: 2,
+                }}
+              >
+                회원 탈퇴
+              </Link>
+            </div>
+          </>
+        )}
+        {activeTab === "api-keys" && <McpKeyManager />}
+      </div>
       </div>
 
-      {/* 위험 영역 */}
-      <div style={{ marginTop: 16, padding: "16px 20px", border: "1px solid var(--color-border)", borderRadius: 8, background: "var(--color-bg-card)" }}>
-        <Link
-          href="/settings/account/withdraw"
-          style={{ fontSize: "var(--text-sm)", color: "var(--color-error)", textDecoration: "none" }}
-        >
-          회원 탈퇴
-        </Link>
-      </div>
+      {/* ── 보안 모달 — 비밀번호 변경 ─────────────────────────────────────── */}
+      {securityOpen && (
+        <SimpleModal title="보안" onClose={() => setSecurityOpen(false)}>
+          <SecurityTab hasPassword={profile.hasPassword} />
+        </SimpleModal>
+      )}
+
+      {/* ── 소셜연동 모달 ─────────────────────────────────────────────────── */}
+      {socialOpen && (
+        <SimpleModal title="소셜연동" onClose={() => setSocialOpen(false)}>
+          <SocialTab
+            social={profile.hasSocialAccounts}
+            hasPassword={profile.hasPassword}
+            onRefresh={fetchProfile}
+          />
+        </SimpleModal>
+      )}
+    </div>
+  );
+}
+
+// ─── 공통 모달 (보안/소셜연동 진입용) ────────────────────────────────────
+function SimpleModal({
+  title,
+  children,
+  onClose,
+}: {
+  title:    string;
+  children: React.ReactNode;
+  onClose:  () => void;
+}) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 300,
+        background: "rgba(0,0,0,0.45)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%", maxWidth: 520,
+          background: "var(--color-bg-card)",
+          border: "1px solid var(--color-border-strong)",
+          borderRadius: 10,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.28)",
+          maxHeight: "85vh",
+          display: "flex", flexDirection: "column",
+        }}
+      >
+        {/* 헤더 */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "14px 20px", borderBottom: "1px solid var(--color-border)",
+          flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>{title}</span>
+          <button
+            onClick={onClose}
+            aria-label="닫기"
+            style={{
+              background: "none", border: "none", cursor: "pointer",
+              fontSize: 18, lineHeight: 1, color: "var(--color-text-secondary)",
+              padding: 0, width: 28, height: 28,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+        {/* 본문 */}
+        <div style={{ padding: "20px 24px", overflowY: "auto" }}>
+          {children}
+        </div>
       </div>
     </div>
   );
 }
+
+// 추가 설정 영역의 인라인 액션 버튼 스타일
+const inlineActionBtn: React.CSSProperties = {
+  padding: "8px 14px",
+  border: "1px solid var(--color-border)",
+  borderRadius: 6,
+  background: "transparent",
+  color: "var(--color-text-primary)",
+  fontSize: "var(--text-sm)",
+  cursor: "pointer",
+};
 
 // ─────────────────────────────────────────────────────────────────────────
 // 기본정보 탭
@@ -556,254 +690,3 @@ function SocialTab({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// API 키 탭
-// ─────────────────────────────────────────────────────────────────────────
-interface ApiKeyItem {
-  apiKeyId: string;
-  keyPrefix: string;
-  keyName: string;
-  createdAt: string;
-  lastUsedAt: string | null;
-}
-
-function ApiKeysTab() {
-  const [keys, setKeys] = useState<ApiKeyItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
-  const [newKeyName, setNewKeyName] = useState("");
-  const [creating, setCreating] = useState(false);
-  // 생성 직후 원문 표시용 (1회만 — 이후 조회 불가)
-  const [createdRawKey, setCreatedRawKey] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  // 키 목록 조회
-  const fetchKeys = useCallback(async () => {
-    try {
-      const res = await authFetch("/api/auth/api-keys");
-      if (res.ok) {
-        const body = await res.json();
-        setKeys(body.data?.items ?? []);
-      }
-    } catch { /* 무시 */ }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { fetchKeys(); }, [fetchKeys]);
-
-  // 키 생성
-  const handleCreate = async () => {
-    if (!newKeyName.trim()) return;
-    setCreating(true);
-    try {
-      const res = await authFetch("/api/auth/api-keys", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keyName: newKeyName.trim() }),
-      });
-      const body = await res.json();
-      if (res.ok) {
-        setCreatedRawKey(body.data.rawKey);
-        setNewKeyName("");
-        setShowCreate(false);
-        fetchKeys();
-      } else {
-        toast.error(body.message || "키 생성 실패");
-      }
-    } catch {
-      toast.error("키 생성 중 오류가 발생했습니다.");
-    }
-    setCreating(false);
-  };
-
-  // 키 복사
-  const handleCopy = async () => {
-    if (!createdRawKey) return;
-    await navigator.clipboard.writeText(createdRawKey);
-    setCopied(true);
-    toast.success("API 키가 클립보드에 복사되었습니다.");
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  // 키 폐기
-  const handleRevoke = async (keyId: string, keyName: string) => {
-    if (!confirm(`"${keyName}" 키를 폐기하시겠습니까?\n폐기 후 이 키로는 인증할 수 없습니다.`)) return;
-    try {
-      const res = await authFetch(`/api/auth/api-keys/${keyId}`, { method: "DELETE" });
-      if (res.ok) {
-        toast.success("API 키가 폐기되었습니다.");
-        fetchKeys();
-      } else {
-        const body = await res.json();
-        toast.error(body.message || "폐기 실패");
-      }
-    } catch {
-      toast.error("키 폐기 중 오류가 발생했습니다.");
-    }
-  };
-
-  if (loading) return <div style={{ color: "var(--color-text-secondary)" }}>로딩 중...</div>;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h3 style={{ margin: 0, fontSize: "var(--text-base)", fontWeight: 600 }}>API 키 관리</h3>
-          <p style={{ margin: "4px 0 0", fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
-            MCP 등 외부 클라이언트에서 SPECODE API에 접근할 때 사용합니다.
-          </p>
-        </div>
-        <button
-          className="sp-btn sp-btn-primary"
-          onClick={() => { setShowCreate(true); setCreatedRawKey(null); }}
-          style={{ fontSize: "var(--text-sm)", whiteSpace: "nowrap" }}
-        >
-          + 키 생성
-        </button>
-      </div>
-
-      {/* 생성 직후 원문 표시 배너 — 이 키는 다시 표시되지 않음 */}
-      {createdRawKey && (
-        <div style={{
-          padding: "16px",
-          background: "var(--color-bg-warning, #fff8e1)",
-          border: "1px solid var(--color-border-warning, #ffe082)",
-          borderRadius: 8,
-        }}>
-          <p style={{ margin: "0 0 8px", fontWeight: 600, fontSize: "var(--text-sm)", color: "var(--color-text-warning, #e65100)" }}>
-            이 키는 다시 표시되지 않습니다. 지금 복사하세요.
-          </p>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <code style={{
-              flex: 1,
-              padding: "8px 12px",
-              background: "var(--color-bg-subtle, #f5f5f5)",
-              borderRadius: 4,
-              fontSize: "var(--text-xs)",
-              fontFamily: "monospace",
-              wordBreak: "break-all",
-            }}>
-              {createdRawKey}
-            </code>
-            <button
-              className="sp-btn sp-btn-secondary"
-              onClick={handleCopy}
-              style={{ fontSize: "var(--text-sm)", whiteSpace: "nowrap" }}
-            >
-              {copied ? "복사됨" : "복사"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 키 생성 폼 */}
-      {showCreate && (
-        <div style={{
-          padding: "16px",
-          border: "1px solid var(--color-border)",
-          borderRadius: 8,
-          display: "flex",
-          gap: 8,
-          alignItems: "flex-end",
-        }}>
-          <div style={{ flex: 1 }}>
-            <label style={{ display: "block", fontSize: "var(--text-sm)", fontWeight: 500, marginBottom: 4 }}>
-              키 이름
-            </label>
-            <input
-              type="text"
-              value={newKeyName}
-              onChange={(e) => setNewKeyName(e.target.value)}
-              placeholder="예: 내 PC, CI/CD, 팀 공용"
-              maxLength={100}
-              style={{
-                width: "100%",
-                padding: "8px 12px",
-                border: "1px solid var(--color-border)",
-                borderRadius: 6,
-                fontSize: "var(--text-sm)",
-                background: "var(--color-bg-input, var(--color-bg))",
-                color: "var(--color-text)",
-              }}
-              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-            />
-          </div>
-          <button
-            className="sp-btn sp-btn-primary"
-            onClick={handleCreate}
-            disabled={creating || !newKeyName.trim()}
-            style={{ fontSize: "var(--text-sm)" }}
-          >
-            {creating ? "생성 중..." : "생성"}
-          </button>
-          <button
-            className="sp-btn sp-btn-secondary"
-            onClick={() => { setShowCreate(false); setNewKeyName(""); }}
-            style={{ fontSize: "var(--text-sm)" }}
-          >
-            취소
-          </button>
-        </div>
-      )}
-
-      {/* 키 목록 */}
-      {keys.length === 0 ? (
-        <div style={{
-          textAlign: "center",
-          padding: "40px 0",
-          color: "var(--color-text-secondary)",
-          fontSize: "var(--text-sm)",
-        }}>
-          등록된 API 키가 없습니다.
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {keys.map((k) => (
-            <div
-              key={k.apiKeyId}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "12px 16px",
-                border: "1px solid var(--color-border)",
-                borderRadius: 8,
-              }}
-            >
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>{k.keyName}</span>
-                  <code style={{
-                    fontSize: "var(--text-xs)",
-                    fontFamily: "monospace",
-                    color: "var(--color-text-secondary)",
-                    background: "var(--color-bg-subtle, #f5f5f5)",
-                    padding: "2px 6px",
-                    borderRadius: 3,
-                  }}>
-                    {k.keyPrefix}...
-                  </code>
-                </div>
-                <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary, var(--color-text-secondary))" }}>
-                  생성: {new Date(k.createdAt).toLocaleDateString("ko-KR")}
-                  {k.lastUsedAt && ` · 마지막 사용: ${new Date(k.lastUsedAt).toLocaleDateString("ko-KR")}`}
-                </span>
-              </div>
-              <button
-                className="sp-btn sp-btn-secondary"
-                onClick={() => handleRevoke(k.apiKeyId, k.keyName)}
-                style={{
-                  fontSize: "var(--text-xs)",
-                  color: "var(--color-danger, #e53935)",
-                  borderColor: "var(--color-danger, #e53935)",
-                }}
-              >
-                폐기
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}

@@ -15,12 +15,6 @@
  */
 
 import { Suspense, useState, useEffect } from "react";
-import { marked } from "marked";
-
-function markedParse(md: string): string {
-  const result = marked.parse(md, { async: false });
-  return typeof result === "string" ? result : "";
-}
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -30,6 +24,8 @@ import { ScreenLayoutEditor, type LayoutRow } from "@/components/ui/ScreenLayout
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
+import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
+import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
 import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
@@ -144,6 +140,9 @@ function ScreenDetailPageInner() {
 
   // 화면 설명 예시 팝업
   const [descExampleOpen, setDescExampleOpen] = useState(false);
+
+  // 설계 양식 DB 조회 — 화면 계층
+  const { data: designTmpl } = useDesignTemplate(projectId, "SCREEN");
   const [descTab, setDescTab] = useState<"edit" | "preview">("edit");
 
   // 설명 변경 이력 저장 여부 확인 다이얼로그
@@ -572,19 +571,25 @@ function ScreenDetailPageInner() {
                 <button
                   type="button"
                   onClick={() => setDescExampleOpen(true)}
-                  style={ghostSmBtnStyle}
+                  disabled={!designTmpl?.exampleCn}
+                  style={{ ...ghostSmBtnStyle, opacity: designTmpl?.exampleCn ? 1 : 0.5, cursor: designTmpl?.exampleCn ? "pointer" : "not-allowed" }}
                 >
                   예시
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
+                    if (!designTmpl?.templateCn) return;
                     handleChange(
                       "description",
-                      DESCRIPTION_TEMPLATE(detail?.displayId ?? "PID-XXXXX", form.name)
-                    )
-                  }
-                  style={ghostSmBtnStyle}
+                      applyTemplateVars(designTmpl.templateCn, {
+                        displayId: detail?.displayId ?? "PID-XXXXX",
+                        name:      form.name,
+                      }),
+                    );
+                  }}
+                  disabled={!designTmpl?.templateCn}
+                  style={{ ...ghostSmBtnStyle, opacity: designTmpl?.templateCn ? 1 : 0.5, cursor: designTmpl?.templateCn ? "pointer" : "not-allowed" }}
                 >
                   템플릿 삽입
                 </button>
@@ -610,9 +615,13 @@ function ScreenDetailPageInner() {
             />
           </Section>
 
-          {/* 화면 설명 예시 팝업 */}
-          {descExampleOpen && (
-            <ScreenExamplePopup onClose={() => setDescExampleOpen(false)} />
+          {/* 화면 설명 예시 팝업 — DB 설계 양식 */}
+          {descExampleOpen && designTmpl?.exampleCn && (
+            <DesignExamplePopup
+              title="화면 설명 예시"
+              contentMd={designTmpl.exampleCn}
+              onClose={() => setDescExampleOpen(false)}
+            />
           )}
 
           {/* 설명 변경 이력 저장 여부 확인 다이얼로그 */}
@@ -1092,139 +1101,4 @@ const areaGridRowStyle: React.CSSProperties = {
   background: "var(--color-bg-card)",
 };
 
-// ── 화면 설명 예시 / 템플릿 ────────────────────────────────────────────────────
-
-const DESCRIPTION_EXAMPLE = `## [PID-00001] 게시판 목록
-
-### 화면 개요
-
-| 항목 | 내용 |
-|:-----|:-----|
-| **비즈니스 목적** | 프로젝트 내 공지사항을 한눈에 확인하고, 제목·유형·기간 조건으로 필요한 글을 빠르게 찾는다. |
-| **진입 경로** | 메뉴 클릭, 등록/수정 완료 후 리다이렉트 |
-
-### 영역 목록
-
-| 영역ID | 영역명 | 유형 | 설명 |
-|:-------|:-------|:-----|:-----|
-| AR-00001 | 검색 영역 | SEARCH_FORM | 유형·기간·제목 조건 검색 |
-| AR-00002 | 목록 영역 | DATA_GRID | 게시글 목록 표시, 페이징, 글쓰기 버튼 |
-
-### 영역 간 흐름
-
-- 화면 진입 시 → 검색 조건 초기화 → 자동 조회 → 목록 표시
-- 검색 버튼 클릭 → 검색 조건으로 재조회 → 목록 갱신 (1페이지 초기화)
-- 행 클릭 → PID-00002 상세 화면 이동`;
-
-const DESCRIPTION_TEMPLATE = (displayId: string, name: string) =>
-  `## [${displayId}] ${name}
-
-### 화면 개요
-
-| 항목 | 내용 |
-|:-----|:-----|
-| **비즈니스 목적** |  |
-| **진입 경로** |  |
-
-### 영역 목록
-
-| 영역ID | 영역명 | 유형 | 설명 |
-|:-------|:-------|:-----|:-----|
-|  |  |  |  |
-
-### 영역 간 흐름
-
-- `;
-
-// ── 예시 팝업 CSS ─────────────────────────────────────────────────────────────
-
-const SCREEN_EXAMPLE_CSS = [
-  ".sc-example h2,.sc-example h3{font-size:14px;font-weight:700;margin:16px 0 8px}",
-  ".sc-example table{border-collapse:collapse;width:100%;margin-bottom:12px}",
-  ".sc-example th,.sc-example td{border:1px solid #e0e0e0;padding:5px 10px;font-size:12px}",
-  ".sc-example th{background:#f5f5f5;font-weight:600}",
-  ".sc-example pre{background:#f5f5f5;padding:10px 14px;border-radius:6px;font-size:12px;overflow-x:auto}",
-  ".sc-example code{font-family:monospace}",
-  ".sc-example ul{padding-left:18px;margin:4px 0}",
-].join(" ");
-
-// ── 예시 팝업 컴포넌트 ────────────────────────────────────────────────────────
-
-function ScreenExamplePopup({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<"raw" | "preview">("preview");
-  const [copied, setCopied] = useState(false);
-
-  function handleCopy() {
-    navigator.clipboard.writeText(DESCRIPTION_EXAMPLE).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    });
-  }
-
-  const tabBtn = (t: "raw" | "preview", label: string) => (
-    <button
-      onClick={() => setTab(t)}
-      style={{
-        padding: "4px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-        borderRadius: 5, border: "none",
-        background: tab === t ? "var(--color-primary, #1976d2)" : "transparent",
-        color: tab === t ? "#fff" : "var(--color-text-secondary)",
-      }}
-    >
-      {label}
-    </button>
-  );
-
-  return (
-    <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={onClose}
-    >
-      <div
-        style={{ background: "var(--color-bg-card)", borderRadius: 10, width: "min(780px, 92vw)", maxHeight: "84vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* 헤더 */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "1px solid var(--color-border)", gap: 12 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, flexShrink: 0 }}>화면 설명 예시</span>
-          <div style={{ display: "flex", gap: 2, background: "var(--color-bg-muted)", padding: "3px", borderRadius: 7 }}>
-            {tabBtn("preview", "미리보기")}
-            {tabBtn("raw", "원문")}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
-            <button
-              onClick={handleCopy}
-              style={{
-                padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                borderRadius: 5, border: "1px solid var(--color-border)",
-                background: copied ? "#e8f5e9" : "var(--color-bg-base)",
-                color: copied ? "#2e7d32" : "var(--color-text-secondary)",
-                transition: "all 0.2s",
-              }}
-            >
-              {copied ? "✓ 복사됨" : "복사"}
-            </button>
-            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--color-text-secondary)", lineHeight: 1 }}>×</button>
-          </div>
-        </div>
-        {/* 본문 */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
-          {tab === "raw" ? (
-            <pre style={{ margin: 0, fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", color: "var(--color-text-primary)", fontFamily: "monospace" }}>
-              {DESCRIPTION_EXAMPLE}
-            </pre>
-          ) : (
-            <>
-              <style dangerouslySetInnerHTML={{ __html: SCREEN_EXAMPLE_CSS }} />
-              <div
-                className="sc-example"
-                style={{ fontSize: 13, lineHeight: 1.8, color: "var(--color-text-primary)" }}
-                dangerouslySetInnerHTML={{ __html: markedParse(DESCRIPTION_EXAMPLE) }}
-              />
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+// 설계 양식(예시/템플릿)은 DB(tb_ai_design_template)로 관리 — 공용 훅 useDesignTemplate 사용.

@@ -81,7 +81,9 @@ function SocialCallbackInner() {
             setError(linkBody.message ?? "소셜 계정 연동에 실패했습니다.");
             return;
           }
-          router.replace("/settings/profile?tab=social&linked=1");
+          // 프로필 페이지에서 ?linked=1 감지 시 소셜연동 모달이 자동으로 열림
+          // (구 "social" 탭은 2026-04-24 모달로 이동)
+          router.replace("/settings/profile?linked=1");
 
         } else if (resultType === "ADD_SOCIAL_DUPLICATE") {
           setError("이미 다른 계정에 연동된 소셜 계정입니다.");

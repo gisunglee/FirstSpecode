@@ -45,7 +45,7 @@ function S({ children, size = 18 }: { children: ReactNode; size?: number }) {
 export type MenuIconKey =
   // 그룹 (레일)
   | "g_dashboard" | "g_project" | "g_analysis" | "g_design"
-  | "g_common" | "g_ai" | "g_help" | "g_data"
+  | "g_common" | "g_ai" | "g_spec_config" | "g_help" | "g_data"
   // 항목 (서브 패널)
   | "i_dashboard"
   | "i_projectList" | "i_projectSettings" | "i_members" | "i_profile" | "i_envSettings"
@@ -53,6 +53,7 @@ export type MenuIconKey =
   | "i_unitWork" | "i_screen" | "i_area" | "i_function" | "i_dbTable"
   | "i_standardGuide" | "i_commonCode" | "i_referenceInfo"
   | "i_aiTask" | "i_planImport" | "i_designImport" | "i_promptTemplate"
+  | "i_designTemplate"
   | "i_review" | "i_memo"
   | "i_graph" | "i_changeLog" | "i_diffTest";
 
@@ -106,6 +107,18 @@ const ICONS: Record<MenuIconKey, ReactNode> = {
       <path d="M15.6 15.6l2.8 2.8" />
       <path d="M18.4 5.6l-2.8 2.8" />
       <path d="M8.4 15.6l-2.8 2.8" />
+    </>
+  ),
+  // 스펙설정 — 문서 + 톱니(도구의 메타 설정)
+  g_spec_config: (
+    <>
+      <path d="M5 3h9l5 5v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+      <path d="M14 3v5h5" />
+      <circle cx="12" cy="15" r="2" />
+      <path d="M12 11v1.5" />
+      <path d="M12 17.5V19" />
+      <path d="M8.5 15H10" />
+      <path d="M14 15h1.5" />
     </>
   ),
   // 도움창고 — 라이프링/도움말
@@ -308,6 +321,14 @@ const ICONS: Record<MenuIconKey, ReactNode> = {
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />
       <path d="M8 10h8" />
       <path d="M8 13h5" />
+    </>
+  ),
+  // 설계 양식 — 문서 + 연필(양식 편집)
+  i_designTemplate: (
+    <>
+      <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9Z" />
+      <path d="M14 3v6h6" />
+      <path d="M8 14l4.5-4.5 2.5 2.5L10.5 16.5H8Z" />
     </>
   ),
   i_review: (

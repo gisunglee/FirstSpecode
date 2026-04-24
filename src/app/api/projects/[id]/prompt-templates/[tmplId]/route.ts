@@ -7,7 +7,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
-import { checkRole } from "@/lib/checkRole";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 type RouteParams = { params: Promise<{ id: string; tmplId: string }> };
@@ -61,27 +61,29 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 }
 
 // ── PUT: 수정 ─────────────────────────────────────────────────────────────────
-
+//
+// 이중 권한 가드:
+//   ① DEFAULT(시스템 공통) — prjct_id=NULL OR default_yn='Y'
+//        → SUPER_ADMIN(sys_role_code) 만 수정 가능
+//   ② 프로젝트 복사본 — prjct_id=projectId AND default_yn='N'
+//        → 프로젝트 OWNER/ADMIN 만 수정 가능 (종전 5개 역할에서 축소)
+// SUPER_ADMIN 은 hasPermission short-circuit 으로 ②도 자동 통과.
+//
+// default_yn 승격/강등 주입 차단 — body 에 defaultYn 필드를 받지 않음(아래 구조 분해).
+// 스코프는 seed/DB 관리자만 변경 가능.
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, tmplId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
-  const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER"]);
-  if (roleCheck) return roleCheck;
+  // content.update 기반 1차 가드 — 멤버십·플랜·역할·시스템역할 컨텍스트 확보
+  const gate = await requirePermission(request, projectId, "content.update");
+  if (gate instanceof Response) return gate;
 
   let body: unknown;
   try { body = await request.json(); } catch {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
+  // body 에서 default_yn 은 의도적으로 구조 분해하지 않음 — 주입 시도 무시
   const {
     tmplNm, taskTyCode, refTyCode,
     sysPromptCn,
@@ -114,6 +116,27 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "프롬프트 템플릿을 찾을 수 없습니다.", 404);
     }
 
+    // 2차 가드 — DEFAULT vs 프로젝트 복사본 분기
+    const isDefault = existing.prjct_id === null || existing.default_yn === "Y";
+    if (isDefault) {
+      if (gate.systemRole !== "SUPER_ADMIN") {
+        return apiError(
+          "FORBIDDEN_DEFAULT_REQUIRES_SUPER_ADMIN",
+          "기본 제공 프롬프트 템플릿은 시스템 관리자(SUPER_ADMIN)만 수정할 수 있습니다.",
+          403
+        );
+      }
+    } else {
+      if (gate.systemRole !== "SUPER_ADMIN"
+        && gate.role !== "OWNER" && gate.role !== "ADMIN") {
+        return apiError(
+          "FORBIDDEN_PROJECT_ADMIN_REQUIRED",
+          "프로젝트 관리자(OWNER/ADMIN)만 수정할 수 있습니다.",
+          403
+        );
+      }
+    }
+
     await prisma.tbAiPromptTemplate.update({
       where: { tmpl_id: tmplId },
       data: {
@@ -125,6 +148,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         use_yn:        useYn ?? existing.use_yn,
         sort_ordr:     sortOrdr ?? existing.sort_ordr,
         mdfcn_dt:      new Date(),
+        // default_yn 은 의도적으로 건드리지 않음 — 스코프 승격/강등 차단
       },
     });
 
@@ -136,35 +160,45 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 }
 
 // ── DELETE: 삭제 ──────────────────────────────────────────────────────────────
-
+//
+// PUT 과 동일한 이중 권한 가드:
+//   ① DEFAULT(시스템 공통) → SUPER_ADMIN 만
+//   ② 프로젝트 복사본 → 프로젝트 OWNER/ADMIN 만
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, tmplId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
-  const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM"]);
-  if (roleCheck) return roleCheck;
+  const gate = await requirePermission(request, projectId, "content.delete");
+  if (gate instanceof Response) return gate;
 
   try {
     const existing = await prisma.tbAiPromptTemplate.findUnique({
       where:  { tmpl_id: tmplId },
-      select: { tmpl_id: true, prjct_id: true },
+      select: { tmpl_id: true, prjct_id: true, default_yn: true },
     });
 
     if (!existing || (existing.prjct_id !== null && existing.prjct_id !== projectId)) {
       return apiError("NOT_FOUND", "프롬프트 템플릿을 찾을 수 없습니다.", 404);
     }
 
-    // 시스템 공통 템플릿은 삭제 불가 (운영자만 가능하도록 추후 분리)
-    if (existing.prjct_id === null) {
-      return apiError("FORBIDDEN", "시스템 공통 템플릿은 삭제할 수 없습니다.", 403);
+    const isDefault = existing.prjct_id === null || existing.default_yn === "Y";
+    if (isDefault) {
+      // DEFAULT 는 UI·API 어느 경로로도 삭제 불가 (SUPER_ADMIN 조차도).
+      // 실수로 삭제되면 모든 프로젝트의 AI 요청에 영향 + 복원 painful.
+      // 진짜 제거가 필요하면 seed/DB 관리 경로로만 가능.
+      return apiError(
+        "FORBIDDEN_DEFAULT_IS_DELETE_PROTECTED",
+        "기본 제공 프롬프트 템플릿은 UI 에서 삭제할 수 없습니다. DB 관리 경로로만 제거 가능합니다.",
+        403
+      );
+    }
+    // 프로젝트 복사본 — OWNER/ADMIN 만 (SUPER_ADMIN 도 허용)
+    if (gate.systemRole !== "SUPER_ADMIN"
+      && gate.role !== "OWNER" && gate.role !== "ADMIN") {
+      return apiError(
+        "FORBIDDEN_PROJECT_ADMIN_REQUIRED",
+        "프로젝트 관리자(OWNER/ADMIN)만 삭제할 수 있습니다.",
+        403
+      );
     }
 
     await prisma.tbAiPromptTemplate.delete({ where: { tmpl_id: tmplId } });

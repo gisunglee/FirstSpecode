@@ -52,7 +52,8 @@ function EmailCompleteInner() {
         }
 
         toast.success("이메일이 변경되었습니다.");
-        router.replace("/settings/profile?tab=basic");
+        // 구 ?tab=basic → 2026-04-24 탭 정리로 "profile" 탭으로 통합 (default)
+        router.replace("/settings/profile");
       })
       .catch(() => {
         setError("이메일 변경 처리 중 오류가 발생했습니다.");

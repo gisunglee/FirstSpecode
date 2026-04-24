@@ -22,6 +22,7 @@ import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import { useAppStore } from "@/store/appStore";
 import { type PromptTemplateTaskType, type PromptTemplateRefType } from "@/constants/codes";
+import { useIsSystemAdmin, useMyRole } from "@/hooks/useMyRole";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -126,12 +127,31 @@ function PromptTemplateDetailPageInner() {
     return () => setBreadcrumb([]);
   }, [setBreadcrumb, projectId, isNew, detail?.tmplNm]);
 
-  const isDefault = !isNew && (detail?.defaultYn === "Y");
-  const isAdminOrOwner = ["OWNER", "ADMIN"].includes(detail?.myRole ?? "");
+  // DEFAULT = 시스템 공통(prjct_id=null) 또는 default_yn='Y' 중 하나라도 해당
+  // (서버의 isDefault 판정과 동일 — 이중 가드 일관성)
+  const isDefault = !isNew && (
+    (detail?.defaultYn === "Y") || (detail?.isSystem ?? false)
+  );
 
-  // 시스템 공통 템플릿은 항상 읽기 전용
-  // DEFAULT 템플릿은 OWNER/ADMIN만 편집 가능, 나머지는 읽기 전용
-  const readOnly = !isNew && ((detail?.isSystem ?? false) || (isDefault && !isAdminOrOwner));
+  const { isSystemAdmin, isLoading: isSysAdminLoading } = useIsSystemAdmin();
+  // 신규 등록 모드(detail 없음)에서도 권한 판정이 필요하므로
+  // detail?.myRole 대신 별도 훅으로 역할 조회 (기존 상세 모드에선 동일 캐시 사용)
+  const { myRole: currentProjectRole, isLoading: isRoleLoading } = useMyRole(projectId);
+  const isProjectAdmin = currentProjectRole === "OWNER" || currentProjectRole === "ADMIN";
+  const isPermissionLoading = isSysAdminLoading || isRoleLoading;
+
+  // 편집 가능 여부:
+  //   - 신규 등록(isNew) → OWNER/ADMIN 또는 SUPER_ADMIN 만 편집 가능 (권한 없으면 읽기 전용)
+  //   - DEFAULT 행  → SUPER_ADMIN 만 편집 가능
+  //   - 프로젝트 복사본 → 프로젝트 OWNER/ADMIN 만 편집 가능
+  //   - 그 외(일반 멤버/뷰어) → 읽기 전용
+  const readOnly = isNew
+    ? !(isProjectAdmin || isSystemAdmin)
+    : (isDefault ? !isSystemAdmin : !isProjectAdmin);
+
+  // "이 템플릿 복사" 버튼 노출 — OWNER/ADMIN 또는 SUPER_ADMIN 만
+  //   (POST 도 동일 역할만 허용하므로 서버와 UI 일치)
+  const canCopy = isProjectAdmin || isSystemAdmin;
 
   // ── 저장 뮤테이션 ──────────────────────────────────────────────────────────────
   const saveMutation = useMutation({
@@ -207,7 +227,39 @@ function PromptTemplateDetailPageInner() {
 
   // ── 로딩 ──────────────────────────────────────────────────────────────────────
   if (!isNew && isLoading) {
-    return <div style={{ padding: "40px 32px", color: "#888" }}>로딩 중...</div>;
+    return <div style={{ padding: "40px 32px", color: "var(--color-text-tertiary)" }}>로딩 중...</div>;
+  }
+
+  // ── 권한 가드 — /new URL 직입 시 DEVELOPER 이하는 접근 차단 ───────────────
+  //  리스트의 "신규 등록" 버튼은 OWNER/ADMIN 이상에게만 노출되지만
+  //  URL 을 직접 타이핑해 도달하는 경우에 대비. 서버도 POST 에서 403 으로 차단함.
+  //  권한 훅이 아직 로딩 중이면 판정 보류(플리커 방지).
+  if (isNew && !isPermissionLoading && !isProjectAdmin && !isSystemAdmin) {
+    return (
+      <div style={{ padding: "40px 32px" }}>
+        <div style={{
+          maxWidth: 520,
+          padding: "24px 28px",
+          border: "1px solid var(--color-border)",
+          borderRadius: 8,
+          background: "var(--color-bg-card)",
+        }}>
+          <h2 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>
+            권한이 없습니다
+          </h2>
+          <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+            프롬프트 템플릿 생성은 프로젝트 관리자(OWNER/ADMIN)만 가능합니다.
+            필요한 경우 프로젝트 관리자에게 요청하거나 기존 템플릿을 복사해서 사용하세요.
+          </p>
+          <button
+            onClick={() => router.push(`/projects/${projectId}/prompt-templates`)}
+            style={secondaryBtnStyle}
+          >
+            목록으로 돌아가기
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -224,7 +276,7 @@ function PromptTemplateDetailPageInner() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button
             onClick={() => router.push(`/projects/${projectId}/prompt-templates`)}
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#666", lineHeight: 1, padding: "2px 4px" }}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1, padding: "2px 4px" }}
           >
             ←
           </button>
@@ -267,42 +319,51 @@ function PromptTemplateDetailPageInner() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 {isDefault ? (
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {/* DEFAULT 배지 — text-primary 배경 + text-inverse 글자로 3테마 컨트라스트 유지 */}
                     <span style={{
                       fontSize: 11, fontWeight: 700, padding: "3px 9px",
-                      borderRadius: 4, background: "#212121", color: "#fff",
+                      borderRadius: 4,
+                      background: "var(--color-text-primary)",
+                      color:      "var(--color-text-inverse)",
                       letterSpacing: "0.06em",
                     }}>
                       DEFAULT
                     </span>
                     {readOnly ? (
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "#d32f2f" }}>
-                        수정/삭제 불가
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-error)" }}>
+                        시스템 관리자만 수정 가능
                       </span>
                     ) : (
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "#e65100" }}>
-                        관리자 편집 모드
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-warning)" }}>
+                        시스템 관리자 편집 모드
                       </span>
                     )}
                   </div>
                 ) : <div />}
-                <button
-                  onClick={() => setCopyConfirm(true)}
-                  disabled={copyMutation.isPending}
-                  style={secondaryBtnStyle}
-                >
-                  이 템플릿 복사
-                </button>
+                {/* 복사 버튼 — OWNER/ADMIN 또는 SUPER_ADMIN 만 */}
+                {canCopy && (
+                  <button
+                    onClick={() => setCopyConfirm(true)}
+                    disabled={copyMutation.isPending}
+                    style={secondaryBtnStyle}
+                  >
+                    이 템플릿 복사
+                  </button>
+                )}
               </div>
 
-              {/* OWNER/ADMIN의 DEFAULT 편집 시 경고 배너 */}
+              {/* SUPER_ADMIN 의 DEFAULT 편집 시 경고 배너 — prjct_id=null 이므로 전체 프로젝트 영향 */}
               {isDefault && !readOnly && (
                 <div style={{
                   padding: "10px 14px", borderRadius: 6,
-                  background: "#fff3e0", border: "1px solid #ffb74d",
-                  fontSize: 13, color: "#e65100", lineHeight: 1.6,
+                  background: "var(--color-warning-subtle)",
+                  border:     "1px solid var(--color-warning-border)",
+                  fontSize:   13,
+                  color:      "var(--color-warning)",
+                  lineHeight: 1.6,
                 }}>
-                  ⚠️ <strong>기본 제공 템플릿</strong>을 수정하고 있습니다.
-                  변경 내용은 이 프로젝트의 모든 AI 요청에 즉시 적용됩니다.
+                  ⚠️ <strong>시스템 공통 템플릿</strong>을 수정하고 있습니다.
+                  변경 내용은 <strong>모든 프로젝트의 AI 요청</strong>에 즉시 적용됩니다.
                   신중하게 수정해 주세요. 문제가 생기면 <strong>이 템플릿 복사</strong> 후 원본을 복원하세요.
                 </div>
               )}
@@ -313,8 +374,11 @@ function PromptTemplateDetailPageInner() {
           {!isNew && taskTyCode in DEPRECATED_TASK_TYPES && (
             <div style={{
               padding: "10px 14px", borderRadius: 6,
-              background: "#fff8e1", border: "1px solid #ffe082",
-              fontSize: 13, color: "#795548", lineHeight: 1.6,
+              background: "var(--color-warning-subtle)",
+              border:     "1px solid var(--color-warning-border)",
+              fontSize:   13,
+              color:      "var(--color-text-secondary)",
+              lineHeight: 1.6,
             }}>
               ⚠️ 이 템플릿의 작업 유형 <strong>"{DEPRECATED_TASK_TYPES[taskTyCode]}"</strong>은(는) 더 이상 사용하지 않는 유형입니다.
               저장 전에 <strong>설계 / 명세 검토 / 영향도 분석 / 구현 / 테스트</strong> 중 하나로 변경해 주세요.
@@ -358,7 +422,7 @@ function PromptTemplateDetailPageInner() {
                 ))}
                 {/* 기존 데이터에 폐기 유형이 있을 경우 선택지 유지 */}
                 {taskTyCode in DEPRECATED_TASK_TYPES && (
-                  <option value={taskTyCode} disabled style={{ color: "#e65100" }}>
+                  <option value={taskTyCode} disabled style={{ color: "var(--color-warning)" }}>
                     ⚠ {DEPRECATED_TASK_TYPES[taskTyCode]} (미사용)
                   </option>
                 )}
@@ -468,7 +532,7 @@ function PromptTemplateDetailPageInner() {
               <strong>"{tmplNm}"</strong> 템플릿을 복사하시겠습니까?
             </p>
             <p style={{ margin: 0, fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-              복사본은 <strong style={{ color: "#e65100" }}>사용 여부 N(미사용)</strong> 상태로 생성됩니다.<br />
+              복사본은 <strong style={{ color: "var(--color-warning)" }}>사용 여부 N(미사용)</strong> 상태로 생성됩니다.<br />
               복사 후 편집 화면으로 이동합니다.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
@@ -505,7 +569,7 @@ function FormField({ label, required, children }: {
     <div>
       <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)" }}>
         {label}
-        {required && <span style={{ color: "#e53935", marginLeft: 2 }}>*</span>}
+        {required && <span style={{ color: "var(--color-error)", marginLeft: 2 }}>*</span>}
       </label>
       {children}
     </div>
@@ -534,7 +598,7 @@ const selectStyle: React.CSSProperties = {
 const primaryBtnStyle: React.CSSProperties = {
   padding: "5px 14px", borderRadius: 6,
   border: "1px solid transparent",
-  background: "var(--color-primary, #1976d2)", color: "#fff",
+  background: "var(--color-brand)", color: "var(--color-text-inverse)",
   fontSize: 12, fontWeight: 600, cursor: "pointer",
 };
 

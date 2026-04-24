@@ -289,7 +289,23 @@
       "Bash(git stash *)",
       "Bash(find /d/source/FirstSpecode/src/app/api/projects/[id] -type f -path \"*ai*\" -name \"route.ts\")",
       "Bash(grep -E \"\\\\.\\(ts|tsx|md\\)$\")",
-      "Bash(find /d/source/FirstSpecode/src/app/api/projects/[id] -type f -name \"route.ts\")"
+      "Bash(find /d/source/FirstSpecode/src/app/api/projects/[id] -type f -name \"route.ts\")",
+      "WebSearch",
+      "Bash(git -C \"d:/source/FirstSpecode\" diff --name-only HEAD~3 HEAD)",
+      "Bash(git -C \"d:/source/FirstSpecode\" log --oneline -5)",
+      "Read(//c/Users/USER/**)",
+      "Read(//c/Users/USER/.claude/**)",
+      "Bash(git check-ignore *)",
+      "Bash(curl -s -o /dev/null -w 'HTTP %{http_code}\\\\n' -X POST http://localhost:3000/api/mcp -H 'Authorization: Bearer spk_d1109b1d68ecd24e2ac9234e01b77ad52af175d38e24f28c0ed1b94d94155c55' -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}')",
+      "Bash(curl -s -X POST http://localhost:3000/api/mcp -H 'Authorization: Bearer spk_d1109b1d68ecd24e2ac9234e01b77ad52af175d38e24f28c0ed1b94d94155c55' -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}')",
+      "Bash(npm ls *)",
+      "Bash(curl -s -X POST http://localhost:3000/api/mcp -H 'Authorization: Bearer spk_d1109b1d68ecd24e2ac9234e01b77ad52af175d38e24f28c0ed1b94d94155c55' -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"curl-test\",\"version\":\"1.0\"}}}')",
+      "mcp__specode__list_projects",
+      "Bash(find d:\\\\\\\\source\\\\\\\\FirstSpecode\\\\\\\\src\\\\\\\\app\\\\\\\\api -name \"route.ts\" -type f)",
+      "Bash(tee /tmp/tsc.log)",
+      "Bash(echo \"---EXIT $?---\")",
+      "Bash(grep -E \"\\\\.ts$\")",
+      "Bash(xargs cat *)"
     ]
   }
 }

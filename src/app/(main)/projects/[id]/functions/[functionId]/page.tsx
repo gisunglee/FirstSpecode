@@ -16,16 +16,11 @@
  */
 
 import { Suspense, useState, useEffect, useRef } from "react";
-import { marked } from "marked";
-
-function markedParse(md: string): string {
-  const result = marked.parse(md, { async: false });
-  return typeof result === "string" ? result : "";
-}
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { renderMarkdown } from "@/lib/renderMarkdown";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import ColMappingDialog from "@/components/ui/ColMappingDialog";
@@ -37,6 +32,8 @@ import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import AiImplementCard from "@/components/ui/AiImplementCard";
 import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
 import ProgressTracker from "@/components/ui/ProgressTracker";
+import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
+import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
 import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
@@ -106,6 +103,9 @@ function FunctionDetailPageInner() {
 
   // ── 설명 예시 팝업 상태 ────────────────────────────────────────────────────
   const [descExampleOpen, setDescExampleOpen] = useState(false);
+
+  // 설계 양식 DB 조회 — 기능 계층
+  const { data: designTmpl } = useDesignTemplate(projectId, "FUNCTION");
 
   // ── 변경 이력 관련 상태 ────────────────────────────────────────────────────
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
@@ -883,13 +883,25 @@ function FunctionDetailPageInner() {
                   <MarkdownTabButtons tab={descTab} onTabChange={setDescTab} />
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
-                  <button type="button" onClick={() => setDescExampleOpen(true)} style={ghostSmBtnStyle}>
+                  <button
+                    type="button"
+                    onClick={() => setDescExampleOpen(true)}
+                    disabled={!designTmpl?.exampleCn}
+                    style={{ ...ghostSmBtnStyle, opacity: designTmpl?.exampleCn ? 1 : 0.5, cursor: designTmpl?.exampleCn ? "pointer" : "not-allowed" }}
+                  >
                     예시
                   </button>
                   <button
                     type="button"
-                    onClick={() => setDescription(DESCRIPTION_TEMPLATE(data?.displayId ?? "FN-XXXXX", name))}
-                    style={ghostSmBtnStyle}
+                    onClick={() => {
+                      if (!designTmpl?.templateCn) return;
+                      setDescription(applyTemplateVars(designTmpl.templateCn, {
+                        displayId: data?.displayId ?? "FN-XXXXX",
+                        name,
+                      }));
+                    }}
+                    disabled={!designTmpl?.templateCn}
+                    style={{ ...ghostSmBtnStyle, opacity: designTmpl?.templateCn ? 1 : 0.5, cursor: designTmpl?.templateCn ? "pointer" : "not-allowed" }}
                   >
                     템플릿 삽입
                   </button>
@@ -910,9 +922,13 @@ function FunctionDetailPageInner() {
               />
             </section>
 
-            {/* 설명 예시 팝업 */}
-            {descExampleOpen && (
-              <FuncExamplePopup onClose={() => setDescExampleOpen(false)} />
+            {/* 설명 예시 팝업 — DB 설계 양식 */}
+            {descExampleOpen && designTmpl?.exampleCn && (
+              <DesignExamplePopup
+                title="기능 설명 예시"
+                contentMd={designTmpl.exampleCn}
+                onClose={() => setDescExampleOpen(false)}
+              />
             )}
 
             {/* 설명 변경 이력 저장 여부 확인 다이얼로그 */}
@@ -1461,98 +1477,7 @@ const AI_HELP_CONTENT: Record<string, { title: string; sections: { heading: stri
 // 상태별 도트 색상/라벨은 공용 codes 모듈(@/constants/codes) 사용
 // 기존 로컬 정의는 "대기 중/처리 중/적용됨/시간 초과" 등 공백·표기 불일치가 있어 통일 목적으로 제거
 
-// ── 설명 예시 / 템플릿 ────────────────────────────────────────────────────────
-
-const DESCRIPTION_EXAMPLE = `#### 기능: [FN-00001] 게시판 목록 조회
-
-| 항목 | 내용 |
-|:-----|:-----|
-| 기능ID | FN-00001 |
-| 기능명 | 게시판 목록 조회 |
-| 기능유형 | SELECT |
-| API | \`GET /api/board\` |
-| 트리거 | 화면 진입(자동), 검색 버튼 클릭 |
-
-**Input**
-
-| 파라미터 | 타입 | 필수 | DB 매핑 | 설명 |
-|:---------|:-----|:-----|:--------|:-----|
-| projectId | number | Y (세션) | project_id | |
-| boardTypeCd | string | N | board_type_cd | null이면 전체 |
-| keyword | string | N | board_title_nm | LIKE 검색 |
-| startDt | string | N | reg_dt | >= 조건 (yyyy-MM-dd) |
-| endDt | string | N | reg_dt | <= 조건 (yyyy-MM-dd) |
-| page | number | Y | - | 1부터 시작 |
-| size | number | Y | - | 기본 20 |
-
-**Output**
-
-| 필드 | 타입 | DB 매핑 | 설명 |
-|:-----|:-----|:--------|:-----|
-| boardId | number | board_id | |
-| boardTypeCd | string | board_type_cd | |
-| boardTitleNm | string | board_title_nm | |
-| regUserNm | string | (JOIN) | 작성자명 |
-| regDt | string | reg_dt | |
-| viewCnt | number | view_cnt | |
-| fixYn | string | fix_yn | |
-| attachYn | string | (서브쿼리) | 첨부파일 존재 Y/N |
-| totalCount | number | COUNT(*) OVER() | 총 건수 |
-
-**참조 테이블 관계**
-\`\`\`
-tb_cm_board b
-  LEFT JOIN tb_cm_user u ON u.user_id = b.reg_user_id
-\`\`\`
-- 첨부파일 존재 여부: \`EXISTS (SELECT 1 FROM tb_cm_attach_file WHERE ref_type_cd = 'BOARD' AND ref_id = b.board_id AND del_yn = 'N')\`
-
-**처리 로직**
-\`\`\`
-1. project_id 세션에서 획득
-2. del_yn = 'N' 필터
-3. 검색 조건 적용 (boardTypeCd, keyword LIKE, startDt >=, endDt <= +1일)
-4. 정렬: fix_yn DESC, reg_dt DESC (상단고정 우선, 최신순)
-5. 페이징: LIMIT :size OFFSET (:page - 1) * :size
-\`\`\`
-
-**업무 규칙**
-- 검색 결과 0건 → "등록된 게시글이 없습니다" 안내
-- 상단고정 게시글은 페이지와 무관하게 항상 최상단
-- 기간 종료일은 해당일 23:59:59까지 포함`;
-
-const DESCRIPTION_TEMPLATE = (displayId: string, name: string) => `#### 기능: [${displayId}] ${name}
-
-| 항목 | 내용 |
-|:-----|:-----|
-| 기능ID | ${displayId} |
-| 기능명 | ${name} |
-| 기능유형 | |
-| API | \`\` |
-| 트리거 | |
-
-**Input**
-
-| 파라미터 | 타입 | 필수 | DB 매핑 | 설명 |
-|:---------|:-----|:-----|:--------|:-----|
-| | | | | |
-
-**Output**
-
-| 필드 | 타입 | DB 매핑 | 설명 |
-|:-----|:-----|:--------|:-----|
-| | | | |
-
-**참조 테이블 관계**
-\`\`\`
-\`\`\`
-
-**처리 로직**
-\`\`\`
-1.
-\`\`\`
-
-**업무 규칙**
-- `;
+// 설계 양식(예시/템플릿)은 DB(tb_ai_design_template)로 관리 — 공용 훅 useDesignTemplate 사용.
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -1766,7 +1691,7 @@ function ColMappingMdPopup({
               <div
                 className="cm-md"
                 style={{ fontSize: 13, lineHeight: 1.8, color: "var(--color-text-primary)" }}
-                dangerouslySetInnerHTML={{ __html: markedParse(md) }}
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(md) }}
               />
             </>
           )}
@@ -1786,93 +1711,4 @@ const ghostSmBtnStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-// ── 예시 팝업 CSS ─────────────────────────────────────────────────────────────
-
-const FUNC_EXAMPLE_CSS = [
-  ".fn-example h3,.fn-example h4{font-size:14px;font-weight:700;margin:16px 0 8px}",
-  ".fn-example table{border-collapse:collapse;width:100%;margin-bottom:12px}",
-  ".fn-example th,.fn-example td{border:1px solid #e0e0e0;padding:5px 10px;font-size:12px}",
-  ".fn-example th{background:#f5f5f5;font-weight:600}",
-  ".fn-example pre{background:#f5f5f5;padding:10px 14px;border-radius:6px;font-size:12px;overflow-x:auto}",
-  ".fn-example code{font-family:monospace}",
-  ".fn-example ul{padding-left:18px;margin:4px 0}",
-].join(" ");
-
-// ── 예시 팝업 컴포넌트 ────────────────────────────────────────────────────────
-
-function FuncExamplePopup({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<"raw" | "preview">("preview");
-  const [copied, setCopied] = useState(false);
-
-  function handleCopy() {
-    navigator.clipboard.writeText(DESCRIPTION_EXAMPLE).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    });
-  }
-
-  const tabBtn = (t: "raw" | "preview", label: string) => (
-    <button
-      onClick={() => setTab(t)}
-      style={{
-        padding: "4px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-        borderRadius: 5, border: "none",
-        background: tab === t ? "var(--color-primary, #1976d2)" : "transparent",
-        color: tab === t ? "#fff" : "var(--color-text-secondary)",
-      }}
-    >
-      {label}
-    </button>
-  );
-
-  return (
-    <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={onClose}
-    >
-      <div
-        style={{ background: "var(--color-bg-card)", borderRadius: 10, width: "min(780px, 92vw)", maxHeight: "84vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "1px solid var(--color-border)", gap: 12 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, flexShrink: 0 }}>기능 설명 예시</span>
-          <div style={{ display: "flex", gap: 2, background: "var(--color-bg-muted)", padding: "3px", borderRadius: 7 }}>
-            {tabBtn("preview", "미리보기")}
-            {tabBtn("raw", "원문")}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
-            <button
-              onClick={handleCopy}
-              style={{
-                padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                borderRadius: 5, border: "1px solid var(--color-border)",
-                background: copied ? "#e8f5e9" : "var(--color-bg-base)",
-                color: copied ? "#2e7d32" : "var(--color-text-secondary)",
-                transition: "all 0.2s",
-              }}
-            >
-              {copied ? "✓ 복사됨" : "복사"}
-            </button>
-            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--color-text-secondary)", lineHeight: 1 }}>×</button>
-          </div>
-        </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
-          {tab === "raw" ? (
-            <pre style={{ margin: 0, fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", color: "var(--color-text-primary)", fontFamily: "monospace" }}>
-              {DESCRIPTION_EXAMPLE}
-            </pre>
-          ) : (
-            <>
-              <style dangerouslySetInnerHTML={{ __html: FUNC_EXAMPLE_CSS }} />
-              <div
-                className="fn-example"
-                style={{ fontSize: 13, lineHeight: 1.8, color: "var(--color-text-primary)" }}
-                dangerouslySetInnerHTML={{ __html: markedParse(DESCRIPTION_EXAMPLE) }}
-              />
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+// FuncExamplePopup 은 공용 DesignExamplePopup 으로 통합됨.

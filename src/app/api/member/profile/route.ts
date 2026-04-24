@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
         pswd_hash:         true,
         plan_code:         true,   // 시스템 플랜 (FREE/PRO/TEAM/ENTERPRISE) — GNB 프로필 배지용
         asignee_view_mode: true,   // 전역 담당자 필터 모드 (all | me) — GNB 토글 상태
+        sys_role_code:     true,   // 시스템 역할 (SUPER_ADMIN | null) — /admin 메뉴 노출 판별
         socialAccounts: {
           select: { provdr_code: true },
         },
@@ -45,6 +46,8 @@ export async function GET(request: NextRequest) {
       profileImage:     member.profl_img_url ?? null,
       plan:             member.plan_code ?? "FREE",
       assigneeViewMode: member.asignee_view_mode ?? "all",
+      // sys_role_code 는 "SUPER_ADMIN" 또는 null — 프론트는 boolean 으로 단순화해서 사용
+      isSystemAdmin:    member.sys_role_code === "SUPER_ADMIN",
       hasPassword:      member.pswd_hash !== null,
       hasSocialAccounts: {
         google: linkedProviders.includes("google"),

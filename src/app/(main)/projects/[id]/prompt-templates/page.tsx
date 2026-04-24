@@ -23,6 +23,7 @@ import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import { useEffect } from "react";
 import { type PromptTemplateTaskType, PROMPT_TEMPLATE_TASK_TYPE_LABEL } from "@/constants/codes";
+import { useIsSystemAdmin, useMyRole } from "@/hooks/useMyRole";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -54,16 +55,19 @@ const REF_TYPE_LABELS: Record<string, string> = {
   UNIT_WORK: "단위업무",
 };
 
+// 작업 유형 배지 색상 — semantic 토큰으로 3테마 자동 대응.
+//   DESIGN(보라)→brand, INSPECT(파랑)→info, IMPACT(주황)→warning,
+//   IMPLEMENT(빨강)→error, TEST(초록)→success, 폐기 유형→muted+tertiary
 const taskTypeBadgeColors: Record<PromptTemplateTaskType, { bg: string; color: string }> = {
-  DESIGN:    { bg: "#f3e5f5", color: "#6a1b9a" },
-  INSPECT:   { bg: "#e3f2fd", color: "#1565c0" },
-  IMPACT:    { bg: "#fff3e0", color: "#e65100" },
-  IMPLEMENT: { bg: "#fce4ec", color: "#c62828" },
-  TEST:      { bg: "#e8f5e9", color: "#2e7d32" },
-  // 폐기 유형 — 회색으로 표시
-  MOCKUP:    { bg: "#f5f5f5", color: "#9e9e9e" },
-  CUSTOM:    { bg: "#f5f5f5", color: "#9e9e9e" },
-  PRE_IMPL:  { bg: "#f5f5f5", color: "#9e9e9e" },
+  DESIGN:    { bg: "var(--color-brand-subtle)",   color: "var(--color-brand)"   },
+  INSPECT:   { bg: "var(--color-info-subtle)",    color: "var(--color-info)"    },
+  IMPACT:    { bg: "var(--color-warning-subtle)", color: "var(--color-warning)" },
+  IMPLEMENT: { bg: "var(--color-error-subtle)",   color: "var(--color-error)"   },
+  TEST:      { bg: "var(--color-success-subtle)", color: "var(--color-success)" },
+  // 폐기 유형 — 흐린 회색
+  MOCKUP:    { bg: "var(--color-bg-muted)", color: "var(--color-text-tertiary)" },
+  CUSTOM:    { bg: "var(--color-bg-muted)", color: "var(--color-text-tertiary)" },
+  PRE_IMPL:  { bg: "var(--color-bg-muted)", color: "var(--color-text-tertiary)" },
 };
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
@@ -82,9 +86,18 @@ function PromptTemplatesPageInner() {
   const qc        = useQueryClient();
   const projectId = params.id as string;
 
+  // 권한 — DEFAULT 편집은 SUPER_ADMIN 만, 프로젝트 복사본 편집/삭제/복사는 OWNER/ADMIN 만
+  //   (SUPER_ADMIN 은 프로젝트 역할 관계없이 어디든 편집 가능 — hasPermission short-circuit)
+  const { isSystemAdmin } = useIsSystemAdmin();
+  const { myRole } = useMyRole(projectId);
+  const isProjectAdmin = myRole === "OWNER" || myRole === "ADMIN";
+  const canCreateOrCopy = isSystemAdmin || isProjectAdmin;
+
   const { setBreadcrumb } = useAppStore();
   useEffect(() => {
     setBreadcrumb([{ label: "프롬프트 관리" }]);
+    // 언마운트 시 초기화 — 다른 페이지 이동 후에도 GNB 브레드크럼이 잔존하는 문제 방지
+    return () => setBreadcrumb([]);
   }, [setBreadcrumb]);
 
   // ── 필터 상태 ────────────────────────────────────────────────────────────────
@@ -135,12 +148,15 @@ function PromptTemplatesPageInner() {
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           프롬프트 관리
         </div>
-        <button
-          onClick={() => router.push(`/projects/${projectId}/prompt-templates/new`)}
-          style={primaryBtnStyle}
-        >
-          + 신규 등록
-        </button>
+        {/* 신규 등록 — OWNER/ADMIN 또는 SUPER_ADMIN 만. 나머지는 버튼 자체 노출 X */}
+        {canCreateOrCopy && (
+          <button
+            onClick={() => router.push(`/projects/${projectId}/prompt-templates/new`)}
+            style={primaryBtnStyle}
+          >
+            + 신규 등록
+          </button>
+        )}
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
@@ -219,16 +235,16 @@ function PromptTemplatesPageInner() {
 
           {/* 바디 */}
           {isLoading ? (
-            <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+            <div style={{ padding: "64px 0", textAlign: "center", color: "var(--color-text-tertiary)", fontSize: 14 }}>
               로딩 중...
             </div>
           ) : rows.length === 0 ? (
-            <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+            <div style={{ padding: "64px 0", textAlign: "center", color: "var(--color-text-tertiary)", fontSize: 14 }}>
               등록된 프롬프트 템플릿이 없습니다.
             </div>
           ) : (
             rows.map((row, idx) => {
-              const tc        = taskTypeBadgeColors[row.taskTyCode] ?? { bg: "#f5f5f5", color: "#555" };
+              const tc        = taskTypeBadgeColors[row.taskTyCode] ?? { bg: "var(--color-bg-muted)", color: "var(--color-text-secondary)" };
               const active    = row.useYn === "Y";
               const isDefault = row.defaultYn === "Y";
               return (
@@ -241,15 +257,15 @@ function PromptTemplatesPageInner() {
                     padding: "12px 16px",
                     paddingLeft: active ? 16 : 13,
                     borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-                    borderLeft: active ? "3px solid transparent" : "3px solid #bdbdbd",
+                    borderLeft: active ? "3px solid transparent" : "3px solid var(--color-border)",
                     alignItems: "center",
                     gap: 8,
                     cursor: "pointer",
-                    background: active ? "var(--color-bg-card)" : "#fafafa",
+                    background: active ? "var(--color-bg-card)" : "var(--color-bg-muted)",
                     transition: "background 0.1s",
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-hover, #f0f4ff)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = active ? "var(--color-bg-card)" : "#fafafa")}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-hover, var(--color-brand-subtle))")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = active ? "var(--color-bg-card)" : "var(--color-bg-muted)")}
                 >
                   {/* 템플릿 명 */}
                   <div style={{ overflow: "hidden" }}>
@@ -257,15 +273,19 @@ function PromptTemplatesPageInner() {
                       {row.isSystem && (
                         <span style={{
                           fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
-                          background: "var(--color-primary)", color: "#fff", flexShrink: 0,
+                          background: "var(--color-brand)", color: "var(--color-text-inverse)", flexShrink: 0,
                         }}>
                           공통
                         </span>
                       )}
                       {isDefault && (
+                        // DEFAULT 배지 — "편집 불가" 강조. text-primary 배경 + text-inverse 글자로
+                        // 3테마 모두 컨트라스트 유지(어두운 테마에선 밝은 배지, 밝은 테마에선 어두운 배지).
                         <span style={{
                           fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
-                          background: "#37474f", color: "#fff", flexShrink: 0,
+                          background: "var(--color-text-primary)",
+                          color:      "var(--color-text-inverse)",
+                          flexShrink: 0,
                           letterSpacing: "0.04em",
                         }}>
                           DEFAULT
@@ -299,17 +319,17 @@ function PromptTemplatesPageInner() {
                     </span>
                   </div>
 
-                  {/* 대상 범위 */}
+                  {/* 대상 범위 — FUNCTION→success, AREA→info, 그 외→muted */}
                   <div style={{ textAlign: "center" }}>
                     <span style={{
                       display: "inline-block", padding: "2px 8px",
                       borderRadius: 4, fontSize: 11, fontWeight: 600,
-                      background: row.refTyCode === "FUNCTION" ? "#e8f5e9"
-                                : row.refTyCode === "AREA"     ? "#e3f2fd"
-                                : "#f5f5f5",
-                      color:      row.refTyCode === "FUNCTION" ? "#2e7d32"
-                                : row.refTyCode === "AREA"     ? "#1565c0"
-                                : "#888",
+                      background: row.refTyCode === "FUNCTION" ? "var(--color-success-subtle)"
+                                : row.refTyCode === "AREA"     ? "var(--color-info-subtle)"
+                                : "var(--color-bg-muted)",
+                      color:      row.refTyCode === "FUNCTION" ? "var(--color-success)"
+                                : row.refTyCode === "AREA"     ? "var(--color-info)"
+                                : "var(--color-text-secondary)",
                       whiteSpace: "nowrap",
                     }}>
                       {row.refTyCode ? REF_TYPE_LABELS[row.refTyCode] ?? row.refTyCode : "범용"}
@@ -331,9 +351,9 @@ function PromptTemplatesPageInner() {
                     <span style={{
                       display: "inline-block", padding: "2px 8px",
                       borderRadius: 4, fontSize: 11, fontWeight: 600,
-                      background: active ? "#e8f5e9" : "transparent",
-                      color:      active ? "#2e7d32" : "#9e9e9e",
-                      border:     active ? "none" : "1px dashed #bdbdbd",
+                      background: active ? "var(--color-success-subtle)" : "transparent",
+                      color:      active ? "var(--color-success)" : "var(--color-text-tertiary)",
+                      border:     active ? "none" : "1px dashed var(--color-border)",
                     }}>
                       {active ? "사용" : "미사용"}
                     </span>
@@ -344,24 +364,34 @@ function PromptTemplatesPageInner() {
                     {row.mdfcnDt.slice(0, 10)}
                   </span>
 
-                  {/* 액션 — default_yn=Y인 시스템 기본 프롬프트는 편집·삭제 불가 */}
+                  {/* 액션 — DEFAULT(공통/기본): SUPER_ADMIN 만 편집·삭제
+                             프로젝트 복사본:    OWNER/ADMIN 만 편집·삭제
+                             그 외:              버튼 자체 비노출 (서버도 403 으로 차단) */}
                   <div style={{ display: "flex", gap: 4 }} onClick={(e) => e.stopPropagation()}>
-                    {!isDefault && (
-                      <button
-                        onClick={() => router.push(`/projects/${projectId}/prompt-templates/${row.tmplId}`)}
-                        style={secondarySmallBtnStyle}
-                      >
-                        편집
-                      </button>
-                    )}
-                    {!isDefault && !row.isSystem && (
-                      <button
-                        onClick={() => setDeleteTarget({ tmplId: row.tmplId, tmplNm: row.tmplNm })}
-                        style={dangerSmallBtnStyle}
-                      >
-                        삭제
-                      </button>
-                    )}
+                    {(() => {
+                      const rowIsDefault = isDefault || row.isSystem;
+                      const canEditThisRow = rowIsDefault ? isSystemAdmin : isProjectAdmin;
+                      if (!canEditThisRow) return null;
+                      return (
+                        <>
+                          <button
+                            onClick={() => router.push(`/projects/${projectId}/prompt-templates/${row.tmplId}`)}
+                            style={secondarySmallBtnStyle}
+                          >
+                            편집
+                          </button>
+                          {/* DEFAULT 는 삭제 금지 (SUPER_ADMIN 도 seed 관리 경로로만 삭제) */}
+                          {!rowIsDefault && (
+                            <button
+                              onClick={() => setDeleteTarget({ tmplId: row.tmplId, tmplNm: row.tmplNm })}
+                              style={dangerSmallBtnStyle}
+                            >
+                              삭제
+                            </button>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               );
@@ -411,7 +441,7 @@ function PromptTemplatesPageInner() {
 const primaryBtnStyle: React.CSSProperties = {
   padding: "5px 14px", borderRadius: 6,
   border: "1px solid transparent",
-  background: "var(--color-primary, #1976d2)", color: "#fff",
+  background: "var(--color-brand)", color: "var(--color-text-inverse)",
   fontSize: 12, fontWeight: 600, cursor: "pointer",
 };
 
@@ -425,7 +455,7 @@ const secondaryBtnStyle: React.CSSProperties = {
 const dangerBtnStyle: React.CSSProperties = {
   padding: "6px 16px", borderRadius: 6,
   border: "1px solid transparent",
-  background: "#e53935", color: "#fff",
+  background: "var(--color-error)", color: "var(--color-text-inverse)",
   fontSize: 13, fontWeight: 600, cursor: "pointer",
 };
 
@@ -439,7 +469,7 @@ const secondarySmallBtnStyle: React.CSSProperties = {
 const dangerSmallBtnStyle: React.CSSProperties = {
   padding: "3px 10px", borderRadius: 5,
   border: "none",
-  background: "#fdecea", color: "#e53935",
+  background: "var(--color-error-subtle)", color: "var(--color-error)",
   fontSize: 11, fontWeight: 600, cursor: "pointer",
 };
 

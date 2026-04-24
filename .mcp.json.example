@@ -1,0 +1,20 @@
+{
+  "_readme_": "MCP 클라이언트 설정 템플릿 — 이 파일을 .mcp.json 으로 복사하고 Bearer 토큰을 본인 키로 교체하세요. 프로필 → MCP 키 탭(또는 프로젝트 LNB → MCP 키)에서 발급 가능. 실제 .mcp.json 은 .gitignore 대상이니 커밋되지 않습니다.",
+  "mcpServers": {
+    "specode-local": {
+      "type": "http",
+      "url": "http://localhost:3000/api/mcp",
+      "headers": {
+        "Authorization": "Bearer spk_<본인_키로_교체>"
+      }
+    },
+    "specode-prod": {
+      "_disabled_": "배포 후 활성화. 배포 도메인으로 URL 교체하고 이 _disabled_ 필드 제거",
+      "type": "http",
+      "url": "https://your-app.vercel.app/api/mcp",
+      "headers": {
+        "Authorization": "Bearer spk_<본인_키로_교체>"
+      }
+    }
+  }
+}

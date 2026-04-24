@@ -15,10 +15,13 @@ export async function GET(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   try {
+    // MCP scope 키면 해당 프로젝트만 노출 — GNB 드롭다운에도 scope 적용해서
+    // "자기 키로 접근 불가한 프로젝트"가 선택 가능하게 보이는 UX 사고 방지.
     const memberships = await prisma.tbPjProjectMember.findMany({
       where: {
         mber_id:         auth.mberId,
         mber_sttus_code: "ACTIVE",
+        ...(auth.allowedPrjctId ? { prjct_id: auth.allowedPrjctId } : {}),
       },
       include: {
         project: {

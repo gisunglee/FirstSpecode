@@ -37,6 +37,28 @@ type MyRoleResponse = {
   myPlan: PlanCode;  // 계정 플랜 (FREE/PRO/TEAM/ENTERPRISE)
 };
 
+// /api/member/profile 에서 시스템 관리자 여부만 뽑아 쓰는 최소 타입.
+// GNB 가 동일 queryKey(["member","profile"])로 이미 캐시하고 있으므로
+// 프로필 재조회 없이 공유된다.
+type MinimalProfile = {
+  isSystemAdmin?: boolean;
+};
+
+// ─── 시스템 관리자 여부 훅 ───────────────────────────────────────────────────
+// 프로젝트 무관. GNB/LNB 에서 /admin 메뉴 노출 판별용.
+export function useIsSystemAdmin(): { isSystemAdmin: boolean; isLoading: boolean } {
+  const { data, isLoading } = useQuery({
+    queryKey: ["member", "profile"],
+    queryFn: () =>
+      authFetch<{ data: MinimalProfile }>("/api/member/profile").then((r) => r.data),
+    staleTime: 5 * 60 * 1000, // 5분 — 시스템 역할은 거의 안 바뀜
+  });
+  return {
+    isSystemAdmin: data?.isSystemAdmin === true,
+    isLoading,
+  };
+}
+
 // ─── 메인 훅 ─────────────────────────────────────────────────────────────────
 
 export function usePermissions(projectId: string | null) {
@@ -50,14 +72,19 @@ export function usePermissions(projectId: string | null) {
     staleTime: 60 * 1000, // 1분 캐싱 — 역할은 자주 바뀌지 않음
   });
 
+  // 시스템 관리자 여부 — 프로젝트 단위가 아닌 전역 값.
+  // 동일 queryKey 캐시 공유이므로 추가 네트워크 호출 없음.
+  const { isSystemAdmin } = useIsSystemAdmin();
+
   // actor 객체 — hasPermission 에 그대로 전달
   const actor: ActorContext = useMemo(
     () => ({
       role: data?.myRole ?? null,
       job:  data?.myJob  ?? null,
       plan: data?.myPlan ?? "FREE",
+      systemRole: isSystemAdmin ? "SUPER_ADMIN" : null,
     }),
-    [data]
+    [data, isSystemAdmin]
   );
 
   // has(perm) — 단일 권한 체크
@@ -71,6 +98,7 @@ export function usePermissions(projectId: string | null) {
     myRole: actor.role,
     myJob:  actor.job,
     myPlan: actor.plan,
+    isSystemAdmin,
     isLoading,
 
     // 단일 권한 체크 — 백엔드와 동일 로직

@@ -1,8 +1,12 @@
 {
+  "_comment_": "MCP 클라이언트 설정 — HTTP 모드 (Next.js /api/mcp 사용). 과거 stdio 방식(.mcp.json.stdio-backup) 대비 별도 Node 프로세스 불필요. 키 노출 방지를 위해 이 파일은 .gitignore 대상.",
   "mcpServers": {
     "specode": {
-      "command": "node",
-      "args": ["D:\\source\\FirstSpecode\\mcp-server\\start.mjs"]
+      "type": "http",
+      "url": "http://localhost:3000/api/mcp",
+      "headers": {
+        "Authorization": "Bearer spk_d1109b1d68ecd24e2ac9234e01b77ad52af175d38e24f28c0ed1b94d94155c55"
+      }
     }
   }
 }

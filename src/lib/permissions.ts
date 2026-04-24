@@ -42,6 +42,20 @@ export const JOB_LABEL: Record<JobCode, string> = {
   ETC:      "미지정",
 };
 
+// ─── 시스템 역할 (SaaS 플랫폼 전체 관리자) ────────────────────────────────
+//
+// "관리자(ADMIN)" 는 프로젝트 단위 역할 — 해당 프로젝트 안에서만 유효.
+// SYSTEM_ROLE 은 SaaS 플랫폼 자체의 전역 역할 — 모든 프로젝트·사용자에
+// 대한 관리 권한을 별도의 컬럼(tb_cm_member.sys_role_code)에서 관리한다.
+//
+// DB UPDATE 로만 설정. UI/API 로는 바꿀 수 없다 (권한 연쇄 상승 차단).
+export const SYSTEM_ROLE_CODES = ["SUPER_ADMIN"] as const;
+export type  SystemRoleCode    = (typeof SYSTEM_ROLE_CODES)[number];
+
+export const SYSTEM_ROLE_LABEL: Record<SystemRoleCode, string> = {
+  SUPER_ADMIN: "시스템 관리자",
+};
+
 // ─── 플랜 ────────────────────────────────────────────────────────────────────
 
 export const PLAN_CODES = ["FREE", "PRO", "TEAM", "ENTERPRISE"] as const;
@@ -119,9 +133,10 @@ export type Permission = keyof typeof PERMISSIONS;
 // ─── 체크 함수 ───────────────────────────────────────────────────────────────
 
 export type ActorContext = {
-  role: RoleCode | null;   // 프로젝트 멤버가 아니면 null
-  job:  JobCode  | null;   // 직무 미지정 시 'ETC'
-  plan: PlanCode;          // 계정 플랜 (기본 FREE)
+  role: RoleCode | null;              // 프로젝트 멤버가 아니면 null
+  job:  JobCode  | null;              // 직무 미지정 시 'ETC'
+  plan: PlanCode;                     // 계정 플랜 (기본 FREE)
+  systemRole?: SystemRoleCode | null; // 시스템 역할 (일반 사용자는 null)
 };
 
 /**
@@ -130,8 +145,18 @@ export type ActorContext = {
  * 반환값:
  *   true  : 허용
  *   false : 거부 (이유는 explainPermission 으로 확인 가능)
+ *
+ * 시스템 관리자 short-circuit:
+ *   systemRole === "SUPER_ADMIN" 이면 프로젝트 역할·직무·플랜 조건을 무시하고
+ *   모든 권한을 허용한다. 단, "지원 세션"(다른 사람 프로젝트 읽기 전용 진입)
+ *   상태에서는 requirePermission 이 systemRole 을 비워서 넘기므로 이 분기는
+ *   타지 않는다 — 그때는 role=VIEWER 로 일반 규칙대로 동작한다.
  */
 export function hasPermission(actor: ActorContext, permission: Permission): boolean {
+  // 시스템 관리자는 전역 허용 — 플랜 제약(ai.bulkDesign 등)까지 우회
+  // (플랫폼 운영자 본인의 권한이지 고객 계정 기능이 아니므로)
+  if (actor.systemRole === "SUPER_ADMIN") return true;
+
   // as PermissionRule — satisfies 로 체크된 값을 optional 속성 포함 형태로 접근
   const rule = PERMISSIONS[permission] as PermissionRule;
 
@@ -215,4 +240,7 @@ export function isJobCode(v: unknown): v is JobCode {
 }
 export function isPlanCode(v: unknown): v is PlanCode {
   return typeof v === "string" && (PLAN_CODES as readonly string[]).includes(v);
+}
+export function isSystemRoleCode(v: unknown): v is SystemRoleCode {
+  return typeof v === "string" && (SYSTEM_ROLE_CODES as readonly string[]).includes(v);
 }

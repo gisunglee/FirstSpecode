@@ -24,7 +24,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { specodeFetch } from "@/lib/mcp/api-client";
+import type { SpecodeFetch } from "@/lib/mcp/api-client";
 
 // ─── 공통 헬퍼 ──────────────────────────────────────────────────
 
@@ -60,7 +60,22 @@ function buildQs(params: Record<string, string | number | undefined>): string {
 // 도구 등록 메인 함수
 // ═══════════════════════════════════════════════════════════════════
 
-export function registerTools(server: McpServer): void {
+/**
+ * MCP 서버에 SPECODE 도구를 등록한다.
+ *
+ * specodeFetch는 주입 방식으로 전달받는다 — 이유:
+ *   HTTP MCP(/api/mcp)에서는 "요청자 토큰"으로 내부 API를 호출해야
+ *   그 사용자가 멤버인 프로젝트만 접근되어 타인 데이터 누수가 막힌다.
+ *   전역 specodeFetch(env 기반)로 고정하면 누가 호출해도 같은 계정으로
+ *   조회되어 권한 누수가 발생하므로, 요청마다 생성된 fetch를 받도록 한다.
+ *
+ * @param server        McpServer 인스턴스 (요청마다 새로 생성)
+ * @param specodeFetch  createSpecodeFetch({ token })로 만든 요청 스코프 fetch
+ */
+export function registerTools(
+  server: McpServer,
+  specodeFetch: SpecodeFetch
+): void {
 
   // ═══════════════════════════════════════════════════════════════
   // 1. 프로젝트 (Project)

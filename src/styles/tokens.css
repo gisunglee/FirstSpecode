@@ -135,6 +135,9 @@
   --color-bg-input:    var(--p-gray-650);
   --color-bg-input-hover: var(--p-gray-550);
   --color-bg-label:    var(--p-gray-600);
+  /* muted — "de-emphasized/비활성" 의미. card보다 한 단계 어둡게(다크 테마 기준)
+     목록의 미사용 행, 비활성 필터 배경, 구분선 있는 헤더 등에서 사용 */
+  --color-bg-muted:    var(--p-gray-550);
   --color-bg-overlay:  rgba(0,0,0,0.6);
   --color-bg-table-odd:  var(--p-gray-750);
   --color-bg-table-even: var(--p-gray-650);
@@ -212,6 +215,9 @@
   --color-bg-input:    #ffffff;
   --color-bg-input-hover: #f8f9fc;
   --color-bg-label:    #eceef6;
+  /* muted — card(#fff)보다 아주 살짝 off-white. 비활성 행 티가 나되 과하지 않게
+     이전 값(#f2f3f8)은 "너무 회색"이라는 피드백 → #f8f9fc 로 은은하게 */
+  --color-bg-muted:    #f8f9fc;
   --color-bg-overlay:  rgba(0,0,0,0.45);
   --color-bg-table-odd:  #f4f5fa;
   --color-bg-table-even: #f8f9fc;
@@ -290,6 +296,8 @@
   --color-bg-input:    #241e38;
   --color-bg-input-hover: #2e2848;
   --color-bg-label:    #2a2442;
+  /* muted — card(#312850)보다 살짝 어두운 보라. 목록 미사용 행 등 "비활성" 느낌 */
+  --color-bg-muted:    #2a2244;
   --color-bg-overlay:  rgba(10,6,18,0.7);
   --color-bg-table-odd:  #1e1830;
   --color-bg-table-even: #241e38;

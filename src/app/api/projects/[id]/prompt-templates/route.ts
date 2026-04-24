@@ -70,19 +70,37 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// ── POST: 생성 ────────────────────────────────────────────────────────────────
-
+// ── POST: 생성 / 복사 ─────────────────────────────────────────────────────────
+//
+// 권한:
+//   - 프로젝트 OWNER/ADMIN 만 생성/복사 가능 (SUPER_ADMIN 은 hasPermission short-circuit 으로 자동 통과)
+//   - UI 의 "이 템플릿 복사" 버튼도 동일 역할에게만 노출해 일관성 유지
+//
+// 보안:
+//   - prjct_id 는 항상 현재 projectId 로 강제 (body 주입 차단)
+//   - default_yn 은 항상 "N" 으로 강제 (DEFAULT 로 승격 차단 — seed 로만 생성 가능)
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const { id: projectId } = await params;
 
   const gate = await requirePermission(request, projectId, "content.create");
   if (gate instanceof Response) return gate;
 
+  // 프로젝트 역할 가드 — OWNER/ADMIN 만 (SUPER_ADMIN 은 위 hasPermission 에서 통과)
+  if (gate.systemRole !== "SUPER_ADMIN"
+    && gate.role !== "OWNER" && gate.role !== "ADMIN") {
+    return apiError(
+      "FORBIDDEN_PROJECT_ADMIN_REQUIRED",
+      "프로젝트 관리자(OWNER/ADMIN)만 템플릿을 생성/복사할 수 있습니다.",
+      403
+    );
+  }
+
   let body: unknown;
   try { body = await request.json(); } catch {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
+  // default_yn 은 의도적으로 구조 분해하지 않음 — body 에서 "Y" 주입해도 무시
   const {
     tmplNm, taskTyCode, refTyCode,
     sysPromptCn,
@@ -111,13 +129,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const created = await prisma.tbAiPromptTemplate.create({
       data: {
         tmpl_id:       randomUUID(),
-        prjct_id:      projectId,
+        prjct_id:      projectId,   // 현재 프로젝트 강제
         tmpl_nm:       tmplNm.trim(),
         task_ty_code:  taskTyCode,
         ref_ty_code:   refTyCode   ?? null,
         sys_prompt_cn: sysPromptCn ?? null,
         tmpl_dc:       tmplDc      ?? null,
         use_yn:        useYn       ?? "Y",
+        default_yn:    "N",         // DEFAULT 승격 차단 (seed 로만 'Y' 가능)
         sort_ordr:     sortOrdr    ?? 0,
         use_cnt:       0,
         creat_mber_id: gate.mberId,

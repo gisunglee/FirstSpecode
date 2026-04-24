@@ -18,6 +18,9 @@ model TbCmMember {
   plan_code           String                    @default("FREE") // 계정 플랜 (FREE/PRO/TEAM/ENTERPRISE)
   plan_expire_dt      DateTime? // 유료 플랜 만료일 (NULL=무료/무제한)
   asignee_view_mode   String                    @default("all") // 전역 담당자 필터 모드: all | me
+  /// 시스템 역할: "SUPER_ADMIN" = 전역 관리자 / null = 일반 사용자.
+  /// DB UPDATE로만 설정. UI/API 로는 변경 불가 (탈취 시 권한 연쇄 상승 차단).
+  sys_role_code       String?                   @db.VarChar(20)
   join_dt             DateTime                  @default(now())
   mdfcn_dt            DateTime?
   wthdrw_dt           DateTime?
@@ -28,12 +31,49 @@ model TbCmMember {
   passwordResetTokens TbCmPasswordResetToken[]
   refreshTokens       TbCmRefreshToken[]
   socialAccounts      TbCmSocialAccount[]
-  apiKeys             TbCmApiKey[]
+  mcpKeys             TbCmMcpKey[]
   removalNotices      TbPjMemberRemovalNotice[]
   projectMembers      TbPjProjectMember[]
   settingsHistory     TbPjSettingsHistory[]
+  supportSessions     TbSysAdminSupportSession[]
+  adminAudits         TbSysAdminAudit[]
 
   @@map("tb_cm_member")
+}
+
+/// 시스템 관리자의 고객 프로젝트 지원 세션 — 읽기 전용 접근 허용.
+/// 30분 자동 만료. 쓰기 API 는 이 세션이 있어도 차단됨.
+model TbSysAdminSupportSession {
+  sess_id       String     @id @default(uuid()) @db.VarChar(36)
+  admin_mber_id String     @db.VarChar(36)
+  prjct_id      String     @db.VarChar(36)
+  memo          String?
+  expires_dt    DateTime
+  ended_dt      DateTime?
+  creat_dt      DateTime   @default(now())
+  admin         TbCmMember @relation(fields: [admin_mber_id], references: [mber_id])
+
+  @@index([admin_mber_id, prjct_id, expires_dt, ended_dt], map: "idx_sys_support_sess_active")
+  @@map("tb_sys_admin_support_session")
+}
+
+/// 시스템 관리자 행동 감사 로그 — 책임추적성.
+/// 지원 세션 개설·전역 리소스 변경·사용자 상태 변경 등을 모두 기록.
+model TbSysAdminAudit {
+  audit_id      String     @id @default(uuid()) @db.VarChar(36)
+  admin_mber_id String     @db.VarChar(36)
+  action_type   String     @db.VarChar(40)
+  target_type   String?    @db.VarChar(40)
+  target_id     String?    @db.VarChar(36)
+  memo          String?
+  ip_addr       String?    @db.VarChar(45)
+  user_agent    String?    @db.VarChar(255)
+  creat_dt      DateTime   @default(now())
+  admin         TbCmMember @relation(fields: [admin_mber_id], references: [mber_id])
+
+  @@index([admin_mber_id, creat_dt(sort: Desc)], map: "idx_sys_audit_admin")
+  @@index([target_type, target_id], map: "idx_sys_audit_target")
+  @@map("tb_sys_admin_audit")
 }
 
 model TbCmEmailVerification {
@@ -197,6 +237,29 @@ model TbPjProjectMember {
 
   @@unique([prjct_id, mber_id])
   @@map("tb_pj_project_member")
+}
+
+// ── 시스템 기본 환경설정 템플릿 — 프로젝트 생성 시 복사 원본 ─────────────
+// TbPjProjectConfig 의 "원본" 역할. 운영자가 이 테이블만 관리해 두면
+// 이후 신규 프로젝트에는 복사본이 자동 생성된다.
+// 주의: prjct_id=NULL 런타임 병합 방식이 아닌 "실제 복사" 패턴 — 각
+//       프로젝트의 설정이 서로 완전 독립적으로 진화해야 하기 때문.
+model TbSysConfigTemplate {
+  sys_tmpl_id    String    @id @default(uuid())
+  config_group   String    @default("GENERAL")
+  config_key     String    @unique(map: "tb_sys_config_template_key_uk")
+  config_label   String    @default("")
+  config_dc      String?
+  value_type     String    @default("TEXT")
+  default_value  String    @default("")
+  select_options Json?
+  sort_ordr      Int       @default(0)
+  use_yn         String    @default("Y")
+  creat_dt       DateTime  @default(now())
+  mdfcn_dt       DateTime?
+
+  @@index([use_yn, config_group, sort_ordr], map: "tb_sys_config_template_grp_idx")
+  @@map("tb_sys_config_template")
 }
 
 // ── 프로젝트 환경설정 — key-value 방식 설정 관리 ────────────────────────────
@@ -617,6 +680,30 @@ model TbAiPromptTemplate {
   @@map("tb_ai_prompt_template")
 }
 
+/// 설계 양식 (예시+템플릿 마크다운) — tb_ai_design_template
+/// 5계층 상세 페이지의 "예시"/"템플릿 삽입" 버튼 소스를 DB로 관리.
+/// prjct_id = NULL 이면 시스템 공통, UUID 면 해당 프로젝트 전용.
+/// 프로젝트 전용이 공통을 override (resolve 우선순위에서 prjct_id NOT NULL 우선).
+model TbAiDesignTemplate {
+  dsgn_tmpl_id  String   @id(map: "pk_ai_design_template") @db.VarChar(36)
+  prjct_id      String?  @db.VarChar(36)
+  ref_ty_code   String   @db.VarChar(20)  // REQUIREMENT | UNIT_WORK | SCREEN | AREA | FUNCTION
+  tmpl_nm       String   @db.VarChar(200)
+  tmpl_dc       String?
+  example_cn    String?
+  template_cn   String?
+  use_yn        String   @default("Y") @db.Char(1)
+  default_yn    String   @default("N") @db.Char(1)
+  sort_ordr     Int      @default(0)
+  creat_mber_id String?  @db.VarChar(36)
+  creat_dt      DateTime @default(now()) @db.Timestamp(6)
+  mdfcn_dt      DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([ref_ty_code, use_yn, prjct_id, default_yn, sort_ordr], map: "idx_ai_dsgn_tmpl_scope")
+  @@index([prjct_id, ref_ty_code, sort_ordr],                     map: "idx_ai_dsgn_tmpl_prjct")
+  @@map("tb_ai_design_template")
+}
+
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model tb_ds_review_comment {
   coment_id     String   @id(map: "pk_ds_review_comment") @db.VarChar(36)
@@ -860,10 +947,22 @@ model TbSgStdGuide {
   @@map("tb_sg_std_guide")
 }
 
-// ── API 키 — MCP 등 외부 클라이언트 인증용 (서비스 토큰 대체) ────────────
-model TbCmApiKey {
+// ── MCP 키 — Claude Code 등 외부 AI 클라이언트의 인바운드 인증용 ─────────
+// prjct_id = 'ALL'  → 전역 키 (해당 사용자가 ACTIVE 멤버인 모든 프로젝트 접근 가능)
+// prjct_id = UUID   → 프로젝트 단위 scope 고정 (다른 프로젝트 접근 시 403 FORBIDDEN_SCOPE)
+//
+// fail-secure 설계:
+//   - NOT NULL (@default 없음) → INSERT 시 반드시 명시 지정 (누락 시 DB 오류)
+//   - 'ALL' 명시적 sentinel → null 의존이 없어져 "실수로 전역 권한" 사고 차단
+//   - tb_pj_project FK 없음 → 'ALL'이 실제 프로젝트가 아니라 FK 불가. 대신 프로젝트
+//     삭제 시 scope 키는 멤버십 조회에서 403 되므로 무해화됨(app 레이어 보호).
+//
+// 원문은 저장하지 않고 SHA-256 해시만 저장 (spk_ prefix + 32B 랜덤 hex).
+// NOTE: tb_pj_project_api_key(외부 AI provider 키 보관소)와 혼동 금지 — 용도/저장방식 다름.
+model TbCmMcpKey {
   api_key_id   String    @id @default(uuid())
   mber_id      String
+  prjct_id     String                        // 'ALL' 또는 UUID — NOT NULL, no default
   key_hash     String    @unique
   key_prefix   String    @db.VarChar(12)
   key_nm       String    @db.VarChar(100)
@@ -871,10 +970,11 @@ model TbCmApiKey {
   revoke_dt    DateTime?
   creat_dt     DateTime  @default(now())
 
-  member TbCmMember @relation(fields: [mber_id], references: [mber_id])
+  member  TbCmMember @relation(fields: [mber_id], references: [mber_id])
 
-  @@index([mber_id], map: "idx_api_key_mber")
-  @@map("tb_cm_api_key")
+  @@index([mber_id],  map: "idx_mcp_key_mber")
+  @@index([prjct_id], map: "idx_mcp_key_prjct")
+  @@map("tb_cm_mcp_key")
 }
 
 // Rate Limit 카운터 — 인증 엔드포인트(로그인/가입/재설정/토큰갱신) 남용 방어용.

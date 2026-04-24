@@ -17,9 +17,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { toast } from "sonner";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "@/store/appStore";
 import { authFetch } from "@/lib/authFetch";
 import type { ProjectOption } from "@/types/layout";
@@ -31,10 +31,13 @@ type MyProfile = {
   profileImage:     string | null;
   plan:             string;  // 시스템 플랜: FREE / PRO / TEAM / ENTERPRISE
   assigneeViewMode: "all" | "me";  // 전역 담당자 필터 모드 — GNB 토글 초기값
+  isSystemAdmin:    boolean; // SUPER_ADMIN 여부 — 드롭다운에 "시스템 관리" 링크 노출
 };
 
 export default function GNB() {
-  const router = useRouter();
+  const router   = useRouter();
+  const pathname = usePathname();
+  const queryClient = useQueryClient();
   const { currentProjectId, setCurrentProjectId, theme, toggleTheme, breadcrumb } =
     useAppStore();
   // 전역 "내 담당" 모드 — 서버(DB)에서 로드, GNB 토글로 변경
@@ -143,14 +146,44 @@ export default function GNB() {
     sessionStorage.removeItem("access_token");
     sessionStorage.removeItem("refresh_token");
     localStorage.removeItem("lc_refresh_token");
+
+    // React Query 캐시 전체 초기화.
+    // QueryClient 인스턴스는 앱 수명 동안 유지되므로, 로그아웃 후 재로그인 시
+    // 이전 사용자의 ["member","profile"] / ["projects","my"] / ["my-role"] 등
+    // 캐시가 그대로 노출되는 문제가 있다. 계정 교차 오염 방지를 위해 전체 clear.
+    queryClient.clear();
+
+    // Zustand 메모리 상태도 초기화 — currentProjectId 등이 남아있으면
+    // 새 사용자 화면에 이전 프로젝트 ID가 잠깐 깔릴 수 있음.
+    setCurrentProjectId(null);
+    useAppStore.getState().setBreadcrumb([]);
+    useAppStore.getState().setHasLoadedProfile(false);
+    useAppStore.getState().setMyAssigneeMode("all");
+
     toast.success("로그아웃되었습니다.");
     router.push("/auth/login");
   }
 
   // 프로젝트 선택 핸들러
+  //
+  // 전역 상태만 바꾸면 LNB 링크는 갱신되지만 현재 페이지는 여전히 이전 projectId를
+  // URL 파라미터로 쥐고 있어 이전 프로젝트 데이터가 그대로 보이는 문제가 있다.
+  //   → 현재 pathname이 `/projects/{oldId}/...` 패턴이면 같은 섹션을 유지한 채
+  //     projectId만 교체해서 즉시 이동시킨다.
+  //   → 단, 상세 경로(`/projects/{id}/screens/abc`)는 새 프로젝트에 해당 리소스가
+  //     없을 수 있으므로 섹션 레벨(예: `/screens`)까지만 유지하고 하위 ID는 잘라냄.
+  //   → 프로젝트 무관 경로(`/dashboard`, `/settings/profile`, `/projects` 등)는
+  //     URL을 건드리지 않는다 — 사용자의 현재 맥락을 유지.
   function handleSelectProject(id: string) {
     setCurrentProjectId(id);
     setDropdownOpen(false);
+
+    // /projects/{uuid} 로 시작하는 경우에만 URL 재작성
+    const match = pathname.match(/^\/projects\/[^/]+(\/[^/]+)?/);
+    if (match) {
+      const section = match[1] ?? "";  // "/screens" 등, 없으면 빈 문자열
+      router.push(`/projects/${id}${section}`);
+    }
   }
 
   return (
@@ -467,6 +500,49 @@ export default function GNB() {
               >
                 프로필 설정
               </Link>
+              {/* MCP 키 관리 — 프로필 설정의 MCP 키 탭으로 직접 진입.
+                  Claude Code 등 외부 클라이언트 연결 키 관리는 자주 쓰이므로 한 클릭에 노출 */}
+              <Link
+                href="/settings/profile?tab=api-keys"
+                onClick={() => setProfileOpen(false)}
+                style={{
+                  display: "block",
+                  padding: "7px 14px",
+                  fontSize: "var(--text-md)",
+                  color: "var(--color-text-secondary)",
+                  textDecoration: "none",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-bg-elevated)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              >
+                MCP 키 관리
+              </Link>
+              {/* 시스템 관리 — SUPER_ADMIN 일 때만 노출.
+                  일반 사용자에게는 /admin 경로의 존재 자체를 숨긴다. */}
+              {myProfile?.isSystemAdmin && (
+                <>
+                  <div style={{ height: 1, background: "var(--color-border)", margin: "2px 0" }} />
+                  <Link
+                    href="/admin"
+                    onClick={() => setProfileOpen(false)}
+                    style={{
+                      display:        "flex",
+                      alignItems:     "center",
+                      gap:            8,
+                      padding:        "7px 14px",
+                      fontSize:       "var(--text-md)",
+                      color:          "var(--color-warning)",
+                      fontWeight:     600,
+                      textDecoration: "none",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-warning-subtle)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  >
+                    <span style={{ fontSize: 10 }}>🛡️</span>
+                    시스템 관리
+                  </Link>
+                </>
+              )}
               <div style={{ height: 1, background: "var(--color-border)", margin: "2px 0" }} />
               <button
                 onClick={handleLogout}

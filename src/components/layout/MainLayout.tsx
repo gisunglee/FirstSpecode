@@ -32,6 +32,7 @@ import GNB from "./GNB";
 import LNB from "./LNB";
 import StatusBar from "./StatusBar";
 import GlobalSearchDialog from "@/components/search/GlobalSearchDialog";
+import SupportSessionBanner from "@/components/admin/SupportSessionBanner";
 import { useAppStore } from "@/store/appStore";
 import { authFetch } from "@/lib/authFetch";
 import { useTripleClickSidebarToggle } from "@/hooks/useTripleClickSidebarToggle";
@@ -127,6 +128,10 @@ export default function MainLayout({
     >
       {/* 상단 GNB */}
       <GNB />
+
+      {/* 시스템 관리자 지원 세션 배너 — 현재 경로가 활성 지원 세션의 프로젝트일 때만 표시.
+          일반 사용자·지원 세션 비진행 시엔 null 반환. */}
+      <SupportSessionBanner />
 
       {/* 중간 영역: LNB + 메인 컨텐츠 */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>

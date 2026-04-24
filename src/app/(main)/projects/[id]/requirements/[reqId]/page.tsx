@@ -11,13 +11,13 @@
  */
 
 import { Suspense, useState, useRef, useEffect } from "react";
-import { marked } from "marked";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { renderMarkdown } from "@/lib/renderMarkdown";
 import { useAppStore } from "@/store/appStore";
+import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
 import dynamic from "next/dynamic";
 // TipTap 번들(≈수백 KB)이 초기 페이지 로드에 포함되지 않도록 dynamic import
 // 탭 전환/모달 오픈 등 실제 편집이 시작되는 시점에 청크가 다운로드됨
@@ -25,88 +25,7 @@ const RichEditor = dynamic(() => import("@/components/ui/RichEditor"), { ssr: fa
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
-
-// ── 상세 명세 예시 / 템플릿 상수 ────────────────────────────────────────────
-
-const SPEC_EXAMPLE = `## 기능 개요
-다양한 유형의 게시판(공지, 자료실, 묻고답하기 등)을 단일 구조로 통합 관리하며,
-관리자가 게시판 유형과 속성을 직접 설정할 수 있는 기능을 제공한다.
-
-## 메뉴 위치
-- 사용자: 정보마당 > 게시판
-- 관리자: 시스템관리 > 게시판관리
-
-## 사용 대상 / 권한
-| 구분 | 대상 | 접근 범위 |
-|------|------|-----------|
-| 일반사용자 | 로그인 사용자 전체 | 조회, 글쓰기, 댓글 |
-| 비로그인 | 일반 방문자 | 조회만 가능 (게시판별 설정) |
-| 게시판 관리자 | 지정된 담당자 | 글 관리, 공지 지정, 첨부 삭제 |
-| 시스템 관리자 | 관리자 | 게시판 생성/수정/삭제, 권한 설정 |
-
-## 제공 화면 목록
-| 화면명 | 설명 |
-|--------|------|
-| 게시판 목록 | 게시글 목록 조회, 검색, 페이징 |
-| 게시글 상세 | 본문, 첨부파일, 댓글 표시 |
-| 게시글 등록/수정 | 에디터 포함, 첨부파일 업로드 |
-| 게시판 관리 | 관리자용 게시판 유형/속성 설정 |
-| 게시글 관리 | 관리자용 전체 글 목록, 일괄 처리 |
-
-## 기능 상세
-| 기능명 | 설명 | 비고 |
-|--------|------|------|
-| 게시판 유형 설정 | 공지/자료실/QnA 등 유형별 속성 ON/OFF | 관리자 전용 |
-| 게시글 CRUD | 등록, 수정, 삭제, 조회 | 권한별 차등 |
-| 공지 고정 | 상단 고정 공지 지정 | 게시판관리자 이상 |
-| 첨부파일 | 다중 파일 업로드, 확장자/용량 제한 설정 | 게시판별 설정 |
-| 댓글 | 댓글 등록/삭제, 대댓글 1단계 지원 | 게시판별 ON/OFF |
-| 검색 | 제목, 내용, 작성자 검색 | |
-| 조회수 | 게시글 조회 시 자동 카운트 | 관리자 조회 제외 |
-| 답글 (QnA) | 원글에 대한 답변 글 연결 표시 | QnA 유형만 해당 |
-
-## 업무 처리 순서
-1. 관리자가 게시판 유형/속성 생성 (댓글 허용 여부, 첨부 허용 여부 등 설정)
-2. 사용자가 게시글 등록 (에디터 작성 + 첨부파일 업로드)
-3. 게시판 관리자가 필요 시 공지 지정 또는 글 숨김 처리
-4. 일반 사용자 목록 조회 → 상세 조회 → 댓글 작성
-5. QnA 유형의 경우 담당자가 답글 등록 → 작성자에게 알림 (알림 연계 시)
-
-## 제외 범위 / 제약 사항 / 협의 사항
-- (제외) 이메일 알림 연계는 본 범위 제외
-- (제약) 첨부파일 확장자는 보안지침상 exe, sh 등 실행파일 불가
-- (협의) 익명 게시 기능은 추후 결정`;
-
-// 내용은 비우고 구조(헤딩·표 컬럼)만 유지한 템플릿
-const SPEC_TEMPLATE = `## 기능 개요
-
-
-## 메뉴 위치
-- 사용자:
-- 관리자:
-
-## 사용 대상 / 권한
-| 구분 | 대상 | 접근 범위 |
-|------|------|-----------|
-| | | |
-
-## 제공 화면 목록
-| 화면명 | 설명 |
-|--------|------|
-| | |
-
-## 기능 상세
-| 기능명 | 설명 | 비고 |
-|--------|------|------|
-| | | |
-
-## 업무 처리 순서
-1.
-
-## 제외 범위 / 제약 사항 / 협의 사항
-- (제외)
-- (제약)
-- (협의)`;
+import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -235,6 +154,10 @@ function RequirementDetailPageInner() {
   // 상세 명세 예시 팝업 상태
   const [specExampleOpen, setSpecExampleOpen] = useState(false);
 
+  // 설계 양식 DB 조회 — 요구사항 계층
+  // data.exampleCn = "예시" 팝업 본문, data.templateCn = "템플릿 적용" 버튼이 삽입할 본문
+  const { data: designTmpl } = useDesignTemplate(projectId, "REQUIREMENT");
+
   // 변경 이력 팝업 상태
   const [historyOpen,    setHistoryOpen]    = useState(false);
   const [diffTarget,     setDiffTarget]     = useState<HistoryItem | null>(null);
@@ -276,34 +199,42 @@ function RequirementDetailPageInner() {
   const myMemberId = memberData?.myMemberId ?? "";
 
   // ── 기존 요구사항 로드 (수정 모드) ─────────────────────────────────────────
+  //
+  // ⚠️ queryFn 안에서 setState를 호출하지 않는다.
+  //   TanStack Query는 동일 queryKey 캐시 hit 시 queryFn을 재실행하지 않으므로
+  //   queryFn 내부 setState는 "뒤로 가기 → 동일 row 재진입" 케이스에서
+  //   폼이 빈 상태로 남는 버그를 유발한다. screens 상세 페이지에서
+  //   이미 동일한 문제로 고친 이력이 있다(2026-04-24).
   const { data: detail, isLoading: isDetailLoading } = useQuery({
     queryKey: ["requirement", projectId, reqId],
     queryFn:  () =>
       authFetch<{ data: RequirementDetail }>(
         `/api/projects/${projectId}/requirements/${reqId}`
-      ).then((r) => {
-        const d = r.data;
-        setForm({
-          taskId:          d.taskId ?? undefined,
-          reqDisplayId:    d.displayId ?? "",
-          sortOrder:       d.sortOrder ?? 0,
-          name:            d.name,
-          priority:        d.priority,
-          source:          d.source,
-          rfpPage:         d.rfpPage,
-          // 기존 마크다운이면 HTML로 변환 (RichEditor는 HTML 저장)
-          originalContent: d.originalContent && !d.originalContent.includes("<")
-            ? renderMarkdown(d.originalContent) : (d.originalContent ?? ""),
-          currentContent:  d.currentContent && !d.currentContent.includes("<")
-            ? renderMarkdown(d.currentContent)  : (d.currentContent  ?? ""),
-          analysisMemo:    d.analysisMemo,
-          detailSpec:      d.detailSpec,
-          assignMemberId:  d.assignMemberId ?? "",
-        });
-        return d;
-      }),
+      ).then((r) => r.data),
     enabled: !isNew,
   });
+
+  // detail 로드되거나 reqId가 바뀌면 폼을 항상 동기화 — 캐시 hit 재방문에서도 재실행됨.
+  useEffect(() => {
+    if (!detail) return;
+    setForm({
+      taskId:          detail.taskId ?? undefined,
+      reqDisplayId:    detail.displayId ?? "",
+      sortOrder:       detail.sortOrder ?? 0,
+      name:            detail.name,
+      priority:        detail.priority,
+      source:          detail.source,
+      rfpPage:         detail.rfpPage,
+      // 저장된 값이 마크다운 형식(HTML 태그 없음)이면 HTML로 변환 — RichEditor는 HTML 저장.
+      originalContent: detail.originalContent && !detail.originalContent.includes("<")
+        ? renderMarkdown(detail.originalContent) : (detail.originalContent ?? ""),
+      currentContent:  detail.currentContent && !detail.currentContent.includes("<")
+        ? renderMarkdown(detail.currentContent)  : (detail.currentContent  ?? ""),
+      analysisMemo:    detail.analysisMemo,
+      detailSpec:      detail.detailSpec,
+      assignMemberId:  detail.assignMemberId ?? "",
+    });
+  }, [detail]);
 
   // ── 첨부파일 목록 조회 ──────────────────────────────────────────────────────
   const { data: filesData, refetch: refetchFiles } = useQuery({
@@ -869,14 +800,20 @@ function RequirementDetailPageInner() {
                   <button
                     type="button"
                     onClick={() => setSpecExampleOpen(true)}
-                    style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: "pointer" }}
+                    disabled={!designTmpl?.exampleCn}
+                    style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: designTmpl?.exampleCn ? "pointer" : "not-allowed", opacity: designTmpl?.exampleCn ? 1 : 0.5 }}
                   >
                     예시
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleChange("detailSpec", SPEC_TEMPLATE)}
-                    style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: "pointer" }}
+                    onClick={() => {
+                      if (!designTmpl?.templateCn) return;
+                      // 요구사항 양식은 displayId/name 플레이스홀더 없음 — applyTemplateVars는 NOOP로 동작
+                      handleChange("detailSpec", applyTemplateVars(designTmpl.templateCn, {}));
+                    }}
+                    disabled={!designTmpl?.templateCn}
+                    style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: designTmpl?.templateCn ? "pointer" : "not-allowed", opacity: designTmpl?.templateCn ? 1 : 0.5 }}
                   >
                     템플릿 적용
                   </button>
@@ -932,9 +869,13 @@ function RequirementDetailPageInner() {
       </div>
       </div>
 
-      {/* ── 상세 명세 예시 팝업 ─────────────────────────────────────────────── */}
-      {specExampleOpen && (
-        <SpecExamplePopup onClose={() => setSpecExampleOpen(false)} />
+      {/* ── 상세 명세 예시 팝업 (DB 양식) ───────────────────────────────────── */}
+      {specExampleOpen && designTmpl?.exampleCn && (
+        <DesignExamplePopup
+          title="상세 명세 예시"
+          contentMd={designTmpl.exampleCn}
+          onClose={() => setSpecExampleOpen(false)}
+        />
       )}
 
       {/* ── 변경 이력 팝업 ──────────────────────────────────────────────────── */}
@@ -1190,99 +1131,6 @@ const inlineIconBtnStyle: React.CSSProperties = {
   borderRadius:   3,
   lineHeight:     0,
 };
-
-// ── 상세 명세 예시 팝업 CSS ──────────────────────────────────────────────────
-
-const SPEC_EXAMPLE_CSS = [
-  ".sp-example h2,.sp-example h3{font-size:14px;font-weight:700;margin:16px 0 8px}",
-  ".sp-example table{border-collapse:collapse;width:100%;margin-bottom:12px}",
-  ".sp-example th,.sp-example td{border:1px solid #e0e0e0;padding:5px 10px;font-size:12px}",
-  ".sp-example th{background:#f5f5f5;font-weight:600}",
-  ".sp-example p{margin:4px 0;font-size:13px}",
-  ".sp-example ul,.sp-example ol{padding-left:18px;margin:4px 0}",
-  ".sp-example li{font-size:13px}",
-].join(" ");
-
-// ── 상세 명세 예시 팝업 컴포넌트 ─────────────────────────────────────────────
-
-function SpecExamplePopup({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<"raw" | "preview">("preview");
-  const [copied, setCopied] = useState(false);
-
-  function handleCopy() {
-    navigator.clipboard.writeText(SPEC_EXAMPLE).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    });
-  }
-
-  const tabBtn = (t: "raw" | "preview", label: string) => (
-    <button
-      onClick={() => setTab(t)}
-      style={{
-        padding: "4px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-        borderRadius: 5, border: "none",
-        background: tab === t ? "var(--color-primary, #1976d2)" : "transparent",
-        color: tab === t ? "#fff" : "var(--color-text-secondary)",
-      }}
-    >
-      {label}
-    </button>
-  );
-
-  return (
-    <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={onClose}
-    >
-      <div
-        style={{ background: "var(--color-bg-card)", borderRadius: 10, width: "min(780px, 92vw)", maxHeight: "84vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* 헤더 */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "1px solid var(--color-border)", gap: 12 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, flexShrink: 0 }}>상세 명세 예시</span>
-          <div style={{ display: "flex", gap: 2, background: "var(--color-bg-muted)", padding: "3px", borderRadius: 7 }}>
-            {tabBtn("preview", "미리보기")}
-            {tabBtn("raw", "원문")}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
-            <button
-              onClick={handleCopy}
-              style={{
-                padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                borderRadius: 5, border: "1px solid var(--color-border)",
-                background: copied ? "#e8f5e9" : "var(--color-bg-base)",
-                color: copied ? "#2e7d32" : "var(--color-text-secondary)",
-                transition: "all 0.2s",
-              }}
-            >
-              {copied ? "✓ 복사됨" : "복사"}
-            </button>
-            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--color-text-secondary)", lineHeight: 1 }}>×</button>
-          </div>
-        </div>
-        {/* 본문 */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
-          {tab === "raw" ? (
-            <pre style={{ margin: 0, fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", color: "var(--color-text-primary)", fontFamily: "monospace" }}>
-              {SPEC_EXAMPLE}
-            </pre>
-          ) : (
-            <>
-              <style dangerouslySetInnerHTML={{ __html: SPEC_EXAMPLE_CSS }} />
-              <div
-                className="sp-example"
-                style={{ fontSize: 13, lineHeight: 1.8, color: "var(--color-text-primary)" }}
-                dangerouslySetInnerHTML={{ __html: (() => { const r = marked.parse(SPEC_EXAMPLE, { async: false }); return typeof r === "string" ? r : ""; })() }}
-              />
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── 파일 크기 포맷 ───────────────────────────────────────────────────────────
 

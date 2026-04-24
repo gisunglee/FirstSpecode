@@ -78,6 +78,8 @@ export default function LNB() {
         label: "프로젝트",
         icon: "g_project",
         // 라벨은 그룹 이름("프로젝트")과 중복되는 접두사를 뗌 — "프로젝트 목록" → "목록"
+        // "개인 설정" / "MCP 키" 는 GNB 우상단 아바타 드롭다운에서 진입 → LNB 에서는 제거
+        // "환경설정" 은 도구 메타 설정 성격이라 "스펙설정" 그룹으로 이동
         items: [
           { label: "목록", href: "/projects", icon: "i_projectList" },
           ...(canAccessSettings && pBase
@@ -85,11 +87,6 @@ export default function LNB() {
             : []),
           ...(canManageMembers && pBase
             ? [{ label: "멤버", href: p("/members"), icon: "i_members" as MenuIconKey }]
-            : []),
-          // "개인 설정"/"환경설정"은 프로젝트와 무관한 항목이라 구별을 위해 유지
-          { label: "개인 설정", href: "/settings/profile", icon: "i_profile" },
-          ...(canAccessSettings && pBase
-            ? [{ label: "환경설정", href: p("/configs"), icon: "i_envSettings" as MenuIconKey }]
             : []),
         ],
       },
@@ -124,6 +121,7 @@ export default function LNB() {
         key: "common",
         label: "공통 설계",
         icon: "g_common",
+        // A군: 프로젝트 콘텐츠 자체(내가 만들 시스템의 재료)
         items: [
           { label: "표준 가이드", href: p("/standard-guides"), icon: "i_standardGuide" },
           { label: "공통코드",    href: p("/common-codes"),    icon: "i_commonCode" },
@@ -138,7 +136,19 @@ export default function LNB() {
           { label: "AI 태스크",     href: p("/ai-tasks"),           icon: "i_aiTask" },
           { label: "기획 가져오기", href: p("/planning/ai-import"), icon: "i_planImport" },
           { label: "설계 가져오기", href: p("/design-import"),      icon: "i_designImport" },
-          { label: "프롬프트 관리", href: p("/prompt-templates"),   icon: "i_promptTemplate" },
+        ],
+      },
+      {
+        key: "spec_config",
+        label: "스펙설정",
+        icon: "g_spec_config",
+        // 프로젝트 단위 도구 메타 설정.
+        items: [
+          { label: "설계 양식",     href: p("/design-templates"), icon: "i_designTemplate" },
+          { label: "프롬프트 관리", href: p("/prompt-templates"), icon: "i_promptTemplate" },
+          ...(canAccessSettings && pBase
+            ? [{ label: "환경설정", href: p("/configs"), icon: "i_envSettings" as MenuIconKey }]
+            : []),
         ],
       },
       {
@@ -166,13 +176,22 @@ export default function LNB() {
     return list.filter((g) => g.items.length > 0);
   }, [pBase, canAccessSettings, canManageMembers]);
 
-  // ── URL 기반 자동 활성 그룹 판별 ────────────────────────────────────────────
-  // /projects/:id/functions/* → "design" 그룹
-  // /dashboard → "dashboard" 그룹 등
-  // 가장 긴 일치(prefix)를 우선 — "/planning" vs "/planning/ai-import" 충돌 방지
-  const groupByUrl = useMemo<string | null>(() => {
-    let bestKey: string | null = null;
-    let bestLen = 0;
+  // ── URL 기반 자동 활성 그룹/항목 판별 ─────────────────────────────────────
+  // 한 번에 가장 긴 prefix 일치 항목을 찾아 그룹키와 href 를 동시에 산출.
+  //
+  // "가장 긴 prefix 가 이긴다" 규칙이 필요한 이유:
+  //   - "/projects" 와 "/projects/:id/members" 처럼 prefix 관계인 메뉴가 함께 있을 때
+  //     단순 startsWith 만으로 판정하면 두 항목이 동시에 활성화됨 (목록+멤버)
+  //   - 가장 긴 일치 하나만 활성으로 인정해 중복 활성을 막음
+  //
+  // 그룹 자동 매칭에도 같은 결과를 사용 — 한 번 순회로 둘 다 결정
+  const { groupByUrl, activeItemHref } = useMemo<{
+    groupByUrl: string | null;
+    activeItemHref: string | null;
+  }>(() => {
+    let bestGroupKey: string | null = null;
+    let bestHref:     string | null = null;
+    let bestLen      = 0;
     for (const g of groups) {
       for (const it of g.items) {
         if (it.href === "#") continue;
@@ -180,12 +199,13 @@ export default function LNB() {
         const matches =
           pathname === it.href || pathname.startsWith(it.href + "/");
         if (matches && it.href.length > bestLen) {
-          bestKey = g.key;
-          bestLen = it.href.length;
+          bestGroupKey = g.key;
+          bestHref     = it.href;
+          bestLen      = it.href.length;
         }
       }
     }
-    return bestKey;
+    return { groupByUrl: bestGroupKey, activeItemHref: bestHref };
   }, [pathname, groups]);
 
   // ── 활성 그룹 상태 ─────────────────────────────────────────────────────────
@@ -263,10 +283,10 @@ export default function LNB() {
               <SubItem
                 key={it.label}
                 item={it}
-                isActive={
-                  it.href !== "#" &&
-                  (pathname === it.href || pathname.startsWith(it.href + "/"))
-                }
+                // "가장 긴 일치" 한 항목만 활성. prefix 충돌(예: /projects 와
+                // /projects/:id/members) 시 더 긴 쪽만 활성으로 인정하여
+                // "목록+멤버" 동시 active 문제를 방지.
+                isActive={it.href !== "#" && it.href === activeItemHref}
               />
             ))}
           </div>
