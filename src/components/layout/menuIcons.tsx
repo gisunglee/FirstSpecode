@@ -46,6 +46,8 @@ export type MenuIconKey =
   // 그룹 (레일)
   | "g_dashboard" | "g_project" | "g_analysis" | "g_design"
   | "g_common" | "g_ai" | "g_spec_config" | "g_help" | "g_data"
+  // 시스템 관리 (SUPER_ADMIN 전용) — 방패 아이콘으로 차별화
+  | "g_admin"
   // 항목 (서브 패널)
   | "i_dashboard"
   | "i_projectList" | "i_projectSettings" | "i_members" | "i_profile" | "i_envSettings"
@@ -135,6 +137,13 @@ const ICONS: Record<MenuIconKey, ReactNode> = {
       <ellipse cx="12" cy="5" rx="8" ry="2.5" />
       <path d="M4 5v6c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5V5" />
       <path d="M4 11v6c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5v-6" />
+    </>
+  ),
+  // 시스템 관리 — 방패 (SUPER_ADMIN 상징)
+  g_admin: (
+    <>
+      <path d="M12 3l8 3v6c0 4.5-3.5 8.5-8 9-4.5-.5-8-4.5-8-9V6l8-3z" />
+      <path d="M9 12l2 2 4-4" />
     </>
   ),
 

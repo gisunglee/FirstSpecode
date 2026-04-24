@@ -305,7 +305,8 @@
       "Bash(tee /tmp/tsc.log)",
       "Bash(echo \"---EXIT $?---\")",
       "Bash(grep -E \"\\\\.ts$\")",
-      "Bash(xargs cat *)"
+      "Bash(xargs cat *)",
+      "Bash(node_modules/.bin/next lint *)"
     ]
   }
 }

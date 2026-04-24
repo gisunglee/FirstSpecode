@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
     const linkedProviders = member.socialAccounts.map((s) => s.provdr_code.toLowerCase());
 
     return apiSuccess({
+      mberId:           auth.mberId,       // /admin 에서 "자기 자신" 판정용
       name:             member.mber_nm ?? "",
       email:            member.email_addr ?? "",
       profileImage:     member.profl_img_url ?? null,

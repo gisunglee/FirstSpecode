@@ -75,26 +75,38 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // 신규 발급
+  // 신규 발급 — 세션 생성 + 감사 기록을 **같은 트랜잭션**으로 묶는다.
+  //
+  // 이유:
+  //   "감사 로그 없이 세션만 열리는" 상태를 절대 만들지 않기 위함.
+  //   logAdminAction() 은 본래 실패 시 조용히 삼켜 본 API 응답을 보호하지만,
+  //   세션 개설 같은 고위험 액션은 "로그 없으면 액션도 없다" 원칙을 적용.
+  //   감사 INSERT 가 실패하면 세션도 롤백되어 관리자는 오류를 보고 재시도하게 된다.
   const expiresAt = new Date(now.getTime() + SUPPORT_SESSION_DURATION_MS);
 
-  const created = await prisma.tbSysAdminSupportSession.create({
-    data: {
-      admin_mber_id: gate.mberId,
-      prjct_id:      projectId,
-      memo:          memo?.trim() || null,
-      expires_dt:    expiresAt,
-    },
-  });
+  const created = await prisma.$transaction(async (tx) => {
+    const session = await tx.tbSysAdminSupportSession.create({
+      data: {
+        admin_mber_id: gate.mberId,
+        prjct_id:      projectId,
+        memo:          memo?.trim() || null,
+        expires_dt:    expiresAt,
+      },
+    });
 
-  await logAdminAction({
-    adminMberId: gate.mberId,
-    actionType:  "SUPPORT_SESSION_OPEN",
-    targetType:  "PROJECT",
-    targetId:    projectId,
-    memo:        memo?.trim() || null,
-    ipAddr:      gate.ipAddr,
-    userAgent:   gate.userAgent,
+    await tx.tbSysAdminAudit.create({
+      data: {
+        admin_mber_id: gate.mberId,
+        action_type:   "SUPPORT_SESSION_OPEN",
+        target_type:   "PROJECT",
+        target_id:     projectId,
+        memo:          memo?.trim() || null,
+        ip_addr:       gate.ipAddr      ?? null,
+        user_agent:    gate.userAgent   ?? null,
+      },
+    });
+
+    return session;
   });
 
   return apiSuccess({

@@ -126,13 +126,18 @@ export async function POST(request: NextRequest) {
       });
 
       // ── 시스템 환경설정 템플릿 → 이 프로젝트로 복사 ────────────────────
-      // tb_sys_config_template(use_yn='Y') 레코드를 tb_pj_project_config 로
-      // 실제 복제. NULL 병합이 아닌 실제 복사를 쓰는 이유는 프로젝트별
-      // 설정이 서로 완전히 독립적으로 진화해야 하기 때문(A의 값 변경이 B에
-      // 파급되면 안 됨). 템플릿 0건이면 건너뜀 — seed 가 아직 안 적용된
-      // 환경에서도 프로젝트 생성은 정상 동작해야 한다.
+      // 복사 조건: use_yn='Y' (활성 템플릿) AND default_value='Y'
+      //   - default_value='Y' 인 것만 복사하는 이유: 프로젝트 생성 직후
+      //     "기본적으로 켜져 있어야 하는 설정"만 자동 주입. 기본이 N인
+      //     옵션 설정까지 자동 복사하면 프로젝트 설정 화면이 지저분해진다.
+      //   - 필요하면 운영자가 UI의 "+ 설정 추가"로 프로젝트별 커스텀 설정을
+      //     직접 등록할 수 있으므로 누락이 막히지 않는다.
+      //
+      // 실제 복사를 쓰는 이유(NULL 병합이 아닌): 프로젝트별 설정이 서로
+      // 완전히 독립적으로 진화해야 하기 때문(A의 값 변경이 B에 파급되면 안 됨).
+      // 조건에 해당하는 템플릿 0건이면 건너뜀 — seed 미적용 환경 호환.
       const sysTmpls = await tx.tbSysConfigTemplate.findMany({
-        where:   { use_yn: "Y" },
+        where:   { use_yn: "Y", default_value: "Y" },
         orderBy: [{ config_group: "asc" }, { sort_ordr: "asc" }],
       });
       if (sysTmpls.length > 0) {

@@ -41,7 +41,9 @@ SELECT
   CURRENT_TIMESTAMP
 FROM tb_pj_project p
 CROSS JOIN tb_sys_config_template t
-WHERE t.use_yn = 'Y'
+-- 복사 조건은 프로젝트 생성 API 와 동일 (use_yn='Y' AND default_value='Y')
+WHERE t.use_yn        = 'Y'
+  AND t.default_value = 'Y'
   AND NOT EXISTS (
     SELECT 1
     FROM tb_pj_project_config c

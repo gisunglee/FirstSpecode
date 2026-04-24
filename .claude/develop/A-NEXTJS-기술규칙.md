@@ -362,3 +362,41 @@ throw new Error(`사용자(id=${userId})를 찾을 수 없습니다. DB 응답: 
 | 컴포넌트 내 비즈니스 로직 | 테스트 불가, 재사용 불가 → lib/이나 hooks/로 분리 |
 | 에러 무시 (`catch {}`) | 반드시 로깅 또는 사용자 알림 처리 |
 | 조건 없는 목록 조회 | 논리삭제 필터(`useYn: "Y"` 등) 항상 포함 |
+
+---
+
+## 9. 시스템 관리자 지원 세션 — 권한 분리 규칙
+
+시스템 관리자(SUPER_ADMIN)가 고객 프로젝트에 "지원 세션"으로 진입한 동안에는
+**읽기 전용**으로만 동작해야 한다. 이 보호막을 깨뜨리지 않는 규칙:
+
+### ① 데이터 내보내기·다운로드는 별도 권한으로 분리
+
+```ts
+// ❌ 나쁜 예 — 내보내기가 "읽기"로 분류되어 지원 세션에서도 통과
+// GET /api/projects/[id]/requirements/export.csv
+const gate = await requirePermission(req, projectId, "content.read");
+
+// ✅ 좋은 예 — 내보내기 전용 권한
+// src/lib/permissions.ts PERMISSIONS 에 추가:
+//   "content.export": { roles: ["OWNER", "ADMIN", "MEMBER"] }
+// 그리고 requirePermission 내부의 isWritePermission 판정이 "*.read" 가 아닌
+// 모든 권한을 write 로 간주하므로 지원 세션에서는 자동 차단.
+const gate = await requirePermission(req, projectId, "content.export");
+```
+
+### ② 판정 기준
+
+다음에 해당하면 **반드시 별도 권한**으로 분리:
+- CSV/Excel/PDF 등 **파일 내보내기** API (GET 이어도)
+- 대량 다운로드(첨부파일 zip, 전체 스크린샷 패키지 등)
+- 외부 시스템 **연동 전송** (이메일 일괄 발송, Webhook 호출)
+- 민감 데이터 조회(예: API 키 평문, 주민번호 복호화)
+
+### ③ 이유
+
+`requirePermission` 은 지원 세션 상태를 "`.read` 접미사만 통과" 로 판정한다.
+이 판정 기준은 단순하지만 `content.read` 하나로 "읽기"를 뭉뚱그려 놓으면
+파일 내보내기 같은 **데이터 유출 경로**가 같이 열린다.
+권한 이름을 분리해 두면 `requirePermission` 로직 변경 없이도 지원 세션에서
+자동으로 차단된다 (`.read` 가 아니므로 write 로 간주 → 403).

@@ -33,6 +33,9 @@ export const AUDIT_ACTION_TYPES = [
   "SUPPORT_SESSION_OPEN",
   "SUPPORT_SESSION_END",
   "SUPPORT_SESSION_EXPIRE",
+  "SUPPORT_SESSION_CLEANUP",   // 만료된 세션 일괄 정리 (관리자 버튼 실행)
+  "SYSTEM_ROLE_GRANT",         // 시스템 관리자 임명
+  "SYSTEM_ROLE_REVOKE",        // 시스템 관리자 해임 (+ 대상 활성 세션 일괄 종료)
   "USER_SUSPEND",
   "USER_UNSUSPEND",
   "USER_UNLOCK",

@@ -25,10 +25,11 @@ import { useIsSystemAdmin } from "@/hooks/useMyRole";
 type TabDef = { label: string; href: string };
 
 const TABS: TabDef[] = [
-  { label: "대시보드",    href: "/admin" },
-  { label: "사용자",      href: "/admin/users" },
-  { label: "프로젝트",    href: "/admin/projects" },
-  { label: "감사 로그",   href: "/admin/audit" },
+  { label: "대시보드",        href: "/admin" },
+  { label: "사용자",          href: "/admin/users" },
+  { label: "프로젝트",        href: "/admin/projects" },
+  { label: "환경설정 템플릿", href: "/admin/config-templates" },
+  { label: "감사 로그",       href: "/admin/audit" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

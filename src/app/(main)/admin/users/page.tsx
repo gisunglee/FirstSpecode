@@ -14,6 +14,7 @@
  */
 
 import { useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
 
@@ -129,7 +130,14 @@ export default function AdminUsersPage() {
             )}
             {items.map((u) => (
               <tr key={u.mberId} style={{ borderBottom: "1px solid var(--color-border)" }}>
-                <Td>{u.email ?? <span style={{ color: "var(--color-text-tertiary)" }}>(없음)</span>}</Td>
+                <Td>
+                  <Link
+                    href={`/admin/users/${u.mberId}`}
+                    style={{ color: "var(--color-text-primary)", textDecoration: "none" }}
+                  >
+                    {u.email ?? <span style={{ color: "var(--color-text-tertiary)" }}>(없음)</span>}
+                  </Link>
+                </Td>
                 <Td>{u.name ?? <span style={{ color: "var(--color-text-tertiary)" }}>(없음)</span>}</Td>
                 <Td>{u.plan}</Td>
                 <Td><StatusBadge status={u.status} /></Td>

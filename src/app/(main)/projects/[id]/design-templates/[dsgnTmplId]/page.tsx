@@ -201,8 +201,9 @@ function DesignTemplateDetailPageInner() {
 
   // ── 복사 뮤테이션 ──────────────────────────────────────────────────────────────
   // 현재 양식의 내용을 새 레코드로 복제. 서버가 prjct_id=현재 프로젝트, default_yn='N'
-  // 로 강제하므로 시스템/DEFAULT 양식도 안전하게 프로젝트 전용 사본이 된다.
-  // 복사본은 사용 여부 'N'으로 생성되어 원본과 충돌하지 않음 — 운영 사고 방지.
+  // 으로 강제하므로 시스템/DEFAULT 양식도 안전하게 프로젝트 전용 사본이 된다.
+  // 복사본은 use_yn='Y' (활성) 으로 생성 — 복사 직후 바로 사용할 수 있어야 한다는
+  // 운영 방침. 편집이 필요하면 상세 페이지에서 수정한다.
   const copyMutation = useMutation({
     mutationFn: () =>
       authFetch<{ data: { dsgnTmplId: string } }>(
@@ -216,14 +217,14 @@ function DesignTemplateDetailPageInner() {
             tmplDc:     tmplDc     || null,
             exampleCn:  exampleCn  || null,
             templateCn: templateCn || null,
-            useYn:      "N",        // 복사본은 항상 미사용으로 생성
+            useYn:      "Y",        // 복사본은 바로 사용 가능하도록 활성으로 생성
             sortOrdr,
           }),
         },
       ).then((r) => r.data),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["design-templates", projectId] });
-      toast.success("복사본이 생성되었습니다. (사용 여부: 미사용)");
+      toast.success("복사본이 생성되었습니다.");
       setCopyConfirm(false);
       router.push(`/projects/${projectId}/design-templates/${res.dsgnTmplId}`);
     },
@@ -556,7 +557,7 @@ function DesignTemplateDetailPageInner() {
             </p>
             <p style={{ fontSize: 12, color: "var(--color-text-secondary)", margin: 0, lineHeight: 1.6 }}>
               현재 양식의 내용을 그대로 복제하여 <strong>프로젝트 전용 사본</strong>을 만듭니다.<br />
-              사본은 <strong>미사용(비활성)</strong> 상태로 생성되며, 편집 후 사용 여부를 변경할 수 있습니다.
+              사본은 <strong>바로 사용 가능한 상태</strong>로 생성됩니다. 필요 시 상세 페이지에서 편집하세요.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
               <button

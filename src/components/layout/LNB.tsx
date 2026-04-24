@@ -25,7 +25,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "@/store/appStore";
-import { useMyRole } from "@/hooks/useMyRole";
+import { useMyRole, useIsSystemAdmin } from "@/hooks/useMyRole";
 import { MenuIcon, type MenuIconKey } from "./menuIcons";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
@@ -44,6 +44,9 @@ type MenuGroup = {
   label: string;        // 서브 패널 상단 타이틀
   icon: MenuIconKey;    // 레일 아이콘
   items: MenuItem[];
+  // accent=true 면 레일 아이콘·라벨을 warning 톤으로 강조.
+  // "시스템 관리"처럼 일반 업무 흐름과 구분해야 하는 그룹 전용.
+  accent?: boolean;
 };
 
 // ── 활성 그룹 sessionStorage 키 ──────────────────────────────────────────────
@@ -53,6 +56,8 @@ export default function LNB() {
   const pathname = usePathname();
   const { sidebarCollapsed, toggleSidebar, setSidebarCollapsed, currentProjectId } = useAppStore();
   const { canManageMembers, canAccessSettings } = useMyRole(currentProjectId);
+  // SUPER_ADMIN 여부 — "시스템 관리" 그룹 노출 판정에 사용
+  const { isSystemAdmin } = useIsSystemAdmin();
 
   // 프로젝트 베이스 경로 — 미선택 시 null → 해당 메뉴들은 비활성 처리
   const pBase = currentProjectId ? `/projects/${currentProjectId}` : null;
@@ -170,11 +175,28 @@ export default function LNB() {
           { label: "Diff 테스트",      href: "/test/diff-prompt",  icon: "i_diffTest" },
         ],
       },
+      // 시스템 관리 — SUPER_ADMIN 만 노출. 프로젝트 문맥과 무관하므로 pBase 불필요.
+      // accent=true 로 레일 아이콘이 warning 톤으로 살짝 튀게 표시된다.
+      ...(isSystemAdmin
+        ? [{
+            key:   "admin",
+            label: "시스템 관리",
+            icon:  "g_admin" as MenuIconKey,
+            accent: true,
+            items: [
+              { label: "대시보드",        href: "/admin",                   icon: "i_dashboard" as MenuIconKey },
+              { label: "사용자",          href: "/admin/users",             icon: "i_members" as MenuIconKey },
+              { label: "프로젝트",        href: "/admin/projects",          icon: "i_projectList" as MenuIconKey },
+              { label: "환경설정 템플릿", href: "/admin/config-templates",  icon: "i_envSettings" as MenuIconKey },
+              { label: "감사 로그",       href: "/admin/audit",             icon: "i_changeLog" as MenuIconKey },
+            ],
+          }]
+        : []),
     ];
 
     // 빈 그룹은 표시하지 않음 (예: VIEWER는 프로젝트 그룹의 항목 일부만 남거나 비어있을 수 있음)
     return list.filter((g) => g.items.length > 0);
-  }, [pBase, canAccessSettings, canManageMembers]);
+  }, [pBase, canAccessSettings, canManageMembers, isSystemAdmin]);
 
   // ── URL 기반 자동 활성 그룹/항목 판별 ─────────────────────────────────────
   // 한 번에 가장 긴 prefix 일치 항목을 찾아 그룹키와 href 를 동시에 산출.
@@ -260,12 +282,21 @@ export default function LNB() {
       <nav className="sp-rail" aria-label="그룹 메뉴">
         {groups.map((g) => {
           const isActive = g.key === activeKey;
+          // accent 그룹("시스템 관리")은 warning 톤으로 강조.
+          // 인라인 style 오버라이드 — 기본 CSS 클래스(is-active) 에서 오는 색을 덮어쓴다.
+          const accentStyle: React.CSSProperties | undefined = g.accent
+            ? {
+                color: "var(--color-warning)",
+                ...(isActive ? { background: "var(--color-warning-subtle)" } : {}),
+              }
+            : undefined;
           return (
             <button
               key={g.key}
               className={`sp-rail-item${isActive ? " is-active" : ""}`}
               onClick={() => selectGroup(g.key)}
               title={g.label}
+              style={accentStyle}
             >
               <MenuIcon name={g.icon} size={20} />
               <span className="sp-rail-label">{g.label}</span>
@@ -277,7 +308,29 @@ export default function LNB() {
       {/* ── 우측 서브 패널: 활성 그룹의 메뉴 목록 ──────────────────────────── */}
       {!sidebarCollapsed && activeGroup && (
         <nav className="sp-subpane" aria-label={`${activeGroup.label} 메뉴`}>
-          <div className="sp-subpane-title">{activeGroup.label}</div>
+          <div
+            className="sp-subpane-title"
+            // accent 그룹은 타이틀 색을 warning 으로 바꿔 "관리자 모드" 라는 점을 상시 인지시킨다
+            style={activeGroup.accent ? { color: "var(--color-warning)" } : undefined}
+          >
+            {activeGroup.label}
+            {activeGroup.accent && (
+              <span style={{
+                marginLeft: 8,
+                fontSize:   "var(--text-xs)",
+                fontWeight: 700,
+                padding:    "1px 6px",
+                borderRadius: 3,
+                background: "var(--color-warning-subtle)",
+                color:      "var(--color-warning)",
+                border:     "1px solid var(--color-warning-border)",
+                letterSpacing: "0.04em",
+                verticalAlign: "middle",
+              }}>
+                ADMIN
+              </span>
+            )}
+          </div>
           <div className="sp-subpane-items">
             {activeGroup.items.map((it) => (
               <SubItem
