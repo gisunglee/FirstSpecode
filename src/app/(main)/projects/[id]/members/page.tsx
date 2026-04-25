@@ -14,7 +14,7 @@
  *   - useMutation: 역할 변경, 제거, 탈퇴, OWNER 양도
  */
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -154,6 +154,19 @@ function MembersPageInner() {
     },
     onError: (err: Error) => toast.error(err.message),
   });
+
+  // ── 권한 가드 ──────────────────────────────────────────────────────────────
+  // 본인 역할이 ADMIN → MEMBER 로 강등된 직후 F5 한 시나리오 대응.
+  // LNB 의 "멤버" 항목은 useMyRole 권한으로 즉시 사라지지만 URL 이 그대로 남아
+  // 멤버 페이지가 계속 렌더되는 인지 불일치를 방지 — 토스트 안내 후 과업 페이지로 이동.
+  // (`/projects/{id}` 는 page.tsx 가 없어 404 — 모든 멤버에게 열린 /tasks 로 보낸다.)
+  useEffect(() => {
+    if (!data) return;
+    if (data.myRole !== "OWNER" && data.myRole !== "ADMIN") {
+      toast.info("멤버 관리 권한이 없어 기본 페이지로 이동합니다.");
+      router.replace(`/projects/${projectId}/tasks`);
+    }
+  }, [data, projectId, router]);
 
   // ── 로딩 / 에러 ────────────────────────────────────────────────────────────
   if (isLoading) {

@@ -106,6 +106,18 @@ export const PERMISSIONS = {
   "content.update":     { roles: ["OWNER", "ADMIN", "MEMBER"] },
   "content.delete":     { roles: ["OWNER", "ADMIN", "MEMBER"] },
 
+  // ── 요구사항 확정(기준선 스냅샷) — 계약 변경 범위 추적이 비즈니스 목적이라
+  // 일반 content 보다 좁게: 기획·리딩 라인(OWNER/ADMIN 또는 PM/PL 직무)만 허용.
+  // "확정 생성" 과 "확정 삭제(전체 폐기)" 모두 같은 권한으로 묶음 — 단, 한번 확정된
+  // 개별 요구사항 이력 버전은 PRD UW-00017 기준 영구 삭제 불가.
+  "requirement.confirm": { roles: ["OWNER", "ADMIN"], jobs: ["PM", "PL"] },
+
+  // ── 요구사항 편집/삭제 — 일반 content 보다 좁게.
+  // 매트릭스로는 OWNER/ADMIN 역할 또는 PM/PL 직무만 통과.
+  // 이 매트릭스로 통과 못 하더라도 "본인이 해당 요구사항 담당자(asign_mber_id)" 인 경우엔
+  // 라우트 레벨에서 별도 분기로 허용 (매트릭스로 표현 못 하는 동적 조건).
+  "requirement.update":  { roles: ["OWNER", "ADMIN"], jobs: ["PM", "PL"] },
+
   // ── DB 표준 (DBA 직무가 ADMIN 없이도 다룰 수 있는 혼합 예시) ──────
   // db.table.write: 스키마 수정 — OWNER/ADMIN 또는 DBA/DEV 직무 (개발 단계 유연성)
   // db.standard.manage: DB 표준 관리 — OWNER/ADMIN 또는 DBA 직무만 (더 엄격)

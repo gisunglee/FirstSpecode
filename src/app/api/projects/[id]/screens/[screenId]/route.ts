@@ -12,9 +12,60 @@ import { NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
+import { requireAuth } from "@/lib/requireAuth";
+import {
+  hasPermission, isRoleCode, isJobCode,
+  type RoleCode, type JobCode,
+} from "@/lib/permissions";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 type RouteParams = { params: Promise<{ id: string; screenId: string }> };
+
+/**
+ * 화면 수정/삭제 권한 게이트.
+ *
+ * 통과 조건 (OR):
+ *   ① permissions 매트릭스 "requirement.update" — OWNER/ADMIN 역할 또는 PM/PL 직무
+ *   ② 본인이 화면의 담당자(asign_mber_id)
+ */
+async function requireScreenWrite(
+  request: NextRequest,
+  projectId: string,
+  screenId: string
+): Promise<{ mberId: string } | Response> {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
+  const membership = await prisma.tbPjProjectMember.findUnique({
+    where:  { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
+    select: { role_code: true, job_title_code: true, mber_sttus_code: true },
+  });
+  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
+    return apiError("FORBIDDEN", "프로젝트 멤버가 아닙니다.", 403);
+  }
+
+  const role: RoleCode | null = isRoleCode(membership.role_code) ? membership.role_code : null;
+  const job:  JobCode  | null = isJobCode(membership.job_title_code) ? membership.job_title_code : null;
+
+  const matrixOK = hasPermission(
+    { role, job, plan: "FREE", systemRole: null },
+    "requirement.update"
+  );
+  if (matrixOK) return { mberId: auth.mberId };
+
+  const target = await prisma.tbDsScreen.findUnique({
+    where:  { scrn_id: screenId },
+    select: { asign_mber_id: true, prjct_id: true },
+  });
+  if (!target || target.prjct_id !== projectId) {
+    return apiError("NOT_FOUND", "화면을 찾을 수 없습니다.", 404);
+  }
+  if (target.asign_mber_id !== auth.mberId) {
+    return apiError("FORBIDDEN", "이 화면을 수정할 권한이 없습니다.", 403);
+  }
+
+  return { mberId: auth.mberId };
+}
 
 // ─── GET: 화면 상세 조회 ─────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
@@ -122,7 +173,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, screenId } = await params;
 
-  const gate = await requirePermission(request, projectId, "content.update");
+  // OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 담당자만 수정 가능
+  const gate = await requireScreenWrite(request, projectId, screenId);
   if (gate instanceof Response) return gate;
 
   let body: unknown;
@@ -271,7 +323,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const url            = new URL(request.url);
   const deleteChildren = url.searchParams.get("deleteChildren") !== "false"; // 기본 true
 
-  const gate = await requirePermission(request, projectId, "content.delete");
+  // OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 담당자만 삭제 가능
+  const gate = await requireScreenWrite(request, projectId, screenId);
   if (gate instanceof Response) return gate;
 
   try {

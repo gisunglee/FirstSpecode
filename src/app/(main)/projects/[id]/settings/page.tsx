@@ -14,7 +14,7 @@
  *   - useMutation: 저장·복사·삭제·API키 CRUD
  */
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -121,6 +121,17 @@ function ProjectSettingsInner() {
   const canEdit   = myRole === "OWNER" || myRole === "ADMIN";
   const isOwner   = myRole === "OWNER";
 
+  // ── 권한 가드 ──────────────────────────────────────────────────────
+  // 멤버 페이지와 동일 패턴 — 권한 없는 사용자가 진입하면 토스트 안내 후
+  // 과업 페이지로 이동. project 로딩 중에는 myRole 이 null 이므로 판정 보류.
+  // (`/projects/{id}` 는 page.tsx 가 없어 404 — 모든 멤버에게 열린 /tasks 로 보낸다.)
+  useEffect(() => {
+    if (project && !canEdit) {
+      toast.info("프로젝트 설정 권한이 없어 기본 페이지로 이동합니다.");
+      router.replace(`/projects/${projectId}/tasks`);
+    }
+  }, [project, canEdit, projectId, router]);
+
   // ── 복사 뮤테이션 ───────────────────────────────────────────────────
   const copyMutation = useMutation({
     mutationFn: () => authFetch<{ data: { newProjectId: string } }>(`/api/projects/${projectId}/copy`, { method: "POST" }),
@@ -145,7 +156,9 @@ function ProjectSettingsInner() {
 
   if (isLoading) return <div style={{ padding: "28px 32px", color: "var(--color-text-tertiary)" }}>로딩 중...</div>;
   if (!project)  return <div style={{ padding: "28px 32px", color: "var(--color-error)" }}>프로젝트를 찾을 수 없습니다.</div>;
-  if (!canEdit)  return <div style={{ padding: "28px 32px", color: "var(--color-text-secondary)" }}>OWNER 또는 관리자만 접근할 수 있습니다.</div>;
+  // 권한 없을 시 위 useEffect 가 redirect 처리. redirect 가 적용되기 전 한 프레임 동안의
+  // 빈 화면 방지를 위해 안내 텍스트만 잠깐 표시 (인라인 메시지 분기에서 redirect 분기로 통일).
+  if (!canEdit)  return <div style={{ padding: "28px 32px", color: "var(--color-text-secondary)" }}>이동 중...</div>;
 
   const tabStyle = (tab: Tab): React.CSSProperties => ({
     padding: "8px 18px",
@@ -178,34 +191,40 @@ function ProjectSettingsInner() {
       </div>
 
       {/* 탭 콘텐츠 */}
-      {activeTab === "basic" && <BasicInfoTab  projectId={projectId} project={project} isOwner={isOwner} queryClient={queryClient} />}
-      {activeTab === "ai"    && <AiSettingsTab projectId={projectId} />}
+      {activeTab === "basic" && (
+        <>
+          <BasicInfoTab projectId={projectId} project={project} isOwner={isOwner} queryClient={queryClient} />
 
-      {/* 멤버 관리 및 초대 바로가기 — 프리미엄 카드 타입 내비게이터 (FID-00074) */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 28, marginBottom: 20 }}>
-        <NavCard
-          title="멤버 관리"
-          description="참여 인원 목록 및 역할을 관리합니다"
-          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
-          onClick={() => router.push(`/projects/${projectId}/members`)}
-          color="var(--color-brand)"
-        />
-        <NavCard
-          title="초대 및 현황"
-          description="새 멤버 초대 및 승인 대기를 확인합니다"
-          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>}
-          onClick={() => router.push(`/projects/${projectId}/members/invitations`)}
-          color="var(--color-success, #22c55e)"
-        />
-      </div>
+          {/* 멤버 관리 및 초대 바로가기 — 기본정보 탭에서만 노출 (FID-00074) */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 28, marginBottom: 20 }}>
+            <NavCard
+              title="멤버 관리"
+              description="참여 인원 목록 및 역할을 관리합니다"
+              icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
+              onClick={() => router.push(`/projects/${projectId}/members`)}
+              color="var(--color-brand)"
+            />
+            <NavCard
+              title="초대 및 현황"
+              description="새 멤버 초대 및 승인 대기를 확인합니다"
+              icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>}
+              onClick={() => router.push(`/projects/${projectId}/members/invitations`)}
+              color="var(--color-success, #22c55e)"
+            />
+          </div>
 
-      {/* 액션 영역 */}
-      <div style={{ background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-card)", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button className="sp-btn sp-btn-secondary" onClick={() => setCopyOpen(true)} disabled={copyMutation.isPending}>프로젝트 복사</button>
-        <button disabled={!isOwner || deleteMutation.isPending} onClick={() => setDeleteOpen(true)} style={{ padding: "6px 16px", fontSize: "var(--text-sm)", fontWeight: 600, background: isOwner ? "var(--color-error-subtle, rgba(239,68,68,0.08))" : "var(--color-bg-elevated)", color: isOwner ? "var(--color-error)" : "var(--color-text-tertiary)", border: `1px solid ${isOwner ? "var(--color-error)" : "var(--color-border)"}`, borderRadius: "var(--radius-btn)", cursor: isOwner ? "pointer" : "not-allowed", opacity: isOwner ? 1 : 0.5 }} title={!isOwner ? "OWNER만 삭제할 수 있습니다" : ""}>
-          프로젝트 삭제
-        </button>
-      </div>
+          {/* 액션 영역 — 기본정보 탭에서만 노출. 프로젝트 삭제는 OWNER 전용 */}
+          <div style={{ background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-card)", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <button className="sp-btn sp-btn-secondary" onClick={() => setCopyOpen(true)} disabled={copyMutation.isPending}>프로젝트 복사</button>
+            {isOwner && (
+              <button disabled={deleteMutation.isPending} onClick={() => setDeleteOpen(true)} style={{ padding: "6px 16px", fontSize: "var(--text-sm)", fontWeight: 600, background: "var(--color-error-subtle, rgba(239,68,68,0.08))", color: "var(--color-error)", border: "1px solid var(--color-error)", borderRadius: "var(--radius-btn)", cursor: "pointer" }}>
+                프로젝트 삭제
+              </button>
+            )}
+          </div>
+        </>
+      )}
+      {activeTab === "ai" && <AiSettingsTab projectId={projectId} />}
 
       {copyOpen && (
         <CopyDialog projectName={project.name} onCancel={() => setCopyOpen(false)} onConfirm={() => { setCopyOpen(false); copyMutation.mutate(); }} isPending={copyMutation.isPending} />

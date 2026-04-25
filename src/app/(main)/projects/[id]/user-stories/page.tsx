@@ -6,13 +6,12 @@
  * 역할:
  *   - 과업·요구사항 필터 + 키워드 검색 (FID-00110)
  *   - 카드 그리드 목록 조회 (FID-00111)
- *   - 삭제 확인 모달 + 삭제 실행 (FID-00112)
+ *   - 삭제 기능은 본 페이지에서 제거됨 — 권한 체크가 필요해 상세 페이지에서만 노출 (FID-00112)
  */
 
 import { Suspense, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
@@ -49,7 +48,6 @@ function UserStoriesPageInner() {
   const params       = useParams<{ id: string }>();
   const router       = useRouter();
   const searchParams = useSearchParams();
-  const queryClient  = useQueryClient();
   const projectId    = params.id;
 
   // ── URL 쿼리 필터 초기값 ─────────────────────────────────────────────────────
@@ -58,11 +56,10 @@ function UserStoriesPageInner() {
   const initialReqFilter  = searchParams.get("reqId")  ?? "";
   const initialTaskFilter = searchParams.get("taskId") ?? "";
 
-  const [taskFilter, setTaskFilter]   = useState(initialTaskFilter);
-  const [reqFilter,  setReqFilter]    = useState(initialReqFilter);
-  const [keyword,    setKeyword]      = useState("");
-  const [deleteTarget, setDeleteTarget] = useState<StoryCard | null>(null);
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [taskFilter, setTaskFilter] = useState(initialTaskFilter);
+  const [reqFilter,  setReqFilter]  = useState(initialReqFilter);
+  const [keyword,    setKeyword]    = useState("");
+  const [hoveredId,  setHoveredId]  = useState<string | null>(null);
 
   // ── 과업 목록 (필터 옵션) ──────────────────────────────────────────────────
   const { data: tasksData } = useQuery({
@@ -115,20 +112,6 @@ function UserStoriesPageInner() {
   });
 
   const stories = data?.items ?? [];
-
-  // ── 삭제 뮤테이션 ──────────────────────────────────────────────────────────
-  const deleteMutation = useMutation({
-    mutationFn: (storyId: string) =>
-      authFetch(`/api/projects/${projectId}/user-stories/${storyId}`, {
-        method: "DELETE",
-      }),
-    onSuccess: () => {
-      toast.success("사용자스토리가 삭제되었습니다.");
-      setDeleteTarget(null);
-      queryClient.invalidateQueries({ queryKey: ["user-stories", projectId] });
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
 
   if (isLoading) {
     return <div style={{ padding: "40px 32px", color: "#888" }}>로딩 중...</div>;
@@ -206,7 +189,6 @@ function UserStoriesPageInner() {
             <div>스토리명</div>
             <div>페르소나</div>
             <div style={{ textAlign: "center" }}>인수기준</div>
-            <div />
           </div>
 
           {/* 행 */}
@@ -260,65 +242,11 @@ function UserStoriesPageInner() {
                   {s.acceptanceCriteriaCount}개
                 </span>
               </div>
-
-              {/* 삭제 버튼 */}
-              <div style={{ display: "flex", justifyContent: "center" }} onClick={(e) => e.stopPropagation()}>
-                <button onClick={() => setDeleteTarget(s)} style={dangerBtnStyle}>삭제</button>
-              </div>
             </div>
           ))}
         </div>
       )}
 
-      </div>
-
-      {/* 삭제 확인 모달 */}
-      {deleteTarget && (
-        <DeleteConfirmModal
-          story={deleteTarget}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={() => deleteMutation.mutate(deleteTarget.storyId)}
-          isPending={deleteMutation.isPending}
-        />
-      )}
-    </div>
-  );
-}
-
-// ── 삭제 확인 모달 ────────────────────────────────────────────────────────────
-
-function DeleteConfirmModal({
-  story, onCancel, onConfirm, isPending,
-}: {
-  story:     StoryCard;
-  onCancel:  () => void;
-  onConfirm: () => void;
-  isPending: boolean;
-}) {
-  return (
-    <div style={overlayStyle} onClick={onCancel}>
-      <div style={dialogStyle} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700 }}>
-          사용자스토리를 삭제하시겠습니까?
-        </h3>
-        <p style={{ margin: "0 0 8px", fontSize: 14, color: "var(--color-text-primary)", fontWeight: 600 }}>
-          &lsquo;{story.name}&rsquo;
-        </p>
-        <p style={{ margin: "0 0 24px", fontSize: 13, color: "#888" }}>
-          사용자스토리를 삭제하면 인수기준도 함께 삭제됩니다.
-        </p>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button onClick={onCancel} style={secondaryBtnStyle} disabled={isPending}>
-            취소
-          </button>
-          <button
-            onClick={onConfirm}
-            style={{ ...primaryBtnStyle, background: "#e53935" }}
-            disabled={isPending}
-          >
-            {isPending ? "삭제 중..." : "삭제"}
-          </button>
-        </div>
       </div>
     </div>
   );
@@ -328,7 +256,7 @@ function DeleteConfirmModal({
 
 const gridHeaderStyle: React.CSSProperties = {
   display:               "grid",
-  gridTemplateColumns:   "2fr 3fr 3fr 80px 60px",
+  gridTemplateColumns:   "2fr 3fr 3fr 80px",
   gap:                   12,
   padding:               "10px 16px",
   background:            "var(--color-bg-muted)",
@@ -341,7 +269,7 @@ const gridHeaderStyle: React.CSSProperties = {
 
 const gridRowStyle: React.CSSProperties = {
   display:               "grid",
-  gridTemplateColumns:   "2fr 3fr 3fr 80px 60px",
+  gridTemplateColumns:   "2fr 3fr 3fr 80px",
   gap:                   12,
   padding:               "12px 16px",
   alignItems:            "center",
@@ -378,41 +306,3 @@ const primaryBtnStyle: React.CSSProperties = {
   cursor:       "pointer",
 };
 
-const secondaryBtnStyle: React.CSSProperties = {
-  padding:      "8px 16px",
-  borderRadius: 6,
-  border:       "1px solid var(--color-border)",
-  background:   "var(--color-bg-card)",
-  color:        "var(--color-text-primary)",
-  fontSize:     14,
-  cursor:       "pointer",
-};
-
-const dangerBtnStyle: React.CSSProperties = {
-  padding:      "4px 10px",
-  borderRadius: 4,
-  border:       "1px solid #e53935",
-  background:   "transparent",
-  color:        "#e53935",
-  fontSize:     12,
-  cursor:       "pointer",
-};
-
-const overlayStyle: React.CSSProperties = {
-  position:       "fixed",
-  inset:          0,
-  background:     "rgba(0,0,0,0.45)",
-  display:        "flex",
-  alignItems:     "center",
-  justifyContent: "center",
-  zIndex:         1000,
-};
-
-const dialogStyle: React.CSSProperties = {
-  background:   "var(--color-bg-card)",
-  borderRadius: 10,
-  padding:      "28px 32px",
-  minWidth:     360,
-  maxWidth:     440,
-  boxShadow:    "0 8px 32px rgba(0,0,0,0.18)",
-};

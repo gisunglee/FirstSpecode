@@ -67,6 +67,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         definition:  t.defn_cn  ?? "",
         outputInfo:  t.output_info_cn ?? "",
         content:     t.dtl_cn   ?? "",
+        rfpPage:     t.rfp_page_no ?? "",   // [2026-04-25] P2: 라운드트립 데이터 손실 방지
         requirements: t.requirements.map((r) => ({
           systemId:       r.req_id,
           displayId:      r.req_display_id,
@@ -77,6 +78,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           discussionMd:    r.analy_cn    ?? "",
           priority:        r.priort_code,
           source:          r.src_code    ?? "",
+          rfpPage:         r.rfp_page_no ?? "",  // [2026-04-25] P2: 라운드트립 데이터 손실 방지
           userStories: r.userStories.map((s) => ({
             systemId:  s.story_id,
             displayId: s.story_display_id,

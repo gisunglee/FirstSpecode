@@ -466,8 +466,9 @@ function RefInfoModal({
   });
 
   return (
-    <div style={overlayStyle} onClick={onClose}>
-      <div style={{ ...dialogStyle, maxWidth: 520, width: "90vw" }} onClick={(e) => e.stopPropagation()}>
+    // 모달: 오버레이 클릭으로 닫히지 않음 — 작성 중 실수 방지를 위해 [취소]/[저장] 버튼으로만 닫힘
+    <div style={overlayStyle}>
+      <div style={{ ...dialogStyle, maxWidth: 520, width: "90vw" }}>
         <h3 style={{ margin: "0 0 20px", fontSize: 17, fontWeight: 700 }}>
           {isEdit ? "기준 정보 수정" : "기준 정보 추가"}
         </h3>

@@ -8,11 +8,13 @@
  *   - 우측: 원문/현행화 탭 (HTML 렌더링) + 상세 명세 (마크다운 미리보기/원본)
  */
 
-import { Suspense, useState, useMemo } from "react";
+import { Suspense, useState, useMemo, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { marked } from "marked";
 import { authFetch } from "@/lib/authFetch";
+import { usePermissions } from "@/hooks/useMyRole";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -55,12 +57,19 @@ export default function BaselineDetailPage() {
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 
 function BaselineDetailPageInner() {
-  const params     = useParams<{ id: string; baselineId: string }>();
-  const router     = useRouter();
-  const projectId  = params.id;
-  const baselineId = params.baselineId;
+  const params       = useParams<{ id: string; baselineId: string }>();
+  const router       = useRouter();
+  const queryClient  = useQueryClient();
+  const projectId    = params.id;
+  const baselineId   = params.baselineId;
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId]   = useState<string | null>(null);
+  const [commentOpen, setCommentOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen]   = useState(false);
+
+  // 확정 삭제 권한: OWNER/ADMIN 역할 또는 PM/PL 직무
+  const { has } = usePermissions(projectId);
+  const canDelete = has("requirement.confirm");
 
   const { data, isLoading } = useQuery({
     queryKey: ["baseline-requirements", projectId, baselineId],
@@ -68,6 +77,18 @@ function BaselineDetailPageInner() {
       authFetch<{ data: BaselineDetail }>(
         `/api/projects/${projectId}/baseline/${baselineId}/requirements`
       ).then((r) => r.data),
+  });
+
+  // 확정 삭제 — 영구 삭제, 복구 불가
+  const deleteMutation = useMutation({
+    mutationFn: () =>
+      authFetch(`/api/projects/${projectId}/baseline/${baselineId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      toast.success("요구사항 확정이 삭제되었습니다.");
+      queryClient.invalidateQueries({ queryKey: ["baselines", projectId] });
+      router.push(`/projects/${projectId}/baseline`);
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 
   const items = data?.items ?? [];
@@ -96,7 +117,7 @@ function BaselineDetailPageInner() {
           >
             ←
           </button>
-          <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>기준선 상세</span>
+          <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>요구사항 확정 상세</span>
           {data?.name && (
             <span style={{ fontSize: 13, color: "var(--color-text-secondary)", marginLeft: 4 }}>
               · {data.name}
@@ -104,6 +125,22 @@ function BaselineDetailPageInner() {
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
+          {data?.comment && (
+            <button
+              onClick={() => setCommentOpen(true)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 4,
+                padding: "4px 10px", borderRadius: 4,
+                border: "1px solid #fde68a", background: "#fffbeb",
+                fontSize: 12, fontWeight: 600, color: "#92400e",
+                cursor: "pointer",
+              }}
+              title="확정 코멘트 보기"
+            >
+              <span style={{ fontSize: 13 }}>💬</span>
+              확정 코멘트
+            </button>
+          )}
           {data?.confirmedAt && (
             <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
               확정일시&nbsp;
@@ -118,21 +155,24 @@ function BaselineDetailPageInner() {
           <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
             요구사항&nbsp;<strong style={{ color: "var(--color-text-primary)" }}>{data?.totalCount ?? 0}건</strong>
           </span>
+          {canDelete && (
+            <button
+              onClick={() => setDeleteOpen(true)}
+              style={{
+                padding: "4px 12px",
+                fontSize: 12, fontWeight: 600,
+                background: "var(--color-error-subtle, rgba(239,68,68,0.08))",
+                color: "var(--color-error, #dc2626)",
+                border: "1px solid var(--color-error, #dc2626)",
+                borderRadius: 4,
+                cursor: "pointer",
+              }}
+            >
+              확정 삭제
+            </button>
+          )}
         </div>
       </div>
-
-      {/* 확정 코멘트 배너 */}
-      {data?.comment && (
-        <div style={{
-          padding: "10px 24px", flexShrink: 0,
-          background: "#fffbeb", borderBottom: "1px solid #fde68a",
-          fontSize: 13, color: "#92400e",
-          display: "flex", alignItems: "center", gap: 8,
-        }}>
-          <span style={{ fontWeight: 600, flexShrink: 0 }}>확정 코멘트</span>
-          <span style={{ color: "var(--color-text-primary)" }}>{data.comment}</span>
-        </div>
-      )}
 
       {/* 바디 */}
       {items.length === 0 ? (
@@ -215,6 +255,176 @@ function BaselineDetailPageInner() {
 
         </div>
       )}
+
+      {/* 확정 코멘트 모달 */}
+      {commentOpen && data?.comment && (
+        <CommentModal comment={data.comment} onClose={() => setCommentOpen(false)} />
+      )}
+
+      {/* 확정 삭제 모달 — 복구 불가 경고 */}
+      {deleteOpen && data && (
+        <DeleteConfirmModal
+          baselineName={data.name}
+          isPending={deleteMutation.isPending}
+          onCancel={() => setDeleteOpen(false)}
+          onConfirm={() => deleteMutation.mutate()}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── 확정 삭제 확인 모달 ───────────────────────────────────────────────────────
+
+function DeleteConfirmModal({
+  baselineName, isPending, onCancel, onConfirm,
+}: {
+  baselineName: string;
+  isPending:    boolean;
+  onCancel:     () => void;
+  onConfirm:    () => void;
+}) {
+  // 모달: 오버레이 클릭으로 닫지 않음 — 실수 방지를 위해 명시적 [취소]/[삭제]만 받음
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 1100,
+        background: "rgba(0,0,0,0.5)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 20,
+      }}
+    >
+      <div
+        style={{
+          background: "var(--color-bg-card)",
+          borderRadius: 8,
+          width: "100%", maxWidth: 440,
+          padding: "24px 24px 20px",
+          boxShadow: "0 10px 40px rgba(0,0,0,0.25)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+          <span style={{ fontSize: 22 }}>⚠️</span>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>
+            요구사항 확정을 삭제하시겠습니까?
+          </h3>
+        </div>
+
+        <p style={{ margin: "0 0 10px", fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.7 }}>
+          <strong style={{ color: "var(--color-text-primary)" }}>'{baselineName}'</strong> 확정 정보가 영구 삭제됩니다.
+        </p>
+        <p style={{ margin: "0 0 20px", padding: "10px 12px",
+          background: "var(--color-error-subtle, rgba(239,68,68,0.08))",
+          border: "1px solid var(--color-error, #dc2626)",
+          borderRadius: 6,
+          fontSize: 12, fontWeight: 600,
+          color: "var(--color-error, #dc2626)",
+          lineHeight: 1.6,
+        }}>
+          삭제된 확정 정보는 <strong>복구할 수 없습니다.</strong><br />
+          스냅샷에 포함된 요구사항 본문 및 확정 코멘트가 모두 사라집니다.
+        </p>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button
+            onClick={onCancel}
+            disabled={isPending}
+            style={{
+              padding: "7px 16px", borderRadius: 6,
+              border: "1px solid var(--color-border)",
+              background: "var(--color-bg-card)",
+              color: "var(--color-text-primary)",
+              fontSize: 13, cursor: isPending ? "not-allowed" : "pointer",
+            }}
+          >
+            취소
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isPending}
+            style={{
+              padding: "7px 16px", borderRadius: 6,
+              border: "1px solid var(--color-error, #dc2626)",
+              background: "var(--color-error, #dc2626)",
+              color: "#fff",
+              fontSize: 13, fontWeight: 600,
+              cursor: isPending ? "not-allowed" : "pointer",
+              opacity: isPending ? 0.7 : 1,
+            }}
+          >
+            {isPending ? "삭제 중..." : "삭제"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 확정 코멘트 모달 ──────────────────────────────────────────────────────────
+
+function CommentModal({ comment, onClose }: { comment: string; onClose: () => void }) {
+  // ESC 키로 닫기
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 1000,
+        background: "rgba(0,0,0,0.4)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 20,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "var(--color-bg-card)",
+          borderRadius: 8,
+          width: "100%", maxWidth: 640, maxHeight: "80vh",
+          display: "flex", flexDirection: "column",
+          boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
+        }}
+      >
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "14px 20px",
+          borderBottom: "1px solid var(--color-border)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 14 }}>💬</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--color-text-primary)" }}>
+              확정 코멘트
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: "none", border: "none", cursor: "pointer",
+              fontSize: 18, color: "var(--color-text-secondary)", padding: "0 4px", lineHeight: 1,
+            }}
+            aria-label="닫기"
+          >
+            ✕
+          </button>
+        </div>
+        <div style={{
+          padding: "16px 20px", overflowY: "auto",
+          fontSize: 13, lineHeight: 1.7,
+          color: "var(--color-text-primary)",
+          // textarea에 입력된 줄바꿈(Enter)을 그대로 보존해 표시
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+        }}>
+          {comment}
+        </div>
+      </div>
     </div>
   );
 }

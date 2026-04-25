@@ -23,6 +23,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { usePermissions } from "@/hooks/useMyRole";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import { ScreenLayoutEditor, type LayoutRow } from "@/components/ui/ScreenLayoutEditor";
 import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
@@ -50,6 +51,8 @@ type AreaDetail = {
   type:        string;
   sortOrder:   number;
   screenId:    string | null;
+  // 부모 화면의 담당자 — [삭제]/[저장] 버튼 권한 판정용 (영역 자체에는 담당자 컬럼 없음)
+  screenAssigneeId: string | null;
   screenName:  string;
   unitWorkId:  string | null;
   layoutData:     string | null;
@@ -202,6 +205,21 @@ function AreaDetailPageInner() {
     // 신규 모드이면 조회 안 함
     enabled: !isNew,
   });
+
+  // ── 본인 회원 ID + 편집 권한 계산 ─────────────────────────────────────────
+  // 영역 자체에는 담당자가 없어 부모 화면 담당자(screenAssigneeId)를 영역 담당자로 간주.
+  const { data: memberData } = useQuery({
+    queryKey: ["project-members", projectId],
+    queryFn:  () =>
+      authFetch<{ data: { myMemberId: string } }>(`/api/projects/${projectId}/members`).then((r) => r.data),
+    staleTime: 60 * 1000,
+  });
+  const myMemberId = memberData?.myMemberId ?? "";
+
+  const { has: hasPerm } = usePermissions(projectId);
+  const matrixUpdateOK = hasPerm("requirement.update");
+  const isParentScreenAssignee = !!myMemberId && data?.screenAssigneeId === myMemberId;
+  const canEdit = isNew ? true : (matrixUpdateOK || isParentScreenAssignee);
 
   // GNB 브레드크럼 설정 — 단위업무 > 화면 > 영역 > 기능 목록
   useEffect(() => {
@@ -881,8 +899,8 @@ function AreaDetailPageInner() {
           {/* 구분선 */}
           {!isNew && <div style={{ width: 1, height: 20, background: "var(--color-border)" }} />}
 
-          {/* 삭제 */}
-          {!isNew && (
+          {/* 삭제 — 신규 모드 아니고 편집 권한 있을 때만 노출 */}
+          {!isNew && canEdit && (
             <button
               onClick={() => setDeleteConfirmOpen(true)}
               style={{ ...dangerBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
@@ -896,17 +914,34 @@ function AreaDetailPageInner() {
           >
             취소
           </button>
-          <button
-            onClick={handleSave}
-            disabled={saveMutation.isPending}
-            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
-          >
-            {saveMutation.isPending ? "저장 중..." : "저장"}
-          </button>
+          {/* 저장 — 편집 권한자만 노출 */}
+          {canEdit && (
+            <button
+              onClick={handleSave}
+              disabled={saveMutation.isPending}
+              style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
+            >
+              {saveMutation.isPending ? "저장 중..." : "저장"}
+            </button>
+          )}
         </div>
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
+      {/* 읽기 전용 안내 */}
+      {!isNew && !canEdit && (
+        <div style={{
+          margin: "0 0 16px",
+          padding: "10px 14px",
+          background: "var(--color-info-subtle, #f0f4ff)",
+          border: "1px solid var(--color-info, #3b82f6)",
+          borderRadius: 6,
+          fontSize: 12,
+          color: "var(--color-text-secondary)",
+        }}>
+          🔒 <strong>읽기 전용</strong> — 이 영역은 OWNER/ADMIN 또는 PM/PL 직무, 혹은 부모 화면 담당자만 수정할 수 있습니다.
+        </div>
+      )}
       {/* 2-컬럼 레이아웃 */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 24, alignItems: "start" }}>
 
@@ -923,6 +958,7 @@ function AreaDetailPageInner() {
                 <select
                   value={screenId}
                   onChange={(e) => setScreenId(e.target.value)}
+                  disabled={!canEdit}
                   style={selectStyle}
                 >
                   <option value="">미분류 (화면 없음)</option>
@@ -938,6 +974,7 @@ function AreaDetailPageInner() {
                 <select
                   value={type}
                   onChange={(e) => setType(e.target.value)}
+                  disabled={!canEdit}
                   style={selectStyle}
                 >
                   {AREA_TYPES.map((t) => (
@@ -956,6 +993,7 @@ function AreaDetailPageInner() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="영역명을 입력하세요"
+                  readOnly={!canEdit}
                   style={inputStyle}
                 />
               </div>
@@ -966,6 +1004,7 @@ function AreaDetailPageInner() {
                   value={displayIdInput}
                   onChange={(e) => setDisplayIdInput(e.target.value)}
                   placeholder="자동 생성"
+                  readOnly={!canEdit}
                   style={inputStyle}
                 />
               </div>
@@ -975,6 +1014,7 @@ function AreaDetailPageInner() {
                   type="number"
                   value={sortOrder}
                   onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
+                  readOnly={!canEdit}
                   style={inputStyle}
                 />
               </div>
@@ -986,12 +1026,16 @@ function AreaDetailPageInner() {
           {!isNew && (
             <>
               <section style={rightSectionStyle}>
-                <ScreenLayoutEditor
-                  title="레이아웃 구성"
-                  value={layoutRows}
-                  onChange={setLayoutRows}
-                  columnLabelPlaceholder="구성 요소명"
-                />
+                {/* ScreenLayoutEditor 자체는 readOnly prop 미지원 → onChange를 no-op으로 묶고
+                    부모 div에 시각적 잠금 처리 */}
+                <div style={canEdit ? undefined : { opacity: 0.7, pointerEvents: "none" }}>
+                  <ScreenLayoutEditor
+                    title="레이아웃 구성"
+                    value={layoutRows}
+                    onChange={canEdit ? setLayoutRows : () => {}}
+                    columnLabelPlaceholder="구성 요소명"
+                  />
+                </div>
               </section>
 
               <section style={rightSectionStyle}>
@@ -1105,8 +1149,8 @@ function AreaDetailPageInner() {
                       name,
                     }));
                   }}
-                  disabled={!designTmpl?.templateCn}
-                  style={{ ...ghostSmBtnStyle, opacity: designTmpl?.templateCn ? 1 : 0.5, cursor: designTmpl?.templateCn ? "pointer" : "not-allowed" }}
+                  disabled={!designTmpl?.templateCn || !canEdit}
+                  style={{ ...ghostSmBtnStyle, opacity: (designTmpl?.templateCn && canEdit) ? 1 : 0.5, cursor: (designTmpl?.templateCn && canEdit) ? "pointer" : "not-allowed" }}
                 >
                   템플릿 삽입
                 </button>
@@ -1131,6 +1175,7 @@ function AreaDetailPageInner() {
               rows={28}
               tab={descTab}
               onTabChange={setDescTab}
+              readOnly={!canEdit}
             />
           </section>
         </div>

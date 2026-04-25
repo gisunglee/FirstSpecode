@@ -14,6 +14,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { usePermissions } from "@/hooks/useMyRole";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,10 @@ function BaselinePageInner() {
 
   const [createOpen, setCreateOpen] = useState(false);
 
+  // 요구사항 확정 권한: OWNER/ADMIN 역할 또는 PM/PL 직무
+  const { has } = usePermissions(projectId);
+  const canConfirm = has("requirement.confirm");
+
   // ── 요구사항 확정 ────────────────────────────────────────────────────────────
   const { data, isLoading } = useQuery({
     queryKey: ["baselines", projectId],
@@ -74,12 +79,14 @@ function BaselinePageInner() {
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           요구사항 확정
         </div>
-        <button
-          onClick={() => setCreateOpen(true)}
-          style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
-        >
-          일괄 확정
-        </button>
+        {canConfirm && (
+          <button
+            onClick={() => setCreateOpen(true)}
+            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
+          >
+            요구사항 확정
+          </button>
+        )}
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
@@ -208,7 +215,7 @@ function CreateBaselinePopup({
   return (
     <div style={overlayStyle} onClick={onClose}>
       <div style={dialogStyle} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700 }}>전체 요구사항 일괄 확정</h3>
+        <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700 }}>요구사항 확정</h3>
         <p style={{ margin: "0 0 8px", fontSize: 13, color: "var(--color-text-secondary)" }}>
           현재 프로젝트의 모든 요구사항을 스냅샷으로 저장합니다.
         </p>
@@ -241,7 +248,7 @@ function CreateBaselinePopup({
             취소
           </button>
           <button onClick={handleSubmit} style={primaryBtnStyle} disabled={createMutation.isPending}>
-            {createMutation.isPending ? "저장 중..." : "일괄 확정"}
+            {createMutation.isPending ? "저장 중..." : "확정"}
           </button>
         </div>
       </div>

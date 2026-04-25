@@ -64,6 +64,26 @@ type TxClient = Prisma.TransactionClient;
 
 type RouteParams = { params: Promise<{ id: string }> };
 
+// ── 코드 화이트리스트 ────────────────────────────────────────────────────────
+// [2026-04-25] P1: 단일 CRUD UI(requirements/[reqId]/page.tsx, tasks/[taskId]/page.tsx)와
+//                   동일한 허용값. 변경 시 두 곳 동시 수정 필요.
+//                   Claude 출력 또는 사용자가 직접 수정한 JSON에 잘못된 값이 들어와도
+//                   DB에 저장되어 UI 라벨/배지 매칭이 깨지는 사고를 막기 위한 안전망.
+const ALLOWED_SOURCES    = ["RFP", "ADD", "CHANGE"]           as const;
+const ALLOWED_PRIORITIES = ["HIGH", "MEDIUM", "LOW"]          as const;
+const ALLOWED_CATEGORIES = ["NEW_DEV", "IMPROVE", "MAINTAIN"] as const;
+
+function pickAllowed(
+  value:    string | undefined | null,
+  allowed:  readonly string[],
+  fallback: string,
+): string {
+  // value가 화이트리스트에 있으면 그대로, 아니면 fallback.
+  //   - 신규: fallback = 안전한 default ("RFP", "MEDIUM", "NEW_DEV")
+  //   - 수정: fallback = existing 컬럼 값 (이미 DB에 저장된 값을 흔들지 않음)
+  return value && allowed.includes(value) ? value : fallback;
+}
+
 // ── 입력 타입 ────────────────────────────────────────────────────────────────
 
 type AcceptanceCriteriaInput = {
@@ -89,6 +109,7 @@ type RequirementInput = {
   discussionMd?:    string;
   priority?:        string;
   source?:          string;
+  rfpPage?:         string;   // [2026-04-25] P2: RFP 페이지 채널 지원
   userStories?:     UserStoryInput[];
 };
 
@@ -99,6 +120,7 @@ type TaskInput = {
   definition?:  string;
   outputInfo?:  string;
   content?:     string;
+  rfpPage?:     string;       // [2026-04-25] P2: RFP 페이지 채널 지원
   requirements?: RequirementInput[];
 };
 
@@ -219,10 +241,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             where: { task_id: taskInput.systemId },
             data: {
               task_nm:        taskInput.name.trim(),
-              ctgry_code:     taskInput.category || existing.ctgry_code,
+              // [2026-04-25] P1: 화이트리스트 미통과 시 기존 값 유지 (DB 라벨 매칭 보호)
+              ctgry_code:     pickAllowed(taskInput.category, ALLOWED_CATEGORIES, existing.ctgry_code),
               defn_cn:        taskInput.definition?.trim()  ?? existing.defn_cn,
               output_info_cn: taskInput.outputInfo?.trim()  ?? existing.output_info_cn,
               dtl_cn:         taskInput.content?.trim()     ?? existing.dtl_cn,
+              // [2026-04-25] P2: RFP 페이지 — 키 자체가 빠지면 기존 값 유지
+              rfp_page_no:    taskInput.rfpPage?.trim()     ?? existing.rfp_page_no,
               mdfcn_dt:       new Date(),
             },
           });
@@ -237,10 +262,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
               prjct_id:        projectId,
               task_display_id: displayId,
               task_nm:         taskInput.name.trim(),
-              ctgry_code:      taskInput.category || "NEW_DEV",
+              // [2026-04-25] P1: 화이트리스트 미통과 시 default "NEW_DEV"
+              ctgry_code:      pickAllowed(taskInput.category, ALLOWED_CATEGORIES, "NEW_DEV"),
               defn_cn:         taskInput.definition?.trim()  || null,
               output_info_cn:  taskInput.outputInfo?.trim()  || null,
               dtl_cn:          taskInput.content?.trim()     || null,
+              // [2026-04-25] P2: RFP 페이지
+              rfp_page_no:     taskInput.rfpPage?.trim()     || null,
               sort_ordr:       sortOrder,
             },
           });
@@ -268,12 +296,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
               data: {
                 task_id:      taskId,
                 req_nm:       reqInput.name.trim(),
-                priort_code:  reqInput.priority  ?? existing.priort_code,
-                src_code:     reqInput.source     ?? existing.src_code,
+                // [2026-04-25] P1: 화이트리스트 미통과 시 기존 값 유지
+                priort_code:  pickAllowed(reqInput.priority, ALLOWED_PRIORITIES, existing.priort_code),
+                src_code:     pickAllowed(reqInput.source,   ALLOWED_SOURCES,    existing.src_code),
                 orgnl_cn:     reqInput.originalContent?.trim() ?? existing.orgnl_cn,
                 curncy_cn:    reqInput.currentContent?.trim()  ?? existing.curncy_cn,
                 spec_cn:      reqInput.detailSpec?.trim()      ?? existing.spec_cn,
                 analy_cn:     reqInput.discussionMd?.trim()    ?? existing.analy_cn,
+                // [2026-04-25] P2: RFP 페이지
+                rfp_page_no:  reqInput.rfpPage?.trim()         ?? existing.rfp_page_no,
                 mdfcn_dt:     new Date(),
               },
             });
@@ -289,12 +320,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 task_id:        taskId,
                 req_display_id: displayId,
                 req_nm:         reqInput.name.trim(),
-                priort_code:    reqInput.priority || "MEDIUM",
-                src_code:       reqInput.source   || "RFP",
+                // [2026-04-25] P1: 화이트리스트 미통과 시 안전한 default
+                priort_code:    pickAllowed(reqInput.priority, ALLOWED_PRIORITIES, "MEDIUM"),
+                src_code:       pickAllowed(reqInput.source,   ALLOWED_SOURCES,    "RFP"),
                 orgnl_cn:       reqInput.originalContent?.trim() || null,
                 curncy_cn:      reqInput.currentContent?.trim()  || null,
                 spec_cn:        reqInput.detailSpec?.trim()      || null,
                 analy_cn:       reqInput.discussionMd?.trim()    || null,
+                // [2026-04-25] P2: RFP 페이지
+                rfp_page_no:    reqInput.rfpPage?.trim()         || null,
                 sort_ordr:      sortOrder,
               },
             });

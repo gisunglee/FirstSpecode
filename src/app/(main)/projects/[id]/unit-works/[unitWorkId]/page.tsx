@@ -20,6 +20,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { usePermissions } from "@/hooks/useMyRole";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
@@ -198,6 +199,17 @@ function UnitWorkDetailPageInner() {
       }),
     enabled: !isNew,
   });
+
+  // ── 편집 권한 계산 ─────────────────────────────────────────────────────────
+  // 통과: OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 단위업무 담당자.
+  // 담당자 비교는 API 응답의 원본(detail.assignMemberId) 으로 — 폼에서 임의 변경된 값으로
+  // 판단하면 자기 자신을 담당자에서 빼는 순간 권한이 사라지는 버그가 생긴다.
+  // 신규 등록 모드는 별도 권한이라 본 게이트에서 제외 (기존 동작 유지).
+  const { has: hasPerm } = usePermissions(projectId);
+  const matrixUpdateOK = hasPerm("requirement.update");
+  const originalAssigneeId = detail?.assignMemberId ?? null;
+  const isAssignee = !!myMemberId && originalAssigneeId === myMemberId;
+  const canEdit = isNew ? true : (matrixUpdateOK || isAssignee);
 
   // ── 저장 뮤테이션 ──────────────────────────────────────────────────────────
   const saveMutation = useMutation({
@@ -600,6 +612,7 @@ function UnitWorkDetailPageInner() {
                 onChange={(e) => handleChange("comment", e.target.value)}
                 placeholder="AI 요청 시 참고할 추가 지시사항을 입력해 주세요"
                 rows={3}
+                readOnly={!canEdit}
                 style={{ width: "100%", boxSizing: "border-box", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-primary)", fontSize: 13, resize: "vertical", lineHeight: 1.6, outline: "none" }}
               />
             </div>
@@ -870,8 +883,8 @@ function UnitWorkDetailPageInner() {
           >
             취소
           </button>
-          {/* 신규 모드에서는 삭제 버튼 숨김 */}
-          {!isNew && (
+          {/* 삭제 — 신규 모드 아니고 편집 권한 있을 때만 노출 */}
+          {!isNew && canEdit && (
             <button
               onClick={() => { setDeleteChildren(null); setDeleteDialogOpen(true); }}
               disabled={saveMutation.isPending}
@@ -880,17 +893,34 @@ function UnitWorkDetailPageInner() {
               삭제
             </button>
           )}
-          <button
-            onClick={handleSave}
-            disabled={saveMutation.isPending}
-            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
-          >
-            {saveMutation.isPending ? "저장 중..." : "저장"}
-          </button>
+          {/* 저장 — 편집 권한자만 노출 */}
+          {canEdit && (
+            <button
+              onClick={handleSave}
+              disabled={saveMutation.isPending}
+              style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
+            >
+              {saveMutation.isPending ? "저장 중..." : "저장"}
+            </button>
+          )}
         </div>
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
+      {/* 읽기 전용 안내 — 권한 없는 사용자가 진입한 경우 입력이 안 되는 이유 명시 */}
+      {!isNew && !canEdit && (
+        <div style={{
+          margin: "0 0 16px",
+          padding: "10px 14px",
+          background: "var(--color-info-subtle, #f0f4ff)",
+          border: "1px solid var(--color-info, #3b82f6)",
+          borderRadius: 6,
+          fontSize: 12,
+          color: "var(--color-text-secondary)",
+        }}>
+          🔒 <strong>읽기 전용</strong> — 이 단위업무는 OWNER/ADMIN 또는 PM/PL 직무, 혹은 담당자만 수정할 수 있습니다.
+        </div>
+      )}
       {/* 폼 — 2단 레이아웃 (좌: 메타 정보+코멘트, 우: 설명) */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: 20, alignItems: "start" }}>
 
@@ -916,6 +946,7 @@ function UnitWorkDetailPageInner() {
               <select
                 value={form.reqId}
                 onChange={(e) => handleChange("reqId", e.target.value)}
+                disabled={!canEdit}
                 style={{ ...inputStyle, appearance: "none", paddingRight: 32 }}
               >
                 <option value="">요구사항을 선택하세요</option>
@@ -939,6 +970,7 @@ function UnitWorkDetailPageInner() {
                 value={form.name}
                 placeholder="단위업무명을 입력하세요"
                 onChange={(e) => handleChange("name", e.target.value)}
+                readOnly={!canEdit}
                 style={inputStyle}
               />
             </FormField>
@@ -948,6 +980,7 @@ function UnitWorkDetailPageInner() {
                 value={form.displayId ?? ""}
                 placeholder="미입력 시 자동 생성"
                 onChange={(e) => handleChange("displayId", e.target.value)}
+                readOnly={!canEdit}
                 style={inputStyle}
               />
             </FormField>
@@ -960,6 +993,7 @@ function UnitWorkDetailPageInner() {
                 type="date"
                 value={form.startDate ?? ""}
                 onChange={(e) => handleChange("startDate", e.target.value)}
+                readOnly={!canEdit}
                 style={inputStyle}
               />
             </FormField>
@@ -968,6 +1002,7 @@ function UnitWorkDetailPageInner() {
                 type="date"
                 value={form.endDate ?? ""}
                 onChange={(e) => handleChange("endDate", e.target.value)}
+                readOnly={!canEdit}
                 style={inputStyle}
               />
             </FormField>
@@ -1001,6 +1036,7 @@ function UnitWorkDetailPageInner() {
               <select
                 value={form.assignMemberId ?? ""}
                 onChange={(e) => handleChange("assignMemberId", e.target.value)}
+                disabled={!canEdit}
                 style={selectStyle}
               >
                 <option value="">담당자 없음</option>
@@ -1019,6 +1055,7 @@ function UnitWorkDetailPageInner() {
                 max={100}
                 value={form.progress}
                 onChange={(e) => handleChange("progress", Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                readOnly={!canEdit}
                 style={inputStyle}
               />
             </FormField>
@@ -1028,6 +1065,7 @@ function UnitWorkDetailPageInner() {
                 min={0}
                 value={form.sortOrder}
                 onChange={(e) => handleChange("sortOrder", parseInt(e.target.value) || 0)}
+                readOnly={!canEdit}
                 style={inputStyle}
               />
             </FormField>
@@ -1104,6 +1142,7 @@ function UnitWorkDetailPageInner() {
             tab={descTab}
             onTabChange={setDescTab}
             fullHeight
+            readOnly={!canEdit}
           />
         </div>
 

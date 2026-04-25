@@ -17,6 +17,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
+import { usePermissions } from "@/hooks/useMyRole";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -37,6 +38,8 @@ type StoryDetail = {
   scenario: string;
   requirementId: string;
   requirementName: string;
+  // 연결 요구사항의 담당자 — [삭제] 버튼 권한 판정에 사용
+  requirementAssigneeId: string | null;
   taskId: string | null;
   taskName: string;
   acceptanceCriteria: { acId: string; given: string; when: string; then: string }[];
@@ -82,7 +85,25 @@ function UserStoryDetailPageInner() {
     { given: "", when: "", then: "" },
   ]);
 
+  // 삭제 확인 모달 상태
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
   const { setBreadcrumb } = useAppStore();
+
+  // ── 본인 회원 ID 조회 (권한 판정용 — 본인이 연결 요구사항의 담당자인지) ──
+  const { data: memberData } = useQuery({
+    queryKey: ["project-members", projectId],
+    queryFn:  () =>
+      authFetch<{ data: { myMemberId: string } }>(
+        `/api/projects/${projectId}/members`
+      ).then((r) => r.data),
+    staleTime: 60 * 1000,
+  });
+  const myMemberId = memberData?.myMemberId ?? "";
+
+  // 매트릭스 권한 — OWNER/ADMIN 역할 또는 PM/PL 직무
+  const { has: hasPerm } = usePermissions(projectId);
+  const matrixUpdateOK = hasPerm("requirement.update");
 
   // ── 요구사항 목록 (선택 드롭다운) ──────────────────────────────────────────
   const { data: reqsData } = useQuery({
@@ -123,6 +144,23 @@ function UserStoryDetailPageInner() {
         return d;
       }),
     enabled: !isNew,
+  });
+
+  // 삭제 권한: 매트릭스 통과 OR 본인이 연결 요구사항의 담당자.
+  // 신규 등록 모드(isNew)에는 삭제 대상이 없으므로 항상 false.
+  const isAssigneeOfReq = !!myMemberId && detail?.requirementAssigneeId === myMemberId;
+  const canDelete = !isNew && (matrixUpdateOK || isAssigneeOfReq);
+
+  // ── 삭제 뮤테이션 ──────────────────────────────────────────────────────────
+  const deleteMutation = useMutation({
+    mutationFn: () =>
+      authFetch(`/api/projects/${projectId}/user-stories/${storyId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      toast.success("사용자스토리가 삭제되었습니다.");
+      queryClient.invalidateQueries({ queryKey: ["user-stories", projectId] });
+      router.push(`/projects/${projectId}/user-stories`);
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 
   // ── 저장 뮤테이션 ──────────────────────────────────────────────────────────
@@ -231,6 +269,16 @@ function UserStoryDetailPageInner() {
           </span>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          {/* 삭제 — 신규 모드 아니고 권한자(연결 요구사항 담당자 또는 OWNER/ADMIN/PM/PL)만 노출 */}
+          {canDelete && (
+            <button
+              onClick={() => setDeleteOpen(true)}
+              disabled={deleteMutation.isPending}
+              style={{ fontSize: 12, padding: "5px 14px", minWidth: 60, borderRadius: 6, border: "1px solid #e53935", background: "none", color: "#e53935", cursor: "pointer", fontWeight: 600 }}
+            >
+              삭제
+            </button>
+          )}
           <button
             onClick={() => router.push(`/projects/${projectId}/user-stories`)}
             disabled={saveMutation.isPending}
@@ -365,6 +413,48 @@ function UserStoryDetailPageInner() {
 
       </div>
       </div>
+
+      {/* 삭제 확인 모달 — 오버레이 클릭으로 닫지 않음 (실수 방지) */}
+      {deleteOpen && detail && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 1100,
+          background: "rgba(0,0,0,0.45)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 20,
+        }}>
+          <div style={{
+            background: "var(--color-bg-card)", borderRadius: 10,
+            padding: "28px 32px", width: "100%", maxWidth: 440,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+          }}>
+            <h3 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>
+              사용자스토리를 삭제하시겠습니까?
+            </h3>
+            <p style={{ margin: "0 0 8px", fontSize: 14, color: "var(--color-text-primary)", fontWeight: 600 }}>
+              &lsquo;{detail.name}&rsquo;
+            </p>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--color-text-secondary)" }}>
+              사용자스토리를 삭제하면 인수기준도 함께 삭제됩니다.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                onClick={() => setDeleteOpen(false)}
+                disabled={deleteMutation.isPending}
+                style={{ ...secondaryBtnStyle }}
+              >
+                취소
+              </button>
+              <button
+                onClick={() => deleteMutation.mutate()}
+                disabled={deleteMutation.isPending}
+                style={{ ...primaryBtnStyle, background: "#e53935", border: "1px solid #e53935" }}
+              >
+                {deleteMutation.isPending ? "삭제 중..." : "삭제"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -306,7 +306,8 @@
       "Bash(echo \"---EXIT $?---\")",
       "Bash(grep -E \"\\\\.ts$\")",
       "Bash(xargs cat *)",
-      "Bash(node_modules/.bin/next lint *)"
+      "Bash(node_modules/.bin/next lint *)",
+      "Bash(find /d/source/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id] -maxdepth 1 -type f -name \"*.tsx\")"
     ]
   }
 }

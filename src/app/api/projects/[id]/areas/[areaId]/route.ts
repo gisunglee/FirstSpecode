@@ -11,9 +11,66 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
+import { requireAuth } from "@/lib/requireAuth";
+import {
+  hasPermission, isRoleCode, isJobCode,
+  type RoleCode, type JobCode,
+} from "@/lib/permissions";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 type RouteParams = { params: Promise<{ id: string; areaId: string }> };
+
+/**
+ * 영역 수정/삭제 권한 게이트.
+ *
+ * 영역 자체에는 담당자 컬럼이 없어 부모 화면(scrn_id)의 담당자를 영역 담당자로 간주.
+ *
+ * 통과 조건 (OR):
+ *   ① permissions 매트릭스 "requirement.update" — OWNER/ADMIN 역할 또는 PM/PL 직무
+ *   ② 본인이 부모 화면의 담당자(parent screen.asign_mber_id)
+ *
+ * 영역에 부모 화면이 없으면(scrn_id null) 매트릭스 통과만 허용.
+ */
+async function requireAreaWrite(
+  request: NextRequest,
+  projectId: string,
+  areaId: string
+): Promise<{ mberId: string } | Response> {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
+  const membership = await prisma.tbPjProjectMember.findUnique({
+    where:  { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
+    select: { role_code: true, job_title_code: true, mber_sttus_code: true },
+  });
+  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
+    return apiError("FORBIDDEN", "프로젝트 멤버가 아닙니다.", 403);
+  }
+
+  const role: RoleCode | null = isRoleCode(membership.role_code) ? membership.role_code : null;
+  const job:  JobCode  | null = isJobCode(membership.job_title_code) ? membership.job_title_code : null;
+
+  const matrixOK = hasPermission(
+    { role, job, plan: "FREE", systemRole: null },
+    "requirement.update"
+  );
+  if (matrixOK) return { mberId: auth.mberId };
+
+  // 부모 화면의 담당자인지 확인
+  const target = await prisma.tbDsArea.findUnique({
+    where:   { area_id: areaId },
+    include: { screen: { select: { asign_mber_id: true } } },
+  });
+  if (!target || target.prjct_id !== projectId) {
+    return apiError("NOT_FOUND", "영역을 찾을 수 없습니다.", 404);
+  }
+  const parentAssigneeId = target.screen?.asign_mber_id ?? null;
+  if (parentAssigneeId !== auth.mberId) {
+    return apiError("FORBIDDEN", "이 영역을 수정할 권한이 없습니다.", 403);
+  }
+
+  return { mberId: auth.mberId };
+}
 
 // ─── GET: 영역 상세 조회 ─────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
@@ -30,6 +87,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           screen: {
             select: {
               scrn_id: true, scrn_nm: true, scrn_display_id: true, unit_work_id: true,
+              // 영역 자체에는 담당자가 없어 부모 화면의 담당자를 영역 담당자로 간주.
+              // 프론트에서 [삭제]/[저장] 버튼 노출 판정에 사용.
+              asign_mber_id: true,
               unitWork: { select: { unit_work_display_id: true, unit_work_nm: true } },
             },
           },
@@ -119,6 +179,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       layoutData:  area.layer_data_dc ?? null,
       commentCn:   area.coment_cn ?? "",
       screenId:    area.scrn_id ?? null,
+      // 부모 화면의 담당자 — 프론트 권한 판정에 사용 (영역 자체 담당자 컬럼이 없으므로)
+      screenAssigneeId:  area.screen?.asign_mber_id ?? null,
       screenName:        area.screen?.scrn_nm ?? "미분류",
       screenDisplayId:   area.screen?.scrn_display_id ?? null,
       unitWorkId:        area.screen?.unit_work_id ?? null,
@@ -155,7 +217,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, areaId } = await params;
 
-  const gate = await requirePermission(request, projectId, "content.update");
+  // OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 부모 화면 담당자만 수정 가능
+  const gate = await requireAreaWrite(request, projectId, areaId);
   if (gate instanceof Response) return gate;
 
   let body: unknown;
@@ -249,7 +312,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const url            = new URL(request.url);
   const deleteChildren = url.searchParams.get("deleteChildren") !== "false"; // 기본 true
 
-  const gate = await requirePermission(request, projectId, "content.delete");
+  // OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 부모 화면 담당자만 삭제 가능
+  const gate = await requireAreaWrite(request, projectId, areaId);
   if (gate instanceof Response) return gate;
 
   try {

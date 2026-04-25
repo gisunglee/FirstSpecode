@@ -23,8 +23,12 @@ type Props = {
 
 export default function RootLayout({ children }: Props) {
   return (
-    <html lang="ko">
-      <body>
+    // suppressHydrationWarning:
+    // 일부 브라우저 확장(WXT 기반: data-wxt-integrated 등)이 React 하이드레이션 전에
+    // DOM 속성을 주입해 hidden / data-* 등이 서버 HTML과 달라지는 문제를 방지.
+    // 동작에는 영향이 없으며 Next.js 공식 권장 패턴.
+    <html lang="ko" suppressHydrationWarning>
+      <body suppressHydrationWarning>
         {/* TanStack Query 전역 Provider */}
         <QueryProvider>
           {children}

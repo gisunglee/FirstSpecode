@@ -15,6 +15,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { usePermissions } from "@/hooks/useMyRole";
 import { renderMarkdown } from "@/lib/renderMarkdown";
 import { useAppStore } from "@/store/appStore";
 import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
@@ -213,6 +214,17 @@ function RequirementDetailPageInner() {
       ).then((r) => r.data),
     enabled: !isNew,
   });
+
+  // ── 편집 권한 계산 ─────────────────────────────────────────────────────────
+  // 통과 조건: OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 해당 요구사항 담당자.
+  // 담당자 비교는 반드시 "원본(API 응답) 담당자ID" 로 — 폼에서 임의로 바꾼 값으로 판단하면
+  // 자기 자신을 담당자에서 빼는 순간 권한이 사라지는 버그가 생긴다.
+  // 신규 등록 모드(reqId === "new") 는 별도 권한이라 본 게이트에서 제외 (기존 동작 유지).
+  const { has: hasPerm } = usePermissions(projectId);
+  const matrixUpdateOK   = hasPerm("requirement.update");
+  const originalAssigneeId = detail?.assignMemberId ?? null;
+  const isAssignee = !!myMemberId && originalAssigneeId === myMemberId;
+  const canEdit = isNew ? true : (matrixUpdateOK || isAssignee);
 
   // detail 로드되거나 reqId가 바뀌면 폼을 항상 동기화 — 캐시 hit 재방문에서도 재실행됨.
   useEffect(() => {
@@ -503,7 +515,8 @@ function RequirementDetailPageInner() {
           </span>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          {!isNew && (
+          {/* 삭제 — 신규 모드 아니고 편집 권한 있을 때만 노출 */}
+          {!isNew && canEdit && (
             <button
               onClick={() => setReqDeleteOpen(true)}
               style={{ fontSize: 12, padding: "5px 14px", minWidth: 60, borderRadius: 6, border: "1px solid #e53935", background: "none", color: "#e53935", cursor: "pointer", fontWeight: 600 }}
@@ -511,6 +524,7 @@ function RequirementDetailPageInner() {
               삭제
             </button>
           )}
+          {/* 취소 — 항상 노출 (단순 페이지 이동, 권한 무관) */}
           <button
             onClick={() => router.push(`/projects/${projectId}/requirements`)}
             disabled={saveMutation.isPending}
@@ -518,17 +532,34 @@ function RequirementDetailPageInner() {
           >
             취소
           </button>
-          <button
-            onClick={handleSave}
-            disabled={saveMutation.isPending}
-            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
-          >
-            {saveMutation.isPending ? "저장 중..." : "저장"}
-          </button>
+          {/* 저장 — 편집 권한자만 노출 */}
+          {canEdit && (
+            <button
+              onClick={handleSave}
+              disabled={saveMutation.isPending}
+              style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
+            >
+              {saveMutation.isPending ? "저장 중..." : "저장"}
+            </button>
+          )}
         </div>
       </div>
 
       <div style={{ padding: "0 24px 24px", maxWidth: 1400 }}>
+      {/* 읽기 전용 안내 — 권한 없는 사용자가 진입한 경우, 왜 입력이 안 되는지 명시 */}
+      {!isNew && !canEdit && (
+        <div style={{
+          margin: "0 0 16px",
+          padding: "10px 14px",
+          background: "var(--color-info-subtle, #f0f4ff)",
+          border: "1px solid var(--color-info, #3b82f6)",
+          borderRadius: 6,
+          fontSize: 12,
+          color: "var(--color-text-secondary)",
+        }}>
+          🔒 <strong>읽기 전용</strong> — 이 요구사항은 OWNER/ADMIN 또는 PM/PL 직무, 혹은 담당자만 수정할 수 있습니다.
+        </div>
+      )}
       {/* 2단 레이아웃: 왼쪽(기본정보+원문·현행화) / 오른쪽(분석메모·상세명세+근거파일) */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 24, alignItems: "start" }}>
 
@@ -542,6 +573,7 @@ function RequirementDetailPageInner() {
               <select
                 value={form.taskId ?? ""}
                 onChange={(e) => handleChange("taskId", e.target.value || "")}
+                disabled={!canEdit}
                 style={selectStyle}
               >
                 <option value="">미분류</option>
@@ -559,6 +591,7 @@ function RequirementDetailPageInner() {
                   value={form.name}
                   placeholder="요구사항명을 입력하세요"
                   onChange={(e) => handleChange("name", e.target.value)}
+                  readOnly={!canEdit}
                   style={inputStyle}
                 />
               </FormField>
@@ -568,6 +601,7 @@ function RequirementDetailPageInner() {
                   value={form.reqDisplayId}
                   placeholder="예: RQ-00001"
                   onChange={(e) => handleChange("reqDisplayId", e.target.value)}
+                  readOnly={!canEdit}
                   style={inputStyle}
                 />
               </FormField>
@@ -600,6 +634,7 @@ function RequirementDetailPageInner() {
                 <select
                   value={form.assignMemberId}
                   onChange={(e) => handleChange("assignMemberId", e.target.value)}
+                  disabled={!canEdit}
                   style={selectStyle}
                 >
                   <option value="">담당자 없음</option>
@@ -619,6 +654,7 @@ function RequirementDetailPageInner() {
                   value={form.sortOrder || ""}
                   onChange={(e) => setForm((prev) => ({ ...prev, sortOrder: parseInt(e.target.value) || 0 }))}
                   placeholder="0"
+                  readOnly={!canEdit}
                   style={inputStyle}
                 />
               </FormField>
@@ -630,6 +666,7 @@ function RequirementDetailPageInner() {
                 <select
                   value={form.priority}
                   onChange={(e) => handleChange("priority", e.target.value)}
+                  disabled={!canEdit}
                   style={selectStyle}
                 >
                   <option value="HIGH">높음 (HIGH)</option>
@@ -641,6 +678,7 @@ function RequirementDetailPageInner() {
                 <select
                   value={form.source}
                   onChange={(e) => handleChange("source", e.target.value)}
+                  disabled={!canEdit}
                   style={selectStyle}
                 >
                   <option value="RFP">RFP</option>
@@ -654,6 +692,7 @@ function RequirementDetailPageInner() {
                   value={form.rfpPage}
                   placeholder="예: p.23"
                   onChange={(e) => handleChange("rfpPage", e.target.value)}
+                  readOnly={!canEdit}
                   style={inputStyle}
                 />
               </FormField>
@@ -708,6 +747,7 @@ function RequirementDetailPageInner() {
                   onChange={(html) => handleChange("currentContent", html)}
                   placeholder="협의 또는 변경 사항이 반영된 최신 내용을 입력하세요"
                   minHeight={338}
+                  readOnly={!canEdit}
                 />
               ) : (
                 <RichEditor
@@ -715,6 +755,7 @@ function RequirementDetailPageInner() {
                   onChange={(html) => handleChange("originalContent", html)}
                   placeholder="RFP 또는 계약서의 원문 그대로 입력하세요"
                   minHeight={338}
+                  readOnly={!canEdit}
                 />
               )}
             </div>
@@ -752,36 +793,43 @@ function RequirementDetailPageInner() {
                       >
                         다운로드
                       </button>
-                      <button
-                        onClick={() => {
-                          if (confirm(`'${file.fileName}' 파일을 삭제하시겠습니까?`)) {
-                            deleteFileMutation.mutate(file.fileId);
-                          }
-                        }}
-                        disabled={deleteFileMutation.isPending}
-                        style={{ ...dangerBtnStyle, fontSize: 12 }}
-                      >
-                        삭제
-                      </button>
+                      {/* 첨부파일 삭제 — 편집 권한자만 */}
+                      {canEdit && (
+                        <button
+                          onClick={() => {
+                            if (confirm(`'${file.fileName}' 파일을 삭제하시겠습니까?`)) {
+                              deleteFileMutation.mutate(file.fileId);
+                            }
+                          }}
+                          disabled={deleteFileMutation.isPending}
+                          style={{ ...dangerBtnStyle, fontSize: 12 }}
+                        >
+                          삭제
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
               )}
 
-              {/* 파일 첨부 버튼 */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                style={{ display: "none" }}
-                onChange={handleFileUpload}
-              />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                style={secondaryBtnStyle}
-              >
-                + 파일 첨부
-              </button>
+              {/* 파일 첨부 — 편집 권한자만 */}
+              {canEdit && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    style={{ display: "none" }}
+                    onChange={handleFileUpload}
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    style={secondaryBtnStyle}
+                  >
+                    + 파일 첨부
+                  </button>
+                </>
+              )}
             </Section>
           )}
         </div>
@@ -812,8 +860,8 @@ function RequirementDetailPageInner() {
                       // 요구사항 양식은 displayId/name 플레이스홀더 없음 — applyTemplateVars는 NOOP로 동작
                       handleChange("detailSpec", applyTemplateVars(designTmpl.templateCn, {}));
                     }}
-                    disabled={!designTmpl?.templateCn}
-                    style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: designTmpl?.templateCn ? "pointer" : "not-allowed", opacity: designTmpl?.templateCn ? 1 : 0.5 }}
+                    disabled={!designTmpl?.templateCn || !canEdit}
+                    style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: (designTmpl?.templateCn && canEdit) ? "pointer" : "not-allowed", opacity: (designTmpl?.templateCn && canEdit) ? 1 : 0.5 }}
                   >
                     템플릿 적용
                   </button>
@@ -835,6 +883,7 @@ function RequirementDetailPageInner() {
                 onChange={(v) => handleChange("detailSpec", v)}
                 placeholder={`## 기능 상세\n\n- 항목1\n- 항목2`}
                 rows={20}
+                readOnly={!canEdit}
               />
             </div>
 
@@ -862,6 +911,7 @@ function RequirementDetailPageInner() {
                 onChange={(v) => handleChange("analysisMemo", v)}
                 placeholder={`## 분석 내용\n\n- 항목1\n- 항목2`}
                 rows={20}
+                readOnly={!canEdit}
               />
             </div>
           </Section>

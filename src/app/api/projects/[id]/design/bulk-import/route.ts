@@ -63,14 +63,38 @@ type TxClient = Prisma.TransactionClient;
 
 type RouteParams = { params: Promise<{ id: string }> };
 
+// ── 코드 화이트리스트 ────────────────────────────────────────────────────────
+// [2026-04-25] D5: 단일 CRUD UI(screens/[screenId]/page.tsx, areas/[areaId]/page.tsx,
+//                   functions/[functionId]/page.tsx)와 동일한 허용값.
+//                   변경 시 두 곳 동시 수정 필요.
+//                   Claude 출력 또는 사용자가 직접 수정한 JSON에 잘못된 값이 들어와도
+//                   DB에 저장되어 UI 라벨/배지 매칭이 깨지는 사고를 막기 위한 안전망.
+const ALLOWED_SCREEN_TYPES   = ["LIST", "DETAIL", "INPUT", "POPUP", "TAB", "REPORT"]                                  as const;
+const ALLOWED_AREA_TYPES     = ["SEARCH", "GRID", "FORM", "INFO_CARD", "TAB", "FULL_SCREEN"]                          as const;
+const ALLOWED_FUNCTION_TYPES = ["SEARCH", "SAVE", "DELETE", "DOWNLOAD", "UPLOAD", "NAVIGATE", "VALIDATE", "OTHER"]    as const;
+const ALLOWED_PRIORITIES     = ["HIGH", "MEDIUM", "LOW"]                                                              as const;
+const ALLOWED_COMPLEXITIES   = ["HIGH", "MEDIUM", "LOW"]                                                              as const;
+
+function pickAllowed(
+  value:    string | undefined | null,
+  allowed:  readonly string[],
+  fallback: string,
+): string {
+  // value가 화이트리스트에 있으면 그대로, 아니면 fallback.
+  //   - 신규: fallback = 안전한 default (예: "LIST", "GRID", "OTHER", "MEDIUM")
+  //   - 수정: fallback = existing 컬럼 값 (이미 DB에 저장된 값을 흔들지 않음)
+  return value && allowed.includes(value) ? value : fallback;
+}
+
 // ── 입력 타입 ────────────────────────────────────────────────────────────────
 
 type FunctionInput = {
-  systemId?:    string;
-  name:         string;
-  description?: string;
-  priority?:    string;
-  complexity?:  string;
+  systemId?:     string;
+  name:          string;
+  description?:  string;
+  functionType?: string;   // [2026-04-25] D3: 기능 유형 (SEARCH/SAVE/DELETE 등)
+  priority?:     string;
+  complexity?:   string;
 };
 
 type AreaInput = {
@@ -293,7 +317,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 unit_work_id: unitWorkId,
                 scrn_nm:      scInput.name.trim(),
                 scrn_dc:      scInput.description?.trim() ?? existing.scrn_dc,
-                scrn_ty_code: scInput.screenType         ?? existing.scrn_ty_code,
+                // [2026-04-25] D5: 화이트리스트 미통과 시 기존 값 유지 (UI 라벨 매칭 보호)
+                scrn_ty_code: pickAllowed(scInput.screenType, ALLOWED_SCREEN_TYPES, existing.scrn_ty_code),
                 dsply_code:   scInput.displayCode?.trim() ?? existing.dsply_code,
                 ctgry_l_nm:   scInput.categoryL?.trim()  ?? existing.ctgry_l_nm,
                 ctgry_m_nm:   scInput.categoryM?.trim()  ?? existing.ctgry_m_nm,
@@ -313,7 +338,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 scrn_display_id: displayId,
                 scrn_nm:        scInput.name.trim(),
                 scrn_dc:        scInput.description?.trim()  || null,
-                scrn_ty_code:   scInput.screenType           || "LIST",
+                // [2026-04-25] D5: 화이트리스트 미통과 시 default "LIST"
+                scrn_ty_code:   pickAllowed(scInput.screenType, ALLOWED_SCREEN_TYPES, "LIST"),
                 dsply_code:     scInput.displayCode?.trim()  || null,
                 ctgry_l_nm:     scInput.categoryL?.trim()    || null,
                 ctgry_m_nm:     scInput.categoryM?.trim()    || null,
@@ -345,7 +371,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                   scrn_id:      screenId,
                   area_nm:      arInput.name.trim(),
                   area_dc:      arInput.description?.trim() ?? existing.area_dc,
-                  area_ty_code: arInput.areaType            ?? existing.area_ty_code,
+                  // [2026-04-25] D5: 화이트리스트 미통과 시 기존 값 유지
+                  area_ty_code: pickAllowed(arInput.areaType, ALLOWED_AREA_TYPES, existing.area_ty_code),
                   mdfcn_dt:     new Date(),
                 },
               });
@@ -361,7 +388,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                   area_display_id: displayId,
                   area_nm:        arInput.name.trim(),
                   area_dc:        arInput.description?.trim() || null,
-                  area_ty_code:   arInput.areaType            || "GRID",
+                  // [2026-04-25] D5: 화이트리스트 미통과 시 default "GRID"
+                  area_ty_code:   pickAllowed(arInput.areaType, ALLOWED_AREA_TYPES, "GRID"),
                   sort_ordr:      sortOrder,
                 },
               });
@@ -384,12 +412,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 await tx.tbDsFunction.update({
                   where: { func_id: fnInput.systemId },
                   data: {
-                    area_id:     areaId,
-                    func_nm:     fnInput.name.trim(),
-                    func_dc:     fnInput.description?.trim() ?? existing.func_dc,
-                    priort_code: fnInput.priority            ?? existing.priort_code,
-                    cmplx_code:  fnInput.complexity          ?? existing.cmplx_code,
-                    mdfcn_dt:    new Date(),
+                    area_id:      areaId,
+                    func_nm:      fnInput.name.trim(),
+                    func_dc:      fnInput.description?.trim() ?? existing.func_dc,
+                    // [2026-04-25] D3+D5: functionType 채널 지원 + 화이트리스트
+                    func_ty_code: pickAllowed(fnInput.functionType, ALLOWED_FUNCTION_TYPES, existing.func_ty_code),
+                    priort_code:  pickAllowed(fnInput.priority,     ALLOWED_PRIORITIES,     existing.priort_code),
+                    cmplx_code:   pickAllowed(fnInput.complexity,   ALLOWED_COMPLEXITIES,   existing.cmplx_code),
+                    mdfcn_dt:     new Date(),
                   },
                 });
                 result.updated.functions++;
@@ -398,14 +428,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 const sortOrder = await nextFunctionSortOrder(projectId, tx);
                 await tx.tbDsFunction.create({
                   data: {
-                    prjct_id:       projectId,
-                    area_id:        areaId,
+                    prjct_id:        projectId,
+                    area_id:         areaId,
                     func_display_id: displayId,
-                    func_nm:        fnInput.name.trim(),
-                    func_dc:        fnInput.description?.trim() || null,
-                    priort_code:    fnInput.priority            || "MEDIUM",
-                    cmplx_code:     fnInput.complexity          || "MEDIUM",
-                    sort_ordr:      sortOrder,
+                    func_nm:         fnInput.name.trim(),
+                    func_dc:         fnInput.description?.trim() || null,
+                    // [2026-04-25] D3+D5: functionType 채널 지원 + 화이트리스트 미통과 시 안전한 default
+                    func_ty_code:    pickAllowed(fnInput.functionType, ALLOWED_FUNCTION_TYPES, "OTHER"),
+                    priort_code:     pickAllowed(fnInput.priority,     ALLOWED_PRIORITIES,     "MEDIUM"),
+                    cmplx_code:      pickAllowed(fnInput.complexity,   ALLOWED_COMPLEXITIES,   "MEDIUM"),
+                    sort_ordr:       sortOrder,
                   },
                 });
                 result.created.functions++;

@@ -20,6 +20,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { usePermissions } from "@/hooks/useMyRole";
 import { renderMarkdown } from "@/lib/renderMarkdown";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
@@ -184,6 +185,21 @@ function FunctionDetailPageInner() {
         .then((r) => r.data),
     enabled: !isNew,
   });
+
+  // ── 본인 회원 ID + 편집 권한 계산 ─────────────────────────────────────────
+  const { data: memberData } = useQuery({
+    queryKey: ["project-members", projectId],
+    queryFn:  () =>
+      authFetch<{ data: { myMemberId: string } }>(`/api/projects/${projectId}/members`).then((r) => r.data),
+    staleTime: 60 * 1000,
+  });
+  const myMemberId = memberData?.myMemberId ?? "";
+
+  const { has: hasPerm } = usePermissions(projectId);
+  const matrixUpdateOK = hasPerm("requirement.update");
+  const originalAssigneeId = data?.assignMemberId ?? null;
+  const isAssignee = !!myMemberId && originalAssigneeId === myMemberId;
+  const canEdit = isNew ? true : (matrixUpdateOK || isAssignee);
 
   // GNB 브레드크럼 설정 — 단위업무 > 화면 > 영역 > 기능
   useEffect(() => {
@@ -705,8 +721,8 @@ function FunctionDetailPageInner() {
           {/* 구분선 */}
           <div style={{ width: 1, height: 20, background: "var(--color-border)" }} />
 
-          {/* 삭제 버튼 (신규 등록 모드에서는 숨김) */}
-          {!isNew && (
+          {/* 삭제 — 신규 모드 아니고 편집 권한 있을 때만 노출 */}
+          {!isNew && canEdit && (
             <button
               onClick={() => setDeleteConfirmOpen(true)}
               disabled={saveMutation.isPending || deleteMutation.isPending}
@@ -716,7 +732,7 @@ function FunctionDetailPageInner() {
             </button>
           )}
 
-          {/* 취소·저장 */}
+          {/* 취소 — 항상 노출 */}
           <button
             onClick={() => router.push(`/projects/${projectId}/functions`)}
             disabled={saveMutation.isPending}
@@ -724,23 +740,40 @@ function FunctionDetailPageInner() {
           >
             취소
           </button>
-          <button
-            onClick={() => {
-              if (!name.trim()) { toast.error("기능명을 입력해 주세요."); return; }
-              const descChanged = !isNew && description.trim() !== originalDescription.trim();
-              if (descChanged) { setHistoryDialogOpen(true); return; }
-              saveMutation.mutate({});
-            }}
-            disabled={saveMutation.isPending}
-            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
-          >
-            {saveMutation.isPending ? "저장 중..." : "저장"}
-          </button>
+          {/* 저장 — 편집 권한자만 노출 */}
+          {canEdit && (
+            <button
+              onClick={() => {
+                if (!name.trim()) { toast.error("기능명을 입력해 주세요."); return; }
+                const descChanged = !isNew && description.trim() !== originalDescription.trim();
+                if (descChanged) { setHistoryDialogOpen(true); return; }
+                saveMutation.mutate({});
+              }}
+              disabled={saveMutation.isPending}
+              style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
+            >
+              {saveMutation.isPending ? "저장 중..." : "저장"}
+            </button>
+          )}
         </div>
       </div>
 
       {/* ── 2컬럼 레이아웃: 왼쪽 기본 정보, 오른쪽 설명 + 컬럼 매핑 + AI 지원 */}
       <div style={{ padding: "0 24px 24px" }}>
+        {/* 읽기 전용 안내 */}
+        {!isNew && !canEdit && (
+          <div style={{
+            margin: "0 0 16px",
+            padding: "10px 14px",
+            background: "var(--color-info-subtle, #f0f4ff)",
+            border: "1px solid var(--color-info, #3b82f6)",
+            borderRadius: 6,
+            fontSize: 12,
+            color: "var(--color-text-secondary)",
+          }}>
+            🔒 <strong>읽기 전용</strong> — 이 기능은 OWNER/ADMIN 또는 PM/PL 직무, 혹은 담당자만 수정할 수 있습니다.
+          </div>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr", gap: 20, alignItems: "start" }}>
 
           {/* ── 왼쪽: 기본 정보 + 첨부파일 ── */}
@@ -751,7 +784,7 @@ function FunctionDetailPageInner() {
               <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "0 16px" }}>
                 <div style={formGroupStyle}>
                   <label style={labelStyle}>소속 영역</label>
-                  <select value={areaId} onChange={(e) => setAreaId(e.target.value)} style={selectStyle}>
+                  <select value={areaId} onChange={(e) => setAreaId(e.target.value)} disabled={!canEdit} style={selectStyle}>
                     <option value="">미분류 (영역 없음)</option>
                     {areaOptions.map((a) => (
                       <option key={a.areaId} value={a.areaId}>{a.displayId} {a.name}</option>
@@ -761,7 +794,7 @@ function FunctionDetailPageInner() {
 
                 <div style={formGroupStyle}>
                   <label style={labelStyle}>유형</label>
-                  <select value={type} onChange={(e) => setType(e.target.value)} style={selectStyle}>
+                  <select value={type} onChange={(e) => setType(e.target.value)} disabled={!canEdit} style={selectStyle}>
                     {FUNC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>
@@ -776,6 +809,7 @@ function FunctionDetailPageInner() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="기능명을 입력하세요"
+                    readOnly={!canEdit}
                     style={inputStyle}
                   />
                 </div>
@@ -786,6 +820,7 @@ function FunctionDetailPageInner() {
                     value={displayId}
                     onChange={(e) => setDisplayId(e.target.value)}
                     placeholder="미입력 시 자동 생성"
+                    readOnly={!canEdit}
                     style={inputStyle}
                   />
                 </div>
@@ -795,7 +830,7 @@ function FunctionDetailPageInner() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 16px" }}>
                 <div style={formGroupStyle}>
                   <label style={labelStyle}>우선순위</label>
-                  <select value={priority} onChange={(e) => setPriority(e.target.value)} style={selectStyle}>
+                  <select value={priority} onChange={(e) => setPriority(e.target.value)} disabled={!canEdit} style={selectStyle}>
                     <option value="HIGH">높음</option>
                     <option value="MEDIUM">중간</option>
                     <option value="LOW">낮음</option>
@@ -804,7 +839,7 @@ function FunctionDetailPageInner() {
 
                 <div style={formGroupStyle}>
                   <label style={labelStyle}>복잡도</label>
-                  <select value={complexity} onChange={(e) => setComplexity(e.target.value)} style={selectStyle}>
+                  <select value={complexity} onChange={(e) => setComplexity(e.target.value)} disabled={!canEdit} style={selectStyle}>
                     <option value="HIGH">높음</option>
                     <option value="MEDIUM">중간</option>
                     <option value="LOW">낮음</option>
@@ -823,6 +858,7 @@ function FunctionDetailPageInner() {
                     value={effort}
                     onChange={(e) => setEffort(e.target.value)}
                     placeholder="시간 (예: 2, 0.5)"
+                    readOnly={!canEdit}
                     style={inputStyle}
                   />
                 </div>
@@ -836,6 +872,7 @@ function FunctionDetailPageInner() {
                     type="date"
                     value={implStartDate}
                     onChange={(e) => setImplStartDate(e.target.value)}
+                    readOnly={!canEdit}
                     style={inputStyle}
                   />
                 </div>
@@ -846,6 +883,7 @@ function FunctionDetailPageInner() {
                     type="date"
                     value={implEndDate}
                     onChange={(e) => setImplEndDate(e.target.value)}
+                    readOnly={!canEdit}
                     style={inputStyle}
                   />
                 </div>
@@ -857,6 +895,7 @@ function FunctionDetailPageInner() {
                     min={0}
                     value={sortOrder}
                     onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
+                    readOnly={!canEdit}
                     style={inputStyle}
                   />
                 </div>
@@ -894,14 +933,14 @@ function FunctionDetailPageInner() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (!designTmpl?.templateCn) return;
+                      if (!designTmpl?.templateCn || !canEdit) return;
                       setDescription(applyTemplateVars(designTmpl.templateCn, {
                         displayId: data?.displayId ?? "FN-XXXXX",
                         name,
                       }));
                     }}
-                    disabled={!designTmpl?.templateCn}
-                    style={{ ...ghostSmBtnStyle, opacity: designTmpl?.templateCn ? 1 : 0.5, cursor: designTmpl?.templateCn ? "pointer" : "not-allowed" }}
+                    disabled={!designTmpl?.templateCn || !canEdit}
+                    style={{ ...ghostSmBtnStyle, opacity: (designTmpl?.templateCn && canEdit) ? 1 : 0.5, cursor: (designTmpl?.templateCn && canEdit) ? "pointer" : "not-allowed" }}
                   >
                     템플릿 삽입
                   </button>
@@ -919,6 +958,7 @@ function FunctionDetailPageInner() {
                 rows={25}
                 tab={descTab}
                 onTabChange={setDescTab}
+                readOnly={!canEdit}
               />
             </section>
 

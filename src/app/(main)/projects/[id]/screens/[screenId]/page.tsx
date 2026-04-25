@@ -19,6 +19,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { usePermissions } from "@/hooks/useMyRole";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import { ScreenLayoutEditor, type LayoutRow } from "@/components/ui/ScreenLayoutEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
@@ -196,6 +197,14 @@ function ScreenDetailPageInner() {
     enabled: !isNew,
   });
 
+  // ── 편집 권한 계산 ─────────────────────────────────────────────────────────
+  // 통과: OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 화면 담당자.
+  const { has: hasPerm } = usePermissions(projectId);
+  const matrixUpdateOK = hasPerm("requirement.update");
+  const originalAssigneeId = detail?.assignMemberId ?? null;
+  const isAssignee = !!myMemberId && originalAssigneeId === myMemberId;
+  const canEdit = isNew ? true : (matrixUpdateOK || isAssignee);
+
   // detail이 로드되거나 다른 screenId로 바뀌면 폼/레이아웃을 항상 동기화.
   //   캐시 hit(재방문) 시에도 detail은 바로 값이 들어와 이 효과가 재실행되므로
   //   "동일 row 재진입" 케이스에서 폼이 비어 보이는 문제를 원천 차단한다.
@@ -372,7 +381,8 @@ function ScreenDetailPageInner() {
           >
             취소
           </button>
-          {!isNew && (
+          {/* 삭제 — 신규 모드 아니고 편집 권한 있을 때만 노출 */}
+          {!isNew && canEdit && (
             <button
               onClick={() => { setDeleteChildren(null); setDeleteConfirmOpen(true); }}
               disabled={saveMutation.isPending}
@@ -381,17 +391,34 @@ function ScreenDetailPageInner() {
               삭제
             </button>
           )}
-          <button
-            onClick={handleSave}
-            disabled={saveMutation.isPending}
-            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
-          >
-            {saveMutation.isPending ? "저장 중..." : "저장"}
-          </button>
+          {/* 저장 — 편집 권한자만 노출 */}
+          {canEdit && (
+            <button
+              onClick={handleSave}
+              disabled={saveMutation.isPending}
+              style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
+            >
+              {saveMutation.isPending ? "저장 중..." : "저장"}
+            </button>
+          )}
         </div>
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
+        {/* 읽기 전용 안내 — 권한 없는 사용자가 진입한 경우 명시 */}
+        {!isNew && !canEdit && (
+          <div style={{
+            margin: "0 0 16px",
+            padding: "10px 14px",
+            background: "var(--color-info-subtle, #f0f4ff)",
+            border: "1px solid var(--color-info, #3b82f6)",
+            borderRadius: 6,
+            fontSize: 12,
+            color: "var(--color-text-secondary)",
+          }}>
+            🔒 <strong>읽기 전용</strong> — 이 화면은 OWNER/ADMIN 또는 PM/PL 직무, 혹은 담당자만 수정할 수 있습니다.
+          </div>
+        )}
         {/* 2-컬럼 레이아웃: 기본 정보 | 화면 설명 */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 28, alignItems: "start" }}>
 
@@ -405,6 +432,7 @@ function ScreenDetailPageInner() {
                 <select
                   value={form.unitWorkId ?? ""}
                   onChange={(e) => handleChange("unitWorkId", e.target.value)}
+                  disabled={!canEdit}
                   style={selectStyle}
                 >
                   <option value="">미분류</option>
@@ -424,6 +452,7 @@ function ScreenDetailPageInner() {
                     value={form.name}
                     placeholder="화면명을 입력하세요"
                     onChange={(e) => handleChange("name", e.target.value)}
+                    readOnly={!canEdit}
                     style={inputStyle}
                   />
                 </FormField>
@@ -433,6 +462,7 @@ function ScreenDetailPageInner() {
                     value={form.displayId ?? ""}
                     placeholder="미입력 시 자동 생성"
                     onChange={(e) => handleChange("displayId", e.target.value)}
+                    readOnly={!canEdit}
                     style={inputStyle}
                   />
                 </FormField>
@@ -466,6 +496,7 @@ function ScreenDetailPageInner() {
                   <select
                     value={form.assignMemberId}
                     onChange={(e) => handleChange("assignMemberId", e.target.value)}
+                    disabled={!canEdit}
                     style={selectStyle}
                   >
                     <option value="">담당자 없음</option>
@@ -481,6 +512,7 @@ function ScreenDetailPageInner() {
                   <select
                     value={form.type}
                     onChange={(e) => handleChange("type", e.target.value)}
+                    disabled={!canEdit}
                     style={selectStyle}
                   >
                     <option value="LIST">LIST</option>
@@ -499,6 +531,7 @@ function ScreenDetailPageInner() {
                     onChange={(e) =>
                       setForm((prev) => ({ ...prev, sortOrder: parseInt(e.target.value) || 0 }))
                     }
+                    readOnly={!canEdit}
                     style={inputStyle}
                   />
                 </FormField>
@@ -512,6 +545,7 @@ function ScreenDetailPageInner() {
                     value={form.categoryL}
                     placeholder="예: 회원 관리"
                     onChange={(e) => handleChange("categoryL", e.target.value)}
+                    readOnly={!canEdit}
                     style={inputStyle}
                   />
                 </FormField>
@@ -521,6 +555,7 @@ function ScreenDetailPageInner() {
                     value={form.categoryM}
                     placeholder="예: 회원 정보"
                     onChange={(e) => handleChange("categoryM", e.target.value)}
+                    readOnly={!canEdit}
                     style={inputStyle}
                   />
                 </FormField>
@@ -530,6 +565,7 @@ function ScreenDetailPageInner() {
                     value={form.categoryS}
                     placeholder="예: 목록 조회"
                     onChange={(e) => handleChange("categoryS", e.target.value)}
+                    readOnly={!canEdit}
                     style={inputStyle}
                   />
                 </FormField>
@@ -538,16 +574,21 @@ function ScreenDetailPageInner() {
 
             {/* 레이아웃 에디터 — 기본 정보 아래 */}
             <Section title="레이아웃 구성" hideTitle small>
-              <ScreenLayoutEditor
-                title={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>레이아웃 구성<HelpIcon onClick={() => setHelpOpen("layout")} /></span>}
-                value={layoutRows}
-                onChange={setLayoutRows}
-                areas={detail?.areas.map((a) => ({
-                  areaId: a.areaId,
-                  displayId: a.displayId,
-                  name: a.name,
-                }))}
-              />
+              {/* ScreenLayoutEditor 자체는 readOnly prop 미지원 → 권한 없을 때 onChange를
+                  no-op으로 묶어 사용자가 만져도 상태가 변하지 않도록 함. 시각적으로 잠겼음을
+                  나타내기 위해 부모 div 에 opacity / pointer-events 처리를 더한다. */}
+              <div style={canEdit ? undefined : { opacity: 0.7, pointerEvents: "none" }}>
+                <ScreenLayoutEditor
+                  title={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>레이아웃 구성<HelpIcon onClick={() => setHelpOpen("layout")} /></span>}
+                  value={layoutRows}
+                  onChange={canEdit ? setLayoutRows : () => {}}
+                  areas={detail?.areas.map((a) => ({
+                    areaId: a.areaId,
+                    displayId: a.displayId,
+                    name: a.name,
+                  }))}
+                />
+              </div>
             </Section>
 
             {/* AR-00066 영역 목록 (수정 모드에서만, FID-00148) */}
@@ -612,6 +653,7 @@ function ScreenDetailPageInner() {
               rows={26}
               tab={descTab}
               onTabChange={setDescTab}
+              readOnly={!canEdit}
             />
           </Section>
 
