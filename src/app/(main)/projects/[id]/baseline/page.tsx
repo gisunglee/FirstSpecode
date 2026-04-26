@@ -94,24 +94,24 @@ function BaselinePageInner() {
           총 {data?.totalCount ?? 0}건
         </div>
 
-        {/* 요구사항 확정 그리드 (AR-00056) */}
-        {items.length === 0 ? (
-          <div style={{ padding: "60px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-            저장된 기준선이 없습니다.
+        {/* 요구사항 확정 그리드 (AR-00056) — 빈 상태에서도 헤더 표시 (과업 페이지 패턴과 통일) */}
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+          {/* 헤더 행 */}
+          <div style={gridHeaderStyle}>
+            <div>#</div>
+            <div>기준선명</div>
+            <div>확정일시</div>
+            <div>확정자</div>
+            <div>요구사항 수</div>
           </div>
-        ) : (
-          <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-            {/* 헤더 행 */}
-            <div style={gridHeaderStyle}>
-              <div>#</div>
-              <div>기준선명</div>
-              <div>확정일시</div>
-              <div>확정자</div>
-              <div>요구사항 수</div>
-            </div>
 
-            {/* 데이터 행 */}
-            {items.map((item, idx) => (
+          {items.length === 0 ? (
+            <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+              저장된 기준선이 없습니다.
+            </div>
+          ) : (
+            /* 데이터 행 */
+            items.map((item, idx) => (
               <div
                 key={item.baselineId}
                 onClick={() => router.push(`/projects/${projectId}/baseline/${item.baselineId}`)}
@@ -154,9 +154,9 @@ function BaselinePageInner() {
                   </span>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            ))
+          )}
+        </div>
 
       </div>
 

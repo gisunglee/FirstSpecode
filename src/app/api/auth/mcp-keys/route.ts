@@ -10,6 +10,11 @@
  *
  * 제한:
  *   - 사용자당 활성 키 최대 10개
+ *   - keyUseSe='WORKER' 발급 시 prjctId 필수 (전역 발급 차단)
+ *
+ * 키 용도 (key_use_se_code, [2026-04-26] 추가):
+ *   - 'CLIENT' (기본) — Claude Code MCP 도구용. 전역/프로젝트 scope 자유.
+ *   - 'WORKER'      — /run-ai-tasks 워커용. 프로젝트 scope 필수 (전역 거부).
  *
  * 과거 경로: /api/auth/api-keys (2026-04-24 mcp-keys로 rename — 용도 명확화)
  */
@@ -24,6 +29,11 @@ import { MCP_KEY_GLOBAL_SCOPE, isGlobalMcpKey } from "@/lib/mcpKeyScope";
 // 사용자당 활성 MCP 키 최대 개수
 const MAX_MCP_KEYS_PER_USER = 10;
 
+// [2026-04-26] 키 용도 허용값 — DB CHECK 제약과 동일하게 유지할 것
+// (변경 시 prisma/sql/2026-04-26_add_mcp_key_use_se_code.sql 의 CHECK 도 함께 수정)
+const ALLOWED_KEY_USE_SE = ["CLIENT", "WORKER"] as const;
+type KeyUseSe = (typeof ALLOWED_KEY_USE_SE)[number];
+
 // ─── GET: MCP 키 목록 조회 ─────────────────────────────────────────
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -34,12 +44,13 @@ export async function GET(request: NextRequest) {
       where: { mber_id: auth.mberId, revoke_dt: null },
       orderBy: { creat_dt: "desc" },
       select: {
-        api_key_id:   true,
-        key_prefix:   true,
-        key_nm:       true,
-        prjct_id:     true,
-        creat_dt:     true,
-        last_used_dt: true,
+        api_key_id:      true,
+        key_prefix:      true,
+        key_nm:          true,
+        key_use_se_code: true,   // [2026-04-26] 용도 표시용
+        prjct_id:        true,
+        creat_dt:        true,
+        last_used_dt:    true,
       },
     });
 
@@ -63,6 +74,7 @@ export async function GET(request: NextRequest) {
         apiKeyId:   k.api_key_id,
         keyPrefix:  k.key_prefix,
         keyName:    k.key_nm,
+        keyUseSe:   k.key_use_se_code,   // [2026-04-26] 'CLIENT' | 'WORKER'
         // UI 호환: 전역이면 null (기존 UI가 prjctId null 체크로 배지 분기)
         prjctId:    global ? null : k.prjct_id,
         prjctNm:    global ? null : projectNameMap.get(k.prjct_id) ?? null,
@@ -90,7 +102,11 @@ export async function POST(request: NextRequest) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { keyName, prjctId } = body as { keyName?: string; prjctId?: string };
+  const { keyName, prjctId, keyUseSe } = body as {
+    keyName?:  string;
+    prjctId?:  string;
+    keyUseSe?: string;   // [2026-04-26] 'CLIENT' (기본) 또는 'WORKER'
+  };
 
   // ── 키 이름 검증 ───────────────────────────────────────────────
   if (!keyName?.trim()) {
@@ -98,6 +114,29 @@ export async function POST(request: NextRequest) {
   }
   if (keyName.trim().length > 100) {
     return apiError("VALIDATION_ERROR", "키 이름은 100자 이하여야 합니다.", 400);
+  }
+
+  // ── 키 용도 검증 ───────────────────────────────────────────────
+  // 미지정 시 'CLIENT' 기본 (기존 호출자 호환). 잘못된 값은 거부.
+  const useSeRaw = keyUseSe ?? "CLIENT";
+  if (!ALLOWED_KEY_USE_SE.includes(useSeRaw as KeyUseSe)) {
+    return apiError(
+      "VALIDATION_ERROR",
+      `키 용도는 ${ALLOWED_KEY_USE_SE.join(" 또는 ")} 중 하나여야 합니다.`,
+      400
+    );
+  }
+  const useSe = useSeRaw as KeyUseSe;
+
+  // 'WORKER' 키는 프로젝트 scope 강제 — 전역 발급 차단 (사용자 실수 원천 봉쇄)
+  // 워커는 단일 프로젝트 컨텍스트에서만 동작해야 하므로 발급 단계에서 막는다.
+  // 서버측 워커 인증(worker/_lib/auth.ts)에서 한 번 더 차단되는 이중 방어.
+  if (useSe === "WORKER" && !prjctId) {
+    return apiError(
+      "VALIDATION_ERROR",
+      "워커용 키는 반드시 프로젝트 scope 를 지정해야 합니다. 전역('ALL') 발급 불가.",
+      400
+    );
   }
 
   // ── 프로젝트 scope 요청 시 멤버십 검증 ─────────────────────────
@@ -139,11 +178,12 @@ export async function POST(request: NextRequest) {
 
     const created = await prisma.tbCmMcpKey.create({
       data: {
-        mber_id:    auth.mberId,
-        prjct_id:   scopeValue,
-        key_hash:   keyHash,
-        key_prefix: keyPrefix,
-        key_nm:     keyName.trim(),
+        mber_id:         auth.mberId,
+        prjct_id:        scopeValue,
+        key_use_se_code: useSe,        // [2026-04-26] 'CLIENT' 또는 'WORKER'
+        key_hash:        keyHash,
+        key_prefix:      keyPrefix,
+        key_nm:          keyName.trim(),
       },
     });
 
@@ -160,6 +200,7 @@ export async function POST(request: NextRequest) {
       {
         apiKeyId: created.api_key_id,
         keyName:  created.key_nm,
+        keyUseSe: created.key_use_se_code,   // [2026-04-26] 'CLIENT' | 'WORKER'
         keyPrefix,
         rawKey,
         // UI 호환: 전역이면 null

@@ -8,7 +8,13 @@
  *   - IN_PROGRESS 상태가 아닌 경우 409 반환
  *
  * 인증:
- *   X-Worker-Key 헤더 필수
+ *   - X-Mcp-Key (WORKER 용도 키) 단일 채널
+ *   - 본인 요청 + 자기 프로젝트 태스크만 완료 처리 가능 (소유권 검증)
+ *
+ * 동시성:
+ *   - 트랜잭션 내 atomic updateMany — `where` 에 IN_PROGRESS + 소유권 박음
+ *   - count=1 인 경우만 ref 엔티티 결과 전파. 같은 트랜잭션이라 일관성 보장.
+ *   - 두 워커가 동시 complete 시도해도 하나만 통과, 다른 하나는 409.
  *
  * Body:
  *   {
@@ -26,9 +32,9 @@ import { requireWorkerAuth } from "../../../_lib/auth";
 type RouteParams = { params: Promise<{ taskId: string }> };
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  // 워커 인증 확인
-  const authError = requireWorkerAuth(request);
-  if (authError) return authError;
+  // 워커 인증 — MCP 키(WORKER 용도) 단일 채널
+  const auth = await requireWorkerAuth(request);
+  if (auth instanceof Response) return auth;
 
   const { taskId } = await params;
 
@@ -52,37 +58,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    // ref_ty_code / ref_id 는 applyResultToRef 에서 사용하므로 함께 조회
-    const task = await prisma.tbAiTask.findUnique({
-      where:  { ai_task_id: taskId },
-      select: {
-        ai_task_id:      true,
-        task_sttus_code: true,
-        ref_ty_code:     true,
-        ref_id:          true,
-      },
-    });
-
-    if (!task) {
-      return apiError("NOT_FOUND", "AI 태스크를 찾을 수 없습니다.", 404);
-    }
-
-    // IN_PROGRESS 상태에서만 완료 처리 가능
-    if (task.task_sttus_code !== "IN_PROGRESS") {
-      return apiError(
-        "CONFLICT",
-        `현재 상태(${task.task_sttus_code})에서는 완료 처리할 수 없습니다. IN_PROGRESS 상태여야 합니다.`,
-        409
-      );
-    }
-
-    // 태스크 상태 전환과 ref 엔티티 결과 반영을 하나의 트랜잭션으로 묶는다.
-    // 이유: 둘 중 하나만 성공하면 상태 불일치가 발생한다.
-    //   - 태스크는 DONE 이지만 ref 엔티티에 결과 없음 → 화면에서 결과가 안 보임
-    //   - ref 엔티티는 갱신됐는데 태스크는 IN_PROGRESS → 중복 처리 위험
-    await prisma.$transaction(async (tx) => {
-      await tx.tbAiTask.update({
-        where: { ai_task_id: taskId },
+    // ── 트랜잭션 안 atomic update + ref 엔티티 결과 전파 ─────────────
+    // updateMany 의 where 절에 상태(IN_PROGRESS) + 소유권을 모두 박아 race 차단.
+    // count !== 1 이면 트랜잭션 자체에서 일찍 빠져나와 진단 path 로 이동.
+    // count === 1 인 경우에만 ref 정보 조회 → applyResultToRef.
+    //   같은 트랜잭션이라 task 의 ref_ty_code/ref_id 가 일관됨.
+    //   ref 갱신 실패 시 트랜잭션 롤백 → task 상태 전환도 함께 되돌아감 (상태 불일치 차단).
+    const txResult = await prisma.$transaction(async (tx) => {
+      const updated = await tx.tbAiTask.updateMany({
+        where: {
+          ai_task_id:      taskId,
+          task_sttus_code: "IN_PROGRESS",
+          prjct_id:        auth.prjctId,
+          req_mber_id:     auth.mberId,
+        },
         data: {
           task_sttus_code: status,
           result_cn:       trimmedResult || null,
@@ -90,14 +79,54 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         },
       });
 
-      // DONE 성공 건에만 ref 엔티티로 결과 전파.
-      // FAILED 의 resultCn 은 에러 메시지일 가능성이 높아 사용자 컨텐츠 컬럼을 오염시키므로 전파 금지.
-      if (status === "DONE") {
-        await applyResultToRef(tx, task.ref_ty_code, task.ref_id, trimmedResult);
+      if (updated.count !== 1) {
+        return { ok: false as const };
       }
+
+      // DONE 성공 건에만 ref 엔티티로 결과 전파.
+      // FAILED 의 resultCn 은 에러 메시지일 가능성이 높아 사용자 컨텐츠 컬럼 오염 방지.
+      if (status === "DONE") {
+        const task = await tx.tbAiTask.findUnique({
+          where:  { ai_task_id: taskId },
+          select: { ref_ty_code: true, ref_id: true },
+        });
+        if (task) {
+          await applyResultToRef(tx, task.ref_ty_code, task.ref_id, trimmedResult);
+        }
+      }
+
+      return { ok: true as const };
     });
 
-    return apiSuccess({ taskId, status, completedAt: new Date().toISOString() });
+    if (txResult.ok) {
+      return apiSuccess({ taskId, status, completedAt: new Date().toISOString() });
+    }
+
+    // ── count=0 진단 (느린 path) ────────────────────────────────────
+    // 정상 흐름에서는 거의 도달 안 함. 도달 시 사용자 디버깅용 에러 구분.
+    const task = await prisma.tbAiTask.findUnique({
+      where:  { ai_task_id: taskId },
+      select: { task_sttus_code: true, prjct_id: true, req_mber_id: true },
+    });
+
+    if (!task) {
+      return apiError("NOT_FOUND", "AI 태스크를 찾을 수 없습니다.", 404);
+    }
+
+    if (task.prjct_id !== auth.prjctId || task.req_mber_id !== auth.mberId) {
+      return apiError(
+        "FORBIDDEN_TASK_OWNERSHIP",
+        "이 태스크에 접근할 권한이 없습니다.",
+        403,
+      );
+    }
+
+    return apiError(
+      "CONFLICT",
+      `현재 상태(${task.task_sttus_code})에서는 완료 처리할 수 없습니다. ` +
+      `IN_PROGRESS 상태여야 하며, 다른 워커가 이미 완료 처리했을 수 있습니다.`,
+      409,
+    );
   } catch (err) {
     console.error(`[POST /api/worker/tasks/${taskId}/complete] 오류:`, err);
     return apiError("DB_ERROR", "태스크 완료 처리에 실패했습니다.", 500);

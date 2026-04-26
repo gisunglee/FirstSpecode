@@ -176,23 +176,23 @@ function UserStoriesPageInner() {
         )}
       </div>
 
-      {/* ── 테이블 목록 ──────────────────────────────────────────────────────── */}
-      {stories.length === 0 ? (
-        <div style={{ padding: "60px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-          등록된 사용자스토리가 없습니다.
+      {/* ── 테이블 목록 — 빈 상태에서도 헤더 표시 (과업 페이지 패턴과 통일) ────── */}
+      <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+        {/* 헤더 */}
+        <div style={gridHeaderStyle}>
+          <div>요구사항</div>
+          <div>스토리명</div>
+          <div>페르소나</div>
+          <div style={{ textAlign: "center" }}>인수기준</div>
         </div>
-      ) : (
-        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-          {/* 헤더 */}
-          <div style={gridHeaderStyle}>
-            <div>요구사항</div>
-            <div>스토리명</div>
-            <div>페르소나</div>
-            <div style={{ textAlign: "center" }}>인수기준</div>
-          </div>
 
-          {/* 행 */}
-          {stories.map((s, idx) => (
+        {stories.length === 0 ? (
+          <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+            등록된 사용자스토리가 없습니다.
+          </div>
+        ) : (
+          /* 행 */
+          stories.map((s, idx) => (
             <div
               key={s.storyId}
               onClick={() => router.push(`/projects/${projectId}/user-stories/${s.storyId}`)}
@@ -243,9 +243,9 @@ function UserStoriesPageInner() {
                 </span>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
 
       </div>
     </div>

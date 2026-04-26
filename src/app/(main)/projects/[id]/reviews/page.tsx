@@ -118,26 +118,26 @@ function ReviewsPageInner() {
         총 {items.length}건
       </div>
 
-      {/* 목록 테이블 */}
-      {items.length === 0 ? (
-        <div style={{ padding: "60px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-          등록된 리뷰 요청이 없습니다.
-        </div>
-      ) : (
-        <div style={{ padding: "0 24px 24px" }}>
-          <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-            {/* 헤더 행 */}
-            <div style={gridHeaderStyle}>
-              <div>제목</div>
-              <div>요청자</div>
-              <div>답변자</div>
-              <div>상태</div>
-              <div style={{ textAlign: "center" }}>코멘트</div>
-              <div>요청 일시</div>
-              <div>답변 일시</div>
-            </div>
+      {/* 목록 테이블 — 빈 상태에서도 헤더 표시 (과업 페이지 패턴과 통일) */}
+      <div style={{ padding: "0 24px 24px" }}>
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+          {/* 헤더 행 */}
+          <div style={gridHeaderStyle}>
+            <div>제목</div>
+            <div>요청자</div>
+            <div>답변자</div>
+            <div>상태</div>
+            <div style={{ textAlign: "center" }}>코멘트</div>
+            <div>요청 일시</div>
+            <div>답변 일시</div>
+          </div>
 
-            {items.map((item, idx) => {
+          {items.length === 0 ? (
+            <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+              등록된 리뷰 요청이 없습니다.
+            </div>
+          ) : (
+            items.map((item, idx) => {
               const st = STATUS_MAP[item.statusCode] ?? { label: item.statusCode, color: "#555", bg: "#f5f5f5" };
               return (
                 <div
@@ -199,10 +199,10 @@ function ReviewsPageInner() {
                   </div>
                 </div>
               );
-            })}
-          </div>
+            })
+          )}
         </div>
-      )}
+      </div>
 
       {/* 신규 리뷰 요청 모달 */}
       {modalOpen && (

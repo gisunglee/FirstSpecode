@@ -7,7 +7,8 @@
  *   - 화면 CRUD API(/api/projects/...)와 완전히 분리된 워커 전용 엔드포인트
  *
  * 인증:
- *   X-Worker-Key 헤더 필수 (WORKER_API_KEY 환경변수)
+ *   - X-Mcp-Key 헤더(WORKER 용도 키)만 허용. 자동으로 본인 요청 + 자기 프로젝트 PENDING 만 반환.
+ *   - 자세한 가드는 src/app/api/worker/_lib/auth.ts 참조
  *
  * Query Parameters:
  *   limit           — 최대 조회 건수 (기본 10, 최대 50)
@@ -18,12 +19,19 @@
  *                     향후 taskType 종류가 늘어나도 "구현만 빼기" 식 호출이 가능하도록 분리
  *                     taskType(포함)과 동시에 주면 포함 후 제외 순으로 적용
  *   refType         — 참조 유형 필터 (AREA|FUNCTION), 쉼표 복수 지원
+ *   statusOnly      — "true" 이면 태스크 본문은 가져오지 않고 큐 카운트만 반환 (자가 점검용)
+ *                     /run-ai-tasks STATUS 명령에서 사용 — 인증 정보 + 큐 통계만 필요
+ *
+ * 응답:
+ *   { count, tasks, meta: { mberName, email, prjctName, prjctId, keyName, lastUsedAt, pending? } }
+ *   meta 는 워커 클라이언트가 "지금 누구 키로 동작 중인지" 즉시 인지하도록 노출.
+ *   meta.pending 은 statusOnly=true 일 때 큐 카운트(전체/타입별) 표시.
  */
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
-import { requireWorkerAuth } from "../_lib/auth";
+import { requireWorkerAuth, type WorkerAuth } from "../_lib/auth";
 
 type AttachmentDto = {
   fileId:      string;
@@ -34,13 +42,17 @@ type AttachmentDto = {
 };
 
 export async function GET(request: NextRequest) {
-  // 워커 인증 확인
-  const authError = requireWorkerAuth(request);
-  if (authError) return authError;
+  // ── 워커 인증 — MCP 키(WORKER 용도) 단일 채널 ─────────────────
+  const auth = await requireWorkerAuth(request);
+  if (auth instanceof Response) return auth;
 
   const url      = new URL(request.url);
   const limitRaw = parseInt(url.searchParams.get("limit") ?? "10");
   const limit    = Math.min(Math.max(1, isNaN(limitRaw) ? 10 : limitRaw), 50);
+
+  // [2026-04-26] 자가 점검 모드 — 태스크 본문 안 가져오고 카운트만
+  // /run-ai-tasks STATUS 명령에서 사용. 사용자가 키 노출 의심 시 빠른 진단 가능.
+  const statusOnly = url.searchParams.get("statusOnly") === "true";
 
   // 쉼표로 구분된 복수 값을 지원 — "INSPECT,IMPACT" 같은 그룹 필터용
   // 공백 제거 후 빈 문자열은 탈락시켜 방어 처리
@@ -53,10 +65,47 @@ export async function GET(request: NextRequest) {
   // 두 필터를 따로 스프레드하면 제외 또는 포함 중 하나만 적용되는 버그가 생긴다.
   const taskTypeWhere = buildTaskTypeWhere(taskTypes, excludeTaskTypes);
 
+  // ── 본인 요청 + 자기 프로젝트 자동 필터 ────────────────────────
+  // 사칭 차단의 핵심 — 워커가 mberId/prjctId 를 명시적으로 보낼 필요 없이
+  // 서버가 키에서 자동으로 결정하므로 헤더 위조로 다른 사용자 큐를 빼올 수 없음.
+  const ownerFilter = { req_mber_id: auth.mberId, prjct_id: auth.prjctId };
+
   // 포함과 제외가 완전히 동일한 경우 → 결과는 반드시 공집합이므로 DB 쿼리 없이 빈 배열 반환
   // (예: taskType=IMPLEMENT & excludeTaskType=IMPLEMENT 같은 호출자 실수 방어)
   if (taskTypeWhere === "EMPTY_RESULT") {
-    return apiSuccess({ count: 0, tasks: [] });
+    return apiSuccess({ count: 0, tasks: [], meta: buildAuthMeta(auth) });
+  }
+
+  // ── statusOnly 모드 — 본문 없이 카운트만 ────────────────────────
+  // 자가 점검(/run-ai-tasks STATUS) 전용. DB 부하 최소화.
+  // taskType/refType 필터도 동일하게 적용 — 본 조회와 일관된 카운트 보장
+  // (예: ?statusOnly=true&taskType=IMPLEMENT → IMPLEMENT 만 카운트)
+  if (statusOnly) {
+    const baseWhere = {
+      task_sttus_code: "PENDING",
+      OR: [{ exec_avlbl_dt: null }, { exec_avlbl_dt: { lte: new Date() } }],
+      ...(taskTypeWhere ? { task_ty_code: taskTypeWhere } : {}),
+      ...(refTypes.length === 1  ? { ref_ty_code: refTypes[0]   } : {}),
+      ...(refTypes.length >  1  ? { ref_ty_code: { in: refTypes } } : {}),
+      ...ownerFilter,
+    };
+    // 타입별 카운트 — 사용자에게 "지금 SPEC 몇 건, IMP 몇 건" 같이 표시
+    const groupByType = await prisma.tbAiTask.groupBy({
+      by:    ["task_ty_code"],
+      where: baseWhere,
+      _count: { _all: true },
+    });
+    const pendingByType: Record<string, number> = {};
+    let pendingTotal = 0;
+    for (const g of groupByType) {
+      pendingByType[g.task_ty_code] = g._count._all;
+      pendingTotal += g._count._all;
+    }
+    return apiSuccess({
+      count: 0,
+      tasks: [],
+      meta: { ...buildAuthMeta(auth), pending: { total: pendingTotal, byType: pendingByType } },
+    });
   }
 
   try {
@@ -71,6 +120,8 @@ export async function GET(request: NextRequest) {
         ...(taskTypeWhere ? { task_ty_code: taskTypeWhere } : {}),
         ...(refTypes.length === 1  ? { ref_ty_code: refTypes[0]   } : {}),
         ...(refTypes.length >  1  ? { ref_ty_code: { in: refTypes } }   : {}),
+        // 본인 요청 + 자기 프로젝트로 자동 한정 (사칭 차단)
+        ...ownerFilter,
       },
       orderBy: { req_dt: "asc" }, // FIFO — 오래된 요청부터 처리
       take: limit,
@@ -145,11 +196,32 @@ export async function GET(request: NextRequest) {
         parentTaskId:     t.parent_task_id    ?? null,
         attachments:      attachmentMap.get(t.ai_task_id) ?? [],
       })),
+      // 워커 클라이언트가 "지금 누구 키로, 어느 프로젝트에서" 동작 중인지
+      // 즉시 인지하도록 노출 — 잘못된 키 박았을 때 빠른 발견의 핵심
+      meta: buildAuthMeta(auth),
     });
   } catch (err) {
     console.error("[GET /api/worker/tasks] DB 오류:", err);
     return apiError("DB_ERROR", "태스크 조회에 실패했습니다.", 500);
   }
+}
+
+/**
+ * 응답의 meta 블록 생성 — 워커가 출력할 신원 정보.
+ *
+ * 사용자가 워커 첫 호출 직후 "어떤 키로, 누구로, 어떤 프로젝트에서" 동작 중인지
+ * 한눈에 확인하도록 풍부한 정보를 내려보낸다.
+ * → 잘못된 키를 박았을 때 즉시 인지 가능 (사용자 실수 차단의 핵심).
+ */
+function buildAuthMeta(auth: WorkerAuth) {
+  return {
+    mberName:   auth.mberNm ?? auth.email ?? "(이름 없음)",
+    email:      auth.email,
+    prjctName:  auth.prjctNm ?? "(프로젝트명 미상)",
+    prjctId:    auth.prjctId,
+    keyName:    auth.keyName,
+    lastUsedAt: auth.lastUsedAt?.toISOString() ?? null,
+  };
 }
 
 /**

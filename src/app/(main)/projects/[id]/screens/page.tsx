@@ -335,31 +335,31 @@ function ScreensPageInner() {
           </div>
         </div>
 
-        {/* 목록 */}
-        {items.length === 0 ? (
-          <div style={{ padding: "60px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-            등록된 화면이 없습니다.
+        {/* 목록 — 빈 상태에서도 헤더 표시 (과업 페이지 패턴과 통일) */}
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+          {/* 헤더 행 */}
+          <div style={gridHeaderStyle}>
+            <div />
+            <div>요구사항 명</div>
+            <div>단위업무 명</div>
+            <div>화면 명</div>
+            <div>담당자</div>
+            <div>화면유형</div>
+            <div style={{ textAlign: "center" }}>영역수</div>
+            <div style={{ textAlign: "center" }}>정렬</div>
+            <div>대분류</div>
+            <div>중분류</div>
+            <div>소분류</div>
+            <div style={{ textAlign: "center" }}>AI 구현</div>
+            <div style={{ textAlign: "center" }}>설/구/테</div>
           </div>
-        ) : (
-          <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-            {/* 헤더 행 */}
-            <div style={gridHeaderStyle}>
-              <div />
-              <div>요구사항 명</div>
-              <div>단위업무 명</div>
-              <div>화면 명</div>
-              <div>담당자</div>
-              <div>화면유형</div>
-              <div style={{ textAlign: "center" }}>영역수</div>
-              <div style={{ textAlign: "center" }}>정렬</div>
-              <div>대분류</div>
-              <div>중분류</div>
-              <div>소분류</div>
-              <div style={{ textAlign: "center" }}>AI 구현</div>
-              <div style={{ textAlign: "center" }}>설/구/테</div>
-            </div>
 
-            {items.map((screen, idx) => {
+          {items.length === 0 ? (
+            <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+              등록된 화면이 없습니다.
+            </div>
+          ) : (
+            items.map((screen, idx) => {
               // 분류순 모드에선 정렬 기준이 대/중/소라 요구사항·단위업무 그룹 경계가 의미 없음
               //   → 매 행에 요구사항·단위업무명을 반복 표시하고, 행 구분선도 모두 그어준다.
               const isFirstReq = isCategoryView
@@ -554,9 +554,9 @@ function ScreensPageInner() {
 
                 </div>
               );
-            })}
-          </div>
-        )}
+            })
+          )}
+        </div>
       </div>
 
       {/* PID-00045 삭제 확인 팝업 */}

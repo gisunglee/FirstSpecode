@@ -8,12 +8,14 @@
  *     로컬 파일 경로를 전달하지 않고 이 엔드포인트로만 파일을 수신한다
  *
  * 인증:
- *   X-Worker-Key 헤더 필수 (세션/JWT 불가)
+ *   - X-Mcp-Key (WORKER 용도 키) 단일 채널
+ *   - 본인 요청 + 자기 프로젝트 태스크의 첨부만 다운로드 가능 (소유권 검증)
  *
  * 보안:
  *   - fileId로 조회한 레코드가 실제 해당 taskId의 첨부인지 검증
  *   - ref_tbl_nm="tb_ai_task"가 아닌 레코드(영역/기능 첨부 등)는 거부
  *   - file_path_nm이 uploads/ 밖을 가리키는 경로 조작 공격 방지
+ *   - 본인 태스크의 첨부만 — 다른 사용자 첨부 다운로드 차단
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -43,9 +45,9 @@ const MIME_BY_EXT: Record<string, string> = {
 };
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  // 워커 인증
-  const authError = requireWorkerAuth(request);
-  if (authError) return authError;
+  // 워커 인증 — MCP 키(WORKER 용도) 단일 채널
+  const auth = await requireWorkerAuth(request);
+  if (auth instanceof Response) return auth;
 
   const { taskId, fileId } = await params;
 
@@ -58,6 +60,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // (다른 리소스의 첨부 파일을 이 경로로 내려받는 것을 차단)
     if (!file || file.ref_tbl_nm !== "tb_ai_task" || file.ref_id !== taskId) {
       return apiError("NOT_FOUND", "첨부 파일을 찾을 수 없습니다.", 404);
+    }
+
+    // 태스크 소유권 검증 — 본인 요청 + 자기 프로젝트 태스크의 첨부만
+    // 첨부는 task ID 로만 격리되므로 task 까지 한 번 더 조회해서 검증한다.
+    const task = await prisma.tbAiTask.findUnique({
+      where:  { ai_task_id: taskId },
+      select: { prjct_id: true, req_mber_id: true },
+    });
+    if (!task || task.prjct_id !== auth.prjctId || task.req_mber_id !== auth.mberId) {
+      return apiError(
+        "FORBIDDEN_TASK_OWNERSHIP",
+        "이 태스크의 첨부에 접근할 권한이 없습니다.",
+        403,
+      );
     }
 
     // 경로 조작 방지 — path.resolve 한 결과가 UPLOAD_ROOT 하위여야만 읽기

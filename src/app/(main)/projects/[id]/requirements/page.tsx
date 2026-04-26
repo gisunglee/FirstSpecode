@@ -292,27 +292,27 @@ function RequirementsPageInner() {
         )}
       </div>
 
-      {/* 목록 */}
-      {items.length === 0 ? (
-        <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-          {isError ? "접근 권한이 없거나 프로젝트 정보를 찾을 수 없습니다." : "등록된 요구사항이 없습니다."}
+      {/* 목록 — 빈 상태에서도 헤더가 항상 보이도록 컨테이너+헤더는 분기 밖에 둠 (과업 페이지 패턴과 통일) */}
+      <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+        {/* 헤더 행 */}
+        <div style={gridHeaderStyle}>
+          <div />
+          <div>과업명</div>
+          <div>요구사항명</div>
+          <div>담당자</div>
+          <div>우선순위</div>
+          <div>출처</div>
+          <div style={{ textAlign: "center" }}>단위업무</div>
+          <div style={{ textAlign: "center" }}>정렬</div>
         </div>
-      ) : (
-        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-          {/* 헤더 행 */}
-          <div style={gridHeaderStyle}>
-            <div />
-            <div>과업명</div>
-            <div>요구사항명</div>
-            <div>담당자</div>
-            <div>우선순위</div>
-            <div>출처</div>
-            <div style={{ textAlign: "center" }}>단위업무</div>
-            <div style={{ textAlign: "center" }}>정렬</div>
-          </div>
 
-          {/* 데이터 행 — 동일 과업명 연속 시 첫 행에만 표시 */}
-          {items.map((req, idx) => {
+        {items.length === 0 ? (
+          <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+            {isError ? "접근 권한이 없거나 프로젝트 정보를 찾을 수 없습니다." : "등록된 요구사항이 없습니다."}
+          </div>
+        ) : (
+          /* 데이터 행 — 동일 과업명 연속 시 첫 행에만 표시 */
+          items.map((req, idx) => {
             // 이전 행과 과업이 같으면 과업명 숨김
             const prevTaskId = idx > 0 ? items[idx - 1].taskId : null;
             const showTaskName = req.taskId !== prevTaskId;
@@ -400,9 +400,9 @@ function RequirementsPageInner() {
 
               </div>
             );
-          })}
-        </div>
-      )}
+          })
+        )}
+      </div>
 
       </div>
 

@@ -81,6 +81,11 @@ export async function POST(request: NextRequest) {
     const token    = generateVerifyToken();
     const expiry   = verifyTokenExpiryDate();
 
+    // 회원명 폴백 — 이메일 회원가입은 이름 입력 필드가 없어 mber_nm 이 NULL 로 저장되면
+    // 멤버 목록·담당자 select 등에서 "(이름 없음)" 으로 표시되는 UX 이슈가 발생.
+    // 소셜 콜백과 동일 정책: 이메일 @ 앞부분(로컬파트)을 회원명으로 자동 저장.
+    const fallbackName = email.split("@")[0];
+
     // 회원 생성 + 인증 토큰 INSERT (트랜잭션)
     const member = await prisma.$transaction(async (tx) => {
       const newMember = await tx.tbCmMember.create({
@@ -88,6 +93,7 @@ export async function POST(request: NextRequest) {
           email_addr:      email,
           pswd_hash:       pswdHash,
           mber_sttus_code: "UNVERIFIED",
+          mber_nm:         fallbackName,
         },
       });
 

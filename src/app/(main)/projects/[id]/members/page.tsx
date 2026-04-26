@@ -223,11 +223,11 @@ function MembersPageInner() {
         borderRadius: "var(--radius-lg)",
         overflow: "hidden",
       }}>
-        {/* 헤더 — 역할/직무 2개 컬럼 분리 */}
+        {/* 헤더 — 다른 목록 페이지와 행 두께 통일 (10px 16px / 12px 16px) */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "1fr 140px 140px 110px 120px",
-          padding: "12px 20px",
+          gridTemplateColumns: "1.6fr 140px 140px 110px 120px",
+          padding: "10px 16px",
           background: "var(--color-bg-muted)",
           borderBottom: "1px solid var(--color-border)",
           fontSize: 12,
@@ -260,24 +260,30 @@ function MembersPageInner() {
                 key={member.memberId}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 140px 140px 110px 120px",
-                  padding: "14px 20px",
+                  gridTemplateColumns: "1.6fr 140px 140px 110px 120px",
+                  padding: "12px 16px",
                   borderBottom: "1px solid var(--color-border)",
                   alignItems: "center",
                   gap: 16,
                 }}
               >
-                {/* 이름 / 이메일 */}
-                <div>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                {/* 이름 / 이메일 — 한 줄에 수평 배치 (다른 목록 페이지 행 두께와 통일) */}
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, overflow: "hidden" }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "var(--color-text-primary)", flexShrink: 0 }}>
                     {member.name ?? "(이름 없음)"}
-                    {isMe && (
-                      <span style={{ marginLeft: 6, fontSize: 11, color: "#888" }}>(나)</span>
-                    )}
-                  </p>
-                  <p style={{ margin: 0, fontSize: 12, color: "var(--color-text-secondary)" }}>
+                  </span>
+                  {isMe && (
+                    <span style={{ fontSize: 11, color: "#888", flexShrink: 0 }}>(나)</span>
+                  )}
+                  <span style={{
+                    fontSize: 12,
+                    color: "var(--color-text-secondary)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}>
                     {member.email}
-                  </p>
+                  </span>
                 </div>
 
                 {/* 역할 드롭다운 / 배지 */}

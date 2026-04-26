@@ -172,6 +172,9 @@ function RequirementDetailPageInner() {
   // 요구사항 삭제 팝업 상태
   const [reqDeleteOpen, setReqDeleteOpen] = useState(false);
 
+  // Word 출력 진행 상태 — 버튼 disabled / 라벨 전환용
+  const [isExporting, setIsExporting] = useState(false);
+
   // 파일 업로드 input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -225,6 +228,10 @@ function RequirementDetailPageInner() {
   const originalAssigneeId = detail?.assignMemberId ?? null;
   const isAssignee = !!myMemberId && originalAssigneeId === myMemberId;
   const canEdit = isNew ? true : (matrixUpdateOK || isAssignee);
+
+  // Word 출력 권한 — content.export 매트릭스(MEMBER 이상). 신규 모드에선 출력할 데이터가 없어서 비활성.
+  // 시스템 관리자 지원 세션은 API 측에서 자동 차단되므로 UI 단에선 별도 분기 불필요.
+  const canExport = !isNew && hasPerm("content.export");
 
   // detail 로드되거나 reqId가 바뀌면 폼을 항상 동기화 — 캐시 hit 재방문에서도 재실행됨.
   useEffect(() => {
@@ -469,6 +476,55 @@ function RequirementDetailPageInner() {
     }
   }
 
+  // ── 요구사항 명세서 Word(.docx) 출력 ───────────────────────────────────────
+  // 첨부파일 다운로드와 같은 방식: AT 헤더 직접 부착 + blob → <a> 클릭 트리거.
+  // authFetch 는 항상 res.json() 으로 파싱하므로 바이너리 응답에 사용 불가 — fetch 직접 호출.
+  async function handleExportDocx() {
+    if (!detail) return;
+
+    const at =
+      typeof window !== "undefined"
+        ? (sessionStorage.getItem("access_token") ?? "")
+        : "";
+
+    setIsExporting(true);
+    try {
+      const url = `/api/projects/${projectId}/requirements/${reqId}/export/docx`;
+      const res = await fetch(url, { headers: at ? { Authorization: `Bearer ${at}` } : {} });
+
+      if (!res.ok) {
+        // 에러 응답은 JSON — 메시지 추출해서 사용자에게 노출
+        let msg = `요청 실패 (${res.status})`;
+        try {
+          const err = await res.json();
+          if (err?.message) msg = err.message;
+        } catch { /* JSON 아니면 기본 메시지 사용 */ }
+        toast.error(msg);
+        return;
+      }
+
+      // 서버가 RFC 5987 형식으로 인코딩된 한글 파일명을 보냄 — 그대로 사용
+      // 예) filename*=UTF-8''REQ-00022_%EC%9A%94%EA%B5%AC%EC%82%AC%ED%95%AD%EB%AA%85%EC%84%B8%EC%84%9C.docx
+      const disposition = res.headers.get("content-disposition") ?? "";
+      const m = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+      const filename = m
+        ? decodeURIComponent(m[1])
+        : `${detail.displayId}_요구사항명세서.docx`;
+
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success("Word 파일이 다운로드되었습니다.");
+    } catch {
+      toast.error("Word 파일 생성에 실패했습니다.");
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   // ── 파일 다운로드 ───────────────────────────────────────────────────────────
   function handleDownload(file: AttachedFile) {
     const at =
@@ -522,6 +578,16 @@ function RequirementDetailPageInner() {
               style={{ fontSize: 12, padding: "5px 14px", minWidth: 60, borderRadius: 6, border: "1px solid #e53935", background: "none", color: "#e53935", cursor: "pointer", fontWeight: 600 }}
             >
               삭제
+            </button>
+          )}
+          {/* Word 출력 — 신규 아니고 출력 권한 있을 때만. 추후 PDF 추가되면 드롭다운으로 확장 */}
+          {canExport && (
+            <button
+              onClick={handleExportDocx}
+              disabled={isExporting}
+              style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 80, opacity: isExporting ? 0.6 : 1, cursor: isExporting ? "wait" : "pointer" }}
+            >
+              {isExporting ? "출력 중..." : "Word 출력"}
             </button>
           )}
           {/* 취소 — 항상 노출 (단순 페이지 이동, 권한 무관) */}

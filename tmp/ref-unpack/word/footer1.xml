@@ -1,0 +1,332 @@
+<?xml version="1.0" encoding="utf-8"?>
+<w:ftr xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex" xmlns:cx1="http://schemas.microsoft.com/office/drawing/2015/9/8/chartex" xmlns:cx2="http://schemas.microsoft.com/office/drawing/2015/10/21/chartex" xmlns:cx3="http://schemas.microsoft.com/office/drawing/2016/5/9/chartex" xmlns:cx4="http://schemas.microsoft.com/office/drawing/2016/5/10/chartex" xmlns:cx5="http://schemas.microsoft.com/office/drawing/2016/5/11/chartex" xmlns:cx6="http://schemas.microsoft.com/office/drawing/2016/5/12/chartex" xmlns:cx7="http://schemas.microsoft.com/office/drawing/2016/5/13/chartex" xmlns:cx8="http://schemas.microsoft.com/office/drawing/2016/5/14/chartex" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:aink="http://schemas.microsoft.com/office/drawing/2016/ink" xmlns:am3d="http://schemas.microsoft.com/office/drawing/2017/model3d" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:oel="http://schemas.microsoft.com/office/2019/extlst" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml" xmlns:w16cex="http://schemas.microsoft.com/office/word/2018/wordml/cex" xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid" xmlns:w16="http://schemas.microsoft.com/office/word/2018/wordml" xmlns:w16du="http://schemas.microsoft.com/office/word/2023/wordml/word16du" xmlns:w16sdtdh="http://schemas.microsoft.com/office/word/2020/wordml/sdtdatahash" xmlns:w16sdtfl="http://schemas.microsoft.com/office/word/2024/wordml/sdtformatlock" xmlns:w16se="http://schemas.microsoft.com/office/word/2015/wordml/symex" xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" mc:Ignorable="w14 w15 w16se w16cid w16 w16cex w16sdtdh w16sdtfl w16du wp14">
+  <w:tbl>
+    <w:tblPr>
+      <w:tblW w:w="0" w:type="auto"/>
+      <w:tblInd w:w="99" w:type="dxa"/>
+      <w:tblBorders>
+        <w:top w:val="single" w:sz="24" w:space="0" w:color="808080"/>
+      </w:tblBorders>
+      <w:tblCellMar>
+        <w:left w:w="99" w:type="dxa"/>
+        <w:right w:w="99" w:type="dxa"/>
+      </w:tblCellMar>
+      <w:tblLook w:val="0000" w:firstRow="0" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="0"/>
+    </w:tblPr>
+    <w:tblGrid>
+      <w:gridCol w:w="4579"/>
+      <w:gridCol w:w="851"/>
+      <w:gridCol w:w="4677"/>
+    </w:tblGrid>
+    <w:tr w:rsidR="000B2C0E" w14:paraId="3205E2F8" w14:textId="77777777" w:rsidTr="00775430">
+      <w:trPr>
+        <w:trHeight w:val="375"/>
+      </w:trPr>
+      <w:tc>
+        <w:tcPr>
+          <w:tcW w:w="4579" w:type="dxa"/>
+          <w:tcBorders>
+            <w:top w:val="nil"/>
+          </w:tcBorders>
+        </w:tcPr>
+        <w:p w14:paraId="6484D6B5" w14:textId="77777777" w:rsidR="000B2C0E" w:rsidRPr="00EC33BF" w:rsidRDefault="000B2C0E" w:rsidP="00863075">
+          <w:pPr>
+            <w:jc w:val="center"/>
+            <w:rPr>
+              <w:rFonts w:ascii="맑은 고딕" w:eastAsia="맑은 고딕" w:hAnsi="맑은 고딕"/>
+              <w:b/>
+              <w:lang w:eastAsia="ko-KR"/>
+            </w:rPr>
+          </w:pPr>
+        </w:p>
+      </w:tc>
+      <w:tc>
+        <w:tcPr>
+          <w:tcW w:w="851" w:type="dxa"/>
+          <w:tcBorders>
+            <w:top w:val="nil"/>
+          </w:tcBorders>
+        </w:tcPr>
+        <w:p w14:paraId="572DD749" w14:textId="77777777" w:rsidR="000B2C0E" w:rsidRPr="00771EFE" w:rsidRDefault="000B2C0E" w:rsidP="00775430">
+          <w:pPr>
+            <w:spacing w:line="80" w:lineRule="atLeast"/>
+            <w:jc w:val="center"/>
+            <w:rPr>
+              <w:rFonts w:ascii="맑은 고딕" w:eastAsia="맑은 고딕" w:hAnsi="맑은 고딕"/>
+              <w:b/>
+              <w:i/>
+              <w:iCs/>
+              <w:position w:val="24"/>
+              <w:sz w:val="16"/>
+            </w:rPr>
+          </w:pPr>
+        </w:p>
+      </w:tc>
+      <w:tc>
+        <w:tcPr>
+          <w:tcW w:w="4677" w:type="dxa"/>
+          <w:tcBorders>
+            <w:top w:val="nil"/>
+          </w:tcBorders>
+        </w:tcPr>
+        <w:p w14:paraId="14A8FD30" w14:textId="77777777" w:rsidR="000B2C0E" w:rsidRPr="00771EFE" w:rsidRDefault="000B2C0E" w:rsidP="00F77CFA">
+          <w:pPr>
+            <w:spacing w:line="80" w:lineRule="atLeast"/>
+            <w:jc w:val="right"/>
+            <w:rPr>
+              <w:rFonts w:ascii="맑은 고딕" w:eastAsia="맑은 고딕" w:hAnsi="맑은 고딕"/>
+              <w:b/>
+              <w:i/>
+              <w:iCs/>
+              <w:position w:val="24"/>
+              <w:sz w:val="16"/>
+            </w:rPr>
+          </w:pPr>
+        </w:p>
+      </w:tc>
+    </w:tr>
+    <w:tr w:rsidR="000B2C0E" w14:paraId="35B6F76D" w14:textId="77777777" w:rsidTr="00775430">
+      <w:trPr>
+        <w:trHeight w:val="284"/>
+      </w:trPr>
+      <w:tc>
+        <w:tcPr>
+          <w:tcW w:w="4579" w:type="dxa"/>
+          <w:vAlign w:val="bottom"/>
+        </w:tcPr>
+        <w:p w14:paraId="26E11757" w14:textId="77777777" w:rsidR="000B2C0E" w:rsidRPr="00BB16B7" w:rsidRDefault="000B2C0E" w:rsidP="00A20B04">
+          <w:pPr>
+            <w:rPr>
+              <w:rFonts w:asciiTheme="minorEastAsia" w:eastAsiaTheme="minorEastAsia" w:hAnsiTheme="minorEastAsia"/>
+              <w:lang w:eastAsia="ko-KR"/>
+            </w:rPr>
+          </w:pPr>
+        </w:p>
+      </w:tc>
+      <w:tc>
+        <w:tcPr>
+          <w:tcW w:w="851" w:type="dxa"/>
+          <w:vAlign w:val="bottom"/>
+        </w:tcPr>
+        <w:p w14:paraId="244936E1" w14:textId="77777777" w:rsidR="000B2C0E" w:rsidRPr="009D55EB" w:rsidRDefault="000B2C0E" w:rsidP="00775430">
+          <w:pPr>
+            <w:jc w:val="center"/>
+            <w:rPr>
+              <w:rFonts w:asciiTheme="minorHAnsi" w:eastAsiaTheme="minorHAnsi" w:hAnsiTheme="minorHAnsi"/>
+              <w:lang w:eastAsia="ko-KR"/>
+            </w:rPr>
+          </w:pPr>
+          <w:r w:rsidRPr="009D55EB">
+            <w:rPr>
+              <w:rFonts w:asciiTheme="minorHAnsi" w:eastAsiaTheme="minorHAnsi" w:hAnsiTheme="minorHAnsi"/>
+            </w:rPr>
+            <w:fldChar w:fldCharType="begin"/>
+          </w:r>
+          <w:r w:rsidRPr="009D55EB">
+            <w:rPr>
+              <w:rFonts w:asciiTheme="minorHAnsi" w:eastAsiaTheme="minorHAnsi" w:hAnsiTheme="minorHAnsi"/>
+            </w:rPr>
+            <w:instrText xml:space="preserve"> PAGE  </w:instrText>
+          </w:r>
+          <w:r w:rsidRPr="009D55EB">
+            <w:rPr>
+              <w:rFonts w:asciiTheme="minorHAnsi" w:eastAsiaTheme="minorHAnsi" w:hAnsiTheme="minorHAnsi"/>
+            </w:rPr>
+            <w:fldChar w:fldCharType="separate"/>
+          </w:r>
+          <w:r>
+            <w:rPr>
+              <w:rFonts w:asciiTheme="minorHAnsi" w:eastAsiaTheme="minorHAnsi" w:hAnsiTheme="minorHAnsi"/>
+              <w:noProof/>
+            </w:rPr>
+            <w:t>6</w:t>
+          </w:r>
+          <w:r w:rsidRPr="009D55EB">
+            <w:rPr>
+              <w:rFonts w:asciiTheme="minorHAnsi" w:eastAsiaTheme="minorHAnsi" w:hAnsiTheme="minorHAnsi"/>
+            </w:rPr>
+            <w:fldChar w:fldCharType="end"/>
+          </w:r>
+          <w:r w:rsidRPr="009D55EB">
+            <w:rPr>
+              <w:rFonts w:asciiTheme="minorHAnsi" w:eastAsiaTheme="minorHAnsi" w:hAnsiTheme="minorHAnsi" w:hint="eastAsia"/>
+              <w:lang w:eastAsia="ko-KR"/>
+            </w:rPr>
+            <w:t>/</w:t>
+          </w:r>
+          <w:r w:rsidRPr="009D55EB">
+            <w:rPr>
+              <w:rFonts w:asciiTheme="minorHAnsi" w:eastAsiaTheme="minorHAnsi" w:hAnsiTheme="minorHAnsi"/>
+            </w:rPr>
+            <w:fldChar w:fldCharType="begin"/>
+          </w:r>
+          <w:r w:rsidRPr="009D55EB">
+            <w:rPr>
+              <w:rFonts w:asciiTheme="minorHAnsi" w:eastAsiaTheme="minorHAnsi" w:hAnsiTheme="minorHAnsi"/>
+            </w:rPr>
+            <w:instrText xml:space="preserve"> NUMPAGES  </w:instrText>
+          </w:r>
+          <w:r w:rsidRPr="009D55EB">
+            <w:rPr>
+              <w:rFonts w:asciiTheme="minorHAnsi" w:eastAsiaTheme="minorHAnsi" w:hAnsiTheme="minorHAnsi"/>
+            </w:rPr>
+            <w:fldChar w:fldCharType="separate"/>
+          </w:r>
+          <w:r>
+            <w:rPr>
+              <w:rFonts w:asciiTheme="minorHAnsi" w:eastAsiaTheme="minorHAnsi" w:hAnsiTheme="minorHAnsi"/>
+              <w:noProof/>
+            </w:rPr>
+            <w:t>12</w:t>
+          </w:r>
+          <w:r w:rsidRPr="009D55EB">
+            <w:rPr>
+              <w:rFonts w:asciiTheme="minorHAnsi" w:eastAsiaTheme="minorHAnsi" w:hAnsiTheme="minorHAnsi"/>
+            </w:rPr>
+            <w:fldChar w:fldCharType="end"/>
+          </w:r>
+        </w:p>
+      </w:tc>
+      <w:tc>
+        <w:tcPr>
+          <w:tcW w:w="4677" w:type="dxa"/>
+        </w:tcPr>
+        <w:p w14:paraId="27CB1A26" w14:textId="0577927F" w:rsidR="000B2C0E" w:rsidRPr="00775430" w:rsidRDefault="000B2C0E" w:rsidP="00775430">
+          <w:pPr>
+            <w:jc w:val="right"/>
+            <w:rPr>
+              <w:rFonts w:asciiTheme="minorEastAsia" w:eastAsiaTheme="minorEastAsia" w:hAnsiTheme="minorEastAsia"/>
+              <w:sz w:val="20"/>
+              <w:lang w:eastAsia="ko-KR"/>
+            </w:rPr>
+          </w:pPr>
+          <w:r w:rsidRPr="00775430">
+            <w:rPr>
+              <w:rFonts w:asciiTheme="minorEastAsia" w:eastAsiaTheme="minorEastAsia" w:hAnsiTheme="minorEastAsia"/>
+              <w:sz w:val="20"/>
+              <w:lang w:eastAsia="ko-KR"/>
+            </w:rPr>
+            <w:t xml:space="preserve">Copyright </w:t>
+          </w:r>
+          <w:r w:rsidRPr="00775430">
+            <w:rPr>
+              <w:rFonts w:asciiTheme="minorEastAsia" w:eastAsiaTheme="minorEastAsia" w:hAnsiTheme="minorEastAsia" w:hint="eastAsia"/>
+              <w:sz w:val="20"/>
+              <w:lang w:eastAsia="ko-KR"/>
+            </w:rPr>
+            <w:t>ⓒ</w:t>
+          </w:r>
+          <w:r w:rsidRPr="00775430">
+            <w:rPr>
+              <w:rFonts w:asciiTheme="minorEastAsia" w:eastAsiaTheme="minorEastAsia" w:hAnsiTheme="minorEastAsia"/>
+              <w:sz w:val="20"/>
+              <w:lang w:eastAsia="ko-KR"/>
+            </w:rPr>
+            <w:t xml:space="preserve"> </w:t>
+          </w:r>
+          <w:r w:rsidRPr="00775430">
+            <w:rPr>
+              <w:rFonts w:asciiTheme="minorEastAsia" w:eastAsiaTheme="minorEastAsia" w:hAnsiTheme="minorEastAsia" w:cs="맑은 고딕" w:hint="eastAsia"/>
+              <w:sz w:val="20"/>
+              <w:lang w:eastAsia="ko-KR"/>
+            </w:rPr>
+            <w:t>㈜자몽컴퍼니</w:t>
+          </w:r>
+          <w:r w:rsidR="00B666A4">
+            <w:rPr>
+              <w:rFonts w:asciiTheme="minorEastAsia" w:eastAsiaTheme="minorEastAsia" w:hAnsiTheme="minorEastAsia" w:cs="맑은 고딕" w:hint="eastAsia"/>
+              <w:sz w:val="20"/>
+              <w:lang w:eastAsia="ko-KR"/>
+            </w:rPr>
+            <w:t xml:space="preserve"> 컨소니엄</w:t>
+          </w:r>
+        </w:p>
+      </w:tc>
+    </w:tr>
+  </w:tbl>
+  <w:p w14:paraId="473EDF59" w14:textId="77777777" w:rsidR="000B2C0E" w:rsidRDefault="000B2C0E">
+    <w:pPr>
+      <w:spacing w:line="40" w:lineRule="atLeast"/>
+      <w:rPr>
+        <w:sz w:val="4"/>
+      </w:rPr>
+    </w:pPr>
+    <w:r>
+      <w:rPr>
+        <w:noProof/>
+        <w:lang w:eastAsia="ko-KR"/>
+      </w:rPr>
+      <mc:AlternateContent>
+        <mc:Choice Requires="wps">
+          <w:drawing>
+            <wp:anchor distT="0" distB="0" distL="114300" distR="114300" simplePos="0" relativeHeight="251661312" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1" wp14:anchorId="73C6909C" wp14:editId="23A6B632">
+              <wp:simplePos x="0" y="0"/>
+              <wp:positionH relativeFrom="margin">
+                <wp:align>right</wp:align>
+              </wp:positionH>
+              <wp:positionV relativeFrom="paragraph">
+                <wp:posOffset>-278765</wp:posOffset>
+              </wp:positionV>
+              <wp:extent cx="6400800" cy="9525"/>
+              <wp:effectExtent l="0" t="0" r="19050" b="28575"/>
+              <wp:wrapNone/>
+              <wp:docPr id="42" name="직선 연결선 42"/>
+              <wp:cNvGraphicFramePr/>
+              <a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                <a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+                  <wps:wsp>
+                    <wps:cNvCnPr/>
+                    <wps:spPr>
+                      <a:xfrm flipV="1">
+                        <a:off x="0" y="0"/>
+                        <a:ext cx="6400800" cy="9525"/>
+                      </a:xfrm>
+                      <a:prstGeom prst="line">
+                        <a:avLst/>
+                      </a:prstGeom>
+                      <a:ln w="12700">
+                        <a:solidFill>
+                          <a:schemeClr val="bg1">
+                            <a:lumMod val="50000"/>
+                          </a:schemeClr>
+                        </a:solidFill>
+                      </a:ln>
+                    </wps:spPr>
+                    <wps:style>
+                      <a:lnRef idx="1">
+                        <a:schemeClr val="dk1"/>
+                      </a:lnRef>
+                      <a:fillRef idx="0">
+                        <a:schemeClr val="dk1"/>
+                      </a:fillRef>
+                      <a:effectRef idx="0">
+                        <a:schemeClr val="dk1"/>
+                      </a:effectRef>
+                      <a:fontRef idx="minor">
+                        <a:schemeClr val="tx1"/>
+                      </a:fontRef>
+                    </wps:style>
+                    <wps:bodyPr/>
+                  </wps:wsp>
+                </a:graphicData>
+              </a:graphic>
+              <wp14:sizeRelH relativeFrom="margin">
+                <wp14:pctWidth>0</wp14:pctWidth>
+              </wp14:sizeRelH>
+              <wp14:sizeRelV relativeFrom="margin">
+                <wp14:pctHeight>0</wp14:pctHeight>
+              </wp14:sizeRelV>
+            </wp:anchor>
+          </w:drawing>
+        </mc:Choice>
+        <mc:Fallback>
+          <w:pict>
+            <v:line w14:anchorId="149C4EDA" id="직선 연결선 42" o:spid="_x0000_s1026" style="position:absolute;left:0;text-align:left;flip:y;z-index:251661312;visibility:visible;mso-wrap-style:square;mso-width-percent:0;mso-height-percent:0;mso-wrap-distance-left:9pt;mso-wrap-distance-top:0;mso-wrap-distance-right:9pt;mso-wrap-distance-bottom:0;mso-position-horizontal:right;mso-position-horizontal-relative:margin;mso-position-vertical:absolute;mso-position-vertical-relative:text;mso-width-percent:0;mso-height-percent:0;mso-width-relative:margin;mso-height-relative:margin" from="452.8pt,-21.95pt" to="956.8pt,-21.2pt" o:gfxdata="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&#10;" strokecolor="#7f7f7f [1612]" strokeweight="1pt">
+              <w10:wrap anchorx="margin"/>
+            </v:line>
+          </w:pict>
+        </mc:Fallback>
+      </mc:AlternateContent>
+    </w:r>
+  </w:p>
+</w:ftr>

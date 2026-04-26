@@ -371,38 +371,39 @@ function FunctionsPageInner() {
         )}
       </div>
 
-      {filteredItems.length === 0 ? (
-        <div style={{ padding: "60px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-          등록된 기능이 없습니다.
-        </div>
-      ) : (
-        <div style={{ padding: "0 24px 24px" }}>
-          <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-            <div style={{ ...gridHeaderStyle, gridTemplateColumns: viewMode === "category" ? GRID_TEMPLATE_CATEGORY : GRID_TEMPLATE }}>
-              <div />
-              {viewMode === "category" ? (
-                <>
-                  <div>대분류</div>
-                  <div>중분류</div>
-                  <div>소분류</div>
-                </>
-              ) : (
-                <>
-                  <div>단위업무 명</div>
-                  <div>화면 명</div>
-                  <div>영역 명</div>
-                </>
-              )}
-              <div>기능명</div>
-              <div style={{ textAlign: "center" }}>정렬</div>
-              <div>유형</div>
-              <div>복잡도</div>
-              <div>공수</div>
-              <div style={{ textAlign: "center" }}>AI</div>
-              <div style={{ textAlign: "center", paddingLeft: 8 }}>설/구/테</div>
-            </div>
+      {/* 목록 — 빈 상태에서도 헤더 표시 (과업 페이지 패턴과 통일) */}
+      <div style={{ padding: "0 24px 24px" }}>
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+          <div style={{ ...gridHeaderStyle, gridTemplateColumns: viewMode === "category" ? GRID_TEMPLATE_CATEGORY : GRID_TEMPLATE }}>
+            <div />
+            {viewMode === "category" ? (
+              <>
+                <div>대분류</div>
+                <div>중분류</div>
+                <div>소분류</div>
+              </>
+            ) : (
+              <>
+                <div>단위업무 명</div>
+                <div>화면 명</div>
+                <div>영역 명</div>
+              </>
+            )}
+            <div>기능명</div>
+            <div style={{ textAlign: "center" }}>정렬</div>
+            <div>유형</div>
+            <div>복잡도</div>
+            <div>공수</div>
+            <div style={{ textAlign: "center" }}>AI</div>
+            <div style={{ textAlign: "center", paddingLeft: 8 }}>설/구/테</div>
+          </div>
 
-            {filteredItems.map((fn, idx) => {
+          {filteredItems.length === 0 ? (
+            <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+              등록된 기능이 없습니다.
+            </div>
+          ) : (
+            filteredItems.map((fn, idx) => {
               const prev = filteredItems[idx - 1];
               // 이전 행과 같은 값이면 셀 숨김 (계층 그룹핑 효과)
               const showUnitWork = idx === 0 || (viewMode === "category" ? fn.ctgryL !== prev.ctgryL : fn.unitWorkId !== prev.unitWorkId);
@@ -627,10 +628,10 @@ function FunctionsPageInner() {
                   )}
                 </div>
               );
-            })}
-          </div>
+            })
+          )}
         </div>
-      )}
+      </div>
 
       {/* AI 태스크 상세 팝업 */}
       {aiDetailTaskId && (

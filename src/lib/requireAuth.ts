@@ -112,6 +112,18 @@ export async function requireAuth(request: NextRequest): Promise<AuthPayload | R
       return apiError("INVALID_API_KEY", "유효하지 않은 API 키입니다.", 401);
     }
 
+    // [2026-04-26] 키 용도 검증 — Claude Code MCP / 일반 API 호출에는 'CLIENT' 만 허용
+    // 워커용 'WORKER' 키가 이 경로로 들어오면 거부 (채널 혼용 방지).
+    // 'WORKER' 키는 /api/worker/* 의 X-Mcp-Key 헤더로만 사용해야 함.
+    if (mcpKey.key_use_se_code === "WORKER") {
+      return apiError(
+        "WRONG_KEY_PURPOSE",
+        "이 키는 워커(run-ai-tasks) 전용입니다. " +
+        "Claude Code 등 일반 API 호출에는 'Claude Code (MCP 도구)' 용도 키를 사용하세요.",
+        403,
+      );
+    }
+
     // last_used_dt 비동기 갱신 — 응답 지연 없이 fire-and-forget
     prisma.tbCmMcpKey.update({
       where: { api_key_id: mcpKey.api_key_id },

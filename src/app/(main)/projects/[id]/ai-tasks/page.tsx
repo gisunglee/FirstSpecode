@@ -408,29 +408,30 @@ function AiTasksPageInner() {
         </div>
 
         <div>
-          {isLoading ? (
-            <div style={{ padding: "40px 32px", color: "#888" }}>불러오는 중...</div>
-          ) : items.length === 0 ? (
-            <div style={{ padding: "60px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-              AI 태스크가 없습니다.
+          {/* 빈 상태/로딩에서도 헤더 표시 (과업 페이지 패턴과 통일) */}
+          <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+            <div style={{ ...gridHeaderStyle, gridTemplateColumns: GRID_CONFIG }}>
+              <div style={{ textAlign: "center" }}>요청 구분</div>
+              <div style={{ textAlign: "center" }}>작업유형</div>
+              <div>대상</div>
+              <div style={{ textAlign: "center" }}>요청자</div>
+              <div style={{ textAlign: "center" }}>요청일시</div>
+              <div style={{ textAlign: "center" }}>완료일시</div>
+              <div style={{ textAlign: "center" }}>소요</div>
+              <div style={{ textAlign: "center" }}>재시도</div>
+              <div style={{ textAlign: "center" }}>상태 / 액션</div>
+              <div style={{ textAlign: "center" }}>실행 가능일</div>
+              <div />
             </div>
-          ) : (
-            <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-              <div style={{ ...gridHeaderStyle, gridTemplateColumns: GRID_CONFIG }}>
-                <div style={{ textAlign: "center" }}>요청 구분</div>
-                <div style={{ textAlign: "center" }}>작업유형</div>
-                <div>대상</div>
-                <div style={{ textAlign: "center" }}>요청자</div>
-                <div style={{ textAlign: "center" }}>요청일시</div>
-                <div style={{ textAlign: "center" }}>완료일시</div>
-                <div style={{ textAlign: "center" }}>소요</div>
-                <div style={{ textAlign: "center" }}>재시도</div>
-                <div style={{ textAlign: "center" }}>상태 / 액션</div>
-                <div style={{ textAlign: "center" }}>실행 가능일</div>
-                <div />
-              </div>
 
-              {items.map((row, idx) => (
+            {isLoading ? (
+              <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>불러오는 중...</div>
+            ) : items.length === 0 ? (
+              <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+                AI 태스크가 없습니다.
+              </div>
+            ) : (
+              items.map((row, idx) => (
                 <div
                   key={row.taskId}
                   onClick={() => setSelectedTaskId(row.taskId === selectedTaskId ? null : row.taskId)}
@@ -522,9 +523,9 @@ function AiTasksPageInner() {
                     </button>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
         </div>
 
         {selectedTaskId && (

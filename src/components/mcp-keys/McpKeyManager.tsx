@@ -41,13 +41,19 @@ interface ProjectOption {
   prjct_nm: string;
 }
 
+// [2026-04-26] 키 용도 — DB CHECK 제약과 동일
+//   CLIENT — Claude Code MCP 도구용 (전역/프로젝트 scope 자유)
+//   WORKER — /run-ai-tasks 워커용 (프로젝트 scope 강제)
+type KeyUseSe = "CLIENT" | "WORKER";
+
 interface ApiKeyItem {
-  apiKeyId:   string;
-  keyPrefix:  string;
-  keyName:    string;
-  prjctId:    string | null;   // null = 전역 키
-  prjctNm:    string | null;
-  createdAt:  string;
+  apiKeyId: string;
+  keyPrefix: string;
+  keyName: string;
+  keyUseSe: KeyUseSe;        // [2026-04-26] 키 용도
+  prjctId: string | null;   // null = 전역 키
+  prjctNm: string | null;
+  createdAt: string;
   lastUsedAt: string | null;
 }
 
@@ -65,10 +71,22 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
   // 생성 직후 원문 표시용 (1회만 — 이후 조회 불가)
   const [createdRawKey, setCreatedRawKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // [2026-04-26] 키 용도 선택 — 안전 기본값: 'CLIENT' (Claude Code MCP 도구용)
+  // 'WORKER' 선택 시: 자동으로 scopeType='project' 강제, 전역 옵션 비활성
+  const [keyUseSe, setKeyUseSe] = useState<KeyUseSe>("CLIENT");
+
   // Scope 선택 — 안전 기본값: "특정 프로젝트 고정"
   const [scopeType, setScopeType] = useState<"global" | "project">("project");
   const [selectedPrjctId, setSelectedPrjctId] = useState<string>(defaultProjectId ?? "");
   const [projects, setProjects] = useState<ProjectOption[]>([]);
+
+  // 'WORKER' 키는 전역 발급 불가 — 용도가 WORKER 로 바뀌면 자동으로 'project' 로 전환
+  // 사용자가 라디오 잘못 누르는 것을 UI 단계에서 차단 (서버측에서도 한 번 더 검증).
+  useEffect(() => {
+    if (keyUseSe === "WORKER" && scopeType === "global") {
+      setScopeType("project");
+    }
+  }, [keyUseSe, scopeType]);
 
   // 키 목록 조회
   const fetchKeys = useCallback(async () => {
@@ -133,6 +151,7 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           keyName: newKeyName.trim(),
+          keyUseSe,    // [2026-04-26] 'CLIENT' | 'WORKER'
           prjctId: scopeType === "project" ? selectedPrjctId : undefined,
         }),
       });
@@ -265,23 +284,71 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
             />
           </div>
 
+          {/* [2026-04-26] 키 용도 선택 — Claude Code MCP / 워커 채널 분리 */}
+          <div>
+            <label style={{ display: "block", fontSize: "var(--text-sm)", fontWeight: 500, marginBottom: 6 }}>
+              사용 용도
+            </label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "var(--text-sm)" }}>
+                <input
+                  type="radio"
+                  name="keyUseSe"
+                  value="CLIENT"
+                  checked={keyUseSe === "CLIENT"}
+                  onChange={() => setKeyUseSe("CLIENT")}
+                />
+                <span>
+                  <strong>Claude Code (MCP 도구)</strong>
+                  {" "}- Claude Code 등 외부 AI 클라이언트에서 SPECODE MCP 호출용
+                </span>
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "var(--text-sm)" }}>
+                <input
+                  type="radio"
+                  name="keyUseSe"
+                  value="WORKER"
+                  checked={keyUseSe === "WORKER"}
+                  onChange={() => setKeyUseSe("WORKER")}
+                />
+                <span>
+                  <strong>워커 (run-ai-tasks)</strong>
+                  {" "}- AI 태스크 처리 워커용. 프로젝트 scope 필수, 전역 발급 불가
+                </span>
+              </label>
+            </div>
+          </div>
+
           {/* Scope 선택 */}
           <div>
             <label style={{ display: "block", fontSize: "var(--text-sm)", fontWeight: 500, marginBottom: 6 }}>
               접근 범위
+              {keyUseSe === "WORKER" && (
+                <span style={{ marginLeft: 8, fontSize: "var(--text-xs)", color: "var(--color-text-secondary)", fontWeight: 400 }}>
+                  (워커 키는 프로젝트 scope 만 허용)
+                </span>
+              )}
             </label>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "var(--text-sm)" }}>
+              <label
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  cursor: keyUseSe === "WORKER" ? "not-allowed" : "pointer",
+                  fontSize: "var(--text-sm)",
+                  opacity: keyUseSe === "WORKER" ? 0.5 : 1,
+                }}
+              >
                 <input
                   type="radio"
                   name="scopeType"
                   value="global"
                   checked={scopeType === "global"}
                   onChange={() => setScopeType("global")}
+                  disabled={keyUseSe === "WORKER"}
                 />
                 <span>
                   <span style={{ color: "var(--color-text-warning, #e65100)", fontWeight: 600 }}>⚠️ 전역</span>
-                  {" "}— 내가 속한 모든 프로젝트 접근 가능 (비권장)
+                  {" "}- 내가 속한 모든 프로젝트 접근 가능 (비권장)
                 </span>
               </label>
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "var(--text-sm)" }}>
@@ -292,7 +359,7 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
                   checked={scopeType === "project"}
                   onChange={() => setScopeType("project")}
                 />
-                <span>특정 프로젝트 고정 — 실수로 다른 프로젝트 건드리는 사고 방지</span>
+                <span>특정 프로젝트 고정 - 실수로 다른 프로젝트 건드리는 사고 방지</span>
               </label>
             </div>
             {scopeType === "project" && (
@@ -376,6 +443,21 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
                   }}>
                     {k.keyPrefix}...
                   </code>
+                  {/* [2026-04-26] 용도 배지 — Claude Code(CLIENT) vs 워커(WORKER) 구분 */}
+                  <span style={{
+                    fontSize: "var(--text-xs)",
+                    padding: "2px 8px",
+                    borderRadius: 12,
+                    background: k.keyUseSe === "WORKER"
+                      ? "var(--color-bg-success, #e8f5e9)"
+                      : "var(--color-bg-info, #e3f2fd)",
+                    color: k.keyUseSe === "WORKER"
+                      ? "var(--color-text-success, #2e7d32)"
+                      : "var(--color-text-info, #1565c0)",
+                    fontWeight: 500,
+                  }}>
+                    {k.keyUseSe === "WORKER" ? "🤖 워커" : "🧠 Claude Code"}
+                  </span>
                   {/* Scope 배지 */}
                   {k.prjctId ? (
                     <span style={{

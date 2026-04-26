@@ -963,6 +963,14 @@ model TbCmMcpKey {
   api_key_id   String    @id @default(uuid())
   mber_id      String
   prjct_id     String                        // 'ALL' 또는 UUID — NOT NULL, no default
+
+  // [2026-04-26] 키 용도 구분 — Claude Code MCP / 워커 인증 채널 분리
+  //   CLIENT — Claude Code MCP 도구용 (전역/프로젝트 scope 모두 허용)
+  //   WORKER — /run-ai-tasks 워커용 (프로젝트 scope 강제, 전역 발급 거부)
+  // CHECK 제약(prisma/sql/2026-04-26_add_mcp_key_use_se_code.sql)으로
+  // 두 값 외에는 INSERT 자체 차단된다.
+  key_use_se_code String    @default("CLIENT") @db.VarChar(20)
+
   key_hash     String    @unique
   key_prefix   String    @db.VarChar(12)
   key_nm       String    @db.VarChar(100)
@@ -972,8 +980,9 @@ model TbCmMcpKey {
 
   member  TbCmMember @relation(fields: [mber_id], references: [mber_id])
 
-  @@index([mber_id],  map: "idx_mcp_key_mber")
-  @@index([prjct_id], map: "idx_mcp_key_prjct")
+  @@index([mber_id],                              map: "idx_mcp_key_mber")
+  @@index([prjct_id],                             map: "idx_mcp_key_prjct")
+  @@index([mber_id, key_use_se_code, revoke_dt], map: "idx_mcp_key_use_se")
   @@map("tb_cm_mcp_key")
 }
 

@@ -137,26 +137,26 @@ function MemoListInner() {
         </span>
       </div>
 
-      {/* ── 테이블 ── */}
-      {items.length === 0 ? (
-        <div style={{ padding: "60px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-          등록된 메모가 없습니다.
-        </div>
-      ) : (
-        <div style={{ padding: "0 24px 24px" }}>
-          <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-            {/* 헤더 행 */}
-            <div style={gridHeaderStyle}>
-              <div>제목</div>
-              <div>연결 대상</div>
-              <div>공유</div>
-              <div>작성자</div>
-              <div style={{ textAlign: "center" }}>조회</div>
-              <div>작성일</div>
-            </div>
+      {/* ── 테이블 — 빈 상태에서도 헤더 표시 (과업 페이지 패턴과 통일) ── */}
+      <div style={{ padding: "0 24px 24px" }}>
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+          {/* 헤더 행 */}
+          <div style={gridHeaderStyle}>
+            <div>제목</div>
+            <div>연결 대상</div>
+            <div>공유</div>
+            <div>작성자</div>
+            <div style={{ textAlign: "center" }}>조회</div>
+            <div>작성일</div>
+          </div>
 
-            {/* 데이터 행 */}
-            {items.map((m, idx) => (
+          {items.length === 0 ? (
+            <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+              등록된 메모가 없습니다.
+            </div>
+          ) : (
+            /* 데이터 행 */
+            items.map((m, idx) => (
               <div
                 key={m.memoId}
                 onClick={() => router.push(`/projects/${projectId}/memos/${m.memoId}`)}
@@ -211,10 +211,10 @@ function MemoListInner() {
                   {formatDateShort(m.creatDt)}
                 </div>
               </div>
-            ))}
-          </div>
+            ))
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

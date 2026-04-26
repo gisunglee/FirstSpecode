@@ -106,6 +106,14 @@ export const PERMISSIONS = {
   "content.update":     { roles: ["OWNER", "ADMIN", "MEMBER"] },
   "content.delete":     { roles: ["OWNER", "ADMIN", "MEMBER"] },
 
+  // ── 콘텐츠 내보내기 (Word/PDF 등 파일 다운로드) ──────────────────
+  // .read 가 아니라 별도 권한으로 분리한 이유:
+  //   requirePermission 의 isWritePermission 은 ".read" 만 통과시킨다.
+  //   "content.read" 로 묶어두면 시스템 관리자 지원 세션에서 데이터 일괄 유출 경로가 열린다.
+  //   "content.export" 로 분리해 두면 자동으로 지원 세션에서 차단된다.
+  // VIEWER 도 화면을 볼 수는 있어야 한다는 정책이지만, 파일로 빼가는 건 멤버 이상만 허용.
+  "content.export":     { roles: ["OWNER", "ADMIN", "MEMBER"] },
+
   // ── 요구사항 확정(기준선 스냅샷) — 계약 변경 범위 추적이 비즈니스 목적이라
   // 일반 content 보다 좁게: 기획·리딩 라인(OWNER/ADMIN 또는 PM/PL 직무)만 허용.
   // "확정 생성" 과 "확정 삭제(전체 폐기)" 모두 같은 권한으로 묶음 — 단, 한번 확정된

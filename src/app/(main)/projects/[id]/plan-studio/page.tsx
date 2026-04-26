@@ -81,30 +81,32 @@ function Inner() {
           총 <strong>{items.length}</strong>건
         </div>
 
-        {/* 테이블 */}
-        <div style={gridHeader}>
-          <div>기획실ID</div>
-          <div>기획실명</div>
-          <div style={{ textAlign: "center" }}>산출물수</div>
-          <div>수정일시</div>
-          <div />
-        </div>
-
-        {isLoading ? (
-          <div style={{ padding: 20, color: "#aaa", fontSize: 13 }}>로딩 중...</div>
-        ) : items.length === 0 ? (
-          <div style={{ padding: 20, color: "#aaa", fontSize: 13 }}>등록된 기획실이 없습니다. 생성 버튼을 눌러 시작하세요.</div>
-        ) : items.map((s) => (
-          <div key={s.planStudioId} onClick={() => router.push(`/projects/${projectId}/plan-studio/${s.planStudioId}`)} style={gridRow}>
-            <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{s.planStudioDisplayId}</div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-primary, #1976d2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.planStudioNm}</div>
-            <div style={{ textAlign: "center", fontSize: 13 }}>{s.artfCount}</div>
-            <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{new Date(s.mdfcnDt ?? s.creatDt).toLocaleString()}</div>
-            <div style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-              <button onClick={() => setDeleteTarget({ id: s.planStudioId, name: s.planStudioNm })} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "#ccc" }} title="삭제">×</button>
-            </div>
+        {/* 테이블 — border 컨테이너로 감싸 빈 상태에서도 헤더가 표시되도록 통일 */}
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+          <div style={gridHeader}>
+            <div>기획실ID</div>
+            <div>기획실명</div>
+            <div style={{ textAlign: "center" }}>산출물수</div>
+            <div>수정일시</div>
+            <div />
           </div>
-        ))}
+
+          {isLoading ? (
+            <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>로딩 중...</div>
+          ) : items.length === 0 ? (
+            <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>등록된 기획실이 없습니다. 생성 버튼을 눌러 시작하세요.</div>
+          ) : items.map((s) => (
+            <div key={s.planStudioId} onClick={() => router.push(`/projects/${projectId}/plan-studio/${s.planStudioId}`)} style={gridRow}>
+              <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{s.planStudioDisplayId}</div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-primary, #1976d2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.planStudioNm}</div>
+              <div style={{ textAlign: "center", fontSize: 13 }}>{s.artfCount}</div>
+              <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{new Date(s.mdfcnDt ?? s.creatDt).toLocaleString()}</div>
+              <div style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                <button onClick={() => setDeleteTarget({ id: s.planStudioId, name: s.planStudioNm })} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "#ccc" }} title="삭제">×</button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* 생성 팝업 */}

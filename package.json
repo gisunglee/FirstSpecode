@@ -36,6 +36,7 @@
     "@types/diff": "^7.0.2",
     "bcryptjs": "^3.0.3",
     "diff": "^8.0.4",
+    "docx": "^9.6.1",
     "jsonwebtoken": "^9.0.3",
     "marked": "^17.0.5",
     "mcp-handler": "^1.1.0",

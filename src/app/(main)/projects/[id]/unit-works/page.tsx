@@ -524,29 +524,29 @@ function UnitWorksPageInner() {
         </select>
       </div>
 
-      {/* 목록 */}
-      {items.length === 0 ? (
-        <div style={{ padding: "60px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-          등록된 단위업무가 없습니다.
+      {/* 목록 — 빈 상태에서도 헤더 표시 (과업 페이지 패턴과 통일) */}
+      <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+        {/* 헤더 행 */}
+        <div style={gridHeaderStyle}>
+          <div />
+          <div style={{ textAlign: "center" }}>순서</div>
+          <div>요구사항</div>
+          <div>단위업무명</div>
+          <div>담당자</div>
+          <div>기간</div>
+          <div style={{ textAlign: "center" }}>진행률</div>
+          <div style={{ textAlign: "center" }}>화면수</div>
+          <div style={{ textAlign: "center" }}>AI 구현</div>
+          <div style={{ textAlign: "center" }}>분/설/구/테</div>
         </div>
-      ) : (
-        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-          {/* 헤더 행 */}
-          <div style={gridHeaderStyle}>
-            <div />
-            <div style={{ textAlign: "center" }}>순서</div>
-            <div>요구사항</div>
-            <div>단위업무명</div>
-            <div>담당자</div>
-            <div>기간</div>
-            <div style={{ textAlign: "center" }}>진행률</div>
-            <div style={{ textAlign: "center" }}>화면수</div>
-            <div style={{ textAlign: "center" }}>AI 구현</div>
-            <div style={{ textAlign: "center" }}>분/설/구/테</div>
-          </div>
 
-          {/* 데이터 행 */}
-          {items.map((uw, idx) => (
+        {items.length === 0 ? (
+          <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+            등록된 단위업무가 없습니다.
+          </div>
+        ) : (
+          /* 데이터 행 */
+          items.map((uw, idx) => (
             <div
               key={uw.unitWorkId}
               draggable
@@ -703,9 +703,9 @@ function UnitWorksPageInner() {
                 </div>
               )}
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
       </div>
 
       {/* ── PRD 범위 선택 모달 ─────────────────────────────────────────────── */}

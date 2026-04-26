@@ -307,7 +307,11 @@
       "Bash(grep -E \"\\\\.ts$\")",
       "Bash(xargs cat *)",
       "Bash(node_modules/.bin/next lint *)",
-      "Bash(find /d/source/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id] -maxdepth 1 -type f -name \"*.tsx\")"
+      "Bash(find /d/source/FirstSpecode/src/app/\\\\\\(main\\\\\\)/projects/[id] -maxdepth 1 -type f -name \"*.tsx\")",
+      "Bash(curl -s \"http://localhost:3001/api/worker/tasks?statusOnly=true\" -H \"X-Worker-Key: specode-worker-dev-key\")",
+      "Bash(npm root *)",
+      "Bash(node build-req-doc.js)",
+      "Bash(pandoc \"D:/자몽/greenhouse_2025/03.분석/302.요건정의서/GDBS_A303_요건정의서_사업관리.docx\" -o d:/source/FirstSpecode/tmp/ref.md)"
     ]
   }
 }
