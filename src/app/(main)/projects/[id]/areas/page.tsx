@@ -256,7 +256,11 @@ function AreasPageInner() {
                 <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
 
                 {/* 단위업무명 — 같은 unitWorkId이면 첫 행에만 표시, 클릭 시 단위업무 상세로 이동 */}
-                <div onClick={(e) => e.stopPropagation()}>
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  title={area.unitWorkName ?? undefined}
+                >
                   {items[idx - 1]?.unitWorkId === area.unitWorkId && area.unitWorkId
                     ? null
                     : area.unitWorkId ? (
@@ -273,7 +277,11 @@ function AreasPageInner() {
                 </div>
 
                 {/* 화면명 — 같은 화면(screenId)이면 첫 행에만 표시 */}
-                <div onClick={(e) => e.stopPropagation()}>
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  title={area.screenName ?? undefined}
+                >
                   {items[idx - 1]?.screenId === area.screenId && area.screenId
                     ? null
                     : area.screenId ? (
@@ -289,8 +297,14 @@ function AreasPageInner() {
                   }
                 </div>
 
-                {/* 영역명 */}
-                <div style={{ fontSize: 14, fontWeight: 500 }}>
+                {/* 영역명 — displayId + name 한 줄. 좁은 폭에서는 ellipsis (title로 전체 노출) */}
+                <div
+                  style={{
+                    fontSize: 14, fontWeight: 500,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}
+                  title={`${area.displayId} ${area.name}`}
+                >
                   <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
                     {area.displayId}
                   </span>
@@ -552,8 +566,12 @@ function formatRequestedAt(iso: string): string {
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-// AI 구현 컬럼은 "배지 + 시간(MM-DD HH:mm)"을 한 줄에 담도록 150px로 여유 확보
-const GRID_TEMPLATE = "32px 10% 12% 1fr 7% 5% 5% 14% 8% 150px 7%";
+// 단위업무·화면·영역명은 fr 비율로(가변), 배지/숫자/날짜 등은 고정폭으로 안정화.
+// 좁은 화면에서도 텍스트 셀이 ellipsis 로 자연스럽게 잘리도록 화면 목록과 동일한 패턴 사용.
+//   유형 60px(GRID/FORM 등 4자) · 정렬 40px · 기능수 50px
+//   구현기간 140px("2026-04-13 ~ 2026-04-23" 23자 nowrap)
+//   예상공수 90px("5h (5h)") · AI 구현 130px(배지+MM-DD HH:mm) · 설/구/테 80px
+const GRID_TEMPLATE = "32px 1.2fr 1.2fr 2fr 60px 40px 50px 140px 90px 130px 80px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid",

@@ -52,9 +52,6 @@ type FuncRow = {
   designRt: number;
   implRt: number;
   testRt: number;
-  ctgryL: string | null;
-  ctgryM: string | null;
-  ctgryS: string | null;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -86,9 +83,6 @@ function FunctionsPageInner() {
   const [editValue, setEditValue] = useState("");
   // 정렬순서 직접 입력 상태: { funcId → sortOrder }
   const [sortEdits, setSortEdits] = useState<Record<string, number>>({});
-
-  // 뷰 모드
-  const [viewMode, setViewMode] = useState<"default" | "category">("default");
 
   // 검색 필터
   const [unitWorkFilter, setUnitWorkFilter] = useState("");
@@ -164,19 +158,8 @@ function FunctionsPageInner() {
     ).entries()
   ).map(([id]) => ({ id: id! }));
 
-  // 분류 정렬 아이템 (대→중→소→기능명 순)
-  const categorySortedItems = [...items].sort((a, b) => {
-    const lA = a.ctgryL ?? ""; const lB = b.ctgryL ?? "";
-    if (lA !== lB) return lA.localeCompare(lB, "ko");
-    const mA = a.ctgryM ?? ""; const mB = b.ctgryM ?? "";
-    if (mA !== mB) return mA.localeCompare(mB, "ko");
-    const sA = a.ctgryS ?? ""; const sB = b.ctgryS ?? "";
-    if (sA !== sB) return sA.localeCompare(sB, "ko");
-    return a.name.localeCompare(b.name, "ko");
-  });
-
   // 클라이언트 필터링
-  const filteredItems = (viewMode === "category" ? categorySortedItems : items).filter(
+  const filteredItems = items.filter(
     (f) =>
       (!unitWorkFilter || f.unitWorkId === unitWorkFilter) &&
       (!screenFilter || f.screenId === screenFilter) &&
@@ -265,30 +248,6 @@ function FunctionsPageInner() {
           기능 정의 목록
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* 뷰 모드 토글 */}
-          <div style={{ display: "flex", border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
-            <button
-              onClick={() => setViewMode("default")}
-              style={{
-                padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none",
-                background: viewMode === "default" ? "var(--color-primary, #1976d2)" : "var(--color-bg-card)",
-                color: viewMode === "default" ? "#fff" : "var(--color-text-secondary)",
-              }}
-            >
-              조회
-            </button>
-            <button
-              onClick={() => setViewMode("category")}
-              style={{
-                padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                border: "none", borderLeft: "1px solid var(--color-border)",
-                background: viewMode === "category" ? "var(--color-primary, #1976d2)" : "var(--color-bg-card)",
-                color: viewMode === "category" ? "#fff" : "var(--color-text-secondary)",
-              }}
-            >
-              분류로 조회
-            </button>
-          </div>
           <button
             onClick={() => {
               const orders = Object.entries(sortEdits).map(([funcId, sortOrder]) => ({ funcId, sortOrder }));
@@ -374,21 +333,11 @@ function FunctionsPageInner() {
       {/* 목록 — 빈 상태에서도 헤더 표시 (과업 페이지 패턴과 통일) */}
       <div style={{ padding: "0 24px 24px" }}>
         <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-          <div style={{ ...gridHeaderStyle, gridTemplateColumns: viewMode === "category" ? GRID_TEMPLATE_CATEGORY : GRID_TEMPLATE }}>
+          <div style={gridHeaderStyle}>
             <div />
-            {viewMode === "category" ? (
-              <>
-                <div>대분류</div>
-                <div>중분류</div>
-                <div>소분류</div>
-              </>
-            ) : (
-              <>
-                <div>단위업무 명</div>
-                <div>화면 명</div>
-                <div>영역 명</div>
-              </>
-            )}
+            <div>단위업무 명</div>
+            <div>화면 명</div>
+            <div>영역 명</div>
             <div>기능명</div>
             <div style={{ textAlign: "center" }}>정렬</div>
             <div>유형</div>
@@ -406,9 +355,9 @@ function FunctionsPageInner() {
             filteredItems.map((fn, idx) => {
               const prev = filteredItems[idx - 1];
               // 이전 행과 같은 값이면 셀 숨김 (계층 그룹핑 효과)
-              const showUnitWork = idx === 0 || (viewMode === "category" ? fn.ctgryL !== prev.ctgryL : fn.unitWorkId !== prev.unitWorkId);
-              const showScreen = idx === 0 || (viewMode === "category" ? (fn.ctgryL !== prev.ctgryL || fn.ctgryM !== prev.ctgryM) : fn.screenId !== prev.screenId);
-              const showArea = idx === 0 || (viewMode === "category" ? (fn.ctgryL !== prev.ctgryL || fn.ctgryM !== prev.ctgryM || fn.ctgryS !== prev.ctgryS) : fn.areaId !== prev.areaId);
+              const showUnitWork = idx === 0 || fn.unitWorkId !== prev.unitWorkId;
+              const showScreen = idx === 0 || fn.screenId !== prev.screenId;
+              const showArea = idx === 0 || fn.areaId !== prev.areaId;
 
               return (
                 <div
@@ -423,7 +372,6 @@ function FunctionsPageInner() {
                   onMouseLeave={() => setHoveredId(null)}
                   style={{
                     ...gridRowStyle,
-                    gridTemplateColumns: viewMode === "category" ? GRID_TEMPLATE_CATEGORY : GRID_TEMPLATE,
                     borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
                     background: hoveredId === fn.funcId
                       ? (fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100
@@ -440,53 +388,46 @@ function FunctionsPageInner() {
                 >
                   <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
 
-                  {viewMode === "category" ? (
-                    <>
-                      {/* 대분류 */}
-                      <div style={{ fontSize: 13, color: "var(--color-text-primary)", fontWeight: showUnitWork ? 600 : 400 }}>
-                        {showUnitWork ? (fn.ctgryL ?? <span style={{ color: "#ccc" }}>-</span>) : ""}
-                      </div>
-                      {/* 중분류 */}
-                      <div style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
-                        {showScreen ? (fn.ctgryM ?? <span style={{ color: "#ccc" }}>-</span>) : ""}
-                      </div>
-                      {/* 소분류 */}
-                      <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-                        {showArea ? (fn.ctgryS ?? <span style={{ color: "#ccc" }}>-</span>) : ""}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      {/* 단위업무명 (클릭 → 단위업무 상세, 행 클릭과 분리) */}
-                      <div onClick={(e) => e.stopPropagation()}>
-                        {showUnitWork ? (
-                          fn.unitWorkId ? (
-                            <button onClick={() => router.push(`/projects/${projectId}/unit-works/${fn.unitWorkId}`)} style={linkBtnStyle}>
-                              {fn.unitWorkName}
-                            </button>
-                          ) : (
-                            <span style={{ color: "#ccc", fontSize: 13 }}>-</span>
-                          )
-                        ) : ""}
-                      </div>
+                  {/* 단위업무명 (클릭 → 단위업무 상세, 행 클릭과 분리) */}
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                    title={showUnitWork ? fn.unitWorkName : undefined}
+                  >
+                    {showUnitWork ? (
+                      fn.unitWorkId ? (
+                        <button onClick={() => router.push(`/projects/${projectId}/unit-works/${fn.unitWorkId}`)} style={linkBtnStyle}>
+                          {fn.unitWorkName}
+                        </button>
+                      ) : (
+                        <span style={{ color: "#ccc", fontSize: 13 }}>-</span>
+                      )
+                    ) : ""}
+                  </div>
 
-                      {/* 화면명 (클릭 → 화면 상세, 행 클릭과 분리) */}
-                      <div onClick={(e) => e.stopPropagation()}>
-                        {showScreen ? (
-                          fn.screenId ? (
-                            <button onClick={() => router.push(`/projects/${projectId}/screens/${fn.screenId}`)} style={linkBtnStyle}>
-                              {fn.screenName}
-                            </button>
-                          ) : (
-                            <span style={{ color: "#ccc", fontSize: 13 }}>-</span>
-                          )
-                        ) : ""}
-                      </div>
-                    </>
-                  )}
+                  {/* 화면명 (클릭 → 화면 상세, 행 클릭과 분리) */}
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                    title={showScreen ? fn.screenName : undefined}
+                  >
+                    {showScreen ? (
+                      fn.screenId ? (
+                        <button onClick={() => router.push(`/projects/${projectId}/screens/${fn.screenId}`)} style={linkBtnStyle}>
+                          {fn.screenName}
+                        </button>
+                      ) : (
+                        <span style={{ color: "#ccc", fontSize: 13 }}>-</span>
+                      )
+                    ) : ""}
+                  </div>
 
                   {/* 영역명 (클릭 → 영역 상세, 행 클릭과 분리) */}
-                  <div onClick={(e) => e.stopPropagation()}>
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                    title={showArea ? fn.areaName : undefined}
+                  >
                     {showArea ? (
                       fn.areaId ? (
                         <button
@@ -501,17 +442,27 @@ function FunctionsPageInner() {
                     ) : ""}
                   </div>
 
-                  {/* 기능명 */}
-                  <div style={{ fontSize: 14, fontWeight: 500, display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ color: "var(--color-text-secondary)", fontSize: 11 }}>
+                  {/* 기능명 — flex 자식 중 name 만 ellipsis(min-width:0), displayId/완료배지는 shrink 금지 */}
+                  <div
+                    style={{
+                      fontSize: 14, fontWeight: 500,
+                      display: "flex", alignItems: "center", gap: 8,
+                      overflow: "hidden", whiteSpace: "nowrap", minWidth: 0,
+                    }}
+                    title={`${fn.displayId} ${fn.name}`}
+                  >
+                    <span style={{ color: "var(--color-text-secondary)", fontSize: 11, flexShrink: 0 }}>
                       {fn.displayId}
                     </span>
-                    {fn.name}
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>
+                      {fn.name}
+                    </span>
                     {fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100 && (
                       <span style={{
                         fontSize: 11, fontWeight: 600, color: "#16a34a",
                         background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)",
                         borderRadius: 4, padding: "1px 7px", whiteSpace: "nowrap",
+                        flexShrink: 0,
                       }}>
                         ✓ 완료
                       </span>
@@ -742,9 +693,11 @@ function complexityBadgeStyle(c: string): React.CSSProperties {
 }
 
 
-// 단위업무·화면·영역·기능명은 fr로 비율 분배, 나머지 소형 컬럼은 고정
-const GRID_TEMPLATE = "32px 1.5fr 2fr 2fr 4fr 44px 65px 75px 55px 60px 90px";
-const GRID_TEMPLATE_CATEGORY = "32px 1.5fr 1.5fr 1.5fr 4fr 44px 65px 75px 55px 60px 90px";
+// 단위업무·화면·영역·기능명은 fr로 비율 분배, 나머지 소형 컬럼은 고정.
+// 좁은 폭에서도 텍스트가 줄바꿈되지 않도록 ellipsis 처리와 함께 사용.
+//   기능명(3fr)이 가장 큰 비중, 영역명(2fr), 단위업무·화면(1.5fr) 순.
+//   유형/복잡도 배지는 4~6자라 60/70px, AI 인디케이터는 22px 도트 2개라 55px.
+const GRID_TEMPLATE = "32px 1.5fr 1.5fr 2fr 3fr 44px 60px 70px 55px 55px 88px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID_TEMPLATE, gap: 8,

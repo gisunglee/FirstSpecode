@@ -313,7 +313,7 @@ function DbTablesPageInner() {
             <span style={{ textAlign: "center" }} title="IO 프로필: 조회 위주(🔍) / 저장 위주(✏️) / 혼합(🔄)">
               IO
             </span>
-            <span>등록/수정일</span>
+            <span style={{ textAlign: "center" }}>등록/수정일</span>
           </div>
 
           {/* 신규 등록 인라인 폼 */}
@@ -447,7 +447,7 @@ function DbTablesPageInner() {
                 </span>
 
                 {/* 등록/수정일 — 수정된 적이 있으면 mdfcnDt, 아니면 creatDt */}
-                <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+                <span style={{ fontSize: 12, color: "var(--color-text-secondary)", textAlign: "center" }}>
                   {(row.mdfcnDt ?? row.creatDt).slice(0, 10)}
                 </span>
               </div>
@@ -463,8 +463,10 @@ function DbTablesPageInner() {
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
 // 물리 / 논리 / 설명 / 담당자 / 컬럼수 / 활용률 / 기능연결 / IO / 등록·수정일
+// 담당자: 이름 대부분이 짧고(닉네임/실명) ellipsis 처리되므로 80px 로 축소 — 좁은 화면에서 설명 영역 확보
+// 등록/수정일: YYYY-MM-DD(10자) 고정폭이라 90px 로 줄이고 center 정렬 — 우측 잔여 공백 제거
 const GRID =
-  "minmax(160px,220px) minmax(120px,180px) 1fr 120px 72px 100px 80px 48px 100px";
+  "minmax(160px,220px) minmax(120px,180px) 1fr 80px 72px 100px 80px 48px 90px";
 
 const headerRowStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID,

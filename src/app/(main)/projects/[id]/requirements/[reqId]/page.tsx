@@ -16,6 +16,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { usePermissions } from "@/hooks/useMyRole";
+import { bumpMinorVersion } from "@/lib/exports/version";
 import { renderMarkdown } from "@/lib/renderMarkdown";
 import { useAppStore } from "@/store/appStore";
 import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
@@ -27,6 +28,9 @@ import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEdit
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
 import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
+import ReleaseDialog from "@/components/common/ReleaseDialog";
+import ReleaseHistoryDialog from "@/components/documents/ReleaseHistoryDialog";
+import ExportMenu from "@/components/common/ExportMenu";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -175,6 +179,13 @@ function RequirementDetailPageInner() {
   // Word 출력 진행 상태 — 버튼 disabled / 라벨 전환용
   const [isExporting, setIsExporting] = useState(false);
 
+  // 발행 모달 (TbDsDocumentRelease 신규 등록) 상태
+  const [isReleaseOpen, setIsReleaseOpen] = useState(false);
+  // 발행 이력 보기 모달 — ExportMenu 의 [발행 이력 보기] 메뉴 항목에서 오픈
+  const [isReleaseHistoryOpen, setIsReleaseHistoryOpen] = useState(false);
+  // 발행 이력 목록 강제 재조회용 — 발행 성공 시 +1 증가
+  const [releaseRefreshTag, setReleaseRefreshTag] = useState(0);
+
   // 파일 업로드 input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -232,6 +243,48 @@ function RequirementDetailPageInner() {
   // Word 출력 권한 — content.export 매트릭스(MEMBER 이상). 신규 모드에선 출력할 데이터가 없어서 비활성.
   // 시스템 관리자 지원 세션은 API 측에서 자동 차단되므로 UI 단에선 별도 분기 불필요.
   const canExport = !isNew && hasPerm("content.export");
+  // 발행 권한 — 백엔드와 동일하게 content.export 사용 (발행은 출력 가능 권한자가 한다는 정책)
+  const canRelease = canExport;
+
+  // ── 발행 모달 defaults 계산용 데이터 ────────────────────────────────────
+  // 직전 발행 버전과 프로젝트 설정의 PM/문서버전 기본값을 모달에 prefill 한다.
+  // 두 쿼리 모두 발행 모달이 열릴 때만 의미 있지만 staleTime 으로 캐싱.
+
+  // 발행 이력 목록 — ReleaseHistorySection 과 같은 queryKey 를 써서 캐시 공유 (네트워크 호출 1회)
+  const { data: releaseListData } = useQuery({
+    queryKey: ["release-history", projectId, "REQUIREMENT", reqId, releaseRefreshTag],
+    queryFn: () =>
+      authFetch<{ data: { releases: { releaseId: string; version: string }[] } }>(
+        `/api/projects/${projectId}/documents/release?docKind=REQUIREMENT&refId=${encodeURIComponent(reqId)}`
+      ).then((r) => r.data),
+    enabled: !isNew && !!reqId,
+    staleTime: 30_000,
+  });
+
+  // 프로젝트 문서 설정 — 모달 defaults 의 승인자/문서버전용
+  const { data: docSettingsData } = useQuery({
+    queryKey: ["document-settings", projectId],
+    queryFn: () =>
+      authFetch<{ data: { copyrightHolder: string | null; docVersionDefault: string | null; approverName: string | null } }>(
+        `/api/projects/${projectId}/settings/document`
+      ).then((r) => r.data),
+    enabled: canRelease,
+    staleTime: 60_000,
+  });
+
+  // 모달 defaults — 직전 발행 버전 마이너 +1 자동 채움
+  //   - 발행 1건+ : bumpMinorVersion(직전 vrsn_no)  예: v1.0 → v1.1
+  //   - 발행 0건  : 프로젝트 설정의 docVersionDefault 또는 fallback "v1.0"
+  // 사용자가 메이저(v2.0 등) 로 가고 싶으면 모달에서 직접 수정.
+  // author 는 로드된 detail 의 담당자명 (없으면 빈 문자열 → 사용자가 직접 입력)
+  const lastReleasedVersion = releaseListData?.releases?.[0]?.version;
+  const releaseDefaults = {
+    version: lastReleasedVersion
+      ? bumpMinorVersion(lastReleasedVersion)
+      : (docSettingsData?.docVersionDefault ?? "v1.0"),
+    author:   detail?.assignMemberName ?? "",
+    approver: docSettingsData?.approverName ?? "",
+  };
 
   // detail 로드되거나 reqId가 바뀌면 폼을 항상 동기화 — 캐시 hit 재방문에서도 재실행됨.
   useEffect(() => {
@@ -580,15 +633,17 @@ function RequirementDetailPageInner() {
               삭제
             </button>
           )}
-          {/* Word 출력 — 신규 아니고 출력 권한 있을 때만. 추후 PDF 추가되면 드롭다운으로 확장 */}
+          {/* 출력 액션 그룹 — Word 출력 / 발행하기 / 발행 이력 보기 를 드롭다운 1개로 묶음.
+              개별 버튼이 헤더에 늘어서던 이전 구조를 정리하고, 추후 PDF 추가 시에도 메뉴
+              항목 1줄 추가로 확장 가능. 출력 권한자(MEMBER+) 만 메뉴 표시. */}
           {canExport && (
-            <button
-              onClick={handleExportDocx}
-              disabled={isExporting}
-              style={{ ...secondaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 80, opacity: isExporting ? 0.6 : 1, cursor: isExporting ? "wait" : "pointer" }}
-            >
-              {isExporting ? "출력 중..." : "Word 출력"}
-            </button>
+            <ExportMenu
+              isExporting={isExporting}
+              canRelease={canRelease}
+              onExportDocx={handleExportDocx}
+              onRelease={() => setIsReleaseOpen(true)}
+              onViewHistory={() => setIsReleaseHistoryOpen(true)}
+            />
           )}
           {/* 취소 — 항상 노출 (단순 페이지 이동, 권한 무관) */}
           <button
@@ -1036,6 +1091,36 @@ function RequirementDetailPageInner() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 발행 모달 — ExportMenu 의 [발행하기] 메뉴 항목에서 열림 */}
+      {!isNew && (
+        <ReleaseDialog
+          open={isReleaseOpen}
+          projectId={projectId}
+          docKind="REQUIREMENT"
+          refId={reqId}
+          defaults={releaseDefaults}
+          onClose={() => setIsReleaseOpen(false)}
+          onSuccess={() => {
+            setIsReleaseOpen(false);
+            // 발행 이력 목록 강제 재조회 + Word 출력의 변경이력 표 캐시 무효화
+            setReleaseRefreshTag((t) => t + 1);
+          }}
+        />
+      )}
+
+      {/* 발행 이력 보기 모달 — ExportMenu 의 [발행 이력 보기] 메뉴 항목에서 열림.
+          이전 버전의 페이지 본문 인라인 섹션은 제거했음 (모달로 일원화). */}
+      {!isNew && (
+        <ReleaseHistoryDialog
+          open={isReleaseHistoryOpen}
+          onClose={() => setIsReleaseHistoryOpen(false)}
+          projectId={projectId}
+          docKind="REQUIREMENT"
+          refId={reqId}
+          refreshTag={releaseRefreshTag}
+        />
       )}
 
       {/* Diff 뷰어 팝업 */}

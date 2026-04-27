@@ -128,6 +128,26 @@ function CommonCodesPageInner() {
 
   const codes = showAllCodes ? (allCodesData ?? []) : (codesData ?? []);
 
+  // ── 프로젝트 환경설정 — 공통코드 동작 제어용 두 값만 사용 ──────────────────
+  //   UNIQUE_CODE_USE_YN  : "Y" → 공통코드 유니크 강제 (체크박스 해제 불가)
+  //   CODE_DEL_PSBL_YN    : "N" → 코드/그룹 삭제 차단 (✕ 버튼 비활성)
+  // configs 페이지와 동일 queryKey 라 캐시 공유됨 (서버 재호출 최소화)
+  const { data: configsData } = useQuery({
+    queryKey: ["configs", projectId],
+    queryFn: () =>
+      authFetch<{ data: { groups: Array<{ items: Array<{ key: string; value: string }> }> } }>(
+        `/api/projects/${projectId}/configs`
+      ).then((r) => r.data),
+  });
+  const configMap: Record<string, string> = {};
+  for (const g of configsData?.groups ?? []) {
+    for (const item of g.items) configMap[item.key] = item.value;
+  }
+  const uniqueForced  = configMap.UNIQUE_CODE_USE_YN === "Y";
+  const deleteBlocked = configMap.CODE_DEL_PSBL_YN   === "N";
+  // 체크박스 표시·서버 전송에 모두 사용 — uniqueForced 면 사용자 의사와 무관하게 true
+  const effectiveUnique = uniqueForced || globalUnique;
+
   // 선택된 그룹 정보
   const selectedGroup = groups.find((g) => g.grpCode === selectedGrpCode);
 
@@ -272,11 +292,12 @@ function CommonCodesPageInner() {
     const dupLocal = codes.find((c, i) => codes.indexOf(c) !== i);
     if (dupLocal) { toast.error(`입력한 코드 중 중복이 있습니다: ${dupLocal}`); return; }
 
-    // 순차 저장 — 실패 시 중단하고 에러 토스트
+    // 순차 저장 — 실패 시 중단하고 에러 토스트.
+    // globalUnique 는 effectiveUnique(=환경설정 강제 OR 사용자 체크) 사용
     let successCnt = 0;
     for (const d of valid) {
       try {
-        await addCodeMut.mutateAsync({ cmCode: d.cmCode, codeNm: d.codeNm, codeDc: d.codeDc || undefined, globalUnique });
+        await addCodeMut.mutateAsync({ cmCode: d.cmCode, codeNm: d.codeNm, codeDc: d.codeDc || undefined, globalUnique: effectiveUnique });
         successCnt++;
       } catch (err) {
         toast.error(`${d.cmCode}: ${(err as Error).message}`);
@@ -336,7 +357,8 @@ function CommonCodesPageInner() {
     const newVal = editCodeValue.trim();
     if (!newVal || newVal === oldCmCode) { setEditingCode(null); setEditCodeValue(""); return; }
     if (!CODE_PATTERN.test(newVal)) { toast.error("코드는 영문, 숫자, _, :, - 만 입력 가능합니다."); return; }
-    updateCodeMut.mutate({ codeId, body: { cmCode: newVal, globalUnique } });
+    // globalUnique 는 effectiveUnique 사용 — 환경설정 강제 시 사용자 체크와 무관하게 유니크 검증
+    updateCodeMut.mutate({ codeId, body: { cmCode: newVal, globalUnique: effectiveUnique } });
   }
 
   function toggleCodeUseYn(codeId: number, current: string) {
@@ -412,14 +434,27 @@ function CommonCodesPageInner() {
               모든 그룹코드 조회 (그룹별 정렬)
             </label>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--color-text-secondary)", cursor: "pointer" }}>
+              <label
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  fontSize: 12, color: "var(--color-text-secondary)",
+                  cursor: uniqueForced ? "not-allowed" : "pointer",
+                }}
+                title={uniqueForced ? "프로젝트 환경설정(UNIQUE_CODE_USE_YN=Y)에서 강제 적용 중입니다." : undefined}
+              >
                 <input
                   type="checkbox"
-                  checked={globalUnique}
-                  onChange={(e) => setGlobalUnique(e.target.checked)}
-                  style={{ cursor: "pointer" }}
+                  checked={effectiveUnique}
+                  disabled={uniqueForced}
+                  onChange={(e) => { if (!uniqueForced) setGlobalUnique(e.target.checked); }}
+                  style={{ cursor: uniqueForced ? "not-allowed" : "pointer" }}
                 />
                 공통코드 유니크 사용
+                {uniqueForced && (
+                  <span style={{ fontSize: 10, color: "#e65100", marginLeft: 4 }}>
+                    (환경설정 강제)
+                  </span>
+                )}
               </label>
               <button
                 onClick={() => setUniqueHelpOpen(true)}
@@ -582,12 +617,21 @@ function CommonCodesPageInner() {
                     </div>
                   </div>
 
-                  {/* 삭제 */}
+                  {/* 삭제 — 환경설정(CODE_DEL_PSBL_YN=N) 시 비활성 */}
                   <button
                     className="cc-del-btn"
-                    onClick={(e) => { e.stopPropagation(); setDeleteTarget({ type: "group", id: g.grpCode, name: g.grpCodeNm }); }}
-                    style={deleteBtnStyle}
-                    title="그룹 삭제"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (deleteBlocked) return;
+                      setDeleteTarget({ type: "group", id: g.grpCode, name: g.grpCodeNm });
+                    }}
+                    disabled={deleteBlocked}
+                    style={{
+                      ...deleteBtnStyle,
+                      cursor: deleteBlocked ? "not-allowed" : "pointer",
+                      opacity: deleteBlocked ? 0.3 : undefined,
+                    }}
+                    title={deleteBlocked ? "프로젝트 환경설정(CODE_DEL_PSBL_YN=N)에서 코드 삭제가 차단되어 있습니다." : "그룹 삭제"}
                   >
                     ×
                   </button>
@@ -773,9 +817,9 @@ function CommonCodesPageInner() {
                         + 행 추가
                       </button>
                       <div style={{ display: "flex", gap: 6 }}>
-                        {globalUnique && (
+                        {effectiveUnique && (
                           <span style={{ fontSize: 10, color: "#e65100", alignSelf: "center", marginRight: 6 }}>
-                            ⚠ 유니크 옵션 적용 중
+                            ⚠ 유니크 옵션 적용 중{uniqueForced ? " (환경설정 강제)" : ""}
                           </span>
                         )}
                         <button
@@ -912,13 +956,21 @@ function CommonCodesPageInner() {
                         </div>
                       )}
 
-                      {/* 삭제 — 호버 시에만 표시 */}
+                      {/* 삭제 — 호버 시에만 표시. 환경설정(CODE_DEL_PSBL_YN=N) 시 비활성 */}
                       <div style={{ textAlign: "center" }}>
                         <button
                           className="cc-del-btn"
-                          onClick={() => setDeleteTarget({ type: "code", id: c.codeId, name: c.codeNm })}
-                          style={deleteBtnStyle}
-                          title="코드 삭제"
+                          onClick={() => {
+                            if (deleteBlocked) return;
+                            setDeleteTarget({ type: "code", id: c.codeId, name: c.codeNm });
+                          }}
+                          disabled={deleteBlocked}
+                          style={{
+                            ...deleteBtnStyle,
+                            cursor: deleteBlocked ? "not-allowed" : "pointer",
+                            opacity: deleteBlocked ? 0.3 : undefined,
+                          }}
+                          title={deleteBlocked ? "프로젝트 환경설정(CODE_DEL_PSBL_YN=N)에서 코드 삭제가 차단되어 있습니다." : "코드 삭제"}
                         >
                           ×
                         </button>

@@ -242,11 +242,17 @@ function ConfigsInner() {
                     {showGroup ? item.group : ""}
                   </div>
 
-                  {/* 설정명 — 클릭 시 수정 팝업 */}
+                  {/* 설정명 — 클릭 시 수정 팝업. 좁은 폭에서는 ellipsis (title로 전체 노출) */}
                   <div
                     onClick={() => setEditItem(item)}
-                    title="클릭하여 수정"
-                    style={{ fontSize: 13, color: "var(--color-text-primary)", cursor: "pointer", textDecoration: "underline", textDecorationColor: "transparent", transition: "text-decoration-color 0.15s" }}
+                    title={item.label}
+                    style={{
+                      fontSize: 13, color: "var(--color-text-primary)",
+                      cursor: "pointer",
+                      textDecoration: "underline", textDecorationColor: "transparent",
+                      transition: "text-decoration-color 0.15s",
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}
                     onMouseEnter={(e) => (e.currentTarget.style.textDecorationColor = "var(--color-primary, #1976d2)")}
                     onMouseLeave={(e) => (e.currentTarget.style.textDecorationColor = "transparent")}
                   >
@@ -821,7 +827,14 @@ function EditConfigModal({ projectId, item, onClose, onSaved }: {
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
 // 설정 그룹 | 설정명 | 설정 구분 키 | 설명 | 유형 | 설정 값 | 기본값 | 삭제
-const GRID_TEMPLATE = "140px 1fr 180px 1fr 85px 200px 110px 60px";
+//   설정 그룹(100px)  — "설계" 2자~"프롬프트" 4자로 충분
+//   설정 구분 키(180px) — UNIQUE_CODE_USE_YN 18자(monospace 11px) ≈ 145px + padding
+//   유형(80px)         — "ON/OFF" 6자 + padding
+//   설정 값(110px)     — ON 배지(~40px) 또는 짧은 텍스트, ellipsis 적용됨
+//   기본값(60px)       — Y/N 단일 문자 center 정렬
+//   삭제(60px)         — 아이콘 2개(✎ ✕)
+//   설정명·설명은 1fr 로 가용 공간 분배 + ellipsis
+const GRID_TEMPLATE = "100px 1fr 180px 1fr 80px 110px 60px 60px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID_TEMPLATE, gap: 8,

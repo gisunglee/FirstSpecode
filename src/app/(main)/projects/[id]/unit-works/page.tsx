@@ -583,8 +583,12 @@ function UnitWorksPageInner() {
                 {uw.sortOrder}
               </div>
 
-              {/* 요구사항 (클릭 → 요구사항 상세, 행 클릭과 분리) */}
-              <div onClick={(e) => e.stopPropagation()}>
+              {/* 요구사항 (클릭 → 요구사항 상세, 행 클릭과 분리). 좁은 폭에서는 ellipsis */}
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                title={`${uw.reqDisplayId} ${uw.reqName}`}
+              >
                 <button
                   onClick={() => router.push(`/projects/${projectId}/requirements/${uw.reqId}`)}
                   style={linkBtnStyle}
@@ -596,12 +600,27 @@ function UnitWorksPageInner() {
                 </button>
               </div>
 
-              {/* 단위업무명 */}
-              <div style={{ fontSize: 14, fontWeight: 500, display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ color: "var(--color-text-secondary)", fontSize: 12 }}>
+              {/* 단위업무명 — flex 자식 중 name 만 ellipsis(min-width:0).
+                  displayId/완료 배지는 flexShrink:0 으로 항상 전체 노출 */}
+              <div
+                style={{
+                  fontSize: 14, fontWeight: 500,
+                  display: "flex", alignItems: "center", gap: 8,
+                  overflow: "hidden", whiteSpace: "nowrap", minWidth: 0,
+                }}
+                title={`${uw.displayId} ${uw.name}`}
+              >
+                <span style={{ color: "var(--color-text-secondary)", fontSize: 12, flexShrink: 0 }}>
                   {uw.displayId}
                 </span>
-                <span style={uw.analyRt === 100 && uw.designRt === 100 && uw.implRt === 100 && uw.testRt === 100 ? { color: "var(--color-text-secondary)", textDecoration: "none" } : {}}>
+                <span
+                  style={{
+                    overflow: "hidden", textOverflow: "ellipsis", minWidth: 0,
+                    ...(uw.analyRt === 100 && uw.designRt === 100 && uw.implRt === 100 && uw.testRt === 100
+                      ? { color: "var(--color-text-secondary)", textDecoration: "none" }
+                      : {}),
+                  }}
+                >
                   {uw.name}
                 </span>
                 {uw.analyRt === 100 && uw.designRt === 100 && uw.implRt === 100 && uw.testRt === 100 && (
@@ -609,6 +628,7 @@ function UnitWorksPageInner() {
                     fontSize: 11, fontWeight: 600, color: "#16a34a",
                     background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)",
                     borderRadius: 4, padding: "1px 7px", letterSpacing: "0.2px", whiteSpace: "nowrap",
+                    flexShrink: 0,
                   }}>
                     ✓ 완료
                   </span>
@@ -631,8 +651,8 @@ function UnitWorksPageInner() {
                 {uw.assignMemberName ?? "-"}
               </div>
 
-              {/* 기간 */}
-              <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+              {/* 기간 — "YYYY-MM-DD ~ YYYY-MM-DD"(23자) 한 줄 유지 */}
+              <div style={{ fontSize: 12, color: "var(--color-text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {uw.startDate && uw.endDate
                   ? `${uw.startDate} ~ ${uw.endDate}`
                   : uw.startDate
@@ -1022,7 +1042,12 @@ function DeleteConfirmDialog({
 // 드래그핸들 / 순서 / 요구사항 / 단위업무명(flex) / 담당자 / 기간 / 진행률 / 화면수 / AI구현 / 분설구테
 // 기간 16%→14% 로 축소해 담당자 110px 확보
 // AI 구현 컬럼은 "배지 + 시간(MM-DD HH:mm)"을 한 줄에 담도록 150px 확보
-const GRID_TEMPLATE = "28px 44px 22% 1fr 110px 14% 80px 56px 150px 110px";
+// % 기반 컬럼은 사이드바 펼침/접힘으로 가용 폭이 줄면 텍스트 셀이 과도하게 좁아져 깨졌음.
+// fr 기반으로 전환하고 기간/AI구현 등 콘텐츠 길이가 정해진 컬럼은 고정폭으로 안정화.
+//   요구사항(1.5fr) < 단위업무명(2fr) — 단위업무명에 더 큰 비중
+//   기간 145px("2026-04-02 ~ 2028-06-08" 23자 nowrap)
+//   AI 구현 130px(배지+MM-DD HH:mm)
+const GRID_TEMPLATE = "28px 44px 1.5fr 2fr 110px 145px 80px 56px 130px 110px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",

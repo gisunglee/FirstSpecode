@@ -128,8 +128,8 @@ function ReviewsPageInner() {
             <div>답변자</div>
             <div>상태</div>
             <div style={{ textAlign: "center" }}>코멘트</div>
-            <div>요청 일시</div>
-            <div>답변 일시</div>
+            <div style={{ textAlign: "center" }}>요청 일시</div>
+            <div style={{ textAlign: "center" }}>답변 일시</div>
           </div>
 
           {items.length === 0 ? (
@@ -183,19 +183,19 @@ function ReviewsPageInner() {
                     )}
                   </div>
 
-                  {/* 코멘트 수 */}
+                  {/* 코멘트 수 — 빈 값은 다른 목록과 동일하게 옅은 하이픈 */}
                   <div style={{ textAlign: "center", fontSize: 13, color: item.commentCount > 0 ? "var(--color-primary, #1976d2)" : "var(--color-text-secondary)" }}>
-                    {item.commentCount > 0 ? `💬 ${item.commentCount}` : "—"}
+                    {item.commentCount > 0 ? `💬 ${item.commentCount}` : <span style={{ color: "#ccc" }}>-</span>}
                   </div>
 
-                  {/* 요청 일시 — MM-DD HH:mm 단축 포맷 */}
-                  <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+                  {/* 요청 일시 — MM-DD HH:mm 단축 포맷, center 정렬 (우측 공백 제거) */}
+                  <div style={{ fontSize: 12, color: "var(--color-text-secondary)", textAlign: "center" }}>
                     {formatDateShort(item.createdAt)}
                   </div>
 
-                  {/* 답변 일시 — MM-DD HH:mm 단축 포맷 */}
-                  <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
-                    {item.completedAt ? formatDateShort(item.completedAt) : "—"}
+                  {/* 답변 일시 — MM-DD HH:mm 단축 포맷, center 정렬 */}
+                  <div style={{ fontSize: 12, color: "var(--color-text-secondary)", textAlign: "center" }}>
+                    {item.completedAt ? formatDateShort(item.completedAt) : <span style={{ color: "#ccc" }}>-</span>}
                   </div>
                 </div>
               );
@@ -345,10 +345,14 @@ function NewReviewModal({
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-// 제목(가변) | 요청자 | 답변자 | 상태 | 코멘트 | 요청일시 | 답변일시
-// 제목(가변) | 요청자 | 답변자 | 상태 | 코멘트 | 요청일시 | 답변일시
-// 제목(가변) | 요청자 | 답변자 | 상태 | 코멘트 | 요청일시 | 답변일시
-const GRID_TEMPLATE = "1fr 10.5% 10.5% 7.7% 8.9% 9.5% 9.5%";
+// 제목(가변 1fr) | 요청자 | 답변자 | 상태 | 코멘트 | 요청일시 | 답변일시
+// % 기반은 폭 변동에 따라 컨텐츠 대비 과한 공백이 남아 left-align 시 우측에 빈 공간 발생.
+// 콘텐츠 길이가 정해진 컬럼은 고정폭으로 잡고 날짜는 center 정렬해서 우측 공백 제거.
+//   요청자/답변자: 110px (이름 또는 이메일 prefix, 길면 ellipsis)
+//   상태:        130px (배지 + 별점 5개 ★★★★★)
+//   코멘트:       70px (💬 N 또는 -)
+//   요청·답변일시: 100px (MM-DD HH:mm 11자)
+const GRID_TEMPLATE = "1fr 110px 110px 130px 70px 100px 100px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID_TEMPLATE, gap: 8,

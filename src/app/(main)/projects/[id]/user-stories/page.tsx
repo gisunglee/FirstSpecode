@@ -206,8 +206,14 @@ function UserStoriesPageInner() {
                 paddingLeft: 13,
               }}
             >
-              {/* 요구사항 — 표시번호 + 이름 */}
-              <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.4 }}>
+              {/* 요구사항 — 표시번호 + 이름. 좁은 폭에서는 ellipsis (title로 전체 노출) */}
+              <div
+                style={{
+                  fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.4,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}
+                title={s.requirementDisplayId ? `${s.requirementDisplayId} ${s.requirementName}` : undefined}
+              >
                 {s.requirementDisplayId ? (
                   <>
                     <span style={{ color: "var(--color-text-secondary)", fontSize: 11, marginRight: 4 }}>
@@ -220,8 +226,14 @@ function UserStoriesPageInner() {
                 )}
               </div>
 
-              {/* 스토리명 */}
-              <div style={{ fontSize: 14, fontWeight: 500 }}>
+              {/* 스토리명 — displayId 는 nowrap 유지, 이름만 ellipsis */}
+              <div
+                style={{
+                  fontSize: 14, fontWeight: 500,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}
+                title={`${s.displayId} ${s.name}`}
+              >
                 <span style={{ color: "var(--color-text-secondary)", fontSize: 11, marginRight: 6 }}>
                   {s.displayId}
                 </span>
@@ -256,7 +268,8 @@ function UserStoriesPageInner() {
 
 const gridHeaderStyle: React.CSSProperties = {
   display:               "grid",
-  gridTemplateColumns:   "2fr 3fr 3fr 80px",
+  // 요구사항(2.5fr) 가장 길어질 수 있는 컬럼에 큰 비중, 페르소나(2fr)는 보통 짧음
+  gridTemplateColumns:   "2.5fr 3fr 2fr 80px",
   gap:                   12,
   padding:               "10px 16px",
   background:            "var(--color-bg-muted)",
@@ -269,7 +282,8 @@ const gridHeaderStyle: React.CSSProperties = {
 
 const gridRowStyle: React.CSSProperties = {
   display:               "grid",
-  gridTemplateColumns:   "2fr 3fr 3fr 80px",
+  // 요구사항(2.5fr) 가장 길어질 수 있는 컬럼에 큰 비중, 페르소나(2fr)는 보통 짧음
+  gridTemplateColumns:   "2.5fr 3fr 2fr 80px",
   gap:                   12,
   padding:               "12px 16px",
   alignItems:            "center",

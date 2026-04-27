@@ -193,13 +193,24 @@ model TbPjProject {
 }
 
 model TbPjProjectSettings {
-  seting_id         String      @id @default(uuid())
-  prjct_id          String      @unique
-  ai_call_mthd_code String      @default("DIRECT")
-  plan_code         String      @default("FREE")
-  creat_dt          DateTime    @default(now())
-  mdfcn_dt          DateTime    @default(now())
-  project           TbPjProject @relation(fields: [prjct_id], references: [prjct_id])
+  seting_id           String      @id @default(uuid())
+  prjct_id            String      @unique
+  ai_call_mthd_code   String      @default("DIRECT")
+  plan_code           String      @default("FREE")
+  // ── 출력 문서(.docx 등) 양식 기본값 ──────────────────────────────────────
+  // copyright_holder    : 표지 / 바닥글의 저작권 문구 (예: "Copyright ⓒ (주)바른아이오")
+  // doc_version_default : 출력 시 표지·변경이력 표의 기본 문서 버전 (예: "v1.0")
+  // approver_nm         : 출력 시 표지/변경이력 표의 "승인자" 기본값 (보통 프로젝트 PM)
+  //                       멤버 select 가 아닌 자유 텍스트 — 외부 PM(고객사 측) 도 가능하게.
+  //                       추후 산출물별 발행이력(TbDsDocumentRelease) 도입 시
+  //                       발행 모달의 "승인자" 입력란 기본값으로도 활용 예정.
+  // 모두 nullable — 미설정 시 출력 핸들러에서 코드 fallback 사용
+  copyright_holder    String?
+  doc_version_default String?
+  approver_nm         String?
+  creat_dt            DateTime    @default(now())
+  mdfcn_dt            DateTime    @default(now())
+  project             TbPjProject @relation(fields: [prjct_id], references: [prjct_id])
 
   @@map("tb_pj_project_settings")
 }
@@ -337,6 +348,47 @@ model TbDsDesignChange {
   chg_type_code String   @default("UPDATE")
 
   @@map("tb_ds_design_change")
+}
+
+// ─── 산출물 발행 이력 ───────────────────────────────────────────────────────
+//
+// 역할:
+//   요구사항·단위업무·화면 등 모든 산출물 문서(.docx)의 "공식 발행" 기록.
+//   사용자가 [발행] 버튼을 눌러 의식적으로 등록하는 단위 — 일반 데이터 수정 이력
+//   (TbRqRequirementHistory, TbDsDesignChange) 과는 의미가 다른 별개 라이프사이클이다.
+//
+// TbDsDesignChange 와 분리한 이유:
+//   - DesignChange = 데이터 변경 자동/수동 추적 (자주 발생, 스냅샷 Json)
+//   - DocumentRelease = 산출물 발행 이벤트 (드물게 발생, 사용자가 정한 공식 버전 라벨 + 승인자)
+//   - 라이프사이클·트리거·필수 컬럼(승인자) 모두 다름. 같은 테이블에 섞으면 쿼리·의미 모두 혼란.
+//
+// snapshot_data:
+//   발행 시점의 RequirementExportInput 객체를 JSON 으로 박제.
+//   이후 데이터(요구사항 본문/담당자/발주처명 등)가 바뀌어도 발행본은 그대로 복원 가능.
+//   → "v1.0 다운로드" = 그 시점 그대로의 docx (시점 일관성 보장).
+//
+// doc_kind:
+//   "REQUIREMENT" | "UNIT_WORK" | "SCREEN" | "AREA" | "FUNCTION" ... 등 산출물 종류.
+//   현재는 REQUIREMENT 만 사용. 다른 도메인 출력 추가 시 같은 모델 재활용.
+//
+// 멤버 FK 미설정 (release_mber_id):
+//   기존 도메인들과 동일한 패턴 — 발행자 멤버가 퇴장해도 이력 보존.
+model TbDsDocumentRelease {
+  release_id      String   @id @default(uuid())
+  prjct_id        String
+  doc_kind        String   // "REQUIREMENT" | "UNIT_WORK" | "SCREEN" | ...
+  ref_id          String   // 산출물 도메인 행 ID (req_id, unit_work_id 등)
+  vrsn_no         String   // 사용자가 입력한 공식 버전 라벨 ("v1.0", "v1.1", "1.0.0" 등)
+  change_cn       String?  // 짧은 변경 사유 (한두 줄)
+  author_nm       String?  // 작성자 이름 (스냅샷 — 멤버명 박제)
+  approver_nm     String?  // 승인자 이름 (스냅샷)
+  release_mber_id String?  // 발행 버튼을 누른 멤버 ID (감사용 — 표시엔 미사용)
+  snapshot_data   Json     // 발행 시점의 양식 입력 객체 (이전 버전 다운로드 시 그대로 복원)
+  released_dt     DateTime @default(now())
+
+  // Word 출력 시 "이 산출물의 발행 이력 전체" 조회가 자주 발생 → 복합 인덱스
+  @@index([prjct_id, doc_kind, ref_id], map: "tb_ds_doc_release_target_idx")
+  @@map("tb_ds_document_release")
 }
 
 model TbDsUnitWork {

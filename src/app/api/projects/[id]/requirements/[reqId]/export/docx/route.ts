@@ -1,60 +1,40 @@
 /**
  * GET /api/projects/[id]/requirements/[reqId]/export/docx
- *   — 요구사항 1건을 공공 SI 양식 Word(.docx) 로 내려받는 엔드포인트
+ *   — 요구사항 1건의 현재 시점 양식을 Word(.docx) 로 내려받는다
  *
- * 역할:
- *   - DB 에서 요구사항 + 상위 과업 + 담당자 + 프로젝트 메타를 한 번에 조회
- *   - 양식에 필요한 라벨(우선순위/출처)로 매핑
- *   - 변경이력/작성자/승인자/문서버전 등 DB 미정비 영역은 기본값(fallback)으로 채움
- *   - buildRequirementDocx 호출 → Buffer → 다운로드 응답
+ * 데이터 흐름:
+ *   1) buildRequirementExportInput() — DB → 양식 입력 객체 매핑 (lib/exports/requirement-data)
+ *   2) 발행 이력(TbDsDocumentRelease) 이 있으면 변경이력 표를 그 데이터로 덮어씀
+ *   3) buildRequirementDocx()        — 양식 입력 객체 → docx Buffer
+ *   4) 다운로드 응답
  *
  * 권한:
  *   - "content.export" — VIEWER 차단, MEMBER 이상만
- *   - "content.read" 가 아닌 별도 권한이라 시스템 관리자 지원 세션에서 자동 차단됨
+ *   - ".read" 가 아니라 시스템 관리자 지원 세션에서 자동 차단됨
  *
  * 응답:
  *   - Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
  *   - Content-Disposition: attachment; filename*=UTF-8''<encoded>
+ *
+ * 관련:
+ *   - 특정 발행 버전의 docx 다운로드는 /documents/release/[releaseId]/docx 별도 엔드포인트 사용
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiError } from "@/lib/apiResponse";
+import { buildRequirementDocx } from "@/lib/exports/docx/requirement";
 import {
-  buildRequirementDocx,
-  type RequirementExportInput,
-} from "@/lib/exports/docx/requirement";
+  buildRequirementExportInput,
+  REQUIREMENT_EXPORT_FALLBACK,
+} from "@/lib/exports/requirement-data";
+import { bumpMinorVersion } from "@/lib/exports/version";
 
 type RouteParams = { params: Promise<{ id: string; reqId: string }> };
 
-// ─── 코드 → 라벨 매핑 ────────────────────────────────────────
-// 화면(requirements/page.tsx)과 동일한 라벨 사용. 향후 공통 코드 테이블로 옮기면 한 곳에서 관리.
-const PRIORITY_LABELS: Record<string, string> = {
-  HIGH:   "높음 (HIGH)",
-  MEDIUM: "중간 (MEDIUM)",
-  LOW:    "낮음 (LOW)",
-};
-
-const SOURCE_LABELS: Record<string, string> = {
-  RFP:    "RFP",
-  ADD:    "추가",
-  CHANGE: "변경",
-};
-
-// ─── DB 미정비 영역 기본값 ──────────────────────────────────
-// 추후 DB 정비되면 이 값들은 모두 실제 데이터로 교체 (CLAUDE.md TODO).
-// 호출부에서 fallback 만 책임지고, 양식 모듈은 이 값을 그대로 출력한다.
-const FALLBACK = {
-  copyright:       "Copyright ⓒ SPECODE",
-  documentVersion: "v1.0",
-  authorName:      "(미지정)",
-  approverName:    "(미지정)",
-  historyChange:   "최초 작성",
-} as const;
-
-// ─── MIME ────────────────────────────────────────────────────
 const MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const DOC_KIND_REQUIREMENT = "REQUIREMENT";
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, reqId } = await params;
@@ -64,80 +44,69 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   if (gate instanceof Response) return gate;
 
   try {
-    // ② DB 조회 — 요구사항 + 상위 과업 (한 번)
-    const req = await prisma.tbRqRequirement.findUnique({
-      where:   { req_id: reqId },
-      include: { task: { select: { task_nm: true } } },
+    // ② DB → 양식 입력 객체 매핑
+    const result = await buildRequirementExportInput(projectId, reqId);
+    if (!result.ok) {
+      return apiError(result.code, result.message, result.httpStatus);
+    }
+    const input = result.input;
+
+    // ③ 발행 이력 조회
+    //   변경이력 표 = "현재 본문" 1행 (항상) + 발행 이력 행들 (있으면)
+    //
+    //   "현재 본문" 행을 항상 맨 위에 두는 이유:
+    //     - [Word 출력] 으로 받는 docx 는 "지금 시점의 본문" 이지만 표는 발행본만
+    //       표시되면 본문/표 시제 불일치로 사용자가 혼란.
+    //     - 발행을 안 했어도 변경이력 표가 비어있지 않게 유지 (빈 표보다 나음).
+    //   "현재 본문" 행은 입력란 prefill 이 아닌 출력 양식 전용 — DB 박제 안 됨.
+    //   (특정 발행 버전 다운로드 /documents/release/[id]/docx 는 박제된 snapshot 사용 →
+    //    이 경로는 영향 없음)
+    const releases = await prisma.tbDsDocumentRelease.findMany({
+      where:   { prjct_id: projectId, doc_kind: DOC_KIND_REQUIREMENT, ref_id: reqId },
+      orderBy: { released_dt: "desc" },
+      select: {
+        vrsn_no: true, change_cn: true, author_nm: true, approver_nm: true, released_dt: true,
+      },
     });
-    if (!req || req.prjct_id !== projectId) {
-      return apiError("NOT_FOUND", "요구사항을 찾을 수 없습니다.", 404);
-    }
 
-    // ③ 프로젝트 / 담당자 병렬 조회 — 의존 관계 없음
-    const [project, assignee] = await Promise.all([
-      prisma.tbPjProject.findUnique({
-        where:  { prjct_id: projectId },
-        select: { prjct_nm: true, client_nm: true },
-      }),
-      req.asign_mber_id
-        ? prisma.tbCmMember.findUnique({
-            where:  { mber_id: req.asign_mber_id },
-            // mber_nm 비어있는 경우 email 로 fallback
-            select: { mber_nm: true, email_addr: true },
-          })
-        : Promise.resolve(null),
-    ]);
-
-    if (!project) {
-      return apiError("NOT_FOUND", "프로젝트를 찾을 수 없습니다.", 404);
-    }
-
-    // ④ 양식 입력 데이터 구성
-    // 발주처는 프로젝트의 client_nm — 비어있으면 "발주처 미지정"
-    const ordererName = project.client_nm?.trim() || "발주처 미지정";
-    const assigneeName = assignee
-      ? (assignee.mber_nm?.trim() || assignee.email_addr || "미지정")
-      : "미지정";
-
-    const writtenAt = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-
-    const input: RequirementExportInput = {
-      ordererName,
-      copyright:   FALLBACK.copyright,
-      projectName: project.prjct_nm,
-
-      reqDisplayId:   req.req_display_id,
-      reqName:        req.req_nm,
-      parentTaskName: req.task?.task_nm ?? "미분류",
-      priorityLabel:  PRIORITY_LABELS[req.priort_code] ?? req.priort_code,
-      sourceLabel:    SOURCE_LABELS[req.src_code]      ?? req.src_code,
-      rfpPage:        req.rfp_page_no ?? "",
-      assigneeName,
-      sortOrder:      req.sort_ordr ?? 0,
-      detailSpec:     req.spec_cn ?? "",
-
-      // DB 미정비 영역 — 기본값
-      documentVersion: FALLBACK.documentVersion,
-      writtenAt,
-      authorName:      FALLBACK.authorName,
-      approverName:    FALLBACK.approverName,
-      history: [
-        {
-          version:  FALLBACK.documentVersion,
-          date:     writtenAt,
-          change:   FALLBACK.historyChange,
-          author:   FALLBACK.authorName,
-          approver: FALLBACK.approverName,
-        },
-      ],
+    const today = new Date().toISOString().slice(0, 10);
+    // "현재 작업 중" 행의 버전 라벨 결정:
+    //   - 발행 1건+ : 직전 발행 버전을 마이너 +1 (예: v1.0 → v1.1)
+    //                "이 본문이 다음에 발행될 버전" 으로 자연스럽게 읽히도록.
+    //   - 발행 0건  : input.documentVersion 그대로 (= 프로젝트 설정의 docVersionDefault
+    //                또는 코드 fallback "v1.0").
+    // 메이저 자동화는 의도적으로 안 함 — 시스템이 마이너/메이저 의도를 알 수 없으므로
+    // 사용자가 발행 시점에 모달에서 직접 수정.
+    const currentVersion = releases.length > 0
+      ? bumpMinorVersion(releases[0].vrsn_no)
+      : input.documentVersion;
+    // 변경 내용 라벨 — 상황별 분기
+    //   - 발행 0건 (지금 작성한 게 최초 본문)        : "최초 작성"
+    //   - 발행 1건+ (직전 발행 이후 수정 중인 본문) : "(현재 작업 중)"
+    const currentChange = releases.length > 0
+      ? "(현재 작업 중)"
+      : REQUIREMENT_EXPORT_FALLBACK.historyChange;
+    const currentRow = {
+      version:  currentVersion,
+      date:     today,
+      change:   currentChange,
+      author:   input.authorName,
+      approver: input.approverName,
     };
+    const releaseRows = releases.map((r) => ({
+      version:  r.vrsn_no,
+      date:     r.released_dt.toISOString().slice(0, 10),
+      change:   r.change_cn   ?? "",
+      author:   r.author_nm   ?? "",
+      approver: r.approver_nm ?? "",
+    }));
+    input.history = [currentRow, ...releaseRows];
 
-    // ⑤ docx 생성
+    // ④ docx 생성
     const buffer = await buildRequirementDocx(input);
 
-    // ⑥ 다운로드 응답
-    // 파일명: REQ-00023_요구사항명세서.docx — 한글 포함이라 RFC 5987 형식
-    const filename = `${req.req_display_id}_요구사항명세서.docx`;
+    // ⑤ 다운로드 응답 — 파일명 한글 포함이라 RFC 5987 형식 사용
+    const filename = `${input.reqDisplayId}_요구사항명세서.docx`;
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {

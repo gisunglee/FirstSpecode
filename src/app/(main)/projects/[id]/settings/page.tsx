@@ -38,7 +38,13 @@ type AiSettings = {
   callMethod: "DIRECT" | "QUEUE";
 };
 
-type Tab = "basic" | "ai";
+type Tab = "basic" | "ai" | "document";
+
+type DocumentSettings = {
+  copyrightHolder:   string | null;
+  docVersionDefault: string | null;
+  approverName:      string | null;
+};
 
 // ── 복사 확인 POPUP ──────────────────────────────────────────────────────
 function CopyDialog({
@@ -186,8 +192,9 @@ function ProjectSettingsInner() {
       <div style={{ padding: "0 24px 24px", maxWidth: 680 }}>
       {/* AR-00032 탭 네비게이션 (FID-00074) */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--color-border)", marginBottom: 12 }}>
-        <button style={tabStyle("basic")} onClick={() => setActiveTab("basic")}>기본정보</button>
-        <button style={tabStyle("ai")}    onClick={() => setActiveTab("ai")}>AI설정</button>
+        <button style={tabStyle("basic")}    onClick={() => setActiveTab("basic")}>기본정보</button>
+        <button style={tabStyle("ai")}       onClick={() => setActiveTab("ai")}>AI설정</button>
+        <button style={tabStyle("document")} onClick={() => setActiveTab("document")}>문서설정</button>
       </div>
 
       {/* 탭 콘텐츠 */}
@@ -224,7 +231,8 @@ function ProjectSettingsInner() {
           </div>
         </>
       )}
-      {activeTab === "ai" && <AiSettingsTab projectId={projectId} />}
+      {activeTab === "ai"       && <AiSettingsTab projectId={projectId} />}
+      {activeTab === "document" && <DocumentSettingsTab projectId={projectId} />}
 
       {copyOpen && (
         <CopyDialog projectName={project.name} onCancel={() => setCopyOpen(false)} onConfirm={() => { setCopyOpen(false); copyMutation.mutate(); }} isPending={copyMutation.isPending} />
@@ -481,6 +489,151 @@ function AiSettingsTab({ projectId }: { projectId: string }) {
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <button className="sp-btn sp-btn-primary" onClick={() => saveMethodMutation.mutate()} disabled={saveMethodMutation.isPending}>
             {saveMethodMutation.isPending ? "저장 중..." : "저장"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 문서 설정 탭 (출력 docx 양식 기본값) ─────────────────────────────────────
+// 입력 항목:
+//   - 기본 승인자 (PM)  — 표지/변경이력 표의 "승인자" 칸에 자동 채워짐. 외부 PM 도 OK
+//                        (자유 텍스트 — 멤버 select 가 아닌 이유는 멤버 명단에 없는
+//                         고객사 PM 도 들어갈 수 있어야 하기 때문).
+//   - 저작권 문구       — 표지/바닥글에 들어가는 "Copyright ⓒ ..." 문구
+//   - 기본 문서 버전    — 표지/변경이력 표 첫 행의 "v1.0" 같은 라벨
+//
+// 모두 비워두면 export 핸들러가 코드 fallback 사용 — 입력란 placeholder 가 그 fallback 값을 보여줌.
+
+// 입력란 아래 안내 문구 공통 스타일 — 같은 패턴이 3곳 반복되어 상수로 추출
+// color 는 secondary — placeholder/회색 텍스트와 구분되어 잘 읽히도록
+const fieldHintStyle: React.CSSProperties = {
+  margin:     "6px 0 0",
+  fontSize:   "var(--text-xs)",
+  color:      "var(--color-text-secondary)",
+  lineHeight: 1.6,
+};
+
+// 안내 문구 안의 예시 텍스트(코드체) — 발주처명·버전 라벨 같은 예시 강조
+const hintCodeStyle: React.CSSProperties = {
+  background:   "var(--color-bg-elevated)",
+  padding:      "1px 6px",
+  borderRadius: 3,
+  fontFamily:   "var(--font-mono, monospace)",
+  fontSize:     "0.95em",
+  color:        "var(--color-text-primary)",
+};
+
+function DocumentSettingsTab({ projectId }: { projectId: string }) {
+  const queryClient = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["document-settings", projectId],
+    queryFn: () =>
+      authFetch<{ data: DocumentSettings }>(`/api/projects/${projectId}/settings/document`).then((r) => r.data),
+  });
+
+  // 폼 상태 — 입력값은 모두 string (빈 문자열 → 저장 시 null 로 변환)
+  const [approverName,      setApproverName]      = useState("");
+  const [copyrightHolder,   setCopyrightHolder]   = useState("");
+  const [docVersionDefault, setDocVersionDefault] = useState("");
+  const [loaded, setLoaded] = useState(false);
+
+  // 처음 로드된 데이터를 폼 상태에 한 번만 반영 — 사용자 편집 중에 덮어쓰지 않도록
+  if (data && !loaded) {
+    setApproverName(data.approverName ?? "");
+    setCopyrightHolder(data.copyrightHolder ?? "");
+    setDocVersionDefault(data.docVersionDefault ?? "");
+    setLoaded(true);
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      authFetch(`/api/projects/${projectId}/settings/document`, {
+        method: "PUT",
+        // 빈 문자열은 명시적으로 null 로 — 사용자가 지우면 fallback 으로 돌아가도록
+        body: JSON.stringify({
+          approverName:      approverName      || null,
+          copyrightHolder:   copyrightHolder   || null,
+          docVersionDefault: docVersionDefault || null,
+        }),
+      }),
+    onSuccess: () => {
+      toast.success("저장되었습니다.");
+      queryClient.invalidateQueries({ queryKey: ["document-settings", projectId] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  if (isLoading) return <div style={{ color: "var(--color-text-tertiary)", fontSize: "var(--text-sm)" }}>로딩 중...</div>;
+
+  return (
+    <div>
+      <div style={{ background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-card)", padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <h3 style={{ margin: "0 0 4px", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--color-text-heading)" }}>출력 문서 양식 기본값</h3>
+        <p style={{ margin: 0, fontSize: "var(--text-xs)", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+          프로젝트의 모든 산출물 문서(.docx) 출력 시 표지·바닥글·변경이력 표에
+          <strong> 공통으로 사용되는 기본값</strong>입니다.
+          요구사항 명세서뿐 아니라 향후 추가될 단위업무·화면 등 모든 산출물에 동일하게 적용됩니다.
+          비워두면 시스템 기본값으로 출력됩니다.
+        </p>
+
+        <div>
+          <label className="sp-label">기본 승인자 (PM)</label>
+          <input
+            className="sp-input"
+            placeholder="(미지정)"
+            value={approverName}
+            onChange={(e) => setApproverName(e.target.value)}
+            maxLength={100}
+          />
+          <p style={fieldHintStyle}>
+            <strong>적용 위치:</strong> 표지의 &ldquo;승인자&rdquo; 행, 변경이력 표 우측 끝 &ldquo;승인자&rdquo; 컬럼.<br />
+            보통 프로젝트 PM 또는 검수 책임자 이름. 멤버가 아닌
+            <strong> 외부 PM(고객사 측, 컨소시엄 PM 등) 이름도 자유 입력 가능</strong>합니다.
+            추후 산출물별 발행 기능 도입 시에도 이 값이 발행 모달의 승인자 기본값으로 활용됩니다.
+          </p>
+        </div>
+
+        <div>
+          <label className="sp-label">저작권 문구</label>
+          <input
+            className="sp-input"
+            placeholder="Copyright ⓒ SPECODE"
+            value={copyrightHolder}
+            onChange={(e) => setCopyrightHolder(e.target.value)}
+            maxLength={255}
+          />
+          <p style={fieldHintStyle}>
+            <strong>적용 위치:</strong> 모든 출력 문서의 <strong>각 페이지 바닥글 우측</strong>에 공통 표시.<br />
+            발주처·컨소시엄명·구축사 등을 자유롭게 입력하세요.
+            예) <code style={hintCodeStyle}>Copyright ⓒ (주)바른아이오</code>
+          </p>
+        </div>
+
+        <div>
+          <label className="sp-label">기본 문서 버전</label>
+          <input
+            className="sp-input"
+            placeholder="v1.0"
+            value={docVersionDefault}
+            onChange={(e) => setDocVersionDefault(e.target.value)}
+            maxLength={50}
+          />
+          <p style={fieldHintStyle}>
+            <strong>적용 위치:</strong> 표지의 &ldquo;문서 버전&rdquo; 행, 변경이력 표 첫 행 &ldquo;버전&rdquo; 컬럼.<br />
+            <strong>최초 발행 버전</strong>으로 사용됩니다. 표기는 자유 — 예) <code style={hintCodeStyle}>v1.0</code>, <code style={hintCodeStyle}>1.0.0</code>, <code style={hintCodeStyle}>v0.1</code>
+          </p>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button
+            className="sp-btn sp-btn-primary"
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+          >
+            {saveMutation.isPending ? "저장 중..." : "저장"}
           </button>
         </div>
       </div>
