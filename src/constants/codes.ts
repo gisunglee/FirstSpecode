@@ -125,27 +125,37 @@ export const AI_REF_TYPE_LABEL: Record<AiRefType, string> = {
 // ══════════════════════════════════════════════════════════════════════════════
 
 /**
- * 프롬프트 템플릿이 적용되는 태스크 타입 — AI 태스크 타입 + 템플릿 전용 "TEST"
- * `TEST` 는 실제 AI 태스크로 실행되지 않고, 프롬프트 작성 과정에서 테스트 실행용으로만 사용되는 코드.
+ * 프롬프트 템플릿이 적용되는 태스크 타입
+ *   - AiTaskType                  : 일반 AI 작업 (DESIGN/INSPECT/IMPACT/IMPLEMENT/CUSTOM/...)
+ *   - "TEST"                       : 프롬프트 작성 화면에서만 쓰이는 테스트 실행용 (실제 태스크로 저장 안 됨)
+ *   - "PLAN_STUDIO_ARTF_GENERATE"  : 기획실 산출물 생성 (단일값 — 구분/형식은 div_code/fmt_code 컬럼으로 분리)
+ *
+ * 기획실 프롬프트도 같은 테이블(tb_ai_prompt_template)에서 관리되며,
+ * (ref_ty_code='PLAN_STUDIO_ARTF', task_ty_code='PLAN_STUDIO_ARTF_GENERATE', div_code, fmt_code) 4컬럼 매칭으로 조회한다.
  */
-export type PromptTemplateTaskType = AiTaskType | "TEST";
+export type PromptTemplateTaskType = AiTaskType | "TEST" | "PLAN_STUDIO_ARTF_GENERATE";
 
 export const PROMPT_TEMPLATE_TASK_TYPE_LABEL: Record<PromptTemplateTaskType, string> = {
   ...AI_TASK_TYPE_LABEL,
   TEST: "테스트",
+  // "산출물 생성" — 사용처 칸이 이미 "기획실 산출물" 이므로 중복을 줄임
+  PLAN_STUDIO_ARTF_GENERATE: "산출물 생성",
 };
 
 /**
- * 프롬프트 템플릿이 적용되는 참조 엔티티 — PLAN_STUDIO_ARTF 를 제외한 설계 도메인 엔티티만
- * (기획실 산출물 프롬프트는 `constants/planStudio.ts` 의 AI_TASK_TY_ARTF_GENERATE 경로에서 관리)
+ * 프롬프트 템플릿이 적용되는 참조 엔티티
+ * 모든 AiRefType 을 포함 — 기획실(PLAN_STUDIO_ARTF) 도 통합 관리 대상.
+ * 기획실 매트릭스(구분 × 형식)는 `tb_ai_prompt_template.div_code` / `fmt_code` 두 컬럼으로 표현.
+ * (구분·형식 도메인 값은 `constants/planStudio.ts` 의 ARTF_DIV / ARTF_FMT 참조)
  */
-export type PromptTemplateRefType = Exclude<AiRefType, "PLAN_STUDIO_ARTF">;
+export type PromptTemplateRefType = AiRefType;
 
 export const PROMPT_TEMPLATE_REF_TYPE_LABEL: Record<PromptTemplateRefType, string> = {
-  UNIT_WORK: "단위업무",
-  SCREEN:    "화면",
-  AREA:      "영역",
-  FUNCTION:  "기능",
+  UNIT_WORK:        "단위업무",
+  SCREEN:           "화면",
+  AREA:             "영역",
+  FUNCTION:         "기능",
+  PLAN_STUDIO_ARTF: "기획실 산출물",
 };
 
 // ══════════════════════════════════════════════════════════════════════════════

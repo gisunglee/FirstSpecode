@@ -311,7 +311,7 @@ function AreasPageInner() {
                   {area.name}
                 </div>
 
-                {/* 유형 배지 */}
+                {/* 유형 배지 — 표시 형태 배지는 행 높이가 늘어나서 목록에서는 제거. 필요하면 영역 편집에서 확인. */}
                 <div>
                   <span style={typeBadgeStyle(area.type)}>
                     {area.type}
@@ -527,13 +527,13 @@ function DeleteConfirmDialog({
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
 function typeBadgeStyle(type: string): React.CSSProperties {
+  // 신규 분류 5종 — 데이터 성격 기준
   const colors: Record<string, { bg: string; color: string }> = {
-    SEARCH: { bg: "#e3f2fd", color: "#1565c0" },
-    GRID: { bg: "#e8f5e9", color: "#2e7d32" },
-    FORM: { bg: "#fff3e0", color: "#e65100" },
-    INFO_CARD: { bg: "#f3e5f5", color: "#6a1b9a" },
-    TAB: { bg: "#e0f2f1", color: "#00695c" },
-    FULL_SCREEN: { bg: "#fce4ec", color: "#880e4f" },
+    FILTER:  { bg: "#e3f2fd", color: "#1565c0" },
+    LIST:    { bg: "#e8f5e9", color: "#2e7d32" },
+    FORM:    { bg: "#fff3e0", color: "#e65100" },
+    DETAIL:  { bg: "#f3e5f5", color: "#6a1b9a" },
+    GENERAL: { bg: "#eceff1", color: "#37474f" },
   };
   const c = colors[type] ?? { bg: "#f5f5f5", color: "#555" };
   return {
@@ -546,6 +546,7 @@ function typeBadgeStyle(type: string): React.CSSProperties {
     color: c.color,
   };
 }
+
 
 // ── AI 태스크 상태 배지 스타일 (AI 구현 컬럼용) ─────────────────────
 // 상태 라벨·색상은 공용 codes 모듈(@/constants/codes)에서 가져옴

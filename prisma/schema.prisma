@@ -440,21 +440,27 @@ model TbDsScreen {
 }
 
 model TbDsArea {
-  area_id         String         @id @default(uuid())
-  prjct_id        String
-  scrn_id         String?
-  area_display_id String
-  area_nm         String         @default("")
-  area_dc         String?
-  area_ty_code    String         @default("GRID")
-  sort_ordr       Int            @default(0)
-  creat_dt        DateTime       @default(now())
-  mdfcn_dt        DateTime?
-  excaldw_data    Json?
-  layer_data_dc   String?
-  coment_cn       String?
-  screen          TbDsScreen?    @relation(fields: [scrn_id], references: [scrn_id])
-  functions       TbDsFunction[]
+  area_id           String         @id @default(uuid())
+  prjct_id          String
+  scrn_id           String?
+  area_display_id   String
+  area_nm           String         @default("")
+  area_dc           String?
+  // 영역 유형 — "무엇이 담기는가" (데이터 성격)
+  // FILTER(조회 조건) / LIST(데이터 목록) / FORM(데이터 양식) / DETAIL(상세 정보) / GENERAL(일반 콘텐츠)
+  area_ty_code      String         @default("LIST")
+  // 영역 표시 형태 — "어떻게 배치/작동하는가" (시각 방식)
+  // STATIC(고정) / POPOVER(팝오버) / MODAL(모달) / DRAWER(드로어) / TABS(탭 전환) / ACCORDION(아코디언)
+  // 종속 팝업도 별도 화면이 아닌 영역의 표시 형태 변형으로 표현.
+  display_form_code String         @default("STATIC")
+  sort_ordr         Int            @default(0)
+  creat_dt          DateTime       @default(now())
+  mdfcn_dt          DateTime?
+  excaldw_data      Json?
+  layer_data_dc     String?
+  coment_cn         String?
+  screen            TbDsScreen?    @relation(fields: [scrn_id], references: [scrn_id])
+  functions         TbDsFunction[]
 
   @@index([prjct_id], map: "tb_ds_area_prjct_idx")
   @@map("tb_ds_area")
@@ -712,12 +718,25 @@ model TbRqBaselineSnapshot {
   @@map("tb_rq_baseline_snapshot")
 }
 
+/// AI 프롬프트 템플릿 — tb_ai_prompt_template
+///
+/// 매칭 차원:
+///   - ref_ty_code  : 어떤 entity (UNIT_WORK/SCREEN/AREA/FUNCTION/PLAN_STUDIO_ARTF)
+///   - task_ty_code : 무엇을 할지 (DESIGN/INSPECT/IMPACT/IMPLEMENT/CUSTOM/PLAN_STUDIO_ARTF_GENERATE)
+///   - div_code     : 산출물 구분 (PLAN_STUDIO_ARTF 전용; IA/JOURNEY/FLOW/MOCKUP/ERD/PROCESS, 그 외 NULL)
+///   - fmt_code     : 출력 형식  (PLAN_STUDIO_ARTF 전용; MD/MERMAID/HTML, 그 외 NULL)
+///
+/// 일반 사용처는 (ref_ty_code, task_ty_code) 만으로 매칭, div/fmt 는 NULL.
+/// 기획실 산출물은 (ref_ty_code='PLAN_STUDIO_ARTF', task_ty_code='PLAN_STUDIO_ARTF_GENERATE', div_code, fmt_code) 4컬럼 매칭.
 model TbAiPromptTemplate {
   tmpl_id       String   @id(map: "pk_ai_prompt_template") @db.VarChar(36)
   prjct_id      String?  @db.VarChar(36)
   tmpl_nm       String   @db.VarChar(200)
-  task_ty_code  String   @db.VarChar(20)
+  // VARCHAR(30): 'PLAN_STUDIO_ARTF_GENERATE' (25자) 등 긴 코드 수용
+  task_ty_code  String   @db.VarChar(30)
   ref_ty_code   String?  @db.VarChar(20)
+  div_code      String?  @db.VarChar(20)
+  fmt_code      String?  @db.VarChar(20)
   sys_prompt_cn String?
   tmpl_dc       String?
   use_yn        String   @default("Y") @db.Char(1)
@@ -728,7 +747,8 @@ model TbAiPromptTemplate {
   use_cnt       Int      @default(0)
   default_yn    String   @default("N") @db.Char(1)
 
-  @@index([prjct_id, task_ty_code, use_yn], map: "idx_ai_tmpl_prjct")
+  @@index([prjct_id, task_ty_code, use_yn],                                 map: "idx_ai_tmpl_prjct")
+  @@index([ref_ty_code, task_ty_code, div_code, fmt_code],                  map: "idx_ai_tmpl_plan_studio")
   @@map("tb_ai_prompt_template")
 }
 

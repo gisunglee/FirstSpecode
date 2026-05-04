@@ -109,7 +109,7 @@ npx next lint --no-cache 2>&1 | head -200 || echo "lint 미설정 또는 실패"
 CLAUDE.md 규칙 준수 여부:
 - API route **인터페이스** 변경(메서드/경로/파라미터) 있으면 MCP 파일도 수정되어야 함
 - `git diff --name-only HEAD~5 HEAD` 로 최근 변경 확인 (선택적, Bash 권한 있으면)
-- `src/app/api/**/route.ts` 변경 있는데 `mcp-server/src/register-tools.ts` 또는 `src/lib/mcp/register-tools.ts` 변경 없음 → major
+- `src/app/api/**/route.ts` 변경 있는데 `src/lib/mcp/register-tools.ts` 변경 없음 → major
 
 ### 5. 판정 및 출력
 

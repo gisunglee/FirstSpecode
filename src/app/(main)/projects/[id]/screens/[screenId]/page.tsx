@@ -1019,13 +1019,13 @@ function FormField({
 }
 
 function areaTypeBadgeStyle(type: string): React.CSSProperties {
+  // 신규 분류 5종 — 데이터 성격 기준 (FILTER/LIST/FORM/DETAIL/GENERAL)
   const colors: Record<string, { bg: string; color: string }> = {
-    SEARCH: { bg: "#e3f2fd", color: "#1565c0" },
-    GRID: { bg: "#e8f5e9", color: "#2e7d32" },
-    FORM: { bg: "#fff3e0", color: "#e65100" },
-    INFO_CARD: { bg: "#f3e5f5", color: "#6a1b9a" },
-    TAB: { bg: "#e0f2f1", color: "#00695c" },
-    FULL_SCREEN: { bg: "#fce4ec", color: "#880e4f" },
+    FILTER:  { bg: "#e3f2fd", color: "#1565c0" },
+    LIST:    { bg: "#e8f5e9", color: "#2e7d32" },
+    FORM:    { bg: "#fff3e0", color: "#e65100" },
+    DETAIL:  { bg: "#f3e5f5", color: "#6a1b9a" },
+    GENERAL: { bg: "#eceff1", color: "#37474f" },
   };
   const c = colors[type] ?? { bg: "#f5f5f5", color: "#555" };
   return {

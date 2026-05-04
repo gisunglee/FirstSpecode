@@ -5,7 +5,7 @@
  *   - 같은 Next.js 앱의 API route를 호출하는 래퍼
  *   - 두 가지 인증 모드 제공:
  *     (1) 토큰 전파(Token Propagation) — HTTP MCP용: 요청자 토큰을 그대로 릴레이
- *     (2) 서비스 토큰(env fallback) — 로컬/테스트용: SPECODE_API_KEY 또는 JWT
+ *     (2) 서비스 토큰(env fallback) — 로컬/테스트용: SPECODE_MCP_KEY 또는 JWT
  *   - Vercel 배포 시 자체 URL로 호출, 로컬에서는 localhost
  *
  * 사용 원칙:
@@ -16,10 +16,10 @@
  * 환경변수:
  *   SPECODE_BASE_URL — 명시적 지정 시 사용 (기본: 자동 감지)
  *   VERCEL_URL       — Vercel이 자동 설정하는 배포 URL
- *   SPECODE_API_KEY  — API 키 (spk_... 형식, 프로필에서 발급) — env fallback 전용
- *   JWT_SECRET       — JWT 서명 키 (API 키 없을 때 fallback)
- *   SERVICE_MBER_ID  — 서비스 계정 회원 ID (API 키 없을 때 fallback)
- *   SERVICE_EMAIL    — 서비스 계정 이메일 (API 키 없을 때 fallback)
+ *   SPECODE_MCP_KEY  — MCP 인증 키 (spk_... 형식, 용도='MCP', 프로필에서 발급) — env fallback 전용
+ *   JWT_SECRET       — JWT 서명 키 (MCP 키 없을 때 fallback)
+ *   SERVICE_MBER_ID  — 서비스 계정 회원 ID (MCP 키 없을 때 fallback)
+ *   SERVICE_EMAIL    — 서비스 계정 이메일 (MCP 키 없을 때 fallback)
  */
 
 import jwt from "jsonwebtoken";
@@ -54,9 +54,9 @@ function getBaseUrl(): string {
 // 주의: 이 경로는 요청자 컨텍스트가 아니라 "서비스 계정" 컨텍스트로 호출함.
 //       HTTP MCP(/api/mcp)에서는 이 경로를 절대 타지 않도록 token을 주입할 것.
 function getFallbackToken(): string {
-  // API 키 우선
-  const apiKey = process.env.SPECODE_API_KEY || "";
-  if (apiKey) return apiKey;
+  // MCP 키 우선
+  const mcpKey = process.env.SPECODE_MCP_KEY || "";
+  if (mcpKey) return mcpKey;
 
   // fallback의 fallback: JWT 서비스 토큰 자체 발급
   const secret = process.env.JWT_SECRET || "";
@@ -65,7 +65,7 @@ function getFallbackToken(): string {
 
   if (!secret || !mberId || !email) {
     throw new Error(
-      "MCP 인증 실패: SPECODE_API_KEY 또는 (JWT_SECRET + SERVICE_MBER_ID + SERVICE_EMAIL)을 설정해 주세요"
+      "MCP 인증 실패: SPECODE_MCP_KEY 또는 (JWT_SECRET + SERVICE_MBER_ID + SERVICE_EMAIL)을 설정해 주세요"
     );
   }
 

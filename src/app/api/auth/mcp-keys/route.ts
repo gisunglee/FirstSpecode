@@ -6,15 +6,17 @@
  *   - 로그인한 사용자의 MCP 인증 키(spk_...) 관리
  *   - 생성 시 원문(rawKey)은 응답에서 1회만 반환 (이후 조회 불가 — SHA-256 해시로 저장)
  *   - 목록에서는 prefix(앞 12자)만 표시
- *   - prjctId 지정 시 해당 프로젝트로 scope 고정 (다른 프로젝트 접근 시 403)
+ *   - prjctId는 필수 — 항상 단일 프로젝트로 scope 고정 (다른 프로젝트 접근 시 403)
  *
  * 제한:
  *   - 사용자당 활성 키 최대 10개
- *   - keyUseSe='WORKER' 발급 시 prjctId 필수 (전역 발급 차단)
+ *   - 모든 키(CLIENT/WORKER) prjctId 필수 — 전역('ALL') 발급 전면 차단
  *
  * 키 용도 (key_use_se_code, [2026-04-26] 추가):
- *   - 'CLIENT' (기본) — Claude Code MCP 도구용. 전역/프로젝트 scope 자유.
- *   - 'WORKER'      — /run-ai-tasks 워커용. 프로젝트 scope 필수 (전역 거부).
+ *   - 'CLIENT' (기본) — Claude Code MCP 도구용
+ *   - 'WORKER'      — /run-ai-tasks 워커용
+ *   ※ 두 용도 모두 프로젝트 scope 필수. 전역 키는 정책상 미지원
+ *      (사고 폭 축소 — 키 유출/AI 실수 시 다른 프로젝트로 사고 전파 차단)
  *
  * 과거 경로: /api/auth/api-keys (2026-04-24 mcp-keys로 rename — 용도 명확화)
  */
@@ -24,7 +26,9 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { generateApiKey, hashApiKey, getApiKeyPrefix } from "@/lib/auth";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
-import { MCP_KEY_GLOBAL_SCOPE, isGlobalMcpKey } from "@/lib/mcpKeyScope";
+// isGlobalMcpKey만 사용 — 전역 발급은 더 이상 안 하지만, 기존 발급된 'ALL' 키가
+// 목록에 노출될 때 표시(🌐 전역 배지)와 prjctNm 분기를 위해 GET 측에서 필요.
+import { isGlobalMcpKey } from "@/lib/mcpKeyScope";
 
 // 사용자당 활성 MCP 키 최대 개수
 const MAX_MCP_KEYS_PER_USER = 10;
@@ -128,31 +132,33 @@ export async function POST(request: NextRequest) {
   }
   const useSe = useSeRaw as KeyUseSe;
 
-  // 'WORKER' 키는 프로젝트 scope 강제 — 전역 발급 차단 (사용자 실수 원천 봉쇄)
-  // 워커는 단일 프로젝트 컨텍스트에서만 동작해야 하므로 발급 단계에서 막는다.
-  // 서버측 워커 인증(worker/_lib/auth.ts)에서 한 번 더 차단되는 이중 방어.
-  if (useSe === "WORKER" && !prjctId) {
+  // ── prjctId 필수 검증 — 전역 키 발급 전면 차단 ───────────────
+  // 정책: 모든 MCP 키는 단일 프로젝트로 scope 고정해야 한다.
+  //   사유: ① 키 유출 시 피해 폭 N배 확산 차단
+  //         ② AI 실수로 다른 프로젝트 데이터 만지는 사고 차단(URL scope 가드 작동)
+  //         ③ "이 키 쓰면 어디까지 만져지는가"의 예측 가능성 보장
+  // 이전에는 CLIENT 키에 한해 전역 발급 가능했으나 운영 정책으로 차단됨.
+  // DB에 'ALL' sentinel이 들어가지 않도록 발급 단계에서 막는다.
+  if (!prjctId) {
     return apiError(
       "VALIDATION_ERROR",
-      "워커용 키는 반드시 프로젝트 scope 를 지정해야 합니다. 전역('ALL') 발급 불가.",
+      "MCP 키는 반드시 프로젝트를 지정해야 합니다. 전역 키는 더 이상 발급할 수 없습니다.",
       400
     );
   }
 
   // ── 프로젝트 scope 요청 시 멤버십 검증 ─────────────────────────
   // 비멤버 프로젝트로 scope 고정 시도 차단 (보안: 발급 시점에 원천 차단)
-  if (prjctId) {
-    const membership = await prisma.tbPjProjectMember.findUnique({
-      where: { prjct_id_mber_id: { prjct_id: prjctId, mber_id: auth.mberId } },
-      select: { mber_sttus_code: true },
-    });
-    if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-      return apiError(
-        "FORBIDDEN",
-        "해당 프로젝트의 활성 멤버가 아닙니다.",
-        403
-      );
-    }
+  const membership = await prisma.tbPjProjectMember.findUnique({
+    where: { prjct_id_mber_id: { prjct_id: prjctId, mber_id: auth.mberId } },
+    select: { mber_sttus_code: true },
+  });
+  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
+    return apiError(
+      "FORBIDDEN",
+      "해당 프로젝트의 활성 멤버가 아닙니다.",
+      403
+    );
   }
 
   try {
@@ -173,13 +179,11 @@ export async function POST(request: NextRequest) {
     const keyHash   = hashApiKey(rawKey);
     const keyPrefix = getApiKeyPrefix(rawKey);
 
-    // fail-secure: prjctId 미지정 시 명시적 sentinel('ALL')로 저장. null 금지.
-    const scopeValue = prjctId ?? MCP_KEY_GLOBAL_SCOPE;
-
+    // 위 prjctId 필수 검증을 통과했으므로 여기서는 항상 UUID. 전역 sentinel 미사용.
     const created = await prisma.tbCmMcpKey.create({
       data: {
         mber_id:         auth.mberId,
-        prjct_id:        scopeValue,
+        prjct_id:        prjctId,
         key_use_se_code: useSe,        // [2026-04-26] 'CLIENT' 또는 'WORKER'
         key_hash:        keyHash,
         key_prefix:      keyPrefix,

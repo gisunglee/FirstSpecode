@@ -16,6 +16,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
+import { useCanEditTask } from "@/hooks/useCanEditTask";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -69,6 +70,10 @@ function TaskListPageInner() {
   const router      = useRouter();
   const projectId   = params.id;
   const queryClient = useQueryClient();
+
+  // 과업 등록/순서변경/복사 가능 여부 — 백엔드 taskWriteGate 와 동일 규칙
+  // (OWNER/ADMIN 또는 PM/PL, 또는 환경설정 MEMBER_TASK_UPT_PSBL_YN="Y" 인 멤버)
+  const { canCreateTask } = useCanEditTask(projectId);
 
   // 담당자 필터 — 전역 appStore.myAssigneeMode 구독 (GNB 토글과 양방향 바인딩)
   const searchParams     = useSearchParams();
@@ -224,12 +229,15 @@ function TaskListPageInner() {
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           과업 목록
         </div>
-        <button
-          onClick={() => router.push(`/projects/${projectId}/tasks/new`)}
-          style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
-        >
-          + 과업 추가
-        </button>
+        {/* 등록 권한자만 노출 — 권한 없는 사용자는 버튼 자체가 보이지 않음 */}
+        {canCreateTask && (
+          <button
+            onClick={() => router.push(`/projects/${projectId}/tasks/new`)}
+            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
+          >
+            + 과업 추가
+          </button>
+        )}
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
@@ -310,11 +318,11 @@ function TaskListPageInner() {
             return (
               <div
                 key={task.taskId}
-                draggable
-                onDragStart={() => handleDragStart(idx)}
-                onDragEnter={() => handleDragEnter(idx)}
-                onDragEnd={handleDragEnd}
-                onDragOver={(e) => e.preventDefault()}
+                draggable={canCreateTask}
+                onDragStart={canCreateTask ? () => handleDragStart(idx) : undefined}
+                onDragEnter={canCreateTask ? () => handleDragEnter(idx) : undefined}
+                onDragEnd={canCreateTask ? handleDragEnd : undefined}
+                onDragOver={canCreateTask ? (e) => e.preventDefault() : undefined}
                 onClick={() => router.push(`/projects/${projectId}/tasks/${task.taskId}`)}
                 style={{
                   display: "grid",
@@ -328,13 +336,17 @@ function TaskListPageInner() {
                   transition: "background 0.1s",
                 }}
               >
-                {/* 드래그 핸들 */}
-                <span
-                  onClick={(e) => e.stopPropagation()}
-                  style={{ color: "#bbb", fontSize: 16, cursor: "grab", userSelect: "none" }}
-                >
-                  ≡
-                </span>
+                {/* 드래그 핸들 — 정렬 권한 있을 때만 노출 */}
+                {canCreateTask ? (
+                  <span
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ color: "#bbb", fontSize: 16, cursor: "grab", userSelect: "none" }}
+                  >
+                    ≡
+                  </span>
+                ) : (
+                  <span />
+                )}
 
                 {/* 과업명 */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

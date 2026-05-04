@@ -7,6 +7,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
+import { requireTaskWrite } from "@/lib/taskWriteGate";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 type RouteParams = { params: Promise<{ id: string; taskId: string }> };
@@ -55,7 +56,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, taskId } = await params;
 
-  const gate = await requirePermission(request, projectId, "content.update");
+  // OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 담당자 OR 환경설정 MEMBER_TASK_UPT_PSBL_YN="Y"
+  const gate = await requireTaskWrite(request, projectId, { taskId });
   if (gate instanceof Response) return gate;
 
   let body: unknown;
@@ -156,7 +158,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, taskId } = await params;
 
-  const gate = await requirePermission(request, projectId, "content.delete");
+  // OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 담당자 OR 환경설정 MEMBER_TASK_UPT_PSBL_YN="Y"
+  const gate = await requireTaskWrite(request, projectId, { taskId });
   if (gate instanceof Response) return gate;
 
   // deleteType: 'ALL' | 'TASK_ONLY'

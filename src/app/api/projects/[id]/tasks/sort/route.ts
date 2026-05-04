@@ -6,26 +6,18 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
-import { checkRole } from "@/lib/checkRole";
+import { requireTaskWrite } from "@/lib/taskWriteGate";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
-  const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER"]);
-  if (roleCheck) return roleCheck;
+  // 정렬은 전 과업에 영향 — 본인 담당 여부로 통과시킬 수 없으므로 taskId 미전달
+  // (OWNER/ADMIN 역할 OR PM/PL 직무 OR 환경설정 MEMBER_TASK_UPT_PSBL_YN="Y" 만 통과)
+  const gate = await requireTaskWrite(request, projectId);
+  if (gate instanceof Response) return gate;
 
   let body: unknown;
   try { body = await request.json(); } catch {

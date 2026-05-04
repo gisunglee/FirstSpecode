@@ -16,6 +16,7 @@
  */
 
 import { Suspense, useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -1555,9 +1556,51 @@ const colMappingRowStyle: React.CSSProperties = {
 const formGroupStyle: React.CSSProperties = { marginBottom: 16 };
 
 // ── 표시 ID 도움말 ───────────────────────────────────────────────────────────
+//
+// 마운트 위치: createPortal 로 document.body 직접.
+//   1) 부모 <label fontWeight:600> 의 볼드가 모달 본문에 상속되는 문제 차단
+//   2) MainLayout(z-index 2000) 같은 상위 요소에 백드롭이 가려지는 문제 차단
+// 닫기: 우상단 ×, 모달 바깥(백드롭) 클릭, ESC 키 — 셋 다 지원.
+// (※ 이 컴포넌트는 areas/functions/unit-works 페이지에 별도 정의되어 있으며 동일 패턴 유지.)
 
 function DisplayIdHelp() {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // SSR-safe — document.body 는 클라이언트에서만 존재
+  useEffect(() => { setMounted(true); }, []);
+
+  // ESC 키로 닫기 — 모달 열린 동안만 리스너 활성
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const overlay = open ? (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5000 }}
+      onClick={() => setOpen(false)}
+    >
+      <div
+        style={{ background: "var(--color-bg-card)", borderRadius: 12, padding: "24px 28px", minWidth: 400, maxWidth: 520, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>표시 ID</span>
+          <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}>×</button>
+        </div>
+        {/* fontWeight: 400 명시 — 부모 label(600) 상속 차단(포털로도 막히지만 명시적으로 한 번 더). */}
+        <div style={{ fontSize: 13, fontWeight: 400, color: "var(--color-text-primary)", lineHeight: 1.8, whiteSpace: "pre-line" }}>
+          {"명칭 대신 화면에 표시되는 고유 식별자입니다.\n비워 두면 자동으로 생성됩니다.\n\n예시)\n• 단위업무: UW-00001\n• 화면: SCR-00001\n• 영역: AR-00001\n• 기능: FN-00001"}
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <>
       <button
@@ -1572,22 +1615,7 @@ function DisplayIdHelp() {
           fontSize: 10, fontWeight: 700, cursor: "pointer", padding: 0, lineHeight: 1,
         }}
       >?</button>
-      {open && (
-        <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1200 }}
-          onClick={() => setOpen(false)}
-        >
-          <div style={{ background: "var(--color-bg-card)", borderRadius: 12, padding: "24px 28px", minWidth: 400, maxWidth: 520, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>표시 ID</span>
-              <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}>×</button>
-            </div>
-            <div style={{ fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.8, whiteSpace: "pre-line" }}>
-              {"명칭 대신 화면에 표시되는 고유 식별자입니다.\n비워 두면 자동으로 생성됩니다.\n\n예시)\n• 단위업무: UW-00001\n• 화면: SCR-00001\n• 영역: AR-00001\n• 기능: FN-00001"}
-            </div>
-          </div>
-        </div>
-      )}
+      {mounted && overlay && createPortal(overlay, document.body)}
     </>
   );
 }
@@ -1601,13 +1629,16 @@ const inputStyle: React.CSSProperties = {
   border: "1px solid var(--color-border)", fontSize: 14,
   background: "var(--color-bg-card)", color: "var(--color-text-primary)", boxSizing: "border-box",
 };
+// select 전용 — 단위업무/영역/화면 등 다른 편집 페이지와 동일한 chevron 화살표 (얇은 ⌄)
+// 기존 채워진 삼각형(▼) 은 다른 페이지와 톤이 달라 통일.
 const selectStyle: React.CSSProperties = {
   ...inputStyle,
-  appearance: "none",
-  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
-  backgroundRepeat: "no-repeat",
+  paddingRight:       "32px",
+  appearance:         "none",
+  WebkitAppearance:   "none",
+  backgroundImage:    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
+  backgroundRepeat:   "no-repeat",
   backgroundPosition: "right 10px center",
-  paddingRight: 32,
 };
 const primaryBtnStyle: React.CSSProperties = {
   padding: "8px 20px", borderRadius: 6, border: "1px solid transparent",

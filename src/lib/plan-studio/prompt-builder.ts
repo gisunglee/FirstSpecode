@@ -22,6 +22,7 @@ import { prisma } from "@/lib/prisma";
 import { getRequestPrompt } from "./prompts";
 
 export async function buildPrompt(opts: {
+  projectId: string;
   artfId: string;
   artfNm: string;
   artfDivCode: string;
@@ -42,7 +43,9 @@ export async function buildPrompt(opts: {
   lines.push("");
 
   // ── 구분별 전문 요청 프롬프트 ──
-  const requestPrompt = getRequestPrompt(opts.artfDivCode, opts.artfFmtCode);
+  // DB(tb_ai_prompt_template)에서 (프로젝트 + DIV + FMT) 매트릭스로 조회
+  // 호출 시 use_cnt 자동 증가 — 화면 "이용 횟수" 통계에 반영
+  const requestPrompt = await getRequestPrompt(opts.projectId, opts.artfDivCode, opts.artfFmtCode);
   lines.push("  <request_prompt>");
   lines.push(`    ${requestPrompt}`);
   lines.push("  </request_prompt>");

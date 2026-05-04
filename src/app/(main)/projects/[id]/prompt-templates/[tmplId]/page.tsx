@@ -22,6 +22,7 @@ import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import { useAppStore } from "@/store/appStore";
 import { type PromptTemplateTaskType, type PromptTemplateRefType } from "@/constants/codes";
+import { ARTF_DIV, ARTF_FMT } from "@/constants/planStudio";
 import { useIsSystemAdmin, useMyRole } from "@/hooks/useMyRole";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
@@ -37,6 +38,9 @@ type TemplateDetail = {
   tmplNm: string;
   taskTyCode: TaskType;
   refTyCode: RefType | null;
+  // 기획실(PLAN_STUDIO_ARTF) 매트릭스 — 그 외 사용처는 null
+  divCode: string | null;
+  fmtCode: string | null;
   sysPromptCn: string;
   tmplDc: string;
   useYn: string;
@@ -62,6 +66,10 @@ const DEPRECATED_TASK_TYPES: Partial<Record<TaskType, string>> = {
   MOCKUP: "목업",
   CUSTOM: "자유 요청",
 };
+
+// 기획실 산출물 매트릭스 옵션 — constants/planStudio.ts 의 도메인 그대로 사용
+const DIV_OPTIONS = Object.values(ARTF_DIV);   // [{code, name, group}, ...]
+const FMT_OPTIONS = Object.values(ARTF_FMT);   // [{code, name}, ...]
 
 // ── 페이지 래퍼 ───────────────────────────────────────────────────────────────
 
@@ -93,6 +101,9 @@ function PromptTemplateDetailPageInner() {
   const [tmplNm, setTmplNm] = useState("");
   const [taskTyCode, setTaskTyCode] = useState<TaskType>("INSPECT");
   const [refTyCode, setRefTyCode] = useState<RefType | "">("");
+  // 기획실 매트릭스 — 사용처가 PLAN_STUDIO_ARTF 일 때만 의미 있음. 그 외엔 빈 문자열.
+  const [divCode, setDivCode] = useState("");
+  const [fmtCode, setFmtCode] = useState("");
   const [tmplDc, setTmplDc] = useState("");
   const [useYn, setUseYn] = useState("Y");
   const [sortOrdr, setSortOrdr] = useState(0);
@@ -112,6 +123,8 @@ function PromptTemplateDetailPageInner() {
       setTmplNm(detail.tmplNm);
       setTaskTyCode(detail.taskTyCode);
       setRefTyCode(detail.refTyCode ?? "");
+      setDivCode(detail.divCode ?? "");
+      setFmtCode(detail.fmtCode ?? "");
       setTmplDc(detail.tmplDc);
       setUseYn(detail.useYn);
       setSortOrdr(detail.sortOrdr);
@@ -156,10 +169,14 @@ function PromptTemplateDetailPageInner() {
   // ── 저장 뮤테이션 ──────────────────────────────────────────────────────────────
   const saveMutation = useMutation({
     mutationFn: () => {
+      // 기획실(PLAN_STUDIO_ARTF) 일 때만 div/fmt 전송. 그 외에는 null 로 강제(서버도 무시).
+      const isPlanStudio = refTyCode === "PLAN_STUDIO_ARTF";
       const body = {
         tmplNm,
         taskTyCode,
         refTyCode: refTyCode || null,
+        divCode: isPlanStudio ? (divCode || null) : null,
+        fmtCode: isPlanStudio ? (fmtCode || null) : null,
         sysPromptCn: sysPromptCn || null,
         tmplDc: tmplDc || null,
         useYn,
@@ -198,24 +215,33 @@ function PromptTemplateDetailPageInner() {
       toast.error(`"${DEPRECATED_TASK_TYPES[taskTyCode]}"은(는) 사용 중단된 유형입니다. 작업 유형을 변경해 주세요.`);
       return;
     }
+    // 기획실 산출물은 매트릭스 두 차원이 모두 채워져야 한다 (서버도 동일 검증)
+    if (refTyCode === "PLAN_STUDIO_ARTF") {
+      if (!divCode) { toast.error("산출물 구분을 선택하세요."); return; }
+      if (!fmtCode) { toast.error("출력 형식을 선택하세요."); return; }
+    }
     saveMutation.mutate();
   }
 
   // ── 복사 뮤테이션 ──────────────────────────────────────────────────────────────
   const copyMutation = useMutation({
-    mutationFn: () =>
-      authFetch<{ data: { tmplId: string } }>(`/api/projects/${projectId}/prompt-templates`, {
+    mutationFn: () => {
+      const isPlanStudio = refTyCode === "PLAN_STUDIO_ARTF";
+      return authFetch<{ data: { tmplId: string } }>(`/api/projects/${projectId}/prompt-templates`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tmplNm: `${tmplNm} (복사본)`,
           taskTyCode,
           refTyCode: refTyCode || null,
+          divCode: isPlanStudio ? (divCode || null) : null,
+          fmtCode: isPlanStudio ? (fmtCode || null) : null,
           sysPromptCn: sysPromptCn || null,
           tmplDc: tmplDc || null,
           useYn: "N",   // 복사본은 항상 미사용으로 생성
           sortOrdr,
         }),
-      }).then((r) => r.data),
+      }).then((r) => r.data);
+    },
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["prompt-templates", projectId] });
       toast.success("복사본이 생성되었습니다. (사용 여부: 미사용)");
@@ -414,17 +440,24 @@ function PromptTemplateDetailPageInner() {
               <select
                 value={taskTyCode}
                 onChange={(e) => setTaskTyCode(e.target.value as TaskType)}
-                disabled={readOnly}
+                // 기획실 사용처는 task_ty_code 가 PLAN_STUDIO_ARTF_GENERATE 단일값으로 강제됨
+                disabled={readOnly || refTyCode === "PLAN_STUDIO_ARTF"}
                 style={selectStyle}
               >
-                {TASK_TYPE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-                {/* 기존 데이터에 폐기 유형이 있을 경우 선택지 유지 */}
-                {taskTyCode in DEPRECATED_TASK_TYPES && (
-                  <option value={taskTyCode} disabled style={{ color: "var(--color-warning)" }}>
-                    ⚠ {DEPRECATED_TASK_TYPES[taskTyCode]} (미사용)
-                  </option>
+                {refTyCode === "PLAN_STUDIO_ARTF" ? (
+                  <option value="PLAN_STUDIO_ARTF_GENERATE">산출물 생성</option>
+                ) : (
+                  <>
+                    {TASK_TYPE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                    {/* 기존 데이터에 폐기 유형이 있을 경우 선택지 유지 */}
+                    {taskTyCode in DEPRECATED_TASK_TYPES && (
+                      <option value={taskTyCode} disabled style={{ color: "var(--color-warning)" }}>
+                        ⚠ {DEPRECATED_TASK_TYPES[taskTyCode]} (미사용)
+                      </option>
+                    )}
+                  </>
                 )}
               </select>
             </FormField>
@@ -432,7 +465,24 @@ function PromptTemplateDetailPageInner() {
             <FormField label="대상 사용처">
               <select
                 value={refTyCode}
-                onChange={(e) => setRefTyCode(e.target.value as RefType | "")}
+                onChange={(e) => {
+                  // 사용처 변경 시 매트릭스 차원 자동 정합화:
+                  //   - 기획실로 전환 → task_ty_code 강제 + div/fmt 기본값(IA/MD) 채움
+                  //   - 기획실에서 빠져나감 → task_ty_code 기본값(INSPECT) 으로 + div/fmt 비움
+                  const v = e.target.value as RefType | "";
+                  setRefTyCode(v);
+                  if (v === "PLAN_STUDIO_ARTF") {
+                    setTaskTyCode("PLAN_STUDIO_ARTF_GENERATE");
+                    if (!divCode) setDivCode("IA");
+                    if (!fmtCode) setFmtCode("MD");
+                  } else {
+                    if (taskTyCode === "PLAN_STUDIO_ARTF_GENERATE") {
+                      setTaskTyCode("INSPECT");
+                    }
+                    setDivCode("");
+                    setFmtCode("");
+                  }
+                }}
                 disabled={readOnly}
                 style={selectStyle}
               >
@@ -441,6 +491,7 @@ function PromptTemplateDetailPageInner() {
                 <option value="SCREEN">화면 (SCREEN)</option>
                 <option value="AREA">영역 설계 (AREA)</option>
                 <option value="FUNCTION">기능 설계 (FUNCTION)</option>
+                <option value="PLAN_STUDIO_ARTF">기획실 산출물 (PLAN_STUDIO_ARTF)</option>
               </select>
             </FormField>
 
@@ -467,6 +518,40 @@ function PromptTemplateDetailPageInner() {
               </select>
             </FormField>
           </div>
+
+          {/* 기획실 산출물 — 산출물 구분 × 출력 형식 매트릭스 (사용처 PLAN_STUDIO_ARTF 일 때만) */}
+          {refTyCode === "PLAN_STUDIO_ARTF" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr 0.7fr 0.7fr", gap: 16 }}>
+              <FormField label="산출물 구분" required>
+                <select
+                  value={divCode}
+                  onChange={(e) => setDivCode(e.target.value)}
+                  disabled={readOnly}
+                  style={selectStyle}
+                >
+                  {DIV_OPTIONS.map((d) => (
+                    <option key={d.code} value={d.code}>{d.name} ({d.code})</option>
+                  ))}
+                </select>
+              </FormField>
+
+              <FormField label="출력 형식" required>
+                <select
+                  value={fmtCode}
+                  onChange={(e) => setFmtCode(e.target.value)}
+                  disabled={readOnly}
+                  style={selectStyle}
+                >
+                  {FMT_OPTIONS.map((f) => (
+                    <option key={f.code} value={f.code}>{f.name} ({f.code})</option>
+                  ))}
+                </select>
+              </FormField>
+
+              <div />
+              <div />
+            </div>
+          )}
 
           {/* 수정 모드에서 메타 정보 표시 */}
           {!isNew && detail && (

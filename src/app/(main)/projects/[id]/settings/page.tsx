@@ -314,8 +314,65 @@ function BasicInfoTab({
   );
 }
 
-// ── AR-00034 AI설정 탭 (FID-00077 ~ FID-00081) ───────────────────────────
-function AiSettingsTab({ projectId }: { projectId: string }) {
+// ── AR-00034 AI설정 탭 — 현재 "준비 중" 상태 ───────────────────────────────
+//
+// [2026-05-04] 일시 비활성화 사유:
+//   - tb_pj_project_api_key 에 저장되는 키는 어디서도 읽지 않고(decryptApiKey 호출자 0건),
+//     실제 AI 요청은 외부 워커(Claude Code/Python)가 자기 키로 처리한다.
+//   - ai_call_mthd_code(DIRECT/QUEUE) 도 분기 로직이 없어 토글이 무의미하다.
+//   → 사용자 혼동을 막기 위해 UI 만 "준비 중" 안내로 교체.
+//   → 데이터/테이블/API/이력 기록은 모두 보존 — 미래 워커가 프로젝트 단위 키를 읽도록
+//     확장될 때 아래 AiSettingsTabLive 를 export 만 바꿔 복원하면 된다.
+function AiSettingsTab({ projectId: _projectId }: { projectId: string }) {
+  // _projectId : 미래 복원 시 사용. 현재 placeholder 에서는 참조하지 않음.
+  return (
+    <div
+      style={{
+        background:    "var(--color-bg-card)",
+        border:        "1px solid var(--color-border)",
+        borderRadius:  "var(--radius-card)",
+        padding:       "48px 24px",
+        textAlign:     "center",
+      }}
+    >
+      <div style={{ fontSize: 40, marginBottom: 12 }}>🛠️</div>
+      <h3
+        style={{
+          margin:    "0 0 8px",
+          fontSize:  "var(--text-lg)",
+          fontWeight: 700,
+          color:     "var(--color-text-heading)",
+        }}
+      >
+        준비 중입니다
+      </h3>
+      <p
+        style={{
+          margin:    "0 auto",
+          maxWidth:  420,
+          fontSize:  "var(--text-sm)",
+          color:     "var(--color-text-secondary)",
+          lineHeight: 1.7,
+        }}
+      >
+        AI API 키 관리와 호출 방식 설정 기능은 곧 제공될 예정입니다.<br />
+        현재 AI 요청은 시스템 기본 설정으로 처리됩니다.
+      </p>
+    </div>
+  );
+}
+
+// ── AR-00034 AI설정 탭 — 실제 구현 (현재 비활성, 복원용 보존) ──────────────
+//
+// 복원 방법:
+//   1) 위 AiSettingsTab 의 본문을 <AiSettingsTabLive projectId={_projectId} /> 로 교체
+//   2) 또는 위 함수를 통째로 지우고 이 함수의 이름을 AiSettingsTab 으로 되돌림
+//
+// 관련 백엔드 라우트(보존 중):
+//   - GET/PUT /api/projects/[id]/settings/ai
+//   - POST    /api/projects/[id]/settings/api-keys
+//   - PUT/DELETE /api/projects/[id]/settings/api-keys/[keyId]
+function AiSettingsTabLive({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient();
 
   // 인라인 상태

@@ -68,17 +68,12 @@ API route의 **인터페이스**를 변경할 때 MCP 도구도 반드시 함께
 - 새 API route 추가 (→ MCP 도구 추가 검토)
 - API route 삭제 (→ MCP 도구 삭제)
 
-**수정 대상 파일 (2곳 동시 수정):**
+**수정 대상 파일:**
 ```
-1. mcp-server/src/register-tools.ts   ← stdio 로컬용
-2. src/lib/mcp/register-tools.ts      ← HTTP Vercel용
+src/lib/mcp/register-tools.ts      ← HTTP MCP (Next.js /api/mcp)
 ```
 
-**수정 후 필수 작업:**
-```
-1. mcp-server: cd mcp-server && npx tsc     ← dist/ 빌드
-2. 스모크 테스트: cd mcp-server && npx tsx test/smoke.ts
-```
+> 과거 stdio 로컬용 `mcp-server/` 별도 프로세스는 폐기됨. 이제 HTTP MCP 한 채널만 사용.
 
 **인터페이스 변경이 아닌 경우 (MCP 수정 불필요):**
 - API 내부 로직 변경 (쿼리 최적화, 정렬 변경 등)

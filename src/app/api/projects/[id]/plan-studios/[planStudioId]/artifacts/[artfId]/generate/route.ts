@@ -90,6 +90,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // [2단계] 프롬프트 직조
     const prompt = await buildPrompt({
+      projectId,
       artfId,
       artfNm: body.artfNm,
       artfDivCode: body.artfDivCode,

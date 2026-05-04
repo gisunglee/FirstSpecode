@@ -175,6 +175,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       name:        area.area_nm,
       description: area.area_dc ?? "",
       type:        area.area_ty_code,
+      displayFormCode: area.display_form_code,
       sortOrder:   area.sort_ordr,
       layoutData:  area.layer_data_dc ?? null,
       commentCn:   area.coment_cn ?? "",
@@ -226,16 +227,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { screenId, name, type, description, sortOrder, layoutData, commentCn, saveHistory, displayId } = body as {
-    screenId?:    string;
-    name?:        string;
-    type?:        string;
-    description?: string;
-    sortOrder?:   number;
-    layoutData?:  string;
-    commentCn?:   string;
-    saveHistory?: boolean;
-    displayId?:   string;
+  const { screenId, name, type, displayFormCode, description, sortOrder, layoutData, commentCn, saveHistory, displayId } = body as {
+    screenId?:        string;
+    name?:            string;
+    type?:            string;
+    displayFormCode?: string;
+    description?:     string;
+    sortOrder?:       number;
+    layoutData?:      string;
+    commentCn?:       string;
+    saveHistory?:     boolean;
+    displayId?:       string;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "영역명을 입력해 주세요.", 400);
@@ -256,7 +258,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           scrn_id:      screenId !== undefined ? (screenId || null) : existing.scrn_id,
           area_display_id: displayId?.trim() || existing.area_display_id,
           area_nm:      name.trim(),
-          area_ty_code: type || "GRID",
+          // 유형 — 미전송 시 LIST 기본 (PUT은 사실상 항상 type 전송)
+          area_ty_code: type || "LIST",
+          // 표시 형태 — 클라이언트가 안 보내면 기존값 유지 (부분 수정 안전)
+          display_form_code: displayFormCode ?? existing.display_form_code,
           area_dc:      newDescription,
           sort_ordr:    sortOrder ?? existing.sort_ordr,
           layer_data_dc: layoutData !== undefined ? layoutData : existing.layer_data_dc,
@@ -275,7 +280,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             areaId:    areaId,
             displayId: displayId?.trim() || existing.area_display_id,
             name:      name.trim(),
-            type:      type || "GRID",
+            type:      type || "LIST",
           },
           chg_mber_id: gate.mberId,
         },

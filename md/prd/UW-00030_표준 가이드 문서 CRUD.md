@@ -276,6 +276,6 @@
 - **UW-00031**: 카테고리 마스터 테이블 (사용자 정의 카테고리)
 - **UW-00032**: AI 표준 가이드 검토 (AI가 가이드 품질/일관성 리뷰)
 - **UW-00034**: 풀텍스트 검색 (PostgreSQL tsvector)
-- **MCP 도구**: `search_standard_guides`, `get_standard_guide` 노출 (2곳 동시 수정: `mcp-server/src/register-tools.ts`, `src/lib/mcp/register-tools.ts`)
+- **MCP 도구**: `search_standard_guides`, `get_standard_guide` 노출 (`src/lib/mcp/register-tools.ts` 수정)
 - **AI 프롬프트 자동 주입**: `/run-ai-task` 실행 시 task의 ref_ty_code에 따라 관련 카테고리 가이드 자동 주입
 - **CLAUDE.md export**: 개발자 로컬 Claude Code에서 참조 가능한 md 파일 export

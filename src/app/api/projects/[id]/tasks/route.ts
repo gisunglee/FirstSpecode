@@ -6,6 +6,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
+import { requireTaskWrite } from "@/lib/taskWriteGate";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -86,7 +87,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const { id: projectId } = await params;
 
-  const gate = await requirePermission(request, projectId, "content.create");
+  // OWNER/ADMIN 역할 OR PM/PL 직무 — MEMBER 는 환경설정 MEMBER_TASK_UPT_PSBL_YN="Y" 일 때만 통과
+  const gate = await requireTaskWrite(request, projectId);
   if (gate instanceof Response) return gate;
 
   let body: unknown;

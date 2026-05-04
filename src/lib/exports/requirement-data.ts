@@ -48,6 +48,52 @@ export const REQUIREMENT_EXPORT_FALLBACK = {
   historyChange:   "최초 작성",
 } as const;
 
+// ─── 변경이력 표 분기에 쓰이는 "본문" 필드 목록 ──────────────
+// [Word 출력] 시 직전 발행본 snapshot 과 현재 input 을 비교해 본문 변경 여부를 판정한다.
+// 비교 대상은 "양식 본문 영역에 직접 영향 가는 필드" 만 — 메타(저작권/문서버전/작성정보)나
+// 변경이력 자체는 제외해야 자기 참조 무한루프나 무의미한 변경 감지를 피한다.
+//
+// keyof RequirementExportInput 타입 잠금 — 새 필드 추가 시 이 배열에도 등록하도록 컴파일 시
+// 강제 (양식이 진화해도 비교 누락이 없게 함).
+export const REQUIREMENT_CONTENT_FIELDS: readonly (keyof RequirementExportInput)[] = [
+  "ordererName",
+  "projectName",
+  "reqDisplayId",
+  "reqName",
+  "parentTaskName",
+  "priorityLabel",
+  "sourceLabel",
+  "rfpPage",
+  "assigneeName",
+  "sortOrder",
+  "detailSpec",
+] as const;
+
+/**
+ * 직전 발행 시점 snapshot 과 현재 input 을 비교해 본문이 변경됐는지 판정.
+ *
+ * 양식 진화 호환:
+ *   - snapshot 에 없는 필드 (이후 추가된 컬럼) 는 비교 스킵 — 옛 박제본을 부당하게 "변경됨"
+ *     으로 잘못 판정하지 않는다.
+ *   - current 에 없는 필드 (양식에서 제거된 컬럼) 도 비교 스킵.
+ *   - 결과: 양식이 진화해도 옛 박제본과 정상 비교 가능.
+ *
+ * @param snapshot  TbDsDocumentRelease.snapshot_data 에서 복원된 부분 객체
+ * @param current   현재 시점에서 buildRequirementExportInput() 으로 만든 input
+ * @returns         본문 변경 있으면 true (= "현재 작업 중" 행 표시 필요)
+ */
+export function hasContentChanged(
+  snapshot: Partial<RequirementExportInput>,
+  current:  RequirementExportInput,
+): boolean {
+  for (const field of REQUIREMENT_CONTENT_FIELDS) {
+    if (!(field in snapshot)) continue;  // 옛 박제본 호환 — 추가된 필드 비교 스킵
+    if (!(field in current))  continue;  // 양식에서 제거된 필드 비교 스킵
+    if (snapshot[field] !== current[field]) return true;
+  }
+  return false;
+}
+
 // ─── 결과 타입 ──────────────────────────────────────────────
 export type RequirementExportDataResult =
   | { ok: true;  input: RequirementExportInput }

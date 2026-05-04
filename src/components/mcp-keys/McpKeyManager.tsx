@@ -5,7 +5,7 @@
  *
  * 역할:
  *   - 사용자의 MCP 키 목록 조회 / 생성 / 폐기
- *   - 생성 시 scope 선택 (전역 vs 특정 프로젝트 고정)
+ *   - 생성 시 단일 프로젝트로 scope 고정 (전역 키 발급은 정책상 미지원)
  *   - 생성 직후 원문(rawKey) 1회 표시 + 클립보드 복사
  *
  * 재사용 위치:
@@ -16,6 +16,11 @@
  * Props:
  *   - defaultProjectId: 전달 시 신규 생성 폼의 프로젝트 드롭다운 기본 선택값
  *                      미전달 시 프로젝트 목록의 첫 항목 자동 선택
+ *
+ * 정책 — 전역 키 미지원:
+ *   키 유출/AI 실수로 인한 사고 폭을 한 프로젝트에 가두기 위해 전역('ALL') 발급은
+ *   API/UI 양쪽에서 차단된다. 기존에 발급된 전역 키는 목록에서 🌐 배지로 표시되며,
+ *   해당 키는 폐기 후 프로젝트 단위로 재발급해야 한다.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -42,8 +47,9 @@ interface ProjectOption {
 }
 
 // [2026-04-26] 키 용도 — DB CHECK 제약과 동일
-//   CLIENT — Claude Code MCP 도구용 (전역/프로젝트 scope 자유)
-//   WORKER — /run-ai-tasks 워커용 (프로젝트 scope 강제)
+//   CLIENT — Claude Code MCP 도구용
+//   WORKER — /run-ai-tasks 워커용
+// 두 용도 모두 단일 프로젝트 scope 필수 — 전역 발급 정책상 차단됨
 type KeyUseSe = "CLIENT" | "WORKER";
 
 interface ApiKeyItem {
@@ -72,21 +78,11 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
   const [createdRawKey, setCreatedRawKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   // [2026-04-26] 키 용도 선택 — 안전 기본값: 'CLIENT' (Claude Code MCP 도구용)
-  // 'WORKER' 선택 시: 자동으로 scopeType='project' 강제, 전역 옵션 비활성
   const [keyUseSe, setKeyUseSe] = useState<KeyUseSe>("CLIENT");
 
-  // Scope 선택 — 안전 기본값: "특정 프로젝트 고정"
-  const [scopeType, setScopeType] = useState<"global" | "project">("project");
+  // 모든 키는 단일 프로젝트 scope 필수 — 전역 키는 정책상 미지원
   const [selectedPrjctId, setSelectedPrjctId] = useState<string>(defaultProjectId ?? "");
   const [projects, setProjects] = useState<ProjectOption[]>([]);
-
-  // 'WORKER' 키는 전역 발급 불가 — 용도가 WORKER 로 바뀌면 자동으로 'project' 로 전환
-  // 사용자가 라디오 잘못 누르는 것을 UI 단계에서 차단 (서버측에서도 한 번 더 검증).
-  useEffect(() => {
-    if (keyUseSe === "WORKER" && scopeType === "global") {
-      setScopeType("project");
-    }
-  }, [keyUseSe, scopeType]);
 
   // 키 목록 조회
   const fetchKeys = useCallback(async () => {
@@ -126,22 +122,9 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
   // 키 생성
   const handleCreate = async () => {
     if (!newKeyName.trim()) return;
-    if (scopeType === "project" && !selectedPrjctId) {
+    if (!selectedPrjctId) {
       toast.error("프로젝트를 선택해 주세요.");
       return;
-    }
-
-    // 전역 키는 위험 → 명시적 confirm으로 사고 방지
-    if (scopeType === "global") {
-      const ok = confirm(
-        "⚠️ 전역 MCP 키를 생성하시겠습니까?\n\n" +
-        "이 키는 당신이 멤버로 참여 중인 \"모든 프로젝트\"에 접근할 수 있습니다.\n\n" +
-        "- Claude Code 세션이 실수로 다른 프로젝트 데이터를 건드릴 수 있습니다\n" +
-        "- 키가 유출되면 피해 범위가 전체 프로젝트로 확산됩니다\n\n" +
-        "특정 프로젝트에서만 쓸 예정이라면 '특정 프로젝트 고정' 사용을 강력히 권장합니다.\n\n" +
-        "그래도 전역 키로 발급할까요?"
-      );
-      if (!ok) return;
     }
 
     setCreating(true);
@@ -152,7 +135,7 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
         body: JSON.stringify({
           keyName: newKeyName.trim(),
           keyUseSe,    // [2026-04-26] 'CLIENT' | 'WORKER'
-          prjctId: scopeType === "project" ? selectedPrjctId : undefined,
+          prjctId: selectedPrjctId,
         }),
       });
       const body = await res.json();
@@ -319,70 +302,32 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
             </div>
           </div>
 
-          {/* Scope 선택 */}
+          {/* 프로젝트 선택 — 모든 키는 단일 프로젝트 scope 필수 */}
           <div>
             <label style={{ display: "block", fontSize: "var(--text-sm)", fontWeight: 500, marginBottom: 6 }}>
-              접근 범위
-              {keyUseSe === "WORKER" && (
-                <span style={{ marginLeft: 8, fontSize: "var(--text-xs)", color: "var(--color-text-secondary)", fontWeight: 400 }}>
-                  (워커 키는 프로젝트 scope 만 허용)
-                </span>
-              )}
+              프로젝트
+              <span style={{ marginLeft: 8, fontSize: "var(--text-xs)", color: "var(--color-text-secondary)", fontWeight: 400 }}>
+                (이 키는 선택한 프로젝트에서만 동작합니다)
+              </span>
             </label>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <label
-                style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  cursor: keyUseSe === "WORKER" ? "not-allowed" : "pointer",
-                  fontSize: "var(--text-sm)",
-                  opacity: keyUseSe === "WORKER" ? 0.5 : 1,
-                }}
-              >
-                <input
-                  type="radio"
-                  name="scopeType"
-                  value="global"
-                  checked={scopeType === "global"}
-                  onChange={() => setScopeType("global")}
-                  disabled={keyUseSe === "WORKER"}
-                />
-                <span>
-                  <span style={{ color: "var(--color-text-warning, #e65100)", fontWeight: 600 }}>⚠️ 전역</span>
-                  {" "}- 내가 속한 모든 프로젝트 접근 가능 (비권장)
-                </span>
-              </label>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "var(--text-sm)" }}>
-                <input
-                  type="radio"
-                  name="scopeType"
-                  value="project"
-                  checked={scopeType === "project"}
-                  onChange={() => setScopeType("project")}
-                />
-                <span>특정 프로젝트 고정 - 실수로 다른 프로젝트 건드리는 사고 방지</span>
-              </label>
-            </div>
-            {scopeType === "project" && (
-              <select
-                value={selectedPrjctId}
-                onChange={(e) => setSelectedPrjctId(e.target.value)}
-                style={{
-                  marginTop: 8,
-                  width: "100%",
-                  padding: "8px 12px",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: 6,
-                  fontSize: "var(--text-sm)",
-                  background: "var(--color-bg-input, var(--color-bg))",
-                  color: "var(--color-text)",
-                }}
-              >
-                {projects.length === 0 && <option value="">(참여 중인 프로젝트 없음)</option>}
-                {projects.map((p) => (
-                  <option key={p.prjct_id} value={p.prjct_id}>{p.prjct_nm}</option>
-                ))}
-              </select>
-            )}
+            <select
+              value={selectedPrjctId}
+              onChange={(e) => setSelectedPrjctId(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                border: "1px solid var(--color-border)",
+                borderRadius: 6,
+                fontSize: "var(--text-sm)",
+                background: "var(--color-bg-input, var(--color-bg))",
+                color: "var(--color-text)",
+              }}
+            >
+              {projects.length === 0 && <option value="">(참여 중인 프로젝트 없음)</option>}
+              {projects.map((p) => (
+                <option key={p.prjct_id} value={p.prjct_id}>{p.prjct_nm}</option>
+              ))}
+            </select>
           </div>
 
           {/* 액션 버튼 */}
@@ -397,7 +342,7 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
             <button
               className="sp-btn sp-btn-primary"
               onClick={handleCreate}
-              disabled={creating || !newKeyName.trim() || (scopeType === "project" && !selectedPrjctId)}
+              disabled={creating || !newKeyName.trim() || !selectedPrjctId}
               style={{ fontSize: "var(--text-sm)" }}
             >
               {creating ? "생성 중..." : "생성"}

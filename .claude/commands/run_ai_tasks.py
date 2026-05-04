@@ -5,8 +5,13 @@ run_ai_tasks.py — SPECODE AI 태스크 자동 처리 워커
 역할:
   1. SPECODE 서버에서 PENDING 태스크 목록을 가져옴
   2. 각 태스크를 순차적으로 처리 (PENDING → IN_PROGRESS → DONE/FAILED)
-  3. 태스크 유형별 프롬프트 파일을 읽어 Claude Code에 전달
+  3. task.reqCn 을 그대로 Claude Code 에 전달 (서버에서 시스템프롬프트 합성 완료된 완성형)
   4. Claude의 응답을 result_cn으로 저장
+
+프롬프트:
+  - task.reqCn 은 서버측에서 tb_ai_prompt_template 의 시스템프롬프트가 이미 합성된 완성형
+  - 워커는 추가 프롬프트 합성을 하지 않는다 (이중 시스템프롬프트로 인한 출력 충돌 방지)
+  - 프롬프트 수정은 SPECODE 화면 → "프롬프트 관리" 메뉴
 
 사용법:
   python .claude/commands/run_ai_tasks.py
@@ -15,9 +20,9 @@ run_ai_tasks.py — SPECODE AI 태스크 자동 처리 워커
   python .claude/commands/run_ai_tasks.py --ref-type FUNCTION
 
 환경변수 (.env 또는 .env.local):
-  SPECODE_URL     — 서버 주소 (기본값: http://localhost:3000)
-  WORKER_API_KEY  — Worker API 인증 키 (기본값: dev-worker-key)
-  TASK_LIMIT      — 한 번에 처리할 최대 태스크 수 (기본값: 10)
+  SPECODE_URL         — 서버 주소 (기본값: http://localhost:3000)
+  SPECODE_WORKER_KEY  — 워커용 MCP 키 (spk_ 시작, 용도='WORKER'). 필수.
+  TASK_LIMIT          — 한 번에 처리할 최대 태스크 수 (기본값: 10)
 """
 
 import os
@@ -52,9 +57,18 @@ def load_env():
 
 load_env()
 
-SPECODE_URL    = os.environ.get("SPECODE_URL",    "http://localhost:3000")
-WORKER_API_KEY = os.environ.get("WORKER_API_KEY", "dev-worker-key")
-TASK_LIMIT     = int(os.environ.get("TASK_LIMIT", "10"))
+SPECODE_URL        = os.environ.get("SPECODE_URL", "http://localhost:3000")
+SPECODE_WORKER_KEY = os.environ.get("SPECODE_WORKER_KEY", "").strip()
+TASK_LIMIT         = int(os.environ.get("TASK_LIMIT", "10"))
+
+if not SPECODE_WORKER_KEY.startswith("spk_"):
+    print(
+        "오류: SPECODE_WORKER_KEY 환경변수가 설정되지 않았거나 형식이 잘못되었습니다.\n"
+        "  발급 방법: SPECODE > 설정 > MCP 키 관리 > '워커 (run-ai-tasks)' 용도로 생성\n"
+        "  → .env.local 에 SPECODE_WORKER_KEY=spk_xxxx... 박기",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 # 프로젝트 루트 경로
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -68,7 +82,7 @@ def worker_request(method: str, path: str, body: dict | None = None) -> dict:
 
     url     = f"{SPECODE_URL}{path}"
     headers = {
-        "X-Worker-Key":  WORKER_API_KEY,
+        "X-Mcp-Key":     SPECODE_WORKER_KEY,
         "Content-Type":  "application/json",
     }
 
@@ -81,122 +95,6 @@ def worker_request(method: str, path: str, body: dict | None = None) -> dict:
     except urllib.error.HTTPError as e:
         error_body = e.read().decode("utf-8")
         raise RuntimeError(f"HTTP {e.code}: {error_body}") from e
-
-# ─── 프롬프트 로드 ────────────────────────────────────────────────────────────
-
-# 프롬프트 파일 경로: .claude/prompts/{REF_TY_CODE}-{TASK_TY_CODE}.md
-PROMPTS_DIR = PROJECT_ROOT / ".claude" / "prompts"
-
-# 내장 기본 프롬프트 (프롬프트 파일이 없을 때 fallback)
-DEFAULT_PROMPTS: dict[str, str] = {
-    "FUNCTION-DESIGN": """\
-당신은 소프트웨어 설계 전문가입니다.
-아래 기능 정보를 바탕으로 상세 기능 명세서 초안을 작성해 주세요.
-
-명세서에 포함할 내용:
-1. 기능 개요 (목적, 사용자, 진입점)
-2. 입력값 및 유효성 검사 규칙
-3. 처리 로직 (단계별)
-4. 출력/결과
-5. 예외 처리 및 오류 메시지
-6. 관련 테이블 및 컬럼 영향
-
-마크다운 형식으로 작성해 주세요.""",
-
-    "FUNCTION-INSPECT": """\
-당신은 소프트웨어 QA 전문가입니다.
-아래 기능 명세를 검토하고 누락되거나 불명확한 사항을 지적해 주세요.
-
-검토 항목:
-1. 입력값 유효성 검사 누락 여부
-2. 예외 케이스 처리 누락 여부
-3. 권한/보안 고려 사항 누락 여부
-4. 성능 고려 사항 (대량 데이터 처리 등)
-5. 사용자 경험 상 불명확한 부분
-6. 기타 개선 제안
-
-발견된 항목을 우선순위(높음/중간/낮음)와 함께 마크다운 형식으로 작성해 주세요.""",
-
-    "FUNCTION-IMPACT": """\
-당신은 소프트웨어 아키텍처 전문가입니다.
-아래 기능 변경 시 영향을 받는 범위를 분석해 주세요.
-
-분석 항목:
-1. 영향받는 데이터 (테이블, 컬럼)
-2. 영향받는 연관 기능 (호출하거나 호출받는 기능)
-3. 영향받는 화면/UI
-4. 보안/권한 영향
-5. 마이그레이션 또는 데이터 정합성 이슈
-6. 테스트가 필요한 시나리오
-
-마크다운 형식으로 작성해 주세요.""",
-
-    "AREA-DESIGN": """\
-당신은 UI/UX 설계 전문가입니다.
-아래 영역(화면 구역) 정보를 바탕으로 화면 설계 초안을 작성해 주세요.
-
-작성 내용:
-1. 영역 개요 (목적, 사용자)
-2. 레이아웃 구조 (ASCII 또는 설명)
-3. 포함될 UI 컴포넌트 목록 (폼, 테이블, 버튼 등)
-4. 각 컴포넌트의 데이터 바인딩
-5. 사용자 인터랙션 흐름
-6. 반응형 고려 사항
-
-마크다운 형식으로 작성해 주세요.""",
-
-    "AREA-INSPECT": """\
-당신은 UI/UX 및 소프트웨어 QA 전문가입니다.
-아래 영역 명세를 검토하고 누락되거나 불명확한 사항을 지적해 주세요.
-
-검토 항목:
-1. 화면 구성 요소 정의 완전성
-2. 사용자 인터랙션 처리 누락 여부
-3. 데이터 표시/입력 명세 불명확 여부
-4. 오류/빈 데이터 상태 처리 여부
-5. 접근성(Accessibility) 고려 사항
-6. 성능(렌더링, 페이지네이션) 고려 사항
-
-발견된 항목을 우선순위(높음/중간/낮음)와 함께 마크다운 형식으로 작성해 주세요.""",
-
-    "AREA-IMPACT": """\
-당신은 소프트웨어 아키텍처 전문가입니다.
-아래 영역(화면 구역) 변경 시 영향을 받는 범위를 분석해 주세요.
-
-분석 항목:
-1. 영향받는 기능 목록
-2. 영향받는 데이터 소스 (API, 테이블)
-3. 연관 화면 및 영역
-4. 공통 컴포넌트 재사용 이슈
-5. 사용자 흐름(Flow) 변경 영향
-6. 테스트가 필요한 시나리오
-
-마크다운 형식으로 작성해 주세요.""",
-}
-
-
-def load_prompt(ref_type: str, task_type: str) -> str:
-    """
-    프롬프트를 다음 순서로 탐색하여 반환합니다:
-      1. .claude/prompts/{REF_TYPE}-{TASK_TYPE}.md
-      2. .claude/prompts/{TASK_TYPE}.md
-      3. DEFAULT_PROMPTS dict의 내장 프롬프트
-    """
-    key = f"{ref_type}-{task_type}"
-
-    specific = PROMPTS_DIR / f"{ref_type}-{task_type}.md"
-    if specific.exists():
-        return specific.read_text(encoding="utf-8").strip()
-
-    generic = PROMPTS_DIR / f"{task_type}.md"
-    if generic.exists():
-        return generic.read_text(encoding="utf-8").strip()
-
-    if key in DEFAULT_PROMPTS:
-        return DEFAULT_PROMPTS[key]
-
-    return f"다음 {ref_type}의 {task_type} 태스크를 처리해 주세요. 결과를 마크다운 형식으로 작성해 주세요."
-
 
 # ─── Claude Code 호출 ─────────────────────────────────────────────────────────
 
@@ -257,12 +155,6 @@ def call_claude(prompt: str) -> str:
 
 # ─── 태스크 처리 ──────────────────────────────────────────────────────────────
 
-def build_final_prompt(task: dict) -> str:
-    """태스크 정보와 프롬프트 파일을 조합하여 최종 프롬프트를 구성합니다."""
-    prompt_template = load_prompt(task["refType"], task["taskType"])
-    return f"{prompt_template}\n\n---\n\n{task['reqCn']}\n"
-
-
 def process_task(task: dict) -> bool:
     """단일 태스크를 처리합니다. 반환값: True=성공, False=실패"""
     task_id   = task["taskId"]
@@ -281,8 +173,9 @@ def process_task(task: dict) -> bool:
         return False
 
     # 2. Claude 호출
+    #    task["reqCn"] 은 서버측에서 시스템프롬프트가 합성된 완성형 — 그대로 전달
     try:
-        final_prompt = build_final_prompt(task)
+        final_prompt = task["reqCn"]
         print(f"  [Claude 호출] 프롬프트 {len(final_prompt)}자")
         result_text = call_claude(final_prompt)
         print(f"  [Claude 완료] 결과 {len(result_text)}자")

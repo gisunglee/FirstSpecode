@@ -9,26 +9,18 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
-import { checkRole } from "@/lib/checkRole";
+import { requireTaskWrite } from "@/lib/taskWriteGate";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 type RouteParams = { params: Promise<{ id: string; taskId: string }> };
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, taskId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
-  const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER"]);
-  if (roleCheck) return roleCheck;
+  // 복사 = 새 과업 생성과 동등 → 본인 담당이라도 다른 사람 과업 복사로 권한 우회 가능하면 안 됨
+  // 그래서 taskId 미전달(생성 게이트와 동일 정책)
+  const gate = await requireTaskWrite(request, projectId);
+  if (gate instanceof Response) return gate;
 
   try {
     // 원본 과업 조회

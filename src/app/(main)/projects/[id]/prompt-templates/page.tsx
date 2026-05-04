@@ -16,18 +16,22 @@
  */
 
 import { Suspense, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import { useEffect } from "react";
-import { type PromptTemplateTaskType, PROMPT_TEMPLATE_TASK_TYPE_LABEL } from "@/constants/codes";
+import {
+  type PromptTemplateTaskType,
+  type PromptTemplateRefType,
+  PROMPT_TEMPLATE_TASK_TYPE_LABEL,
+} from "@/constants/codes";
+import { ARTF_DIV } from "@/constants/planStudio";
+import { type PromptDomain, parsePromptDomain } from "@/lib/prompt-template/domain";
 import { useIsSystemAdmin, useMyRole } from "@/hooks/useMyRole";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
-
-type RefType  = "AREA" | "FUNCTION";
 
 type TemplateRow = {
   tmplId:     string;
@@ -35,7 +39,10 @@ type TemplateRow = {
   isSystem:   boolean;
   tmplNm:     string;
   taskTyCode: PromptTemplateTaskType;
-  refTyCode:  RefType | null;
+  refTyCode:  PromptTemplateRefType | null;
+  // 기획실(PLAN_STUDIO_ARTF) 전용 매트릭스 — 그 외 사용처는 null
+  divCode:    string | null;
+  fmtCode:    string | null;
   tmplDc:     string;
   useYn:      string;
   defaultYn:  string;
@@ -50,20 +57,25 @@ type TemplateRow = {
 // RefType 라벨은 이 페이지에서 "영역 설계/기능 설계" 식 접미사가 붙어 있어 공용(영역/기능)과 다름 → 로컬 유지.
 
 const REF_TYPE_LABELS: Record<string, string> = {
-  AREA:      "영역 설계",
-  FUNCTION:  "기능 설계",
-  UNIT_WORK: "단위업무",
+  UNIT_WORK:        "단위업무",
+  SCREEN:           "화면",
+  AREA:             "영역 설계",
+  FUNCTION:         "기능 설계",
+  PLAN_STUDIO_ARTF: "기획실",
 };
 
 // 작업 유형 배지 색상 — semantic 토큰으로 3테마 자동 대응.
 //   DESIGN(보라)→brand, INSPECT(파랑)→info, IMPACT(주황)→warning,
-//   IMPLEMENT(빨강)→error, TEST(초록)→success, 폐기 유형→muted+tertiary
+//   IMPLEMENT(빨강)→error, TEST(초록)→success,
+//   PLAN_STUDIO_ARTF_GENERATE(파랑)→info — 기획실 산출물 생성
+//   폐기 유형→muted+tertiary
 const taskTypeBadgeColors: Record<PromptTemplateTaskType, { bg: string; color: string }> = {
-  DESIGN:    { bg: "var(--color-brand-subtle)",   color: "var(--color-brand)"   },
-  INSPECT:   { bg: "var(--color-info-subtle)",    color: "var(--color-info)"    },
-  IMPACT:    { bg: "var(--color-warning-subtle)", color: "var(--color-warning)" },
-  IMPLEMENT: { bg: "var(--color-error-subtle)",   color: "var(--color-error)"   },
-  TEST:      { bg: "var(--color-success-subtle)", color: "var(--color-success)" },
+  DESIGN:                    { bg: "var(--color-brand-subtle)",   color: "var(--color-brand)"   },
+  INSPECT:                   { bg: "var(--color-info-subtle)",    color: "var(--color-info)"    },
+  IMPACT:                    { bg: "var(--color-warning-subtle)", color: "var(--color-warning)" },
+  IMPLEMENT:                 { bg: "var(--color-error-subtle)",   color: "var(--color-error)"   },
+  TEST:                      { bg: "var(--color-success-subtle)", color: "var(--color-success)" },
+  PLAN_STUDIO_ARTF_GENERATE: { bg: "var(--color-info-subtle)",    color: "var(--color-info)"    },
   // 폐기 유형 — 흐린 회색
   MOCKUP:    { bg: "var(--color-bg-muted)", color: "var(--color-text-tertiary)" },
   CUSTOM:    { bg: "var(--color-bg-muted)", color: "var(--color-text-tertiary)" },
@@ -81,10 +93,11 @@ export default function PromptTemplatesPage() {
 }
 
 function PromptTemplatesPageInner() {
-  const params    = useParams();
-  const router    = useRouter();
-  const qc        = useQueryClient();
-  const projectId = params.id as string;
+  const params       = useParams();
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const qc           = useQueryClient();
+  const projectId    = params.id as string;
 
   // 권한 — DEFAULT 편집은 SUPER_ADMIN 만, 프로젝트 복사본 편집/삭제/복사는 OWNER/ADMIN 만
   //   (SUPER_ADMIN 은 프로젝트 역할 관계없이 어디든 편집 가능 — hasPermission short-circuit)
@@ -100,23 +113,43 @@ function PromptTemplatesPageInner() {
     return () => setBreadcrumb([]);
   }, [setBreadcrumb]);
 
+  // ── 도메인 탭 (URL 단일 진실의 원천) ──────────────────────────────────────────
+  // 새로고침/뒤로가기/링크 공유에 안전하도록 useState 대신 URL 쿼리에서 직접 파싱.
+  // 잘못된 값이거나 미지정이면 "general" 기본.
+  const activeTab: PromptDomain = parsePromptDomain(searchParams.get("tab")) ?? "general";
+  const setActiveTab = (next: PromptDomain) => {
+    // 탭 전환 시 다른 필터는 유지하되 도메인 컨텍스트가 바뀌었으므로
+    // 기획실 전용/일반 전용 필터는 비워서 잘못된 조회 방지.
+    const next_qs = new URLSearchParams(searchParams.toString());
+    next_qs.set("tab", next);
+    next_qs.delete("refType");
+    next_qs.delete("divCode");
+    router.replace(`?${next_qs.toString()}`);
+  };
+
   // ── 필터 상태 ────────────────────────────────────────────────────────────────
   const [taskTypeFilter, setTaskTypeFilter] = useState("");
+  // 일반 탭 전용: 사용처 필터 (UNIT_WORK/SCREEN/AREA/FUNCTION)
   const [refTypeFilter,  setRefTypeFilter]  = useState("");
+  // 기획실 탭 전용: 산출물 구분 필터 (IA/JOURNEY/...)
+  const [divCodeFilter,  setDivCodeFilter]  = useState("");
   const [useYnFilter,    setUseYnFilter]    = useState("");
 
   // ── 삭제 확인 다이얼로그 ──────────────────────────────────────────────────────
   const [deleteTarget, setDeleteTarget] = useState<{ tmplId: string; tmplNm: string } | null>(null);
 
   // ── 데이터 조회 ───────────────────────────────────────────────────────────────
+  // 탭은 항상 도메인 파라미터로 서버에 전달 — 서버에서 ref_ty_code 기준으로 분류한 결과만 반환
   const queryParams = new URLSearchParams();
+  queryParams.set("domain", activeTab);
   if (taskTypeFilter) queryParams.set("taskType", taskTypeFilter);
-  if (refTypeFilter)  queryParams.set("refType",  refTypeFilter);
-  if (useYnFilter)    queryParams.set("useYn",    useYnFilter);
-  const qs = queryParams.toString() ? `?${queryParams.toString()}` : "";
+  if (activeTab === "general"    && refTypeFilter) queryParams.set("refType", refTypeFilter);
+  if (activeTab === "plan-studio" && divCodeFilter) queryParams.set("divCode", divCodeFilter);
+  if (useYnFilter) queryParams.set("useYn", useYnFilter);
+  const qs = `?${queryParams.toString()}`;
 
   const { data: rows = [], isLoading } = useQuery<TemplateRow[]>({
-    queryKey: ["prompt-templates", projectId, taskTypeFilter, refTypeFilter, useYnFilter],
+    queryKey: ["prompt-templates", projectId, activeTab, taskTypeFilter, refTypeFilter, divCodeFilter, useYnFilter],
     queryFn: () =>
       authFetch<{ data: TemplateRow[] }>(`/api/projects/${projectId}/prompt-templates${qs}`)
         .then((r) => r.data),
@@ -143,7 +176,6 @@ function PromptTemplatesPageInner() {
         padding: "10px 24px",
         background: "var(--color-bg-card)",
         borderBottom: "1px solid var(--color-border)",
-        marginBottom: 16,
       }}>
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           프롬프트 관리
@@ -157,6 +189,26 @@ function PromptTemplatesPageInner() {
             + 신규 등록
           </button>
         )}
+      </div>
+
+      {/* ── 도메인 탭 — 일반 / 기획실 ── */}
+      <div style={{
+        display: "flex", gap: 0,
+        padding: "0 24px",
+        background: "var(--color-bg-card)",
+        borderBottom: "1px solid var(--color-border)",
+        marginBottom: 16,
+      }}>
+        <TabButton
+          active={activeTab === "general"}
+          onClick={() => setActiveTab("general")}
+          label="일반"
+        />
+        <TabButton
+          active={activeTab === "plan-studio"}
+          onClick={() => setActiveTab("plan-studio")}
+          label="기획실"
+        />
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
@@ -174,16 +226,31 @@ function PromptTemplatesPageInner() {
             ))}
           </select>
 
-          <select
-            value={refTypeFilter}
-            onChange={(e) => setRefTypeFilter(e.target.value)}
-            style={filterSelectStyle}
-          >
-            <option value="">전체 사용처</option>
-            <option value="AREA">영역 설계 (AREA)</option>
-            <option value="FUNCTION">기능 설계 (FUNCTION)</option>
-            <option value="UNIT_WORK">단위업무 (UNIT_WORK)</option>
-          </select>
+          {/* 도메인 별 컨텍스트 필터 — 일반 탭은 사용처, 기획실 탭은 산출물 구분 */}
+          {activeTab === "general" ? (
+            <select
+              value={refTypeFilter}
+              onChange={(e) => setRefTypeFilter(e.target.value)}
+              style={filterSelectStyle}
+            >
+              <option value="">전체 사용처</option>
+              <option value="UNIT_WORK">단위업무 (UNIT_WORK)</option>
+              <option value="SCREEN">화면 (SCREEN)</option>
+              <option value="AREA">영역 설계 (AREA)</option>
+              <option value="FUNCTION">기능 설계 (FUNCTION)</option>
+            </select>
+          ) : (
+            <select
+              value={divCodeFilter}
+              onChange={(e) => setDivCodeFilter(e.target.value)}
+              style={filterSelectStyle}
+            >
+              <option value="">전체 산출물</option>
+              {Object.values(ARTF_DIV).map((d) => (
+                <option key={d.code} value={d.code}>{d.name} ({d.code})</option>
+              ))}
+            </select>
+          )}
 
           <select
             value={useYnFilter}
@@ -195,9 +262,14 @@ function PromptTemplatesPageInner() {
             <option value="N">미사용</option>
           </select>
 
-          {(taskTypeFilter || refTypeFilter || useYnFilter) && (
+          {(taskTypeFilter || refTypeFilter || divCodeFilter || useYnFilter) && (
             <button
-              onClick={() => { setTaskTypeFilter(""); setRefTypeFilter(""); setUseYnFilter(""); }}
+              onClick={() => {
+                setTaskTypeFilter("");
+                setRefTypeFilter("");
+                setDivCodeFilter("");
+                setUseYnFilter("");
+              }}
               style={secondarySmallBtnStyle}
             >
               초기화
@@ -240,7 +312,9 @@ function PromptTemplatesPageInner() {
             </div>
           ) : rows.length === 0 ? (
             <div style={{ padding: "64px 0", textAlign: "center", color: "var(--color-text-tertiary)", fontSize: 14 }}>
-              등록된 프롬프트 템플릿이 없습니다.
+              {activeTab === "plan-studio"
+                ? "기획실 프롬프트가 없습니다."
+                : "일반 프롬프트가 없습니다."}
             </div>
           ) : (
             rows.map((row, idx) => {
@@ -270,14 +344,8 @@ function PromptTemplatesPageInner() {
                   {/* 템플릿 명 */}
                   <div style={{ overflow: "hidden" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      {row.isSystem && (
-                        <span style={{
-                          fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
-                          background: "var(--color-brand)", color: "var(--color-text-inverse)", flexShrink: 0,
-                        }}>
-                          공통
-                        </span>
-                      )}
+                      {/* [공통] 배지는 [DEFAULT] 와 의미가 거의 겹쳐 제거됨.
+                          편집 가능 여부의 판단 신호로는 [DEFAULT] 만 유지. */}
                       {isDefault && (
                         // DEFAULT 배지 — "편집 불가" 강조. text-primary 배경 + text-inverse 글자로
                         // 3테마 모두 컨트라스트 유지(어두운 테마에선 밝은 배지, 밝은 테마에선 어두운 배지).
@@ -319,20 +387,27 @@ function PromptTemplatesPageInner() {
                     </span>
                   </div>
 
-                  {/* 대상 범위 — FUNCTION→success, AREA→info, 그 외→muted */}
+                  {/* 대상 범위 — FUNCTION→success, AREA→info, PLAN_STUDIO_ARTF→brand, 그 외→muted */}
+                  {/* 기획실 산출물은 div·fmt 까지 같이 표시 (예: "기획실 IA·MD") */}
                   <div style={{ textAlign: "center" }}>
                     <span style={{
                       display: "inline-block", padding: "2px 8px",
                       borderRadius: 4, fontSize: 11, fontWeight: 600,
-                      background: row.refTyCode === "FUNCTION" ? "var(--color-success-subtle)"
-                                : row.refTyCode === "AREA"     ? "var(--color-info-subtle)"
+                      background: row.refTyCode === "FUNCTION"         ? "var(--color-success-subtle)"
+                                : row.refTyCode === "AREA"             ? "var(--color-info-subtle)"
+                                : row.refTyCode === "PLAN_STUDIO_ARTF" ? "var(--color-brand-subtle)"
                                 : "var(--color-bg-muted)",
-                      color:      row.refTyCode === "FUNCTION" ? "var(--color-success)"
-                                : row.refTyCode === "AREA"     ? "var(--color-info)"
+                      color:      row.refTyCode === "FUNCTION"         ? "var(--color-success)"
+                                : row.refTyCode === "AREA"             ? "var(--color-info)"
+                                : row.refTyCode === "PLAN_STUDIO_ARTF" ? "var(--color-brand)"
                                 : "var(--color-text-secondary)",
                       whiteSpace: "nowrap",
                     }}>
-                      {row.refTyCode ? REF_TYPE_LABELS[row.refTyCode] ?? row.refTyCode : "범용"}
+                      {row.refTyCode === "PLAN_STUDIO_ARTF" && row.divCode && row.fmtCode
+                        ? `기획실 ${row.divCode}·${row.fmtCode}`
+                        : row.refTyCode
+                          ? REF_TYPE_LABELS[row.refTyCode] ?? row.refTyCode
+                          : "범용"}
                     </span>
                   </div>
 
@@ -433,6 +508,39 @@ function PromptTemplatesPageInner() {
         </div>
       )}
     </div>
+  );
+}
+
+// ── 도메인 탭 버튼 ────────────────────────────────────────────────────────────
+//
+// 활성 상태: brand 색 밑줄 + 굵은 글씨 (3테마 자동 대응).
+// 비활성 상태: secondary 텍스트 + 투명 보더 (위치 안 흔들리도록 같은 두께 보더 유지).
+
+function TabButton({
+  active, onClick, label,
+}: {
+  active:  boolean;
+  onClick: () => void;
+  label:   string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding:    "10px 16px",
+        background: "none",
+        border:     "none",
+        // 활성 탭만 brand 색 밑줄 — 위치 안 흔들리도록 비활성도 같은 두께의 투명 보더 유지
+        borderBottom: active ? "2px solid var(--color-brand)" : "2px solid transparent",
+        marginBottom: -1,   // 부모의 borderBottom 과 시각적으로 겹치도록
+        fontSize:   13,
+        fontWeight: active ? 700 : 500,
+        color:      active ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+        cursor:     "pointer",
+      }}
+    >
+      {label}
+    </button>
   );
 }
 

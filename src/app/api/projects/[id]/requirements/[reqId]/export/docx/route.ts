@@ -24,9 +24,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiError } from "@/lib/apiResponse";
-import { buildRequirementDocx } from "@/lib/exports/docx/requirement";
+import {
+  buildRequirementDocx,
+  type RequirementExportInput,
+} from "@/lib/exports/docx/requirement";
 import {
   buildRequirementExportInput,
+  hasContentChanged,
   REQUIREMENT_EXPORT_FALLBACK,
 } from "@/lib/exports/requirement-data";
 import { bumpMinorVersion } from "@/lib/exports/version";
@@ -52,47 +56,38 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const input = result.input;
 
     // ③ 발행 이력 조회
-    //   변경이력 표 = "현재 본문" 1행 (항상) + 발행 이력 행들 (있으면)
+    //   변경이력 표 구성 = (직전 발행 후 본문 변경 있으면) "현재 작업 중" 행 + 발행 이력 행들
     //
-    //   "현재 본문" 행을 항상 맨 위에 두는 이유:
-    //     - [Word 출력] 으로 받는 docx 는 "지금 시점의 본문" 이지만 표는 발행본만
-    //       표시되면 본문/표 시제 불일치로 사용자가 혼란.
-    //     - 발행을 안 했어도 변경이력 표가 비어있지 않게 유지 (빈 표보다 나음).
-    //   "현재 본문" 행은 입력란 prefill 이 아닌 출력 양식 전용 — DB 박제 안 됨.
-    //   (특정 발행 버전 다운로드 /documents/release/[id]/docx 는 박제된 snapshot 사용 →
-    //    이 경로는 영향 없음)
+    //   본문 변경 여부 비교는 "직전 발행 snapshot 의 핵심 본문 필드" vs "현재 input" —
+    //   진척률·정렬순서 같은 양식 외 수정에 의한 오감지 방지.
+    //
+    //   snapshot_data 도 select 에 포함 — 직전 1건의 비교에만 필요하므로 비용 미미.
+    //   (산출물별 발행 횟수는 보통 적음 — 폭증 시 archive 정책 별도 도입 예정)
     const releases = await prisma.tbDsDocumentRelease.findMany({
       where:   { prjct_id: projectId, doc_kind: DOC_KIND_REQUIREMENT, ref_id: reqId },
       orderBy: { released_dt: "desc" },
       select: {
-        vrsn_no: true, change_cn: true, author_nm: true, approver_nm: true, released_dt: true,
+        vrsn_no:       true,
+        change_cn:     true,
+        author_nm:     true,
+        approver_nm:   true,
+        released_dt:   true,
+        snapshot_data: true,
       },
     });
 
-    const today = new Date().toISOString().slice(0, 10);
-    // "현재 작업 중" 행의 버전 라벨 결정:
-    //   - 발행 1건+ : 직전 발행 버전을 마이너 +1 (예: v1.0 → v1.1)
-    //                "이 본문이 다음에 발행될 버전" 으로 자연스럽게 읽히도록.
-    //   - 발행 0건  : input.documentVersion 그대로 (= 프로젝트 설정의 docVersionDefault
-    //                또는 코드 fallback "v1.0").
-    // 메이저 자동화는 의도적으로 안 함 — 시스템이 마이너/메이저 의도를 알 수 없으므로
-    // 사용자가 발행 시점에 모달에서 직접 수정.
-    const currentVersion = releases.length > 0
-      ? bumpMinorVersion(releases[0].vrsn_no)
-      : input.documentVersion;
-    // 변경 내용 라벨 — 상황별 분기
-    //   - 발행 0건 (지금 작성한 게 최초 본문)        : "최초 작성"
-    //   - 발행 1건+ (직전 발행 이후 수정 중인 본문) : "(현재 작업 중)"
-    const currentChange = releases.length > 0
-      ? "(현재 작업 중)"
-      : REQUIREMENT_EXPORT_FALLBACK.historyChange;
-    const currentRow = {
-      version:  currentVersion,
-      date:     today,
-      change:   currentChange,
-      author:   input.authorName,
-      approver: input.approverName,
-    };
+    // 본문 변경 여부 판정:
+    //   발행 0건           → 항상 "현재 작업 중" 행 표시 (= "최초 작성")
+    //   발행 1건+ + 변경 O → "현재 작업 중" 행 + 발행 이력
+    //   발행 1건+ + 변경 X → 발행 이력만 (중복 행 회피)
+    let showCurrentRow = true;
+    if (releases.length > 0) {
+      // snapshot_data 는 RequirementExportInput 형태로 박제됐다고 가정 (Json round-trip).
+      // 양식 진화 호환은 hasContentChanged 내부에서 처리.
+      const lastSnapshot = releases[0].snapshot_data as Partial<RequirementExportInput>;
+      showCurrentRow = hasContentChanged(lastSnapshot, input);
+    }
+
     const releaseRows = releases.map((r) => ({
       version:  r.vrsn_no,
       date:     r.released_dt.toISOString().slice(0, 10),
@@ -100,7 +95,34 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       author:   r.author_nm   ?? "",
       approver: r.approver_nm ?? "",
     }));
-    input.history = [currentRow, ...releaseRows];
+
+    if (showCurrentRow) {
+      const today = new Date().toISOString().slice(0, 10);
+      // "현재 작업 중" 행의 버전 라벨:
+      //   - 발행 1건+ : 직전 발행 버전 마이너 +1 (예: v1.0 → v1.1)
+      //                "이 본문이 다음에 발행될 버전" 으로 자연스럽게 읽힘
+      //   - 발행 0건  : input.documentVersion 그대로
+      // 메이저 자동화 안 함 — 사용자가 발행 모달에서 직접 수정.
+      const currentVersion = releases.length > 0
+        ? bumpMinorVersion(releases[0].vrsn_no)
+        : input.documentVersion;
+      // 변경 내용 라벨 분기
+      //   - 발행 0건  : "최초 작성"
+      //   - 발행 1건+ : "(현재 작업 중)"
+      const currentChange = releases.length > 0
+        ? "(현재 작업 중)"
+        : REQUIREMENT_EXPORT_FALLBACK.historyChange;
+      const currentRow = {
+        version:  currentVersion,
+        date:     today,
+        change:   currentChange,
+        author:   input.authorName,
+        approver: input.approverName,
+      };
+      input.history = [currentRow, ...releaseRows];
+    } else {
+      input.history = releaseRows;
+    }
 
     // ④ docx 생성
     const buffer = await buildRequirementDocx(input);

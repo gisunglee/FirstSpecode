@@ -4,17 +4,22 @@
  * 역할:
  *   - McpServer 인스턴스에 SPECODE 도구들을 등록
  *
- * 도구 카테고리 (38개):
+ * 도구 카테고리 (35개):
  *   [프로젝트]     list_projects, get_project
- *   [기획-과업]    list_tasks, get_task, create_task, update_task, delete_task
- *   [기획-요구사항] list_requirements, get_requirement, create_requirement, update_requirement, delete_requirement
- *   [기획-스토리]  list_user_stories, get_user_story, create_user_story, update_user_story, delete_user_story
+ *   [기획-과업]    list_tasks, get_task, create_task, update_task
+ *   [기획-요구사항] list_requirements, get_requirement, create_requirement, update_requirement
+ *   [기획-스토리]  list_user_stories, get_user_story, create_user_story, update_user_story
  *   [기획-트리]    get_planning_tree
- *   [설계-단위업무] list_unit_works, get_unit_work, create_unit_work, update_unit_work, delete_unit_work
- *   [설계-화면]    list_screens, get_screen, create_screen, update_screen, delete_screen
- *   [설계-영역]    list_areas, get_area, create_area, update_area, delete_area
- *   [설계-기능]    list_functions, get_function, create_function, update_function, delete_function
+ *   [설계-단위업무] list_unit_works, get_unit_work, create_unit_work, update_unit_work
+ *   [설계-화면]    list_screens, get_screen, create_screen, update_screen
+ *   [설계-영역]    list_areas, get_area, create_area, update_area
+ *   [설계-기능]    list_functions, get_function, create_function, update_function
  *   [DB]           list_db_tables, get_db_table, get_db_table_usage, get_db_column_usage
+ *
+ * 정책 — DELETE 미지원:
+ *   MCP에서는 어떤 엔티티도 삭제할 수 없다. AI가 한 번의 잘못된 호출로 cascade 삭제를
+ *   일으키지 못하도록 delete_* 도구를 일괄 제거했다. 삭제는 UI(웹) 채널에서만 가능하며,
+ *   API DELETE 라우트는 그대로 유지된다.
  *
  * 계층 관계:
  *   기획: 과업(Task) → 요구사항(Requirement) → 사용자스토리(UserStory)
@@ -199,28 +204,6 @@ export function registerTools(
     }
   );
 
-  server.tool(
-    "delete_task",
-    "과업 삭제 — 과업을 삭제합니다. deleteType으로 하위 데이터 처리 방식을 결정합니다",
-    {
-      projectId: z.string().describe("프로젝트 ID"),
-      taskId: z.string().describe("과업 ID"),
-      deleteType: z.string().optional().describe("삭제 방식. 허용값: ALL(하위 요구사항·스토리 모두 삭제) | TASK_ONLY(과업만 삭제, 하위 요구사항은 미분류로 이동). 기본: ALL"),
-    },
-    async ({ projectId, taskId, deleteType }) => {
-      try {
-        const qs = buildQs({ deleteType });
-        const data = await specodeFetch(
-          `/api/projects/${projectId}/tasks/${taskId}${qs}`,
-          { method: "DELETE" }
-        );
-        return textResult(data);
-      } catch (err) {
-        return errorResult(err);
-      }
-    }
-  );
-
   // ═══════════════════════════════════════════════════════════════
   // 3. 기획 — 요구사항 (Requirement)
   //    displayId 자동채번: REQ-NNNNN
@@ -326,26 +309,6 @@ export function registerTools(
     }
   );
 
-  server.tool(
-    "delete_requirement",
-    "요구사항 삭제 — 요구사항과 하위 사용자스토리를 삭제합니다",
-    {
-      projectId: z.string().describe("프로젝트 ID"),
-      requirementId: z.string().describe("요구사항 ID"),
-    },
-    async ({ projectId, requirementId }) => {
-      try {
-        const data = await specodeFetch(
-          `/api/projects/${projectId}/requirements/${requirementId}`,
-          { method: "DELETE" }
-        );
-        return textResult(data);
-      } catch (err) {
-        return errorResult(err);
-      }
-    }
-  );
-
   // ═══════════════════════════════════════════════════════════════
   // 4. 기획 — 사용자스토리 (User Story)
   //    displayId 자동채번: STR-NNNNN
@@ -433,26 +396,6 @@ export function registerTools(
         const data = await specodeFetch(
           `/api/projects/${projectId}/user-stories/${storyId}`,
           { method: "PUT", body: JSON.stringify(body) }
-        );
-        return textResult(data);
-      } catch (err) {
-        return errorResult(err);
-      }
-    }
-  );
-
-  server.tool(
-    "delete_user_story",
-    "사용자스토리 삭제 — 사용자스토리와 하위 인수기준을 삭제합니다",
-    {
-      projectId: z.string().describe("프로젝트 ID"),
-      storyId: z.string().describe("사용자스토리 ID"),
-    },
-    async ({ projectId, storyId }) => {
-      try {
-        const data = await specodeFetch(
-          `/api/projects/${projectId}/user-stories/${storyId}`,
-          { method: "DELETE" }
         );
         return textResult(data);
       } catch (err) {
@@ -581,28 +524,6 @@ export function registerTools(
     }
   );
 
-  server.tool(
-    "delete_unit_work",
-    "단위업무 삭제 — 단위업무를 삭제합니다. 기본적으로 하위 화면도 함께 삭제됩니다",
-    {
-      projectId: z.string().describe("프로젝트 ID"),
-      unitWorkId: z.string().describe("단위업무 ID"),
-      deleteChildren: z.string().optional().describe("하위 화면 삭제 여부. 허용값: true(하위 화면 삭제) | false(하위 화면은 미분류로 이동). 기본: true"),
-    },
-    async ({ projectId, unitWorkId, deleteChildren }) => {
-      try {
-        const qs = buildQs({ deleteChildren });
-        const data = await specodeFetch(
-          `/api/projects/${projectId}/unit-works/${unitWorkId}${qs}`,
-          { method: "DELETE" }
-        );
-        return textResult(data);
-      } catch (err) {
-        return errorResult(err);
-      }
-    }
-  );
-
   // ═══════════════════════════════════════════════════════════════
   // 7. 설계 — 화면 (Screen)
   //    displayId 자동채번: SCR-NNNNN
@@ -703,28 +624,6 @@ export function registerTools(
     }
   );
 
-  server.tool(
-    "delete_screen",
-    "화면 삭제 — 화면을 삭제합니다. 기본적으로 하위 영역도 함께 삭제됩니다",
-    {
-      projectId: z.string().describe("프로젝트 ID"),
-      screenId: z.string().describe("화면 ID"),
-      deleteChildren: z.string().optional().describe("하위 영역 삭제 여부. 허용값: true(하위 영역 삭제) | false(하위 영역은 미분류로 이동). 기본: true"),
-    },
-    async ({ projectId, screenId, deleteChildren }) => {
-      try {
-        const qs = buildQs({ deleteChildren });
-        const data = await specodeFetch(
-          `/api/projects/${projectId}/screens/${screenId}${qs}`,
-          { method: "DELETE" }
-        );
-        return textResult(data);
-      } catch (err) {
-        return errorResult(err);
-      }
-    }
-  );
-
   // ═══════════════════════════════════════════════════════════════
   // 8. 설계 — 영역 (Area)
   //    FK: screenId (선택 — 소속 화면)
@@ -812,28 +711,6 @@ export function registerTools(
         const data = await specodeFetch(
           `/api/projects/${projectId}/areas/${areaId}`,
           { method: "PUT", body: JSON.stringify(body) }
-        );
-        return textResult(data);
-      } catch (err) {
-        return errorResult(err);
-      }
-    }
-  );
-
-  server.tool(
-    "delete_area",
-    "영역 삭제 — 영역을 삭제합니다. 기본적으로 하위 기능도 함께 삭제됩니다",
-    {
-      projectId: z.string().describe("프로젝트 ID"),
-      areaId: z.string().describe("영역 ID"),
-      deleteChildren: z.string().optional().describe("하위 기능 삭제 여부. 허용값: true(하위 기능 삭제) | false(하위 기능은 미분류로 이동). 기본: true"),
-    },
-    async ({ projectId, areaId, deleteChildren }) => {
-      try {
-        const qs = buildQs({ deleteChildren });
-        const data = await specodeFetch(
-          `/api/projects/${projectId}/areas/${areaId}${qs}`,
-          { method: "DELETE" }
         );
         return textResult(data);
       } catch (err) {
@@ -941,26 +818,6 @@ export function registerTools(
         const data = await specodeFetch(
           `/api/projects/${projectId}/functions/${functionId}`,
           { method: "PUT", body: JSON.stringify(body) }
-        );
-        return textResult(data);
-      } catch (err) {
-        return errorResult(err);
-      }
-    }
-  );
-
-  server.tool(
-    "delete_function",
-    "기능 삭제 — 기능을 삭제합니다",
-    {
-      projectId: z.string().describe("프로젝트 ID"),
-      functionId: z.string().describe("기능 ID"),
-    },
-    async ({ projectId, functionId }) => {
-      try {
-        const data = await specodeFetch(
-          `/api/projects/${projectId}/functions/${functionId}`,
-          { method: "DELETE" }
         );
         return textResult(data);
       } catch (err) {

@@ -15,6 +15,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
+import { useCanEditTask } from "@/hooks/useCanEditTask";
 import { renderMarkdown } from "@/lib/renderMarkdown";
 import dynamic from "next/dynamic";
 // TipTap 번들이 초기 로드에 포함되지 않도록 dynamic import
@@ -129,6 +130,14 @@ function TaskDetailPageInner() {
   });
   const members    = memberData?.members ?? [];
   const myMemberId = memberData?.myMemberId ?? "";
+
+  // ── 편집/삭제 가능 여부 — 백엔드 taskWriteGate 와 동일 규칙 ──────────────────
+  // 신규 등록 모드는 isAssignee 가 무의미하므로 false 로 둠 (canCreateTask 가 결정)
+  // 수정 모드는 본인이 담당자인지(isAssignee)도 통과 조건에 포함
+  const isAssignee = !isNew && !!myMemberId && taskDetail?.assignMemberId === myMemberId;
+  const { canEditTask, canCreateTask } = useCanEditTask(projectId, { isAssignee });
+  // 화면 분기: 신규는 canCreateTask, 수정은 canEditTask
+  const canSave = isNew ? canCreateTask : canEditTask;
 
   // ── 복사 뮤테이션 ──────────────────────────────────────────────────────────
   const copyMutation = useMutation({
@@ -247,7 +256,8 @@ function TaskDetailPageInner() {
           >
             취소
           </button>
-          {!isNew && (
+          {/* 복사 — 새 과업 생성 권한과 동일 (canCreateTask) */}
+          {!isNew && canCreateTask && (
             <button
               onClick={() => copyMutation.mutate()}
               disabled={copyMutation.isPending || saveMutation.isPending}
@@ -256,7 +266,8 @@ function TaskDetailPageInner() {
               {copyMutation.isPending ? "복사 중..." : "복사"}
             </button>
           )}
-          {!isNew && (
+          {/* 삭제 — 편집 권한자(canEditTask) 만 노출 */}
+          {!isNew && canEditTask && (
             <button
               onClick={() => { setDeleteType("ALL"); setDeleteDialogOpen(true); }}
               disabled={saveMutation.isPending}
@@ -265,13 +276,16 @@ function TaskDetailPageInner() {
               삭제
             </button>
           )}
-          <button
-            onClick={handleSave}
-            disabled={saveMutation.isPending}
-            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
-          >
-            {saveMutation.isPending ? "저장 중..." : "저장"}
-          </button>
+          {/* 저장 — 신규는 등록 권한, 수정은 편집 권한 */}
+          {canSave && (
+            <button
+              onClick={handleSave}
+              disabled={saveMutation.isPending}
+              style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
+            >
+              {saveMutation.isPending ? "저장 중..." : "저장"}
+            </button>
+          )}
         </div>
       </div>
 

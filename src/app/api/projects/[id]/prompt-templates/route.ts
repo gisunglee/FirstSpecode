@@ -11,8 +11,22 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { ARTF_DIV, ARTF_FMT } from "@/constants/planStudio";
+import { buildPromptDomainWhere, parsePromptDomain } from "@/lib/prompt-template/domain";
 
 type RouteParams = { params: Promise<{ id: string }> };
+
+// ── 검증 상수 ────────────────────────────────────────────────────────────────
+// 일반 사용처(UNIT_WORK/SCREEN/AREA/FUNCTION)에서 허용되는 작업 유형
+// (TEST 는 화면 전용이라 서버 저장 대상에서 제외)
+const VALID_TASK_TYPES_GENERAL = ["INSPECT", "DESIGN", "IMPLEMENT", "MOCKUP", "IMPACT", "CUSTOM"];
+
+// 기획실(PLAN_STUDIO_ARTF) 전용 작업 유형 — 단일값
+const TASK_TYPE_PLAN_STUDIO = "PLAN_STUDIO_ARTF_GENERATE";
+
+// 기획실 매트릭스 도메인 — constants/planStudio.ts 와 단일 진실의 원천 유지
+const VALID_DIV_CODES = Object.keys(ARTF_DIV);  // ["IA", "JOURNEY", "FLOW", "MOCKUP", "ERD", "PROCESS"]
+const VALID_FMT_CODES = Object.keys(ARTF_FMT);  // ["MD", "MERMAID", "HTML"]
 
 // ── GET: 목록 조회 ────────────────────────────────────────────────────────────
 
@@ -27,6 +41,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const taskTyCode   = url.searchParams.get("taskType")  ?? null;
   const refTyCode    = url.searchParams.get("refType")   ?? null;
   const useYnFilter  = url.searchParams.get("useYn")     ?? null;
+  // 도메인 탭 필터 (general / plan-studio) — 잘못된 값은 무시(null) 후 전체 반환
+  const domain       = parsePromptDomain(url.searchParams.get("domain"));
+  // 기획실 탭 전용 — 산출물 구분(IA/JOURNEY/...) 으로 좁히기. domain 미지정이면 무시.
+  const divCodeFilter = url.searchParams.get("divCode") ?? null;
 
   try {
     const templates = await prisma.tbAiPromptTemplate.findMany({
@@ -39,6 +57,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         ...(taskTyCode  ? { task_ty_code: taskTyCode }  : {}),
         ...(refTyCode   ? { ref_ty_code:  refTyCode }   : {}),
         ...(useYnFilter ? { use_yn:       useYnFilter } : {}),
+        // 도메인 분류는 lib 헬퍼에서 일원화 — 서버·클라이언트 정의 일치 보장
+        ...buildPromptDomainWhere(domain),
+        // 기획실 도메인일 때만 div_code 필터 의미 있음 — 일반 도메인에는 div_code 가 NULL
+        ...(domain === "plan-studio" && divCodeFilter ? { div_code: divCodeFilter } : {}),
       },
       orderBy: [
         { sort_ordr: "asc" },
@@ -54,6 +76,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         tmplNm:       t.tmpl_nm,
         taskTyCode:   t.task_ty_code,
         refTyCode:    t.ref_ty_code   ?? null,
+        // 기획실(PLAN_STUDIO_ARTF) 전용 매트릭스 차원 — 그 외 사용처는 NULL
+        divCode:      t.div_code      ?? null,
+        fmtCode:      t.fmt_code      ?? null,
         tmplDc:       t.tmpl_dc       ?? "",
         useYn:        t.use_yn,
         defaultYn:    t.default_yn,
@@ -103,12 +128,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   // default_yn 은 의도적으로 구조 분해하지 않음 — body 에서 "Y" 주입해도 무시
   const {
     tmplNm, taskTyCode, refTyCode,
+    divCode, fmtCode,
     sysPromptCn,
     tmplDc, useYn, sortOrdr,
   } = body as {
     tmplNm?:       string;
     taskTyCode?:   string;
     refTyCode?:    string | null;
+    divCode?:      string | null;
+    fmtCode?:      string | null;
     sysPromptCn?:  string | null;
     tmplDc?:       string | null;
     useYn?:        string;
@@ -119,9 +147,34 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "템플릿 명은 필수입니다.", 400);
   }
 
-  const VALID_TASK_TYPES = ["INSPECT", "DESIGN", "IMPLEMENT", "MOCKUP", "IMPACT", "CUSTOM"];
-  if (!taskTyCode || !VALID_TASK_TYPES.includes(taskTyCode)) {
-    return apiError("VALIDATION_ERROR", "유효하지 않은 작업 유형입니다.", 400);
+  // ── 사용처별 작업 유형·매트릭스 검증 ────────────────────────────────────────
+  // 기획실(PLAN_STUDIO_ARTF) 은 단일 task_ty_code + (div × fmt) 매트릭스 필수,
+  // 그 외 사용처는 일반 task_ty_code 5종 중 하나, div/fmt 는 무시(NULL)
+  const isPlanStudio = refTyCode === "PLAN_STUDIO_ARTF";
+  let normalizedDivCode: string | null = null;
+  let normalizedFmtCode: string | null = null;
+
+  if (isPlanStudio) {
+    if (taskTyCode !== TASK_TYPE_PLAN_STUDIO) {
+      return apiError(
+        "VALIDATION_ERROR",
+        `기획실 산출물 템플릿의 작업 유형은 ${TASK_TYPE_PLAN_STUDIO} 여야 합니다.`,
+        400
+      );
+    }
+    if (!divCode || !VALID_DIV_CODES.includes(divCode)) {
+      return apiError("VALIDATION_ERROR", "유효하지 않은 산출물 구분(divCode)입니다.", 400);
+    }
+    if (!fmtCode || !VALID_FMT_CODES.includes(fmtCode)) {
+      return apiError("VALIDATION_ERROR", "유효하지 않은 출력 형식(fmtCode)입니다.", 400);
+    }
+    normalizedDivCode = divCode;
+    normalizedFmtCode = fmtCode;
+  } else {
+    if (!taskTyCode || !VALID_TASK_TYPES_GENERAL.includes(taskTyCode)) {
+      return apiError("VALIDATION_ERROR", "유효하지 않은 작업 유형입니다.", 400);
+    }
+    // 비-기획실에서 div/fmt 가 넘어와도 무시 — DB 무결성 위반 방지
   }
 
   try {
@@ -133,6 +186,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         tmpl_nm:       tmplNm.trim(),
         task_ty_code:  taskTyCode,
         ref_ty_code:   refTyCode   ?? null,
+        div_code:      normalizedDivCode,
+        fmt_code:      normalizedFmtCode,
         sys_prompt_cn: sysPromptCn ?? null,
         tmpl_dc:       tmplDc      ?? null,
         use_yn:        useYn       ?? "Y",

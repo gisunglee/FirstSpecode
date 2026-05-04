@@ -9,8 +9,16 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { ARTF_DIV, ARTF_FMT } from "@/constants/planStudio";
 
 type RouteParams = { params: Promise<{ id: string; tmplId: string }> };
+
+// ── 검증 상수 ────────────────────────────────────────────────────────────────
+// (POST/PUT 양쪽에서 동일한 규칙. 정의는 ../route.ts 와 일치 — 리팩터링 시 헬퍼 추출 검토)
+const VALID_TASK_TYPES_GENERAL = ["INSPECT", "DESIGN", "IMPLEMENT", "MOCKUP", "IMPACT", "CUSTOM"];
+const TASK_TYPE_PLAN_STUDIO    = "PLAN_STUDIO_ARTF_GENERATE";
+const VALID_DIV_CODES = Object.keys(ARTF_DIV);
+const VALID_FMT_CODES = Object.keys(ARTF_FMT);
 
 // ── GET: 상세 조회 ────────────────────────────────────────────────────────────
 
@@ -44,6 +52,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       tmplNm:      t.tmpl_nm,
       taskTyCode:  t.task_ty_code,
       refTyCode:   t.ref_ty_code   ?? null,
+      // 기획실 매트릭스 차원 — 그 외 사용처는 NULL
+      divCode:     t.div_code      ?? null,
+      fmtCode:     t.fmt_code      ?? null,
       sysPromptCn: t.sys_prompt_cn ?? "",
       tmplDc:      t.tmpl_dc       ?? "",
       useYn:       t.use_yn,
@@ -86,12 +97,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   // body 에서 default_yn 은 의도적으로 구조 분해하지 않음 — 주입 시도 무시
   const {
     tmplNm, taskTyCode, refTyCode,
+    divCode, fmtCode,
     sysPromptCn,
     tmplDc, useYn, sortOrdr,
   } = body as {
     tmplNm?:      string;
     taskTyCode?:  string;
     refTyCode?:   string | null;
+    divCode?:     string | null;
+    fmtCode?:     string | null;
     sysPromptCn?: string | null;
     tmplDc?:      string | null;
     useYn?:       string;
@@ -102,9 +116,34 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "템플릿 명은 필수입니다.", 400);
   }
 
-  const VALID_TASK_TYPES = ["INSPECT", "DESIGN", "IMPLEMENT", "MOCKUP", "IMPACT", "CUSTOM"];
-  if (!taskTyCode || !VALID_TASK_TYPES.includes(taskTyCode)) {
-    return apiError("VALIDATION_ERROR", "유효하지 않은 작업 유형입니다.", 400);
+  // ── 사용처별 작업 유형·매트릭스 검증 (POST 와 동일 규칙) ─────────────────────
+  // PUT 은 부분 업데이트 성격이 강하지만, refTyCode/divCode/fmtCode 가 명시적으로
+  // 변경되는 경우에는 일관성을 깨뜨리지 않도록 함께 검증한다.
+  const isPlanStudio = refTyCode === "PLAN_STUDIO_ARTF";
+  let normalizedDivCode: string | null = null;
+  let normalizedFmtCode: string | null = null;
+
+  if (isPlanStudio) {
+    if (taskTyCode !== TASK_TYPE_PLAN_STUDIO) {
+      return apiError(
+        "VALIDATION_ERROR",
+        `기획실 산출물 템플릿의 작업 유형은 ${TASK_TYPE_PLAN_STUDIO} 여야 합니다.`,
+        400
+      );
+    }
+    if (!divCode || !VALID_DIV_CODES.includes(divCode)) {
+      return apiError("VALIDATION_ERROR", "유효하지 않은 산출물 구분(divCode)입니다.", 400);
+    }
+    if (!fmtCode || !VALID_FMT_CODES.includes(fmtCode)) {
+      return apiError("VALIDATION_ERROR", "유효하지 않은 출력 형식(fmtCode)입니다.", 400);
+    }
+    normalizedDivCode = divCode;
+    normalizedFmtCode = fmtCode;
+  } else {
+    if (!taskTyCode || !VALID_TASK_TYPES_GENERAL.includes(taskTyCode)) {
+      return apiError("VALIDATION_ERROR", "유효하지 않은 작업 유형입니다.", 400);
+    }
+    // 비-기획실에서 div/fmt 가 넘어와도 무시 — DB 무결성 위반 방지 (NULL 강제)
   }
 
   try {
@@ -143,6 +182,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         tmpl_nm:       tmplNm.trim(),
         task_ty_code:  taskTyCode,
         ref_ty_code:   refTyCode !== undefined ? (refTyCode ?? null) : existing.ref_ty_code,
+        // div_code/fmt_code 는 사용처가 PLAN_STUDIO_ARTF 일 때만 값 유지, 그 외는 NULL 로 정리
+        div_code:      normalizedDivCode,
+        fmt_code:      normalizedFmtCode,
         sys_prompt_cn: sysPromptCn !== undefined ? (sysPromptCn ?? null) : existing.sys_prompt_cn,
         tmpl_dc:       tmplDc !== undefined ? (tmplDc ?? null) : existing.tmpl_dc,
         use_yn:        useYn ?? existing.use_yn,

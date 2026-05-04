@@ -70,7 +70,7 @@ type RouteParams = { params: Promise<{ id: string }> };
 //                   Claude 출력 또는 사용자가 직접 수정한 JSON에 잘못된 값이 들어와도
 //                   DB에 저장되어 UI 라벨/배지 매칭이 깨지는 사고를 막기 위한 안전망.
 const ALLOWED_SCREEN_TYPES   = ["LIST", "DETAIL", "INPUT", "POPUP", "TAB", "REPORT"]                                  as const;
-const ALLOWED_AREA_TYPES     = ["SEARCH", "GRID", "FORM", "INFO_CARD", "TAB", "FULL_SCREEN"]                          as const;
+const ALLOWED_AREA_TYPES     = ["FILTER", "LIST", "FORM", "DETAIL", "GENERAL"]                                        as const;
 const ALLOWED_FUNCTION_TYPES = ["SEARCH", "SAVE", "DELETE", "DOWNLOAD", "UPLOAD", "NAVIGATE", "VALIDATE", "OTHER"]    as const;
 const ALLOWED_PRIORITIES     = ["HIGH", "MEDIUM", "LOW"]                                                              as const;
 const ALLOWED_COMPLEXITIES   = ["HIGH", "MEDIUM", "LOW"]                                                              as const;
@@ -81,7 +81,7 @@ function pickAllowed(
   fallback: string,
 ): string {
   // value가 화이트리스트에 있으면 그대로, 아니면 fallback.
-  //   - 신규: fallback = 안전한 default (예: "LIST", "GRID", "OTHER", "MEDIUM")
+  //   - 신규: fallback = 안전한 default (예: 화면 "LIST", 영역 "LIST", 기능 "OTHER", 우선순위 "MEDIUM")
   //   - 수정: fallback = existing 컬럼 값 (이미 DB에 저장된 값을 흔들지 않음)
   return value && allowed.includes(value) ? value : fallback;
 }
@@ -388,8 +388,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                   area_display_id: displayId,
                   area_nm:        arInput.name.trim(),
                   area_dc:        arInput.description?.trim() || null,
-                  // [2026-04-25] D5: 화이트리스트 미통과 시 default "GRID"
-                  area_ty_code:   pickAllowed(arInput.areaType, ALLOWED_AREA_TYPES, "GRID"),
+                  // [2026-04-25] D5: 화이트리스트 미통과 시 default "LIST" (신규 분류 기본값)
+                  area_ty_code:   pickAllowed(arInput.areaType, ALLOWED_AREA_TYPES, "LIST"),
                   sort_ordr:      sortOrder,
                 },
               });

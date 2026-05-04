@@ -18,7 +18,8 @@
  *   - Excalidraw 팝업은 동적 import (SSR 비활성화) — 미설치 시 stub 표시
  */
 
-import { Suspense, useState, useEffect, useRef } from "react";
+import React, { Suspense, useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -49,6 +50,8 @@ type AreaDetail = {
   name:        string;
   description: string;
   type:        string;
+  // 영역이 화면에 어떤 형태로 그려지는지 — INLINE / LAYER_POPUP / MODAL / DRAWER / TAB_PANEL / ACCORDION
+  displayFormCode: string;
   sortOrder:   number;
   screenId:    string | null;
   // 부모 화면의 담당자 — [삭제]/[저장] 버튼 권한 판정용 (영역 자체에는 담당자 컬럼 없음)
@@ -111,7 +114,9 @@ function AreaDetailPageInner() {
   // ── 폼 상태 ────────────────────────────────────────────────────────────────
   const [name,        setName]        = useState("");
   const [displayIdInput, setDisplayIdInput] = useState("");
-  const [type,        setType]        = useState("GRID");
+  const [type,        setType]        = useState("LIST");
+  // 표시 형태 — 신규 시 STATIC 기본
+  const [displayFormCode, setDisplayFormCode] = useState("STATIC");
   const [description, setDescription] = useState("");
   const [descTab, setDescTab] = useState<"edit" | "preview">("edit");
   const [sortOrder,   setSortOrder]   = useState<number>(0);
@@ -258,6 +263,8 @@ function AreaDetailPageInner() {
       setName(data.name);
       setDisplayIdInput(data.displayId ?? "");
       setType(data.type);
+      // 기존 영역에 표시 형태 값이 없으면 STATIC(기본값)으로 폴백
+      setDisplayFormCode(data.displayFormCode ?? "STATIC");
       setDescription(data.description);
       setSortOrder(data.sortOrder);
       setScreenId(data.screenId ?? "");
@@ -279,6 +286,7 @@ function AreaDetailPageInner() {
         name:        name.trim(),
         displayId:   displayIdInput.trim() || undefined,
         type,
+        displayFormCode,
         description: description.trim(),
         sortOrder:   sortOrder || 0,
         layoutData:  layoutRows.length > 0 ? JSON.stringify(layoutRows) : undefined,
@@ -951,8 +959,8 @@ function AreaDetailPageInner() {
           {/* ── AR-00069 기본 정보 폼 ─────────────────────────────────── */}
           <section style={sectionStyle}>
 
-            {/* 소속 화면 + 유형 */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 140px", gap: 16 }}>
+            {/* 소속 화면 + 유형 + 표시 형태 — 표시 형태는 라벨 두 줄 방지 위해 170px */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 130px 170px", gap: 16 }}>
               <div style={formGroupStyle}>
                 <label style={labelStyle}>소속 화면</label>
                 <select
@@ -970,7 +978,9 @@ function AreaDetailPageInner() {
                 </select>
               </div>
               <div style={formGroupStyle}>
-                <label style={labelStyle}>유형</label>
+                <label style={{ ...labelStyle, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  유형<FieldHelp title="유형" body={AREA_TYPE_HELP_BODY} />
+                </label>
                 <select
                   value={type}
                   onChange={(e) => setType(e.target.value)}
@@ -979,6 +989,22 @@ function AreaDetailPageInner() {
                 >
                   {AREA_TYPES.map((t) => (
                     <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+              </div>
+              {/* 표시 형태 — INLINE(기본)이 아니면 영역명 옆 배지로도 노출되어 한눈에 구분됨 */}
+              <div style={formGroupStyle}>
+                <label style={{ ...labelStyle, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  표시 형태<FieldHelp title="표시 형태" body={AREA_DISPLAY_FORM_HELP_BODY} />
+                </label>
+                <select
+                  value={displayFormCode}
+                  onChange={(e) => setDisplayFormCode(e.target.value)}
+                  disabled={!canEdit}
+                  style={selectStyle}
+                >
+                  {AREA_DISPLAY_FORMS.map((f) => (
+                    <option key={f.value} value={f.value}>{f.label}</option>
                   ))}
                 </select>
               </div>
@@ -998,7 +1024,9 @@ function AreaDetailPageInner() {
                 />
               </div>
               <div style={formGroupStyle}>
-                <label style={{ ...labelStyle, display: "inline-flex", alignItems: "center", gap: 4 }}>표시 ID<DisplayIdHelp /></label>
+                <label style={{ ...labelStyle, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  표시 ID<FieldHelp title="표시 ID" body={DISPLAY_ID_HELP_BODY} />
+                </label>
                 <input
                   type="text"
                   value={displayIdInput}
@@ -1199,13 +1227,26 @@ function AreaDetailPageInner() {
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
+// 영역 유형 — "무엇이 담기는가" (데이터 성격)
+// 표시 방식(탭/모달 등)과 분리. 그건 AREA_DISPLAY_FORMS 가 담당.
 const AREA_TYPES = [
-  { value: "SEARCH",      label: "검색 조건" },
-  { value: "GRID",        label: "데이터 목록" },
-  { value: "FORM",        label: "입력 폼" },
-  { value: "INFO_CARD",   label: "정보 카드" },
-  { value: "TAB",         label: "탭" },
-  { value: "FULL_SCREEN", label: "전체화면" },
+  { value: "FILTER",  label: "조회 조건" },
+  { value: "LIST",    label: "데이터 목록" },
+  { value: "FORM",    label: "데이터 양식" },
+  { value: "DETAIL",  label: "상세 정보" },
+  { value: "GENERAL", label: "일반 콘텐츠" },
+];
+
+// 영역 표시 형태 — "어떻게 배치/작동하는가" (시각 방식)
+// STATIC 외 값은 클릭/이벤트로 활성화. 표시 시점/트리거 조건은 영역 설명(area_dc)에 자유 텍스트로 작성.
+// MODAL = 백드롭으로 차단되는 강제 다이얼로그 / POPOVER = 차단 없는 가벼운 레이어
+const AREA_DISPLAY_FORMS = [
+  { value: "STATIC",    label: "고정" },
+  { value: "MODAL",     label: "모달" },
+  { value: "POPOVER",   label: "팝오버" },
+  { value: "DRAWER",    label: "드로어" },
+  { value: "TABS",      label: "탭 전환" },
+  { value: "ACCORDION", label: "아코디언" },
 ];
 
 const STATUS_LABELS: Record<string, string> = {
@@ -1289,16 +1330,69 @@ const rightLabelStyle: React.CSSProperties = {
 
 const formGroupStyle: React.CSSProperties = {};
 
-// ── 표시 ID 도움말 ───────────────────────────────────────────────────────────
+// ── 필드 도움말 컴포넌트 ─────────────────────────────────────────────────────
+//
+// 라벨 옆에 ? 아이콘을 두고, 클릭하면 모달로 도움말 본문을 보여준다.
+//
+// 닫기 경로 3가지 — 모두 지원해서 사용자가 막히는 일이 없게:
+//   1) 우상단 × 버튼
+//   2) 모달 바깥(백드롭) 클릭
+//   3) ESC 키 (열린 동안만 keydown 리스너 등록)
+//
+// 마운트 위치: createPortal 로 document.body 직접. 페이지 안에 그대로 두면
+// MainLayout(z-index 2000) 같은 상위 요소에 백드롭이 가려져 일부 영역에서 클릭이
+// 무시되는 문제가 생긴다. 포털 + 충분한 z-index(5000) 로 우회.
+//
+// body 는 ReactNode — 단순 문자열도 되고, 항목 리스트 같은 구조화된 JSX 도 가능.
+//
+// 본 파일 안에서만 정의·사용. 같은 이름의 DisplayIdHelp 가 functions/[functionId],
+// unit-works/[unitWorkId] 페이지에 별도로 존재하나 그 두 곳은 의도적으로 건드리지 않는다
+// (사용자 요청: "다른 기능에 영향 없게").
 
-function DisplayIdHelp() {
+function FieldHelp({ title, body }: { title: string; body: React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // SSR-safe — document.body 는 클라이언트에서만 존재
+  useEffect(() => { setMounted(true); }, []);
+
+  // ESC 키로 닫기 — 모달이 열린 동안만 리스너 활성화 (누수 없음)
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const overlay = open ? (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5000 }}
+      onClick={() => setOpen(false)}
+    >
+      <div
+        style={{ background: "var(--color-bg-card)", borderRadius: 12, padding: "24px 28px", minWidth: 420, maxWidth: 560, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>{title}</span>
+          <button
+            onClick={() => setOpen(false)}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}
+          >×</button>
+        </div>
+        {body}
+      </div>
+    </div>
+  ) : null;
+
   return (
     <>
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen(true); }}
-        title="도움말"
+        title={`${title} 도움말`}
         style={{
           display: "inline-flex", alignItems: "center", justifyContent: "center",
           width: 16, height: 16, borderRadius: "50%",
@@ -1307,25 +1401,89 @@ function DisplayIdHelp() {
           fontSize: 10, fontWeight: 700, cursor: "pointer", padding: 0, lineHeight: 1,
         }}
       >?</button>
-      {open && (
-        <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1200 }}
-          onClick={() => setOpen(false)}
-        >
-          <div style={{ background: "var(--color-bg-card)", borderRadius: 12, padding: "24px 28px", minWidth: 400, maxWidth: 520, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>표시 ID</span>
-              <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}>×</button>
-            </div>
-            <div style={{ fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.8, whiteSpace: "pre-line" }}>
-              {"명칭 대신 화면에 표시되는 고유 식별자입니다.\n비워 두면 자동으로 생성됩니다.\n\n예시)\n• 단위업무: UW-00001\n• 화면: SCR-00001\n• 영역: AR-00001\n• 기능: FN-00001"}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* createPortal: 페이지 트리 밖(document.body) 에 마운트하여 부모의 z-index/transform 영향 차단 */}
+      {mounted && overlay && createPortal(overlay, document.body)}
     </>
   );
 }
+
+// ── 도움말 본문 헬퍼 ─────────────────────────────────────────────────────────
+//
+// 모든 도움말은 동일한 시각 위계를 따른다:
+//   • 인트로(연한 색) → 항목 그리드(용어 볼드 / 설명 연한 색) → 보조 메모(구분선 위)
+// 단순 항목 리스트는 ItemListBody 재사용. 그 외 변형(예: "예시" 서브헤더)은 인라인 JSX.
+
+// 항목 리스트 본문 — 인트로 + 항목들(용어/설명) + 끝 메모
+function ItemListBody({
+  intro, items, notes,
+}: {
+  intro?:  string;
+  items:   { term: string; desc: string }[];
+  notes?:  string;
+}) {
+  return (
+    <div style={{ fontSize: 13, lineHeight: 1.7 }}>
+      {intro && (
+        <div style={{ color: "var(--color-text-secondary)", marginBottom: 14 }}>{intro}</div>
+      )}
+      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", columnGap: 10, rowGap: 6 }}>
+        {items.map((it) => (
+          <React.Fragment key={it.term}>
+            <span style={{ fontWeight: 700, color: "var(--color-text-primary)", whiteSpace: "nowrap" }}>{it.term}</span>
+            <span style={{ color: "var(--color-text-secondary)", fontWeight: 400 }}>{it.desc}</span>
+          </React.Fragment>
+        ))}
+      </div>
+      {notes && (
+        <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--color-border)", fontSize: 12, color: "var(--color-text-secondary)", whiteSpace: "pre-line", lineHeight: 1.6 }}>
+          {notes}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 도움말 본문 정의 ─────────────────────────────────────────────────────────
+
+// 표시 ID — 다른 페이지(functions/unit-works) 의 DisplayIdHelp 와 동일한 단순 텍스트 형태로 유지.
+// (이 영역만 새 디자인으로 바꾸면 같은 도움말이 페이지마다 달라 보여 일관성이 깨짐.)
+// fontWeight: 400 명시 — 부모 label(600) 상속 차단(포털로도 막히지만 명시적으로 한 번 더).
+const DISPLAY_ID_HELP_BODY = (
+  <div style={{ fontSize: 13, fontWeight: 400, color: "var(--color-text-primary)", lineHeight: 1.8, whiteSpace: "pre-line" }}>
+    {"명칭 대신 화면에 표시되는 고유 식별자입니다.\n비워 두면 자동으로 생성됩니다.\n\n예시)\n• 단위업무: UW-00001\n• 화면: SCR-00001\n• 영역: AR-00001\n• 기능: FN-00001"}
+  </div>
+);
+
+// 영역 유형 — 항목 리스트 (표시 형태와 동일 패턴: 용어 볼드 + 설명 연하게)
+const AREA_TYPE_HELP_BODY = (
+  <ItemListBody
+    intro="이 영역에 무엇이 담기는지를 정합니다. (데이터의 성격)"
+    items={[
+      { term: "조회 조건",   desc: "검색어 입력, 필터 선택 등 조회를 위한 입력 요소" },
+      { term: "데이터 목록", desc: "그리드/테이블/리스트 등 다수의 데이터를 보여주는 영역" },
+      { term: "데이터 양식", desc: "신규 등록·수정 등 입력을 위한 폼 영역" },
+      { term: "상세 정보",   desc: "데이터의 상세 내용이나 요약을 보여주는 읽기 전용 영역" },
+      { term: "일반 콘텐츠", desc: "에디터·이미지·안내 문구 등 위 범주에 속하지 않는 자유 영역" },
+    ]}
+    notes={"* 탭/전체화면 같은 \"보이는 방식\"은 [표시 형태] 에서 별도로 지정합니다."}
+  />
+);
+
+// 표시 형태 — 항목 리스트 (용어 볼드 + 설명 연하게, 시각 위계 명확)
+const AREA_DISPLAY_FORM_HELP_BODY = (
+  <ItemListBody
+    intro="이 영역이 사용자에게 어떻게 노출되는지를 정합니다. (시각적 배치)"
+    items={[
+      { term: "고정",     desc: "페이지 안 특정 위치에 상시 노출되는 기본 형태" },
+      { term: "모달",     desc: "배경을 차단(Dim)하고 화면 중앙에 독립적으로 뜨는 창" },
+      { term: "팝오버",   desc: "배경 차단 없이 특정 요소 근처에 가볍게 뜨는 레이어" },
+      { term: "드로어",   desc: "화면의 측면(좌/우)에서 슬라이드되어 나오는 패널" },
+      { term: "아코디언", desc: "클릭 시 수직으로 펼쳐지거나 접히는 형태" },
+      { term: "탭 전환",  desc: "한 영역 내에서 여러 콘텐츠를 탭으로 전환하며 보여주는 형태" },
+    ]}
+    notes={"표시 시점·트리거 조건은 [영역 설명] 에 자유 텍스트로 작성하세요.\n예: \"캘린더에서 컨설팅 일정 항목 클릭 시 표시\""}
+  />
+);
 
 const labelStyle: React.CSSProperties = {
   display:      "block",

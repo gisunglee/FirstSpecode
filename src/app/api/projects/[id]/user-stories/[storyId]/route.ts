@@ -17,15 +17,19 @@ import { apiSuccess, apiError } from "@/lib/apiResponse";
 type RouteParams = { params: Promise<{ id: string; storyId: string }> };
 
 /**
- * 사용자스토리 삭제 권한 게이트.
+ * 사용자스토리 수정/삭제 권한 게이트.
  *
  * 통과 조건 (OR):
  *   ① permissions 매트릭스 "requirement.update" 통과 — OWNER/ADMIN 역할 또는 PM/PL 직무
  *   ② 본인이 "이 스토리와 연결된 요구사항"의 담당자(asign_mber_id)
  *
  * (사용자스토리 자체에는 작성자/담당자 컬럼이 없으므로 연결 요구사항의 담당자를 기준으로 함.)
+ *
+ * PUT/DELETE 양쪽에서 동일 게이트를 사용한다 — 다른 5개 엔티티(요구사항/단위업무/화면/영역/기능)의
+ * require*Write 패턴과 정합. 인수기준(AcceptanceCriteria)은 PUT 핸들러 내부 createMany로 일괄
+ * 재생성되므로 이 게이트가 자동 보호한다.
  */
-async function requireStoryDelete(
+async function requireUserStoryWrite(
   request: NextRequest,
   projectId: string,
   storyId: string
@@ -60,7 +64,7 @@ async function requireStoryDelete(
     return apiError("NOT_FOUND", "사용자스토리를 찾을 수 없습니다.", 404);
   }
   if (story.requirement.asign_mber_id !== auth.mberId) {
-    return apiError("FORBIDDEN", "이 사용자스토리를 삭제할 권한이 없습니다.", 403);
+    return apiError("FORBIDDEN", "이 사용자스토리를 수정/삭제할 권한이 없습니다.", 403);
   }
 
   return { mberId: auth.mberId };
@@ -126,7 +130,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, storyId } = await params;
 
-  const gate = await requirePermission(request, projectId, "content.update");
+  // OWNER/ADMIN 역할 OR PM/PL 직무 OR 부모 요구사항의 담당자만 수정 가능
+  const gate = await requireUserStoryWrite(request, projectId, storyId);
   if (gate instanceof Response) return gate;
 
   let body: unknown;
@@ -200,7 +205,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, storyId } = await params;
 
   // OWNER/ADMIN 역할 OR PM/PL 직무 OR 연결 요구사항의 담당자만 삭제 가능
-  const gate = await requireStoryDelete(request, projectId, storyId);
+  const gate = await requireUserStoryWrite(request, projectId, storyId);
   if (gate instanceof Response) return gate;
 
   try {

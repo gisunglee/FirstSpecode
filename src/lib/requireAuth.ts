@@ -112,6 +112,18 @@ export async function requireAuth(request: NextRequest): Promise<AuthPayload | R
       return apiError("INVALID_API_KEY", "유효하지 않은 API 키입니다.", 401);
     }
 
+    // [정책] 전역 'ALL' 키 사용 자체 차단 — 발급(POST /api/auth/mcp-keys)은 이미 막혔지만,
+    // DB에 남아있는 과거 키 또는 직접 INSERT된 키도 무력화. 키 소유자가 모든 멤버십
+    // 프로젝트에 광역 권한을 행사하던 경로를 인증 진입에서 봉쇄.
+    // 사용자는 프로젝트별 키를 재발급해 사용해야 함.
+    if (mcpKey.prjct_id === MCP_KEY_GLOBAL_SCOPE) {
+      return apiError(
+        "GLOBAL_KEY_DEPRECATED",
+        "전역 MCP 키는 더 이상 지원되지 않습니다. SPECODE > 설정 > MCP 키 에서 프로젝트별 키를 재발급하세요.",
+        403,
+      );
+    }
+
     // [2026-04-26] 키 용도 검증 — Claude Code MCP / 일반 API 호출에는 'CLIENT' 만 허용
     // 워커용 'WORKER' 키가 이 경로로 들어오면 거부 (채널 혼용 방지).
     // 'WORKER' 키는 /api/worker/* 의 X-Mcp-Key 헤더로만 사용해야 함.
@@ -130,20 +142,18 @@ export async function requireAuth(request: NextRequest): Promise<AuthPayload | R
       data: { last_used_dt: new Date() },
     }).catch(() => {});
 
-    // 프로젝트 고정 키면 URL scope 검증 — 72개 프로젝트 라우트 일괄 보호
-    // 'ALL' sentinel(전역 키)은 검증 생략, 실제 UUID만 대상
-    const isGlobal = mcpKey.prjct_id === MCP_KEY_GLOBAL_SCOPE;
-    if (!isGlobal) {
-      const scopeErr = checkUrlScope(request, mcpKey.prjct_id);
-      if (scopeErr) return scopeErr;
-    }
+    // 프로젝트 고정 키 — URL scope 검증 (72개 프로젝트 라우트 일괄 보호)
+    // 위에서 'ALL' 키는 이미 403 거부됐으므로 여기 도달한 키는 항상 실제 프로젝트 UUID.
+    // isGlobal 분기는 dead code지만 defensive 유지 — 미래에 정책이 바뀌어도
+    // mcpKeyScope.enforceMcpKeyScope/scopeWhere가 일관되게 동작하도록.
+    const scopeErr = checkUrlScope(request, mcpKey.prjct_id);
+    if (scopeErr) return scopeErr;
 
     return {
       mberId: mcpKey.member.mber_id,
       email:  mcpKey.member.email_addr ?? "",
-      // 'ALL' → undefined (app 레이어에서는 "scope 제한 없음"으로 통일)
-      // mcpKeyScope.enforceMcpKeyScope, scopeWhere도 이 값 기준으로 동작
-      allowedPrjctId: isGlobal ? undefined : mcpKey.prjct_id,
+      // 'ALL' 키는 이미 차단됐으므로 항상 실제 프로젝트 UUID
+      allowedPrjctId: mcpKey.prjct_id,
     };
   }
 

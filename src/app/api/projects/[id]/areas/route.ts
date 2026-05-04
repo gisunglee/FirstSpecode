@@ -133,6 +133,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         displayId:       a.area_display_id,
         name:            a.area_nm,
         type:            a.area_ty_code,
+        displayFormCode: a.display_form_code,
         sortOrder:       a.sort_ordr,
         screenId:        a.scrn_id ?? null,
         screenName:      a.screen?.scrn_nm ?? "미분류",
@@ -170,13 +171,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { screenId, name, type, description, sortOrder, displayId: inputDisplayId } = body as {
-    screenId?:    string;
-    name?:        string;
-    type?:        string;
-    description?: string;
-    sortOrder?:   number;
-    displayId?:   string;
+  const { screenId, name, type, displayFormCode, description, sortOrder, displayId: inputDisplayId } = body as {
+    screenId?:        string;
+    name?:            string;
+    type?:            string;
+    displayFormCode?: string;
+    description?:     string;
+    sortOrder?:       number;
+    displayId?:       string;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "영역명을 입력해 주세요.", 400);
@@ -210,7 +212,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           scrn_id:        screenId || null,
           area_display_id: displayId,
           area_nm:        name.trim(),
-          area_ty_code:   type || "GRID",
+          // 유형 — 미전송 시 LIST(데이터 목록) 기본
+          area_ty_code:   type || "LIST",
+          // 표시 형태 — 미전송 시 STATIC(고정) 기본
+          display_form_code: displayFormCode || "STATIC",
           area_dc:        description?.trim() || null,
           sort_ordr:      nextSort,
         },
@@ -230,7 +235,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           areaId:    area.area_id,
           displayId: displayId,
           name:      name.trim(),
-          type:      type || "GRID",
+          type:      type || "LIST",
         },
         chg_mber_id: gate.mberId,
       },
