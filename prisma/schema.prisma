@@ -1203,3 +1203,68 @@ model TbSpImplSnapshot {
   @@index([ref_tbl_nm, ref_id, creat_dt(sort: Desc)], map: "idx_impl_snapshot_ref")
   @@map("tb_sp_impl_snapshot")
 }
+
+// ─── 배치 잡 실행 로그 (2026-05-06 도입) ────────────────────────────────────
+//
+// 정기/수동 배치의 실행 1회 단위 기록. 구체적 항목별 결과는 TbCmBatchJobItem.
+//
+// 잡 종류 (job_ty_code) — 신규 잡 추가 시 여기에 줄을 늘리면 된다.
+//   - PROJECT_HARD_DELETE   : 보관 기간이 지난 soft-deleted 프로젝트의 영구 삭제
+//   - ATTACH_FILE_CLEANUP   : DB 행 없는 디스크 첨부파일 정리(orphan)
+//
+// 운영 정책:
+//   - 같은 잡을 두 번 돌려도 안전(idempotent) — 대상 조건이 동적이므로 자연 보장.
+//   - 항목 단위로 격리 처리 → 한 건 실패해도 다음으로 진행, sttus_code='PARTIAL'.
+model TbCmBatchJob {
+  job_id        String                @id @default(uuid())
+  // 잡 종류 (위 주석 참조)
+  job_ty_code   String
+  // 표시용 잡 이름 (운영자가 어드민 UI 에서 보기 편하도록)
+  job_nm        String                @default("")
+  // 트리거 종류: CRON | MANUAL
+  trgr_ty_code  String                @default("CRON")
+  // 수동 실행한 운영자 멤버 ID (CRON 이면 NULL)
+  trgr_mber_id  String?
+  // 실행 상태: RUNNING | SUCCESS | PARTIAL | FAILED
+  sttus_code    String                @default("RUNNING")
+  bgng_dt       DateTime              @default(now())
+  end_dt        DateTime?
+  // 처리 카운트
+  trgt_cnt      Int                   @default(0)
+  success_cnt   Int                   @default(0)
+  fail_cnt      Int                   @default(0)
+  skip_cnt      Int                   @default(0)
+  // 잡 자체가 catastrophic 으로 실패한 경우의 메시지 (항목 레벨이 아님)
+  error_msg     String?
+  // 잡 메타 — 보관기간, 임계값 등 잡별 부가 정보
+  summary_json  Json?
+  items         TbCmBatchJobItem[]
+
+  @@index([job_ty_code, bgng_dt(sort: Desc)], map: "tb_cm_batch_job_ty_dt_idx")
+  @@map("tb_cm_batch_job")
+}
+
+// ─── 배치 잡의 항목별 처리 결과 ─────────────────────────────────────────────
+//
+// 한 잡(TbCmBatchJob) 안의 처리 대상 1건당 1행. "어제 배치에서 실패한 프로젝트
+// 가 어느 것?" 같은 질문이 즉답되도록 식별 정보(trgt_id, trgt_label) 를 함께
+// 보관한다. 대상이 사라진 뒤에도 trgt_label 로 추적 가능.
+model TbCmBatchJobItem {
+  item_id       String       @id @default(uuid())
+  job_id        String
+  // 대상 종류: PROJECT | ATTACH_FILE 등
+  trgt_ty_code  String
+  trgt_id       String
+  // 처리 시점의 식별 라벨 (사후 추적용 — 프로젝트명, 파일명 등)
+  trgt_label    String?
+  // 항목 처리 상태: SUCCESS | FAILED | SKIPPED
+  sttus_code    String
+  error_msg     String?
+  processed_dt  DateTime     @default(now())
+  // 부가 메타 (예: 삭제된 첨부파일 수, 디스크 용량 등)
+  meta_json     Json?
+  job           TbCmBatchJob @relation(fields: [job_id], references: [job_id], onDelete: Cascade, map: "tb_cm_batch_job_item_job_fk")
+
+  @@index([job_id, sttus_code], map: "tb_cm_batch_job_item_job_sttus_idx")
+  @@map("tb_cm_batch_job_item")
+}

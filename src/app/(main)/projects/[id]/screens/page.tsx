@@ -477,7 +477,7 @@ function ScreensPageInner() {
 
                   {/* 화면유형 배지 */}
                   <div>
-                    <span style={typeBadgeStyle(screen.type)}>
+                    <span className="sp-badge" style={typeBadgeStyle(screen.type)}>
                       {screen.type}
                     </span>
                   </div>
@@ -523,7 +523,7 @@ function ScreensPageInner() {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        <span style={implStatusBadgeStyle(screen.implTask.status)}>
+                        <span className="sp-badge" style={implStatusBadgeStyle(screen.implTask.status)}>
                           {AI_TASK_STATUS_LABEL[screen.implTask.status as AiTaskStatus] ?? screen.implTask.status}
                         </span>
                         <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>

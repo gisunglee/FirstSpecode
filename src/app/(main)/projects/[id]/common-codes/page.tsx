@@ -500,7 +500,7 @@ function CommonCodesPageInner() {
             <div style={{ flex: 1, overflowY: "auto" }}>
               {/* 신규 추가 인라인 행 */}
               {addingGroup && (
-                <div style={{ ...groupRowStyle, background: "#fff9e8" }}>
+                <div style={{ ...groupRowStyle, background: "var(--color-warning-subtle)" }}>
                   <input
                     ref={grpCodeInputRef}
                     value={newGrpCode}
@@ -541,7 +541,7 @@ function CommonCodesPageInner() {
                     onClick={() => setSelectedGrpCode(g.grpCode)}
                     style={{
                       ...groupRowStyle,
-                      background: selectedGrpCode === g.grpCode ? "var(--color-primary-bg, #e3f2fd)" : "var(--color-bg-card)",
+                      background: selectedGrpCode === g.grpCode ? "var(--color-brand-subtle)" : "var(--color-bg-card)",
                       borderLeft: selectedGrpCode === g.grpCode ? "3px solid var(--color-primary, #1976d2)" : "3px solid transparent",
                       cursor: "pointer",
                     }}
@@ -596,7 +596,7 @@ function CommonCodesPageInner() {
 
                     {/* 코드 수 뱃지 */}
                     <div style={{ display: "flex", justifyContent: "center" }}>
-                      <span style={{
+                      <span className="sp-badge" style={{
                         fontSize: 11, fontWeight: 600, minWidth: 22, textAlign: "center",
                         color: g.codeCount > 0 ? "var(--color-primary, #1976d2)" : "#bbb",
                         background: g.codeCount > 0 ? "rgba(25,118,210,0.08)" : "var(--color-bg-muted)",
@@ -610,6 +610,7 @@ function CommonCodesPageInner() {
                     <div style={{ display: "flex", justifyContent: "center" }}>
                       <div
                         onClick={(e) => { e.stopPropagation(); toggleGroupUseYn(g.grpCode, g.useYn); }}
+                        className="sp-badge"
                         style={{ width: 32, height: 18, borderRadius: 9, background: g.useYn === "Y" ? "#4caf50" : "#ddd", position: "relative", cursor: "pointer", transition: "background 0.2s" }}
                         title={g.useYn === "Y" ? "사용 중 → 미사용으로 변경" : "미사용 → 사용으로 변경"}
                       >
@@ -700,7 +701,7 @@ function CommonCodesPageInner() {
                         <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: "2px 4px" }}>{c.codeDc || "-"}</div>
                         {/* 사용 */}
                         <div style={{ display: "flex", justifyContent: "center" }}>
-                          <div style={{ width: 32, height: 18, borderRadius: 9, background: c.useYn === "Y" ? "#4caf50" : "#ddd", position: "relative" }}>
+                          <div className="sp-badge" style={{ width: 32, height: 18, borderRadius: 9, background: c.useYn === "Y" ? "#4caf50" : "#ddd", position: "relative" }}>
                             <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: c.useYn === "Y" ? 16 : 2, boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
                           </div>
                         </div>
@@ -761,7 +762,7 @@ function CommonCodesPageInner() {
                 <div style={{ flex: 1, overflowY: "auto" }}>
                   {/* 신규 추가 인라인 행 — 여러 건 동시 입력 */}
                   {addingCode && (
-                    <div style={{ padding: "8px 16px", borderBottom: "1px solid var(--color-border)", background: "#fff9e8" }}>
+                    <div style={{ padding: "8px 16px", borderBottom: "1px solid var(--color-border)", background: "var(--color-warning-subtle)" }}>
                       {newCodeDrafts.map((draft, idx) => (
                         <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
                           <input
@@ -928,6 +929,7 @@ function CommonCodesPageInner() {
                         <div style={{ display: "flex", justifyContent: "center" }}>
                           <div
                             onClick={() => toggleCodeUseYn(c.codeId, c.useYn)}
+                            className="sp-badge"
                             style={{ width: 32, height: 18, borderRadius: 9, background: c.useYn === "Y" ? "#4caf50" : "#ddd", position: "relative", cursor: "pointer", transition: "background 0.2s" }}
                             title={c.useYn === "Y" ? "사용 중" : "미사용"}
                           >

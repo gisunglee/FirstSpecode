@@ -313,7 +313,7 @@ function AreasPageInner() {
 
                 {/* 유형 배지 — 표시 형태 배지는 행 높이가 늘어나서 목록에서는 제거. 필요하면 영역 편집에서 확인. */}
                 <div>
-                  <span style={typeBadgeStyle(area.type)}>
+                  <span className="sp-badge" style={typeBadgeStyle(area.type)}>
                     {area.type}
                   </span>
                 </div>
@@ -373,7 +373,7 @@ function AreasPageInner() {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      <span style={implStatusBadgeStyle(area.implTask.status)}>
+                      <span className="sp-badge" style={implStatusBadgeStyle(area.implTask.status)}>
                         {AI_TASK_STATUS_LABEL[area.implTask.status as AiTaskStatus] ?? area.implTask.status}
                       </span>
                       <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>

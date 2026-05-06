@@ -28,6 +28,7 @@ import { renderMarkdown } from "@/lib/renderMarkdown";
 import { ARTF_DIV, ARTF_FMT, DIV_BADGE_COLOR, AI_STATUS_BADGE } from "@/constants/planStudio";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import PlanStudioAIRequestPopup from "@/components/ui/PlanStudioAIRequestPopup";
+import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,8 @@ function DetailInner() {
   const router = useRouter();
   const qc = useQueryClient();
   const mermaidRef = useRef<HTMLDivElement>(null);
+  // Mermaid 다이어그램 테마를 현재 앱 테마(라이트/다크/dark-purple)에 맞추기 위해 구독
+  const theme = useAppStore((s) => s.theme);
 
   // ── 기획실 상세 (산출물 목록 포함) ──
   const { data: studioData } = useQuery({
@@ -152,12 +155,15 @@ function DetailInner() {
   }
 
   // Mermaid 렌더링
+  // theme 변화 시 자동 재렌더링되도록 의존성에 theme 포함 — 라이트→다크 토글하면 다이어그램이 다크 톤으로 즉시 갱신
   useEffect(() => {
     if (artfFmtCode !== "MERMAID" || viewMode !== "preview" || !artfCn || !mermaidRef.current) return;
     (async () => {
       try {
         const mermaid = (await import("mermaid")).default;
-        mermaid.initialize({ startOnLoad: false, theme: "default" });
+        // dark, dark-purple 모두 mermaid 'dark' 팔레트 사용 — 어두운 본문 위에 어두운 다이어그램으로 자연스러움
+        const isDark = theme === "dark" || theme === "dark-purple";
+        mermaid.initialize({ startOnLoad: false, theme: isDark ? "dark" : "default" });
         // AI 응답이 ```mermaid ... ``` fence로 감싸져 오면 파싱 실패 → fence 벗겨서 전달
         const src = stripOuterCodeFence(artfCn, ["mermaid"]);
         // Mermaid는 같은 ID를 두 번 렌더링하면 에러 → 유니크 ID
@@ -167,7 +173,7 @@ function DetailInner() {
         if (mermaidRef.current) mermaidRef.current.innerHTML = `<pre style="color:#e53935">Mermaid 렌더링 오류:\n${err}</pre>`;
       }
     })();
-  }, [artfFmtCode, viewMode, artfCn]);
+  }, [artfFmtCode, viewMode, artfCn, theme]);
 
   // Full Size 팝업 Mermaid 렌더링
   useEffect(() => {
@@ -175,7 +181,8 @@ function DetailInner() {
     (async () => {
       try {
         const mermaid = (await import("mermaid")).default;
-        mermaid.initialize({ startOnLoad: false, theme: "default" });
+        const isDark = theme === "dark" || theme === "dark-purple";
+        mermaid.initialize({ startOnLoad: false, theme: isDark ? "dark" : "default" });
         const src = stripOuterCodeFence(artfCn, ["mermaid"]);
         const { svg } = await mermaid.render(`mm-full-${Date.now()}`, src);
         if (fullMermaidRef.current) fullMermaidRef.current.innerHTML = svg;
@@ -183,7 +190,7 @@ function DetailInner() {
         if (fullMermaidRef.current) fullMermaidRef.current.innerHTML = `<pre style="color:#e53935">Mermaid 렌더링 오류:\n${err}</pre>`;
       }
     })();
-  }, [fullSizeOpen, artfFmtCode, fullSizeMode, artfCn]);
+  }, [fullSizeOpen, artfFmtCode, fullSizeMode, artfCn, theme]);
 
   // ── 저장 ──
   const saveMut = useMutation({
@@ -348,6 +355,16 @@ function DetailInner() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button onClick={() => router.push(`/projects/${projectId}/plan-studio`)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#666" }}>←</button>
+          {/* 엔티티 타입 배지 — 다른 상세 페이지(요구사항/화면/영역)의 "{타입} 편집" 헤더와 톤을 맞춤.
+              분석 그룹의 기존 태그 색상(과업=파랑, 요구사항=회색, 스토리=보라)과 겹치지 않도록 시안 톤 사용. */}
+          <span style={{
+            fontSize: 11, fontWeight: 600,
+            padding: "2px 8px", borderRadius: 4,
+            background: "#e0f7fa", color: "#006064",
+            letterSpacing: "0.02em", flexShrink: 0,
+          }}>
+            기획실
+          </span>
           <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>{studio.planStudioNm}</span>
           <span style={{ fontSize: 11, color: "#999" }}>({studio.planStudioDisplayId})</span>
         </div>
@@ -423,18 +440,18 @@ function DetailInner() {
               const aiBadge = a.aiStatus ? AI_STATUS_BADGE[a.aiStatus] : null;
               const isSelected = selectedArtfId === a.artfId;
               return (
-                <div key={a.artfId} onClick={() => selectArtf(a.artfId)} style={{ display: "grid", gridTemplateColumns: ARTF_GRID, gap: 0, padding: "9px 12px", alignItems: "center", cursor: "pointer", borderBottom: "1px solid var(--color-border)", background: isSelected ? "var(--color-primary-bg, #e3f2fd)" : "var(--color-bg-card)", borderLeft: isSelected ? "3px solid var(--color-primary, #1976d2)" : "3px solid transparent", transition: "background 0.1s" }}>
+                <div key={a.artfId} onClick={() => selectArtf(a.artfId)} style={{ display: "grid", gridTemplateColumns: ARTF_GRID, gap: 0, padding: "9px 12px", alignItems: "center", cursor: "pointer", borderBottom: "1px solid var(--color-border)", background: isSelected ? "var(--color-brand-subtle)" : "var(--color-bg-card)", borderLeft: isSelected ? "3px solid var(--color-primary, #1976d2)" : "3px solid transparent", transition: "background 0.1s" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: isSelected ? 600 : 500, overflow: "hidden", color: isSelected ? "var(--color-primary, #1976d2)" : "var(--color-text-primary)" }}>
                     <button onClick={(e) => { e.stopPropagation(); toggleGoodById(a.artfId, a.goodDesignYn); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1, flexShrink: 0 }} title="좋은 설계">{a.goodDesignYn === "Y" ? "⭐" : "☆"}</button>
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.artfNm || "(이름 없음)"}</span>
                   </div>
-                  <div style={{ textAlign: "center" }}><span style={{ ...badge, background: divBadge.bg, color: divBadge.color }}>{ARTF_DIV[a.artfDivCode as keyof typeof ARTF_DIV]?.name ?? a.artfDivCode}</span></div>
+                  <div style={{ textAlign: "center" }}><span className="sp-badge" style={{ ...badge, background: divBadge.bg, color: divBadge.color }}>{ARTF_DIV[a.artfDivCode as keyof typeof ARTF_DIV]?.name ?? a.artfDivCode}</span></div>
                   <div style={{ textAlign: "center", fontSize: 11, color: "var(--color-text-secondary)" }}>{ARTF_FMT[a.artfFmtCode as keyof typeof ARTF_FMT]?.name ?? a.artfFmtCode}</div>
                   <div style={{ textAlign: "center" }} onClick={(e) => { e.stopPropagation(); if (a.aiTaskId) setAiDetailTaskId(a.aiTaskId); }}>
                     {aiBadge ? (
-                      <span style={{ ...badge, background: aiBadge.bg, color: aiBadge.color, cursor: a.aiTaskId ? "pointer" : "default" }}>{aiBadge.label}</span>
+                      <span className="sp-badge" style={{ ...badge, background: aiBadge.bg, color: aiBadge.color, cursor: a.aiTaskId ? "pointer" : "default" }}>{aiBadge.label}</span>
                     ) : a.aiTaskId ? (
-                      <span style={{ ...badge, background: "#fff3e0", color: "#e65100", cursor: "pointer" }}>대기</span>
+                      <span className="sp-badge" style={{ ...badge, background: "#fff3e0", color: "#e65100", cursor: "pointer" }}>대기</span>
                     ) : (
                       <span style={{ fontSize: 11, color: "#bbb" }}>—</span>
                     )}

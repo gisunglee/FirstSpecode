@@ -445,12 +445,12 @@ function AiTasksPageInner() {
                   }}
                 >
                   <div style={{ textAlign: "center" }}>
-                    <span style={refTypeBadgeStyle(row.refType)}>
+                    <span className="sp-badge" style={refTypeBadgeStyle(row.refType)}>
                       {row.refType === "AREA" ? "영역" : row.refType === "UNIT_WORK" ? "단위업무" : row.refType === "PLAN_STUDIO_ARTF" ? "기획실" : "기능"}
                     </span>
                   </div>
                   <div style={{ textAlign: "center" }}>
-                    <span style={taskTypeBadgeStyle(row.taskType)}>
+                    <span className="sp-badge" style={taskTypeBadgeStyle(row.taskType)}>
                       {TASK_TYPE_LABELS[row.taskType]}
                     </span>
                   </div>
@@ -482,7 +482,7 @@ function AiTasksPageInner() {
                     {row.retryCnt > 0 ? `${row.retryCnt}회` : "—"}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                    <span style={statusBadgeStyle(row.status)}>{AI_TASK_STATUS_LABEL[row.status]}</span>
+                    <span className="sp-badge" style={statusBadgeStyle(row.status)}>{AI_TASK_STATUS_LABEL[row.status]}</span>
                     {["FAILED", "REJECTED", "TIMEOUT"].includes(row.status) && (
                       <button
                         title="재요청 — 새 태스크 생성"

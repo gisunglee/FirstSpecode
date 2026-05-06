@@ -11,6 +11,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { requireAuth } from "@/lib/requireAuth";
+import { ACTIVE_PROJECT_RELATION_WHERE } from "@/lib/projectGuard";
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -22,6 +23,9 @@ export async function GET(request: NextRequest) {
         mber_id:         auth.mberId,
         role_code:       "OWNER",
         mber_sttus_code: "ACTIVE",
+        // 탈퇴 STEP 1: 위임/삭제 대상 OWNER 프로젝트만 노출.
+        // 이미 삭제 처리된 프로젝트는 위임 대상이 아니므로 제외.
+        project: ACTIVE_PROJECT_RELATION_WHERE,
       },
       include: {
         project: {

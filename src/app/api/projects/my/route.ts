@@ -9,6 +9,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { ACTIVE_PROJECT_RELATION_WHERE } from "@/lib/projectGuard";
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -22,6 +23,8 @@ export async function GET(request: NextRequest) {
         mber_id:         auth.mberId,
         mber_sttus_code: "ACTIVE",
         ...(auth.allowedPrjctId ? { prjct_id: auth.allowedPrjctId } : {}),
+        // 삭제 예정 프로젝트는 GNB/LNB 드롭다운에 노출되지 않아야 한다.
+        project: ACTIVE_PROJECT_RELATION_WHERE,
       },
       include: {
         project: {

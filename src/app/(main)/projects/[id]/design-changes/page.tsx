@@ -267,7 +267,7 @@ function DesignChangesPageInner() {
                     {(() => {
                       const a = ACTION_STYLE[item.chgTypeCode] ?? { label: item.chgTypeCode, bg: "#f0f0f0", text: "#616161" };
                       return (
-                        <span style={{
+                        <span className="sp-badge" style={{
                           display: "inline-block", padding: "2px 8px", borderRadius: 12,
                           background: a.bg, color: a.text,
                           fontSize: 11, fontWeight: 700,
@@ -280,7 +280,7 @@ function DesignChangesPageInner() {
 
                   {/* 대상 테이블 */}
                   <span>
-                    <span style={{
+                    <span className="sp-badge" style={{
                       display: "inline-block", padding: "2px 8px", borderRadius: 12,
                       background: colors.bg, color: colors.text,
                       fontSize: 11, fontWeight: 700,

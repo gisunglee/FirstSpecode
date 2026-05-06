@@ -217,7 +217,7 @@ function RequirementsPageInner() {
   return (
     <div style={{ padding: 0 }}>
       {/* 헤더 */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "var(--color-bg-header)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           요구사항 목록
         </div>
@@ -376,14 +376,14 @@ function RequirementsPageInner() {
 
                 {/* 우선순위 배지 */}
                 <div>
-                  <span style={priorityBadgeStyle(req.priority)}>
+                  <span className="sp-badge" style={priorityBadgeStyle(req.priority)}>
                     {PRIORITY_LABELS[req.priority] ?? req.priority}
                   </span>
                 </div>
 
                 {/* 출처 배지 */}
                 <div>
-                  <span style={sourceBadgeStyle(req.source)}>
+                  <span className="sp-badge" style={sourceBadgeStyle(req.source)}>
                     {SOURCE_LABELS[req.source] ?? req.source}
                   </span>
                 </div>
@@ -569,7 +569,7 @@ const gridHeaderStyle: React.CSSProperties = {
   gridTemplateColumns: GRID_TEMPLATE,
   gap:                 12,
   padding:             "10px 16px",
-  background:          "var(--color-bg-muted)",
+  background:          "var(--color-bg-header)",
   fontSize:            12,
   fontWeight:          600,
   color:               "var(--color-text-secondary)",

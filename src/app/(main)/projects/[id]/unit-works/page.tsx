@@ -624,7 +624,7 @@ function UnitWorksPageInner() {
                   {uw.name}
                 </span>
                 {uw.analyRt === 100 && uw.designRt === 100 && uw.implRt === 100 && uw.testRt === 100 && (
-                  <span style={{
+                  <span className="sp-badge" style={{
                     fontSize: 11, fontWeight: 600, color: "#16a34a",
                     background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)",
                     borderRadius: 4, padding: "1px 7px", letterSpacing: "0.2px", whiteSpace: "nowrap",
@@ -691,7 +691,7 @@ function UnitWorksPageInner() {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    <span style={implStatusBadgeStyle(uw.implTask.status)}>
+                    <span className="sp-badge" style={implStatusBadgeStyle(uw.implTask.status)}>
                       {AI_TASK_STATUS_LABEL[uw.implTask.status as AiTaskStatus] ?? uw.implTask.status}
                     </span>
                     <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>
@@ -706,7 +706,7 @@ function UnitWorksPageInner() {
               {/* 분석/설계/구현/테스트 진척률 */}
               {uw.analyRt === 100 && uw.designRt === 100 && uw.implRt === 100 && uw.testRt === 100 ? (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <span style={{
+                  <span className="sp-badge" style={{
                     background: "linear-gradient(90deg, #e65100, #1565c0, #2e7d32, #6a1b9a)",
                     color: "#fff", borderRadius: 6, padding: "2px 8px",
                     fontSize: 11, fontWeight: 800, letterSpacing: "0.5px", whiteSpace: "nowrap",

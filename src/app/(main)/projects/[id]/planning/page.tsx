@@ -281,7 +281,7 @@ function PlanningTreePageInner() {
   }
 
   return (
-    <div style={{ display: "flex", height: "calc(100vh - 48px)", overflow: "hidden", padding: "12px 16px 12px 16px", boxSizing: "border-box", background: "var(--color-bg-base, #f0f2f5)" }}>
+    <div style={{ display: "flex", height: "calc(100vh - 48px)", overflow: "hidden", padding: "12px 16px 12px 16px", boxSizing: "border-box", background: "var(--color-bg-content)" }}>
 
       {/* ── 좌측 트리 패널 (AR-00057) ──────────────────────────────────────── */}
       <div style={{

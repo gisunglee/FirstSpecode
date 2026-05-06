@@ -389,7 +389,7 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
                     {k.keyPrefix}...
                   </code>
                   {/* [2026-04-26] 용도 배지 — Claude Code(CLIENT) vs 워커(WORKER) 구분 */}
-                  <span style={{
+                  <span className="sp-badge" style={{
                     fontSize: "var(--text-xs)",
                     padding: "2px 8px",
                     borderRadius: 12,
@@ -405,7 +405,7 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
                   </span>
                   {/* Scope 배지 */}
                   {k.prjctId ? (
-                    <span style={{
+                    <span className="sp-badge" style={{
                       fontSize: "var(--text-xs)",
                       padding: "2px 8px",
                       borderRadius: 12,
@@ -416,7 +416,7 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
                       🔒 {k.prjctNm}
                     </span>
                   ) : (
-                    <span style={{
+                    <span className="sp-badge" style={{
                       fontSize: "var(--text-xs)",
                       padding: "2px 8px",
                       borderRadius: 12,

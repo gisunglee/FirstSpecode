@@ -83,7 +83,13 @@ export async function requirePermission(
   const scopeErr = enforceMcpKeyScope(auth, projectId);
   if (scopeErr) return scopeErr;  // 403 FORBIDDEN_SCOPE
 
-  // ② 멤버십 + 멤버 플랜 + 시스템 역할 조회 (한 번의 쿼리로)
+  // ② 멤버십 + 멤버 플랜 + 시스템 역할 + 프로젝트 삭제 상태 조회 (한 번의 쿼리로)
+  //
+  // project.del_yn 을 함께 가져오는 이유:
+  //   OWNER 가 프로젝트 삭제(soft delete) 를 요청한 뒤에는, 일반 사용자가
+  //   해당 프로젝트의 어떤 API 도 호출할 수 없어야 한다. 권한 가드의
+  //   진입점인 여기서 한 번에 막아 두면 거의 모든 API 가 자동 차폐된다.
+  //   SUPER_ADMIN 의 지원 세션 경로는 아래 별도 분기에서 처리.
   const membership = await prisma.tbPjProjectMember.findUnique({
     where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
     select: {
@@ -96,8 +102,25 @@ export async function requirePermission(
           sys_role_code: true,
         },
       },
+      project: {
+        select: { del_yn: true },
+      },
     },
   });
+
+  // ─── 프로젝트가 "삭제 예정" 이면 일반 사용자는 진입 불가 ──────────
+  //
+  // del_yn='Y' 시점부터 hard delete 배치까지의 보관 기간 동안, OWNER 를
+  // 포함한 모든 일반 멤버에게 해당 프로젝트는 "이미 사라진 것"으로
+  // 보여야 한다. 복구는 별도의 restore API 로만 가능. 시스템 관리자는
+  // 아래 지원 세션 분기에서 별도 처리.
+  if (membership?.project?.del_yn === "Y") {
+    return apiError(
+      "FORBIDDEN_PROJECT_DELETED",
+      "이 프로젝트는 삭제 처리되었습니다.",
+      403
+    );
+  }
 
   // ─── 멤버십이 있는 정상 경로 ───────────────────────────────────────
   if (membership && membership.mber_sttus_code === "ACTIVE") {

@@ -69,6 +69,14 @@ function CopyDialog({
 }
 
 // ── 삭제 확인 POPUP (PID-00018) ──────────────────────────────────────────
+//
+// 2026-05-06 동작 변경:
+//   삭제는 즉시 제거가 아닌 "soft delete" 로 동작한다.
+//   - 보관 기간(기본 14일) 동안 OWNER 가 복구 가능 (휴지통 화면 예정)
+//   - 보관 기간이 지나면 별도 배치(또는 어드민)가 영구 삭제
+//   - 다른 멤버에게는 즉시 보이지 않게 처리됨
+//
+//   문구도 그에 맞춰 "즉시 영구 삭제" 가 아닌 "삭제 처리(복구 가능)"로 정확화.
 function DeleteDialog({
   projectName, onCancel, onConfirm, isPending,
 }: { projectName: string; onCancel: () => void; onConfirm: () => void; isPending: boolean }) {
@@ -80,7 +88,8 @@ function DeleteDialog({
         <div style={{ fontSize: 28, marginBottom: 12 }}>⚠️</div>
         <h3 style={{ margin: "0 0 10px", fontSize: "var(--text-lg)", fontWeight: 700, color: "var(--color-text-heading)" }}>프로젝트를 삭제하시겠습니까?</h3>
         <p style={{ margin: "0 0 8px", fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", lineHeight: 1.7 }}>
-          <strong>'{projectName}'</strong>을 삭제하면<br />모든 하위 데이터가 즉시 제거되며 복구할 수 없습니다.
+          <strong>'{projectName}'</strong>을 삭제하면 다른 멤버에게 즉시 보이지 않게 되고,<br />
+          보관 기간이 지나면 영구 삭제됩니다. 그 전까지는 복구할 수 있습니다.
         </p>
         <div style={{ marginBottom: 20 }}>
           <label style={{ display: "block", marginBottom: 6, fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
@@ -149,11 +158,29 @@ function ProjectSettingsInner() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // ── 삭제 뮤테이션 ───────────────────────────────────────────────────
+  // ── 삭제 뮤테이션 (soft delete) ─────────────────────────────────────
+  //
+  // API 가 안전 토큰(confirm:'DELETE')을 요구한다 — 모달 통과(프로젝트명
+  // 입력)와 별개로 본문 토큰까지 검사하는 이중 보호. 모달은 의도 확인,
+  // 토큰은 실수로 발사되는 호출 자체를 차단한다.
   const deleteMutation = useMutation({
-    mutationFn: () => authFetch(`/api/projects/${projectId}`, { method: "DELETE" }),
-    onSuccess: () => {
-      toast.success("프로젝트가 삭제되었습니다.");
+    mutationFn: () =>
+      authFetch<{ data: { hardDeleteAt?: string; retentionDays?: number } }>(
+        `/api/projects/${projectId}`,
+        {
+          method:  "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ confirm: "DELETE" }),
+        }
+      ),
+    onSuccess: (res) => {
+      // 보관 기간이 응답에 들어오면 사용자가 안심할 수 있도록 토스트에 함께 안내.
+      const days = res?.data?.retentionDays;
+      toast.success(
+        days
+          ? `프로젝트가 삭제 처리되었습니다. ${days}일 후 영구 삭제됩니다 (그 전까지 복구 가능).`
+          : "프로젝트가 삭제 처리되었습니다."
+      );
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       router.push("/projects");
     },

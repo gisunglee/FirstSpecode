@@ -193,7 +193,7 @@ function MemoDetailInner() {
           <div style={titleCardStyle}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               {/* 공유 배지 */}
-              <span style={{
+              <span className="sp-badge" style={{
                 display: "inline-flex", alignItems: "center",
                 padding: "3px 11px", borderRadius: 20, fontSize: 12, fontWeight: 700,
                 ...(data.shareYn === "Y"
@@ -205,7 +205,7 @@ function MemoDetailInner() {
 
               {/* 연결 대상 배지 */}
               {data.refTyCode && (
-                <span style={{
+                <span className="sp-badge" style={{
                   display: "inline-flex", alignItems: "center",
                   padding: "3px 11px", borderRadius: 20, fontSize: 12, fontWeight: 600,
                   background: "#e3f2fd", color: "#1565c0",
@@ -253,6 +253,7 @@ function MemoDetailInner() {
               <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>공유</span>
               <button
                 onClick={() => setShareYn((p) => (p === "Y" ? "N" : "Y"))}
+                className="sp-badge"
                 style={{
                   padding: "4px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700,
                   border: "1px solid", cursor: "pointer",

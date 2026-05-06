@@ -10,8 +10,15 @@
 import fs from "fs";
 import path from "path";
 
-// 업로드 루트 디렉터리
-const UPLOAD_ROOT = path.join(process.cwd(), "uploads");
+/**
+ * 업로드 루트 디렉터리.
+ *
+ * 외부 export 이유 — 디스크 정리 배치(hardDeleteProject, attach-file-cleanup)
+ * 가 path traversal 가드 시 "이 경계 밖은 절대 안 건드린다" 의 기준값으로
+ * 동일한 상수를 참조해야 한다. 환경별 디렉터리 정책이 바뀌어도 한 곳만
+ * 수정하면 일관되게 따라간다.
+ */
+export const UPLOAD_ROOT = path.resolve(process.cwd(), "uploads");
 
 /** 업로드 루트 디렉터리가 없으면 생성 */
 export function ensureDir(subDir: string): string {

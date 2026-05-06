@@ -7,6 +7,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { ACTIVE_PROJECT_RELATION_WHERE } from "@/lib/projectGuard";
 
 // ─── GET: 내 프로젝트 목록 ─────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
@@ -22,6 +23,9 @@ export async function GET(request: NextRequest) {
         mber_id: auth.mberId,
         mber_sttus_code: "ACTIVE",
         ...(auth.allowedPrjctId ? { prjct_id: auth.allowedPrjctId } : {}),
+        // 삭제 예정(soft-deleted) 프로젝트는 일반 사용자 목록에서 제외.
+        // SUPER_ADMIN 어드민 화면(/admin/projects)에서는 별도로 노출.
+        project: ACTIVE_PROJECT_RELATION_WHERE,
       },
       include: {
         project: {

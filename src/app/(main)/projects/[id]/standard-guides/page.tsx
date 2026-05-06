@@ -263,7 +263,7 @@ function StandardGuideListInner() {
                 >
                   {/* 카테고리 배지 */}
                   <div>
-                    <span style={{
+                    <span className="sp-badge" style={{
                       display: "inline-block",
                       padding: "2px 10px",
                       borderRadius: 12,
@@ -287,7 +287,7 @@ function StandardGuideListInner() {
                   {/* 사용여부 배지 */}
                   <div>
                     {g.useYn === "Y" ? (
-                      <span style={{
+                      <span className="sp-badge" style={{
                         display: "inline-block",
                         padding: "2px 10px", borderRadius: 12,
                         fontSize: 11, fontWeight: 700,
@@ -296,7 +296,7 @@ function StandardGuideListInner() {
                         사용중
                       </span>
                     ) : (
-                      <span style={{
+                      <span className="sp-badge" style={{
                         display: "inline-block",
                         padding: "2px 10px", borderRadius: 12,
                         fontSize: 11, fontWeight: 700,

@@ -37,6 +37,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "프로젝트를 찾을 수 없습니다.", 404);
     }
 
+    // 삭제 예정 프로젝트는 복사 불가 — 복구 후에 다시 시도해야 한다.
+    if (original.del_yn === "Y") {
+      return apiError("FORBIDDEN_PROJECT_DELETED", "이 프로젝트는 삭제 처리되었습니다.", 403);
+    }
+
     // 트랜잭션: 복사본 프로젝트 + 멤버(OWNER) + 설정 생성
     const newProject = await prisma.$transaction(async (tx) => {
       const copy = await tx.tbPjProject.create({

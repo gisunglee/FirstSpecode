@@ -269,18 +269,18 @@ function ReviewDetailPageInner() {
           <div style={titleCardStyle}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               {/* 상태 배지 */}
-              <span style={{ display: "inline-flex", alignItems: "center", padding: "3px 11px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: st.bg, color: st.color }}>
+              <span className="sp-badge" style={{ display: "inline-flex", alignItems: "center", padding: "3px 11px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: st.bg, color: st.color }}>
                 {st.label}
               </span>
               {/* 피드백 코드 배지 */}
               {data.fdbkCode && FDBK_MAP[data.fdbkCode] && (
-                <span style={{ display: "inline-flex", alignItems: "center", padding: "3px 11px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: FDBK_MAP[data.fdbkCode].bg, color: FDBK_MAP[data.fdbkCode].color }}>
+                <span className="sp-badge" style={{ display: "inline-flex", alignItems: "center", padding: "3px 11px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: FDBK_MAP[data.fdbkCode].bg, color: FDBK_MAP[data.fdbkCode].color }}>
                   {FDBK_MAP[data.fdbkCode].label}
                 </span>
               )}
               {/* 별점 수치 */}
               {data.stsfScr != null && (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "#fffbeb", color: "#b45309" }}>
+                <span className="sp-badge" style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "#fffbeb", color: "#b45309" }}>
                   <span style={{ fontSize: 13 }}>★</span> {data.stsfScr}/5
                 </span>
               )}

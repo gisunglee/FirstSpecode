@@ -128,6 +128,7 @@ function BaselineDetailPageInner() {
           {data?.comment && (
             <button
               onClick={() => setCommentOpen(true)}
+              className="sp-badge"
               style={{
                 display: "inline-flex", alignItems: "center", gap: 4,
                 padding: "4px 10px", borderRadius: 4,
@@ -212,7 +213,7 @@ function BaselineDetailPageInner() {
                       padding: "10px 14px",
                       borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
                       cursor: "pointer",
-                      background: isActive ? "var(--color-primary-bg, #e3f2fd)" : "var(--color-bg-card)",
+                      background: isActive ? "var(--color-brand-subtle)" : "var(--color-bg-card)",
                       borderLeft: isActive ? "3px solid var(--color-primary, #1976d2)" : "3px solid transparent",
                     }}
                   >
@@ -227,7 +228,7 @@ function BaselineDetailPageInner() {
                       </span>
                     </div>
                     {pr && (
-                      <span style={{
+                      <span className="sp-badge" style={{
                         display: "inline-block", marginTop: 4,
                         padding: "1px 6px", borderRadius: 4,
                         fontSize: 10, fontWeight: 600,
@@ -455,7 +456,7 @@ function ReqDetail({ req }: { req: SnapshotReq }) {
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-primary, #1976d2)", flexShrink: 0 }}>{req.displayId}</span>
           {pr && (
-            <span style={{
+            <span className="sp-badge" style={{
               padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600,
               background: pr.bg, color: pr.color, flexShrink: 0,
             }}>

@@ -127,11 +127,23 @@
   --color-bg-titlebar: var(--p-gray-700);
   --color-bg-menubar:  var(--p-gray-800);
   --color-bg-toolbar:  var(--p-gray-750);
-  --color-bg-sidebar:  var(--p-gray-500);
+  /* sidebar — 분석/설계 등 보조 메뉴 사이드바 배경.
+     이전: gray-500(#2e3248) 였으나 본문 카드(gray-600)보다 밝아 이질감.
+     gray-700(titlebar 동일 톤)로 내려 menubar(gray-800)와 본문 사이 위치로 정렬. */
+  --color-bg-sidebar:  var(--p-gray-700);
   --color-bg-content:  var(--p-gray-650);
-  --color-bg-card:     var(--p-gray-500);
-  --color-bg-surface:  var(--p-gray-400);
-  --color-bg-elevated: var(--p-gray-400);
+  /* header — 페이지 상단 헤더 바 / 테이블 헤더.
+     사용자 정의 위계: sidebar(가장 어두움) > 페이지 헤더(card와 동일 톤) > 그 외
+     header = card = gray-650 으로 통일 — 모든 페이지 헤더가 사이드바보다 한 톤 밝게,
+     동시에 헤더 적용 페이지/미적용 페이지(card 사용)가 시각적으로 동일하게 보이도록 함. */
+  --color-bg-header:   var(--p-gray-650);
+  /* card — 본문 데이터 카드. content(gray-650)와 동일한 톤으로 페이지 배경과 평면.
+     헤더(gray-600)가 한 톤 밝게 떠 있고 본문이 차분히 가라앉는 위계. */
+  --color-bg-card:     var(--p-gray-650);
+  /* surface / elevated — card보다 한 단계 위. 모달·드롭다운·팝업.
+     이전: gray-400(#474f68) 였으나 card 강하 후 위계 점프가 과해서 정렬. */
+  --color-bg-surface:  var(--p-gray-500);
+  --color-bg-elevated: var(--p-gray-500);
   --color-bg-input:    var(--p-gray-650);
   --color-bg-input-hover: var(--p-gray-550);
   --color-bg-label:    var(--p-gray-600);
@@ -209,6 +221,8 @@
   --color-bg-toolbar:  #eceef6;
   --color-bg-sidebar:  #ffffff;
   --color-bg-content:  #eceef6;
+  /* header — 페이지 상단 헤더 바 / 테이블 헤더. 라이트는 sidebar와 같은 흰색 유지 */
+  --color-bg-header:   #ffffff;
   --color-bg-card:     #ffffff;
   --color-bg-surface:  #ffffff;
   --color-bg-elevated: #f4f5fa;
@@ -290,6 +304,8 @@
   --color-bg-toolbar:  #1c162a;
   --color-bg-sidebar:  #312850;
   --color-bg-content:  #241e38;
+  /* header — 페이지 상단 헤더 바 / 테이블 헤더. 메뉴 영역 톤(menubar)과 정렬 */
+  --color-bg-header:   #1e1830;
   --color-bg-card:     #312850;
   --color-bg-surface:  #3a3060;
   --color-bg-elevated: #3a3060;

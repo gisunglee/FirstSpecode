@@ -32,6 +32,8 @@ const TABS: TabDef[] = [
   { label: "설계 양식",       href: "/admin/design-templates" },
   { label: "프롬프트 관리",   href: "/admin/prompt-templates" },
   { label: "감사 로그",       href: "/admin/audit" },
+  // soft-deleted 프로젝트의 영구 삭제 운영 화면 (외부 cron 없을 때 손으로 정리)
+  { label: "정보 삭제",       href: "/admin/cleanup" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

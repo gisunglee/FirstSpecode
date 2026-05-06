@@ -283,8 +283,8 @@ export default function AiTaskDetailDialog({
               flexWrap: "wrap", background: "var(--color-bg-card)", flexShrink: 0,
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={taskTypeBadgeStyle(data.taskType)}>{AI_TASK_TYPE_LABEL[data.taskType]}</span>
-                <span style={statusBadgeStyle(data.status)}>{AI_TASK_STATUS_LABEL[data.status]}</span>
+                <span className="sp-badge" style={taskTypeBadgeStyle(data.taskType)}>{AI_TASK_TYPE_LABEL[data.taskType]}</span>
+                <span className="sp-badge" style={statusBadgeStyle(data.status)}>{AI_TASK_STATUS_LABEL[data.status]}</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 4 }}>
                   {data.refDisplayId && (
                     <span style={{ fontSize: 15, fontWeight: 600, color: "var(--color-primary)" }}>{data.refDisplayId}</span>

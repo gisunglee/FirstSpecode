@@ -132,11 +132,19 @@ export async function requireWorkerAuth(
     );
   }
 
-  // 5. 프로젝트명 조회 (응답 meta.auth 표시용)
+  // 5. 프로젝트명 + 삭제 상태 조회 (응답 meta.auth 표시용 + 차단 판정)
+  //    워커 키도 삭제 예정 프로젝트에는 작업을 시작해선 안 된다.
   const project = await prisma.tbPjProject.findUnique({
     where:  { prjct_id: mcpKey.prjct_id },
-    select: { prjct_nm: true },
+    select: { prjct_nm: true, del_yn: true },
   });
+  if (project?.del_yn === "Y") {
+    return apiError(
+      "FORBIDDEN_PROJECT_DELETED",
+      "이 프로젝트는 삭제 처리되었습니다.",
+      403,
+    );
+  }
 
   // 6. last_used_dt 비동기 갱신 — 응답 지연 없이 fire-and-forget
   // 실패해도 무시(키 사용 추적이 끊겨도 본 요청 처리에는 지장 없음).

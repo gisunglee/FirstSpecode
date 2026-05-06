@@ -147,16 +147,28 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // ── 프로젝트 scope 요청 시 멤버십 검증 ─────────────────────────
+  // ── 프로젝트 scope 요청 시 멤버십 + 활성 검증 ─────────────────────────
   // 비멤버 프로젝트로 scope 고정 시도 차단 (보안: 발급 시점에 원천 차단)
+  // 삭제 예정(soft-deleted) 프로젝트로의 키 발급도 차단 — 어차피 곧 hard
+  // delete 되므로 유효 기간이 짧고 운영상 의미 없음.
   const membership = await prisma.tbPjProjectMember.findUnique({
     where: { prjct_id_mber_id: { prjct_id: prjctId, mber_id: auth.mberId } },
-    select: { mber_sttus_code: true },
+    select: {
+      mber_sttus_code: true,
+      project: { select: { del_yn: true } },
+    },
   });
   if (!membership || membership.mber_sttus_code !== "ACTIVE") {
     return apiError(
       "FORBIDDEN",
       "해당 프로젝트의 활성 멤버가 아닙니다.",
+      403
+    );
+  }
+  if (membership.project?.del_yn === "Y") {
+    return apiError(
+      "FORBIDDEN_PROJECT_DELETED",
+      "삭제 처리된 프로젝트에는 MCP 키를 발급할 수 없습니다.",
       403
     );
   }

@@ -364,6 +364,7 @@ function DbTableDetailPageInner() {
         {!isNew && (
           <button
             onClick={() => setDeleteConfirm(true)}
+            className="sp-badge"
             style={{ padding: "5px 14px", borderRadius: 6, border: "none", background: "#fdecea", color: "#e53935", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
           >
             삭제
@@ -483,6 +484,7 @@ function DbTableDetailPageInner() {
               {/* ADD DDL */}
               <button
                 onClick={() => setDdlOpen(true)}
+                className="sp-badge"
                 style={ddlBtnStyle}
               >
                 ADD DDL
@@ -502,6 +504,7 @@ function DbTableDetailPageInner() {
               그대로 반영된다는 사실을 한 줄로 짧게 알린다. */}
           <div
             role="note"
+            className="sp-badge"
             style={{
               display: "flex", alignItems: "center", gap: 8,
               padding: "8px 12px", marginBottom: 10,

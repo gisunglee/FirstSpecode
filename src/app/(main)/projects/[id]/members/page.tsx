@@ -289,7 +289,7 @@ function MembersPageInner() {
                 {/* 역할 드롭다운 / 배지 */}
                 <div>
                   {roleDisabled ? (
-                    <span style={{
+                    <span className="sp-badge" style={{
                       display: "inline-block",
                       padding: "4px 12px",
                       borderRadius: 20,
@@ -601,10 +601,16 @@ function LeaveDialog({
     onError:   (err: Error) => toast.error(err.message),
   });
 
-  // 프로젝트 삭제 (OWNER 혼자)
+  // 프로젝트 삭제 (OWNER 혼자) — soft delete
+  // API 가 안전 토큰(confirm:'DELETE')을 요구하므로 본문에 함께 전송.
+  // (이중 보호: 모달 통과 + 본문 토큰)
   const deleteMutation = useMutation({
     mutationFn: () =>
-      authFetch(`/api/projects/${projectId}`, { method: "DELETE" }),
+      authFetch(`/api/projects/${projectId}`, {
+        method:  "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ confirm: "DELETE" }),
+      }),
     onSuccess: onLeft,
     onError:   (err: Error) => toast.error(err.message),
   });

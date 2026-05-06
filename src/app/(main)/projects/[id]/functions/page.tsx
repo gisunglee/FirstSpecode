@@ -493,7 +493,7 @@ function FunctionsPageInner() {
 
                   {/* 유형 배지 */}
                   <div>
-                    <span style={typeBadgeStyle(fn.type)}>{fn.type}</span>
+                    <span className="sp-badge" style={typeBadgeStyle(fn.type)}>{fn.type}</span>
                   </div>
 
                   {/* 복잡도 인라인 편집 (FID-00168) */}
@@ -512,6 +512,7 @@ function FunctionsPageInner() {
                       </select>
                     ) : (
                       <span
+                        className="sp-badge"
                         onClick={() => startEdit(fn.funcId, "complexity", fn.complexity)}
                         style={{ ...complexityBadgeStyle(fn.complexity), cursor: "pointer" }}
                         title="클릭하여 편집"
@@ -641,6 +642,7 @@ function AiDot({ label, taskInfo, onClick }: {
 
   return (
     <button
+      className="sp-badge"
       title={title}
       onClick={() => active && taskInfo && onClick(taskInfo.taskId)}
       style={{

@@ -187,7 +187,7 @@ function ConfigsInner() {
 
                   {/* 유형 */}
                   <div>
-                    <span style={{
+                    <span className="sp-badge" style={{
                       fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 3,
                       background: "#f5f5f5", color: "#666",
                     }}>
@@ -198,7 +198,7 @@ function ConfigsInner() {
                   {/* 설정 값 — 읽기 전용 */}
                   <div style={{ fontSize: 12, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.value}>
                     {item.valueType === "BOOLEAN" ? (
-                      <span style={{
+                      <span className="sp-badge" style={{
                         display: "inline-block", padding: "2px 10px", borderRadius: 10, fontSize: 11, fontWeight: 700,
                         ...(item.value === "Y"
                           ? { background: "#e8f5e9", color: "#2e7d32" }
@@ -419,6 +419,7 @@ function EditConfigModal({ projectId, item, onClose, onSaved }: {
               {item.valueType === "BOOLEAN" ? (
                 <button
                   type="button"
+                  className="sp-badge"
                   onClick={() => setValue(value === "Y" ? "N" : "Y")}
                   style={{
                     display: "block", width: "100%", padding: "7px 12px", borderRadius: 6,

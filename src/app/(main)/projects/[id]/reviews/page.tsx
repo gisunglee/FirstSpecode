@@ -165,13 +165,13 @@ function ReviewsPageInner() {
 
                   {/* 상태 배지 + 피드백 + 별점 (가로 배치) */}
                   <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 5 }}>
-                    <span style={{ whiteSpace: "nowrap", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, background: st.bg, color: st.color }}>
+                    <span className="sp-badge" style={{ whiteSpace: "nowrap", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, background: st.bg, color: st.color }}>
                       {st.label}
                     </span>
                     {item.fdbkCode && (() => {
                       const fb = FDBK_MAP[item.fdbkCode!];
                       return fb ? (
-                        <span style={{ whiteSpace: "nowrap", padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600, background: fb.bg, color: fb.color }}>
+                        <span className="sp-badge" style={{ whiteSpace: "nowrap", padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600, background: fb.bg, color: fb.color }}>
                           {fb.label}
                         </span>
                       ) : null;
