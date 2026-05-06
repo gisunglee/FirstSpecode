@@ -36,8 +36,9 @@
 * **`tb_cm_progress`** (진척 현황)
   * `progrs_id` (v36, PK) / `ref_tbl_nm` (v50) / `ref_id` (v36, Unique)
   * `analy_rt`, `design_rt`, `impl_rt`, `test_rt` (i, 0~100)
-* **`tb_cm_reference_info`** (참조 정보)
-  * `ref_info_id` (t, PK) / `ref_info_code` (v6) / `ref_bgng_de` (v8)
+* **`tb_cm_standard_info`** (기준 정보 — 시스템 운영의 기준값 lookup)
+  * `std_info_id` (t, PK) / `std_info_code` (v6) / `std_bgng_de` (v8)
+  * 명명 이력: 2026-05-05 reference_info / ref_* → standard_info / std_* 통일
 
 ## 3. 프로젝트 관리 (Project)
 * **`tb_pj_project`** (프로젝트)

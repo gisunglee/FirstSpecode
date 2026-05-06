@@ -110,7 +110,7 @@
 기능 **정상 동작** 중 (`ROLES.EDIT` 에 MEMBER 포함되어 VIEWER 차단 보장).
 **보안 허점 없음**. 단 직무·플랜 규칙은 못 씀 — 필요 시 자연 교체.
 
-주요 잔존 영역: `ai-tasks` 본체 + 액션(retry/cancel/reject) / `areas·functions·requirements/files·ai·excalidraw·inline` / `reference-info` / `baseline` / `planning/bulk-import` / `design/bulk-import` / `phase-progress` / `col-mappings` / `impl-tree` / `*/sort` 11종 / `tasks/[taskId]/copy` / `reviews/[reviewId]` 본체 등
+주요 잔존 영역: `ai-tasks` 본체 + 액션(retry/cancel/reject) / `areas·functions·requirements/files·ai·excalidraw·inline` / `standard-info` / `baseline` / `planning/bulk-import` / `design/bulk-import` / `phase-progress` / `col-mappings` / `impl-tree` / `*/sort` 11종 / `tasks/[taskId]/copy` / `reviews/[reviewId]` 본체 등
 
 ### ⚪ 가드 최소
 

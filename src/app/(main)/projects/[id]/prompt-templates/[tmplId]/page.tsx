@@ -147,24 +147,26 @@ function PromptTemplateDetailPageInner() {
   );
 
   const { isSystemAdmin, isLoading: isSysAdminLoading } = useIsSystemAdmin();
-  // 신규 등록 모드(detail 없음)에서도 권한 판정이 필요하므로
-  // detail?.myRole 대신 별도 훅으로 역할 조회 (기존 상세 모드에선 동일 캐시 사용)
-  const { myRole: currentProjectRole, isLoading: isRoleLoading } = useMyRole(projectId);
-  const isProjectAdmin = currentProjectRole === "OWNER" || currentProjectRole === "ADMIN";
+  // 신규 등록 모드(detail 없음)에서도 권한 판정이 필요하므로 별도 훅으로 조회
+  const { myRole: currentProjectRole, myJob: currentProjectJob, isLoading: isRoleLoading } = useMyRole(projectId);
+  // OWNER/ADMIN 또는 PM/PL 이면 프로젝트 사본 편집·복사·생성 가능
+  const isProjectEditor =
+    currentProjectRole === "OWNER" || currentProjectRole === "ADMIN" ||
+    currentProjectJob  === "PM"    || currentProjectJob  === "PL";
   const isPermissionLoading = isSysAdminLoading || isRoleLoading;
 
-  // 편집 가능 여부:
-  //   - 신규 등록(isNew) → OWNER/ADMIN 또는 SUPER_ADMIN 만 편집 가능 (권한 없으면 읽기 전용)
-  //   - DEFAULT 행  → SUPER_ADMIN 만 편집 가능
-  //   - 프로젝트 복사본 → 프로젝트 OWNER/ADMIN 만 편집 가능
-  //   - 그 외(일반 멤버/뷰어) → 읽기 전용
+  // 편집 가능 여부 (2026-05-06 정책 변경):
+  //   - DEFAULT 양식은 일반 페이지에서 **누구도** 편집 불가 (SUPER_ADMIN 도 차단).
+  //     SUPER_ADMIN 은 /admin/prompt-templates 전용 페이지에서만 편집한다.
+  //   - 신규 등록(isNew) → OWNER/ADMIN/PM/PL 또는 SUPER_ADMIN 만 (프로젝트 사본 생성)
+  //   - 프로젝트 복사본 → OWNER/ADMIN 또는 PM/PL 만 편집 가능
+  //   - 그 외 → 읽기 전용
   const readOnly = isNew
-    ? !(isProjectAdmin || isSystemAdmin)
-    : (isDefault ? !isSystemAdmin : !isProjectAdmin);
+    ? !(isProjectEditor || isSystemAdmin)
+    : (isDefault ? true : !isProjectEditor);
 
-  // "이 템플릿 복사" 버튼 노출 — OWNER/ADMIN 또는 SUPER_ADMIN 만
-  //   (POST 도 동일 역할만 허용하므로 서버와 UI 일치)
-  const canCopy = isProjectAdmin || isSystemAdmin;
+  // "이 템플릿 복사" 버튼 노출 — 편집 권한자 또는 SUPER_ADMIN
+  const canCopy = isProjectEditor || isSystemAdmin;
 
   // ── 저장 뮤테이션 ──────────────────────────────────────────────────────────────
   const saveMutation = useMutation({
@@ -260,7 +262,7 @@ function PromptTemplateDetailPageInner() {
   //  리스트의 "신규 등록" 버튼은 OWNER/ADMIN 이상에게만 노출되지만
   //  URL 을 직접 타이핑해 도달하는 경우에 대비. 서버도 POST 에서 403 으로 차단함.
   //  권한 훅이 아직 로딩 중이면 판정 보류(플리커 방지).
-  if (isNew && !isPermissionLoading && !isProjectAdmin && !isSystemAdmin) {
+  if (isNew && !isPermissionLoading && !isProjectEditor && !isSystemAdmin) {
     return (
       <div style={{ padding: "40px 32px" }}>
         <div style={{
@@ -274,8 +276,8 @@ function PromptTemplateDetailPageInner() {
             권한이 없습니다
           </h2>
           <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-            프롬프트 템플릿 생성은 프로젝트 관리자(OWNER/ADMIN)만 가능합니다.
-            필요한 경우 프로젝트 관리자에게 요청하거나 기존 템플릿을 복사해서 사용하세요.
+            프롬프트 템플릿 생성은 프로젝트 관리자(OWNER/ADMIN) 또는 PM/PL 만 가능합니다.
+            필요한 경우 책임자에게 요청하거나 기존 템플릿을 복사해서 사용하세요.
           </p>
           <button
             onClick={() => router.push(`/projects/${projectId}/prompt-templates`)}
@@ -355,15 +357,11 @@ function PromptTemplateDetailPageInner() {
                     }}>
                       DEFAULT
                     </span>
-                    {readOnly ? (
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-error)" }}>
-                        시스템 관리자만 수정 가능
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-warning)" }}>
-                        시스템 관리자 편집 모드
-                      </span>
-                    )}
+                    {/* 일반 페이지에서는 DEFAULT 가 항상 read-only.
+                        SUPER_ADMIN 의 편집은 /admin/prompt-templates 에서. */}
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-error)" }}>
+                      읽기 전용 (수정은 시스템 관리자 페이지에서)
+                    </span>
                   </div>
                 ) : <div />}
                 {/* 복사 버튼 — OWNER/ADMIN 또는 SUPER_ADMIN 만 */}
@@ -378,8 +376,9 @@ function PromptTemplateDetailPageInner() {
                 )}
               </div>
 
-              {/* SUPER_ADMIN 의 DEFAULT 편집 시 경고 배너 — prjct_id=null 이므로 전체 프로젝트 영향 */}
-              {isDefault && !readOnly && (
+              {/* DEFAULT 안내 — 일반 페이지에서는 항상 read-only.
+                  SUPER_ADMIN 도 여기서 편집 불가. /admin/prompt-templates 안내. */}
+              {isDefault && (
                 <div style={{
                   padding: "10px 14px", borderRadius: 6,
                   background: "var(--color-warning-subtle)",
@@ -388,9 +387,20 @@ function PromptTemplateDetailPageInner() {
                   color:      "var(--color-warning)",
                   lineHeight: 1.6,
                 }}>
-                  ⚠️ <strong>시스템 공통 템플릿</strong>을 수정하고 있습니다.
-                  변경 내용은 <strong>모든 프로젝트의 AI 요청</strong>에 즉시 적용됩니다.
-                  신중하게 수정해 주세요. 문제가 생기면 <strong>이 템플릿 복사</strong> 후 원본을 복원하세요.
+                  ⚠️ 이 템플릿은 <strong>시스템 공통 템플릿</strong>입니다.
+                  프로젝트 전용 템플릿이 필요하면 <strong>&ldquo;이 템플릿 복사&rdquo;</strong> 후 편집해 주세요.
+                  {isSystemAdmin && (
+                    <>
+                      {" "}시스템 관리자는{" "}
+                      <a
+                        href={`/admin/prompt-templates/${tmplId}`}
+                        style={{ color: "var(--color-warning)", fontWeight: 700, textDecoration: "underline" }}
+                      >
+                        시스템 관리 페이지
+                      </a>
+                      에서 직접 수정할 수 있습니다.
+                    </>
+                  )}
                 </div>
               )}
             </div>

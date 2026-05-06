@@ -219,23 +219,29 @@ function StandardGuideListInner() {
         </span>
       </div>
 
-      {/* ── 테이블 ── */}
-      {items.length === 0 ? (
-        <div style={{ padding: "60px 0", textAlign: "center", color: "var(--color-text-tertiary)", fontSize: 14 }}>
-          {search || category || useFilter ? "검색 결과가 없습니다." : "등록된 표준 가이드가 없습니다."}
-        </div>
-      ) : (
-        <div style={{ padding: "0 24px 24px" }}>
-          <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-            <div style={gridHeaderStyle}>
-              <div>카테고리</div>
-              <div>제목</div>
-              <div>사용여부</div>
-              <div>작성자</div>
-              <div>최근 수정일</div>
-            </div>
+      {/* ── 테이블 ──
+          데이터 0건이어도 테이블 구조(테두리 + 컬럼 헤더)는 항상 노출.
+          빈 상태는 데이터 영역에만 메시지로 표시 — 다른 목록 페이지와 동일한 표준 패턴 */}
+      <div style={{ padding: "0 24px 24px" }}>
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+          <div style={gridHeaderStyle}>
+            <div>카테고리</div>
+            <div>제목</div>
+            <div>사용여부</div>
+            <div>작성자</div>
+            <div>최근 수정일</div>
+          </div>
 
-            {items.map((g, idx) => {
+          {items.length === 0 ? (
+            // 빈 상태는 배경 없이 투명 — AI 태스크 목록 등 다른 페이지와 통일
+            <div style={{
+              padding: "60px 0", textAlign: "center",
+              color: "var(--color-text-tertiary)", fontSize: 14,
+            }}>
+              {search || category || useFilter ? "검색 결과가 없습니다." : "등록된 표준 가이드가 없습니다."}
+            </div>
+          ) : (
+            items.map((g, idx) => {
               // 서버에서 오는 category 값은 문자열이므로 badge 룩업 전에 narrow
               const cat = g.category as GuideCategory;
               const badge = GUIDE_CATEGORY_BADGE[cat];
@@ -315,10 +321,10 @@ function StandardGuideListInner() {
                   </div>
                 </div>
               );
-            })}
-          </div>
+            })
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

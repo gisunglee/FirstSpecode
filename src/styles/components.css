@@ -1077,3 +1077,33 @@ body {
 .sp-rich-editor .ProseMirror img.sp-editor-img.ProseMirror-selectednode {
   outline: 2px solid var(--color-brand);
 }
+
+/* ================================================================
+   FORM CONTROLS — 네이티브 화살표 제거 유틸리티
+   ----------------------------------------------------------------
+   <select> 와 <input list="..."> 의 브라우저 기본 indicator(▼) 를
+   제거해서 인라인 style 의 커스텀 chevron SVG 만 보이게 한다.
+
+   사용:
+     <select className="sp-no-native-arrow" style={{...chevron SVG bg...}}>
+     <input list="..." className="sp-no-native-arrow" style={{...}}>
+
+   브라우저별 indicator 제거 — 환경에 따라 다른 셀렉터가 매칭되므로 모두 적용.
+   !important 로 사용자 에이전트 스타일을 확실히 덮어쓴다.
+================================================================ */
+.sp-no-native-arrow::-webkit-calendar-picker-indicator {
+  display: none !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  pointer-events: none !important;
+}
+.sp-no-native-arrow::-webkit-list-button {
+  display: none !important;
+  -webkit-appearance: none !important;
+}
+.sp-no-native-arrow::-ms-expand {
+  display: none !important;
+}

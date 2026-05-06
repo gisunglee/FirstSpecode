@@ -99,12 +99,16 @@ function PromptTemplatesPageInner() {
   const qc           = useQueryClient();
   const projectId    = params.id as string;
 
-  // 권한 — DEFAULT 편집은 SUPER_ADMIN 만, 프로젝트 복사본 편집/삭제/복사는 OWNER/ADMIN 만
-  //   (SUPER_ADMIN 은 프로젝트 역할 관계없이 어디든 편집 가능 — hasPermission short-circuit)
+  // 권한:
+  //   - DEFAULT 편집은 SUPER_ADMIN 전용 (/admin/prompt-templates) — 일반 페이지에서는 보기만
+  //   - 프로젝트 사본 편집/삭제/복사는 OWNER/ADMIN 또는 PM/PL
+  //     (실무 책임자인 PM/PL 도 프롬프트 운영을 함께 담당)
   const { isSystemAdmin } = useIsSystemAdmin();
-  const { myRole } = useMyRole(projectId);
-  const isProjectAdmin = myRole === "OWNER" || myRole === "ADMIN";
-  const canCreateOrCopy = isSystemAdmin || isProjectAdmin;
+  const { myRole, myJob } = useMyRole(projectId);
+  const isProjectEditor =
+    myRole === "OWNER" || myRole === "ADMIN" ||
+    myJob === "PM"     || myJob === "PL";
+  const canCreateOrCopy = isSystemAdmin || isProjectEditor;
 
   const { setBreadcrumb } = useAppStore();
   useEffect(() => {
@@ -137,6 +141,9 @@ function PromptTemplatesPageInner() {
 
   // ── 삭제 확인 다이얼로그 ──────────────────────────────────────────────────────
   const [deleteTarget, setDeleteTarget] = useState<{ tmplId: string; tmplNm: string } | null>(null);
+
+  // 페이지 도움말
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // ── 데이터 조회 ───────────────────────────────────────────────────────────────
   // 탭은 항상 도메인 파라미터로 서버에 전달 — 서버에서 ref_ty_code 기준으로 분류한 결과만 반환
@@ -177,8 +184,9 @@ function PromptTemplatesPageInner() {
         background: "var(--color-bg-card)",
         borderBottom: "1px solid var(--color-border)",
       }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           프롬프트 관리
+          <HelpIcon onClick={() => setHelpOpen(true)} />
         </div>
         {/* 신규 등록 — OWNER/ADMIN 또는 SUPER_ADMIN 만. 나머지는 버튼 자체 노출 X */}
         {canCreateOrCopy && (
@@ -439,24 +447,25 @@ function PromptTemplatesPageInner() {
                     {row.mdfcnDt.slice(0, 10)}
                   </span>
 
-                  {/* 액션 — DEFAULT(공통/기본): SUPER_ADMIN 만 편집·삭제
-                             프로젝트 복사본:    OWNER/ADMIN 만 편집·삭제
-                             그 외:              버튼 자체 비노출 (서버도 403 으로 차단) */}
+                  {/* 액션 — 2026-05-06 정책 변경:
+                       DEFAULT(공통/기본): 누구나 "보기" 만 (SUPER_ADMIN 도 일반 페이지에서는 편집 불가
+                                          → /admin/prompt-templates 사용)
+                       프로젝트 복사본:    OWNER/ADMIN 또는 PM/PL 만 편집·삭제
+                       그 외:              "보기" 버튼만 */}
                   <div style={{ display: "flex", gap: 4 }} onClick={(e) => e.stopPropagation()}>
                     {(() => {
                       const rowIsDefault = isDefault || row.isSystem;
-                      const canEditThisRow = rowIsDefault ? isSystemAdmin : isProjectAdmin;
-                      if (!canEditThisRow) return null;
+                      const canEditThisRow = !rowIsDefault && isProjectEditor;
                       return (
                         <>
                           <button
                             onClick={() => router.push(`/projects/${projectId}/prompt-templates/${row.tmplId}`)}
                             style={secondarySmallBtnStyle}
                           >
-                            편집
+                            {canEditThisRow ? "편집" : "보기"}
                           </button>
-                          {/* DEFAULT 는 삭제 금지 (SUPER_ADMIN 도 seed 관리 경로로만 삭제) */}
-                          {!rowIsDefault && (
+                          {/* 삭제는 프로젝트 복사본 + 편집권자만. DEFAULT 는 절대 불가. */}
+                          {!rowIsDefault && isProjectEditor && (
                             <button
                               onClick={() => setDeleteTarget({ tmplId: row.tmplId, tmplNm: row.tmplNm })}
                               style={dangerSmallBtnStyle}
@@ -474,6 +483,42 @@ function PromptTemplatesPageInner() {
           )}
         </div>
       </div>
+
+      {/* ── 페이지 도움말 다이얼로그 ── */}
+      {helpOpen && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 1200,
+            background: "var(--color-bg-overlay)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+          onClick={() => setHelpOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "var(--color-bg-card)",
+              borderRadius: 12, padding: "24px 28px",
+              minWidth: 480, maxWidth: 600,
+              boxShadow: "var(--shadow-lg)",
+              color: "var(--color-text-primary)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <span style={{ fontSize: 15, fontWeight: 700 }}>프롬프트 관리란?</span>
+              <button
+                onClick={() => setHelpOpen(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.8, whiteSpace: "pre-line" }}>
+              {PROMPT_TEMPLATES_HELP}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 삭제 확인 다이얼로그 ── */}
       {deleteTarget && (
@@ -597,3 +642,46 @@ const filterSelectStyle: React.CSSProperties = {
   backgroundPosition: "right 10px center",
   minWidth:           120,
 };
+
+// ── 도움말 아이콘 ────────────────────────────────────────────────────────────
+
+function HelpIcon({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      title="도움말"
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: 16, height: 16, borderRadius: "50%",
+        border: "1.5px solid var(--color-text-secondary)",
+        background: "transparent", color: "var(--color-text-secondary)",
+        fontSize: 10, fontWeight: 700, cursor: "pointer", padding: 0, lineHeight: 1,
+      }}
+    >
+      ?
+    </button>
+  );
+}
+
+// ── 도움말 본문 ──────────────────────────────────────────────────────────────
+
+const PROMPT_TEMPLATES_HELP = `프롬프트는 AI(LLM) 에게 보내는 지시문입니다.
+SPECODE 가 AI 호출을 만들 때 (작업유형 × 사용처) 조합으로 이 목록에서
+적절한 템플릿을 골라 시스템 메시지로 전달합니다.
+
+📌 어디에 쓰이나요?
+  • 단위업무 / 화면 / 영역 / 기능 상세 페이지의 [AI 작업] 버튼
+  • 기획실 산출물 생성 (대상 사용처 = PLAN_STUDIO_ARTF 인 항목들)
+  • 작업 유형(설계 / 명세 검토 / 영향도 분석 / 구현 / 테스트) 별로 다른 프롬프트 사용
+
+🔗 설계 양식과의 연관성
+  대부분의 프롬프트는 "이 양식대로 작성하라" 는 지시를 포함합니다.
+  설계 양식(/design-templates) 을 수정했다면, 같은 사용처의 프롬프트도 함께 점검·수정해
+  AI 가 새 양식을 따르도록 유지하세요.
+
+⚙️ 권한
+  • DEFAULT(공통/기본) 프롬프트: 스펙코드 시스템에서 최초 설정한 기본 내용이며 수정 불가능합니다.
+  • 프로젝트 전용 사본: OWNER / ADMIN / PM / PL 이 수정·삭제할 수 있습니다.
+  • 기존 템플릿을 기반으로 [복사] 하거나 [신규 등록] 으로 작성할 수 있고,
+    동일 (작업유형 × 사용처) 유형은 바로 시스템에 적용되니 추가/수정에 유의해 주세요.`;

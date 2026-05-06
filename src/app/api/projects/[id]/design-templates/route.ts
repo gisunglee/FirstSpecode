@@ -94,12 +94,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const gate = await requirePermission(request, projectId, "content.create");
   if (gate instanceof Response) return gate;
 
-  // 프로젝트 역할 가드 — OWNER/ADMIN 만 (SUPER_ADMIN 은 위 hasPermission 에서 통과)
+  // 프로젝트 역할·직무 가드 — OWNER/ADMIN 또는 PM/PL 만 (SUPER_ADMIN 은 위 hasPermission 에서 통과).
+  // 양식·프롬프트는 프로젝트 운영 자산이라 일반 MEMBER 가 가볍게 만들면 안 되지만,
+  // PM/PL 은 실무 책임자라 OWNER/ADMIN 과 동일 권한을 부여한다.
   if (gate.systemRole !== "SUPER_ADMIN"
-    && gate.role !== "OWNER" && gate.role !== "ADMIN") {
+    && gate.role !== "OWNER" && gate.role !== "ADMIN"
+    && gate.job !== "PM"   && gate.job !== "PL") {
     return apiError(
-      "FORBIDDEN_PROJECT_ADMIN_REQUIRED",
-      "프로젝트 관리자(OWNER/ADMIN)만 설계 양식을 생성/복사할 수 있습니다.",
+      "FORBIDDEN_PROJECT_ADMIN_OR_PM_REQUIRED",
+      "프로젝트 관리자(OWNER/ADMIN) 또는 PM/PL 만 설계 양식을 생성/복사할 수 있습니다.",
       403
     );
   }

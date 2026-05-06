@@ -271,7 +271,16 @@
       "Bash(curl -s -X POST http://localhost:3000/api/mcp -H 'Authorization: Bearer spk_d1109b1d68ecd24e2ac9234e01b77ad52af175d38e24f28c0ed1b94d94155c55' -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}')",
       "Bash(curl -s -X POST http://localhost:3000/api/mcp -H 'Authorization: Bearer spk_d1109b1d68ecd24e2ac9234e01b77ad52af175d38e24f28c0ed1b94d94155c55' -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":99,\"method\":\"tools/call\",\"params\":{\"name\":\"delete_task\",\"arguments\":{\"projectId\":\"bbba8058-a48f-4dfb-a586-71e2d87be7a4\",\"taskId\":\"deadbeef\"}}}')",
       "Bash(curl -s -X POST http://localhost:3000/api/mcp -H 'Authorization: Bearer spk_d1109b1d68ecd24e2ac9234e01b77ad52af175d38e24f28c0ed1b94d94155c55' -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"get_task\",\"arguments\":{\"projectId\":\"bbba8058-a48f-4dfb-a586-71e2d87be7a4\",\"taskId\":\"a0a31e8e-0d15-448a-b1bd-206bf70c2948\"}}}')",
-      "Bash(curl -s -X POST http://localhost:3000/api/mcp -H 'Authorization: Bearer spk_d1109b1d68ecd24e2ac9234e01b77ad52af175d38e24f28c0ed1b94d94155c55' -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_task\",\"arguments\":{\"projectId\":\"bbba8058-a48f-4dfb-a586-71e2d87be7a4\",\"taskId\":\"a0a31e8e-0d15-448a-b1bd-206bf70c2948\",\"name\":\"이메일 회원가입\",\"category\":\"NEW_DEV\",\"definition\":\"123\",\"content\":\"<p>23123</p>\",\"outputInfo\":\"123\"}}}')"
+      "Bash(curl -s -X POST http://localhost:3000/api/mcp -H 'Authorization: Bearer spk_d1109b1d68ecd24e2ac9234e01b77ad52af175d38e24f28c0ed1b94d94155c55' -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_task\",\"arguments\":{\"projectId\":\"bbba8058-a48f-4dfb-a586-71e2d87be7a4\",\"taskId\":\"a0a31e8e-0d15-448a-b1bd-206bf70c2948\",\"name\":\"이메일 회원가입\",\"category\":\"NEW_DEV\",\"definition\":\"123\",\"content\":\"<p>23123</p>\",\"outputInfo\":\"123\"}}}')",
+      "Bash(node scripts/check-tmpl.mjs)",
+      "PowerShell(Get-Process -Name node -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Force)",
+      "Bash(awk 'NR<433 || NR>695' \"src/app/\\(main\\)/projects/[id]/configs/page.tsx\")",
+      "Bash(mv /tmp/configs_page_new.tsx \"src/app/\\(main\\)/projects/[id]/configs/page.tsx\")",
+      "Bash(npm view *)",
+      "Bash(cat)",
+      "Bash(node scripts/p0-smoke.mjs)",
+      "Bash(rm scripts/p0-smoke.mjs)"
     ]
   }
 }

@@ -81,12 +81,15 @@ function DesignTemplatesPageInner() {
   const projectId = params.id as string;
 
   // 권한 (프롬프트 관리와 동일 패턴):
-  //   - DEFAULT (공통/기본) 편집은 SUPER_ADMIN 만
-  //   - 프로젝트 복사본 편집/삭제/복사는 OWNER/ADMIN 만
+  //   - DEFAULT(공통/기본) 편집은 SUPER_ADMIN 전용 (/admin/design-templates)
+  //   - 프로젝트 복사본 편집/삭제/복사는 OWNER/ADMIN 또는 PM/PL
+  //     (실무 책임자인 PM/PL 도 양식 운영 담당. 일반 MEMBER 는 보기만)
   const { isSystemAdmin } = useIsSystemAdmin();
-  const { myRole } = useMyRole(projectId);
-  const isProjectAdmin = myRole === "OWNER" || myRole === "ADMIN";
-  const canCreateOrCopy = isSystemAdmin || isProjectAdmin;
+  const { myRole, myJob } = useMyRole(projectId);
+  const isProjectEditor =
+    myRole === "OWNER" || myRole === "ADMIN" ||
+    myJob === "PM"     || myJob === "PL";
+  const canCreateOrCopy = isSystemAdmin || isProjectEditor;
 
   const { setBreadcrumb } = useAppStore();
   useEffect(() => {
@@ -103,6 +106,9 @@ function DesignTemplatesPageInner() {
 
   // ── 삭제 확인 다이얼로그 ───────────────────────────────────────────────────
   const [deleteTarget, setDeleteTarget] = useState<{ dsgnTmplId: string; tmplNm: string } | null>(null);
+
+  // ── 페이지 도움말 다이얼로그 ──────────────────────────────────────────────
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // ── 데이터 조회 ────────────────────────────────────────────────────────────
   const queryParams = new URLSearchParams();
@@ -142,8 +148,9 @@ function DesignTemplatesPageInner() {
         borderBottom: "1px solid var(--color-border)",
         marginBottom: 16,
       }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           설계 양식
+          <HelpIcon onClick={() => setHelpOpen(true)} />
         </div>
         {/* 신규 등록 — OWNER/ADMIN 또는 SUPER_ADMIN 만 */}
         {canCreateOrCopy && (
@@ -348,13 +355,15 @@ function DesignTemplatesPageInner() {
                     {row.mdfcnDt.slice(0, 10)}
                   </span>
 
-                  {/* 액션 — DEFAULT(공통/기본): SUPER_ADMIN 만 편집, 삭제 불가
-                             프로젝트 복사본:    OWNER/ADMIN 만 편집·삭제
-                             그 외:              "보기" 버튼만 */}
+                  {/* 액션 — 2026-05-06 정책 변경:
+                       DEFAULT(공통/기본): 누구나 "보기" 만 (SUPER_ADMIN 도 일반 페이지에서는 편집 불가
+                                          → /admin/design-templates 사용)
+                       프로젝트 복사본:    OWNER/ADMIN 또는 PM/PL 만 편집·삭제
+                       그 외:              "보기" 버튼만 */}
                   <div style={{ display: "flex", gap: 4 }} onClick={(e) => e.stopPropagation()}>
                     {(() => {
                       const rowIsDefault = isDefault || row.isSystem;
-                      const canEditThisRow = rowIsDefault ? isSystemAdmin : isProjectAdmin;
+                      const canEditThisRow = !rowIsDefault && isProjectEditor;
                       return (
                         <>
                           <button
@@ -363,8 +372,8 @@ function DesignTemplatesPageInner() {
                           >
                             {canEditThisRow ? "편집" : "보기"}
                           </button>
-                          {/* 삭제는 프로젝트 복사본 + OWNER/ADMIN 만. DEFAULT 는 절대 불가. */}
-                          {!rowIsDefault && isProjectAdmin && (
+                          {/* 삭제는 프로젝트 복사본 + 편집권자만. DEFAULT 는 절대 불가. */}
+                          {!rowIsDefault && isProjectEditor && (
                             <button
                               onClick={() => setDeleteTarget({ dsgnTmplId: row.dsgnTmplId, tmplNm: row.tmplNm })}
                               style={dangerSmallBtnStyle}
@@ -382,6 +391,42 @@ function DesignTemplatesPageInner() {
           )}
         </div>
       </div>
+
+      {/* ── 페이지 도움말 다이얼로그 ── */}
+      {helpOpen && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 1200,
+            background: "var(--color-bg-overlay)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+          onClick={() => setHelpOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "var(--color-bg-card)",
+              borderRadius: 12, padding: "24px 28px",
+              minWidth: 480, maxWidth: 600,
+              boxShadow: "var(--shadow-lg)",
+              color: "var(--color-text-primary)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <span style={{ fontSize: 15, fontWeight: 700 }}>설계 양식이란?</span>
+              <button
+                onClick={() => setHelpOpen(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.8, whiteSpace: "pre-line" }}>
+              {DESIGN_TEMPLATES_HELP}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 삭제 확인 다이얼로그 ── */}
       {deleteTarget && (
@@ -472,3 +517,54 @@ const filterSelectStyle: React.CSSProperties = {
   backgroundPosition: "right 10px center",
   minWidth:           140,
 };
+
+// ── 도움말 아이콘 ────────────────────────────────────────────────────────────
+// 다른 화면(screens 등) 의 HelpIcon 과 동일한 모양·동작.
+
+function HelpIcon({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      title="도움말"
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: 16, height: 16, borderRadius: "50%",
+        border: "1.5px solid var(--color-text-secondary)",
+        background: "transparent", color: "var(--color-text-secondary)",
+        fontSize: 10, fontWeight: 700, cursor: "pointer", padding: 0, lineHeight: 1,
+      }}
+    >
+      ?
+    </button>
+  );
+}
+
+// ── 도움말 본문 ──────────────────────────────────────────────────────────────
+// 사용자가 "이 양식이 어디에 쓰이는지" 한 번에 파악할 수 있도록 작성.
+// 프롬프트 관리와의 연관성도 명시 — 양식만 고치고 프롬프트가 옛 양식을 가정하면
+// AI 결과 품질이 떨어질 수 있어 함께 점검하도록 안내.
+
+const DESIGN_TEMPLATES_HELP = `설계 양식은 단위업무·화면·영역·기능 등 5계층 상세 페이지의
+"예시" 버튼과 "템플릿 삽입" 버튼이 가져오는 마크다운 본문입니다.
+
+📌 어디에 쓰이나요?
+  • 단위업무 / 화면 / 영역 / 기능 상세 페이지의 설명 에디터 우측 상단
+  • [예시] 버튼  → example_cn 본문이 팝업으로 표시
+  • [템플릿 삽입] 버튼 → template_cn 본문이 에디터에 그대로 삽입
+
+이 양식을 통해 모든 사람이 같은 구조로 설계를 작성할 수 있어
+AI가 일관된 형식으로 결과를 생성하고, 검토자도 빠르게 읽을 수 있습니다.
+
+🔗 프롬프트 관리와의 연관성
+  AI 프롬프트(/prompt-templates) 가 "이 양식대로 작성하라" 는 지시를 포함하는 경우가 많습니다.
+  양식을 수정하면 그 양식을 참조하는 프롬프트도 함께 점검·수정해야
+  AI 결과 품질이 유지됩니다. 상세 페이지의 우측 카드에서 같은 대상 계층을 쓰는
+  프롬프트 목록을 확인할 수 있습니다.
+
+⚙️ 권한
+  • DEFAULT(공통/기본) 양식: 스펙코드 시스템에서 최초 설정한 기본 내용이며 수정 불가능합니다.
+  • 프로젝트 전용 사본: OWNER / ADMIN / PM / PL 이 수정·삭제할 수 있습니다.
+  • 기존 양식을 기반으로 [복사] 하거나 [신규 등록] 으로 작성할 수 있고,
+    동일 (대상 계층) 유형은 바로 시스템에 적용되니 추가/수정에 유의해 주세요.`;
+

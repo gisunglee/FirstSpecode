@@ -82,16 +82,16 @@ export default function LNB() {
         key: "project",
         label: "프로젝트",
         icon: "g_project",
-        // 라벨은 그룹 이름("프로젝트")과 중복되는 접두사를 뗌 — "프로젝트 목록" → "목록"
+        // 풀 라벨로 표기 — 그룹명("프로젝트")과 중복되더라도 의미가 명확해야 한다는 사용자 피드백 반영.
         // "개인 설정" / "MCP 키" 는 GNB 우상단 아바타 드롭다운에서 진입 → LNB 에서는 제거
         // "환경설정" 은 도구 메타 설정 성격이라 "스펙설정" 그룹으로 이동
         items: [
-          { label: "목록", href: "/projects", icon: "i_projectList" },
+          { label: "프로젝트 목록", href: "/projects", icon: "i_projectList" },
           ...(canAccessSettings && pBase
-            ? [{ label: "설정", href: p("/settings"), icon: "i_projectSettings" as MenuIconKey }]
+            ? [{ label: "프로젝트 설정", href: p("/settings"), icon: "i_projectSettings" as MenuIconKey }]
             : []),
           ...(canManageMembers && pBase
-            ? [{ label: "멤버", href: p("/members"), icon: "i_members" as MenuIconKey }]
+            ? [{ label: "프로젝트 멤버", href: p("/members"), icon: "i_members" as MenuIconKey }]
             : []),
         ],
       },
@@ -130,7 +130,7 @@ export default function LNB() {
         items: [
           { label: "표준 가이드", href: p("/standard-guides"), icon: "i_standardGuide" },
           { label: "공통코드",    href: p("/common-codes"),    icon: "i_commonCode" },
-          { label: "기준 정보",   href: p("/reference-info"),  icon: "i_referenceInfo" },
+          { label: "기준 정보",   href: p("/standard-info"),   icon: "i_referenceInfo" },
         ],
       },
       {
@@ -188,6 +188,9 @@ export default function LNB() {
               { label: "사용자",          href: "/admin/users",             icon: "i_members" as MenuIconKey },
               { label: "프로젝트",        href: "/admin/projects",          icon: "i_projectList" as MenuIconKey },
               { label: "환경설정 템플릿", href: "/admin/config-templates",  icon: "i_envSettings" as MenuIconKey },
+              // DEFAULT 양식·프롬프트 — 모든 프로젝트의 AI 흐름에 영향 → SUPER_ADMIN 전용 페이지에서만 편집
+              { label: "설계 양식",       href: "/admin/design-templates",  icon: "i_designTemplate" as MenuIconKey },
+              { label: "프롬프트 관리",   href: "/admin/prompt-templates",  icon: "i_promptTemplate" as MenuIconKey },
               { label: "감사 로그",       href: "/admin/audit",             icon: "i_changeLog" as MenuIconKey },
             ],
           }]

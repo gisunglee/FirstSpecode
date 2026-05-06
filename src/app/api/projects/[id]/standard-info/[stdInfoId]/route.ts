@@ -26,6 +26,7 @@
  *   - 2026-05-05 전역 → 프로젝트 단위 (prjct_id NOT NULL) 전환
  *   - 2026-05-05 requireAuth+checkRole → requirePermission 으로 표준화
  *   - 2026-05-05 isToggle 판별 강화 (단일키 검사로 오판 차단)
+ *   - 2026-05-05 bus_div_code(고정 6종) → biz_ctgry_nm(자유 텍스트 100자) 전환
  */
 
 import { NextRequest } from "next/server";
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       stdBgngDe:     r.std_bgng_de,
       stdEndDe:      r.std_end_de,
       stdInfoNm:     r.std_info_nm,
-      busDivCode:    r.biz_ctgry_nm,
+      bizCtgryNm:    r.biz_ctgry_nm,
       stdDataTyCode: r.std_data_ty_code,
       mainStdVal:    r.main_std_val,
       subStdVal:     r.sub_std_val,
@@ -88,10 +89,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
   const {
     stdInfoCode, stdBgngDe, stdEndDe, stdInfoNm,
-    busDivCode, stdDataTyCode, mainStdVal, subStdVal, stdInfoDc, useYn,
+    bizCtgryNm, stdDataTyCode, mainStdVal, subStdVal, stdInfoDc, useYn,
   } = body as {
     stdInfoCode?: string; stdBgngDe?: string; stdEndDe?: string;
-    stdInfoNm?: string; busDivCode?: string; stdDataTyCode?: string;
+    stdInfoNm?: string; bizCtgryNm?: string; stdDataTyCode?: string;
     mainStdVal?: string; subStdVal?: string; stdInfoDc?: string; useYn?: string;
   };
 
@@ -139,7 +140,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             std_bgng_de:      bgngDe!,
             std_end_de:       stdEndDe !== undefined ? endDe : existing.std_end_de,
             std_info_nm:      stdInfoNm!.trim(),
-            biz_ctgry_nm:     busDivCode?.trim() || existing.biz_ctgry_nm,
+            biz_ctgry_nm:     bizCtgryNm?.trim() || existing.biz_ctgry_nm,
             std_data_ty_code: stdDataTyCode?.trim() || existing.std_data_ty_code,
             main_std_val:     mainStdVal !== undefined ? (mainStdVal?.trim() || null) : existing.main_std_val,
             sub_std_val:      subStdVal !== undefined ? (subStdVal?.trim() || null) : existing.sub_std_val,

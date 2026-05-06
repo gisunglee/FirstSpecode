@@ -182,13 +182,54 @@ model TbPjProject {
   creat_mber_id   String?
   creat_dt        DateTime                @default(now())
   mdfcn_dt        DateTime?
+
+  // ── Soft delete (2026-05-06 도입) ───────────────────────────────────────
+  // OWNER 가 DELETE 를 호출하면 즉시 삭제하지 않고 다음 4개 컬럼이 세팅된다.
+  //   - del_yn        : 'Y' = 삭제 예정, 'N' = 사용 중
+  //   - del_dt        : 삭제 요청 시각
+  //   - del_mber_id   : 삭제를 요청한 OWNER (감사 추적)
+  //   - hard_del_dt   : 실제 hard delete 가 수행될 예정 시각
+  //                     (= del_dt + 보관기간; 기본 14일, TbSysConfigTemplate 으로 조정)
+  // hard_del_dt 가 지난 행은 별도 배치(project-hard-delete)가 일괄 정리한다.
+  // 보관 기간 동안 OWNER 는 복구(restore) 가능, SUPER_ADMIN 은 항상 조회 가능.
+  del_yn          String                  @default("N") @db.Char(1)
+  del_dt          DateTime?
+  del_mber_id     String?
+  hard_del_dt     DateTime?
   planStudios     TbDsPlanStudio[]
   apiKeys         TbPjProjectApiKey[]
   invitations     TbPjProjectInvitation[]
   members         TbPjProjectMember[]
   settings        TbPjProjectSettings?
   settingsHistory TbPjSettingsHistory[]
+  standardInfos   TbCmStandardInfo[]
+  // 2026-05-06 P1 — 핵심 도메인 6개 CASCADE
+  unitWorks       TbDsUnitWork[]
+  screens         TbDsScreen[]
+  areas           TbDsArea[]
+  functions       TbDsFunction[]
+  tasks           TbRqTask[]
+  requirements    TbRqRequirement[]
+  // 2026-05-06 P2 — 부가 도메인 15개 CASCADE
+  projectConfigs  TbPjProjectConfig[]
+  removalNotices  TbPjMemberRemovalNotice[]
+  designChanges   TbDsDesignChange[]
+  documentReleases TbDsDocumentRelease[]
+  dbTables        TbDsDbTable[]
+  dbTableRevisions TbDsDbTableRevision[]
+  progresses      TbCmProgress[]
+  aiTasks         TbAiTask[]
+  attachFiles     TbCmAttachFile[]
+  baselineSnapshots TbRqBaselineSnapshot[]
+  reviewRequests  tb_ds_review_request[]
+  codeGroups      TbCmCodeGroup[]
+  codes           TbCmCode[]
+  memos           TbDsMemo[]
+  stdGuides       TbSgStdGuide[]
 
+  // 배치(project-hard-delete) 가 매일 스캔하는 인덱스
+  // (del_yn='Y' AND hard_del_dt <= now()) 조건을 빠르게 추리기 위함
+  @@index([del_yn, hard_del_dt], map: "tb_pj_project_soft_del_idx")
   @@map("tb_pj_project")
 }
 
@@ -228,7 +269,10 @@ model TbPjProjectInvitation {
   expiry_dt       DateTime
   accept_dt       DateTime?
   cancel_dt       DateTime?
-  project         TbPjProject @relation(fields: [prjct_id], references: [prjct_id])
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 핫픽스 — 누락된 CASCADE 보강)
+  // 이전에는 RESTRICT 였기 때문에, 초대 이력이 한 건이라도 있으면 프로젝트
+  // DELETE 가 FK 위반으로 실패했음.
+  project         TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_pj_project_invitation_prjct_fk")
 
   @@map("tb_pj_project_invitation")
 }
@@ -289,6 +333,9 @@ model TbPjProjectConfig {
   creat_dt       DateTime  @default(now())
   mdfcn_dt       DateTime?
 
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
+  project        TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_pj_project_config_prjct_fk")
+
   @@unique([prjct_id, config_key], map: "tb_pj_project_config_uk")
   @@index([prjct_id, config_group], map: "tb_pj_project_config_grp_idx")
   @@map("tb_pj_project_config")
@@ -302,7 +349,8 @@ model TbPjProjectApiKey {
   mask_key_val  String
   creat_dt      DateTime    @default(now())
   mdfcn_dt      DateTime?
-  project       TbPjProject @relation(fields: [prjct_id], references: [prjct_id])
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 핫픽스 — 누락된 CASCADE 보강)
+  project       TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_pj_project_api_key_prjct_fk")
 
   @@map("tb_pj_project_api_key")
 }
@@ -316,7 +364,10 @@ model TbPjSettingsHistory {
   aftr_val_cn String?
   chg_dt      DateTime    @default(now())
   member      TbCmMember  @relation(fields: [chg_mber_id], references: [mber_id])
-  project     TbPjProject @relation(fields: [prjct_id], references: [prjct_id])
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 핫픽스 — 누락된 CASCADE 보강)
+  // 본 테이블은 프로젝트 PUT 마다 행이 누적되므로, 변경이 한 번이라도
+  // 있었던 모든 프로젝트는 이전 코드로 삭제 자체가 불가능했음.
+  project     TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_pj_settings_history_prjct_fk")
 
   @@map("tb_pj_settings_history")
 }
@@ -330,6 +381,8 @@ model TbPjMemberRemovalNotice {
   cnfrm_dt  DateTime?
   creat_dt  DateTime   @default(now())
   member    TbCmMember @relation(fields: [mber_id], references: [mber_id])
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
+  project   TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_pj_member_removal_notice_prjct_fk")
 
   @@map("tb_pj_member_removal_notice")
 }
@@ -346,6 +399,9 @@ model TbDsDesignChange {
   chg_mber_id   String?
   chg_dt        DateTime @default(now())
   chg_type_code String   @default("UPDATE")
+
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
+  project       TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_design_change_prjct_fk")
 
   @@map("tb_ds_design_change")
 }
@@ -386,6 +442,9 @@ model TbDsDocumentRelease {
   snapshot_data   Json     // 발행 시점의 양식 입력 객체 (이전 버전 다운로드 시 그대로 복원)
   released_dt     DateTime @default(now())
 
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
+  project         TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_document_release_prjct_fk")
+
   // Word 출력 시 "이 산출물의 발행 이력 전체" 조회가 자주 발생 → 복합 인덱스
   @@index([prjct_id, doc_kind, ref_id], map: "tb_ds_doc_release_target_idx")
   @@map("tb_ds_document_release")
@@ -408,6 +467,8 @@ model TbDsUnitWork {
   coment_cn            String?
   screens              TbDsScreen[]
   requirement          TbRqRequirement @relation(fields: [req_id], references: [req_id])
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 보강)
+  project              TbPjProject     @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_unit_work_prjct_fk")
 
   @@index([prjct_id], map: "tb_ds_unit_work_prjct_idx")
   @@map("tb_ds_unit_work")
@@ -434,6 +495,8 @@ model TbDsScreen {
   coment_cn       String?
   areas           TbDsArea[]
   unitWork        TbDsUnitWork? @relation(fields: [unit_work_id], references: [unit_work_id])
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 보강)
+  project         TbPjProject   @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_screen_prjct_fk")
 
   @@index([prjct_id], map: "tb_ds_screen_prjct_idx")
   @@map("tb_ds_screen")
@@ -461,6 +524,8 @@ model TbDsArea {
   coment_cn         String?
   screen            TbDsScreen?    @relation(fields: [scrn_id], references: [scrn_id])
   functions         TbDsFunction[]
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 보강)
+  project           TbPjProject    @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_area_prjct_fk")
 
   @@index([prjct_id], map: "tb_ds_area_prjct_idx")
   @@map("tb_ds_area")
@@ -484,7 +549,9 @@ model TbDsFunction {
   impl_bgng_de    String?
   impl_end_de     String?
   coment_cn       String?
-  area            TbDsArea? @relation(fields: [area_id], references: [area_id])
+  area            TbDsArea?   @relation(fields: [area_id], references: [area_id])
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 보강)
+  project         TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_function_prjct_fk")
 
   @@index([prjct_id], map: "tb_ds_function_prjct_idx")
   @@map("tb_ds_function")
@@ -501,6 +568,8 @@ model TbDsDbTable {
   mdfcn_mber_id String?
   mdfcn_dt      DateTime?           @db.Timestamp(3)
   columns       TbDsDbTableColumn[]
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
+  project       TbPjProject         @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_db_table_prjct_fk")
 
   @@index([prjct_id], map: "tb_ds_db_table_prjct_idx")
   @@map("tb_ds_db_table")
@@ -518,7 +587,8 @@ model TbDsDbTableColumn {
   creat_dt      DateTime    @default(now())
   mdfcn_mber_id String?
   mdfcn_dt      DateTime?   @db.Timestamp(3)
-  table         TbDsDbTable @relation(fields: [tbl_id], references: [tbl_id])
+  // 부모 테이블 삭제 시 컬럼도 함께 정리 (2026-05-06 보강 — 프로젝트 cascade 호환)
+  table         TbDsDbTable @relation(fields: [tbl_id], references: [tbl_id], onDelete: Cascade)
 
   @@map("tb_ds_db_table_column")
 }
@@ -538,6 +608,9 @@ model TbDsDbTableRevision {
   snapshot_data Json // diff 스냅샷
   chg_mber_id   String?
   chg_dt        DateTime @default(now())
+
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
+  project       TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_db_table_revision_prjct_fk")
 
   @@index([tbl_id, chg_dt(sort: Desc)], map: "idx_db_tbl_rev_tbl")
   @@index([prjct_id, chg_dt(sort: Desc)], map: "idx_db_tbl_rev_prjct")
@@ -573,6 +646,9 @@ model TbCmProgress {
   mdfcn_mber_id String?  @db.VarChar(36)
   mdfcn_dt      DateTime @default(now()) @db.Timestamp(6)
 
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
+  project       TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_cm_progress_prjct_fk")
+
   @@unique([ref_tbl_nm, ref_id], map: "uk_cm_progress_ref")
   @@map("tb_cm_progress")
 }
@@ -597,6 +673,9 @@ model TbAiTask {
   compl_dt          DateTime?
   apply_dt          DateTime?
   implSnapshots     TbSpImplSnapshot[]
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
+  // 자식인 tb_sp_impl_snapshot 은 ai_task FK 가 이미 CASCADE 라 자동 따라 정리됨
+  project           TbPjProject        @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ai_task_prjct_fk")
 
   @@map("tb_ai_task")
 }
@@ -616,6 +695,8 @@ model TbRqTask {
   creat_dt        DateTime          @default(now())
   mdfcn_dt        DateTime?
   requirements    TbRqRequirement[]
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 보강)
+  project         TbPjProject       @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_rq_task_prjct_fk")
 
   @@index([prjct_id], map: "tb_rq_task_prjct_idx")
   @@map("tb_rq_task")
@@ -641,6 +722,8 @@ model TbRqRequirement {
   unitWorks      TbDsUnitWork[]
   task           TbRqTask?       @relation(fields: [task_id], references: [task_id])
   userStories    TbRqUserStory[]
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 보강)
+  project        TbPjProject     @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_rq_requirement_prjct_fk")
 
   @@index([prjct_id], map: "tb_rq_requirement_prjct_idx")
   @@map("tb_rq_requirement")
@@ -689,6 +772,10 @@ model TbCmAttachFile {
   creat_dt       DateTime @default(now())
   req_ref_yn     String?
 
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
+  // 주의: DB 행만 정리됨. 디스크의 file_path_nm 물리 파일은 별도 cleanup 필요.
+  project        TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_cm_attach_file_prjct_fk")
+
   @@map("tb_cm_attach_file")
 }
 
@@ -714,6 +801,9 @@ model TbRqBaselineSnapshot {
   snapshot_data Json
   cnfrm_mber_id String?
   cnfrm_dt      DateTime @default(now())
+
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
+  project       TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_rq_baseline_snapshot_prjct_fk")
 
   @@map("tb_rq_baseline_snapshot")
 }
@@ -806,23 +896,33 @@ model tb_ds_review_request {
   stsf_scr          Int?
   fdbk_code         String?   @db.VarChar(20)
 
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
+  project           TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_review_request_prjct_fk")
+
   @@index([prjct_id, creat_dt(sort: Desc)], map: "idx_ds_review_prjct")
   @@index([ref_tbl_nm, ref_id], map: "idx_ds_review_ref")
   @@index([req_mber_id, review_sttus_code], map: "idx_ds_review_req_mber")
   @@index([revwr_mber_id, review_sttus_code], map: "idx_ds_review_revwr")
 }
 
-model TbCmReferenceInfo {
-  ref_info_id      String    @id @default(uuid())
-  ref_info_code    String    @db.VarChar(6)
-  ref_bgng_de      String    @db.VarChar(8)
-  ref_end_de       String?   @db.VarChar(8)
-  ref_info_nm      String    @db.VarChar(200)
-  bus_div_code     String    @db.VarChar(6)
-  ref_data_ty_code String    @db.VarChar(6)
-  main_ref_val     String?   @db.VarChar(30)
-  sub_ref_val      String?   @db.VarChar(30)
-  ref_info_dc      String?
+// ── 기준 정보 (standard info) — 프로젝트별 기준값 lookup 테이블 ───────────
+// 이전 명칭은 tb_cm_reference_info / ref_* 였으나 화면 라벨("기준 정보")과의
+// 의미 정합성을 위해 standard_info / std_* 로 통일 (2026-05-05 마이그레이션).
+// 같은 날 prjct_id 추가 — 프로젝트마다 다른 기준 운영을 위해 전역 → 프로젝트 단위.
+model TbCmStandardInfo {
+  std_info_id      String    @id @default(uuid())
+  prjct_id         String
+  std_info_code    String    @db.VarChar(6)
+  std_bgng_de      String    @db.VarChar(8)
+  std_end_de       String?   @db.VarChar(8)
+  std_info_nm      String    @db.VarChar(200)
+  // 업무 카테고리명 — 프로젝트별 자유 텍스트(예: "회원", "예산서", "배치").
+  // 이전엔 bus_div_code(고정 6종)였으나 프로젝트마다 분류 기준이 달라 자유 텍스트로 전환.
+  biz_ctgry_nm     String    @db.VarChar(100)
+  std_data_ty_code String    @db.VarChar(6)
+  main_std_val     String?   @db.VarChar(30)
+  sub_std_val      String?   @db.VarChar(30)
+  std_info_dc      String?
   use_yn           String    @default("Y") @db.Char(1)
   del_yn           String    @default("N") @db.Char(1)
   creat_mber_id    String?
@@ -830,20 +930,27 @@ model TbCmReferenceInfo {
   mdfcn_mber_id    String?
   mdfcn_dt         DateTime?
 
-  @@unique([ref_info_code, ref_bgng_de])
-  @@map("tb_cm_reference_info")
+  // 프로젝트 삭제 시 해당 프로젝트의 기준 정보도 함께 정리
+  project          TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade)
+
+  @@unique([prjct_id, std_info_code, std_bgng_de], map: "tb_cm_standard_info_prjct_std_code_bgng_key")
+  @@index([prjct_id], map: "tb_cm_standard_info_prjct_id_idx")
+  @@map("tb_cm_standard_info")
 }
 
 model TbCmCodeGroup {
-  grp_code    String     @db.VarChar(100)
-  grp_code_nm String     @db.VarChar(100)
-  grp_code_dc String?    @db.VarChar(4000)
-  use_yn      String     @default("Y") @db.Char(1)
-  creat_dt    DateTime   @default(now())
-  mdfcn_dt    DateTime   @default(now())
-  grp_code_id Int        @id @default(autoincrement())
-  prjct_id    String     @db.VarChar(36)
+  grp_code    String      @db.VarChar(100)
+  grp_code_nm String      @db.VarChar(100)
+  grp_code_dc String?     @db.VarChar(4000)
+  use_yn      String      @default("Y") @db.Char(1)
+  creat_dt    DateTime    @default(now())
+  mdfcn_dt    DateTime    @default(now())
+  grp_code_id Int         @id @default(autoincrement())
+  prjct_id    String      @db.VarChar(36)
   codes       TbCmCode[]
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
+  // 자식 tb_cm_code 는 grp_code_id FK 가 이미 CASCADE 라 자동 따라 정리됨
+  project     TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_cm_code_group_prjct_fk")
 
   @@unique([prjct_id, grp_code])
   @@unique([prjct_id, grp_code_nm])
@@ -863,6 +970,9 @@ model TbCmCode {
   prjct_id    String        @db.VarChar(36)
   grp_code_id Int
   group       TbCmCodeGroup @relation(fields: [grp_code_id], references: [grp_code_id], onDelete: Cascade)
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
+  // group cascade 와 중복돼 보이지만 양쪽 다 삭제 경로를 보장 (직접 prjct_id 컬럼이 있어 무결성 보호)
+  project     TbPjProject   @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_cm_code_prjct_fk")
 
   @@unique([grp_code_id, cm_code])
   @@index([prjct_id])
@@ -991,6 +1101,9 @@ model TbDsMemo {
   mdfr_mber_id  String?
   mdfcn_dt      DateTime?
 
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
+  project       TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_memo_prjct_fk")
+
   @@index([prjct_id, creat_dt(sort: Desc)], map: "tb_ds_memo_prjct_dt_idx")
   @@index([prjct_id, ref_ty_code, ref_id], map: "tb_ds_memo_ref_idx")
   @@map("tb_ds_memo")
@@ -1013,6 +1126,9 @@ model TbSgStdGuide {
   creat_dt          DateTime  @default(now())
   mdfr_mber_id      String?
   mdfcn_dt          DateTime?
+
+  // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
+  project           TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_sg_std_guide_prjct_fk")
 
   @@index([prjct_id, use_yn, mdfcn_dt(sort: Desc), creat_dt(sort: Desc)], map: "tb_sg_std_guide_prjct_dt_idx")
   @@index([prjct_id, guide_ctgry_code, use_yn],                          map: "tb_sg_std_guide_ctgry_idx")

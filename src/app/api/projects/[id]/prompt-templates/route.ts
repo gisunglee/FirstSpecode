@@ -28,6 +28,17 @@ const TASK_TYPE_PLAN_STUDIO = "PLAN_STUDIO_ARTF_GENERATE";
 const VALID_DIV_CODES = Object.keys(ARTF_DIV);  // ["IA", "JOURNEY", "FLOW", "MOCKUP", "ERD", "PROCESS"]
 const VALID_FMT_CODES = Object.keys(ARTF_FMT);  // ["MD", "MERMAID", "HTML"]
 
+// 시스템 프롬프트 미리보기 — 200자 절단. 본문이 짧으면 그대로 반환.
+// AI 요청 팝업의 "전달 내용" 박스에서 살짝 노출용 (전체 본문은 프롬프트 관리 화면에서 봄).
+const SYS_PROMPT_PREVIEW_LEN = 200;
+function buildSysPromptPreview(raw: string | null): string {
+  if (!raw) return "";
+  const trimmed = raw.trim();
+  return trimmed.length > SYS_PROMPT_PREVIEW_LEN
+    ? trimmed.slice(0, SYS_PROMPT_PREVIEW_LEN) + "…"
+    : trimmed;
+}
+
 // ── GET: 목록 조회 ────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
@@ -43,24 +54,34 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const useYnFilter  = url.searchParams.get("useYn")     ?? null;
   // 도메인 탭 필터 (general / plan-studio) — 잘못된 값은 무시(null) 후 전체 반환
   const domain       = parsePromptDomain(url.searchParams.get("domain"));
-  // 기획실 탭 전용 — 산출물 구분(IA/JOURNEY/...) 으로 좁히기. domain 미지정이면 무시.
+  // 기획실 탭 전용 — (구분 × 형식) 매트릭스로 좁히기. domain 미지정이면 무시.
   const divCodeFilter = url.searchParams.get("divCode") ?? null;
+  const fmtCodeFilter = url.searchParams.get("fmtCode") ?? null;
 
   try {
     const templates = await prisma.tbAiPromptTemplate.findMany({
       where: {
-        // 해당 프로젝트 + 시스템 공통(prjct_id=null) 모두 포함
-        OR: [
-          { prjct_id: projectId },
-          { prjct_id: null },
+        // 프로젝트 OR + 도메인 OR 두 개를 AND 로 묶음.
+        // 단순 스프레드(...)로 합치면 두 번째 `OR` 키가 첫 번째 `OR` 키를 덮어써
+        // **다른 프로젝트의 템플릿이 노출되는 데이터 누출 버그**가 발생한다.
+        // (예: domain='general' 일 때 buildPromptDomainWhere 의 OR 가 프로젝트 OR 를 침식)
+        AND: [
+          // ① 해당 프로젝트 + 시스템 공통(prjct_id=null) 만 노출
+          {
+            OR: [
+              { prjct_id: projectId },
+              { prjct_id: null },
+            ],
+          },
+          // ② 도메인(일반/기획실) 분류는 lib 헬퍼에서 일원화 — 서버·클라이언트 정의 일치 보장
+          buildPromptDomainWhere(domain),
         ],
         ...(taskTyCode  ? { task_ty_code: taskTyCode }  : {}),
         ...(refTyCode   ? { ref_ty_code:  refTyCode }   : {}),
         ...(useYnFilter ? { use_yn:       useYnFilter } : {}),
-        // 도메인 분류는 lib 헬퍼에서 일원화 — 서버·클라이언트 정의 일치 보장
-        ...buildPromptDomainWhere(domain),
-        // 기획실 도메인일 때만 div_code 필터 의미 있음 — 일반 도메인에는 div_code 가 NULL
+        // 기획실 도메인일 때만 div_code/fmt_code 필터 의미 있음 — 일반 도메인에는 둘 다 NULL
         ...(domain === "plan-studio" && divCodeFilter ? { div_code: divCodeFilter } : {}),
+        ...(domain === "plan-studio" && fmtCodeFilter ? { fmt_code: fmtCodeFilter } : {}),
       },
       orderBy: [
         { sort_ordr: "asc" },
@@ -80,6 +101,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         divCode:      t.div_code      ?? null,
         fmtCode:      t.fmt_code      ?? null,
         tmplDc:       t.tmpl_dc       ?? "",
+        // 시스템 프롬프트 짧은 미리보기 — AI 요청 팝업의 "전달 내용" 박스에서 살짝 노출용.
+        // 본문 전체를 목록 응답에 박지 않는 것은 페이로드 비대화 방지 + 본문은 상세 페이지에서.
+        sysPromptPreview: buildSysPromptPreview(t.sys_prompt_cn),
         useYn:        t.use_yn,
         defaultYn:    t.default_yn,
         sortOrdr:     t.sort_ordr,
@@ -110,12 +134,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const gate = await requirePermission(request, projectId, "content.create");
   if (gate instanceof Response) return gate;
 
-  // 프로젝트 역할 가드 — OWNER/ADMIN 만 (SUPER_ADMIN 은 위 hasPermission 에서 통과)
+  // 프로젝트 역할·직무 가드 — OWNER/ADMIN 또는 PM/PL 만
+  // (SUPER_ADMIN 은 위 hasPermission 에서 통과)
   if (gate.systemRole !== "SUPER_ADMIN"
-    && gate.role !== "OWNER" && gate.role !== "ADMIN") {
+    && gate.role !== "OWNER" && gate.role !== "ADMIN"
+    && gate.job !== "PM"   && gate.job !== "PL") {
     return apiError(
-      "FORBIDDEN_PROJECT_ADMIN_REQUIRED",
-      "프로젝트 관리자(OWNER/ADMIN)만 템플릿을 생성/복사할 수 있습니다.",
+      "FORBIDDEN_PROJECT_ADMIN_OR_PM_REQUIRED",
+      "프로젝트 관리자(OWNER/ADMIN) 또는 PM/PL 만 템플릿을 생성/복사할 수 있습니다.",
       403
     );
   }

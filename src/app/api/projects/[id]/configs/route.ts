@@ -1,7 +1,14 @@
 /**
  * GET  /api/projects/[id]/configs — 환경설정 목록 (그룹별)
- * POST /api/projects/[id]/configs — 설정 항목 추가
  * PUT  /api/projects/[id]/configs — 설정값 일괄 저장
+ *
+ * [2026-05-06] POST(설정 항목 추가) 제거:
+ *   - 새 환경설정 항목은 SPECODE 자체 동작을 제어하는 키이므로 코드 변경과 짝을 이룬다
+ *     → 일반 프로젝트 멤버가 임의로 추가할 일이 없음.
+ *   - 시스템 관리자는 /admin/config-templates 에서 시스템 표준 템플릿으로 등록한다.
+ *     새 프로젝트는 생성 시 default_value='Y' 인 항목들을 자동 복사받는다
+ *     (POST /api/projects 의 sysTmpls 복사 로직).
+ *   - 기존 프로젝트에 이미 추가됐던 커스텀 항목은 보존됨 (PUT 으로 값 수정만 가능).
  */
 
 import { NextRequest } from "next/server";
@@ -51,72 +58,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/configs]`, err);
     return apiError("DB_ERROR", "환경설정 조회에 실패했습니다.", 500);
-  }
-}
-
-// ── POST: 설정 항목 추가 ────────────────────────────────────────────────────
-export async function POST(request: NextRequest, { params }: RouteParams) {
-  const { id: projectId } = await params;
-
-  const gate = await requirePermission(request, projectId, "config.manage");
-  if (gate instanceof Response) return gate;
-
-  let body: {
-    group?: string; key?: string; label?: string; description?: string;
-    valueType?: string; defaultValue?: string; selectOptions?: string[];
-  };
-  try {
-    body = await request.json();
-  } catch {
-    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
-  }
-
-  const key = body.key?.trim().toUpperCase();
-  if (!key) return apiError("VALIDATION_ERROR", "설정 키를 입력해 주세요.", 400);
-  if (!body.label?.trim()) return apiError("VALIDATION_ERROR", "설정명을 입력해 주세요.", 400);
-
-  const validTypes = ["BOOLEAN", "TEXT", "SELECT", "NUMBER"];
-  const valueType = body.valueType ?? "TEXT";
-  if (!validTypes.includes(valueType)) {
-    return apiError("VALIDATION_ERROR", `값 유형은 ${validTypes.join(", ")} 중 하나여야 합니다.`, 400);
-  }
-
-  try {
-    // 키 중복 확인
-    const existing = await prisma.tbPjProjectConfig.findUnique({
-      where: { prjct_id_config_key: { prjct_id: projectId, config_key: key } },
-    });
-    if (existing) return apiError("CONFLICT", "이미 존재하는 설정 키입니다.", 409);
-
-    // 정렬순서: 같은 그룹 내 마지막 + 1
-    const group = body.group?.trim() || "GENERAL";
-    const maxSort = await prisma.tbPjProjectConfig.findFirst({
-      where: { prjct_id: projectId, config_group: group },
-      orderBy: { sort_ordr: "desc" },
-      select: { sort_ordr: true },
-    });
-
-    const defaultValue = body.defaultValue?.trim() ?? "";
-
-    const config = await prisma.tbPjProjectConfig.create({
-      data: {
-        prjct_id:       projectId,
-        config_group:   group,
-        config_key:     key,
-        config_value:   defaultValue,
-        config_label:   body.label!.trim(),
-        config_dc:      body.description?.trim() ?? null,
-        value_type:     valueType,
-        default_value:  defaultValue,
-        select_options: body.selectOptions?.length ? body.selectOptions : undefined,
-        sort_ordr:      (maxSort?.sort_ordr ?? 0) + 1,
-      },
-    });
-
-    return apiSuccess({ configId: config.config_id }, 201);
-  } catch (err) {
-    console.error(`[POST /api/projects/${projectId}/configs]`, err);
-    return apiError("DB_ERROR", "설정 추가에 실패했습니다.", 500);
   }
 }
 

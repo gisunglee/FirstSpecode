@@ -465,8 +465,9 @@ function DbTablesPageInner() {
 // 물리 / 논리 / 설명 / 담당자 / 컬럼수 / 활용률 / 기능연결 / IO / 등록·수정일
 // 담당자: 이름 대부분이 짧고(닉네임/실명) ellipsis 처리되므로 80px 로 축소 — 좁은 화면에서 설명 영역 확보
 // 등록/수정일: YYYY-MM-DD(10자) 고정폭이라 90px 로 줄이고 center 정렬 — 우측 잔여 공백 제거
+// 물리/논리 테이블명: 긴 식별자(tb_ai_design_template 등)와 한글 논리명에 여유를 주기 위해 +20% 확장
 const GRID =
-  "minmax(160px,220px) minmax(120px,180px) 1fr 80px 72px 100px 80px 48px 90px";
+  "minmax(192px,264px) minmax(144px,216px) 1fr 80px 72px 100px 80px 48px 90px";
 
 const headerRowStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID,

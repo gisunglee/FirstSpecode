@@ -29,6 +29,8 @@ const TABS: TabDef[] = [
   { label: "사용자",          href: "/admin/users" },
   { label: "프로젝트",        href: "/admin/projects" },
   { label: "환경설정 템플릿", href: "/admin/config-templates" },
+  { label: "설계 양식",       href: "/admin/design-templates" },
+  { label: "프롬프트 관리",   href: "/admin/prompt-templates" },
   { label: "감사 로그",       href: "/admin/audit" },
 ];
 

@@ -22,6 +22,8 @@ import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "@/store/appStore";
 import { authFetch } from "@/lib/authFetch";
+import { usePermissions } from "@/hooks/useMyRole";
+import { ROLE_LABEL } from "@/lib/permissions";
 import type { ProjectOption } from "@/types/layout";
 
 /** GNB 프로필 드롭다운 표시용 — /api/member/profile GET 응답 중 사용하는 필드만 */
@@ -87,6 +89,12 @@ export default function GNB() {
   const avatarInitial = (myProfile?.name?.trim()?.[0]
     ?? myProfile?.email?.trim()?.[0]
     ?? "?").toUpperCase();
+
+  // 현재 프로젝트의 내 역할 — GNB 우측 식별 칩에 노출 ("이지성 · 소유자")
+  // 프로젝트 미선택이거나 멤버 아닌 상태면 myRole = null → 역할 부분 미노출
+  const { myRole } = usePermissions(currentProjectId);
+  const displayName = myProfile?.name?.trim() || myProfile?.email?.split("@")[0] || "";
+  const roleLabel   = myRole ? ROLE_LABEL[myRole] : null;
 
   // 전역 "내 담당" 모드 토글 — 낙관적 업데이트 + 서버 PATCH + 실패 시 롤백
   function toggleMyAssigneeMode() {
@@ -331,8 +339,60 @@ export default function GNB() {
         )}
       </div>
 
-      {/* 우측: 테마 스위처 + 유틸리티 */}
+      {/* 우측: 사용자 식별 칩 + 테마 스위처 + 유틸리티 */}
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        {/* 사용자 식별 칩 — "이지성 · 소유자" 형식.
+            아바타 hover/클릭 없이도 즉시 "내가 누구로 어느 역할인지" 인지 가능.
+            좁은 화면에서는 잘리지 않도록 max-width + ellipsis. 프로필 미로드 시 미노출. */}
+        {displayName && (
+          <div
+            title={`${displayName}${roleLabel ? ` · ${roleLabel}` : ""}${myProfile?.email ? `\n${myProfile.email}` : ""}`}
+            style={{
+              display:      "flex",
+              alignItems:   "center",
+              gap:          6,
+              padding:      "0 10px 0 8px",
+              marginRight:  4,
+              maxWidth:     220,
+              fontSize:     "var(--text-sm)",
+              color:        "var(--color-text-secondary)",
+              borderRight:  "1px solid var(--color-border)",
+              lineHeight:   1.2,
+              whiteSpace:   "nowrap",
+              overflow:     "hidden",
+            }}
+          >
+            <span
+              style={{
+                fontWeight:   500,
+                color:        "var(--color-text-primary)",
+                overflow:     "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {displayName}
+            </span>
+            {roleLabel && (
+              <>
+                <span style={{ color: "var(--color-text-tertiary)" }}>·</span>
+                <span
+                  style={{
+                    fontSize:   "var(--text-xs)",
+                    fontWeight: 600,
+                    padding:    "1px 6px",
+                    borderRadius: "var(--radius-sm)",
+                    background: "var(--color-brand-subtle)",
+                    color:      "var(--color-brand)",
+                    flexShrink: 0,
+                  }}
+                >
+                  {roleLabel}
+                </span>
+              </>
+            )}
+          </div>
+        )}
+
         {/* 테마 토글 버튼 */}
         <button
           className="sp-menu-item"

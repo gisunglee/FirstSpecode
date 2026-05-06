@@ -138,21 +138,25 @@ function DesignTemplateDetailPageInner() {
   const isDefaultOrSystem = isSystem || isDefault;
 
   const { isSystemAdmin, isLoading: isSysAdminLoading } = useIsSystemAdmin();
-  const { myRole: currentProjectRole, isLoading: isRoleLoading } = useMyRole(projectId);
-  const isProjectAdmin = currentProjectRole === "OWNER" || currentProjectRole === "ADMIN";
+  const { myRole: currentProjectRole, myJob: currentProjectJob, isLoading: isRoleLoading } = useMyRole(projectId);
+  // OWNER/ADMIN 또는 PM/PL 이면 프로젝트 사본 편집·복사·생성 가능
+  const isProjectEditor =
+    currentProjectRole === "OWNER" || currentProjectRole === "ADMIN" ||
+    currentProjectJob  === "PM"    || currentProjectJob  === "PL";
   const isPermissionLoading = isSysAdminLoading || isRoleLoading;
 
-  // 편집 가능 여부 (프롬프트 관리와 동일 패턴):
-  //   - 신규 등록(isNew) → OWNER/ADMIN 또는 SUPER_ADMIN 만 편집 가능
-  //   - DEFAULT 행  → SUPER_ADMIN 만 편집 가능
-  //   - 프로젝트 복사본 → 프로젝트 OWNER/ADMIN 만 편집 가능
-  //   - 그 외(일반 멤버/뷰어) → 읽기 전용
+  // 편집 가능 여부 (2026-05-06 정책 변경):
+  //   - DEFAULT 양식은 일반 페이지에서 **누구도** 편집 불가 (SUPER_ADMIN 도 차단).
+  //     SUPER_ADMIN 은 /admin/design-templates 전용 페이지에서만 편집한다.
+  //   - 신규 등록(isNew) → OWNER/ADMIN/PM/PL 또는 SUPER_ADMIN 만 (프로젝트 사본 생성)
+  //   - 프로젝트 복사본 → OWNER/ADMIN 또는 PM/PL 만 편집 가능
+  //   - 그 외 → 읽기 전용
   const readOnly = isNew
-    ? !(isProjectAdmin || isSystemAdmin)
-    : (isDefaultOrSystem ? !isSystemAdmin : !isProjectAdmin);
+    ? !(isProjectEditor || isSystemAdmin)
+    : (isDefaultOrSystem ? true : !isProjectEditor);
 
-  // "이 양식 복사" 버튼 노출 — OWNER/ADMIN 또는 SUPER_ADMIN 만
-  const canCopy = isProjectAdmin || isSystemAdmin;
+  // "이 양식 복사" 버튼 노출 — 편집 권한자 또는 SUPER_ADMIN
+  const canCopy = isProjectEditor || isSystemAdmin;
 
   // 저장
   const saveMutation = useMutation({
@@ -235,8 +239,8 @@ function DesignTemplateDetailPageInner() {
     return <div style={{ padding: "40px 32px", color: "var(--color-text-tertiary)" }}>로딩 중...</div>;
   }
 
-  // /new URL 직입 시 DEVELOPER 이하는 접근 차단 (서버도 POST 에서 403)
-  if (isNew && !isPermissionLoading && !isProjectAdmin && !isSystemAdmin) {
+  // /new URL 직입 시 권한 없는 사용자 접근 차단 (서버도 POST 에서 403)
+  if (isNew && !isPermissionLoading && !isProjectEditor && !isSystemAdmin) {
     return (
       <div style={{ padding: "40px 32px" }}>
         <div style={{
@@ -250,8 +254,8 @@ function DesignTemplateDetailPageInner() {
             권한이 없습니다
           </h2>
           <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-            설계 양식 생성은 프로젝트 관리자(OWNER/ADMIN)만 가능합니다.
-            필요한 경우 프로젝트 관리자에게 요청하거나 기존 양식을 복사해서 사용하세요.
+            설계 양식 생성은 프로젝트 관리자(OWNER/ADMIN) 또는 PM/PL 만 가능합니다.
+            필요한 경우 책임자에게 요청하거나 기존 양식을 복사해서 사용하세요.
           </p>
           <button
             onClick={() => router.push(`/projects/${projectId}/design-templates`)}
@@ -348,15 +352,11 @@ function DesignTemplateDetailPageInner() {
                         DEFAULT
                       </span>
                     )}
-                    {readOnly ? (
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-error)" }}>
-                        시스템 관리자만 수정 가능
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-warning)" }}>
-                        시스템 관리자 편집 모드
-                      </span>
-                    )}
+                    {/* 일반 페이지에서는 DEFAULT 가 항상 read-only.
+                        SUPER_ADMIN 의 편집은 /admin/design-templates 에서. */}
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-error)" }}>
+                      읽기 전용 (수정은 시스템 관리자 페이지에서)
+                    </span>
                   </div>
                 ) : <div />}
                 {/* 복사 버튼 — OWNER/ADMIN 또는 SUPER_ADMIN 만 */}
@@ -371,8 +371,9 @@ function DesignTemplateDetailPageInner() {
                 )}
               </div>
 
-              {/* DEFAULT 경고 배너 — 분기 */}
-              {isDefaultOrSystem && readOnly && (
+              {/* DEFAULT 안내 배너 — 일반 페이지에서는 항상 read-only.
+                  SUPER_ADMIN 도 여기서 편집 불가. /admin/design-templates 안내. */}
+              {isDefaultOrSystem && (
                 <div style={{
                   padding: "10px 14px", borderRadius: 6,
                   background: "var(--color-warning-subtle)",
@@ -381,25 +382,20 @@ function DesignTemplateDetailPageInner() {
                   color:      "var(--color-warning)",
                   lineHeight: 1.6,
                 }}>
-                  ⚠️ 이 양식은 <strong>{isSystem ? "시스템 공통" : "기본"} 양식</strong>이므로
-                  시스템 관리자만 수정할 수 있습니다.
+                  ⚠️ 이 양식은 <strong>{isSystem ? "시스템 공통" : "기본"} 양식</strong>입니다.
                   프로젝트 전용 양식이 필요하면 <strong>&ldquo;이 양식 복사&rdquo;</strong> 후 편집해 주세요.
-                </div>
-              )}
-              {/* SUPER_ADMIN 의 DEFAULT 편집 시 경고 — prjct_id=null 이면 전체 프로젝트 영향 */}
-              {isDefaultOrSystem && !readOnly && (
-                <div style={{
-                  padding: "10px 14px", borderRadius: 6,
-                  background: "var(--color-warning-subtle)",
-                  border:     "1px solid var(--color-warning-border)",
-                  fontSize:   13,
-                  color:      "var(--color-warning)",
-                  lineHeight: 1.6,
-                }}>
-                  ⚠️ <strong>{isSystem ? "시스템 공통" : "기본"} 양식</strong>을 수정하고 있습니다.
-                  변경 내용은 {isSystem ? <strong>모든 프로젝트</strong> : "이 프로젝트"} 의 해당 계층
-                  설계 예시/템플릿에 즉시 반영됩니다. 신중하게 수정해 주세요.
-                  문제가 생기면 <strong>&ldquo;이 양식 복사&rdquo;</strong> 후 원본을 복원하세요.
+                  {isSystemAdmin && (
+                    <>
+                      {" "}시스템 관리자는{" "}
+                      <Link
+                        href={`/admin/design-templates/${dsgnTmplId}`}
+                        style={{ color: "var(--color-warning)", fontWeight: 700, textDecoration: "underline" }}
+                      >
+                        시스템 관리 페이지
+                      </Link>
+                      에서 직접 수정할 수 있습니다.
+                    </>
+                  )}
                 </div>
               )}
             </div>

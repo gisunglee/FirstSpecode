@@ -1,6 +1,10 @@
 /**
  * PUT    /api/projects/[id]/configs/[configId] — 설정 항목 메타 수정
- * DELETE /api/projects/[id]/configs/[configId] — 설정 항목 삭제
+ *
+ * [2026-05-06] DELETE 제거:
+ *   - 환경설정 항목은 SPECODE 코드가 직접 참조하는 키이므로 임의 삭제 시 동작 깨짐.
+ *   - 항목 자체 폐기는 시스템 관리자가 /admin/config-templates 에서 use_yn=N 처리하거나
+ *     DB 직접 정리. 프로젝트 단위 UI 에서는 노출하지 않는다.
  */
 
 import { NextRequest } from "next/server";
@@ -71,26 +75,3 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const { id: projectId, configId } = await params;
-
-  const gate = await requirePermission(request, projectId, "config.manage");
-  if (gate instanceof Response) return gate;
-
-  try {
-    const config = await prisma.tbPjProjectConfig.findUnique({
-      where: { config_id: configId },
-    });
-
-    if (!config || config.prjct_id !== projectId) {
-      return apiError("NOT_FOUND", "설정 항목을 찾을 수 없습니다.", 404);
-    }
-
-    await prisma.tbPjProjectConfig.delete({ where: { config_id: configId } });
-
-    return apiSuccess({ deleted: true });
-  } catch (err) {
-    console.error(`[DELETE /api/projects/${projectId}/configs/${configId}]`, err);
-    return apiError("DB_ERROR", "설정 삭제에 실패했습니다.", 500);
-  }
-}

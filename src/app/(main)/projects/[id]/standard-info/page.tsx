@@ -8,25 +8,27 @@
  *   - 사용 여부(Y/N) 토글 즉시 전환
  *   - 행 클릭 → 상세 다이얼로그 → 수정/삭제
  *   - 신규 등록 → 추가 모달
- *   - 업무 구분 필터 + 키워드 검색
+ *   - 업무 카테고리 필터(현 프로젝트의 distinct 값) + 키워드 검색
  *
  * 주요 기술:
  *   - TanStack Query: 목록 useQuery, 토글/삭제 useMutation, 저장 후 invalidate
  *   - authFetch: 인증 헤더 자동 포함
  *   - 모든 색상은 semantic 토큰 (3테마 자동 대응)
+ *   - 카테고리 색상은 텍스트 해시 기반 자동 매핑 (운영자 입력 부담 0)
  *
  * 컴포넌트 분리:
  *   - StdInfoEditModal      : 추가/수정 모달
  *   - StdInfoDetailDialog   : 상세 조회 다이얼로그
- *   - _constants.ts         : 타입·BUS_DIV/DATA_TYPE 옵션·색상 매핑·날짜 헬퍼
+ *   - _constants.ts         : 타입·DATA_TYPE 옵션·카테고리 색상 헬퍼·날짜 헬퍼·distinct 추출
  *
  * 명명 이력:
  *   - 2026-05-05 reference-info / ref_* → standard-info / std_* 로 통일
  *   - 2026-05-05 전역 → 프로젝트 단위 (prjct_id NOT NULL) 전환
  *   - 2026-05-05 690줄 단일 파일 → page + 모달 2개 + _constants 분리
+ *   - 2026-05-05 bus_div_code(고정 6종) → biz_ctgry_nm(자유 텍스트) 전환
  */
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -34,11 +36,9 @@ import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import {
   type StdInfo,
-  BUS_DIV_OPTIONS,
-  BUS_DIV_LABEL,
   DATA_TYPE_LABEL,
-  BUS_DIV_COLOR,
-  FALLBACK_BUS_DIV_COLOR,
+  getCategoryColor,
+  distinctCategories,
   formatDate,
 } from "./_constants";
 import { StdInfoEditModal }    from "./_components/StdInfoEditModal";
@@ -68,12 +68,12 @@ function StandardInfoPageInner() {
   }, [setBreadcrumb]);
 
   // ── 화면 상태 ─────────────────────────────────────────────────────────────
-  const [search,       setSearch]       = useState("");
-  const [busFilter,    setBusFilter]    = useState("");
-  const [modalOpen,    setModalOpen]    = useState(false);
-  const [editTarget,   setEditTarget]   = useState<StdInfo | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<StdInfo | null>(null);
-  const [viewTarget,   setViewTarget]   = useState<StdInfo | null>(null);
+  const [search,          setSearch]          = useState("");
+  const [categoryFilter,  setCategoryFilter]  = useState("");  // 빈 문자열 = 전체
+  const [modalOpen,       setModalOpen]       = useState(false);
+  const [editTarget,      setEditTarget]      = useState<StdInfo | null>(null);
+  const [deleteTarget,    setDeleteTarget]    = useState<StdInfo | null>(null);
+  const [viewTarget,      setViewTarget]      = useState<StdInfo | null>(null);
 
   // ── 목록 조회 ─────────────────────────────────────────────────────────────
   const { data, isLoading } = useQuery<{ items: StdInfo[]; totalCount: number }>({
@@ -86,17 +86,22 @@ function StandardInfoPageInner() {
 
   const items = data?.items ?? [];
 
-  // 필터 적용 — 서버 페이지네이션은 아직 없음 (운영상 row 수가 많지 않을 것 가정)
+  // 카테고리 distinct — 필터 select 옵션 + 모달 datalist 양쪽에서 재사용
+  // useMemo: items 변경 시에만 재계산
+  const categories = useMemo(() => distinctCategories(items), [items]);
+
+  // 필터 적용 — 서버 페이지네이션은 아직 없음 (운영상 row 수 ~50건 수준 가정)
   const filtered = items.filter((item) => {
-    if (busFilter && item.busDivCode !== busFilter) return false;
+    if (categoryFilter && item.bizCtgryNm !== categoryFilter) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return (
       item.stdInfoCode.toLowerCase().includes(q) ||
       item.stdInfoNm.toLowerCase().includes(q) ||
-      (item.mainStdVal ?? "").toLowerCase().includes(q) ||
-      (item.subStdVal  ?? "").toLowerCase().includes(q) ||
-      (item.stdInfoDc  ?? "").toLowerCase().includes(q)
+      (item.bizCtgryNm  ?? "").toLowerCase().includes(q) ||
+      (item.mainStdVal  ?? "").toLowerCase().includes(q) ||
+      (item.subStdVal   ?? "").toLowerCase().includes(q) ||
+      (item.stdInfoDc   ?? "").toLowerCase().includes(q)
     );
   });
 
@@ -160,10 +165,16 @@ function StandardInfoPageInner() {
             placeholder="코드·명칭·값 검색..."
             style={searchInputStyle}
           />
-          <select value={busFilter} onChange={(e) => setBusFilter(e.target.value)} style={selectStyle}>
-            <option value="">업무 구분 전체</option>
-            {BUS_DIV_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+          {/* 업무 카테고리 필터 — 현재 프로젝트에 등록된 distinct 값으로만 옵션 구성.
+              데이터 0건이면 옵션이 "전체" 만 노출됨. */}
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            style={selectStyle}
+          >
+            <option value="">업무 카테고리 전체</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>{c}</option>
             ))}
           </select>
           <div style={{ flex: 1 }} />
@@ -172,15 +183,16 @@ function StandardInfoPageInner() {
 
         {/* ── 테이블 ── */}
         <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-          {/* 헤더 행 */}
+          {/* 헤더 행 — 8번째 <span /> 은 1fr spacer (GRID 정의와 짝) */}
           <div style={headerRowStyle}>
-            <span>업무 구분</span>
+            <span>업무 카테고리</span>
             <span>코드</span>
             <span>기준 정보 명</span>
             <span>유형</span>
             <span>주요 값</span>
             <span>보조 값</span>
             <span>기간</span>
+            <span aria-hidden />
             <span>사용</span>
           </div>
 
@@ -190,7 +202,7 @@ function StandardInfoPageInner() {
             </div>
           ) : filtered.length === 0 ? (
             <div style={{ padding: "64px 0", textAlign: "center", color: "var(--color-text-secondary)", fontSize: 14 }}>
-              {search || busFilter ? "검색 결과가 없습니다." : "기준 정보를 추가해 주세요."}
+              {search || categoryFilter ? "검색 결과가 없습니다." : "기준 정보를 추가해 주세요."}
             </div>
           ) : (
             filtered.map((item, idx) => (
@@ -214,6 +226,7 @@ function StandardInfoPageInner() {
         <StdInfoEditModal
           projectId={projectId}
           editTarget={editTarget}
+          existingCategories={categories}
           onClose={() => setModalOpen(false)}
           onSaved={() => {
             setModalOpen(false);
@@ -277,9 +290,9 @@ function DataRow({ item, isFirst, onClickRow, onToggle }: {
   onClickRow: () => void;
   onToggle:   () => void;
 }) {
-  const busColor = BUS_DIV_COLOR[item.busDivCode] ?? FALLBACK_BUS_DIV_COLOR;
-  const isActive = item.useYn === "Y";
-  const period   = formatDate(item.stdBgngDe) + (item.stdEndDe ? ` ~ ${formatDate(item.stdEndDe)}` : " ~");
+  const ctgryColor = getCategoryColor(item.bizCtgryNm);
+  const isActive   = item.useYn === "Y";
+  const period     = formatDate(item.stdBgngDe) + (item.stdEndDe ? ` ~ ${formatDate(item.stdEndDe)}` : " ~");
 
   return (
     <div
@@ -292,14 +305,15 @@ function DataRow({ item, isFirst, onClickRow, onToggle }: {
       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-table-hover)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-bg-card)")}
     >
-      {/* 업무 구분 */}
+      {/* 업무 카테고리 */}
       <span>
         <span style={{
           display: "inline-block", padding: "2px 8px", borderRadius: 12,
-          background: busColor.bg, color: busColor.text,
+          background: ctgryColor.bg, color: ctgryColor.text,
           fontSize: 11, fontWeight: 700,
+          maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>
-          {BUS_DIV_LABEL[item.busDivCode] ?? item.busDivCode}
+          {item.bizCtgryNm || "—"}
         </span>
       </span>
 
@@ -336,6 +350,9 @@ function DataRow({ item, isFirst, onClickRow, onToggle }: {
         {period}
       </span>
 
+      {/* 1fr spacer — GRID 8번째 컬럼. 사용 토글을 항상 우측 끝으로 밀어줌 */}
+      <span aria-hidden />
+
       {/* 사용 여부 토글 */}
       <span onClick={(e) => e.stopPropagation()}>
         <button
@@ -356,9 +373,18 @@ function DataRow({ item, isFirst, onClickRow, onToggle }: {
 
 // ── 스타일 (모두 토큰 사용) ──────────────────────────────────────────────────
 //
-// 그리드는 컬럼 8개 — 업무구분 / 코드 / 기준정보명 / 유형 / 주요값 / 보조값 / 기간 / 사용
+// 그리드는 컬럼 9개 — 카테고리 / 코드 / 기준정보명 / 유형 / 주요값 / 보조값 / 기간 / [spacer] / 사용
+//
+// 기준정보명은 minmax(220px, 420px) 로 cap — 데이터가 짧을 때 명 컬럼이 모든
+// 여유 공간을 흡수해 우측 컬럼들이 가운데로 몰리는 시각적 불균형을 막는다.
+// 8번째 1fr spacer 가 남는 공간을 흡수해 "사용" 토글이 항상 우측 끝에 위치.
+//
+// 기간(150px): "2026-05-06 ~ 9999-12-31" (23자) 가 딱 들어가는 폭. 그 외 컬럼은
+// 데이터 길이 대비 여유분을 가지도록 살짝 키워서 시각적 균형을 맞췄다.
+//
 // 컬럼 폭 변경 시 GRID 만 수정하면 헤더·행이 함께 따라간다.
-const GRID = "80px 70px 1fr 65px 80px 80px minmax(130px,160px) 70px";
+// 단, 컬럼 개수를 바꿀 때는 헤더·DataRow 양쪽에 <span/> 개수를 맞춰 줄 것.
+const GRID = "130px 100px minmax(220px,420px) 80px 100px 100px 150px 1fr 80px";
 
 const headerBarStyle: React.CSSProperties = {
   display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -408,7 +434,7 @@ const selectStyle: React.CSSProperties = {
   backgroundImage:    `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
   backgroundRepeat:   "no-repeat",
   backgroundPosition: "right 10px center",
-  minWidth:           140,
+  minWidth:           160,
 };
 
 const addBtnStyle: React.CSSProperties = {
@@ -454,17 +480,12 @@ const dialogStyle: React.CSSProperties = {
   color: "var(--color-text-primary)",
 };
 
-const primaryBtnStyle: React.CSSProperties = {
+const dangerBtnStyle: React.CSSProperties = {
   padding: "7px 20px", borderRadius: 6,
   border: "none",
-  background: "var(--color-brand)",
+  background: "var(--color-error)",
   color: "var(--color-text-inverse)",
   fontSize: 13, fontWeight: 600, cursor: "pointer",
-};
-
-const dangerBtnStyle: React.CSSProperties = {
-  ...primaryBtnStyle,
-  background: "var(--color-error)",
 };
 
 const secondaryBtnStyle: React.CSSProperties = {

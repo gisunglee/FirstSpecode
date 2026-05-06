@@ -27,6 +27,7 @@ import { authFetch } from "@/lib/authFetch";
 import { renderMarkdown } from "@/lib/renderMarkdown";
 import { ARTF_DIV, ARTF_FMT, DIV_BADGE_COLOR, AI_STATUS_BADGE } from "@/constants/planStudio";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
+import PlanStudioAIRequestPopup from "@/components/ui/PlanStudioAIRequestPopup";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -64,7 +65,8 @@ function DetailInner() {
   const [artfDivCode, setArtfDivCode] = useState("IA");
   const [artfFmtCode, setArtfFmtCode] = useState("MD");
   const [artfIdeaCn, setArtfIdeaCn] = useState("");
-  const [comentCn, setComentCn] = useState("");
+  // 코멘트(comentCn)는 본문 입력에서 제외됨 — AI 생성 팝업에서 일회성으로 입력받아
+  // tb_ai_task.coment_cn 에만 저장된다. (산출물 entity 의 coment_cn 컬럼은 호환을 위해 유지하되 신규 저장 안 함)
   const [artfCn, setArtfCn] = useState("");
   const [contexts, setContexts] = useState<ContextItem[]>([]);
   const [viewMode, setViewMode] = useState<"preview" | "edit">("preview");
@@ -81,6 +83,9 @@ function DetailInner() {
   const [reqDetailTab, setReqDetailTab] = useState<"current" | "spec" | "analysis">("current");
   // AI 태스크 상세 팝업
   const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
+  // AI 생성 요청 확인 팝업 — open 시 매칭 프롬프트 조회 + 코멘트/첨부 입력 후 generate API 호출
+  const [aiPopupOpen, setAiPopupOpen] = useState(false);
+  const [aiPopupReRequest, setAiPopupReRequest] = useState(false);
   // Full Size 뷰어 팝업
   const [fullSizeOpen, setFullSizeOpen] = useState(false);
   const [fullSizeMode, setFullSizeMode] = useState<"preview" | "edit">("preview");
@@ -108,7 +113,7 @@ function DetailInner() {
       setArtfDivCode(artfDetail.artfDivCode);
       setArtfFmtCode(artfDetail.artfFmtCode);
       setArtfIdeaCn(artfDetail.artfIdeaCn ?? "");
-      setComentCn(artfDetail.comentCn ?? "");
+      // artfDetail.comentCn 은 더 이상 본문에 노출하지 않음 (deprecated)
       setArtfCn(artfDetail.artfCn ?? "");
       setContexts(artfDetail.contexts);
     }
@@ -184,7 +189,7 @@ function DetailInner() {
   const saveMut = useMutation({
     mutationFn: () => {
       const body = {
-        artfNm, artfDivCode, artfFmtCode, artfIdeaCn, comentCn,
+        artfNm, artfDivCode, artfFmtCode, artfIdeaCn,
         artfCn: viewMode === "edit" ? artfCn : undefined,
         contexts: contexts.map((c, i) => ({ ctxtTyCode: c.ctxtTyCode, refId: c.refId, sortOrdr: i })),
       };
@@ -210,22 +215,31 @@ function DetailInner() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  // ── AI 생성 ──
-  const genMut = useMutation({
-    mutationFn: () => {
-      if (isNew || !selectedArtfId) { throw new Error("먼저 저장해 주세요."); }
-      return authFetch<{ data: { aiTaskId: string; taskSttusCode: string } }>(
-        `/api/projects/${projectId}/plan-studios/${planStudioId}/artifacts/${selectedArtfId}/generate`,
-        { method: "POST", body: JSON.stringify({ artfNm, artfDivCode, artfFmtCode, artfIdeaCn, comentCn, contexts: contexts.map((c, i) => ({ ctxtTyCode: c.ctxtTyCode, refId: c.refId, sortOrdr: i })) }) }
-      ).then((r) => r.data);
-    },
-    onSuccess: () => {
-      toast.success("AI 요청이 등록되었습니다. AI 태스크 목록에서 확인하세요.");
-      qc.invalidateQueries({ queryKey: ["plan-studio-detail", projectId, planStudioId] });
-      qc.invalidateQueries({ queryKey: ["artf-detail", projectId, planStudioId, selectedArtfId] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
+  // ── AI 생성 — 즉시 INSERT 가 아니라 PlanStudioAIRequestPopup 으로 위임 ──
+  // 팝업이 자체적으로 매칭 프롬프트 조회 + 코멘트·첨부 입력 + multipart 호출까지 담당.
+  // 페이지 측은 (1) PENDING/IN_PROGRESS 차단, (2) 팝업 open/close 토글, (3) 성공 시 캐시 무효화만.
+  function openAIRequestPopup() {
+    if (isNew || !selectedArtfId) { toast.error("먼저 저장해 주세요."); return; }
+    if (!artfNm.trim())            { toast.error("기획명을 입력해 주세요."); return; }
+
+    const currentArtf = artfList.find((a) => a.artfId === selectedArtfId);
+    const aiStatus    = currentArtf?.aiStatus;
+
+    // PENDING / IN_PROGRESS / PROCESSING 은 팝업 자체를 막음 (영역 패턴과 동일 정책).
+    if (aiStatus === "PENDING" || aiStatus === "IN_PROGRESS" || aiStatus === "PROCESSING") {
+      toast.error(`현재 AI 작업이 ${aiStatus === "PENDING" ? "대기 중" : "진행 중"}입니다.`);
+      return;
+    }
+
+    // 이미 한 번 처리된 후 재요청 — 팝업은 열되 헤더에 안내 표시
+    setAiPopupReRequest(!!currentArtf?.aiTaskId);
+    setAiPopupOpen(true);
+  }
+
+  function handleAIRequestSuccess() {
+    qc.invalidateQueries({ queryKey: ["plan-studio-detail", projectId, planStudioId] });
+    qc.invalidateQueries({ queryKey: ["artf-detail", projectId, planStudioId, selectedArtfId] });
+  }
 
   // ── 좋은 설계 토글 ──
   function toggleGood() {
@@ -270,7 +284,6 @@ function DetailInner() {
           setArtfDivCode("IA");
           setArtfFmtCode("MD");
           setArtfIdeaCn("");
-          setComentCn("");
           setArtfCn("");
           setContexts([]);
         }
@@ -339,21 +352,12 @@ function DetailInner() {
           <span style={{ fontSize: 11, color: "#999" }}>({studio.planStudioDisplayId})</span>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => {
-            if (isNew) { toast.error("먼저 저장하세요."); return; }
-            // 기존 AI 태스크 상태 확인
-            const currentArtf = artfList.find((a) => a.artfId === selectedArtfId);
-            const aiStatus = currentArtf?.aiStatus;
-            if (aiStatus === "PENDING" || aiStatus === "IN_PROGRESS" || aiStatus === "PROCESSING") {
-              if (!confirm(`현재 AI 작업이 ${aiStatus === "PENDING" ? "대기 중" : "진행 중"}입니다.\n그래도 다시 요청하시겠습니까?`)) return;
-            } else if (currentArtf?.aiTaskId) {
-              if (!confirm("이미 AI 요청 이력이 있습니다.\n저장 후 다시 요청하시겠습니까?")) return;
-            } else {
-              if (!confirm("저장 후 AI 요청하시겠습니까?")) return;
-            }
-            genMut.mutate();
-          }} disabled={genMut.isPending || isNew} style={primaryBtn}>
-            {genMut.isPending ? "AI 생성 중..." : "AI 생성"}
+          <button
+            onClick={openAIRequestPopup}
+            disabled={isNew}
+            style={primaryBtn}
+          >
+            AI 생성
           </button>
           <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending || !artfNm.trim()} style={primaryBtn}>
             {saveMut.isPending ? "저장 중..." : "저장"}
@@ -391,7 +395,7 @@ function DetailInner() {
             <button onClick={() => {
               setSelectedArtfId(null); setIsNew(true);
               setArtfNm(""); setArtfDivCode("IA"); setArtfFmtCode("MD");
-              setArtfIdeaCn(""); setComentCn(""); setArtfCn(""); setContexts([]);
+              setArtfIdeaCn(""); setArtfCn(""); setContexts([]);
               setTimeout(() => artfNmRef.current?.focus(), 100);
             }} style={primaryBtn}>
               + 새 기획
@@ -508,11 +512,10 @@ function DetailInner() {
             )}
           </div>
 
-          {/* AI 지시사항 — 카드 스타일 */}
-          <div style={{ background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 8, padding: "14px 16px" }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", display: "block", marginBottom: 4 }}>AI 지시사항 (comment)</span>
-            <textarea value={comentCn} onChange={(e) => setComentCn(e.target.value)} rows={4} style={{ ...inputStyle, fontFamily: "'맑은 고딕', 'Malgun Gothic', sans-serif", minHeight: 100 }} placeholder="AI에게 전달할 추가 지시사항..." />
-          </div>
+          {/* AI 지시사항(comment) 입력 영역은 [AI 생성] 클릭 시 뜨는 팝업으로 이동했다.
+              본문 입력은 페이지 진입 시 폼이 너무 비대해지고, 산출물별 코멘트가
+              실제로는 한 번 보내고 끝나는 일회성 지시사항이라 페이지에 상주할 필요가 없음.
+              tb_ds_plan_studio_artf.coment_cn 은 호환을 위해 컬럼은 유지하되 새로 저장하지 않음. */}
         </div>
 
         {/* ── 우측: 결과 뷰어 ── */}
@@ -810,6 +813,24 @@ function DetailInner() {
             setAiDetailTaskId(null);
             qc.invalidateQueries({ queryKey: ["plan-studio-detail", projectId, planStudioId] });
           }}
+        />
+      )}
+
+      {/* ── AI 생성 요청 확인 팝업 — 매칭 프롬프트 미리보기 + 코멘트·첨부 입력 + multipart 호출 ── */}
+      {selectedArtfId && (
+        <PlanStudioAIRequestPopup
+          open={aiPopupOpen}
+          onClose={() => setAiPopupOpen(false)}
+          projectId={projectId}
+          planStudioId={planStudioId}
+          artfId={selectedArtfId}
+          artfNm={artfNm}
+          artfDivCode={artfDivCode}
+          artfFmtCode={artfFmtCode}
+          artfIdeaCn={artfIdeaCn}
+          contexts={contexts.map((c, i) => ({ ctxtTyCode: c.ctxtTyCode, refId: c.refId, sortOrdr: i }))}
+          isReRequest={aiPopupReRequest}
+          onSuccess={handleAIRequestSuccess}
         />
       )}
     </div>

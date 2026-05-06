@@ -166,11 +166,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         );
       }
     } else {
+      // 프로젝트 사본 — OWNER/ADMIN 또는 PM/PL 만 수정 가능
       if (gate.systemRole !== "SUPER_ADMIN"
-        && gate.role !== "OWNER" && gate.role !== "ADMIN") {
+        && gate.role !== "OWNER" && gate.role !== "ADMIN"
+        && gate.job !== "PM"   && gate.job !== "PL") {
         return apiError(
-          "FORBIDDEN_PROJECT_ADMIN_REQUIRED",
-          "프로젝트 관리자(OWNER/ADMIN)만 수정할 수 있습니다.",
+          "FORBIDDEN_PROJECT_ADMIN_OR_PM_REQUIRED",
+          "프로젝트 관리자(OWNER/ADMIN) 또는 PM/PL 만 수정할 수 있습니다.",
           403
         );
       }
@@ -233,12 +235,13 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         403
       );
     }
-    // 프로젝트 복사본 — OWNER/ADMIN 만 (SUPER_ADMIN 도 허용)
+    // 프로젝트 복사본 — OWNER/ADMIN 또는 PM/PL 만 (SUPER_ADMIN 도 허용)
     if (gate.systemRole !== "SUPER_ADMIN"
-      && gate.role !== "OWNER" && gate.role !== "ADMIN") {
+      && gate.role !== "OWNER" && gate.role !== "ADMIN"
+      && gate.job !== "PM"   && gate.job !== "PL") {
       return apiError(
-        "FORBIDDEN_PROJECT_ADMIN_REQUIRED",
-        "프로젝트 관리자(OWNER/ADMIN)만 삭제할 수 있습니다.",
+        "FORBIDDEN_PROJECT_ADMIN_OR_PM_REQUIRED",
+        "프로젝트 관리자(OWNER/ADMIN) 또는 PM/PL 만 삭제할 수 있습니다.",
         403
       );
     }
