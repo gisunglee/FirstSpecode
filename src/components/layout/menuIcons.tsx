@@ -56,8 +56,8 @@ export type MenuIconKey =
   | "i_standardGuide" | "i_commonCode" | "i_referenceInfo"
   | "i_aiTask" | "i_planImport" | "i_designImport" | "i_promptTemplate"
   | "i_designTemplate"
-  | "i_review" | "i_memo"
-  | "i_graph" | "i_changeLog" | "i_diffTest";
+  | "i_review" | "i_memo" | "i_docs"
+  | "i_graph" | "i_changeLog" | "i_diffTest" | "i_cleanup";
 
 const ICONS: Record<MenuIconKey, ReactNode> = {
   // ── 그룹 아이콘 (레일) ──────────────────────────────────────────────────────
@@ -349,6 +349,27 @@ const ICONS: Record<MenuIconKey, ReactNode> = {
     <>
       <path d="M14 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-9Z" />
       <path d="M14 3v7h7" />
+    </>
+  ),
+  // 책 펼침 — Docs 의 "공식 문서" 를 직관적으로 표현
+  i_docs: (
+    <>
+      <path d="M3 5a2 2 0 0 1 2-2h6v18H5a2 2 0 0 1-2-2Z" />
+      <path d="M21 5a2 2 0 0 0-2-2h-6v18h6a2 2 0 0 0 2-2Z" />
+      <path d="M7 8h2" />
+      <path d="M7 12h2" />
+      <path d="M15 8h2" />
+      <path d="M15 12h2" />
+    </>
+  ),
+  // 휴지통 — "정보 삭제" / cleanup 메뉴용
+  i_cleanup: (
+    <>
+      <path d="M3 6h18" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M5 6l1 14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-14" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
     </>
   ),
   i_graph: (

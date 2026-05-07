@@ -428,6 +428,20 @@ body {
 .sp-input.is-err { border-color: var(--color-error-border); background: var(--color-error-subtle); }
 .sp-input.is-err:focus { box-shadow: var(--shadow-focus-error); }
 
+/* sp-input + sp-select 변형 — 필터 바에서 폭 고정으로 사용. width:100% 미적용. */
+/* 사용 예: <input className="sp-input sp-input-fixed" style={{ width: 240 }} />          */
+/*         <select className="sp-input sp-input-fixed sp-select" style={{ width: 160 }} /> */
+.sp-input.sp-input-fixed { width: auto; }
+
+/* sp-select — 네이티브 화살표 제거 + 프로젝트 표준 chevron SVG */
+.sp-select {
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+
 /* Input with icon */
 .sp-input-wrap { position: relative; display: flex; align-items: center; }
 .sp-input-icon { position: absolute; left: 9px; color: var(--color-text-disabled); pointer-events: none; transition: color var(--transition-fast); }
@@ -1122,6 +1136,19 @@ body {
                       밝은 글씨는 살짝 더 또렷해져 가독성 향상.
      saturate 0.9 — 채도를 살짝 낮춰 톤이 부드러워지게. */
   filter: brightness(0.7) saturate(0.9) contrast(1.15);
+}
+
+/* ================================================================
+   WARN BOX TOKENS — "주의/안내" 노란 박스용 CSS 변수
+   사용처: var(--sp-warn-bg, #fff8e1) 형태로 라이트 fallback 명시.
+   라이트에서는 fallback(#fff8e1 등)이 사용되어 기존 화면 변화 없음.
+   다크/dark-purple 에서는 아래 정의된 어두운 톤이 적용되어 눈부심 완화.
+================================================================ */
+[data-theme="dark"], [data-theme="dark-purple"] {
+  --sp-warn-bg:     rgba(232, 176, 80, 0.08);
+  --sp-warn-border: rgba(232, 176, 80, 0.25);
+  --sp-warn-title:  #ffb840;
+  --sp-warn-body:   var(--color-text-secondary);
 }
 
 /* ================================================================

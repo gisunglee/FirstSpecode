@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import { usePermissions } from "@/hooks/useMyRole";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -314,18 +315,21 @@ function UserStoryDetailPageInner() {
             </div>
           )}
           <FormField label="요구사항" required>
-            <select
-              value={form.requirementId}
-              onChange={(e) => setForm((p) => ({ ...p, requirementId: e.target.value }))}
-              style={selectStyle}
-            >
-              <option value="">요구사항을 선택하세요</option>
-              {reqOptions.map((r) => (
-                <option key={r.requirementId} value={r.requirementId}>
-                  [{r.taskName}] {r.name}
-                </option>
-              ))}
-            </select>
+            <div className="sp-select-wrap">
+              <select
+                value={form.requirementId}
+                onChange={(e) => setForm((p) => ({ ...p, requirementId: e.target.value }))}
+                className="sp-input"
+              >
+                <option value="">요구사항을 선택하세요</option>
+                {reqOptions.map((r) => (
+                  <option key={r.requirementId} value={r.requirementId}>
+                    [{r.taskName}] {r.name}
+                  </option>
+                ))}
+              </select>
+              <span className="sp-select-arrow"><SelectChevron /></span>
+            </div>
           </FormField>
 
           <FormField label="스토리명" required>
@@ -334,7 +338,7 @@ function UserStoryDetailPageInner() {
               value={form.name}
               placeholder="예: 회원으로서 로그인 후 대시보드를 볼 수 있다"
               onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-              style={inputStyle}
+              className="sp-input"
             />
           </FormField>
 
@@ -344,7 +348,7 @@ function UserStoryDetailPageInner() {
               value={form.persona}
               placeholder="예: 서비스에 가입한 일반 사용자로서"
               onChange={(e) => setForm((p) => ({ ...p, persona: e.target.value }))}
-              style={inputStyle}
+              className="sp-input"
             />
           </FormField>
 
@@ -354,7 +358,8 @@ function UserStoryDetailPageInner() {
               placeholder="예: 나는 이메일과 비밀번호로 로그인하여 프로젝트 목록을 확인하고 싶다."
               rows={5}
               onChange={(e) => setForm((p) => ({ ...p, scenario: e.target.value }))}
-              style={{ ...inputStyle, resize: "vertical" }}
+              className="sp-input"
+              style={{ resize: "vertical" }}
             />
           </FormField>
         </Card>
@@ -390,7 +395,7 @@ function UserStoryDetailPageInner() {
                           value={row[field]}
                           placeholder={FIELD_PLACEHOLDERS[field]}
                           onChange={(e) => updateAcRow(idx, field, e.target.value)}
-                          style={{ ...inputStyle, fontSize: 13 }}
+                          className="sp-input"
                         />
                         {/* X 버튼 — Given 행 오른쪽에만 표시 */}
                         {field === "given" && (
@@ -532,29 +537,6 @@ const FIELD_PLACEHOLDERS: Record<string, string> = {
 };
 
 // ── 스타일 ───────────────────────────────────────────────────────────────────
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 12px",
-  borderRadius: 6,
-  border: "1px solid var(--color-border)",
-  background: "var(--color-bg-card)",
-  color: "var(--color-text-primary)",
-  fontSize: 14,
-  boxSizing: "border-box",
-  outline: "none",
-};
-
-// select 전용 — 브라우저 기본 화살표 제거 후 커스텀 화살표
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  paddingRight: "32px",
-  appearance: "none",
-  WebkitAppearance: "none",
-  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
-  backgroundRepeat: "no-repeat",
-  backgroundPosition: "right 10px center",
-};
 
 const primaryBtnStyle: React.CSSProperties = {
   padding: "8px 24px",

@@ -347,14 +347,14 @@ function RequirementsPageInner() {
                         {req.taskName}
                       </button>
                     ) : (
-                      <span style={{ color: "#aaa", fontSize: 13 }}>미분류</span>
+                      <span style={{ color: "var(--color-text-tertiary)", fontSize: 13 }}>미분류</span>
                     )
                   ) : null}
                 </div>
 
                 {/* 요구사항명 */}
-                <div style={{ fontSize: 14, fontWeight: 500 }}>
-                  <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
+                <div style={{ fontSize: 13 }}>
+                  <span style={{ color: "var(--color-text-secondary)", fontSize: 13, marginRight: 6 }}>
                     {req.displayId}
                   </span>
                   {req.name}
@@ -389,12 +389,12 @@ function RequirementsPageInner() {
                 </div>
 
                 {/* 단위업무 수 */}
-                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
+                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
                   {req.unitWorkCount}
                 </div>
 
                 {/* 정렬 순서 */}
-                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
+                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
                   {req.sortOrder || "-"}
                 </div>
 
@@ -569,7 +569,7 @@ const gridHeaderStyle: React.CSSProperties = {
   gridTemplateColumns: GRID_TEMPLATE,
   gap:                 12,
   padding:             "10px 16px",
-  background:          "var(--color-bg-header)",
+  background:          "var(--color-bg-muted)",
   fontSize:            12,
   fontWeight:          600,
   color:               "var(--color-text-secondary)",
@@ -588,15 +588,19 @@ const gridRowStyle: React.CSSProperties = {
   cursor:              "pointer",
 };
 
+// 인라인 링크 — AI 태스크 페이지 기준에 맞춰 평소엔 일반 텍스트, font: inherit 으로
+// <button> 의 user-agent 폰트가 옆 <span> 과 어긋나는 문제 방지.
 const linkBtnStyle: React.CSSProperties = {
   background:  "none",
   border:      "none",
   cursor:      "pointer",
-  color:       "var(--color-primary, #1976d2)",
-  fontSize:    14,
+  color:       "var(--color-text-primary)",
+  fontFamily:  "inherit",
+  fontWeight:  "inherit",
+  fontSize:    13,
   padding:     0,
   textAlign:   "left",
-  textDecoration: "underline",
+  textDecoration: "none",
 };
 
 const primaryBtnStyle: React.CSSProperties = {

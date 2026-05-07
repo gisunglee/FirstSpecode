@@ -73,23 +73,23 @@ export default function AdminUsersPage() {
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      {/* 필터 바 */}
+      {/* 필터 바 — sp-input-fixed 로 폭 고정, sp-select 로 표준 chevron */}
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <input
-          className="sp-input"
+          className="sp-input sp-input-fixed"
           type="text"
           placeholder="이메일 또는 이름 검색"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") applySearch(); }}
           onBlur={applySearch}
-          style={{ minWidth: 240 }}
+          style={{ width: 280 }}
         />
         <select
-          className="sp-input"
+          className="sp-input sp-input-fixed sp-select"
           value={status}
           onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-          style={{ minWidth: 140 }}
+          style={{ width: 160 }}
         >
           {MEMBER_STATUS.map((s) => (
             <option key={s.value} value={s.value}>{s.label}</option>

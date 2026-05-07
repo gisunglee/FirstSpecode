@@ -195,7 +195,7 @@ function AdminDesignTemplatesPageInner() {
         {/* 헤더 */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "40% 12% 12% 8% 10% 12% 6%",
+          gridTemplateColumns: "1fr 110px 110px 60px 70px 110px 80px",
           padding: "10px 16px",
           background: "var(--color-bg-muted)",
           borderBottom: "1px solid var(--color-border)",
@@ -231,7 +231,7 @@ function AdminDesignTemplatesPageInner() {
                 onClick={() => router.push(`/admin/design-templates/${row.dsgnTmplId}`)}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "40% 12% 12% 8% 10% 12% 6%",
+                  gridTemplateColumns: "1fr 110px 110px 60px 70px 110px 80px",
                   padding: "12px 16px",
                   paddingLeft: active ? 16 : 13,
                   borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",

@@ -361,7 +361,7 @@ function ReviewDetailPageInner() {
                 <input
                   value={titleNm}
                   onChange={(e) => setTitleNm(e.target.value)}
-                  style={inputStyle}
+                  className="sp-input"
                   placeholder="리뷰 제목을 입력하세요"
                   autoFocus
                 />
@@ -661,12 +661,6 @@ const warnBannerStyle: React.CSSProperties = {
   padding: "8px 12px", borderRadius: 6, marginBottom: 10,
   background: "#fff8e1", border: "1px solid #ffe082",
   fontSize: 12, color: "#795548",
-};
-const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "8px 12px", borderRadius: 6,
-  border: "1px solid var(--color-border)", fontSize: 14,
-  background: "var(--color-bg-card)", color: "var(--color-text-primary)",
-  boxSizing: "border-box",
 };
 // 외곽선 버튼
 const ghostBtnStyle: React.CSSProperties = {

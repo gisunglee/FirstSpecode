@@ -91,52 +91,13 @@ function statusBadgeStyle(status: TaskStatus): React.CSSProperties {
   };
 }
 
-function taskTypeBadgeStyle(type: TaskType): React.CSSProperties {
-  const colors: Record<TaskType, { bg: string; color: string }> = {
-    INSPECT:   { bg: "#f5f5f5", color: "#616161" },
-    DESIGN:    { bg: "#e8eaf6", color: "#3f51b5" },
-    IMPLEMENT: { bg: "#fce4ec", color: "#c62828" },
-    PRE_IMPL:  { bg: "#e8f5e9", color: "#2e7d32" },
-    MOCKUP:    { bg: "#f1f8e9", color: "#558b2f" },
-    IMPACT:    { bg: "#fff3e0", color: "#ef6c00" },
-    CUSTOM:    { bg: "#f5f5f5", color: "#757575" },
-    IA:        { bg: "#e3f2fd", color: "#1565c0" },
-    JOURNEY:   { bg: "#e8f5e9", color: "#2e7d32" },
-    FLOW:      { bg: "#fff3e0", color: "#e65100" },
-    ERD:       { bg: "#ede7f6", color: "#4527a0" },
-    PROCESS:   { bg: "#e0f2f1", color: "#00695c" },
-  };
-  const c = colors[type] ?? { bg: "#f5f5f5", color: "#555" };
-  return {
-    display:      "inline-block",
-    padding:      "2px 8px",
-    borderRadius: 4,
-    fontSize:     11,
-    fontWeight:   700,
-    background:   c.bg,
-    color:        c.color,
-  };
-}
-
-function refTypeBadgeStyle(type: RefType): React.CSSProperties {
-  const colors: Record<RefType, { bg: string; color: string }> = {
-    AREA:             { bg: "#f5f5f5", color: "#666666" },
-    FUNCTION:         { bg: "#f3e5f5", color: "#7b1fa2" },
-    UNIT_WORK:        { bg: "#e3f2fd", color: "#1565c0" },
-    PLAN_STUDIO_ARTF: { bg: "#fce4ec", color: "#c62828" },
-  };
-  const c = colors[type] ?? { bg: "#f5f5f5", color: "#555" };
-  return {
-    display:      "inline-block",
-    padding:      "2px 6px",
-    borderRadius: 4,
-    fontSize:     11,
-    fontWeight:   700,
-    backgroundColor: c.bg,
-    color:           c.color,
-    border:          "1px solid var(--color-border)",
-  };
-}
+// 요청구분/작업유형 — 배지 형태를 떼고 요청자 컬럼과 동일한 일반 텍스트로 통일.
+// 한 줄에 색이 4개씩 등장하던 시각 노이즈를 완전히 제거. 컬럼 헤더로 충분히 식별됨.
+const plainCellTextStyle: React.CSSProperties = {
+  display:  "inline-block",
+  fontSize: 13,
+  color:    "var(--color-text-primary)",
+};
 
 // ── 유틸 ──────────────────────────────────────────────────────────────────────
 
@@ -329,7 +290,7 @@ function AiTasksPageInner() {
 
   // ── 11컬럼 그리드 템플릿 ──────────────────────────────────────────
   // 요청구분 | 작업유형 | 대상(가변) | 요청자 | 요청일시 | 완료일시 | 소요 | 재시도 | 상태/액션 | 실행가능일 | 삭제
-  const GRID_CONFIG = "64px 90px minmax(200px, 1fr) 64px 86px 86px 52px 40px 100px 68px 36px";
+  const GRID_CONFIG = "64px 104px minmax(200px, 1fr) 64px 86px 86px 52px 40px 100px 68px 36px";
 
   return (
     <div style={{ padding: 0 }}>
@@ -445,41 +406,40 @@ function AiTasksPageInner() {
                   }}
                 >
                   <div style={{ textAlign: "center" }}>
-                    <span className="sp-badge" style={refTypeBadgeStyle(row.refType)}>
+                    <span style={plainCellTextStyle}>
                       {row.refType === "AREA" ? "영역" : row.refType === "UNIT_WORK" ? "단위업무" : row.refType === "PLAN_STUDIO_ARTF" ? "기획실" : "기능"}
                     </span>
                   </div>
                   <div style={{ textAlign: "center" }}>
-                    <span className="sp-badge" style={taskTypeBadgeStyle(row.taskType)}>
+                    <span style={plainCellTextStyle}>
                       {TASK_TYPE_LABELS[row.taskType]}
                     </span>
                   </div>
                   <div style={{ overflow: "hidden", minWidth: 0 }}>
+                    {/* 대상 셀 — 한 줄로 [코드][이름] · [부모경로 또는 포함기능] 표시.
+                        기존엔 부모경로(RefBreadcrumb)/포함기능 목록을 별도 sub-line으로 띄웠으나
+                        한 행이 두 줄을 차지해 시선이 흩어진다는 피드백 → 같은 줄에 인라인으로 합침.
+                        길이 초과 시 부모경로 영역부터 ellipsis 처리. */}
                     <button
-                      style={{ ...linkBtnStyle, fontWeight: 500, display: "inline-flex", alignItems: "center", maxWidth: "100%", overflow: "hidden" }}
+                      style={{ ...linkBtnStyle, display: "inline-flex", alignItems: "center", maxWidth: "100%", overflow: "hidden", gap: 6 }}
                       onClick={(e) => { e.stopPropagation(); navigateToRef(row); }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-primary)"; e.currentTarget.style.textDecoration = "underline"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = "var(--color-text-primary)"; e.currentTarget.style.textDecoration = "none"; }}
                       type="button"
                     >
-                      {row.refDisplayId && <span style={{ color: "var(--color-primary)", fontSize: 13, marginRight: 6, fontWeight: 600, flexShrink: 0 }}>{row.refDisplayId}</span>}
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.refName}</span>
+                      {row.refDisplayId && <span style={{ color: "var(--color-text-secondary)", fontSize: 13, flexShrink: 0 }}>{row.refDisplayId}</span>}
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{row.refName}</span>
+                      <InlineRefSuffix row={row} />
                     </button>
-                    {/* IMPLEMENT: 포함된 기능 목록 표시 */}
-                    {(row.implFunctions?.length ?? 0) > 0 ? (
-                      <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {row.implFunctions!.map((f) => f.name).join(", ")}
-                      </div>
-                    ) : (
-                      <RefBreadcrumb row={row} />
-                    )}
                   </div>
                   <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>{row.reqMberName}</div>
-                  <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>{formatDatetime(row.requestedAt)}</div>
-                  <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>{row.completedAt ? formatDatetime(row.completedAt) : "—"}</div>
-                  <div style={{ textAlign: "center", fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)" }}>
-                    {row.completedAt ? formatDuration(row.requestedAt, row.completedAt) : (row.status === "IN_PROGRESS" ? formatElapsed(row.elapsedMs) : "—")}
+                  <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>{formatDatetime(row.requestedAt)}</div>
+                  <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>{row.completedAt ? formatDatetime(row.completedAt) : "-"}</div>
+                  <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
+                    {row.completedAt ? formatDuration(row.requestedAt, row.completedAt) : (row.status === "IN_PROGRESS" ? formatElapsed(row.elapsedMs) : "-")}
                   </div>
-                  <div style={{ textAlign: "center", fontSize: 13, fontWeight: 600, color: row.retryCnt > 0 ? "#e65100" : "var(--color-text-secondary)" }}>
-                    {row.retryCnt > 0 ? `${row.retryCnt}회` : "—"}
+                  <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
+                    {row.retryCnt > 0 ? `${row.retryCnt}회` : "-"}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
                     <span className="sp-badge" style={statusBadgeStyle(row.status)}>{AI_TASK_STATUS_LABEL[row.status]}</span>
@@ -504,7 +464,7 @@ function AiTasksPageInner() {
                       </button>
                     )}
                   </div>
-                  <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>{row.execAvlblDt ? formatDatetime(row.execAvlblDt) : "—"}</div>
+                  <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>{row.execAvlblDt ? formatDatetime(row.execAvlblDt) : "-"}</div>
                   <div style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                     <button
                       title="삭제"
@@ -581,30 +541,34 @@ function Pagination({ page, pageCount, onChange }: { page: number; pageCount: nu
 
 // ── 계층 breadcrumb (단위업무 > 화면 > 영역) ─────────────────────────────────
 
-function RefBreadcrumb({ row }: { row: TaskRow }) {
-  // UNIT_WORK: (대상이 단위업무 자체라서 breadcrumb 불필요)
-  // AREA:      unitWork > screen
-  // FUNCTION:  unitWork > screen > area
-  const parts: string[] = [];
-  if (row.refType !== "UNIT_WORK" && row.unitWorkName) parts.push(row.unitWorkName);
-  if (row.refType !== "UNIT_WORK" && row.screenName)   parts.push(row.screenName);
-  if (row.refType === "FUNCTION" && row.areaName) parts.push(row.areaName);
+// 대상 셀의 트레일링 보조 텍스트 — 같은 줄에 인라인으로 표시.
+//  - IMPLEMENT 태스크: 포함된 기능 이름들 (콤마 구분)
+//  - AREA/FUNCTION 태스크: 부모 경로 (단위업무 › 화면 [› 영역])
+//  - UNIT_WORK 태스크: 부모 컨텍스트가 자기 자신이라 표시 X
+// 길이 초과 시 ellipsis. 메인 이름은 잘리지 않고 이 영역만 줄어듦.
+function InlineRefSuffix({ row }: { row: TaskRow }) {
+  let text: string | null = null;
 
-  if (parts.length === 0) return null;
+  if ((row.implFunctions?.length ?? 0) > 0) {
+    text = row.implFunctions!.map((f) => f.name).join(", ");
+  } else {
+    const parts: string[] = [];
+    if (row.refType !== "UNIT_WORK" && row.unitWorkName) parts.push(row.unitWorkName);
+    if (row.refType !== "UNIT_WORK" && row.screenName)   parts.push(row.screenName);
+    if (row.refType === "FUNCTION"   && row.areaName)    parts.push(row.areaName);
+    if (parts.length > 0) text = parts.join(" › ");
+  }
+
+  if (!text) return null;
 
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 3, marginTop: 1,
-      fontSize: 11, color: "var(--color-text-secondary)", flexWrap: "nowrap",
-      overflow: "hidden", maxWidth: "100%",
+    <span style={{
+      fontSize: 12, color: "var(--color-text-secondary)",
+      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      minWidth: 0, flex: "1 1 auto",
     }}>
-      {parts.map((p, i) => (
-        <span key={i} style={{ display: "flex", alignItems: "center", gap: 3, minWidth: 0 }}>
-          {i > 0 && <span style={{ color: "#bbb", flexShrink: 0 }}>›</span>}
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p}</span>
-        </span>
-      ))}
-    </div>
+      · {text}
+    </span>
   );
 }
 
@@ -716,15 +680,24 @@ const segmentBtnStyle = (active: boolean): React.CSSProperties => ({
   outline:    "none",
 });
 
+// 대상 링크 — 평소엔 일반 텍스트색/밑줄 없음으로 시각 노이즈 제거.
+// 클릭 가능 여부는 행 hover 시 커서(pointer)와 호버 텍스트색으로만 안내.
+// (강한 파랑+밑줄은 페이지에 링크가 행마다 1개씩이라 한꺼번에 보면 지저분함)
+// 폰트 크기는 다른 셀(요청자/요청일시 등)과 동일한 13px로 통일.
+// fontFamily/fontWeight 은 inherit — <button> 기본 user agent 스타일이
+// 시스템 UI 폰트(system-ui)로 덮어써서 같은 셀의 <span>(페이지 본문 폰트)과
+// 미세하게 다르게 렌더링되는 문제 방지.
 const linkBtnStyle: React.CSSProperties = {
   background:     "none",
   border:         "none",
   cursor:         "pointer",
-  color:          "var(--color-primary, #1976d2)",
-  fontSize:       14,
+  color:          "var(--color-text-primary)",
+  fontFamily:     "inherit",
+  fontWeight:     "inherit",
+  fontSize:       13,
   padding:        0,
   textAlign:      "left",
-  textDecoration: "underline",
+  textDecoration: "none",
 };
 
 const actionBtnStyle: React.CSSProperties = {

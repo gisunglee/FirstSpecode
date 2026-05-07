@@ -26,6 +26,7 @@ import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
 import { useAppStore } from "@/store/appStore";
 
@@ -429,19 +430,22 @@ function ScreenDetailPageInner() {
             <Section title="기본 정보" hideTitle>
               {/* 상위 단위업무 선택 */}
               <FormField label="상위 단위업무">
-                <select
-                  value={form.unitWorkId ?? ""}
-                  onChange={(e) => handleChange("unitWorkId", e.target.value)}
-                  disabled={!canEdit}
-                  style={selectStyle}
-                >
-                  <option value="">미분류</option>
-                  {uwOptions.map((uw) => (
-                    <option key={uw.unitWorkId} value={uw.unitWorkId}>
-                      {uw.displayId} — {uw.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="sp-select-wrap">
+                  <select
+                    value={form.unitWorkId ?? ""}
+                    onChange={(e) => handleChange("unitWorkId", e.target.value)}
+                    disabled={!canEdit}
+                    className="sp-input"
+                  >
+                    <option value="">미분류</option>
+                    {uwOptions.map((uw) => (
+                      <option key={uw.unitWorkId} value={uw.unitWorkId}>
+                        {uw.displayId} — {uw.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="sp-select-arrow"><SelectChevron /></span>
+                </div>
               </FormField>
 
               {/* 화면명 + 표시 ID */}
@@ -453,7 +457,7 @@ function ScreenDetailPageInner() {
                     placeholder="화면명을 입력하세요"
                     onChange={(e) => handleChange("name", e.target.value)}
                     readOnly={!canEdit}
-                    style={inputStyle}
+                    className="sp-input"
                   />
                 </FormField>
                 <FormField label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>표시 ID<HelpIcon onClick={() => setHelpOpen("displayId")} /></span>}>
@@ -463,7 +467,7 @@ function ScreenDetailPageInner() {
                     placeholder="미입력 시 자동 생성"
                     onChange={(e) => handleChange("displayId", e.target.value)}
                     readOnly={!canEdit}
-                    style={inputStyle}
+                    className="sp-input"
                   />
                 </FormField>
               </div>
@@ -493,35 +497,41 @@ function ScreenDetailPageInner() {
                       </button>
                     )}
                   </div>
-                  <select
-                    value={form.assignMemberId}
-                    onChange={(e) => handleChange("assignMemberId", e.target.value)}
-                    disabled={!canEdit}
-                    style={selectStyle}
-                  >
-                    <option value="">담당자 없음</option>
-                    {members.map((m) => (
-                      <option key={m.memberId} value={m.memberId}>
-                        {m.name ?? m.email}
-                        {m.memberId === myMemberId ? " (나)" : ""}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="sp-select-wrap">
+                    <select
+                      value={form.assignMemberId}
+                      onChange={(e) => handleChange("assignMemberId", e.target.value)}
+                      disabled={!canEdit}
+                      className="sp-input"
+                    >
+                      <option value="">담당자 없음</option>
+                      {members.map((m) => (
+                        <option key={m.memberId} value={m.memberId}>
+                          {m.name ?? m.email}
+                          {m.memberId === myMemberId ? " (나)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
                 </div>
                 <FormField label="화면 유형">
-                  <select
-                    value={form.type}
-                    onChange={(e) => handleChange("type", e.target.value)}
-                    disabled={!canEdit}
-                    style={selectStyle}
-                  >
-                    <option value="LIST">LIST</option>
-                    <option value="DETAIL">DETAIL</option>
-                    <option value="INPUT">INPUT</option>
-                    <option value="POPUP">POPUP</option>
-                    <option value="TAB">TAB</option>
-                    <option value="REPORT">REPORT</option>
-                  </select>
+                  <div className="sp-select-wrap">
+                    <select
+                      value={form.type}
+                      onChange={(e) => handleChange("type", e.target.value)}
+                      disabled={!canEdit}
+                      className="sp-input"
+                    >
+                      <option value="LIST">LIST</option>
+                      <option value="DETAIL">DETAIL</option>
+                      <option value="INPUT">INPUT</option>
+                      <option value="POPUP">POPUP</option>
+                      <option value="TAB">TAB</option>
+                      <option value="REPORT">REPORT</option>
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
                 </FormField>
                 <FormField label="정렬 순서">
                   <input
@@ -532,7 +542,7 @@ function ScreenDetailPageInner() {
                       setForm((prev) => ({ ...prev, sortOrder: parseInt(e.target.value) || 0 }))
                     }
                     readOnly={!canEdit}
-                    style={inputStyle}
+                    className="sp-input"
                   />
                 </FormField>
               </div>
@@ -546,7 +556,7 @@ function ScreenDetailPageInner() {
                     placeholder="예: 회원 관리"
                     onChange={(e) => handleChange("categoryL", e.target.value)}
                     readOnly={!canEdit}
-                    style={inputStyle}
+                    className="sp-input"
                   />
                 </FormField>
                 <FormField label="중분류">
@@ -556,7 +566,7 @@ function ScreenDetailPageInner() {
                     placeholder="예: 회원 정보"
                     onChange={(e) => handleChange("categoryM", e.target.value)}
                     readOnly={!canEdit}
-                    style={inputStyle}
+                    className="sp-input"
                   />
                 </FormField>
                 <FormField label="소분류">
@@ -566,7 +576,7 @@ function ScreenDetailPageInner() {
                     placeholder="예: 목록 조회"
                     onChange={(e) => handleChange("categoryS", e.target.value)}
                     readOnly={!canEdit}
-                    style={inputStyle}
+                    className="sp-input"
                   />
                 </FormField>
               </div>
@@ -1040,29 +1050,6 @@ function areaTypeBadgeStyle(type: string): React.CSSProperties {
 }
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 12px",
-  borderRadius: 6,
-  border: "1px solid var(--color-border)",
-  background: "var(--color-bg-card)",
-  color: "var(--color-text-primary)",
-  fontSize: 14,
-  boxSizing: "border-box",
-  outline: "none",
-};
-
-// select 전용 — 브라우저 기본 화살표를 제거하고 커스텀 화살표로 대체
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  paddingRight: "32px",
-  appearance: "none",
-  WebkitAppearance: "none",
-  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
-  backgroundRepeat: "no-repeat",
-  backgroundPosition: "right 10px center",
-};
 
 const primaryBtnStyle: React.CSSProperties = {
   padding: "8px 24px",

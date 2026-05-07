@@ -233,7 +233,8 @@ function DbTablesPageInner() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="테이블명 검색..."
-            style={{ ...inputStyle, width: 280 }}
+            className="sp-input"
+            style={{ width: 280 }}
           />
 
           {/* 인사이트 필터 칩 — Phase 2
@@ -384,19 +385,20 @@ function DbTablesPageInner() {
                 onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-table-hover)")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-bg-card)")}
               >
-                {/* 물리명 */}
-                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-primary, #1976d2)", fontFamily: "monospace" }}>
+                {/* 물리명 — AI 태스크 페이지 기준에 맞춰 파랑/굵게/monospace 제거,
+                    다른 데이터 셀과 동일한 13px primary 일반 텍스트로 통일 */}
+                <span style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
                   {row.tblPhysclNm}
                 </span>
 
                 {/* 논리명 */}
                 <span style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
-                  {row.tblLgclNm || <span style={{ color: "#bbb" }}>—</span>}
+                  {row.tblLgclNm || <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}
                 </span>
 
                 {/* 설명 */}
-                <span style={{ fontSize: 12, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {row.tblDc || <span style={{ color: "#bbb" }}>—</span>}
+                <span style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {row.tblDc || <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}
                 </span>
 
                 {/* 담당자 — 미지정/퇴장 멤버는 흐린 "-" */}
@@ -412,7 +414,7 @@ function DbTablesPageInner() {
                 </span>
 
                 {/* 컬럼 수 */}
-                <span style={{ textAlign: "center", fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                <span style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
                   {row.columnCount}
                 </span>
 
@@ -447,7 +449,7 @@ function DbTablesPageInner() {
                 </span>
 
                 {/* 등록/수정일 — 수정된 적이 있으면 mdfcnDt, 아니면 creatDt */}
-                <span style={{ fontSize: 12, color: "var(--color-text-secondary)", textAlign: "center" }}>
+                <span style={{ fontSize: 13, color: "var(--color-text-primary)", textAlign: "center" }}>
                   {(row.mdfcnDt ?? row.creatDt).slice(0, 10)}
                 </span>
               </div>
@@ -486,13 +488,6 @@ const dataRowStyle: React.CSSProperties = {
   transition: "background 0.1s",
 };
 
-const inputStyle: React.CSSProperties = {
-  padding: "7px 12px", borderRadius: 6,
-  border: "1px solid var(--color-border)",
-  background: "var(--color-bg-card)",
-  color: "var(--color-text-primary)",
-  fontSize: 13, outline: "none",
-};
 
 const inlineInputStyle: React.CSSProperties = {
   padding: "4px 8px", borderRadius: 5,

@@ -21,6 +21,7 @@ import dynamic from "next/dynamic";
 // TipTap 번들이 초기 로드에 포함되지 않도록 dynamic import
 const RichEditor = dynamic(() => import("@/components/ui/RichEditor"), { ssr: false });
 import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -311,7 +312,7 @@ function TaskDetailPageInner() {
               value={form.name}
               placeholder="과업명을 입력하세요"
               onChange={(e) => handleChange("name", e.target.value)}
-              style={inputStyle}
+              className="sp-input"
             />
           </FormField>
           <FormField label="표시 ID">
@@ -320,7 +321,7 @@ function TaskDetailPageInner() {
               value={form.displayId}
               placeholder="미입력 시 자동 생성"
               onChange={(e) => handleChange("displayId", e.target.value)}
-              style={inputStyle}
+              className="sp-input"
             />
           </FormField>
         </div>
@@ -349,30 +350,36 @@ function TaskDetailPageInner() {
                 </button>
               )}
             </div>
-            <select
-              value={form.assignMemberId}
-              onChange={(e) => handleChange("assignMemberId", e.target.value)}
-              style={selectStyle}
-            >
-              <option value="">담당자 없음</option>
-              {members.map((m) => (
-                <option key={m.memberId} value={m.memberId}>
-                  {m.name ?? m.email}
-                  {m.memberId === myMemberId ? " (나)" : ""}
-                </option>
-              ))}
-            </select>
+            <div className="sp-select-wrap">
+              <select
+                value={form.assignMemberId}
+                onChange={(e) => handleChange("assignMemberId", e.target.value)}
+                className="sp-input"
+              >
+                <option value="">담당자 없음</option>
+                {members.map((m) => (
+                  <option key={m.memberId} value={m.memberId}>
+                    {m.name ?? m.email}
+                    {m.memberId === myMemberId ? " (나)" : ""}
+                  </option>
+                ))}
+              </select>
+              <span className="sp-select-arrow"><SelectChevron /></span>
+            </div>
           </div>
           <FormField label="카테고리" required>
-            <select
-              value={form.category}
-              onChange={(e) => handleChange("category", e.target.value)}
-              style={selectStyle}
-            >
-              <option value="NEW_DEV">신규개발</option>
-              <option value="IMPROVE">기능개선</option>
-              <option value="MAINTAIN">유지보수</option>
-            </select>
+            <div className="sp-select-wrap">
+              <select
+                value={form.category}
+                onChange={(e) => handleChange("category", e.target.value)}
+                className="sp-input"
+              >
+                <option value="NEW_DEV">신규개발</option>
+                <option value="IMPROVE">기능개선</option>
+                <option value="MAINTAIN">유지보수</option>
+              </select>
+              <span className="sp-select-arrow"><SelectChevron /></span>
+            </div>
           </FormField>
           <FormField label="RFP 페이지">
             <input
@@ -380,7 +387,7 @@ function TaskDetailPageInner() {
               value={form.rfpPage}
               placeholder="예: p.23"
               onChange={(e) => handleChange("rfpPage", e.target.value)}
-              style={inputStyle}
+              className="sp-input"
             />
           </FormField>
         </div>
@@ -392,7 +399,8 @@ function TaskDetailPageInner() {
             placeholder="과업 범위를 간략히 설명하세요"
             rows={3}
             onChange={(e) => handleChange("definition", e.target.value)}
-            style={{ ...inputStyle, resize: "vertical" }}
+            className="sp-input"
+            style={{ resize: "vertical" }}
           />
         </FormField>
 
@@ -413,7 +421,8 @@ function TaskDetailPageInner() {
             placeholder="예: 화면설계서, ERD, API 명세서"
             rows={3}
             onChange={(e) => handleChange("outputInfo", e.target.value)}
-            style={{ ...inputStyle, resize: "vertical" }}
+            className="sp-input"
+            style={{ resize: "vertical" }}
           />
         </FormField>
 
@@ -521,29 +530,6 @@ const inlineIconBtnStyle: React.CSSProperties = {
 // 외부 라이브러리 없이 기본 마크다운 요소만 지원:
 
 // ── 스타일 ───────────────────────────────────────────────────────────────────
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 12px",
-  borderRadius: 6,
-  border: "1px solid var(--color-border)",
-  background: "var(--color-bg-card)",
-  color: "var(--color-text-primary)",
-  fontSize: 14,
-  boxSizing: "border-box",
-  outline: "none",
-};
-
-// select 전용 — 브라우저 기본 화살표를 제거하고 커스텀 화살표로 대체
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  paddingRight:       "32px",
-  appearance:         "none",
-  WebkitAppearance:   "none",
-  backgroundImage:    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
-  backgroundRepeat:   "no-repeat",
-  backgroundPosition: "right 10px center",
-};
 
 const primaryBtnStyle: React.CSSProperties = {
   padding: "8px 24px",

@@ -77,7 +77,7 @@ export default function CodeGroupSelect({ value, options, onChange }: Props) {
           flex: 1,
           overflow: "hidden", textOverflow: "ellipsis",
           color:   selected ? "var(--color-text-primary)" : "var(--color-text-tertiary)",
-          fontSize: 12,
+          fontSize: 13,
         }}>
           {selected ? selected.grpCodeNm : ""}
         </span>
@@ -152,7 +152,9 @@ const triggerStyle: React.CSSProperties = {
   border: "1px solid var(--color-border)",
   background: "var(--color-bg-card)",
   color: "var(--color-text-primary)",
-  fontSize: 12,
+  fontFamily: "inherit",
+  fontWeight: "inherit",
+  fontSize: 13,
   outline: "none",
   width: "100%",
   boxSizing: "border-box",
@@ -171,7 +173,10 @@ const dropdownStyle: React.CSSProperties = {
 const searchInputStyle: React.CSSProperties = {
   padding: "6px 10px", border: "none",
   borderBottom: "1px solid var(--color-border)",
-  outline: "none", fontSize: 12,
+  outline: "none",
+  fontFamily: "inherit",
+  fontWeight: "inherit",
+  fontSize: 13,
   background: "var(--color-bg-muted)",
   color: "var(--color-text-primary)",
 };

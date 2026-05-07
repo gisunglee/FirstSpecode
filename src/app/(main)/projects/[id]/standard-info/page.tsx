@@ -37,12 +37,12 @@ import { useAppStore } from "@/store/appStore";
 import {
   type StdInfo,
   DATA_TYPE_LABEL,
-  getCategoryColor,
   distinctCategories,
   formatDate,
 } from "./_constants";
 import { StdInfoEditModal }    from "./_components/StdInfoEditModal";
 import { StdInfoDetailDialog } from "./_components/StdInfoDetailDialog";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
 
@@ -163,20 +163,24 @@ function StandardInfoPageInner() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="코드·명칭·값 검색..."
-            style={searchInputStyle}
+            className="sp-input"
+            style={{ width: 240 }}
           />
           {/* 업무 카테고리 필터 — 현재 프로젝트에 등록된 distinct 값으로만 옵션 구성.
               데이터 0건이면 옵션이 "전체" 만 노출됨. */}
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            style={selectStyle}
-          >
-            <option value="">업무 카테고리 전체</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
+          <div className="sp-select-wrap" style={{ minWidth: 160 }}>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="sp-input"
+            >
+              <option value="">업무 카테고리 전체</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <span className="sp-select-arrow"><SelectChevron /></span>
+          </div>
           <div style={{ flex: 1 }} />
           <button onClick={openCreate} style={addBtnStyle}>+ 기준 정보 추가</button>
         </div>
@@ -290,7 +294,6 @@ function DataRow({ item, isFirst, onClickRow, onToggle }: {
   onClickRow: () => void;
   onToggle:   () => void;
 }) {
-  const ctgryColor = getCategoryColor(item.bizCtgryNm);
   const isActive   = item.useYn === "Y";
   const period     = formatDate(item.stdBgngDe) + (item.stdEndDe ? ` ~ ${formatDate(item.stdEndDe)}` : " ~");
 
@@ -305,20 +308,17 @@ function DataRow({ item, isFirst, onClickRow, onToggle }: {
       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-table-hover)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-bg-card)")}
     >
-      {/* 업무 카테고리 */}
-      <span>
-        <span style={{
-          display: "inline-block", padding: "2px 8px", borderRadius: 12,
-          background: ctgryColor.bg, color: ctgryColor.text,
-          fontSize: 11, fontWeight: 700,
-          maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
-          {item.bizCtgryNm || "—"}
-        </span>
+      {/* 업무 카테고리 — AI 태스크 페이지 기준에 맞춰 컬러 배지 제거,
+          모든 데이터 셀과 동일한 13px primary 일반 텍스트로 통일 */}
+      <span style={{
+        fontSize: 13, color: "var(--color-text-primary)",
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>
+        {item.bizCtgryNm || "-"}
       </span>
 
       {/* 코드 */}
-      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)" }}>
+      <span style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
         {item.stdInfoCode}
       </span>
 
@@ -331,22 +331,22 @@ function DataRow({ item, isFirst, onClickRow, onToggle }: {
       </span>
 
       {/* 유형 */}
-      <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+      <span style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
         {DATA_TYPE_LABEL[item.stdDataTyCode] ?? item.stdDataTyCode}
       </span>
 
-      {/* 주요 값 — 강조용으로 brand 색상 사용 */}
-      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-brand)" }}>
-        {item.mainStdVal || "—"}
+      {/* 주요 값 */}
+      <span style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
+        {item.mainStdVal || "-"}
       </span>
 
       {/* 보조 값 */}
-      <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
-        {item.subStdVal || "—"}
+      <span style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
+        {item.subStdVal || "-"}
       </span>
 
       {/* 기간 */}
-      <span style={{ fontSize: 11, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
+      <span style={{ fontSize: 13, color: "var(--color-text-primary)", whiteSpace: "nowrap" }}>
         {period}
       </span>
 
@@ -409,32 +409,6 @@ const dataRowStyle: React.CSSProperties = {
   background: "var(--color-bg-card)",
   alignItems: "center",
   transition: "background 0.1s",
-};
-
-const searchInputStyle: React.CSSProperties = {
-  padding: "7px 12px", borderRadius: 7,
-  border: "1px solid var(--color-border)",
-  background: "var(--color-bg-card)", color: "var(--color-text-primary)",
-  fontSize: 13, outline: "none", width: 240,
-};
-
-// 목록 화면 필터용 select — 과업 목록(filterSelectStyle) 과 동일한 표준 스타일.
-// 네이티브 화살표를 숨기고(appearance:none) 직접 그린 chevron SVG 를 우측 10px 위치에 배치.
-const selectStyle: React.CSSProperties = {
-  padding:            "7px 32px 7px 12px",
-  borderRadius:       6,
-  border:             "1px solid var(--color-border)",
-  fontSize:           13,
-  background:         "var(--color-bg-card)",
-  color:              "var(--color-text-primary)",
-  cursor:             "pointer",
-  outline:            "none",
-  appearance:         "none",
-  WebkitAppearance:   "none",
-  backgroundImage:    `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
-  backgroundRepeat:   "no-repeat",
-  backgroundPosition: "right 10px center",
-  minWidth:           160,
 };
 
 const addBtnStyle: React.CSSProperties = {

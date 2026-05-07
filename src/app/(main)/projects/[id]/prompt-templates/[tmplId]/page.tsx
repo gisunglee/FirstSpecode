@@ -20,6 +20,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 import { useAppStore } from "@/store/appStore";
 import { type PromptTemplateTaskType, type PromptTemplateRefType } from "@/constants/codes";
 import { ARTF_DIV, ARTF_FMT } from "@/constants/planStudio";
@@ -429,7 +430,7 @@ function PromptTemplateDetailPageInner() {
               placeholder="템플릿 명을 입력하세요"
               readOnly={readOnly}
               maxLength={200}
-              style={inputStyle}
+              className="sp-input"
             />
           </FormField>
 
@@ -440,69 +441,75 @@ function PromptTemplateDetailPageInner() {
               onChange={(e) => setTmplDc(e.target.value)}
               placeholder="템플릿에 대한 간단한 설명을 입력하세요"
               readOnly={readOnly}
-              style={inputStyle}
+              className="sp-input"
             />
           </FormField>
 
           {/* 작업 유형 / 대상 사용처 / 정렬 순서 / 사용 여부 — 비율 조정: 사용처 넓게, 정렬·여부 좁게 */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr 0.7fr 0.7fr", gap: 16 }}>
             <FormField label="작업 유형" required>
-              <select
-                value={taskTyCode}
-                onChange={(e) => setTaskTyCode(e.target.value as TaskType)}
-                // 기획실 사용처는 task_ty_code 가 PLAN_STUDIO_ARTF_GENERATE 단일값으로 강제됨
-                disabled={readOnly || refTyCode === "PLAN_STUDIO_ARTF"}
-                style={selectStyle}
-              >
-                {refTyCode === "PLAN_STUDIO_ARTF" ? (
-                  <option value="PLAN_STUDIO_ARTF_GENERATE">산출물 생성</option>
-                ) : (
-                  <>
-                    {TASK_TYPE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                    {/* 기존 데이터에 폐기 유형이 있을 경우 선택지 유지 */}
-                    {taskTyCode in DEPRECATED_TASK_TYPES && (
-                      <option value={taskTyCode} disabled style={{ color: "var(--color-warning)" }}>
-                        ⚠ {DEPRECATED_TASK_TYPES[taskTyCode]} (미사용)
-                      </option>
-                    )}
-                  </>
-                )}
-              </select>
+              <div className="sp-select-wrap">
+                <select
+                  value={taskTyCode}
+                  onChange={(e) => setTaskTyCode(e.target.value as TaskType)}
+                  // 기획실 사용처는 task_ty_code 가 PLAN_STUDIO_ARTF_GENERATE 단일값으로 강제됨
+                  disabled={readOnly || refTyCode === "PLAN_STUDIO_ARTF"}
+                  className="sp-input"
+                >
+                  {refTyCode === "PLAN_STUDIO_ARTF" ? (
+                    <option value="PLAN_STUDIO_ARTF_GENERATE">산출물 생성</option>
+                  ) : (
+                    <>
+                      {TASK_TYPE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                      {/* 기존 데이터에 폐기 유형이 있을 경우 선택지 유지 */}
+                      {taskTyCode in DEPRECATED_TASK_TYPES && (
+                        <option value={taskTyCode} disabled style={{ color: "var(--color-warning)" }}>
+                          ⚠ {DEPRECATED_TASK_TYPES[taskTyCode]} (미사용)
+                        </option>
+                      )}
+                    </>
+                  )}
+                </select>
+                <span className="sp-select-arrow"><SelectChevron /></span>
+              </div>
             </FormField>
 
             <FormField label="대상 사용처">
-              <select
-                value={refTyCode}
-                onChange={(e) => {
-                  // 사용처 변경 시 매트릭스 차원 자동 정합화:
-                  //   - 기획실로 전환 → task_ty_code 강제 + div/fmt 기본값(IA/MD) 채움
-                  //   - 기획실에서 빠져나감 → task_ty_code 기본값(INSPECT) 으로 + div/fmt 비움
-                  const v = e.target.value as RefType | "";
-                  setRefTyCode(v);
-                  if (v === "PLAN_STUDIO_ARTF") {
-                    setTaskTyCode("PLAN_STUDIO_ARTF_GENERATE");
-                    if (!divCode) setDivCode("IA");
-                    if (!fmtCode) setFmtCode("MD");
-                  } else {
-                    if (taskTyCode === "PLAN_STUDIO_ARTF_GENERATE") {
-                      setTaskTyCode("INSPECT");
+              <div className="sp-select-wrap">
+                <select
+                  value={refTyCode}
+                  onChange={(e) => {
+                    // 사용처 변경 시 매트릭스 차원 자동 정합화:
+                    //   - 기획실로 전환 → task_ty_code 강제 + div/fmt 기본값(IA/MD) 채움
+                    //   - 기획실에서 빠져나감 → task_ty_code 기본값(INSPECT) 으로 + div/fmt 비움
+                    const v = e.target.value as RefType | "";
+                    setRefTyCode(v);
+                    if (v === "PLAN_STUDIO_ARTF") {
+                      setTaskTyCode("PLAN_STUDIO_ARTF_GENERATE");
+                      if (!divCode) setDivCode("IA");
+                      if (!fmtCode) setFmtCode("MD");
+                    } else {
+                      if (taskTyCode === "PLAN_STUDIO_ARTF_GENERATE") {
+                        setTaskTyCode("INSPECT");
+                      }
+                      setDivCode("");
+                      setFmtCode("");
                     }
-                    setDivCode("");
-                    setFmtCode("");
-                  }
-                }}
-                disabled={readOnly}
-                style={selectStyle}
-              >
-                <option value="">범용</option>
-                <option value="UNIT_WORK">단위업무 (UNIT_WORK)</option>
-                <option value="SCREEN">화면 (SCREEN)</option>
-                <option value="AREA">영역 설계 (AREA)</option>
-                <option value="FUNCTION">기능 설계 (FUNCTION)</option>
-                <option value="PLAN_STUDIO_ARTF">기획실 산출물 (PLAN_STUDIO_ARTF)</option>
-              </select>
+                  }}
+                  disabled={readOnly}
+                  className="sp-input"
+                >
+                  <option value="">범용</option>
+                  <option value="UNIT_WORK">단위업무 (UNIT_WORK)</option>
+                  <option value="SCREEN">화면 (SCREEN)</option>
+                  <option value="AREA">영역 설계 (AREA)</option>
+                  <option value="FUNCTION">기능 설계 (FUNCTION)</option>
+                  <option value="PLAN_STUDIO_ARTF">기획실 산출물 (PLAN_STUDIO_ARTF)</option>
+                </select>
+                <span className="sp-select-arrow"><SelectChevron /></span>
+              </div>
             </FormField>
 
             <FormField label="정렬 순서">
@@ -512,20 +519,23 @@ function PromptTemplateDetailPageInner() {
                 onChange={(e) => setSortOrdr(Number(e.target.value))}
                 readOnly={readOnly}
                 min={0}
-                style={inputStyle}
+                className="sp-input"
               />
             </FormField>
 
             <FormField label="사용 여부">
-              <select
-                value={useYn}
-                onChange={(e) => setUseYn(e.target.value)}
-                disabled={readOnly}
-                style={selectStyle}
-              >
-                <option value="Y">사용</option>
-                <option value="N">미사용</option>
-              </select>
+              <div className="sp-select-wrap">
+                <select
+                  value={useYn}
+                  onChange={(e) => setUseYn(e.target.value)}
+                  disabled={readOnly}
+                  className="sp-input"
+                >
+                  <option value="Y">사용</option>
+                  <option value="N">미사용</option>
+                </select>
+                <span className="sp-select-arrow"><SelectChevron /></span>
+              </div>
             </FormField>
           </div>
 
@@ -533,29 +543,35 @@ function PromptTemplateDetailPageInner() {
           {refTyCode === "PLAN_STUDIO_ARTF" && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr 0.7fr 0.7fr", gap: 16 }}>
               <FormField label="산출물 구분" required>
-                <select
-                  value={divCode}
-                  onChange={(e) => setDivCode(e.target.value)}
-                  disabled={readOnly}
-                  style={selectStyle}
-                >
-                  {DIV_OPTIONS.map((d) => (
-                    <option key={d.code} value={d.code}>{d.name} ({d.code})</option>
-                  ))}
-                </select>
+                <div className="sp-select-wrap">
+                  <select
+                    value={divCode}
+                    onChange={(e) => setDivCode(e.target.value)}
+                    disabled={readOnly}
+                    className="sp-input"
+                  >
+                    {DIV_OPTIONS.map((d) => (
+                      <option key={d.code} value={d.code}>{d.name} ({d.code})</option>
+                    ))}
+                  </select>
+                  <span className="sp-select-arrow"><SelectChevron /></span>
+                </div>
               </FormField>
 
               <FormField label="출력 형식" required>
-                <select
-                  value={fmtCode}
-                  onChange={(e) => setFmtCode(e.target.value)}
-                  disabled={readOnly}
-                  style={selectStyle}
-                >
-                  {FMT_OPTIONS.map((f) => (
-                    <option key={f.code} value={f.code}>{f.name} ({f.code})</option>
-                  ))}
-                </select>
+                <div className="sp-select-wrap">
+                  <select
+                    value={fmtCode}
+                    onChange={(e) => setFmtCode(e.target.value)}
+                    disabled={readOnly}
+                    className="sp-input"
+                  >
+                    {FMT_OPTIONS.map((f) => (
+                      <option key={f.code} value={f.code}>{f.name} ({f.code})</option>
+                    ))}
+                  </select>
+                  <span className="sp-select-arrow"><SelectChevron /></span>
+                </div>
               </FormField>
 
               <div />
@@ -672,23 +688,6 @@ function FormField({ label, required, children }: {
 }
 
 // ── 스타일 상수 ───────────────────────────────────────────────────────────────
-
-const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "8px 12px", borderRadius: 6,
-  border: "1px solid var(--color-border)",
-  background: "var(--color-bg-card)", color: "var(--color-text-primary)",
-  fontSize: 14, boxSizing: "border-box", outline: "none",
-};
-
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  paddingRight: "32px",
-  appearance: "none",
-  WebkitAppearance: "none",
-  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
-  backgroundRepeat: "no-repeat",
-  backgroundPosition: "right 10px center",
-};
 
 const primaryBtnStyle: React.CSSProperties = {
   padding: "5px 14px", borderRadius: 6,

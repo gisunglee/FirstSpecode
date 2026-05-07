@@ -280,7 +280,8 @@
       "Bash(npm view *)",
       "Bash(cat)",
       "Bash(node scripts/p0-smoke.mjs)",
-      "Bash(rm scripts/p0-smoke.mjs)"
+      "Bash(rm scripts/p0-smoke.mjs)",
+      "Bash(grep -nA3 \"model TbCmAttachFile\" prisma/schema.prisma)"
     ]
   }
 }

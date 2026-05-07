@@ -121,33 +121,34 @@ function BaselinePageInner() {
                   cursor: "pointer",
                 }}
               >
-                <div style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>{idx + 1}</div>
+                <div style={{ color: "var(--color-text-primary)", fontSize: 13 }}>{idx + 1}</div>
 
                 {/* 기준선명 */}
                 <div>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: "var(--color-primary, #1976d2)" }}>
+                  <span style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
                     {item.name}
                   </span>
                   {item.comment && (
-                    <span style={{ fontSize: 12, color: "#888", marginLeft: 8 }}>{item.comment}</span>
+                    <span style={{ fontSize: 13, color: "var(--color-text-secondary)", marginLeft: 8 }}>{item.comment}</span>
                   )}
                 </div>
 
-                <div style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>
+                <div style={{ color: "var(--color-text-primary)", fontSize: 13 }}>
                   {new Date(item.confirmedAt).toLocaleString("ko-KR", {
                     year: "numeric", month: "2-digit", day: "2-digit",
                     hour: "2-digit", minute: "2-digit",
                   })}
                 </div>
 
-                <div style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>
+                <div style={{ color: "var(--color-text-primary)", fontSize: 13 }}>
                   {item.confirmerEmail || "-"}
                 </div>
 
+                {/* 요구사항 건수 — 알약 디자인은 유지, 폰트만 본문과 통일 */}
                 <div>
                   <span style={{
                     display: "inline-block", padding: "2px 10px", borderRadius: 4,
-                    fontSize: 12, fontWeight: 600,
+                    fontSize: 13,
                     background: "var(--color-bg-muted)", color: "var(--color-text-secondary)",
                   }}>
                     {item.requirementCount}건
@@ -228,7 +229,8 @@ function CreateBaselinePopup({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="예: 1차 기준선, v1.0 릴리스"
-          style={{ ...inputStyle, marginBottom: 16 }}
+          className="sp-input"
+          style={{ marginBottom: 16 }}
           autoFocus
         />
 
@@ -240,7 +242,8 @@ function CreateBaselinePopup({
           onChange={(e) => setComment(e.target.value)}
           placeholder="기준선 생성 사유를 입력해 주세요..."
           rows={16}
-          style={{ ...inputStyle, resize: "vertical", marginBottom: 20 }}
+          className="sp-input"
+          style={{ resize: "vertical", marginBottom: 20 }}
         />
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
@@ -301,17 +304,6 @@ const secondaryBtnStyle: React.CSSProperties = {
   color: "var(--color-text-primary)",
   fontSize: 13,
   cursor: "pointer",
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 12px",
-  borderRadius: 6,
-  border: "1px solid var(--color-border)",
-  background: "var(--color-bg-card)",
-  color: "var(--color-text-primary)",
-  fontSize: 13,
-  boxSizing: "border-box",
 };
 
 const overlayStyle: React.CSSProperties = {

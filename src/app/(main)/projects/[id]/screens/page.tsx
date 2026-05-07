@@ -420,7 +420,7 @@ function ScreensPageInner() {
                           {screen.requirementName}
                         </button>
                       ) : (
-                        <span style={{ color: "#aaa", fontSize: 13 }}>미분류</span>
+                        <span style={{ color: "var(--color-text-tertiary)", fontSize: 13 }}>미분류</span>
                       )
                     ) : null}
                   </div>
@@ -442,7 +442,7 @@ function ScreensPageInner() {
                           {screen.unitWorkName}
                         </button>
                       ) : (
-                        <span style={{ color: "#aaa", fontSize: 13 }}>미분류</span>
+                        <span style={{ color: "var(--color-text-tertiary)", fontSize: 13 }}>미분류</span>
                       )
                     }
                   </div>
@@ -450,12 +450,12 @@ function ScreensPageInner() {
                   {/* 화면명 */}
                   <div
                     style={{
-                      fontSize: 14, fontWeight: 500,
+                      fontSize: 13,
                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                     }}
                     title={`${screen.displayId} ${screen.name}`}
                   >
-                    <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
+                    <span style={{ color: "var(--color-text-secondary)", fontSize: 13, marginRight: 6 }}>
                       {screen.displayId}
                     </span>
                     {screen.name}
@@ -483,27 +483,27 @@ function ScreensPageInner() {
                   </div>
 
                   {/* 영역 수 */}
-                  <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
+                  <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
                     {screen.areaCount}
                   </div>
 
                   {/* 정렬순서 */}
-                  <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>
+                  <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
                     {screen.sortOrder}
                   </div>
 
                   {/* 대분류 */}
-                  <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {screen.categoryL || "-"}
                   </div>
 
                   {/* 중분류 */}
-                  <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {screen.categoryM || "-"}
                   </div>
 
                   {/* 소분류 */}
-                  <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {screen.categoryS || "-"}
                   </div>
 
@@ -531,7 +531,7 @@ function ScreensPageInner() {
                         </span>
                       </button>
                     ) : (
-                      <span style={{ color: "#ccc", fontSize: 13 }}>—</span>
+                      <span style={{ color: "var(--color-text-tertiary)", fontSize: 13 }}>-</span>
                     )}
                   </div>
 
@@ -543,7 +543,7 @@ function ScreensPageInner() {
                       { val: screen.avgTestRt, color: "#6a1b9a" },
                     ].map(({ val, color }, i) => (
                       <span key={i} style={{
-                        color, fontWeight: 600,
+                        color,
                         background: val === 100 ? `${color}14` : "transparent",
                         borderRadius: 3, padding: "1px 3px",
                       }}>
@@ -748,15 +748,19 @@ const gridRowStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
+// 인라인 링크 — AI 태스크 페이지 기준에 맞춰 평소엔 일반 텍스트로 통일.
+// font: inherit 으로 <button> user-agent 폰트가 옆 <span> 과 어긋나는 문제 방지.
 const linkBtnStyle: React.CSSProperties = {
   background: "none",
   border: "none",
   cursor: "pointer",
-  color: "var(--color-primary, #1976d2)",
-  fontSize: 14,
+  color: "var(--color-text-primary)",
+  fontFamily: "inherit",
+  fontWeight: "inherit",
+  fontSize: 13,
   padding: 0,
   textAlign: "left",
-  textDecoration: "underline",
+  textDecoration: "none",
 };
 
 const filterSelectStyle: React.CSSProperties = {

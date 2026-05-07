@@ -210,7 +210,8 @@ function StandardGuideListInner() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="제목·본문 검색"
-            style={{ ...inputStyle, width: "100%", paddingLeft: 32 }}
+            className="sp-input"
+            style={{ paddingLeft: 32 }}
           />
         </div>
 
@@ -278,7 +279,7 @@ function StandardGuideListInner() {
 
                   {/* 제목 */}
                   <div style={{
-                    fontWeight: 500, fontSize: 13, color: "var(--color-text-primary)",
+                    fontSize: 13, color: "var(--color-text-primary)",
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}>
                     {g.subject || "(제목 없음)"}
@@ -309,14 +310,14 @@ function StandardGuideListInner() {
 
                   {/* 작성자 */}
                   <div style={{
-                    fontSize: 13, color: "var(--color-text-secondary)",
+                    fontSize: 13, color: "var(--color-text-primary)",
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }} title={g.creatMberName}>
                     {g.creatMberName}
                   </div>
 
                   {/* 최근 수정일 */}
-                  <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+                  <div style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
                     {formatDateShort(lastDt)}
                   </div>
                 </div>
@@ -353,12 +354,6 @@ const primaryBtnStyle: React.CSSProperties = {
   fontSize: 14, fontWeight: 600, cursor: "pointer",
 };
 
-const inputStyle: React.CSSProperties = {
-  padding: "7px 12px", borderRadius: 6,
-  border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
-  color: "var(--color-text-primary)", fontSize: 13, outline: "none",
-  boxSizing: "border-box",
-};
 
 // 세그먼트 컨트롤 — ai-tasks 등 다른 목록 페이지와 동일 규격 (프로젝트 표준)
 // 외곽 border로 한 덩어리를 감싸고 내부 버튼은 테두리 없이 배치

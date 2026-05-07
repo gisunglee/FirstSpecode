@@ -120,14 +120,14 @@ export default function AdminProjectsPage() {
       {/* 필터 바 */}
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <input
-          className="sp-input"
+          className="sp-input sp-input-fixed"
           type="text"
           placeholder="프로젝트명 또는 고객사 검색"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") applySearch(); }}
           onBlur={applySearch}
-          style={{ minWidth: 240 }}
+          style={{ width: 280 }}
         />
         <div style={{ marginLeft: "auto", fontSize: "var(--text-sm)", color: "var(--color-text-tertiary)" }}>
           총 {totalCount.toLocaleString()}개

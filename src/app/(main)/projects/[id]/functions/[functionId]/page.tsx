@@ -29,6 +29,7 @@ import ColMappingDialog from "@/components/ui/ColMappingDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
 import AiTaskFilePicker from "@/components/ui/AiTaskFilePicker";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 import { type AiTaskStatus, AI_TASK_STATUS_LABEL, AI_TASK_STATUS_DOT } from "@/constants/codes";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import AiImplementCard from "@/components/ui/AiImplementCard";
@@ -785,19 +786,25 @@ function FunctionDetailPageInner() {
               <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "0 16px" }}>
                 <div style={formGroupStyle}>
                   <label style={labelStyle}>소속 영역</label>
-                  <select value={areaId} onChange={(e) => setAreaId(e.target.value)} disabled={!canEdit} style={selectStyle}>
-                    <option value="">미분류 (영역 없음)</option>
-                    {areaOptions.map((a) => (
-                      <option key={a.areaId} value={a.areaId}>{a.displayId} {a.name}</option>
-                    ))}
-                  </select>
+                  <div className="sp-select-wrap">
+                    <select value={areaId} onChange={(e) => setAreaId(e.target.value)} disabled={!canEdit} className="sp-input">
+                      <option value="">미분류 (영역 없음)</option>
+                      {areaOptions.map((a) => (
+                        <option key={a.areaId} value={a.areaId}>{a.displayId} {a.name}</option>
+                      ))}
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
                 </div>
 
                 <div style={formGroupStyle}>
                   <label style={labelStyle}>유형</label>
-                  <select value={type} onChange={(e) => setType(e.target.value)} disabled={!canEdit} style={selectStyle}>
-                    {FUNC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
+                  <div className="sp-select-wrap">
+                    <select value={type} onChange={(e) => setType(e.target.value)} disabled={!canEdit} className="sp-input">
+                      {FUNC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
                 </div>
               </div>
 
@@ -811,7 +818,7 @@ function FunctionDetailPageInner() {
                     onChange={(e) => setName(e.target.value)}
                     placeholder="기능명을 입력하세요"
                     readOnly={!canEdit}
-                    style={inputStyle}
+                    className="sp-input"
                   />
                 </div>
                 <div style={formGroupStyle}>
@@ -822,7 +829,7 @@ function FunctionDetailPageInner() {
                     onChange={(e) => setDisplayId(e.target.value)}
                     placeholder="미입력 시 자동 생성"
                     readOnly={!canEdit}
-                    style={inputStyle}
+                    className="sp-input"
                   />
                 </div>
               </div>
@@ -831,20 +838,26 @@ function FunctionDetailPageInner() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 16px" }}>
                 <div style={formGroupStyle}>
                   <label style={labelStyle}>우선순위</label>
-                  <select value={priority} onChange={(e) => setPriority(e.target.value)} disabled={!canEdit} style={selectStyle}>
-                    <option value="HIGH">높음</option>
-                    <option value="MEDIUM">중간</option>
-                    <option value="LOW">낮음</option>
-                  </select>
+                  <div className="sp-select-wrap">
+                    <select value={priority} onChange={(e) => setPriority(e.target.value)} disabled={!canEdit} className="sp-input">
+                      <option value="HIGH">높음</option>
+                      <option value="MEDIUM">중간</option>
+                      <option value="LOW">낮음</option>
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
                 </div>
 
                 <div style={formGroupStyle}>
                   <label style={labelStyle}>복잡도</label>
-                  <select value={complexity} onChange={(e) => setComplexity(e.target.value)} disabled={!canEdit} style={selectStyle}>
-                    <option value="HIGH">높음</option>
-                    <option value="MEDIUM">중간</option>
-                    <option value="LOW">낮음</option>
-                  </select>
+                  <div className="sp-select-wrap">
+                    <select value={complexity} onChange={(e) => setComplexity(e.target.value)} disabled={!canEdit} className="sp-input">
+                      <option value="HIGH">높음</option>
+                      <option value="MEDIUM">중간</option>
+                      <option value="LOW">낮음</option>
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
                 </div>
 
                 <div style={formGroupStyle}>
@@ -860,7 +873,7 @@ function FunctionDetailPageInner() {
                     onChange={(e) => setEffort(e.target.value)}
                     placeholder="시간 (예: 2, 0.5)"
                     readOnly={!canEdit}
-                    style={inputStyle}
+                    className="sp-input"
                   />
                 </div>
               </div>
@@ -874,7 +887,7 @@ function FunctionDetailPageInner() {
                     value={implStartDate}
                     onChange={(e) => setImplStartDate(e.target.value)}
                     readOnly={!canEdit}
-                    style={inputStyle}
+                    className="sp-input"
                   />
                 </div>
 
@@ -885,7 +898,7 @@ function FunctionDetailPageInner() {
                     value={implEndDate}
                     onChange={(e) => setImplEndDate(e.target.value)}
                     readOnly={!canEdit}
-                    style={inputStyle}
+                    className="sp-input"
                   />
                 </div>
 
@@ -897,7 +910,7 @@ function FunctionDetailPageInner() {
                     value={sortOrder}
                     onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
                     readOnly={!canEdit}
-                    style={inputStyle}
+                    className="sp-input"
                   />
                 </div>
               </div>
@@ -1624,22 +1637,6 @@ function DisplayIdHelp() {
 const labelStyle: React.CSSProperties = {
   display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600,
   color: "var(--color-text-secondary)",
-};
-const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "8px 12px", borderRadius: 6,
-  border: "1px solid var(--color-border)", fontSize: 14,
-  background: "var(--color-bg-card)", color: "var(--color-text-primary)", boxSizing: "border-box",
-};
-// select 전용 — 단위업무/영역/화면 등 다른 편집 페이지와 동일한 chevron 화살표 (얇은 ⌄)
-// 기존 채워진 삼각형(▼) 은 다른 페이지와 톤이 달라 통일.
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  paddingRight:       "32px",
-  appearance:         "none",
-  WebkitAppearance:   "none",
-  backgroundImage:    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
-  backgroundRepeat:   "no-repeat",
-  backgroundPosition: "right 10px center",
 };
 const primaryBtnStyle: React.CSSProperties = {
   padding: "8px 20px", borderRadius: 6, border: "1px solid transparent",

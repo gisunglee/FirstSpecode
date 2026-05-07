@@ -31,6 +31,7 @@ import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
 import ReleaseDialog from "@/components/common/ReleaseDialog";
 import ReleaseHistoryDialog from "@/components/documents/ReleaseHistoryDialog";
 import ExportMenu from "@/components/common/ExportMenu";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -691,17 +692,20 @@ function RequirementDetailPageInner() {
           <Section>
             {/* 상위 과업 선택 */}
             <FormField label="상위 과업">
-              <select
-                value={form.taskId ?? ""}
-                onChange={(e) => handleChange("taskId", e.target.value || "")}
-                disabled={!canEdit}
-                style={selectStyle}
-              >
-                <option value="">미분류</option>
-                {taskOptions.map((t) => (
-                  <option key={t.taskId} value={t.taskId}>{t.name}</option>
-                ))}
-              </select>
+              <div className="sp-select-wrap">
+                <select
+                  value={form.taskId ?? ""}
+                  onChange={(e) => handleChange("taskId", e.target.value || "")}
+                  disabled={!canEdit}
+                  className="sp-input"
+                >
+                  <option value="">미분류</option>
+                  {taskOptions.map((t) => (
+                    <option key={t.taskId} value={t.taskId}>{t.name}</option>
+                  ))}
+                </select>
+                <span className="sp-select-arrow"><SelectChevron /></span>
+              </div>
             </FormField>
 
             {/* 요구사항명 + 표시 ID — 표시 ID를 오른쪽으로 배치 (7:3 비율) */}
@@ -713,7 +717,7 @@ function RequirementDetailPageInner() {
                   placeholder="요구사항명을 입력하세요"
                   onChange={(e) => handleChange("name", e.target.value)}
                   readOnly={!canEdit}
-                  style={inputStyle}
+                  className="sp-input"
                 />
               </FormField>
               <FormField label="표시 ID">
@@ -723,7 +727,7 @@ function RequirementDetailPageInner() {
                   placeholder="예: RQ-00001"
                   onChange={(e) => handleChange("reqDisplayId", e.target.value)}
                   readOnly={!canEdit}
-                  style={inputStyle}
+                  className="sp-input"
                 />
               </FormField>
             </div>
@@ -752,20 +756,23 @@ function RequirementDetailPageInner() {
                     </button>
                   )}
                 </div>
-                <select
-                  value={form.assignMemberId}
-                  onChange={(e) => handleChange("assignMemberId", e.target.value)}
-                  disabled={!canEdit}
-                  style={selectStyle}
-                >
-                  <option value="">담당자 없음</option>
-                  {members.map((m) => (
-                    <option key={m.memberId} value={m.memberId}>
-                      {m.name ?? m.email}
-                      {m.memberId === myMemberId ? " (나)" : ""}
-                    </option>
-                  ))}
-                </select>
+                <div className="sp-select-wrap">
+                  <select
+                    value={form.assignMemberId}
+                    onChange={(e) => handleChange("assignMemberId", e.target.value)}
+                    disabled={!canEdit}
+                    className="sp-input"
+                  >
+                    <option value="">담당자 없음</option>
+                    {members.map((m) => (
+                      <option key={m.memberId} value={m.memberId}>
+                        {m.name ?? m.email}
+                        {m.memberId === myMemberId ? " (나)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="sp-select-arrow"><SelectChevron /></span>
+                </div>
               </div>
               <FormField label="정렬 순서">
                 <input
@@ -776,7 +783,7 @@ function RequirementDetailPageInner() {
                   onChange={(e) => setForm((prev) => ({ ...prev, sortOrder: parseInt(e.target.value) || 0 }))}
                   placeholder="0"
                   readOnly={!canEdit}
-                  style={inputStyle}
+                  className="sp-input"
                 />
               </FormField>
             </div>
@@ -784,28 +791,34 @@ function RequirementDetailPageInner() {
             {/* 우선순위 + 출처 + RFP 페이지 — 3컬럼 */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
               <FormField label="우선순위" required>
-                <select
-                  value={form.priority}
-                  onChange={(e) => handleChange("priority", e.target.value)}
-                  disabled={!canEdit}
-                  style={selectStyle}
-                >
-                  <option value="HIGH">높음 (HIGH)</option>
-                  <option value="MEDIUM">중간 (MEDIUM)</option>
-                  <option value="LOW">낮음 (LOW)</option>
-                </select>
+                <div className="sp-select-wrap">
+                  <select
+                    value={form.priority}
+                    onChange={(e) => handleChange("priority", e.target.value)}
+                    disabled={!canEdit}
+                    className="sp-input"
+                  >
+                    <option value="HIGH">높음 (HIGH)</option>
+                    <option value="MEDIUM">중간 (MEDIUM)</option>
+                    <option value="LOW">낮음 (LOW)</option>
+                  </select>
+                  <span className="sp-select-arrow"><SelectChevron /></span>
+                </div>
               </FormField>
               <FormField label="출처" required>
-                <select
-                  value={form.source}
-                  onChange={(e) => handleChange("source", e.target.value)}
-                  disabled={!canEdit}
-                  style={selectStyle}
-                >
-                  <option value="RFP">RFP</option>
-                  <option value="ADD">추가</option>
-                  <option value="CHANGE">변경</option>
-                </select>
+                <div className="sp-select-wrap">
+                  <select
+                    value={form.source}
+                    onChange={(e) => handleChange("source", e.target.value)}
+                    disabled={!canEdit}
+                    className="sp-input"
+                  >
+                    <option value="RFP">RFP</option>
+                    <option value="ADD">추가</option>
+                    <option value="CHANGE">변경</option>
+                  </select>
+                  <span className="sp-select-arrow"><SelectChevron /></span>
+                </div>
               </FormField>
               <FormField label="RFP 페이지">
                 <input
@@ -814,7 +827,7 @@ function RequirementDetailPageInner() {
                   placeholder="예: p.23"
                   onChange={(e) => handleChange("rfpPage", e.target.value)}
                   readOnly={!canEdit}
-                  style={inputStyle}
+                  className="sp-input"
                 />
               </FormField>
             </div>
@@ -1746,29 +1759,6 @@ function SaveOptionDialog({ lastVersion, changedFlags, onClose, onSave, isPendin
 
 
 // ── 스타일 ───────────────────────────────────────────────────────────────────
-
-const inputStyle: React.CSSProperties = {
-  width:        "100%",
-  padding:      "8px 12px",
-  borderRadius: 6,
-  border:       "1px solid var(--color-border)",
-  background:   "var(--color-bg-card)",
-  color:        "var(--color-text-primary)",
-  fontSize:     14,
-  boxSizing:    "border-box",
-  outline:      "none",
-};
-
-// select 전용 — 브라우저 기본 화살표를 제거하고 커스텀 화살표로 대체
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  paddingRight:       "32px",
-  appearance:         "none",
-  WebkitAppearance:   "none",
-  backgroundImage:    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
-  backgroundRepeat:   "no-repeat",
-  backgroundPosition: "right 10px center",
-};
 
 const primaryBtnStyle: React.CSSProperties = {
   padding:      "8px 24px",

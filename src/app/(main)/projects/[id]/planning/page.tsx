@@ -20,6 +20,7 @@ import dynamic from "next/dynamic";
 // TipTap 번들이 초기 로드에 포함되지 않도록 dynamic import
 const RichEditor = dynamic(() => import("@/components/ui/RichEditor"), { ssr: false });
 import MarkdownEditor from "@/components/ui/MarkdownEditor";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -870,28 +871,31 @@ function TaskDetailPanel({ projectId, taskId, displayId, onSaved }: { projectId:
       <PanelHeader icon="📁" displayType="과업" displayId={displayId} name={name} onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <PanelField label="과업명 *">
-          <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
+          <input value={name} onChange={(e) => setName(e.target.value)} className="sp-input" />
         </PanelField>
         <div style={{ display: "flex", gap: 16 }}>
           <PanelField label="카테고리 *" style={{ flex: 1 }}>
-            <select value={category} onChange={(e) => setCategory(e.target.value)} style={inputStyle}>
-              <option value="NEW_DEV">신규개발</option>
-              <option value="IMPROVE">기능 개선</option>
-              <option value="MAINTAIN">유지 보수</option>
-            </select>
+            <div className="sp-select-wrap">
+              <select value={category} onChange={(e) => setCategory(e.target.value)} className="sp-input">
+                <option value="NEW_DEV">신규개발</option>
+                <option value="IMPROVE">기능 개선</option>
+                <option value="MAINTAIN">유지 보수</option>
+              </select>
+              <span className="sp-select-arrow"><SelectChevron /></span>
+            </div>
           </PanelField>
           <PanelField label="RFP 페이지 번호" style={{ flex: 1 }}>
-            <input value={rfpPage} onChange={(e) => setRfpPage(e.target.value)} placeholder="예: p.23" style={inputStyle} />
+            <input value={rfpPage} onChange={(e) => setRfpPage(e.target.value)} placeholder="예: p.23" className="sp-input" />
           </PanelField>
         </div>
         <PanelField label="정의">
-          <textarea value={definition} onChange={(e) => setDefinition(e.target.value)} rows={4} style={{ ...inputStyle, resize: "vertical" }} />
+          <textarea value={definition} onChange={(e) => setDefinition(e.target.value)} rows={4} className="sp-input" style={{ resize: "vertical" }} />
         </PanelField>
         <PanelField label="세부내용">
           <RichEditor key={`task-content-${taskId}`} value={content} onChange={setContent} placeholder="세부 내용을 입력하세요." minHeight={260} />
         </PanelField>
         <PanelField label="산출물">
-          <textarea value={outputInfo} onChange={(e) => setOutputInfo(e.target.value)} rows={4} style={{ ...inputStyle, resize: "vertical" }} />
+          <textarea value={outputInfo} onChange={(e) => setOutputInfo(e.target.value)} rows={4} className="sp-input" style={{ resize: "vertical" }} />
         </PanelField>
       </div>
     </div>
@@ -1004,22 +1008,28 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
           {basicOpen && (
             <div style={{ padding: "16px 0", display: "flex", flexDirection: "column", gap: 16 }}>
               <PanelField label="요구사항명 *">
-                <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
+                <input value={name} onChange={(e) => setName(e.target.value)} className="sp-input" />
               </PanelField>
               <div style={{ display: "flex", gap: 16 }}>
                 <PanelField label="우선순위" style={{ flex: 1 }}>
-                  <select value={priority} onChange={(e) => setPriority(e.target.value)} style={inputStyle}>
-                    <option value="HIGH">높음 (HIGH)</option>
-                    <option value="MEDIUM">중간 (MEDIUM)</option>
-                    <option value="LOW">낮음 (LOW)</option>
-                  </select>
+                  <div className="sp-select-wrap">
+                    <select value={priority} onChange={(e) => setPriority(e.target.value)} className="sp-input">
+                      <option value="HIGH">높음 (HIGH)</option>
+                      <option value="MEDIUM">중간 (MEDIUM)</option>
+                      <option value="LOW">낮음 (LOW)</option>
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
                 </PanelField>
                 <PanelField label="출처" style={{ flex: 1 }}>
-                  <select value={source} onChange={(e) => setSource(e.target.value)} style={inputStyle}>
-                    <option value="RFP">RFP</option>
-                    <option value="ADD">추가</option>
-                    <option value="CHANGE">변경</option>
-                  </select>
+                  <div className="sp-select-wrap">
+                    <select value={source} onChange={(e) => setSource(e.target.value)} className="sp-input">
+                      <option value="RFP">RFP</option>
+                      <option value="ADD">추가</option>
+                      <option value="CHANGE">변경</option>
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
                 </PanelField>
               </div>
               {/* 원문 / 현행화 탭 */}
@@ -1183,15 +1193,15 @@ function StoryDetailPanel({ projectId, storyId, displayId, onSaved }: { projectI
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {/* 스토리명 */}
         <PanelField label="스토리명 *">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="스토리명을 입력하세요" style={inputStyle} />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="스토리명을 입력하세요" className="sp-input" />
         </PanelField>
 
         {/* 페르소나 / 시나리오 — 2행 */}
         <PanelField label="페르소나">
-          <input value={persona} onChange={(e) => setPersona(e.target.value)} placeholder="예: 일반 회원 (신규 및 기존)" style={inputStyle} />
+          <input value={persona} onChange={(e) => setPersona(e.target.value)} placeholder="예: 일반 회원 (신규 및 기존)" className="sp-input" />
         </PanelField>
         <PanelField label="시나리오">
-          <textarea value={scenario} onChange={(e) => setScenario(e.target.value)} placeholder="사용자의 행동 흐름을 자연어로 서술하세요." rows={5} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.7 }} />
+          <textarea value={scenario} onChange={(e) => setScenario(e.target.value)} placeholder="사용자의 행동 흐름을 자연어로 서술하세요." rows={5} className="sp-input" style={{ resize: "vertical", lineHeight: 1.7 }} />
         </PanelField>
 
         {/* 인수기준 (Given / When / Then) */}
@@ -1323,7 +1333,8 @@ function AcRowItem({ row, idx, total, onUpdate, onDelete }: {
               onChange={(e) => onUpdate(field, e.target.value)}
               placeholder={placeholders[field]}
               rows={4}
-              style={{ ...inputStyle, resize: "vertical", fontSize: 13, lineHeight: 1.6, border: "1px solid var(--color-border)" }}
+              className="sp-input"
+              style={{ resize: "vertical", lineHeight: 1.6 }}
             />
           </div>
         );
@@ -1628,16 +1639,6 @@ const panelStyle: React.CSSProperties = {
 };
 
 
-const inputStyle: React.CSSProperties = {
-  width:        "100%",
-  padding:      "8px 12px",
-  borderRadius: 6,
-  border:       "1px solid var(--color-border)",
-  background:   "var(--color-bg-card)",
-  color:        "var(--color-text-primary)",
-  fontSize:     14,
-  boxSizing:    "border-box",
-};
 
 const primaryBtnStyle: React.CSSProperties = {
   padding:      "5px 14px",

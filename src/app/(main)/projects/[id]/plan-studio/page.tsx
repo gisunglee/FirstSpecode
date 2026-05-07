@@ -97,12 +97,12 @@ function Inner() {
             <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>등록된 기획실이 없습니다. 생성 버튼을 눌러 시작하세요.</div>
           ) : items.map((s) => (
             <div key={s.planStudioId} onClick={() => router.push(`/projects/${projectId}/plan-studio/${s.planStudioId}`)} style={gridRow}>
-              <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{s.planStudioDisplayId}</div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-primary, #1976d2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.planStudioNm}</div>
-              <div style={{ textAlign: "center", fontSize: 13 }}>{s.artfCount}</div>
-              <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{new Date(s.mdfcnDt ?? s.creatDt).toLocaleString()}</div>
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{s.planStudioDisplayId}</div>
+              <div style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.planStudioNm}</div>
+              <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>{s.artfCount}</div>
+              <div style={{ fontSize: 13, color: "var(--color-text-primary)" }}>{formatPlanStudioDt(s.mdfcnDt ?? s.creatDt)}</div>
               <div style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                <button onClick={() => setDeleteTarget({ id: s.planStudioId, name: s.planStudioNm })} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "#ccc" }} title="삭제">×</button>
+                <button onClick={() => setDeleteTarget({ id: s.planStudioId, name: s.planStudioNm })} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--color-text-tertiary)" }} title="삭제">×</button>
               </div>
             </div>
           ))}
@@ -142,7 +142,20 @@ function Inner() {
   );
 }
 
-const GRID = "100px 1fr 80px 140px 40px";
+const GRID = "100px 1fr 80px 160px 40px";
+
+// 수정일시 포맷 — "YYYY-MM-DD HH:mm" 으로 짧게.
+// toLocaleString() 기본값(예: "2026. 4. 11. 오전 11:33:32")은 한글 포맷이라
+// 21+자가 넘어 컬럼을 압박하므로 다른 목록 페이지와 동일한 ISO-식 포맷으로 통일.
+function formatPlanStudioDt(iso: string): string {
+  const d = new Date(iso);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+}
 const gridHeader: React.CSSProperties = { display: "grid", gridTemplateColumns: GRID, gap: 8, padding: "10px 16px", background: "var(--color-bg-muted)", fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" };
 const gridRow: React.CSSProperties = { display: "grid", gridTemplateColumns: GRID, gap: 8, padding: "12px 16px", alignItems: "center", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", cursor: "pointer", transition: "background 0.1s" };
 const overlay: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 };

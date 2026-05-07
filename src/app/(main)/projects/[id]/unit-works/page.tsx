@@ -579,7 +579,7 @@ function UnitWorksPageInner() {
               </div>
 
               {/* 순서 */}
-              <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)", fontWeight: 500 }}>
+              <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
                 {uw.sortOrder}
               </div>
 
@@ -593,7 +593,7 @@ function UnitWorksPageInner() {
                   onClick={() => router.push(`/projects/${projectId}/requirements/${uw.reqId}`)}
                   style={linkBtnStyle}
                 >
-                  <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 4 }}>
+                  <span style={{ color: "var(--color-text-secondary)", fontSize: 13, marginRight: 4 }}>
                     {uw.reqDisplayId}
                   </span>
                   {uw.reqName}
@@ -604,13 +604,13 @@ function UnitWorksPageInner() {
                   displayId/완료 배지는 flexShrink:0 으로 항상 전체 노출 */}
               <div
                 style={{
-                  fontSize: 14, fontWeight: 500,
+                  fontSize: 13,
                   display: "flex", alignItems: "center", gap: 8,
                   overflow: "hidden", whiteSpace: "nowrap", minWidth: 0,
                 }}
                 title={`${uw.displayId} ${uw.name}`}
               >
-                <span style={{ color: "var(--color-text-secondary)", fontSize: 12, flexShrink: 0 }}>
+                <span style={{ color: "var(--color-text-secondary)", fontSize: 13, flexShrink: 0 }}>
                   {uw.displayId}
                 </span>
                 <span
@@ -652,7 +652,7 @@ function UnitWorksPageInner() {
               </div>
 
               {/* 기간 — "YYYY-MM-DD ~ YYYY-MM-DD"(23자) 한 줄 유지 */}
-              <div style={{ fontSize: 12, color: "var(--color-text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <div style={{ fontSize: 13, color: "var(--color-text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {uw.startDate && uw.endDate
                   ? `${uw.startDate} ~ ${uw.endDate}`
                   : uw.startDate
@@ -671,7 +671,7 @@ function UnitWorksPageInner() {
               </div>
 
               {/* 화면수 */}
-              <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
+              <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
                 {uw.screenCount}
               </div>
 
@@ -699,7 +699,7 @@ function UnitWorksPageInner() {
                     </span>
                   </button>
                 ) : (
-                  <span style={{ color: "#ccc", fontSize: 13 }}>—</span>
+                  <span style={{ color: "var(--color-text-tertiary)", fontSize: 13 }}>-</span>
                 )}
               </div>
 
@@ -869,8 +869,8 @@ function UwRatioChip({ label, value, color }: { label: string; value: number; co
       title={`${fullLabel}: ${value}%`}
       style={{
         display: "inline-flex", alignItems: "center", justifyContent: "center",
-        fontSize: 11, fontWeight: 700, lineHeight: 1,
-        color: value > 0 ? color : "#bbb",
+        fontSize: 11, lineHeight: 1,
+        color: value > 0 ? color : "var(--color-text-tertiary)",
         minWidth: 24,
       }}
     >
@@ -933,9 +933,10 @@ function ProgressCell({
         cursor:       "pointer",
         padding:      "2px 6px",
         borderRadius: 4,
+        fontFamily:   "inherit",
+        fontWeight:   "inherit",
         fontSize:     13,
         color:        progress === 100 ? "#2e7d32" : "var(--color-text-primary)",
-        fontWeight:   progress === 100 ? 700 : 400,
       }}
     >
       {progress}%
@@ -1047,7 +1048,7 @@ function DeleteConfirmDialog({
 //   요구사항(1.5fr) < 단위업무명(2fr) — 단위업무명에 더 큰 비중
 //   기간 145px("2026-04-02 ~ 2028-06-08" 23자 nowrap)
 //   AI 구현 130px(배지+MM-DD HH:mm)
-const GRID_TEMPLATE = "28px 44px 1.5fr 2fr 110px 145px 80px 56px 130px 110px";
+const GRID_TEMPLATE = "28px 44px 1.5fr 2fr 110px 180px 80px 56px 130px 110px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",
@@ -1071,29 +1072,6 @@ const gridRowStyle: React.CSSProperties = {
   background:          "var(--color-bg-card)",
   transition:          "background 0.1s",
   cursor:              "pointer",
-};
-
-const inputStyle: React.CSSProperties = {
-  width:        "100%",
-  padding:      "8px 12px",
-  borderRadius: 6,
-  border:       "1px solid var(--color-border)",
-  background:   "var(--color-bg-card)",
-  color:        "var(--color-text-primary)",
-  fontSize:     14,
-  boxSizing:    "border-box",
-  outline:      "none",
-};
-
-// select 전용 — 브라우저 기본 화살표를 제거하고 커스텀 화살표로 대체
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  paddingRight:       "32px",
-  appearance:         "none",
-  WebkitAppearance:   "none",
-  backgroundImage:    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
-  backgroundRepeat:   "no-repeat",
-  backgroundPosition: "right 10px center",
 };
 
 // 담당자 필터 세그먼트 — filterSelectStyle과 동일 높이로 정렬
@@ -1135,15 +1113,19 @@ const filterSelectStyle: React.CSSProperties = {
   minWidth:           160,
 };
 
+// 인라인 링크 — AI 태스크 페이지 기준에 맞춰 평소엔 일반 텍스트로,
+// font: inherit 으로 <button> user-agent 폰트가 옆 <span> 과 어긋나는 문제 방지.
 const linkBtnStyle: React.CSSProperties = {
   background:     "none",
   border:         "none",
   cursor:         "pointer",
-  color:          "var(--color-primary, #1976d2)",
-  fontSize:       14,
+  color:          "var(--color-text-primary)",
+  fontFamily:     "inherit",
+  fontWeight:     "inherit",
+  fontSize:       13,
   padding:        0,
   textAlign:      "left",
-  textDecoration: "underline",
+  textDecoration: "none",
 };
 
 const primaryBtnStyle: React.CSSProperties = {

@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 import {
   GUIDE_CATEGORIES,
   GUIDE_CATEGORY_LABEL,
@@ -285,16 +286,18 @@ function StandardGuideDetailInner() {
           <div style={{ display: "grid", gridTemplateColumns: "180px 1fr 140px", gap: 16, alignItems: "end" }}>
             <div>
               <div style={cardLabelStyle}>카테고리</div>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value as GuideCategory)}
-                // selectStyle = inputStyle + 커스텀 화살표 (브라우저 기본 제거)
-                style={selectStyle}
-              >
-                {GUIDE_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{GUIDE_CATEGORY_LABEL[c]}</option>
-                ))}
-              </select>
+              <div className="sp-select-wrap">
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as GuideCategory)}
+                  className="sp-input"
+                >
+                  {GUIDE_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{GUIDE_CATEGORY_LABEL[c]}</option>
+                  ))}
+                </select>
+                <span className="sp-select-arrow"><SelectChevron /></span>
+              </div>
             </div>
             <div>
               <div style={cardLabelStyle}>제목</div>
@@ -302,20 +305,23 @@ function StandardGuideDetailInner() {
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="가이드 제목을 입력하세요"
-                style={inputStyle}
+                className="sp-input"
               />
             </div>
             <div>
               {/* 사용여부 — Y=사용중(AI 참조), N=미사용(보관만) */}
               <div style={cardLabelStyle}>사용여부</div>
-              <select
-                value={useYn}
-                onChange={(e) => setUseYn(e.target.value === "N" ? "N" : "Y")}
-                style={selectStyle}
-              >
-                <option value="Y">사용중</option>
-                <option value="N">미사용</option>
-              </select>
+              <div className="sp-select-wrap">
+                <select
+                  value={useYn}
+                  onChange={(e) => setUseYn(e.target.value === "N" ? "N" : "Y")}
+                  className="sp-input"
+                >
+                  <option value="Y">사용중</option>
+                  <option value="N">미사용</option>
+                </select>
+                <span className="sp-select-arrow"><SelectChevron /></span>
+              </div>
             </div>
           </div>
         </div>
@@ -390,30 +396,6 @@ const metaValueStyle: React.CSSProperties = {
 
 const metaSepStyle: React.CSSProperties = {
   fontSize: 12, color: "var(--color-border)", userSelect: "none",
-};
-
-const inputStyle: React.CSSProperties = {
-  width:        "100%",
-  padding:      "8px 12px",
-  borderRadius: 6,
-  border:       "1px solid var(--color-border)",
-  background:   "var(--color-bg-card)",
-  color:        "var(--color-text-primary)",
-  fontSize:     14,
-  boxSizing:    "border-box",
-  outline:      "none",
-};
-
-// select 전용 — 브라우저 기본 화살표 제거 + 커스텀 쉐브론 SVG 배경
-// 요구사항 상세(requirements/[reqId])와 동일 규격
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  paddingRight:       "32px",
-  appearance:         "none",
-  WebkitAppearance:   "none",
-  backgroundImage:    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
-  backgroundRepeat:   "no-repeat",
-  backgroundPosition: "right 10px center",
 };
 
 const primaryBtnStyle: React.CSSProperties = {

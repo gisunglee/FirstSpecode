@@ -27,11 +27,29 @@ import {
 } from "@/constants/codes";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
-// 공용 codes 모듈에서 타입 import — 로컬 중복 정의 제거
+// 공용 codes 모듈에서 타입 import — 로컬 중복 정의 제거.
+// 단, tb_ai_task.task_ty_code 는 두 도메인이 섞인 컬럼이라 (codes.ts 주석 참조)
+// 상세 다이얼로그도 일반 AiTaskType + Plan Studio 산출물(IA/JOURNEY/FLOW/ERD/PROCESS)
+// 양쪽을 모두 표시할 수 있어야 한다. ai-tasks 목록 페이지의 TASK_TYPE_LABELS 와 동일한 패턴.
+type PlanStudioArtfType = "IA" | "JOURNEY" | "FLOW" | "ERD" | "PROCESS";
+type ExtendedTaskType   = AiTaskType | PlanStudioArtfType;
+
+const PLAN_STUDIO_ARTF_LABEL: Record<PlanStudioArtfType, string> = {
+  IA:      "정보구조도",
+  JOURNEY: "사용자여정",
+  FLOW:    "화면흐름",
+  ERD:     "ERD",
+  PROCESS: "업무프로세스",
+};
+
+const EXTENDED_TASK_TYPE_LABEL: Record<ExtendedTaskType, string> = {
+  ...AI_TASK_TYPE_LABEL,
+  ...PLAN_STUDIO_ARTF_LABEL,
+};
 
 type TaskDetail = {
   taskId:       string;
-  taskType:     AiTaskType;
+  taskType:     ExtendedTaskType;
   refType:      AiRefType;
   refId:        string;
   refName:      string;
@@ -69,9 +87,10 @@ function statusBadgeStyle(status: AiTaskStatus): React.CSSProperties {
   };
 }
 
-function taskTypeBadgeStyle(type: AiTaskType): React.CSSProperties {
-  // INSPECT/DESIGN/IMPLEMENT/MOCKUP/IMPACT/CUSTOM/PRE_IMPL 7개 모두 대응
-  const colors: Record<AiTaskType, { bg: string; color: string }> = {
+function taskTypeBadgeStyle(type: ExtendedTaskType): React.CSSProperties {
+  // 일반 AiTaskType 7개 + Plan Studio 산출물 5개 모두 대응
+  // Plan Studio 산출물은 보랏빛 톤으로 일반 작업과 시각적으로 구분
+  const colors: Record<ExtendedTaskType, { bg: string; color: string }> = {
     INSPECT:   { bg: "#f5f5f5",  color: "#616161" },
     DESIGN:    { bg: "#e8eaf6",  color: "#3f51b5" },
     IMPLEMENT: { bg: "#fce4ec",  color: "#c62828" },
@@ -79,6 +98,11 @@ function taskTypeBadgeStyle(type: AiTaskType): React.CSSProperties {
     IMPACT:    { bg: "#fff3e0",  color: "#ef6c00" },
     CUSTOM:    { bg: "#f5f5f5",  color: "#757575" },
     PRE_IMPL:  { bg: "#e0f7fa",  color: "#00838f" },
+    IA:        { bg: "#ede7f6",  color: "#5e35b1" },
+    JOURNEY:   { bg: "#ede7f6",  color: "#5e35b1" },
+    FLOW:      { bg: "#ede7f6",  color: "#5e35b1" },
+    ERD:       { bg: "#ede7f6",  color: "#5e35b1" },
+    PROCESS:   { bg: "#ede7f6",  color: "#5e35b1" },
   };
   const c = colors[type] ?? { bg: "#f5f5f5", color: "#555" };
   return {
@@ -283,7 +307,7 @@ export default function AiTaskDetailDialog({
               flexWrap: "wrap", background: "var(--color-bg-card)", flexShrink: 0,
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span className="sp-badge" style={taskTypeBadgeStyle(data.taskType)}>{AI_TASK_TYPE_LABEL[data.taskType]}</span>
+                <span className="sp-badge" style={taskTypeBadgeStyle(data.taskType)}>{EXTENDED_TASK_TYPE_LABEL[data.taskType] ?? "알 수 없음"}</span>
                 <span className="sp-badge" style={statusBadgeStyle(data.status)}>{AI_TASK_STATUS_LABEL[data.status]}</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 4 }}>
                   {data.refDisplayId && (
@@ -316,73 +340,77 @@ export default function AiTaskDetailDialog({
                 )}
               </div>
 
-              {/* 액션 버튼 — 본인·OWNER·ADMIN만 표시 */}
+              {/* 액션 버튼 — 본인·OWNER·ADMIN만 표시.
+                  상태 변경은 모든 상태에서 동일 UI(select)로 통일.
+                  과거에는 DONE 일 때만 "반려" 버튼을 따로 띄웠으나, UX 가 두 갈래로 갈려
+                  사용자가 일관성을 잃는다는 피드백 → select 한 갈래로 통합. */}
               {canControl && (
                 <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-                  {/* DONE 상태에서는 "반려"만 제공 — 결과 반영은 워커 complete 단계에서 자동 처리됨 */}
-                  {data.status === "DONE" && (
-                    <div style={{ display: "flex", gap: 8 }}>
-                      {!rejectMode ? (
-                        <button onClick={() => setRejectMode(true)} style={{ ...secondaryBtnStyle, padding: "5px 12px", fontSize: 12 }}>반려</button>
-                      ) : (
-                        <>
-                          <button onClick={() => { setRejectMode(false); setRejectReason(""); }} style={{ ...secondaryBtnStyle, padding: "5px 12px", fontSize: 12 }}>취소</button>
-                          <button
-                            onClick={handleReject}
-                            disabled={rejectMutation.isPending}
-                            style={{ ...primaryBtnStyle, padding: "5px 14px", fontSize: 12, background: "var(--color-warning, #f59e0b)" }}
-                          >
-                            {rejectMutation.isPending ? "반려 처리 중..." : "반려 확인"}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
+                  {!rejectMode ? (
+                    <>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>상태 변경</span>
+                        <select
+                          value={data.status}
+                          disabled={statusMutation.isPending}
+                          onChange={(e) => {
+                            const next = e.target.value;
+                            // 반려는 사유가 필수 → 단순 PATCH 가 아닌 입력 모드로 전환해서
+                            // /reject API 로 사유와 함께 처리한다.
+                            if (next === "REJECTED") {
+                              setRejectMode(true);
+                              return;
+                            }
+                            statusMutation.mutate(next);
+                          }}
+                          style={{
+                            padding: "4px 28px 4px 10px", borderRadius: 6,
+                            border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
+                            color: "var(--color-text-primary)", fontSize: 12, cursor: "pointer",
+                            appearance: "none",
+                            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+                            backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center",
+                          }}
+                        >
+                          <option value="PENDING">대기</option>
+                          <option value="IN_PROGRESS">처리중</option>
+                          <option value="DONE">완료</option>
+                          {/* APPLIED 는 워커 complete 단계에서만 자동 전환되는 종착 상태.
+                              수동 전환 경로는 계속 차단하되, 이미 APPLIED 인 레코드를 열었을 때
+                              select 가 빈칸으로 보이지 않도록 현재 값일 때만 옵션을 노출한다. */}
+                          {data.status === "APPLIED" && (
+                            <option value="APPLIED">반영됨</option>
+                          )}
+                          <option value="REJECTED">반려</option>
+                          <option value="FAILED">실패</option>
+                          <option value="TIMEOUT">시간초과</option>
+                        </select>
+                      </div>
 
-                  {!rejectMode && data.status !== "DONE" && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>상태 변경</span>
-                      <select
-                        value={data.status}
-                        disabled={statusMutation.isPending}
-                        onChange={(e) => statusMutation.mutate(e.target.value)}
-                        style={{
-                          padding: "4px 28px 4px 10px", borderRadius: 6,
-                          border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
-                          color: "var(--color-text-primary)", fontSize: 12, cursor: "pointer",
-                          appearance: "none",
-                          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
-                          backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center",
+                      <button
+                        type="button"
+                        disabled={deleteMutation.isPending}
+                        onClick={() => {
+                          if (window.confirm("이 AI 태스크를 삭제하시겠습니까?")) {
+                            deleteMutation.mutate();
+                          }
                         }}
+                        style={{ ...dangerBtnStyle, fontSize: 12, padding: "5px 14px" }}
                       >
-                        {/*
-                          APPLIED 옵션은 제거 — "결과 반영" 프로세스가 없어졌으므로
-                          새로 APPLIED 로 수동 전환할 경로도 차단한다.
-                          기존 데이터가 APPLIED 인 경우의 라벨은 STATUS_LABEL 에서 그대로 유지.
-                        */}
-                        <option value="PENDING">대기</option>
-                        <option value="IN_PROGRESS">처리중</option>
-                        <option value="DONE">완료</option>
-                        <option value="REJECTED">반려</option>
-                        <option value="FAILED">실패</option>
-                        <option value="TIMEOUT">시간초과</option>
-                      </select>
+                        삭제
+                      </button>
+                    </>
+                  ) : (
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={() => { setRejectMode(false); setRejectReason(""); }} style={{ ...secondaryBtnStyle, padding: "5px 12px", fontSize: 12 }}>취소</button>
+                      <button
+                        onClick={handleReject}
+                        disabled={rejectMutation.isPending}
+                        style={{ ...primaryBtnStyle, padding: "5px 14px", fontSize: 12, background: "var(--color-warning, #f59e0b)" }}
+                      >
+                        {rejectMutation.isPending ? "반려 처리 중..." : "반려 확인"}
+                      </button>
                     </div>
-                  )}
-
-                  {!rejectMode && (
-                    <button
-                      type="button"
-                      disabled={deleteMutation.isPending}
-                      onClick={() => {
-                        if (window.confirm("이 AI 태스크를 삭제하시겠습니까?")) {
-                          deleteMutation.mutate();
-                        }
-                      }}
-                      style={{ ...dangerBtnStyle, fontSize: 12, padding: "5px 14px" }}
-                    >
-                      삭제
-                    </button>
                   )}
                 </div>
               )}

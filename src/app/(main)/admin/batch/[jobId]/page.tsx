@@ -75,10 +75,10 @@ function Inner({ jobId }: { jobId: string }) {
           {jobId}
         </code>
         <select
-          className="sp-input"
+          className="sp-input sp-input-fixed sp-select"
           value={status}
           onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-          style={{ minWidth: 140, marginLeft: 8 }}
+          style={{ width: 160, marginLeft: 8 }}
         >
           {STATUSES.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>

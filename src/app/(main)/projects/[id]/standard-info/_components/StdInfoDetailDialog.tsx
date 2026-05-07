@@ -31,36 +31,35 @@ export function StdInfoDetailDialog({ target, onClose, onEdit, onDelete }: Props
   const fields: Array<{ label: string; value: string }> = [
     { label: "코드",     value: v.stdInfoCode },
     { label: "유형",     value: DATA_TYPE_LABEL[v.stdDataTyCode] ?? v.stdDataTyCode },
-    { label: "주요 값",  value: v.mainStdVal || "—" },
-    { label: "보조 값",  value: v.subStdVal  || "—" },
+    { label: "주요 값",  value: v.mainStdVal || "-" },
+    { label: "보조 값",  value: v.subStdVal  || "-" },
     { label: "기간",     value: period },
     { label: "사용",     value: v.useYn === "Y" ? "사용" : "미사용" },
-    { label: "설명",     value: v.stdInfoDc  || "—" },
+    { label: "설명",     value: v.stdInfoDc  || "-" },
   ];
 
   return (
     <div style={overlayStyle} onClick={onClose}>
       <div
-        style={{ ...dialogStyle, minWidth: 480, maxWidth: 560 }}
+        style={dialogStyle}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 헤더 */}
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          marginBottom: 16,
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {/* ── 헤더 ── 다른 다이얼로그(DDL 일괄 등록 등)와 통일된 패턴 */}
+        <div style={headerStyle}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             <span style={{
               display: "inline-block", padding: "2px 8px", borderRadius: 12,
               background: ctgryColor.bg, color: ctgryColor.text,
               fontSize: 11, fontWeight: 700,
               maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              flexShrink: 0,
             }}>
-              {v.bizCtgryNm || "—"}
+              {v.bizCtgryNm || "-"}
             </span>
             <h3 style={{
               margin: 0, fontSize: 16, fontWeight: 700,
               color: "var(--color-text-primary)",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>
               {v.stdInfoNm}
             </h3>
@@ -69,22 +68,22 @@ export function StdInfoDetailDialog({ target, onClose, onEdit, onDelete }: Props
             onClick={onClose}
             style={{
               background: "none", border: "none", cursor: "pointer",
-              fontSize: 18, color: "var(--color-text-secondary)",
-              lineHeight: 1, padding: "0 2px",
+              fontSize: 20, color: "var(--color-text-secondary)",
+              lineHeight: 1, padding: 0, flexShrink: 0,
             }}
           >
             ×
           </button>
         </div>
 
-        {/* 상세 내용 */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+        {/* ── 본문 ── */}
+        <div style={bodyStyle}>
           {fields.map(({ label, value }) => (
             <div
               key={label}
               style={{
                 display: "grid", gridTemplateColumns: "80px 1fr",
-                gap: 8, alignItems: "flex-start",
+                gap: 12, alignItems: "flex-start",
               }}
             >
               <span style={{
@@ -103,8 +102,8 @@ export function StdInfoDetailDialog({ target, onClose, onEdit, onDelete }: Props
           ))}
         </div>
 
-        {/* 액션 버튼 */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        {/* ── 푸터 ── 액션 버튼 */}
+        <div style={footerStyle}>
           <button onClick={onClose} style={secondaryBtnStyle}>닫기</button>
           <button onClick={() => onDelete(v)} style={dangerBtnStyle}>삭제</button>
           <button onClick={() => onEdit(v)}   style={primaryBtnStyle}>수정</button>
@@ -123,11 +122,40 @@ const overlayStyle: React.CSSProperties = {
   zIndex: 1000,
 };
 
+// 헤더 / 본문 / 푸터 3영역으로 구분된 표준 다이얼로그 (DDL 일괄 등록 등 다른 페이지와 통일)
 const dialogStyle: React.CSSProperties = {
   background: "var(--color-bg-card)",
-  borderRadius: 12, padding: "24px 28px",
+  borderRadius: 12,
   boxShadow: "var(--shadow-lg)",
   color: "var(--color-text-primary)",
+  minWidth: 480,
+  maxWidth: 560,
+  width: "min(560px, 92vw)",
+  maxHeight: "85vh",
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+};
+
+const headerStyle: React.CSSProperties = {
+  display: "flex", alignItems: "center", justifyContent: "space-between",
+  gap: 12,
+  padding: "14px 20px",
+  borderBottom: "1px solid var(--color-border)",
+};
+
+const bodyStyle: React.CSSProperties = {
+  flex: 1,
+  overflow: "auto",
+  padding: "16px 20px",
+  display: "flex", flexDirection: "column", gap: 10,
+};
+
+const footerStyle: React.CSSProperties = {
+  display: "flex", justifyContent: "flex-end", gap: 8,
+  padding: "12px 20px",
+  borderTop: "1px solid var(--color-border)",
+  background: "var(--color-bg-card)",
 };
 
 const primaryBtnStyle: React.CSSProperties = {
@@ -138,9 +166,13 @@ const primaryBtnStyle: React.CSSProperties = {
   fontSize: 13, fontWeight: 600, cursor: "pointer",
 };
 
+// 삭제 버튼 — 다른 페이지(영역/기능 편집 등)와 일관된 빨간 윤곽선 outline 스타일
 const dangerBtnStyle: React.CSSProperties = {
-  ...primaryBtnStyle,
-  background: "var(--color-error)",
+  padding: "7px 16px", borderRadius: 6,
+  border: "1px solid #e53935",
+  background: "var(--color-bg-card)",
+  color: "#e53935",
+  fontSize: 13, fontWeight: 600, cursor: "pointer",
 };
 
 const secondaryBtnStyle: React.CSSProperties = {

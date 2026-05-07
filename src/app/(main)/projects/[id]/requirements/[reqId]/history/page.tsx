@@ -15,6 +15,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -320,32 +321,38 @@ function DiffViewerPopup({
         <div style={{ display: "flex", gap: 16, marginBottom: 12, alignItems: "center" }}>
           <div>
             <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 4 }}>좌측 버전</label>
-            <select
-              value={v1Id}
-              onChange={(e) => setV1Id(e.target.value)}
-              style={selectStyle}
-            >
-              {items.map((i) => (
-                <option key={i.historyId} value={i.historyId}>
-                  {i.versionNo} ({i.versionType === "CONFIRMED" ? "확정" : "내부"})
-                </option>
-              ))}
-            </select>
+            <div className="sp-select-wrap">
+              <select
+                value={v1Id}
+                onChange={(e) => setV1Id(e.target.value)}
+                className="sp-input"
+              >
+                {items.map((i) => (
+                  <option key={i.historyId} value={i.historyId}>
+                    {i.versionNo} ({i.versionType === "CONFIRMED" ? "확정" : "내부"})
+                  </option>
+                ))}
+              </select>
+              <span className="sp-select-arrow"><SelectChevron /></span>
+            </div>
           </div>
           <div style={{ marginTop: 16, fontSize: 18, color: "var(--color-text-secondary)" }}>↔</div>
           <div>
             <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 4 }}>우측 버전</label>
-            <select
-              value={v2Id}
-              onChange={(e) => setV2Id(e.target.value)}
-              style={selectStyle}
-            >
-              {items.map((i) => (
-                <option key={i.historyId} value={i.historyId}>
-                  {i.versionNo} ({i.versionType === "CONFIRMED" ? "확정" : "내부"})
-                </option>
-              ))}
-            </select>
+            <div className="sp-select-wrap">
+              <select
+                value={v2Id}
+                onChange={(e) => setV2Id(e.target.value)}
+                className="sp-input"
+              >
+                {items.map((i) => (
+                  <option key={i.historyId} value={i.historyId}>
+                    {i.versionNo} ({i.versionType === "CONFIRMED" ? "확정" : "내부"})
+                  </option>
+                ))}
+              </select>
+              <span className="sp-select-arrow"><SelectChevron /></span>
+            </div>
           </div>
         </div>
 
@@ -629,15 +636,6 @@ const dangerBtnStyle: React.CSSProperties = {
   fontSize:     13,
   cursor:       "pointer",
   whiteSpace:   "nowrap",
-};
-
-const selectStyle: React.CSSProperties = {
-  padding:      "7px 12px",
-  borderRadius: 6,
-  border:       "1px solid var(--color-border)",
-  background:   "var(--color-bg-card)",
-  color:        "var(--color-text-primary)",
-  fontSize:     13,
 };
 
 const overlayStyle: React.CSSProperties = {

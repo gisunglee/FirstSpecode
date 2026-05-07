@@ -400,7 +400,7 @@ function FunctionsPageInner() {
                           {fn.unitWorkName}
                         </button>
                       ) : (
-                        <span style={{ color: "#ccc", fontSize: 13 }}>-</span>
+                        <span style={{ color: "var(--color-text-tertiary)", fontSize: 13 }}>-</span>
                       )
                     ) : ""}
                   </div>
@@ -417,7 +417,7 @@ function FunctionsPageInner() {
                           {fn.screenName}
                         </button>
                       ) : (
-                        <span style={{ color: "#ccc", fontSize: 13 }}>-</span>
+                        <span style={{ color: "var(--color-text-tertiary)", fontSize: 13 }}>-</span>
                       )
                     ) : ""}
                   </div>
@@ -437,7 +437,7 @@ function FunctionsPageInner() {
                           {fn.areaName}
                         </button>
                       ) : (
-                        <span style={{ color: "#ccc", fontSize: 13 }}>-</span>
+                        <span style={{ color: "var(--color-text-tertiary)", fontSize: 13 }}>-</span>
                       )
                     ) : ""}
                   </div>
@@ -445,13 +445,13 @@ function FunctionsPageInner() {
                   {/* 기능명 — flex 자식 중 name 만 ellipsis(min-width:0), displayId/완료배지는 shrink 금지 */}
                   <div
                     style={{
-                      fontSize: 14, fontWeight: 500,
+                      fontSize: 13,
                       display: "flex", alignItems: "center", gap: 8,
                       overflow: "hidden", whiteSpace: "nowrap", minWidth: 0,
                     }}
                     title={`${fn.displayId} ${fn.name}`}
                   >
-                    <span style={{ color: "var(--color-text-secondary)", fontSize: 11, flexShrink: 0 }}>
+                    <span style={{ color: "var(--color-text-secondary)", fontSize: 13, flexShrink: 0 }}>
                       {fn.displayId}
                     </span>
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>
@@ -541,7 +541,7 @@ function FunctionsPageInner() {
                     ) : (
                       <span
                         onClick={() => startEdit(fn.funcId, "effort", fn.effort)}
-                        style={{ fontSize: 13, cursor: "pointer", color: fn.effort ? "var(--color-text-primary)" : "#aaa" }}
+                        style={{ fontSize: 13, cursor: "pointer", color: fn.effort ? "var(--color-text-primary)" : "var(--color-text-tertiary)" }}
                         title="클릭하여 편집"
                       >
                         {fn.effort || "-"}
@@ -608,8 +608,8 @@ function RatioChip({ label, value, color }: { label: string; value: number; colo
       title={`${fullLabel}: ${value}%`}
       style={{
         display: "inline-flex", alignItems: "center", justifyContent: "center",
-        fontSize: 11, fontWeight: 700, lineHeight: 1,
-        color: value > 0 ? color : "#bbb",
+        fontSize: 11, lineHeight: 1,
+        color: value > 0 ? color : "var(--color-text-tertiary)",
         minWidth: 30,
       }}
     >
@@ -713,10 +713,18 @@ const gridRowStyle: React.CSSProperties = {
   background: "var(--color-bg-card)", transition: "background 0.1s",
   cursor: "pointer",
 };
+// 단위업무명/화면명/영역명 인라인 링크 — 행마다 3개씩 배치되는데
+// 파랑+밑줄로 강조하면 한 화면에 12개 링크가 시선을 분산시킴.
+// 평소엔 일반 텍스트색, hover 시에만 강조하는 패턴(AI 태스크 페이지와 동일)으로 통일.
+// font: inherit 은 <button> 의 user-agent 기본 폰트(시스템 UI)가 옆 <span> 과
+// 다르게 렌더되는 문제를 막기 위함.
 const linkBtnStyle: React.CSSProperties = {
   background: "none", border: "none", cursor: "pointer",
-  color: "var(--color-primary, #1976d2)", fontSize: 13,
-  padding: 0, textAlign: "left", textDecoration: "underline",
+  color: "var(--color-text-primary)",
+  fontFamily: "inherit",
+  fontWeight: "inherit",
+  fontSize: 13,
+  padding: 0, textAlign: "left", textDecoration: "none",
 };
 const primaryBtnStyle: React.CSSProperties = {
   padding: "8px 20px", borderRadius: 6, border: "1px solid transparent",

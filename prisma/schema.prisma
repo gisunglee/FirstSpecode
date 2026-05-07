@@ -9,19 +9,19 @@ datasource db {
 }
 
 model TbCmMember {
-  mber_id             String                    @id @default(uuid())
-  email_addr          String?                   @unique
+  mber_id             String                     @id @default(uuid())
+  email_addr          String?                    @unique
   pswd_hash           String?
   mber_nm             String?
   profl_img_url       String?
-  mber_sttus_code     String                    @default("UNVERIFIED")
-  plan_code           String                    @default("FREE") // 계정 플랜 (FREE/PRO/TEAM/ENTERPRISE)
+  mber_sttus_code     String                     @default("UNVERIFIED")
+  plan_code           String                     @default("FREE") // 계정 플랜 (FREE/PRO/TEAM/ENTERPRISE)
   plan_expire_dt      DateTime? // 유료 플랜 만료일 (NULL=무료/무제한)
-  asignee_view_mode   String                    @default("all") // 전역 담당자 필터 모드: all | me
+  asignee_view_mode   String                     @default("all") // 전역 담당자 필터 모드: all | me
   /// 시스템 역할: "SUPER_ADMIN" = 전역 관리자 / null = 일반 사용자.
   /// DB UPDATE로만 설정. UI/API 로는 변경 불가 (탈취 시 권한 연쇄 상승 차단).
-  sys_role_code       String?                   @db.VarChar(20)
-  join_dt             DateTime                  @default(now())
+  sys_role_code       String?                    @db.VarChar(20)
+  join_dt             DateTime                   @default(now())
   mdfcn_dt            DateTime?
   wthdrw_dt           DateTime?
   accountLocks        TbCmAccountLock[]
@@ -173,15 +173,15 @@ model TbCmSocialAccount {
 }
 
 model TbPjProject {
-  prjct_id        String                  @id @default(uuid())
-  prjct_nm        String
-  prjct_dc        String?
-  client_nm       String?
-  bgng_de         DateTime?
-  end_de          DateTime?
-  creat_mber_id   String?
-  creat_dt        DateTime                @default(now())
-  mdfcn_dt        DateTime?
+  prjct_id      String    @id @default(uuid())
+  prjct_nm      String
+  prjct_dc      String?
+  client_nm     String?
+  bgng_de       DateTime?
+  end_de        DateTime?
+  creat_mber_id String?
+  creat_dt      DateTime  @default(now())
+  mdfcn_dt      DateTime?
 
   // ── Soft delete (2026-05-06 도입) ───────────────────────────────────────
   // OWNER 가 DELETE 를 호출하면 즉시 삭제하지 않고 다음 4개 컬럼이 세팅된다.
@@ -192,40 +192,40 @@ model TbPjProject {
   //                     (= del_dt + 보관기간; 기본 14일, TbSysConfigTemplate 으로 조정)
   // hard_del_dt 가 지난 행은 별도 배치(project-hard-delete)가 일괄 정리한다.
   // 보관 기간 동안 OWNER 는 복구(restore) 가능, SUPER_ADMIN 은 항상 조회 가능.
-  del_yn          String                  @default("N") @db.Char(1)
-  del_dt          DateTime?
-  del_mber_id     String?
-  hard_del_dt     DateTime?
-  planStudios     TbDsPlanStudio[]
-  apiKeys         TbPjProjectApiKey[]
-  invitations     TbPjProjectInvitation[]
-  members         TbPjProjectMember[]
-  settings        TbPjProjectSettings?
-  settingsHistory TbPjSettingsHistory[]
-  standardInfos   TbCmStandardInfo[]
+  del_yn            String                    @default("N") @db.Char(1)
+  del_dt            DateTime?
+  del_mber_id       String?
+  hard_del_dt       DateTime?
+  planStudios       TbDsPlanStudio[]
+  apiKeys           TbPjProjectApiKey[]
+  invitations       TbPjProjectInvitation[]
+  members           TbPjProjectMember[]
+  settings          TbPjProjectSettings?
+  settingsHistory   TbPjSettingsHistory[]
+  standardInfos     TbCmStandardInfo[]
   // 2026-05-06 P1 — 핵심 도메인 6개 CASCADE
-  unitWorks       TbDsUnitWork[]
-  screens         TbDsScreen[]
-  areas           TbDsArea[]
-  functions       TbDsFunction[]
-  tasks           TbRqTask[]
-  requirements    TbRqRequirement[]
+  unitWorks         TbDsUnitWork[]
+  screens           TbDsScreen[]
+  areas             TbDsArea[]
+  functions         TbDsFunction[]
+  tasks             TbRqTask[]
+  requirements      TbRqRequirement[]
   // 2026-05-06 P2 — 부가 도메인 15개 CASCADE
-  projectConfigs  TbPjProjectConfig[]
-  removalNotices  TbPjMemberRemovalNotice[]
-  designChanges   TbDsDesignChange[]
-  documentReleases TbDsDocumentRelease[]
-  dbTables        TbDsDbTable[]
-  dbTableRevisions TbDsDbTableRevision[]
-  progresses      TbCmProgress[]
-  aiTasks         TbAiTask[]
-  attachFiles     TbCmAttachFile[]
+  projectConfigs    TbPjProjectConfig[]
+  removalNotices    TbPjMemberRemovalNotice[]
+  designChanges     TbDsDesignChange[]
+  documentReleases  TbDsDocumentRelease[]
+  dbTables          TbDsDbTable[]
+  dbTableRevisions  TbDsDbTableRevision[]
+  progresses        TbCmProgress[]
+  aiTasks           TbAiTask[]
+  attachFiles       TbCmAttachFile[]
   baselineSnapshots TbRqBaselineSnapshot[]
-  reviewRequests  tb_ds_review_request[]
-  codeGroups      TbCmCodeGroup[]
-  codes           TbCmCode[]
-  memos           TbDsMemo[]
-  stdGuides       TbSgStdGuide[]
+  reviewRequests    tb_ds_review_request[]
+  codeGroups        TbCmCodeGroup[]
+  codes             TbCmCode[]
+  memos             TbDsMemo[]
+  stdGuides         TbSgStdGuide[]
 
   // 배치(project-hard-delete) 가 매일 스캔하는 인덱스
   // (del_yn='Y' AND hard_del_dt <= now()) 조건을 빠르게 추리기 위함
@@ -334,7 +334,7 @@ model TbPjProjectConfig {
   mdfcn_dt       DateTime?
 
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
-  project        TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_pj_project_config_prjct_fk")
+  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_pj_project_config_prjct_fk")
 
   @@unique([prjct_id, config_key], map: "tb_pj_project_config_uk")
   @@index([prjct_id, config_group], map: "tb_pj_project_config_grp_idx")
@@ -373,14 +373,14 @@ model TbPjSettingsHistory {
 }
 
 model TbPjMemberRemovalNotice {
-  notice_id String     @id @default(uuid())
+  notice_id String      @id @default(uuid())
   mber_id   String
   prjct_id  String
   prjct_nm  String
-  cnfrm_yn  String     @default("N")
+  cnfrm_yn  String      @default("N")
   cnfrm_dt  DateTime?
-  creat_dt  DateTime   @default(now())
-  member    TbCmMember @relation(fields: [mber_id], references: [mber_id])
+  creat_dt  DateTime    @default(now())
+  member    TbCmMember  @relation(fields: [mber_id], references: [mber_id])
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
   project   TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_pj_member_removal_notice_prjct_fk")
 
@@ -401,7 +401,7 @@ model TbDsDesignChange {
   chg_type_code String   @default("UPDATE")
 
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
-  project       TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_design_change_prjct_fk")
+  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_design_change_prjct_fk")
 
   @@map("tb_ds_design_change")
 }
@@ -432,18 +432,18 @@ model TbDsDesignChange {
 model TbDsDocumentRelease {
   release_id      String   @id @default(uuid())
   prjct_id        String
-  doc_kind        String   // "REQUIREMENT" | "UNIT_WORK" | "SCREEN" | ...
-  ref_id          String   // 산출물 도메인 행 ID (req_id, unit_work_id 등)
-  vrsn_no         String   // 사용자가 입력한 공식 버전 라벨 ("v1.0", "v1.1", "1.0.0" 등)
-  change_cn       String?  // 짧은 변경 사유 (한두 줄)
-  author_nm       String?  // 작성자 이름 (스냅샷 — 멤버명 박제)
-  approver_nm     String?  // 승인자 이름 (스냅샷)
-  release_mber_id String?  // 발행 버튼을 누른 멤버 ID (감사용 — 표시엔 미사용)
-  snapshot_data   Json     // 발행 시점의 양식 입력 객체 (이전 버전 다운로드 시 그대로 복원)
+  doc_kind        String // "REQUIREMENT" | "UNIT_WORK" | "SCREEN" | ...
+  ref_id          String // 산출물 도메인 행 ID (req_id, unit_work_id 등)
+  vrsn_no         String // 사용자가 입력한 공식 버전 라벨 ("v1.0", "v1.1", "1.0.0" 등)
+  change_cn       String? // 짧은 변경 사유 (한두 줄)
+  author_nm       String? // 작성자 이름 (스냅샷 — 멤버명 박제)
+  approver_nm     String? // 승인자 이름 (스냅샷)
+  release_mber_id String? // 발행 버튼을 누른 멤버 ID (감사용 — 표시엔 미사용)
+  snapshot_data   Json // 발행 시점의 양식 입력 객체 (이전 버전 다운로드 시 그대로 복원)
   released_dt     DateTime @default(now())
 
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
-  project         TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_document_release_prjct_fk")
+  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_document_release_prjct_fk")
 
   // Word 출력 시 "이 산출물의 발행 이력 전체" 조회가 자주 발생 → 복합 인덱스
   @@index([prjct_id, doc_kind, ref_id], map: "tb_ds_doc_release_target_idx")
@@ -532,20 +532,20 @@ model TbDsArea {
 }
 
 model TbDsFunction {
-  func_id         String    @id @default(uuid())
+  func_id         String      @id @default(uuid())
   prjct_id        String
   area_id         String?
   func_display_id String
-  func_nm         String    @default("")
+  func_nm         String      @default("")
   func_dc         String?
-  priort_code     String    @default("MEDIUM")
-  sort_ordr       Int       @default(0)
-  creat_dt        DateTime  @default(now())
+  priort_code     String      @default("MEDIUM")
+  sort_ordr       Int         @default(0)
+  creat_dt        DateTime    @default(now())
   mdfcn_dt        DateTime?
   asign_mber_id   String?
-  cmplx_code      String    @default("MEDIUM")
+  cmplx_code      String      @default("MEDIUM")
   efrt_val        String?
-  func_ty_code    String    @default("OTHER")
+  func_ty_code    String      @default("OTHER")
   impl_bgng_de    String?
   impl_end_de     String?
   coment_cn       String?
@@ -563,7 +563,7 @@ model TbDsDbTable {
   tbl_physcl_nm String
   tbl_lgcl_nm   String?
   tbl_dc        String?
-  asign_mber_id String?                                // 담당자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
+  asign_mber_id String? // 담당자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
   creat_dt      DateTime            @default(now())
   mdfcn_mber_id String?
   mdfcn_dt      DateTime?           @db.Timestamp(3)
@@ -610,7 +610,7 @@ model TbDsDbTableRevision {
   chg_dt        DateTime @default(now())
 
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
-  project       TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_db_table_revision_prjct_fk")
+  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_db_table_revision_prjct_fk")
 
   @@index([tbl_id, chg_dt(sort: Desc)], map: "idx_db_tbl_rev_tbl")
   @@index([prjct_id, chg_dt(sort: Desc)], map: "idx_db_tbl_rev_prjct")
@@ -647,7 +647,7 @@ model TbCmProgress {
   mdfcn_dt      DateTime @default(now()) @db.Timestamp(6)
 
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
-  project       TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_cm_progress_prjct_fk")
+  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_cm_progress_prjct_fk")
 
   @@unique([ref_tbl_nm, ref_id], map: "uk_cm_progress_ref")
   @@map("tb_cm_progress")
@@ -774,7 +774,7 @@ model TbCmAttachFile {
 
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
   // 주의: DB 행만 정리됨. 디스크의 file_path_nm 물리 파일은 별도 cleanup 필요.
-  project        TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_cm_attach_file_prjct_fk")
+  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_cm_attach_file_prjct_fk")
 
   @@map("tb_cm_attach_file")
 }
@@ -803,7 +803,7 @@ model TbRqBaselineSnapshot {
   cnfrm_dt      DateTime @default(now())
 
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
-  project       TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_rq_baseline_snapshot_prjct_fk")
+  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_rq_baseline_snapshot_prjct_fk")
 
   @@map("tb_rq_baseline_snapshot")
 }
@@ -837,8 +837,8 @@ model TbAiPromptTemplate {
   use_cnt       Int      @default(0)
   default_yn    String   @default("N") @db.Char(1)
 
-  @@index([prjct_id, task_ty_code, use_yn],                                 map: "idx_ai_tmpl_prjct")
-  @@index([ref_ty_code, task_ty_code, div_code, fmt_code],                  map: "idx_ai_tmpl_plan_studio")
+  @@index([prjct_id, task_ty_code, use_yn], map: "idx_ai_tmpl_prjct")
+  @@index([ref_ty_code, task_ty_code, div_code, fmt_code], map: "idx_ai_tmpl_plan_studio")
   @@map("tb_ai_prompt_template")
 }
 
@@ -849,7 +849,7 @@ model TbAiPromptTemplate {
 model TbAiDesignTemplate {
   dsgn_tmpl_id  String   @id(map: "pk_ai_design_template") @db.VarChar(36)
   prjct_id      String?  @db.VarChar(36)
-  ref_ty_code   String   @db.VarChar(20)  // REQUIREMENT | UNIT_WORK | SCREEN | AREA | FUNCTION
+  ref_ty_code   String   @db.VarChar(20) // REQUIREMENT | UNIT_WORK | SCREEN | AREA | FUNCTION
   tmpl_nm       String   @db.VarChar(200)
   tmpl_dc       String?
   example_cn    String?
@@ -862,7 +862,7 @@ model TbAiDesignTemplate {
   mdfcn_dt      DateTime @default(now()) @db.Timestamp(6)
 
   @@index([ref_ty_code, use_yn, prjct_id, default_yn, sort_ordr], map: "idx_ai_dsgn_tmpl_scope")
-  @@index([prjct_id, ref_ty_code, sort_ordr],                     map: "idx_ai_dsgn_tmpl_prjct")
+  @@index([prjct_id, ref_ty_code, sort_ordr], map: "idx_ai_dsgn_tmpl_prjct")
   @@map("tb_ai_design_template")
 }
 
@@ -897,7 +897,7 @@ model tb_ds_review_request {
   fdbk_code         String?   @db.VarChar(20)
 
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
-  project           TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_review_request_prjct_fk")
+  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_review_request_prjct_fk")
 
   @@index([prjct_id, creat_dt(sort: Desc)], map: "idx_ds_review_prjct")
   @@index([ref_tbl_nm, ref_id], map: "idx_ds_review_ref")
@@ -931,7 +931,7 @@ model TbCmStandardInfo {
   mdfcn_dt         DateTime?
 
   // 프로젝트 삭제 시 해당 프로젝트의 기준 정보도 함께 정리
-  project          TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade)
+  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade)
 
   @@unique([prjct_id, std_info_code, std_bgng_de], map: "tb_cm_standard_info_prjct_std_code_bgng_key")
   @@index([prjct_id], map: "tb_cm_standard_info_prjct_id_idx")
@@ -1102,7 +1102,7 @@ model TbDsMemo {
   mdfcn_dt      DateTime?
 
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
-  project       TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_memo_prjct_fk")
+  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_memo_prjct_fk")
 
   @@index([prjct_id, creat_dt(sort: Desc)], map: "tb_ds_memo_prjct_dt_idx")
   @@index([prjct_id, ref_ty_code, ref_id], map: "tb_ds_memo_ref_idx")
@@ -1112,27 +1112,118 @@ model TbDsMemo {
 // ── 표준 가이드 — 프로젝트별 AI 제약사항/규칙 문서 (UW-00030) ──────────────
 // 향후 MCP tool 노출과 /run-ai-task 프롬프트 자동 주입의 데이터 소스로 사용됨
 model TbSgStdGuide {
-  guide_id          String    @id @default(uuid())
-  prjct_id          String
+  guide_id         String    @id @default(uuid())
+  prjct_id         String
   // 카테고리: UI|DATA|AUTH|API|COMMON|SECURITY|FILE|ERROR|BATCH|REPORT
   // enum 값은 src/constants/codes.ts 의 GuideCategory 와 동기화
-  guide_ctgry_code  String
-  guide_sj          String    @default("")
-  guide_cn          String?
+  guide_ctgry_code String
+  guide_sj         String    @default("")
+  guide_cn         String?
   // 사용여부 — Y=사용중(AI가 이 가이드를 참조) / N=미사용(보관만, AI에 전달 안 함)
   // 삭제는 물리 삭제로 별도 처리 — use_yn은 "사용중/미사용" 비즈니스 속성 전용
-  use_yn            String    @default("Y") @db.Char(1)
-  creat_mber_id     String
-  creat_dt          DateTime  @default(now())
-  mdfr_mber_id      String?
-  mdfcn_dt          DateTime?
+  use_yn           String    @default("Y") @db.Char(1)
+  creat_mber_id    String
+  creat_dt         DateTime  @default(now())
+  mdfr_mber_id     String?
+  mdfcn_dt         DateTime?
 
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
-  project           TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_sg_std_guide_prjct_fk")
+  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_sg_std_guide_prjct_fk")
 
   @@index([prjct_id, use_yn, mdfcn_dt(sort: Desc), creat_dt(sort: Desc)], map: "tb_sg_std_guide_prjct_dt_idx")
-  @@index([prjct_id, guide_ctgry_code, use_yn],                          map: "tb_sg_std_guide_ctgry_idx")
+  @@index([prjct_id, guide_ctgry_code, use_yn], map: "tb_sg_std_guide_ctgry_idx")
   @@map("tb_sg_std_guide")
+}
+
+// ── Docs Hub: 시스템 문서 섹션 (1단계 트리) ───────────────────────────────
+// 도움창고 > DOCS 의 좌측 트리 1단계. SUPER_ADMIN 만 작성·편집.
+// prjct_id 없음 — 시스템 자산. 트리 깊이 2단계 고정 (section > page).
+//
+// sect_slug 의 활성(use_yn='Y') 유니크는 partial unique index 로 처리되어
+// 비활성으로 보존된 동일 슬러그가 충돌을 일으키지 않는다.
+model TbSysDocsSection {
+  sect_id        String    @id @default(uuid())
+  sect_slug      String // partial unique: where use_yn='Y'
+  sect_nm        String    @default("")
+  sect_icon_code String?
+  sort_ordr      Int       @default(0)
+  use_yn         String    @default("Y") @db.Char(1)
+  creat_mber_id  String?
+  creat_dt       DateTime  @default(now())
+  mdfr_mber_id   String?
+  mdfcn_dt       DateTime?
+
+  pages TbSysDocsPage[]
+
+  @@index([use_yn, sort_ordr], map: "tb_sys_docs_section_use_idx")
+  @@map("tb_sys_docs_section")
+}
+
+// ── Docs Hub: 시스템 문서 페이지 (2단계 — 실제 문서 본문) ─────────────────
+// 본문은 Markdown(page_cn). 라우팅: /docs/[sect_slug]/[page_slug].
+//   page_sttus_code: DRAFT | PUBLISHED | ARCHIVED
+//   badge_code     : NEW | BETA | DEPRECATED | NULL
+//
+// 사용자 뷰어에는 page_sttus_code='PUBLISHED' AND use_yn='Y' 만 노출.
+// (sect_id, page_slug) 조합은 use_yn='Y' 범위에서 유니크 (partial unique).
+model TbSysDocsPage {
+  page_id         String    @id @default(uuid())
+  sect_id         String
+  page_slug       String
+  page_sj         String    @default("")
+  page_excerpt    String?
+  page_cn         String?
+  page_sttus_code String    @default("DRAFT")
+  badge_code      String?
+  sort_ordr       Int       @default(0)
+  use_yn          String    @default("Y") @db.Char(1)
+  creat_mber_id   String?
+  creat_dt        DateTime  @default(now())
+  mdfr_mber_id    String?
+  mdfcn_dt        DateTime?
+
+  // 페이지가 매달린 섹션은 물리 삭제 금지 — 운영 워크플로우는 use_yn='N' 으로 숨김
+  section TbSysDocsSection @relation(fields: [sect_id], references: [sect_id], onDelete: Restrict, onUpdate: Cascade, map: "tb_sys_docs_page_sect_fk")
+
+  @@index([sect_id, use_yn, sort_ordr], map: "tb_sys_docs_page_sect_idx")
+  @@index([page_sttus_code, mdfcn_dt(sort: Desc), creat_dt(sort: Desc)], map: "tb_sys_docs_page_sttus_idx")
+  @@map("tb_sys_docs_page")
+}
+
+// ── 시스템 첨부파일 (SUPER_ADMIN 업로드) ──────────────────────────────────
+// tb_cm_attach_file(프로젝트 멤버 업로드)와 별도 분리.
+// - lifecycle: 시스템 lifetime 전체 (프로젝트 cascade 영향 없음)
+// - 권한    : SUPER_ADMIN 전용
+// - 정책    : 별도 용량/확장자 화이트리스트
+//
+// 다형 참조:
+//   ref_tbl_nm = 'tb_sys_docs_page'  → Docs 본문/별첨
+//   ref_tbl_nm = 'tb_sys_resource'   → 자료실(추후)
+//
+// 첨부 구분:
+//   attach_div_code = 'INLINE' (Markdown 본문 삽입 이미지)
+//   attach_div_code = 'ATTACH' (페이지 하단 별첨 다운로드)
+model TbSysAttachFile {
+  attach_id       String    @id @default(uuid())
+  ref_tbl_nm      String
+  ref_id          String
+  attach_div_code String    @default("ATTACH")
+  orgnl_file_nm   String
+  stor_file_nm    String
+  file_path_nm    String
+  file_sz         BigInt
+  file_extsn_nm   String
+  mime_ty         String    @default("")
+  sort_ordr       Int       @default(0)
+  use_yn          String    @default("Y") @db.Char(1)
+  creat_mber_id   String?
+  creat_dt        DateTime  @default(now())
+  mdfr_mber_id    String?
+  mdfcn_dt        DateTime?
+
+  @@index([ref_tbl_nm, ref_id, use_yn, sort_ordr], map: "tb_sys_attach_file_ref_idx")
+  @@index([use_yn, creat_dt(sort: Desc)], map: "tb_sys_attach_file_use_idx")
+  @@map("tb_sys_attach_file")
 }
 
 // ── MCP 키 — Claude Code 등 외부 AI 클라이언트의 인바운드 인증용 ─────────
@@ -1148,16 +1239,16 @@ model TbSgStdGuide {
 // 원문은 저장하지 않고 SHA-256 해시만 저장 (spk_ prefix + 32B 랜덤 hex).
 // NOTE: tb_pj_project_api_key(외부 AI provider 키 보관소)와 혼동 금지 — 용도/저장방식 다름.
 model TbCmMcpKey {
-  api_key_id   String    @id @default(uuid())
-  mber_id      String
-  prjct_id     String                        // 'ALL' 또는 UUID — NOT NULL, no default
+  api_key_id String @id @default(uuid())
+  mber_id    String
+  prjct_id   String // 'ALL' 또는 UUID — NOT NULL, no default
 
   // [2026-04-26] 키 용도 구분 — Claude Code MCP / 워커 인증 채널 분리
   //   CLIENT — Claude Code MCP 도구용 (전역/프로젝트 scope 모두 허용)
   //   WORKER — /run-ai-tasks 워커용 (프로젝트 scope 강제, 전역 발급 거부)
   // CHECK 제약(prisma/sql/2026-04-26_add_mcp_key_use_se_code.sql)으로
   // 두 값 외에는 INSERT 자체 차단된다.
-  key_use_se_code String    @default("CLIENT") @db.VarChar(20)
+  key_use_se_code String @default("CLIENT") @db.VarChar(20)
 
   key_hash     String    @unique
   key_prefix   String    @db.VarChar(12)
@@ -1166,10 +1257,10 @@ model TbCmMcpKey {
   revoke_dt    DateTime?
   creat_dt     DateTime  @default(now())
 
-  member  TbCmMember @relation(fields: [mber_id], references: [mber_id])
+  member TbCmMember @relation(fields: [mber_id], references: [mber_id])
 
-  @@index([mber_id],                              map: "idx_mcp_key_mber")
-  @@index([prjct_id],                             map: "idx_mcp_key_prjct")
+  @@index([mber_id], map: "idx_mcp_key_mber")
+  @@index([prjct_id], map: "idx_mcp_key_prjct")
   @@index([mber_id, key_use_se_code, revoke_dt], map: "idx_mcp_key_use_se")
   @@map("tb_cm_mcp_key")
 }
@@ -1216,29 +1307,29 @@ model TbSpImplSnapshot {
 //   - 같은 잡을 두 번 돌려도 안전(idempotent) — 대상 조건이 동적이므로 자연 보장.
 //   - 항목 단위로 격리 처리 → 한 건 실패해도 다음으로 진행, sttus_code='PARTIAL'.
 model TbCmBatchJob {
-  job_id        String                @id @default(uuid())
+  job_id       String             @id @default(uuid())
   // 잡 종류 (위 주석 참조)
-  job_ty_code   String
+  job_ty_code  String
   // 표시용 잡 이름 (운영자가 어드민 UI 에서 보기 편하도록)
-  job_nm        String                @default("")
+  job_nm       String             @default("")
   // 트리거 종류: CRON | MANUAL
-  trgr_ty_code  String                @default("CRON")
+  trgr_ty_code String             @default("CRON")
   // 수동 실행한 운영자 멤버 ID (CRON 이면 NULL)
-  trgr_mber_id  String?
+  trgr_mber_id String?
   // 실행 상태: RUNNING | SUCCESS | PARTIAL | FAILED
-  sttus_code    String                @default("RUNNING")
-  bgng_dt       DateTime              @default(now())
-  end_dt        DateTime?
+  sttus_code   String             @default("RUNNING")
+  bgng_dt      DateTime           @default(now())
+  end_dt       DateTime?
   // 처리 카운트
-  trgt_cnt      Int                   @default(0)
-  success_cnt   Int                   @default(0)
-  fail_cnt      Int                   @default(0)
-  skip_cnt      Int                   @default(0)
+  trgt_cnt     Int                @default(0)
+  success_cnt  Int                @default(0)
+  fail_cnt     Int                @default(0)
+  skip_cnt     Int                @default(0)
   // 잡 자체가 catastrophic 으로 실패한 경우의 메시지 (항목 레벨이 아님)
-  error_msg     String?
+  error_msg    String?
   // 잡 메타 — 보관기간, 임계값 등 잡별 부가 정보
-  summary_json  Json?
-  items         TbCmBatchJobItem[]
+  summary_json Json?
+  items        TbCmBatchJobItem[]
 
   @@index([job_ty_code, bgng_dt(sort: Desc)], map: "tb_cm_batch_job_ty_dt_idx")
   @@map("tb_cm_batch_job")
@@ -1250,20 +1341,20 @@ model TbCmBatchJob {
 // 가 어느 것?" 같은 질문이 즉답되도록 식별 정보(trgt_id, trgt_label) 를 함께
 // 보관한다. 대상이 사라진 뒤에도 trgt_label 로 추적 가능.
 model TbCmBatchJobItem {
-  item_id       String       @id @default(uuid())
-  job_id        String
+  item_id      String       @id @default(uuid())
+  job_id       String
   // 대상 종류: PROJECT | ATTACH_FILE 등
-  trgt_ty_code  String
-  trgt_id       String
+  trgt_ty_code String
+  trgt_id      String
   // 처리 시점의 식별 라벨 (사후 추적용 — 프로젝트명, 파일명 등)
-  trgt_label    String?
+  trgt_label   String?
   // 항목 처리 상태: SUCCESS | FAILED | SKIPPED
-  sttus_code    String
-  error_msg     String?
-  processed_dt  DateTime     @default(now())
+  sttus_code   String
+  error_msg    String?
+  processed_dt DateTime     @default(now())
   // 부가 메타 (예: 삭제된 첨부파일 수, 디스크 용량 등)
-  meta_json     Json?
-  job           TbCmBatchJob @relation(fields: [job_id], references: [job_id], onDelete: Cascade, map: "tb_cm_batch_job_item_job_fk")
+  meta_json    Json?
+  job          TbCmBatchJob @relation(fields: [job_id], references: [job_id], onDelete: Cascade, map: "tb_cm_batch_job_item_job_fk")
 
   @@index([job_id, sttus_code], map: "tb_cm_batch_job_item_job_sttus_idx")
   @@map("tb_cm_batch_job_item")

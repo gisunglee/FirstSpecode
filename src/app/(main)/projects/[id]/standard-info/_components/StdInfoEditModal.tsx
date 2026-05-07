@@ -29,6 +29,7 @@ import {
   DATA_TYPE_OPTIONS,
   getTodayStr,
 } from "../_constants";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 
 type Props = {
   projectId:          string;
@@ -95,22 +96,21 @@ export function StdInfoEditModal({
         </h3>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {/* 코드 + 명칭 */}
+          {/* 코드 + 명칭 — 4:6 비율 */}
           <div style={{ display: "flex", gap: 12 }}>
-            <ModalField label="기준 정보 코드 *" style={{ width: 120 }}>
+            <ModalField label="기준 정보 코드 *" style={{ flex: 4 }}>
               <input
                 value={stdInfoCode}
                 onChange={(e) => setStdInfoCode(e.target.value.toUpperCase())}
                 maxLength={6} placeholder="AUTH01"
-                style={modalInputStyle}
-                disabled={isEdit}
+                className="sp-input"
               />
             </ModalField>
-            <ModalField label="기준 정보 명 *" style={{ flex: 1 }}>
+            <ModalField label="기준 정보 명 *" style={{ flex: 6 }}>
               <input
                 value={stdInfoNm}
                 onChange={(e) => setStdInfoNm(e.target.value)}
-                style={modalInputStyle}
+                className="sp-input"
               />
             </ModalField>
           </div>
@@ -121,30 +121,34 @@ export function StdInfoEditModal({
               {/* 자유 텍스트 + datalist 자동완성.
                   현재 프로젝트에서 이미 쓴 카테고리가 자동완성으로 제안 → 일관성 유도.
                   새 카테고리도 자유 입력 가능. */}
-              <input
-                value={bizCtgryNm}
-                onChange={(e) => setBizCtgryNm(e.target.value)}
-                list={CTGRY_DATALIST_ID}
-                maxLength={100}
-                placeholder="예: 회원, 예산서, 배치"
-                className="sp-no-native-arrow"
-                style={modalChevronInputStyle}
-              />
-              <datalist id={CTGRY_DATALIST_ID}>
-                {existingCategories.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
+              <div className="sp-select-wrap">
+                <input
+                  value={bizCtgryNm}
+                  onChange={(e) => setBizCtgryNm(e.target.value)}
+                  list={CTGRY_DATALIST_ID}
+                  maxLength={100}
+                  placeholder="예: 회원, 예산서, 배치"
+                  className="sp-input sp-no-native-arrow"
+                />
+                <datalist id={CTGRY_DATALIST_ID}>
+                  {existingCategories.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+                <span className="sp-select-arrow"><SelectChevron /></span>
+              </div>
             </ModalField>
             <ModalField label="자료 유형 *" style={{ flex: 1 }}>
-              <select
-                value={stdDataTyCode}
-                onChange={(e) => setStdDataTyCode(e.target.value)}
-                className="sp-no-native-arrow"
-                style={modalChevronInputStyle}
-              >
-                {DATA_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+              <div className="sp-select-wrap">
+                <select
+                  value={stdDataTyCode}
+                  onChange={(e) => setStdDataTyCode(e.target.value)}
+                  className="sp-input"
+                >
+                  {DATA_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                <span className="sp-select-arrow"><SelectChevron /></span>
+              </div>
             </ModalField>
           </div>
 
@@ -153,26 +157,30 @@ export function StdInfoEditModal({
             <ModalField label="주요 기준 값" style={{ flex: 1 }}>
               <input
                 value={mainStdVal} onChange={(e) => setMainStdVal(e.target.value)}
-                style={modalInputStyle} placeholder="Y, 5, ADMIN 등"
+                className="sp-input" placeholder="Y, 5, ADMIN 등"
               />
             </ModalField>
             <ModalField label="보조 기준 값" style={{ flex: 1 }}>
-              <input value={subStdVal} onChange={(e) => setSubStdVal(e.target.value)} style={modalInputStyle} />
+              <input value={subStdVal} onChange={(e) => setSubStdVal(e.target.value)} className="sp-input" />
             </ModalField>
           </div>
 
-          {/* 기간 + 사용 여부 */}
+          {/* 기간 + 사용 여부 — 서버 저장 형식은 YYYYMMDD, UI는 type="date" 라 변환 필요 */}
           <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
             <ModalField label="기준 시작일 *" style={{ flex: 1 }}>
               <input
-                value={stdBgngDe} onChange={(e) => setStdBgngDe(e.target.value)}
-                maxLength={8} placeholder="20260101" style={modalInputStyle}
+                type="date"
+                value={stdBgngDe ? `${stdBgngDe.slice(0,4)}-${stdBgngDe.slice(4,6)}-${stdBgngDe.slice(6,8)}` : ""}
+                onChange={(e) => setStdBgngDe(e.target.value.replace(/-/g, ""))}
+                className="sp-input"
               />
             </ModalField>
             <ModalField label="기준 종료일" style={{ flex: 1 }}>
               <input
-                value={stdEndDe} onChange={(e) => setStdEndDe(e.target.value)}
-                maxLength={8} placeholder="99991231" style={modalInputStyle}
+                type="date"
+                value={stdEndDe ? `${stdEndDe.slice(0,4)}-${stdEndDe.slice(4,6)}-${stdEndDe.slice(6,8)}` : ""}
+                onChange={(e) => setStdEndDe(e.target.value.replace(/-/g, ""))}
+                className="sp-input"
               />
             </ModalField>
             {/* 사용 여부 토글 — 목록 행 토글과 동일한 pill 스타일 */}
@@ -196,7 +204,8 @@ export function StdInfoEditModal({
           <ModalField label="설명">
             <textarea
               value={stdInfoDc} onChange={(e) => setStdInfoDc(e.target.value)} rows={3}
-              style={{ ...modalInputStyle, resize: "vertical" }}
+              className="sp-input"
+              style={{ resize: "vertical" }}
               placeholder="이 기준 정보의 용도를 설명하세요."
             />
           </ModalField>
@@ -248,29 +257,6 @@ const dialogStyle: React.CSSProperties = {
   borderRadius: 12, padding: "24px 28px",
   boxShadow: "var(--shadow-lg)",
   color: "var(--color-text-primary)",
-};
-
-const modalInputStyle: React.CSSProperties = {
-  width: "100%", padding: "7px 10px", borderRadius: 6,
-  border: "1px solid var(--color-border)",
-  background: "var(--color-bg-card)",
-  color: "var(--color-text-primary)",
-  fontSize: 13, boxSizing: "border-box",
-};
-
-// <select> 와 <input list="..."> 공용 — 페이지 필터 select 와 동일한 chevron 패턴.
-// 네이티브 indicator 는 className="sp-no-native-arrow" 로 제거하고 SVG chevron 만 노출.
-// 우측 패딩 32px + 아이콘 위치 right 10px center → 화살표가 우측에서 떠있어 보임.
-const modalChevronInputStyle: React.CSSProperties = {
-  ...modalInputStyle,
-  padding:            "7px 32px 7px 10px",
-  cursor:             "pointer",
-  outline:            "none",
-  appearance:         "none",
-  WebkitAppearance:   "none",
-  backgroundImage:    `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
-  backgroundRepeat:   "no-repeat",
-  backgroundPosition: "right 10px center",
 };
 
 const toggleBaseStyle: React.CSSProperties = {

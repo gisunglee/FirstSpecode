@@ -90,20 +90,20 @@ function AdminBatchJobsInner() {
       {/* 필터 바 */}
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <select
-          className="sp-input"
+          className="sp-input sp-input-fixed sp-select"
           value={type}
           onChange={(e) => { setType(e.target.value); setPage(1); }}
-          style={{ minWidth: 200 }}
+          style={{ width: 200 }}
         >
           {JOB_TYPES.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
         <select
-          className="sp-input"
+          className="sp-input sp-input-fixed sp-select"
           value={status}
           onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-          style={{ minWidth: 140 }}
+          style={{ width: 160 }}
         >
           {STATUSES.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>

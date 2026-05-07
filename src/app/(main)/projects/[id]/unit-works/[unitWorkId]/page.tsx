@@ -30,6 +30,7 @@ import { useAppStore } from "@/store/appStore";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
 import AiImplementCard from "@/components/ui/AiImplementCard";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 import AiTaskFilePicker from "@/components/ui/AiTaskFilePicker";
 import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
 import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
@@ -942,13 +943,12 @@ function UnitWorkDetailPageInner() {
         >
           {/* 상위 요구사항 선택 */}
           <FormField label="상위 요구사항" required>
-            {/* position: relative 래퍼로 커스텀 화살표를 right: 10px에 고정 */}
-            <div style={{ position: "relative" }}>
+            <div className="sp-select-wrap">
               <select
                 value={form.reqId}
                 onChange={(e) => handleChange("reqId", e.target.value)}
                 disabled={!canEdit}
-                style={{ ...inputStyle, appearance: "none", paddingRight: 32 }}
+                className="sp-input"
               >
                 <option value="">요구사항을 선택하세요</option>
                 {reqOptions.map((r) => (
@@ -957,9 +957,7 @@ function UnitWorkDetailPageInner() {
                   </option>
                 ))}
               </select>
-              <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--color-text-secondary)" }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-              </span>
+              <span className="sp-select-arrow"><SelectChevron /></span>
             </div>
           </FormField>
 
@@ -972,7 +970,7 @@ function UnitWorkDetailPageInner() {
                 placeholder="단위업무명을 입력하세요"
                 onChange={(e) => handleChange("name", e.target.value)}
                 readOnly={!canEdit}
-                style={inputStyle}
+                className="sp-input"
               />
             </FormField>
             <FormField label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>표시 ID<DisplayIdHelp /></span>}>
@@ -982,7 +980,7 @@ function UnitWorkDetailPageInner() {
                 placeholder="미입력 시 자동 생성"
                 onChange={(e) => handleChange("displayId", e.target.value)}
                 readOnly={!canEdit}
-                style={inputStyle}
+                className="sp-input"
               />
             </FormField>
           </div>
@@ -995,7 +993,7 @@ function UnitWorkDetailPageInner() {
                 value={form.startDate ?? ""}
                 onChange={(e) => handleChange("startDate", e.target.value)}
                 readOnly={!canEdit}
-                style={inputStyle}
+                className="sp-input"
               />
             </FormField>
             <FormField label="종료일">
@@ -1004,7 +1002,7 @@ function UnitWorkDetailPageInner() {
                 value={form.endDate ?? ""}
                 onChange={(e) => handleChange("endDate", e.target.value)}
                 readOnly={!canEdit}
-                style={inputStyle}
+                className="sp-input"
               />
             </FormField>
           </div>
@@ -1034,20 +1032,23 @@ function UnitWorkDetailPageInner() {
                   </button>
                 )}
               </div>
-              <select
-                value={form.assignMemberId ?? ""}
-                onChange={(e) => handleChange("assignMemberId", e.target.value)}
-                disabled={!canEdit}
-                style={selectStyle}
-              >
-                <option value="">담당자 없음</option>
-                {members.map((m) => (
-                  <option key={m.memberId} value={m.memberId}>
-                    {m.name ?? m.email}
-                    {m.memberId === myMemberId ? " (나)" : ""}
-                  </option>
-                ))}
-              </select>
+              <div className="sp-select-wrap">
+                <select
+                  value={form.assignMemberId ?? ""}
+                  onChange={(e) => handleChange("assignMemberId", e.target.value)}
+                  disabled={!canEdit}
+                  className="sp-input"
+                >
+                  <option value="">담당자 없음</option>
+                  {members.map((m) => (
+                    <option key={m.memberId} value={m.memberId}>
+                      {m.name ?? m.email}
+                      {m.memberId === myMemberId ? " (나)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <span className="sp-select-arrow"><SelectChevron /></span>
+              </div>
             </div>
             <FormField label="진행률 (%)">
               <input
@@ -1057,7 +1058,7 @@ function UnitWorkDetailPageInner() {
                 value={form.progress}
                 onChange={(e) => handleChange("progress", Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
                 readOnly={!canEdit}
-                style={inputStyle}
+                className="sp-input"
               />
             </FormField>
             <FormField label="정렬순서">
@@ -1067,7 +1068,7 @@ function UnitWorkDetailPageInner() {
                 value={form.sortOrder}
                 onChange={(e) => handleChange("sortOrder", parseInt(e.target.value) || 0)}
                 readOnly={!canEdit}
-                style={inputStyle}
+                className="sp-input"
               />
             </FormField>
           </div>
@@ -1239,30 +1240,6 @@ function DisplayIdHelp() {
 }
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
-
-const inputStyle: React.CSSProperties = {
-  width:        "100%",
-  padding:      "8px 12px",
-  borderRadius: 6,
-  border:       "1px solid var(--color-border)",
-  background:   "var(--color-bg-card)",
-  color:        "var(--color-text-primary)",
-  fontSize:     14,
-  boxSizing:    "border-box",
-  outline:      "none",
-};
-
-// select 전용 — 브라우저 기본 화살표(두껍고 오른쪽 끝에 붙음) 제거 후 커스텀 SVG 화살표 사용
-// 과업/요구사항/화면 상세와 동일한 톤·위치
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  paddingRight:       "32px",
-  appearance:         "none",
-  WebkitAppearance:   "none",
-  backgroundImage:    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
-  backgroundRepeat:   "no-repeat",
-  backgroundPosition: "right 10px center",
-};
 
 const primaryBtnStyle: React.CSSProperties = {
   padding:      "8px 24px",

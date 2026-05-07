@@ -96,6 +96,35 @@
   * `use_yn` (b1, NN): Y=활성, N=소프트 삭제 (기본 Y)
   * 인덱스: (prjct_id, use_yn, mdfcn_dt DESC, creat_dt DESC), (prjct_id, guide_ctgry_code, use_yn)
 
-## 7. 특수 목적 (Diff Test)
+## 7. 시스템 문서 (Docs Hub) — `sys_docs`
+* **`tb_sys_docs_section`** (시스템 문서 섹션 — Docs Hub 1단계 트리)
+  * `sect_id` (v36, PK): 섹션 UUID
+  * `sect_slug` (v50, NN): URL slug — partial unique (use_yn='Y' 범위)
+  * `sect_nm` (v200, NN): 섹션 표시명
+  * `sect_icon_code` (v50): 트리 아이콘 키 (menuIcons.tsx i_*)
+  * `sort_ordr` (i, NN): 표시 순서
+  * `use_yn` (b1, NN): Y=공개, N=숨김 (기본 Y)
+  * 인덱스: (use_yn, sort_ordr)
+  * 비고: SUPER_ADMIN 전용. prjct_id 없음 — 시스템 자산.
+* **`tb_sys_docs_page`** (시스템 문서 페이지 — Docs Hub 2단계, 실제 문서)
+  * `page_id` (v36, PK): 페이지 UUID
+  * `sect_id` (v36, FK NN): 섹션 참조 (ON DELETE RESTRICT)
+  * `page_slug` (v50, NN): URL slug — (sect_id, page_slug) partial unique
+  * `page_sj` (v200, NN): 페이지 제목
+  * `page_excerpt` (v500): 한 줄 요약
+  * `page_cn` (t): Markdown 본문 (단일 진실)
+  * `page_sttus_code` (v20, NN): DRAFT|PUBLISHED|ARCHIVED (기본 DRAFT)
+  * `badge_code` (v20): NEW|BETA|DEPRECATED|NULL
+  * 인덱스: (sect_id, use_yn, sort_ordr), (page_sttus_code, mdfcn_dt DESC, creat_dt DESC)
+  * 라우팅: `/docs/[sect_slug]/[page_slug]`
+* **`tb_sys_attach_file`** (시스템 첨부파일 — SUPER_ADMIN 업로드)
+  * `attach_id` (v36, PK)
+  * `ref_tbl_nm` (v50, NN) / `ref_id` (v36, NN): 다형 참조 (예: tb_sys_docs_page)
+  * `attach_div_code` (v20, NN): INLINE(본문 이미지) | ATTACH(별첨 다운로드)
+  * `orgnl_file_nm`, `stor_file_nm`, `file_path_nm`, `file_sz`(bigint), `file_extsn_nm`, `mime_ty`
+  * 인덱스: (ref_tbl_nm, ref_id, use_yn, sort_ordr), (use_yn, creat_dt DESC)
+  * 비고: `tb_cm_attach_file` 와 분리 — 권한 경계/lifecycle/정책이 다름
+
+## 8. 특수 목적 (Diff Test)
 * **`tb_sp_diff_test_master`** & **`tb_sp_diff_test_node`**
   * `diff_prompt_md` (t), `diff_summary_json` (jsonb), `chg_mode_code` 등 프롬프트 변경점 추적 용도

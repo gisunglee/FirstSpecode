@@ -18,6 +18,7 @@ import RevisionList from "@/components/db-table/RevisionList";
 import RevisionDiffDialog from "@/components/db-table/RevisionDiffDialog";
 import RevisionListDialog from "@/components/db-table/RevisionListDialog";
 import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 // 매핑 인사이트 Phase 1 — "사용 현황" 섹션 + 컬럼별 미사용 배지용 훅
 import TableUsageSection, { useTableUsage } from "@/components/db-table/TableUsageSection";
 // 매핑 인사이트 Phase 2 — 컬럼 클릭 드릴다운 팝업
@@ -406,7 +407,7 @@ function DbTableDetailPageInner() {
                 value={physNm}
                 onChange={(e) => setPhysNm(e.target.value)}
                 placeholder="tb_example"
-                style={{ ...inputStyle, fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace", fontWeight: 600, letterSpacing: "0.02em" }}
+                className="sp-input"
               />
             </div>
             <div style={formGroupStyle}>
@@ -415,7 +416,7 @@ function DbTableDetailPageInner() {
                 value={lgclNm}
                 onChange={(e) => setLgclNm(e.target.value)}
                 placeholder="예시 테이블"
-                style={inputStyle}
+                className="sp-input"
               />
             </div>
             {/* 담당자 — 선택 (필수 아님). 논리 테이블명 오른쪽 */}
@@ -441,19 +442,22 @@ function DbTableDetailPageInner() {
                   </button>
                 )}
               </div>
-              <select
-                value={assignMemberId}
-                onChange={(e) => setAssignMemberId(e.target.value)}
-                style={selectStyle}
-              >
-                <option value="">담당자 없음</option>
-                {members.map((m) => (
-                  <option key={m.memberId} value={m.memberId}>
-                    {m.name ?? m.email}
-                    {m.memberId === myMemberId ? " (나)" : ""}
-                  </option>
-                ))}
-              </select>
+              <div className="sp-select-wrap">
+                <select
+                  value={assignMemberId}
+                  onChange={(e) => setAssignMemberId(e.target.value)}
+                  className="sp-input"
+                >
+                  <option value="">담당자 없음</option>
+                  {members.map((m) => (
+                    <option key={m.memberId} value={m.memberId}>
+                      {m.name ?? m.email}
+                      {m.memberId === myMemberId ? " (나)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <span className="sp-select-arrow"><SelectChevron /></span>
+              </div>
             </div>
             {/* 설명 — textarea 2줄, full width */}
             <div style={{ ...formGroupStyle, gridColumn: "1 / -1" }}>
@@ -463,7 +467,8 @@ function DbTableDetailPageInner() {
                 onChange={(e) => setDc(e.target.value)}
                 placeholder="테이블 용도 설명"
                 rows={2}
-                style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }}
+                className="sp-input"
+                style={{ resize: "vertical", lineHeight: 1.5 }}
               />
             </div>
           </div>
@@ -592,7 +597,7 @@ function DbTableDetailPageInner() {
                         value={col.colPhysclNm}
                         onChange={(e) => updateCol(col._key, "colPhysclNm", e.target.value)}
                         placeholder="col_name"
-                        style={{ ...colInputStyle, fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace", fontWeight: 400 }}
+                        style={colInputStyle}
                       />
                       <input
                         value={col.colLgclNm}
@@ -604,13 +609,13 @@ function DbTableDetailPageInner() {
                         value={col.dataTyNm}
                         onChange={(e) => updateCol(col._key, "dataTyNm", e.target.value)}
                         placeholder="VARCHAR(100)"
-                        style={{ ...colInputStyle, fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace" }}
+                        style={colInputStyle}
                       />
                       <input
                         value={col.colDc}
                         onChange={(e) => updateCol(col._key, "colDc", e.target.value)}
                         placeholder="설명"
-                        style={{ ...colInputStyle, fontFamily: "'Pretendard','Noto Sans KR',sans-serif" }}
+                        style={colInputStyle}
                       />
                       {/* 코드 — 공통코드 그룹 검색 드롭다운 */}
                       <CodeGroupSelect
@@ -820,25 +825,6 @@ const labelStyle: React.CSSProperties = {
   color: "var(--color-text-secondary)",
 };
 
-const inputStyle: React.CSSProperties = {
-  padding: "8px 12px", borderRadius: 6,
-  border: "1px solid var(--color-border)",
-  background: "var(--color-bg-card)",
-  color: "var(--color-text-primary)",
-  fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box",
-};
-
-// select 전용 — 브라우저 기본 화살표(두껍고 오른쪽 끝에 붙음) 제거 후 커스텀 SVG 화살표 사용
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  paddingRight: "32px",
-  appearance: "none",
-  WebkitAppearance: "none",
-  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
-  backgroundRepeat: "no-repeat",
-  backgroundPosition: "right 10px center",
-};
-
 // 라벨 옆 인라인 아이콘 버튼 — 이력 조회 등 보조 액션을 최소 면적으로 표현
 const inlineIconBtnStyle: React.CSSProperties = {
   display: "inline-flex",
@@ -876,7 +862,11 @@ const colInputStyle: React.CSSProperties = {
   border: "1px solid var(--color-border)",
   background: "var(--color-bg-card)",
   color: "var(--color-text-primary)",
-  fontSize: 12, outline: "none", width: "100%", boxSizing: "border-box",
+  // 위 inputStyle 과 동일 이유로 inherit 강제.
+  // 폰트 크기는 다른 입력 필드(테이블 정보 input)와 동일하게 13px 로 통일.
+  fontFamily: "inherit",
+  fontWeight: "inherit",
+  fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box",
 };
 
 const primaryBtnStyle: React.CSSProperties = {

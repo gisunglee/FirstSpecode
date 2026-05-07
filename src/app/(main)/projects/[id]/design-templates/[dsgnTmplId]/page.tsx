@@ -19,6 +19,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 import { useAppStore } from "@/store/appStore";
 import { useIsSystemAdmin, useMyRole } from "@/hooks/useMyRole";
 
@@ -409,7 +410,7 @@ function DesignTemplateDetailPageInner() {
               placeholder="양식의 명칭을 입력하세요"
               readOnly={readOnly}
               maxLength={200}
-              style={inputStyle}
+              className="sp-input"
             />
           </FormField>
 
@@ -420,23 +421,26 @@ function DesignTemplateDetailPageInner() {
               onChange={(e) => setTmplDc(e.target.value)}
               placeholder="양식에 대한 간단한 설명"
               readOnly={readOnly}
-              style={inputStyle}
+              className="sp-input"
             />
           </FormField>
 
           {/* 대상 계층 / 정렬 / 사용 여부 */}
           <div style={{ display: "grid", gridTemplateColumns: "1.4fr 0.7fr 0.7fr", gap: 16 }}>
             <FormField label="대상 계층" required>
-              <select
-                value={refTyCode}
-                onChange={(e) => setRefTyCode(e.target.value as DesignRefType)}
-                disabled={readOnly}
-                style={selectStyle}
-              >
-                {REF_TYPE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+              <div className="sp-select-wrap">
+                <select
+                  value={refTyCode}
+                  onChange={(e) => setRefTyCode(e.target.value as DesignRefType)}
+                  disabled={readOnly}
+                  className="sp-input"
+                >
+                  {REF_TYPE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <span className="sp-select-arrow"><SelectChevron /></span>
+              </div>
             </FormField>
 
             <FormField label="정렬">
@@ -446,20 +450,23 @@ function DesignTemplateDetailPageInner() {
                 onChange={(e) => setSortOrdr(Number(e.target.value))}
                 readOnly={readOnly}
                 min={0}
-                style={inputStyle}
+                className="sp-input"
               />
             </FormField>
 
             <FormField label="사용 여부">
-              <select
-                value={useYn}
-                onChange={(e) => setUseYn(e.target.value)}
-                disabled={readOnly}
-                style={selectStyle}
-              >
-                <option value="Y">사용</option>
-                <option value="N">미사용</option>
-              </select>
+              <div className="sp-select-wrap">
+                <select
+                  value={useYn}
+                  onChange={(e) => setUseYn(e.target.value)}
+                  disabled={readOnly}
+                  className="sp-input"
+                >
+                  <option value="Y">사용</option>
+                  <option value="N">미사용</option>
+                </select>
+                <span className="sp-select-arrow"><SelectChevron /></span>
+              </div>
             </FormField>
           </div>
 
@@ -689,23 +696,6 @@ function FormField({ label, required, children }: {
 }
 
 // ── 스타일 상수 ───────────────────────────────────────────────────────────────
-
-const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "8px 12px", borderRadius: 6,
-  border: "1px solid var(--color-border)",
-  background: "var(--color-bg-card)", color: "var(--color-text-primary)",
-  fontSize: 14, boxSizing: "border-box", outline: "none",
-};
-
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  paddingRight: "32px",
-  appearance: "none",
-  WebkitAppearance: "none",
-  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
-  backgroundRepeat: "no-repeat",
-  backgroundPosition: "right 10px center",
-};
 
 const primaryBtnStyle: React.CSSProperties = {
   padding: "5px 14px", borderRadius: 6,

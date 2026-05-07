@@ -209,47 +209,47 @@ function UserStoriesPageInner() {
               {/* 요구사항 — 표시번호 + 이름. 좁은 폭에서는 ellipsis (title로 전체 노출) */}
               <div
                 style={{
-                  fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.4,
+                  fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.4,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}
                 title={s.requirementDisplayId ? `${s.requirementDisplayId} ${s.requirementName}` : undefined}
               >
                 {s.requirementDisplayId ? (
                   <>
-                    <span style={{ color: "var(--color-text-secondary)", fontSize: 11, marginRight: 4 }}>
+                    <span style={{ color: "var(--color-text-secondary)", fontSize: 13, marginRight: 4 }}>
                       {s.requirementDisplayId}
                     </span>
                     {s.requirementName}
                   </>
                 ) : (
-                  <span style={{ color: "#ccc" }}>—</span>
+                  <span style={{ color: "var(--color-text-tertiary)" }}>-</span>
                 )}
               </div>
 
               {/* 스토리명 — displayId 는 nowrap 유지, 이름만 ellipsis */}
               <div
                 style={{
-                  fontSize: 14, fontWeight: 500,
+                  fontSize: 13,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}
                 title={`${s.displayId} ${s.name}`}
               >
-                <span style={{ color: "var(--color-text-secondary)", fontSize: 11, marginRight: 6 }}>
+                <span style={{ color: "var(--color-text-secondary)", fontSize: 13, marginRight: 6 }}>
                   {s.displayId}
                 </span>
                 {s.name}
               </div>
 
               {/* 페르소나 */}
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {s.persona || <span style={{ color: "#ccc" }}>—</span>}
+              <div style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {s.persona || <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}
               </div>
 
-              {/* 인수기준 수 */}
+              {/* 인수기준 수 — 알약 디자인은 유지, 폰트만 본문과 통일 */}
               <div style={{ textAlign: "center" }}>
                 <span style={{
                   display: "inline-block", padding: "2px 8px", borderRadius: 4,
-                  fontSize: 12, background: "var(--color-bg-muted)", color: "var(--color-text-secondary)",
+                  fontSize: 13, background: "var(--color-bg-muted)", color: "var(--color-text-secondary)",
                 }}>
                   {s.acceptanceCriteriaCount}개
                 </span>

@@ -15,6 +15,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import dynamic from "next/dynamic";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 // TipTap 번들이 초기 로드에 포함되지 않도록 dynamic import
 const RichEditor = dynamic(() => import("@/components/ui/RichEditor"), { ssr: false });
 
@@ -294,21 +295,24 @@ function NewReviewModal({
               value={titleNm}
               onChange={(e) => setTitleNm(e.target.value)}
               placeholder="리뷰 요청 제목을 입력하세요"
-              style={inputStyle}
+              className="sp-input"
             />
           </div>
 
           {/* 답변자 */}
           <div style={formGroupStyle}>
             <label style={labelStyle}>답변자 <span style={{ color: "#e53935" }}>*</span></label>
-            <select value={revwrMemberId} onChange={(e) => setRevwrMemberId(e.target.value)} style={selectStyle}>
-              <option value="">답변자를 선택하세요</option>
-              {memberItems.map((m) => (
-                <option key={m.memberId} value={m.memberId}>
-                  {m.name || m.email}
-                </option>
-              ))}
-            </select>
+            <div className="sp-select-wrap">
+              <select value={revwrMemberId} onChange={(e) => setRevwrMemberId(e.target.value)} className="sp-input">
+                <option value="">답변자를 선택하세요</option>
+                {memberItems.map((m) => (
+                  <option key={m.memberId} value={m.memberId}>
+                    {m.name || m.email}
+                  </option>
+                ))}
+              </select>
+              <span className="sp-select-arrow"><SelectChevron /></span>
+            </div>
           </div>
 
           {/* 요청 내용 — RichEditor */}
@@ -372,20 +376,6 @@ const formGroupStyle: React.CSSProperties  = { marginBottom: 16 };
 const labelStyle: React.CSSProperties = {
   display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600,
   color: "var(--color-text-secondary)",
-};
-const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "8px 12px", borderRadius: 6,
-  border: "1px solid var(--color-border)", fontSize: 14,
-  background: "var(--color-bg-card)", color: "var(--color-text-primary)",
-  boxSizing: "border-box",
-};
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  appearance: "none",
-  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
-  backgroundRepeat: "no-repeat",
-  backgroundPosition: "right 10px center",
-  paddingRight: 32,
 };
 const primaryBtnStyle: React.CSSProperties = {
   padding: "8px 20px", borderRadius: 6, border: "1px solid transparent",

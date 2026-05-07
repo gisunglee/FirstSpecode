@@ -161,6 +161,8 @@ export default function LNB() {
         label: "도움창고",
         icon: "g_help",
         items: [
+          // DOCS — 공식 문서. 프로젝트 무관 시스템 콘텐츠라 pBase 없이 고정 경로
+          { label: "DOCS",      href: "/docs",       icon: "i_docs" },
           { label: "리뷰 요청", href: p("/reviews"), icon: "i_review" },
           { label: "메모",      href: p("/memos"),   icon: "i_memo" },
         ],
@@ -191,7 +193,11 @@ export default function LNB() {
               // DEFAULT 양식·프롬프트 — 모든 프로젝트의 AI 흐름에 영향 → SUPER_ADMIN 전용 페이지에서만 편집
               { label: "설계 양식",       href: "/admin/design-templates",  icon: "i_designTemplate" as MenuIconKey },
               { label: "프롬프트 관리",   href: "/admin/prompt-templates",  icon: "i_promptTemplate" as MenuIconKey },
+              // 시스템 공식 문서(Docs Hub) 관리 — /docs 사용자 뷰어와 짝
+              { label: "문서 관리",       href: "/admin/docs",              icon: "i_docs" as MenuIconKey },
               { label: "감사 로그",       href: "/admin/audit",             icon: "i_changeLog" as MenuIconKey },
+              // 소프트삭제된 프로젝트의 영구 삭제 운영 화면
+              { label: "정보 삭제",       href: "/admin/cleanup",           icon: "i_cleanup" as MenuIconKey },
             ],
           }]
         : []),

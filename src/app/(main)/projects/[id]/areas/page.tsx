@@ -266,12 +266,12 @@ function AreasPageInner() {
                     : area.unitWorkId ? (
                       <button
                         onClick={() => router.push(`/projects/${projectId}/unit-works/${area.unitWorkId}`)}
-                        style={{ ...linkBtnStyle, fontSize: 13 }}
+                        style={linkBtnStyle}
                       >
                         {area.unitWorkName}
                       </button>
                     ) : (
-                      <span style={{ color: "#aaa", fontSize: 13 }}>-</span>
+                      <span style={{ color: "var(--color-text-tertiary)", fontSize: 13 }}>-</span>
                     )
                   }
                 </div>
@@ -292,7 +292,7 @@ function AreasPageInner() {
                         {area.screenName}
                       </button>
                     ) : (
-                      <span style={{ color: "#aaa", fontSize: 13 }}>미분류</span>
+                      <span style={{ color: "var(--color-text-tertiary)", fontSize: 13 }}>미분류</span>
                     )
                   }
                 </div>
@@ -300,12 +300,12 @@ function AreasPageInner() {
                 {/* 영역명 — displayId + name 한 줄. 좁은 폭에서는 ellipsis (title로 전체 노출) */}
                 <div
                   style={{
-                    fontSize: 14, fontWeight: 500,
+                    fontSize: 13,
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}
                   title={`${area.displayId} ${area.name}`}
                 >
-                  <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginRight: 6 }}>
+                  <span style={{ color: "var(--color-text-secondary)", fontSize: 13, marginRight: 6 }}>
                     {area.displayId}
                   </span>
                   {area.name}
@@ -319,26 +319,26 @@ function AreasPageInner() {
                 </div>
 
                 {/* 정렬순서 */}
-                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
+                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
                   {area.sortOrder}
                 </div>
 
                 {/* 기능 수 */}
-                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
+                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
                   {area.functionCount}
                 </div>
 
                 {/* 구현기간 — 가장 빠른 시작일 ~ 가장 늦은 종료일 (한 줄 표시) */}
-                <div style={{ textAlign: "center", fontSize: 11, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
+                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)", whiteSpace: "nowrap" }}>
                   {area.implStart || area.implEnd ? (
                     <>{area.implStart ?? "-"} ~ {area.implEnd ?? "-"}</>
                   ) : (
-                    <span style={{ color: "#ccc" }}>-</span>
+                    <span style={{ color: "var(--color-text-tertiary)" }}>-</span>
                   )}
                 </div>
 
                 {/* 예상공수 — D/H 형식 */}
-                <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>
+                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
                   {area.totalEffortHours > 0
                     ? (() => {
                       const d = Math.floor(area.totalEffortHours / 8);
@@ -348,12 +348,12 @@ function AreasPageInner() {
                       if (h > 0) parts.push(`${h}h`);
                       return (
                         <>
-                          <span style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{parts.join(" ")}</span>
-                          <span style={{ marginLeft: 4, fontSize: 11, color: "#aaa" }}>({area.totalEffortHours}h)</span>
+                          <span>{parts.join(" ")}</span>
+                          <span style={{ marginLeft: 4, color: "var(--color-text-tertiary)" }}>({area.totalEffortHours}h)</span>
                         </>
                       );
                     })()
-                    : <span style={{ color: "#ccc" }}>-</span>
+                    : <span style={{ color: "var(--color-text-tertiary)" }}>-</span>
                   }
                 </div>
 
@@ -381,7 +381,7 @@ function AreasPageInner() {
                       </span>
                     </button>
                   ) : (
-                    <span style={{ color: "#ccc", fontSize: 13 }}>—</span>
+                    <span style={{ color: "var(--color-text-tertiary)", fontSize: 13 }}>-</span>
                   )}
                 </div>
 
@@ -393,7 +393,7 @@ function AreasPageInner() {
                     { label: "테", val: area.avgTestRt, color: "#6a1b9a" },
                   ].map(({ label, val, color }) => (
                     <span key={label} style={{
-                      color, fontWeight: 600,
+                      color,
                       background: val === 100 ? `${color}14` : "transparent",
                       borderRadius: 3, padding: "1px 3px",
                     }}>
@@ -598,15 +598,21 @@ const gridRowStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
+// 단위업무/화면 링크 — 행마다 2개씩 배치되는 인라인 링크라
+// 파랑+밑줄 강조가 한 화면에 너무 많은 시선을 분산시킴.
+// AI 태스크 페이지와 동일하게 평소엔 일반 텍스트색으로 두고, font: inherit 으로
+// <button> 의 user-agent 시스템 폰트가 옆 <span> 과 다르게 렌더되는 문제 방지.
 const linkBtnStyle: React.CSSProperties = {
   background: "none",
   border: "none",
   cursor: "pointer",
-  color: "var(--color-primary, #1976d2)",
-  fontSize: 14,
+  color: "var(--color-text-primary)",
+  fontFamily: "inherit",
+  fontWeight: "inherit",
+  fontSize: 13,
   padding: 0,
   textAlign: "left",
-  textDecoration: "underline",
+  textDecoration: "none",
 };
 
 const filterSelectStyle: React.CSSProperties = {

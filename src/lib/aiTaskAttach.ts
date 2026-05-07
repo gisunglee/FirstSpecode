@@ -180,15 +180,37 @@ export async function saveAiTaskAttachments(opts: {
  * 용도:
  *   - 태스크 생성 후 첨부 저장이 부분 실패했을 때의 롤백
  *   - 태스크 자체가 삭제될 때의 정리 (별도 이슈에서 tb_ai_task DELETE 경로에 추가)
+ *
+ * 디스크 ref-count 보호 (재요청 정책 대응):
+ *   - 재요청(retry) 은 원본 첨부의 DB 행만 복사하고 file_path_nm 은 동일하게 유지한다.
+ *     즉 "같은 디스크 파일을 여러 행이 가리키는" 상태가 정상 시나리오에 존재한다.
+ *   - 따라서 한 태스크의 첨부를 디스크에서 unlink 하기 전, 동일 file_path_nm 을
+ *     가진 다른 행이 남아있는지 한 번 더 확인한다. 남아있다면 디스크는 보존하고
+ *     DB 행만 삭제한다 (형제 태스크의 파일이 의도치 않게 사라지는 것 방지).
+ *   - DB 행 삭제 후에도 file_path_nm 을 가리키는 행이 0이 되었다면 orphan 배치
+ *     (attach-file-cleanup) 가 결국 정리하므로 이 함수에서 한 발 늦게 unlink 해도
+ *     데이터 정합성에는 문제가 없다.
  */
 export async function deleteAiTaskAttachments(taskId: string): Promise<void> {
   const files = await prisma.tbCmAttachFile.findMany({
     where:  { ref_tbl_nm: "tb_ai_task", ref_id: taskId },
     select: { attach_file_id: true, file_path_nm: true },
   });
+
+  // 디스크 unlink 는 "같은 file_path_nm 을 참조하는 다른 행이 없는 경우"에만 수행
+  // (retry 로 복사된 형제 행이 살아있을 수 있으므로 무조건 unlink 하면 데이터 손상)
   for (const f of files) {
-    try { deleteFile(f.file_path_nm); } catch { /* 디스크 정리 실패는 로그만 */ }
+    const otherCount = await prisma.tbCmAttachFile.count({
+      where: {
+        file_path_nm:   f.file_path_nm,
+        attach_file_id: { not: f.attach_file_id },
+      },
+    });
+    if (otherCount === 0) {
+      try { deleteFile(f.file_path_nm); } catch { /* 디스크 정리 실패는 로그만 */ }
+    }
   }
+
   if (files.length > 0) {
     await prisma.tbCmAttachFile.deleteMany({
       where: { ref_tbl_nm: "tb_ai_task", ref_id: taskId },

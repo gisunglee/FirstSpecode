@@ -78,23 +78,23 @@ export default function AdminAuditPage() {
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      {/* 필터 바 */}
+      {/* 필터 바 — sp-input-fixed + sp-select 조합으로 폭 고정 + 표준 chevron */}
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <select
-          className="sp-input"
+          className="sp-input sp-input-fixed sp-select"
           value={actionType}
           onChange={(e) => { setActionType(e.target.value); setPage(1); }}
-          style={{ minWidth: 180 }}
+          style={{ width: 200 }}
         >
           {ACTION_TYPES.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
         <select
-          className="sp-input"
+          className="sp-input sp-input-fixed sp-select"
           value={targetType}
           onChange={(e) => { setTargetType(e.target.value); setPage(1); }}
-          style={{ minWidth: 140 }}
+          style={{ width: 160 }}
         >
           {TARGET_TYPES.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>

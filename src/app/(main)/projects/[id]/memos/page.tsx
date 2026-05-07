@@ -114,7 +114,8 @@ function MemoListInner() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="제목 검색..."
-          style={{ ...inputStyle, width: 220 }}
+          className="sp-input"
+          style={{ width: 220 }}
         />
         <div style={{ display: "flex", gap: 4 }}>
           {SHARE_FILTERS.map((f) => (
@@ -244,9 +245,3 @@ const primaryBtnStyle: React.CSSProperties = {
   fontSize: 14, fontWeight: 600, cursor: "pointer",
 };
 
-const inputStyle: React.CSSProperties = {
-  padding: "6px 12px", borderRadius: 6,
-  border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
-  color: "var(--color-text-primary)", fontSize: 13, outline: "none",
-  boxSizing: "border-box",
-};

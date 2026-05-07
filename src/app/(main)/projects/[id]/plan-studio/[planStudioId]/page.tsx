@@ -28,6 +28,7 @@ import { renderMarkdown } from "@/lib/renderMarkdown";
 import { ARTF_DIV, ARTF_FMT, DIV_BADGE_COLOR, AI_STATUS_BADGE } from "@/constants/planStudio";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import PlanStudioAIRequestPopup from "@/components/ui/PlanStudioAIRequestPopup";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
@@ -391,18 +392,24 @@ function DetailInner() {
           {/* 기획명·구분 헤더 */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 8, padding: "10px 14px" }}>
             <label style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", flexShrink: 0 }}>기획명:</label>
-            <input ref={artfNmRef} value={artfNm} onChange={(e) => setArtfNm(e.target.value)} placeholder="기획명 입력" style={{ ...inputStyle, flex: 1 }} />
-            <select value={artfDivCode} onChange={(e) => setArtfDivCode(e.target.value)} style={{ ...inputStyle, width: 140, paddingRight: 28, appearance: "none", WebkitAppearance: "none", backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 10px center" }}>
-              <optgroup label="기획">
-                {Object.values(ARTF_DIV).filter((d) => d.group === "기획").map((d) => <option key={d.code} value={d.code}>{d.name}</option>)}
-              </optgroup>
-              <optgroup label="개발">
-                {Object.values(ARTF_DIV).filter((d) => d.group === "개발").map((d) => <option key={d.code} value={d.code}>{d.name}</option>)}
-              </optgroup>
-            </select>
-            <select value={artfFmtCode} onChange={(e) => setArtfFmtCode(e.target.value)} style={{ ...inputStyle, width: 110, paddingRight: 28, appearance: "none", WebkitAppearance: "none", backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 10px center" }}>
-              {Object.values(ARTF_FMT).map((f) => <option key={f.code} value={f.code}>{f.name}</option>)}
-            </select>
+            <input ref={artfNmRef} value={artfNm} onChange={(e) => setArtfNm(e.target.value)} placeholder="기획명 입력" className="sp-input" style={{ flex: 1 }} />
+            <div className="sp-select-wrap" style={{ width: 140 }}>
+              <select value={artfDivCode} onChange={(e) => setArtfDivCode(e.target.value)} className="sp-input">
+                <optgroup label="기획">
+                  {Object.values(ARTF_DIV).filter((d) => d.group === "기획").map((d) => <option key={d.code} value={d.code}>{d.name}</option>)}
+                </optgroup>
+                <optgroup label="개발">
+                  {Object.values(ARTF_DIV).filter((d) => d.group === "개발").map((d) => <option key={d.code} value={d.code}>{d.name}</option>)}
+                </optgroup>
+              </select>
+              <span className="sp-select-arrow"><SelectChevron /></span>
+            </div>
+            <div className="sp-select-wrap" style={{ width: 110 }}>
+              <select value={artfFmtCode} onChange={(e) => setArtfFmtCode(e.target.value)} className="sp-input">
+                {Object.values(ARTF_FMT).map((f) => <option key={f.code} value={f.code}>{f.name}</option>)}
+              </select>
+              <span className="sp-select-arrow"><SelectChevron /></span>
+            </div>
             {/* 선택 상태 → 수정 + 새 기획 | 신규 상태 → 추가 + 새 기획 */}
         {selectedArtfId ? (
           <>
@@ -523,7 +530,7 @@ function DetailInner() {
               </div>
             </div>
             {ideaTab === "edit" ? (
-              <textarea value={artfIdeaCn} onChange={(e) => setArtfIdeaCn(e.target.value)} rows={8} style={{ ...inputStyle, fontFamily: "'맑은 고딕', 'Malgun Gothic', sans-serif", resize: "vertical", minHeight: 180 }} placeholder="마크다운으로 상세 아이디어를 작성하세요..." />
+              <textarea value={artfIdeaCn} onChange={(e) => setArtfIdeaCn(e.target.value)} rows={8} className="sp-input" style={{ fontFamily: "'맑은 고딕', 'Malgun Gothic', sans-serif", resize: "vertical", minHeight: 180 }} placeholder="마크다운으로 상세 아이디어를 작성하세요..." />
             ) : (
               <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, padding: 10, minHeight: 100, fontSize: 13, lineHeight: 1.7 }} dangerouslySetInnerHTML={{ __html: renderMarkdown(artfIdeaCn) }} />
             )}
@@ -554,7 +561,7 @@ function DetailInner() {
           {/* 렌더링 영역 */}
           <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
             {viewMode === "edit" ? (
-              <textarea value={artfCn} onChange={(e) => setArtfCn(e.target.value)} style={{ ...inputStyle, height: "100%", fontFamily: "monospace", resize: "none" }} />
+              <textarea value={artfCn} onChange={(e) => setArtfCn(e.target.value)} className="sp-input" style={{ height: "100%", fontFamily: "monospace", resize: "none" }} />
             ) : !artfCn ? (
               <div style={{ color: "#aaa", fontSize: 13, padding: 20 }}>아직 생성된 본문이 없습니다.</div>
             ) : artfFmtCode === "MD" ? (
@@ -613,7 +620,7 @@ function DetailInner() {
                 <>
                   {/* 검색 */}
                   <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
-                    <input value={reqSearch} onChange={(e) => setReqSearch(e.target.value)} placeholder="요구사항 ID 또는 이름으로 검색..." style={{ ...inputStyle, background: "var(--color-bg-muted)" }} autoFocus />
+                    <input value={reqSearch} onChange={(e) => setReqSearch(e.target.value)} placeholder="요구사항 ID 또는 이름으로 검색..." className="sp-input" style={{ background: "var(--color-bg-muted)" }} autoFocus />
                   </div>
                   {/* 목록 — 고정 스크롤 */}
                   <div style={{ flex: 1, overflow: "auto" }}>
@@ -684,7 +691,7 @@ function DetailInner() {
               </div>
               {/* 검색 */}
               <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--color-border)" }}>
-                <input value={boardSearch} onChange={(e) => setBoardSearch(e.target.value)} placeholder="기획명 또는 기획실 ID로 검색..." style={{ ...inputStyle, background: "var(--color-bg-muted)" }} autoFocus />
+                <input value={boardSearch} onChange={(e) => setBoardSearch(e.target.value)} placeholder="기획명 또는 기획실 ID로 검색..." className="sp-input" style={{ background: "var(--color-bg-muted)" }} autoFocus />
               </div>
               {/* 목록 */}
               <div style={{ maxHeight: 400, overflow: "auto", padding: "4px 0" }}>
@@ -805,7 +812,7 @@ function DetailInner() {
             {/* 본문 */}
             <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
               {fullSizeMode === "edit" ? (
-                <textarea value={artfCn} onChange={(e) => setArtfCn(e.target.value)} style={{ ...inputStyle, width: "100%", height: "100%", fontFamily: "monospace", resize: "none", fontSize: 13 }} />
+                <textarea value={artfCn} onChange={(e) => setArtfCn(e.target.value)} className="sp-input" style={{ width: "100%", height: "100%", fontFamily: "monospace", resize: "none", fontSize: 13 }} />
               ) : !artfCn ? (
                 <div style={{ color: "#aaa", fontSize: 13, padding: 20 }}>아직 생성된 본문이 없습니다.</div>
               ) : artfFmtCode === "MD" ? (
@@ -891,7 +898,6 @@ function formatShortDt(dt: string | Date): string {
 // ── 스타일 ───────────────────────────────────────────────────────────────────
 const ARTF_GRID = "1fr 80px 70px 80px 35px 105px";
 const actionIconBtn: React.CSSProperties = { background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "#999", padding: "2px 4px" };
-const inputStyle: React.CSSProperties = { width: "100%", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-primary)", fontSize: 13, outline: "none", boxSizing: "border-box" };
 const primaryBtn: React.CSSProperties = { padding: "5px 14px", borderRadius: 6, border: "none", background: "var(--color-primary, #1976d2)", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" };
 const secBtn: React.CSSProperties = { padding: "5px 14px", borderRadius: 6, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-primary)", fontSize: 12, cursor: "pointer" };
 const tabBtn: React.CSSProperties = { padding: "3px 8px", borderRadius: 4, border: "none", background: "transparent", fontSize: 11, cursor: "pointer", color: "var(--color-text-primary)" };

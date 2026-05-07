@@ -350,10 +350,10 @@ function TaskListPageInner() {
 
                 {/* 과업명 */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 11, color: "#aaa", whiteSpace: "nowrap" }}>
+                  <span style={{ fontSize: 13, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
                     {task.displayId}
                   </span>
-                  <span style={{ fontSize: 14, fontWeight: 500, color: "var(--color-text-primary)" }}>
+                  <span style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
                     {task.name}
                   </span>
                 </div>
@@ -384,28 +384,28 @@ function TaskListPageInner() {
                 </div>
 
                 {/* RFP 페이지 */}
-                <span style={{ fontSize: 12, color: "var(--color-text-secondary)", textAlign: "center" }}>
-                  {task.rfpPageNo || <span style={{ color: "#ccc" }}>—</span>}
+                <span style={{ fontSize: 13, color: "var(--color-text-primary)", textAlign: "center" }}>
+                  {task.rfpPageNo || <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}
                 </span>
 
                 {/* 산출물 */}
                 <span
                   style={{
-                    fontSize: 12, color: "var(--color-text-secondary)",
+                    fontSize: 13, color: "var(--color-text-primary)",
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}
                   title={task.outputInfo || ""}
                 >
-                  {task.outputInfo || <span style={{ color: "#ccc" }}>—</span>}
+                  {task.outputInfo || <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}
                 </span>
 
                 {/* 요구사항 건수 */}
-                <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                <span style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
                   {task.requirementCount}건
                 </span>
 
-                {/* HIGH/MED/LOW */}
-                <span style={{ fontSize: 12, color: "#666" }}>
+                {/* HIGH/MED/LOW — 우선순위 색은 의미가 있어 유지 */}
+                <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
                   <span style={{ color: "#e53935" }}>{task.prioritySummary.high}</span>
                   {" / "}
                   <span style={{ color: "#fb8c00" }}>{task.prioritySummary.medium}</span>

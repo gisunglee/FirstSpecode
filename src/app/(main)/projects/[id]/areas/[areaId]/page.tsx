@@ -35,6 +35,7 @@ import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
 import AiImplementCard from "@/components/ui/AiImplementCard";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 import ExcalidrawDialog from "@/components/ui/ExcalidrawDialog";
 import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
 import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
@@ -963,50 +964,59 @@ function AreaDetailPageInner() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 130px 170px", gap: 16 }}>
               <div style={formGroupStyle}>
                 <label style={labelStyle}>소속 화면</label>
-                <select
-                  value={screenId}
-                  onChange={(e) => setScreenId(e.target.value)}
-                  disabled={!canEdit}
-                  style={selectStyle}
-                >
-                  <option value="">미분류 (화면 없음)</option>
-                  {screenOptions.map((s) => (
-                    <option key={s.screenId} value={s.screenId}>
-                      {s.displayId} {s.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="sp-select-wrap">
+                  <select
+                    value={screenId}
+                    onChange={(e) => setScreenId(e.target.value)}
+                    disabled={!canEdit}
+                    className="sp-input"
+                  >
+                    <option value="">미분류 (화면 없음)</option>
+                    {screenOptions.map((s) => (
+                      <option key={s.screenId} value={s.screenId}>
+                        {s.displayId} {s.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="sp-select-arrow"><SelectChevron /></span>
+                </div>
               </div>
               <div style={formGroupStyle}>
                 <label style={{ ...labelStyle, display: "inline-flex", alignItems: "center", gap: 4 }}>
                   유형<FieldHelp title="유형" body={AREA_TYPE_HELP_BODY} />
                 </label>
-                <select
-                  value={type}
-                  onChange={(e) => setType(e.target.value)}
-                  disabled={!canEdit}
-                  style={selectStyle}
-                >
-                  {AREA_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>{t.label}</option>
-                  ))}
-                </select>
+                <div className="sp-select-wrap">
+                  <select
+                    value={type}
+                    onChange={(e) => setType(e.target.value)}
+                    disabled={!canEdit}
+                    className="sp-input"
+                  >
+                    {AREA_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                  <span className="sp-select-arrow"><SelectChevron /></span>
+                </div>
               </div>
               {/* 표시 형태 — INLINE(기본)이 아니면 영역명 옆 배지로도 노출되어 한눈에 구분됨 */}
               <div style={formGroupStyle}>
                 <label style={{ ...labelStyle, display: "inline-flex", alignItems: "center", gap: 4 }}>
                   표시 형태<FieldHelp title="표시 형태" body={AREA_DISPLAY_FORM_HELP_BODY} />
                 </label>
-                <select
-                  value={displayFormCode}
-                  onChange={(e) => setDisplayFormCode(e.target.value)}
-                  disabled={!canEdit}
-                  style={selectStyle}
-                >
-                  {AREA_DISPLAY_FORMS.map((f) => (
-                    <option key={f.value} value={f.value}>{f.label}</option>
-                  ))}
-                </select>
+                <div className="sp-select-wrap">
+                  <select
+                    value={displayFormCode}
+                    onChange={(e) => setDisplayFormCode(e.target.value)}
+                    disabled={!canEdit}
+                    className="sp-input"
+                  >
+                    {AREA_DISPLAY_FORMS.map((f) => (
+                      <option key={f.value} value={f.value}>{f.label}</option>
+                    ))}
+                  </select>
+                  <span className="sp-select-arrow"><SelectChevron /></span>
+                </div>
               </div>
             </div>
 
@@ -1020,7 +1030,7 @@ function AreaDetailPageInner() {
                   onChange={(e) => setName(e.target.value)}
                   placeholder="영역명을 입력하세요"
                   readOnly={!canEdit}
-                  style={inputStyle}
+                  className="sp-input"
                 />
               </div>
               <div style={formGroupStyle}>
@@ -1033,7 +1043,7 @@ function AreaDetailPageInner() {
                   onChange={(e) => setDisplayIdInput(e.target.value)}
                   placeholder="자동 생성"
                   readOnly={!canEdit}
-                  style={inputStyle}
+                  className="sp-input"
                 />
               </div>
               <div style={formGroupStyle}>
@@ -1043,7 +1053,7 @@ function AreaDetailPageInner() {
                   value={sortOrder}
                   onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
                   readOnly={!canEdit}
-                  style={inputStyle}
+                  className="sp-input"
                 />
               </div>
             </div>
@@ -1491,28 +1501,6 @@ const labelStyle: React.CSSProperties = {
   fontSize:     13,
   fontWeight:   600,
   color:        "var(--color-text-secondary)",
-};
-
-const inputStyle: React.CSSProperties = {
-  width:        "100%",
-  padding:      "8px 12px",
-  borderRadius: 6,
-  border:       "1px solid var(--color-border)",
-  fontSize:     14,
-  background:   "var(--color-bg-card)",
-  color:        "var(--color-text-primary)",
-  boxSizing:    "border-box",
-};
-
-// select 전용 — 브라우저 기본 화살표를 제거하고 커스텀 화살표로 대체
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  paddingRight:       "32px",
-  appearance:         "none",
-  WebkitAppearance:   "none",
-  backgroundImage:    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
-  backgroundRepeat:   "no-repeat",
-  backgroundPosition: "right 10px center",
 };
 
 const FUNC_GRID_TEMPLATE = "60px 1fr 100px 100px 100px";

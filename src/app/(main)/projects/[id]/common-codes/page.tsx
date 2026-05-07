@@ -1108,9 +1108,9 @@ function CommonCodesPageInner() {
                 </div>
               </div>
 
-              <div style={{ padding: "10px 14px", borderRadius: 8, background: "#fff8e1", border: "1px solid #ffe082" }}>
-                <div style={{ fontWeight: 700, marginBottom: 2, color: "#e65100" }}>체크 시</div>
-                <div style={{ color: "#795548" }}>
+              <div style={{ padding: "10px 14px", borderRadius: 8, background: "var(--sp-warn-bg, #fff8e1)", border: "1px solid var(--sp-warn-border, #ffe082)" }}>
+                <div style={{ fontWeight: 700, marginBottom: 2, color: "var(--sp-warn-title, #e65100)" }}>체크 시</div>
+                <div style={{ color: "var(--sp-warn-body, #795548)" }}>
                   전체 프로젝트에서 코드는 유일해야 합니다. 동일한 이름의 코드가 다른 그룹에도 존재할 수 없습니다.
                 </div>
               </div>
