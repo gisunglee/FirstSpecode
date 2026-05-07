@@ -1123,3 +1123,23 @@ body {
      saturate 0.9 — 채도를 살짝 낮춰 톤이 부드러워지게. */
   filter: brightness(0.7) saturate(0.9) contrast(1.15);
 }
+
+/* ================================================================
+   NATIVE DATE/TIME INPUT — 다크 테마 캘린더 아이콘 가시성
+   color-scheme: dark 만 부여 — 브라우저 표준 속성으로
+   "이 input은 다크 모드"라고 알려주면 브라우저가 자체적으로
+   캘린더 아이콘·spinner·placeholder를 적절히 렌더링.
+   filter invert 같은 색 반전 트릭이 아니라 부작용이 없음.
+================================================================ */
+[data-theme="dark"]   input[type="date"],
+[data-theme="dark"]   input[type="datetime-local"],
+[data-theme="dark"]   input[type="time"],
+[data-theme="dark"]   input[type="month"],
+[data-theme="dark"]   input[type="week"],
+[data-theme="dark-purple"] input[type="date"],
+[data-theme="dark-purple"] input[type="datetime-local"],
+[data-theme="dark-purple"] input[type="time"],
+[data-theme="dark-purple"] input[type="month"],
+[data-theme="dark-purple"] input[type="week"] {
+  color-scheme: dark;
+}

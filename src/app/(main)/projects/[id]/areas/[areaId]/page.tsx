@@ -1574,9 +1574,10 @@ const secondaryBtnStyle: React.CSSProperties = {
 const dangerBtnStyle: React.CSSProperties = {
   padding:      "8px 16px",
   borderRadius: 6,
-  border:       "1px solid #f5c6cb",
+  // 다른 페이지(기능 편집 등)와 일관된 빨간 윤곽 — 이전 핑크 톤(#f5c6cb)은 다크에서 노란/주황으로 보였음
+  border:       "1px solid #e53935",
   background:   "var(--color-bg-card)",
-  color:        "#c62828",
+  color:        "#e53935",
   fontSize:     14,
   cursor:       "pointer",
 };

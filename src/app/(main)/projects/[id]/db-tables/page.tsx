@@ -381,7 +381,7 @@ function DbTablesPageInner() {
                   borderTop: idx === 0 && !creating ? "none" : "1px solid var(--color-border)",
                   cursor: "pointer",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-hover, #f4f6ff)")}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-table-hover)")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-bg-card)")}
               >
                 {/* 물리명 */}

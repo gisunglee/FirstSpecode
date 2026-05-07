@@ -244,9 +244,10 @@ function PhaseItem({ phase, label, value, isLoading, readOnly, isSaving, onSave 
             fontSize:     11,
             fontWeight:   700,
             textAlign:    "center",
-            border:       "none",
+            border:       "1px solid var(--color-border)",
             borderRadius: 4,
-            background:   "rgba(255,255,255,0.95)",
+            // input 배경/글자는 테마 토큰으로 — 라이트=흰배경+검정글자, 다크=어두운배경+밝은글자
+            background:   "var(--color-bg-input)",
             color:        "var(--color-text-primary)",
             outline:      "none",
             opacity:      disabled ? 0.5 : 1,

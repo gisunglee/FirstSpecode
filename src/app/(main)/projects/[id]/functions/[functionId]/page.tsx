@@ -1079,7 +1079,7 @@ function FunctionDetailPageInner() {
                       <div style={{ flex: "0 0 120px", fontSize: 12 }}>{m.usePurpsCn || <span style={{ color: "var(--color-text-disabled)" }}>—</span>}</div>
                       <div style={{ flex: "0 0 72px", textAlign: "center" }}>
                         {m.ioSeCode ? (
-                          <span style={{
+                          <span className="sp-badge" style={{
                             display: "inline-block", padding: "1px 7px", borderRadius: 4, fontSize: 11, fontWeight: 700,
                             background: "var(--color-primary, #1976d2)", color: "#fff",
                           }}>
@@ -1092,7 +1092,7 @@ function FunctionDetailPageInner() {
                       <div style={{ flex: "1 1 0", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.colName || "—"}</div>
                       <div style={{ flex: "0 0 120px", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {m.refGrpCode ? (
-                          <span style={{
+                          <span className="sp-badge" style={{
                             padding: "1px 6px", borderRadius: 3, fontSize: 10, fontWeight: 600,
                             background: "rgba(46,125,50,0.1)", color: "#2e7d32",
                           }}>
@@ -1544,9 +1544,10 @@ const sectionTitleStyle: React.CSSProperties = { margin: "0 0 8px", fontSize: 13
 const colMappingHeaderStyle: React.CSSProperties = {
   display: "flex", alignItems: "center", gap: 8,
   padding: "9px 12px",
-  background: "#f5f5f5",
-  borderBottom: "1px solid #e0e0e0",
-  fontSize: 12, fontWeight: 700, color: "#444",
+  // 하드코딩(#f5f5f5/#444/#e0e0e0)은 다크에서 라이트 그대로 노출 → 토큰으로 교체
+  background: "var(--color-bg-muted)",
+  borderBottom: "1px solid var(--color-border)",
+  fontSize: 12, fontWeight: 700, color: "var(--color-text-secondary)",
   letterSpacing: "0.02em",
 };
 const colMappingRowStyle: React.CSSProperties = {

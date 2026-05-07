@@ -265,16 +265,18 @@ function ProjectsPageInner() {
         </div>
       ) : (
         <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius-card)", overflow: "hidden" }}>
-          {/* 테이블 헤더 */}
+          {/* 테이블 헤더 — 멤버 목록 등 다른 페이지와 동일 표준
+              (bg-muted + text-secondary) — elevated/tertiary 조합은 다크에서
+              글자가 배경과 비슷한 톤이 되어 헤더가 거의 안 보였음 */}
           <div
             style={{
               display: "grid",
               gridTemplateColumns: "1fr 140px 200px 80px 36px",
               padding: "8px 16px",
-              background: "var(--color-bg-elevated)",
+              background: "var(--color-bg-muted)",
               borderBottom: "1px solid var(--color-border)",
               fontSize: "var(--text-xs)",
-              color: "var(--color-text-tertiary)",
+              color: "var(--color-text-secondary)",
               fontWeight: 600,
               gap: 12,
             }}

@@ -29,12 +29,13 @@ type Props = {
 };
 
 // 모든 계층에 공통으로 적용할 스코프 클래스 — dangerouslySetInnerHTML로 주입되는 HTML에 한해 적용
+// 색상은 모두 semantic 토큰 사용 — 라이트/다크/dark-purple 자동 대응 (이전 #e0e0e0/#f5f5f5 하드코딩은 다크에서 안 보임)
 const EXAMPLE_CSS = [
   ".dt-example h2,.dt-example h3,.dt-example h4{font-size:14px;font-weight:700;margin:16px 0 8px}",
   ".dt-example table{border-collapse:collapse;width:100%;margin-bottom:12px}",
-  ".dt-example th,.dt-example td{border:1px solid #e0e0e0;padding:5px 10px;font-size:12px}",
-  ".dt-example th{background:#f5f5f5;font-weight:600}",
-  ".dt-example pre{background:#f5f5f5;padding:10px 14px;border-radius:6px;font-size:12px;overflow-x:auto}",
+  ".dt-example th,.dt-example td{border:1px solid var(--color-border);padding:5px 10px;font-size:12px}",
+  ".dt-example th{background:var(--color-bg-muted);font-weight:600;color:var(--color-text-secondary)}",
+  ".dt-example pre{background:var(--color-bg-muted);padding:10px 14px;border-radius:6px;font-size:12px;overflow-x:auto}",
   ".dt-example code{font-family:monospace}",
   ".dt-example ul{padding-left:18px;margin:4px 0}",
   ".dt-example strong{font-weight:700}",

@@ -692,7 +692,7 @@ function BreadcrumbChip({ label, href, tag, isLast, onNavigate }: {
     }}>
       {/* tag 배지 — badge(ID prefix)가 없고 tag가 있을 때 표시 */}
       {!badge && tag && (
-        <span style={{
+        <span className="sp-badge" style={{
           fontSize: 10, fontWeight: 600,
           padding: "1px 5px", borderRadius: 3,
           background: tagColor?.bg ?? "#f5f5f5",
@@ -704,7 +704,7 @@ function BreadcrumbChip({ label, href, tag, isLast, onNavigate }: {
         </span>
       )}
       {badge && (
-        <span style={{
+        <span className="sp-badge" style={{
           fontSize: 10, fontWeight: 700,
           padding: "1px 5px", borderRadius: 3,
           background: color.bg, color: color.color,

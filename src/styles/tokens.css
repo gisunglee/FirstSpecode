@@ -169,6 +169,10 @@
   --color-text-inverse:   var(--p-gray-850);
   --color-text-link:      var(--p-indigo-300);
 
+  /* primary — 코드 전반의 var(--color-primary, #1976d2) fallback 을 대체.
+     다크에서는 brand 인디고 톤으로 통일해 강조 요소 일관성 확보. 라이트는
+     이 토큰을 정의하지 않아 fallback(#1976d2 머티리얼 블루)이 그대로 유지됨. */
+  --color-primary:      var(--p-indigo-400);
   --color-brand:        var(--p-indigo-400);
   --color-brand-hover:  var(--p-indigo-300);
   --color-brand-subtle: rgba(91,104,232,0.14);
@@ -333,6 +337,8 @@
   --color-text-inverse:   #1a1428;
   --color-text-link:      #c4b5fd;
 
+  /* primary — 다크와 동일 정책: var(--color-primary, #1976d2) fallback 을 보라 brand 로 일치 */
+  --color-primary:      #8b5cf6;
   --color-brand:        #8b5cf6;
   --color-brand-hover:  #a78bfa;
   --color-brand-subtle: rgba(139,92,246,0.14);

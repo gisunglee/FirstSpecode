@@ -159,7 +159,7 @@ function ConfigsInner() {
 
                   {/* 설정 구분 키 */}
                   <div>
-                    <span style={{
+                    <span className="sp-badge" style={{
                       display: "inline-block", padding: "2px 8px", borderRadius: 4,
                       background: "#f0f0f0", fontSize: 11, fontWeight: 600,
                       fontFamily: "monospace", color: "#555", letterSpacing: "0.02em",
