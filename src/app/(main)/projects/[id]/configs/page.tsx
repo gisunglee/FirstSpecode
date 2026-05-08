@@ -153,19 +153,13 @@ function ConfigsInner() {
                   }}
                 >
                   {/* 그룹 */}
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--color-primary, #1976d2)" }}>
+                  <div style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
                     {showGroup ? item.group : ""}
                   </div>
 
-                  {/* 설정 구분 키 */}
-                  <div>
-                    <span className="sp-badge" style={{
-                      display: "inline-block", padding: "2px 8px", borderRadius: 4,
-                      background: "#f0f0f0", fontSize: 11, fontWeight: 600,
-                      fontFamily: "monospace", color: "#555", letterSpacing: "0.02em",
-                    }}>
-                      {item.key}
-                    </span>
+                  {/* 설정 구분 키 — 코드형 배지 제거, 일반 텍스트로 통일 */}
+                  <div style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.key}>
+                    {item.key}
                   </div>
 
                   {/* 설정명 — 클릭 시 수정 팝업. 좁은 폭에서는 ellipsis (title로 전체 노출) */}
@@ -196,7 +190,7 @@ function ConfigsInner() {
                   </div>
 
                   {/* 설정 값 — 읽기 전용 */}
-                  <div style={{ fontSize: 12, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.value}>
+                  <div style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.value}>
                     {item.valueType === "BOOLEAN" ? (
                       <span className="sp-badge" style={{
                         display: "inline-block", padding: "2px 10px", borderRadius: 10, fontSize: 11, fontWeight: 700,
@@ -207,18 +201,18 @@ function ConfigsInner() {
                         {item.value === "Y" ? "ON" : "OFF"}
                       </span>
                     ) : (
-                      item.value || <span style={{ color: "#ccc" }}>—</span>
+                      item.value || <span style={{ color: "var(--color-text-tertiary)" }}>-</span>
                     )}
                   </div>
 
                   {/* 설명 */}
-                  <div style={{ fontSize: 12, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.description ?? ""}>
-                    {item.description || <span style={{ color: "#ccc" }}>—</span>}
+                  <div style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.description ?? ""}>
+                    {item.description || <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}
                   </div>
 
                   {/* 기본값 */}
-                  <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>
-                    {item.defaultValue || "—"}
+                  <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
+                    {item.defaultValue || "-"}
                   </div>
 
                   {/* 수정 — 삭제는 의도치 않은 SPECODE 동작 변경을 막기 위해 제거됨 */}
@@ -471,6 +465,22 @@ function EditConfigModal({ projectId, item, onClose, onSaved }: {
           &nbsp;— 설정 항목의 메타데이터(그룹·키·설정명·유형·기본값 등)는 시스템 관리자가 관리합니다.
           이 화면에서는 <b>설정 값</b>만 변경할 수 있습니다.
         </div>
+
+        {/* ID_PREFIX 그룹 경고 — 변경은 자유롭지만 기존 채번된 ID 와 새 ID 가 섞일 수 있음 */}
+        {item.group === "ID_PREFIX" && (
+          <div style={{
+            margin: "0 24px 14px", padding: "10px 14px", borderRadius: 8,
+            background: "var(--sp-warn-bg, #fff8e1)",
+            border: "1px solid var(--sp-warn-border, #ffe082)",
+            fontSize: 12, lineHeight: 1.7,
+            color: "var(--sp-warn-body, #795548)",
+          }}>
+            <span style={{ fontWeight: 700, color: "var(--sp-warn-title, #e65100)" }}>⚠️ prefix 변경 주의</span>
+            <br />
+            이미 채번된 표시 ID(예: <code>REQ-00001</code>)는 그대로 유지되고, <b>이후 신규 항목부터 새 prefix</b>로 채번됩니다.
+            결과적으로 기존 ID 와 새 ID 가 섞이게 되니 첫 항목 채번 전에 정하는 것을 권장드립니다.
+          </div>
+        )}
 
         {/* 하단 버튼 */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "0 24px 20px" }}>

@@ -19,6 +19,7 @@ import { Suspense, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -161,7 +162,7 @@ function Inner() {
                   opacity:    inactive ? 0.7 : 1,
                 }}
               >
-                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--color-brand)" }}>
+                <div style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
                   {showGroup ? item.group : ""}
                 </div>
 
@@ -173,21 +174,16 @@ function Inner() {
                   {item.label}
                 </div>
 
-                <div>
-                  <span style={{
-                    display: "inline-block", padding: "2px 8px", borderRadius: 4,
-                    background: "var(--color-bg-muted)", fontSize: 11, fontWeight: 600,
-                    fontFamily: "monospace", color: "var(--color-text-secondary)", letterSpacing: "0.02em",
-                  }}>
-                    {item.key}
-                  </span>
+                {/* 설정 구분 키 — 코드형 배지 제거, 일반 텍스트로 통일 */}
+                <div style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.key}>
+                  {item.key}
                 </div>
 
                 <div
-                  style={{ fontSize: 12, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                   title={item.description ?? ""}
                 >
-                  {item.description || <span style={{ color: "var(--color-text-tertiary)" }}>—</span>}
+                  {item.description || <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}
                 </div>
 
                 <div>
@@ -200,7 +196,7 @@ function Inner() {
                 </div>
 
                 {/* 기본값 */}
-                <div style={{ fontSize: 12, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.defaultValue}>
+                <div style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.defaultValue}>
                   {item.valueType === "BOOLEAN" ? (
                     <span style={{
                       display: "inline-block", padding: "2px 10px", borderRadius: 10, fontSize: 11, fontWeight: 700,
@@ -211,7 +207,7 @@ function Inner() {
                       {item.defaultValue === "Y" ? "ON" : "OFF"}
                     </span>
                   ) : (
-                    item.defaultValue || <span style={{ color: "var(--color-text-tertiary)" }}>—</span>
+                    item.defaultValue || <span style={{ color: "var(--color-text-tertiary)" }}>-</span>
                   )}
                 </div>
 
@@ -374,41 +370,44 @@ function AddTemplateModal({ onClose, onAdded }: {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             <div>
               <label style={formLabelStyle}>설정 그룹</label>
-              <input value={group} onChange={(e) => setGroup(e.target.value.toUpperCase())} placeholder="GENERAL" style={formInputStyle} />
+              <input value={group} onChange={(e) => setGroup(e.target.value.toUpperCase())} placeholder="GENERAL" className="sp-input" />
             </div>
             <div>
               <label style={formLabelStyle}>설정 구분 키</label>
-              <input value={key} onChange={(e) => setKey(e.target.value.toUpperCase())} placeholder="USE_AI_API" style={formInputStyle} />
+              <input value={key} onChange={(e) => setKey(e.target.value.toUpperCase())} placeholder="USE_AI_API" className="sp-input" />
             </div>
           </div>
 
           <div>
             <label style={formLabelStyle}>설정명</label>
-            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="AI API 사용 여부" style={formInputStyle} />
+            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="AI API 사용 여부" className="sp-input" />
           </div>
 
           <div>
             <label style={formLabelStyle}>설명 (선택)</label>
-            <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="이 설정에 대한 설명" style={formInputStyle} />
+            <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="이 설정에 대한 설명" className="sp-input" />
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             <div>
               <label style={formLabelStyle}>값 유형</label>
-              <select value={valueType} onChange={(e) => setValueType(e.target.value)} style={formInputStyle}>
-                {VALUE_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+              <div className="sp-select-wrap">
+                <select value={valueType} onChange={(e) => setValueType(e.target.value)} className="sp-input">
+                  {VALUE_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                <span className="sp-select-arrow"><SelectChevron /></span>
+              </div>
             </div>
             <div>
               <label style={formLabelStyle}>기본값</label>
-              <input value={defaultValue} onChange={(e) => setDefaultValue(e.target.value)} placeholder={valueType === "BOOLEAN" ? "Y 또는 N" : ""} style={formInputStyle} />
+              <input value={defaultValue} onChange={(e) => setDefaultValue(e.target.value)} placeholder={valueType === "BOOLEAN" ? "Y 또는 N" : ""} className="sp-input" />
             </div>
           </div>
 
           {valueType === "SELECT" && (
             <div>
               <label style={formLabelStyle}>선택지 후보 (쉼표 구분)</label>
-              <input value={selectOptions} onChange={(e) => setSelectOptions(e.target.value)} placeholder="claude, gpt-4o, gemini" style={formInputStyle} />
+              <input value={selectOptions} onChange={(e) => setSelectOptions(e.target.value)} placeholder="claude, gpt-4o, gemini" className="sp-input" />
             </div>
           )}
         </div>
@@ -495,48 +494,54 @@ function EditTemplateModal({ item, onClose, onSaved }: {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             <div>
               <label style={formLabelStyle}>설정 그룹</label>
-              <input value={group} onChange={(e) => setGroup(e.target.value.toUpperCase())} style={formInputStyle} />
+              <input value={group} onChange={(e) => setGroup(e.target.value.toUpperCase())} className="sp-input" />
             </div>
             <div>
               <label style={formLabelStyle}>설정 구분 키</label>
-              <input value={key} onChange={(e) => setKey(e.target.value.toUpperCase())} style={formInputStyle} />
+              <input value={key} onChange={(e) => setKey(e.target.value.toUpperCase())} className="sp-input" />
             </div>
           </div>
 
           <div>
             <label style={formLabelStyle}>설정명</label>
-            <input value={label} onChange={(e) => setLabel(e.target.value)} style={formInputStyle} />
+            <input value={label} onChange={(e) => setLabel(e.target.value)} className="sp-input" />
           </div>
 
           <div>
             <label style={formLabelStyle}>설명 (선택)</label>
-            <input value={description} onChange={(e) => setDescription(e.target.value)} style={formInputStyle} />
+            <input value={description} onChange={(e) => setDescription(e.target.value)} className="sp-input" />
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
             <div>
               <label style={formLabelStyle}>값 유형</label>
-              <select value={valueType} onChange={(e) => setValueType(e.target.value)} style={formInputStyle}>
-                {VALUE_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+              <div className="sp-select-wrap">
+                <select value={valueType} onChange={(e) => setValueType(e.target.value)} className="sp-input">
+                  {VALUE_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                <span className="sp-select-arrow"><SelectChevron /></span>
+              </div>
             </div>
             <div>
               <label style={formLabelStyle}>기본값</label>
-              <input value={defaultValue} onChange={(e) => setDefaultValue(e.target.value)} placeholder={valueType === "BOOLEAN" ? "Y 또는 N" : ""} style={formInputStyle} />
+              <input value={defaultValue} onChange={(e) => setDefaultValue(e.target.value)} placeholder={valueType === "BOOLEAN" ? "Y 또는 N" : ""} className="sp-input" />
             </div>
             <div>
               <label style={formLabelStyle}>활성 여부</label>
-              <select value={useYn} onChange={(e) => setUseYn(e.target.value)} style={formInputStyle}>
-                <option value="Y">활성</option>
-                <option value="N">비활성</option>
-              </select>
+              <div className="sp-select-wrap">
+                <select value={useYn} onChange={(e) => setUseYn(e.target.value)} className="sp-input">
+                  <option value="Y">활성</option>
+                  <option value="N">비활성</option>
+                </select>
+                <span className="sp-select-arrow"><SelectChevron /></span>
+              </div>
             </div>
           </div>
 
           {valueType === "SELECT" && (
             <div>
               <label style={formLabelStyle}>선택지 후보 (쉼표 구분)</label>
-              <input value={selectOptions} onChange={(e) => setSelectOptions(e.target.value)} placeholder="claude, gpt-4o, gemini" style={formInputStyle} />
+              <input value={selectOptions} onChange={(e) => setSelectOptions(e.target.value)} placeholder="claude, gpt-4o, gemini" className="sp-input" />
             </div>
           )}
         </div>
@@ -563,7 +568,7 @@ function EditTemplateModal({ item, onClose, onSaved }: {
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 // 설정 그룹 | 설정명 | 설정 구분 키 | 설명 | 유형 | 기본값 | 활성 | 액션
-const GRID_TEMPLATE = "120px 1fr 180px 1fr 85px 140px 70px 60px";
+const GRID_TEMPLATE = "120px 0.7fr 220px 1fr 85px 140px 70px 60px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID_TEMPLATE, gap: 8,
@@ -599,12 +604,6 @@ const dangerBtnStyle: React.CSSProperties = {
 const formLabelStyle: React.CSSProperties = {
   display: "block", fontSize: 12, fontWeight: 600,
   color: "var(--color-text-secondary)", marginBottom: 4,
-};
-
-const formInputStyle: React.CSSProperties = {
-  width: "100%", padding: "7px 10px", borderRadius: 6,
-  border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
-  color: "var(--color-text-primary)", fontSize: 13, outline: "none", boxSizing: "border-box",
 };
 
 const modalOverlayStyle: React.CSSProperties = {

@@ -1,78 +1,65 @@
 "use client";
 
 /**
- * SupportSessionBanner — 시스템 관리자 지원 세션 알림 배너
+ * SupportSessionBanner — 시스템 관리자 지원 세션 알림 배너 (전역)
  *
  * 역할:
- *   - 현재 브라우저 경로가 /projects/{id}/** 이고,
- *     해당 프로젝트에 내 활성 지원 세션이 있으면
- *     화면 상단에 "읽기 전용 진행중" 경고 배너를 표시
- *   - 남은 시간 카운트다운과 "지원 종료" 버튼 제공
+ *   - SUPER_ADMIN 에게 활성 지원 세션이 1건이라도 있으면 화면 상단에 배너 표시
+ *   - 어느 페이지든 (시스템 관리 / 대시보드 / 다른 프로젝트) **항상 보이게** —
+ *     관리자가 지원 세션 중인 것을 잊어버리지 않도록 (이전: /projects/{id}/* 만)
+ *   - 남은 시간 카운트다운 + "프로젝트로 이동" + "지원 종료" 버튼 제공
+ *   - 활성 세션이 여러 개면 한 줄씩 쌓아서 모두 표시
  *
- * 설계 근거:
- *   - 사용자가 무심코 고객 데이터를 수정하려 할 때 직전에 인지시키는 목적
- *   - 세션 만료 / 종료 시 즉시 배너 사라짐 — 1초 주기로 시간 재계산
- *   - 관리자가 아닌 사용자는 이 컴포넌트가 항상 조용히 null 반환 (비용 0)
+ * 시각:
+ *   - 진한 warning 톤 + 펄스 애니메이션 + 좌측 stripe 로 강조
+ *   - 일반 사용자에겐 항상 null (네트워크 0)
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { usePathname } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useIsSystemAdmin } from "@/hooks/useMyRole";
 
 type SessionItem = {
-  sessId:    string;
-  projectId: string;
-  memo:      string | null;
-  expiresAt: string;
-  createdAt: string;
+  sessId:      string;
+  projectId:   string;
+  projectName: string;
+  memo:        string | null;
+  expiresAt:   string;
+  createdAt:   string;
 };
 
-// URL 에서 projectId 추출 — /projects/{uuid}/**
-function extractProjectIdFromPath(pathname: string | null): string | null {
-  if (!pathname) return null;
-  const m = pathname.match(/^\/projects\/([^/]+)/);
-  if (!m) return null;
-  // 하위 라우트가 "new" 같은 특수 키워드일 수 있지만, 그때는 세션 조회가 빈 결과를 주므로 무해
-  return m[1] ?? null;
-}
-
 export default function SupportSessionBanner() {
-  const pathname = usePathname();
   const { isSystemAdmin } = useIsSystemAdmin();
   const queryClient = useQueryClient();
 
-  const projectId = extractProjectIdFromPath(pathname);
-
-  // 관리자 + 프로젝트 경로일 때만 쿼리 활성화 — 그 외엔 네트워크 요청 없음
-  const enabled = isSystemAdmin && !!projectId;
-
+  // 관리자만 활성 세션 조회 — 일반 사용자는 네트워크 호출 0
   const { data: sessions = [] } = useQuery<SessionItem[]>({
-    queryKey: ["support-session", "active", projectId],
+    queryKey: ["support-session", "active", "all"],
     queryFn: () =>
       authFetch<{ data: { items: SessionItem[] } }>(
-        `/api/admin/support-session?projectId=${projectId}`
+        `/api/admin/support-session`
       ).then((r) => r.data.items ?? []),
-    enabled,
-    refetchInterval: 60 * 1000, // 1분 주기로 재조회 (만료 감지)
+    enabled: isSystemAdmin,
+    refetchInterval: 60 * 1000, // 1분 주기 — 만료 자동 감지
     staleTime: 30 * 1000,
   });
 
-  // 1초마다 "남은 시간" 표시만 갱신
+  // 1초마다 카운트다운만 갱신
   const [now, setNow] = useState<number>(() => Date.now());
   useEffect(() => {
-    if (!enabled) return;
+    if (!isSystemAdmin || sessions.length === 0) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [enabled]);
+  }, [isSystemAdmin, sessions.length]);
 
-  // 활성 세션 (지금 이 프로젝트)
-  const activeSession = useMemo(() => {
-    if (!projectId) return null;
-    return sessions.find((s) => s.projectId === projectId && new Date(s.expiresAt).getTime() > now) ?? null;
-  }, [sessions, projectId, now]);
+  // 만료된 세션은 표시 제외 — 1초 단위 시각 갱신과 함께 자연스럽게 사라짐
+  const activeSessions = useMemo(
+    () => sessions.filter((s) => new Date(s.expiresAt).getTime() > now),
+    [sessions, now]
+  );
 
   // 세션 종료 뮤테이션
   const endMutation = useMutation({
@@ -90,62 +77,146 @@ export default function SupportSessionBanner() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  if (!enabled || !activeSession) return null;
+  if (!isSystemAdmin || activeSessions.length === 0) return null;
 
-  const remaining = Math.max(0, new Date(activeSession.expiresAt).getTime() - now);
+  return (
+    <>
+      {/* CSS 애니메이션 — 좌측 stripe 미세 펄스 */}
+      <style>{`
+        @keyframes sp-support-pulse {
+          0%, 100% { opacity: 1; }
+          50%      { opacity: 0.55; }
+        }
+        .sp-support-stripe {
+          animation: sp-support-pulse 1.6s ease-in-out infinite;
+        }
+      `}</style>
+
+      <div role="status" aria-label="지원 세션 진행 중">
+        {activeSessions.map((s) => (
+          <SessionBanner
+            key={s.sessId}
+            session={s}
+            now={now}
+            onEnd={() => endMutation.mutate(s.sessId)}
+            ending={endMutation.isPending}
+          />
+        ))}
+      </div>
+    </>
+  );
+}
+
+// ── 세션 한 건 배너 ────────────────────────────────────────────────────────
+function SessionBanner({
+  session, now, onEnd, ending,
+}: {
+  session: SessionItem;
+  now:     number;
+  onEnd:   () => void;
+  ending:  boolean;
+}) {
+  const remaining = Math.max(0, new Date(session.expiresAt).getTime() - now);
   const min = Math.floor(remaining / 60000);
   const sec = Math.floor((remaining % 60000) / 1000);
   const timeStr = `${min}:${String(sec).padStart(2, "0")}`;
+  // 5분 이하 — 색을 더 강하게
+  const isUrgent = remaining < 5 * 60 * 1000;
 
   return (
     <div
-      role="status"
       style={{
-        display:       "flex",
-        alignItems:    "center",
-        gap:           12,
-        padding:       "6px 16px",
-        background:    "var(--color-warning-subtle)",
-        color:         "var(--color-warning)",
-        borderBottom:  "1px solid var(--color-warning-border)",
-        fontSize:      "var(--text-sm)",
-        fontWeight:    500,
+        display:      "flex",
+        alignItems:   "center",
+        gap:          12,
+        padding:      "10px 16px 10px 0",
+        background:   isUrgent ? "var(--color-error-subtle)" : "var(--color-warning-subtle)",
+        color:        isUrgent ? "var(--color-error)"        : "var(--color-warning)",
+        borderBottom: `1px solid ${isUrgent ? "var(--color-error-border)" : "var(--color-warning-border)"}`,
+        fontSize:     "var(--text-sm)",
+        fontWeight:   500,
+        position:     "relative",
       }}
     >
-      <span style={{ fontSize: 14 }}>⚠️</span>
-      <span>
-        <strong>지원 세션 진행 중 (읽기 전용)</strong>
-        {activeSession.memo && (
-          <span style={{ marginLeft: 8, opacity: 0.8 }}>— {activeSession.memo}</span>
-        )}
+      {/* 좌측 강조 stripe — 펄스 애니메이션 */}
+      <div
+        className="sp-support-stripe"
+        style={{
+          width:      6,
+          alignSelf:  "stretch",
+          background: isUrgent ? "var(--color-error)" : "var(--color-warning)",
+        }}
+      />
+
+      <span style={{ fontSize: 16 }}>⚠️</span>
+      <span style={{ fontWeight: 700, fontSize: "var(--text-md)" }}>
+        지원 세션 진행 중 (읽기 전용)
       </span>
       <span style={{
-        marginLeft:   "auto",
-        fontFamily:   "var(--font-mono)",
-        fontSize:     "var(--text-xs)",
         padding:      "2px 8px",
-        background:   "var(--color-bg-card)",
         borderRadius: "var(--radius-sm)",
-        border:       "1px solid var(--color-warning-border)",
+        background:   "var(--color-bg-card)",
+        border:       `1px solid ${isUrgent ? "var(--color-error-border)" : "var(--color-warning-border)"}`,
+        fontSize:     "var(--text-xs)",
+        fontWeight:   700,
       }}>
-        {timeStr}
+        {session.projectName}
       </span>
-      <button
-        onClick={() => endMutation.mutate(activeSession.sessId)}
-        disabled={endMutation.isPending}
-        style={{
-          padding:      "2px 10px",
-          fontSize:     "var(--text-xs)",
-          fontWeight:   600,
-          color:        "var(--color-warning)",
+      {session.memo && (
+        <span style={{ opacity: 0.85, fontSize: "var(--text-xs)" }}>
+          — {session.memo}
+        </span>
+      )}
+
+      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+        {/* 카운트다운 */}
+        <span style={{
+          fontFamily:   "var(--font-mono)",
+          fontSize:     "var(--text-sm)",
+          fontWeight:   700,
+          padding:      "3px 10px",
           background:   "var(--color-bg-card)",
-          border:       "1px solid var(--color-warning-border)",
           borderRadius: "var(--radius-sm)",
-          cursor:       "pointer",
-        }}
-      >
-        {endMutation.isPending ? "…" : "지원 종료"}
-      </button>
+          border:       `1px solid ${isUrgent ? "var(--color-error-border)" : "var(--color-warning-border)"}`,
+        }}>
+          {timeStr}
+        </span>
+
+        {/* 프로젝트로 이동 — 다른 페이지에서 빠르게 진입 */}
+        <Link
+          href={`/projects/${session.projectId}/unit-works`}
+          style={{
+            padding:      "4px 10px",
+            fontSize:     "var(--text-xs)",
+            fontWeight:   600,
+            color:        isUrgent ? "var(--color-error)" : "var(--color-warning)",
+            background:   "var(--color-bg-card)",
+            border:       `1px solid ${isUrgent ? "var(--color-error-border)" : "var(--color-warning-border)"}`,
+            borderRadius: "var(--radius-sm)",
+            textDecoration: "none",
+          }}
+        >
+          프로젝트로 이동
+        </Link>
+
+        <button
+          onClick={onEnd}
+          disabled={ending}
+          style={{
+            padding:      "4px 10px",
+            fontSize:     "var(--text-xs)",
+            fontWeight:   600,
+            color:        "var(--color-text-inverse)",
+            background:   isUrgent ? "var(--color-error)" : "var(--color-warning)",
+            border:       "none",
+            borderRadius: "var(--radius-sm)",
+            cursor:       ending ? "wait" : "pointer",
+            opacity:      ending ? 0.6 : 1,
+          }}
+        >
+          {ending ? "…" : "지원 종료"}
+        </button>
+      </div>
     </div>
   );
 }

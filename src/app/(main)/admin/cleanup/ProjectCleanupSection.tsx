@@ -79,7 +79,9 @@ const MAX_BATCH = 20;
 export function ProjectCleanupSection() {
   const qc = useQueryClient();
   const [page,      setPage]      = useState(1);
-  const [enabled,   setEnabled]   = useState(false);
+  // 페이지 진입 시 자동으로 목록을 조회 — 별도 [대상 조회] 클릭 단계를 없애 1-step UX.
+  // 다시 조회 버튼은 그대로 둬서 강제 새로고침 가능.
+  const [enabled,   setEnabled]   = useState(true);
   const [selected,  setSelected]  = useState<Set<string>>(new Set());
   const [dialogOn,  setDialogOn]  = useState(false);
   // 결과는 string 메시지가 아닌 구조화된 데이터로 보관 — 정규식 추출 같은
@@ -280,45 +282,39 @@ export function ProjectCleanupSection() {
                 </Td>
                 <Td><StatusBadge expired={p.expired} /></Td>
                 <Td>
-                  <div style={{ fontWeight: 500 }}>{p.name}</div>
-                  <code style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>
-                    {p.projectId.slice(0, 8)}…
-                  </code>
-                  {p.clientName && (
-                    <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>
-                      {p.clientName}
-                    </div>
-                  )}
+                  {/* 프로젝트 — 이름 + UUID(전체) + 고객사 를 한 줄에 · 로 결합.
+                      길어서 잘리면 ellipsis 처리 + title 로 전체값 노출 */}
+                  <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={`${p.name} · ${p.projectId}${p.clientName ? ` · ${p.clientName}` : ""}`}>
+                    <span>{p.name}</span>
+                    <span style={{ color: "var(--color-text-tertiary)", marginLeft: 6 }}>· {p.projectId}</span>
+                    {p.clientName && <span style={{ color: "var(--color-text-tertiary)", marginLeft: 6 }}>· {p.clientName}</span>}
+                  </div>
                 </Td>
                 <Td>
                   {p.owner ? (
-                    <>
-                      <div>{p.owner.name ?? p.owner.email ?? "(이름 없음)"}</div>
-                      {p.owner.email && (
-                        <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>
-                          {p.owner.email}
-                        </div>
+                    <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p.owner.email ?? ""}>
+                      <span>{p.owner.name ?? p.owner.email ?? "(이름 없음)"}</span>
+                      {p.owner.email && p.owner.name && (
+                        <span style={{ color: "var(--color-text-tertiary)", marginLeft: 6 }}>· {p.owner.email}</span>
                       )}
-                    </>
+                    </div>
                   ) : (
-                    <span style={{ color: "var(--color-text-tertiary)" }}>—</span>
+                    <span style={{ color: "var(--color-text-tertiary)" }}>-</span>
                   )}
                 </Td>
                 <Td>
                   {p.deletedAt
                     ? new Date(p.deletedAt).toLocaleString("ko-KR")
-                    : <span style={{ color: "var(--color-text-tertiary)" }}>—</span>}
+                    : <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}
                 </Td>
                 <Td>
                   {p.hardDeleteAt ? (
-                    <>
-                      <div>{new Date(p.hardDeleteAt).toLocaleString("ko-KR")}</div>
-                      <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>
-                        {formatRemaining(p.expired, p.remainingHours)}
-                      </div>
-                    </>
+                    <div style={{ whiteSpace: "nowrap" }}>
+                      <span>{new Date(p.hardDeleteAt).toLocaleString("ko-KR")}</span>
+                      <span style={{ color: "var(--color-text-tertiary)", marginLeft: 6 }}>· {formatRemaining(p.expired, p.remainingHours)}</span>
+                    </div>
                   ) : (
-                    <span style={{ color: "var(--color-text-tertiary)" }}>—</span>
+                    <span style={{ color: "var(--color-text-tertiary)" }}>-</span>
                   )}
                 </Td>
                 <Td>
@@ -443,9 +439,9 @@ function StatusBadge({ expired }: { expired: boolean }) {
 /** 영구 삭제 시 함께 사라지는 자식 도메인 카운트를 한 줄로 압축 표시 */
 function ImpactSummary({ impact, total }: { impact: ImpactCounts; total: number }) {
   if (total === 0) {
-    return <span style={{ color: "var(--color-text-tertiary)" }}>—</span>;
+    return <span style={{ color: "var(--color-text-tertiary)" }}>-</span>;
   }
-  // 0 인 항목은 숨겨 압축. 전체 합 + 주요 카테고리만 굵게.
+  // 0 인 항목은 숨겨 압축. 합계 + 카테고리 breakdown 을 한 줄에 · 로 결합.
   const parts: string[] = [];
   if (impact.requirements) parts.push(`요구 ${impact.requirements}`);
   if (impact.screens)      parts.push(`화면 ${impact.screens}`);
@@ -456,12 +452,11 @@ function ImpactSummary({ impact, total }: { impact: ImpactCounts; total: number 
   if (impact.aiTasks)      parts.push(`AI ${impact.aiTasks}`);
   if (impact.dbTables)     parts.push(`DB ${impact.dbTables}`);
   if (impact.attachFiles)  parts.push(`첨부 ${impact.attachFiles}`);
+  const breakdown = parts.join(" · ");
   return (
-    <div>
-      <div style={{ fontWeight: 600 }}>{total.toLocaleString()}행</div>
-      <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", lineHeight: 1.4 }}>
-        {parts.join(" · ")}
-      </div>
+    <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={breakdown}>
+      <span>{total.toLocaleString()}행</span>
+      {breakdown && <span style={{ color: "var(--color-text-tertiary)", marginLeft: 6 }}>· {breakdown}</span>}
     </div>
   );
 }

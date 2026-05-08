@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { requireTaskWrite } from "@/lib/taskWriteGate";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { getIdPrefix } from "@/lib/idPrefix";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -120,7 +121,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const nextSeq = maxTask
         ? (parseInt(maxTask.task_display_id.replace(/\D/g, "")) || 0) + 1
         : 1;
-      displayId = `SFR-${String(nextSeq).padStart(5, "0")}`;
+      const taskPrefix = await getIdPrefix(projectId, "TASK");
+      displayId = `${taskPrefix}-${String(nextSeq).padStart(5, "0")}`;
     }
 
     // sort_ordr: 마지막 + 1

@@ -56,6 +56,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { checkRole } from "@/lib/checkRole";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { createIdPrefixCache } from "@/lib/idPrefix";
 
 // Prisma 인터랙티브 트랜잭션 클라이언트 타입
 // 채번 헬퍼에 tx를 넘겨야 트랜잭션 내 미커밋 데이터를 읽을 수 있음
@@ -128,34 +129,36 @@ type TaskInput = {
 // 반드시 트랜잭션 클라이언트(tx)를 받아서 호출해야 함
 // → 동일 트랜잭션 내 미커밋 INSERT를 읽어야 중복 displayId를 막을 수 있음
 
-async function nextTaskDisplayId(projectId: string, tx: TxClient): Promise<string> {
+// prefix 는 호출자가 미리 캐시에서 받아 인자로 전달 — bulk 채번 시 DB 반복 조회 방지
+
+async function nextTaskDisplayId(projectId: string, tx: TxClient, prefix: string): Promise<string> {
   const max = await tx.tbRqTask.findFirst({
     where:   { prjct_id: projectId },
     orderBy: { task_display_id: "desc" },
     select:  { task_display_id: true },
   });
   const seq = max ? (parseInt(max.task_display_id.replace(/\D/g, "")) || 0) + 1 : 1;
-  return `SFR-${String(seq).padStart(5, "0")}`;
+  return `${prefix}-${String(seq).padStart(5, "0")}`;
 }
 
-async function nextReqDisplayId(projectId: string, tx: TxClient): Promise<string> {
+async function nextReqDisplayId(projectId: string, tx: TxClient, prefix: string): Promise<string> {
   const max = await tx.tbRqRequirement.findFirst({
     where:   { prjct_id: projectId },
     orderBy: { req_display_id: "desc" },
     select:  { req_display_id: true },
   });
   const seq = max ? (parseInt(max.req_display_id.replace(/\D/g, "")) || 0) + 1 : 1;
-  return `REQ-${String(seq).padStart(5, "0")}`;
+  return `${prefix}-${String(seq).padStart(5, "0")}`;
 }
 
-async function nextStoryDisplayId(projectId: string, tx: TxClient): Promise<string> {
+async function nextStoryDisplayId(projectId: string, tx: TxClient, prefix: string): Promise<string> {
   const max = await tx.tbRqUserStory.findFirst({
     where:   { requirement: { prjct_id: projectId } },
     orderBy: { story_display_id: "desc" },
     select:  { story_display_id: true },
   });
   const seq = max ? (parseInt(max.story_display_id.replace(/\D/g, "")) || 0) + 1 : 1;
-  return `STR-${String(seq).padStart(5, "0")}`;
+  return `${prefix}-${String(seq).padStart(5, "0")}`;
 }
 
 async function nextTaskSortOrder(projectId: string, tx: TxClient): Promise<number> {
@@ -220,6 +223,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   };
 
   try {
+    // 트랜잭션 진입 전에 prefix 3종 한 번에 조회 — bulk 채번 시 DB 재조회 방지
+    const prefixCache = createIdPrefixCache(projectId);
+    const taskPrefix  = await prefixCache.get("TASK");
+    const reqPrefix   = await prefixCache.get("REQUIREMENT");
+    const storyPrefix = await prefixCache.get("USER_STORY");
+
     // 트랜잭션으로 묶어서 부분 실패 방지
     await prisma.$transaction(async (tx) => {
       for (const taskInput of tasks) {
@@ -255,7 +264,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           result.updated.tasks++;
         } else {
           // ── 과업 신규 등록 ─────────────────────────────────────────────────
-          const displayId  = await nextTaskDisplayId(projectId, tx);
+          const displayId  = await nextTaskDisplayId(projectId, tx, taskPrefix);
           const sortOrder  = await nextTaskSortOrder(projectId, tx);
           const created    = await tx.tbRqTask.create({
             data: {
@@ -312,7 +321,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             result.updated.requirements++;
           } else {
             // 신규
-            const displayId = await nextReqDisplayId(projectId, tx);
+            const displayId = await nextReqDisplayId(projectId, tx, reqPrefix);
             const sortOrder = await nextReqSortOrder(projectId, taskId, tx);
             const created   = await tx.tbRqRequirement.create({
               data: {
@@ -382,7 +391,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
               result.updated.stories++;
             } else {
               // 신규
-              const displayId = await nextStoryDisplayId(projectId, tx);
+              const displayId = await nextStoryDisplayId(projectId, tx, storyPrefix);
               const sortOrder = await nextStorySortOrder(reqId, tx);
               const created   = await tx.tbRqUserStory.create({
                 data: {

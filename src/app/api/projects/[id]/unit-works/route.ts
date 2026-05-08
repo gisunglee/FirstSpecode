@@ -9,6 +9,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { getIdPrefix } from "@/lib/idPrefix";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -184,7 +185,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const nextSeq = maxUw
         ? (parseInt(maxUw.unit_work_display_id.replace(/\D/g, "")) || 0) + 1
         : 1;
-      displayId = `UW-${String(nextSeq).padStart(5, "0")}`;
+      const uwPrefix = await getIdPrefix(projectId, "UNIT_WORK");
+      displayId = `${uwPrefix}-${String(nextSeq).padStart(5, "0")}`;
     }
 
     // sort_ordr: 해당 요구사항 내 마지막 + 1

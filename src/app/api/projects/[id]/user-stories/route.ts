@@ -7,6 +7,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { getIdPrefix } from "@/lib/idPrefix";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -132,7 +133,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const nextSeq  = maxStory
       ? (parseInt(maxStory.story_display_id.replace(/\D/g, "")) || 0) + 1
       : 1;
-    const displayId = `STR-${String(nextSeq).padStart(5, "0")}`;
+    const storyPrefix = await getIdPrefix(projectId, "USER_STORY");
+    const displayId = `${storyPrefix}-${String(nextSeq).padStart(5, "0")}`;
 
     // sort_ordr: 해당 요구사항의 마지막 + 1
     const maxSort = await prisma.tbRqUserStory.findFirst({

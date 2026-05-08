@@ -16,6 +16,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { usePermissions } from "@/hooks/useMyRole";
+import { useIdPrefixes } from "@/hooks/useIdPrefixes";
 import { bumpMinorVersion } from "@/lib/exports/version";
 import { renderMarkdown } from "@/lib/renderMarkdown";
 import { useAppStore } from "@/store/appStore";
@@ -36,18 +37,18 @@ import { SelectChevron } from "@/components/ui/SelectChevron";
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
 type HistoryItem = {
-  historyId:    string;
-  versionNo:    string;
-  comment:      string;
-  changedAt:    string;
+  historyId: string;
+  versionNo: string;
+  comment: string;
+  changedAt: string;
   changerEmail: string;
 };
 
 type DiffContent = {
   historyId: string;
   versionNo: string;
-  orgnlCn:   string;
-  curncyCn:  string;
+  orgnlCn: string;
+  curncyCn: string;
 };
 
 type DiffResult = {
@@ -56,59 +57,59 @@ type DiffResult = {
 };
 
 type TaskOption = {
-  taskId:   string;
-  name:     string;
+  taskId: string;
+  name: string;
   category: string;
 };
 
 type RequirementDetail = {
-  requirementId:    string;
-  displayId:        string;
-  name:             string;
-  priority:         string;
-  source:           string;
-  rfpPage:          string;
-  originalContent:  string;
-  currentContent:   string;
-  analysisMemo:     string;
-  detailSpec:       string;
-  taskId:           string | null;
+  requirementId: string;
+  displayId: string;
+  name: string;
+  priority: string;
+  source: string;
+  rfpPage: string;
+  originalContent: string;
+  currentContent: string;
+  analysisMemo: string;
+  detailSpec: string;
+  taskId: string | null;
   // 담당자 — 서버 join으로 내려옴
-  assignMemberId:   string | null;
+  assignMemberId: string | null;
   assignMemberName: string | null;
-  sortOrder:        number;
+  sortOrder: number;
 };
 
 // 프로젝트 멤버 — 담당자 콤보박스 옵션용
 type ProjectMember = {
   memberId: string;
-  name:     string | null;
-  email:    string;
-  role:     string;
+  name: string | null;
+  email: string;
+  role: string;
 };
 
 type AttachedFile = {
-  fileId:     string;
-  fileName:   string;
-  fileSize:   number;
-  extension:  string;
+  fileId: string;
+  fileName: string;
+  fileSize: number;
+  extension: string;
   uploadedAt: string;
 };
 
 type SaveBody = {
-  taskId?:          string;
-  reqDisplayId:     string;
-  sortOrder:        number;
-  name:             string;
-  priority:         string;
-  source:           string;
-  rfpPage:          string;
-  originalContent:  string;
-  currentContent:   string;
-  analysisMemo:     string;
-  detailSpec:       string;
+  taskId?: string;
+  reqDisplayId: string;
+  sortOrder: number;
+  name: string;
+  priority: string;
+  source: string;
+  rfpPage: string;
+  originalContent: string;
+  currentContent: string;
+  analysisMemo: string;
+  detailSpec: string;
   // 담당자 — "" = 미지정 (서버에서 null 처리)
-  assignMemberId:   string;
+  assignMemberId: string;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -124,27 +125,29 @@ export default function RequirementDetailPage() {
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 
 function RequirementDetailPageInner() {
-  const params      = useParams<{ id: string; reqId: string }>();
-  const router      = useRouter();
+  const params = useParams<{ id: string; reqId: string }>();
+  const router = useRouter();
   const queryClient = useQueryClient();
-  const projectId   = params.id;
-  const reqId       = params.reqId;
-  const isNew       = reqId === "new";
+  const projectId = params.id;
+  const reqId = params.reqId;
+  const isNew = reqId === "new";
+  // 표시 ID prefix — 환경설정 기반 placeholder
+  const { getPrefix } = useIdPrefixes(projectId);
 
   // ── 폼 상태 ────────────────────────────────────────────────────────────────
   const [form, setForm] = useState<SaveBody>({
-    taskId:          undefined,
-    reqDisplayId:    "",
-    sortOrder:       0,
-    name:            "",
-    priority:        "MEDIUM",
-    source:          "RFP",
-    rfpPage:         "",
+    taskId: undefined,
+    reqDisplayId: "",
+    sortOrder: 0,
+    name: "",
+    priority: "MEDIUM",
+    source: "RFP",
+    rfpPage: "",
     originalContent: "",
-    currentContent:  "",
-    analysisMemo:    "",
-    detailSpec:      "",
-    assignMemberId:  "",
+    currentContent: "",
+    analysisMemo: "",
+    detailSpec: "",
+    assignMemberId: "",
   });
 
   // 담당자 변경 이력 팝업 상태
@@ -155,7 +158,7 @@ function RequirementDetailPageInner() {
 
   // 마크다운 탭 상태 (분석메모 / 상세명세 각각)
   const [analyzeTab, setAnalyzeTab] = useState<"edit" | "preview">("edit");
-  const [specTab,    setSpecTab]    = useState<"edit" | "preview">("edit");
+  const [specTab, setSpecTab] = useState<"edit" | "preview">("edit");
 
   // 상세 명세 예시 팝업 상태
   const [specExampleOpen, setSpecExampleOpen] = useState(false);
@@ -165,14 +168,14 @@ function RequirementDetailPageInner() {
   const { data: designTmpl } = useDesignTemplate(projectId, "REQUIREMENT");
 
   // 변경 이력 팝업 상태
-  const [historyOpen,    setHistoryOpen]    = useState(false);
-  const [diffTarget,     setDiffTarget]     = useState<HistoryItem | null>(null);
-  const [deleteTarget,   setDeleteTarget]   = useState<HistoryItem | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [diffTarget, setDiffTarget] = useState<HistoryItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<HistoryItem | null>(null);
   // 저장 다이얼로그 상태
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   // 변경이력(designChange) 팝업 — 분석메모/상세명세 각각
   const [analyChangeHistOpen, setAnalyChangeHistOpen] = useState(false);
-  const [specChangeHistOpen,  setSpecChangeHistOpen]  = useState(false);
+  const [specChangeHistOpen, setSpecChangeHistOpen] = useState(false);
 
   // 요구사항 삭제 팝업 상태
   const [reqDeleteOpen, setReqDeleteOpen] = useState(false);
@@ -195,7 +198,7 @@ function RequirementDetailPageInner() {
   // ── 과업 목록 조회 (taskId 선택용) ─────────────────────────────────────────
   const { data: tasksData } = useQuery({
     queryKey: ["tasks-for-select", projectId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: { tasks: TaskOption[] } }>(
         `/api/projects/${projectId}/tasks`
       ).then((r) => r.data.tasks),
@@ -205,13 +208,13 @@ function RequirementDetailPageInner() {
   // ── 프로젝트 멤버 목록 조회 (담당자 콤보박스용) ─────────────────────────────
   const { data: memberData } = useQuery({
     queryKey: ["project-members", projectId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: { members: ProjectMember[]; myMemberId: string } }>(
         `/api/projects/${projectId}/members`
       ).then((r) => r.data),
     staleTime: 60 * 1000, // 1분
   });
-  const members    = memberData?.members ?? [];
+  const members = memberData?.members ?? [];
   const myMemberId = memberData?.myMemberId ?? "";
 
   // ── 기존 요구사항 로드 (수정 모드) ─────────────────────────────────────────
@@ -223,7 +226,7 @@ function RequirementDetailPageInner() {
   //   이미 동일한 문제로 고친 이력이 있다(2026-04-24).
   const { data: detail, isLoading: isDetailLoading } = useQuery({
     queryKey: ["requirement", projectId, reqId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: RequirementDetail }>(
         `/api/projects/${projectId}/requirements/${reqId}`
       ).then((r) => r.data),
@@ -236,7 +239,7 @@ function RequirementDetailPageInner() {
   // 자기 자신을 담당자에서 빼는 순간 권한이 사라지는 버그가 생긴다.
   // 신규 등록 모드(reqId === "new") 는 별도 권한이라 본 게이트에서 제외 (기존 동작 유지).
   const { has: hasPerm } = usePermissions(projectId);
-  const matrixUpdateOK   = hasPerm("requirement.update");
+  const matrixUpdateOK = hasPerm("requirement.update");
   const originalAssigneeId = detail?.assignMemberId ?? null;
   const isAssignee = !!myMemberId && originalAssigneeId === myMemberId;
   const canEdit = isNew ? true : (matrixUpdateOK || isAssignee);
@@ -283,7 +286,7 @@ function RequirementDetailPageInner() {
     version: lastReleasedVersion
       ? bumpMinorVersion(lastReleasedVersion)
       : (docSettingsData?.docVersionDefault ?? "v1.0"),
-    author:   detail?.assignMemberName ?? "",
+    author: detail?.assignMemberName ?? "",
     approver: docSettingsData?.approverName ?? "",
   };
 
@@ -291,28 +294,28 @@ function RequirementDetailPageInner() {
   useEffect(() => {
     if (!detail) return;
     setForm({
-      taskId:          detail.taskId ?? undefined,
-      reqDisplayId:    detail.displayId ?? "",
-      sortOrder:       detail.sortOrder ?? 0,
-      name:            detail.name,
-      priority:        detail.priority,
-      source:          detail.source,
-      rfpPage:         detail.rfpPage,
+      taskId: detail.taskId ?? undefined,
+      reqDisplayId: detail.displayId ?? "",
+      sortOrder: detail.sortOrder ?? 0,
+      name: detail.name,
+      priority: detail.priority,
+      source: detail.source,
+      rfpPage: detail.rfpPage,
       // 저장된 값이 마크다운 형식(HTML 태그 없음)이면 HTML로 변환 — RichEditor는 HTML 저장.
       originalContent: detail.originalContent && !detail.originalContent.includes("<")
         ? renderMarkdown(detail.originalContent) : (detail.originalContent ?? ""),
-      currentContent:  detail.currentContent && !detail.currentContent.includes("<")
-        ? renderMarkdown(detail.currentContent)  : (detail.currentContent  ?? ""),
-      analysisMemo:    detail.analysisMemo,
-      detailSpec:      detail.detailSpec,
-      assignMemberId:  detail.assignMemberId ?? "",
+      currentContent: detail.currentContent && !detail.currentContent.includes("<")
+        ? renderMarkdown(detail.currentContent) : (detail.currentContent ?? ""),
+      analysisMemo: detail.analysisMemo,
+      detailSpec: detail.detailSpec,
+      assignMemberId: detail.assignMemberId ?? "",
     });
   }, [detail]);
 
   // ── 첨부파일 목록 조회 ──────────────────────────────────────────────────────
   const { data: filesData, refetch: refetchFiles } = useQuery({
     queryKey: ["req-files", projectId, reqId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: { items: AttachedFile[] } }>(
         `/api/projects/${projectId}/requirements/${reqId}/files`
       ).then((r) => r.data.items),
@@ -325,13 +328,13 @@ function RequirementDetailPageInner() {
     mutationFn: (body: SaveBody) =>
       isNew
         ? authFetch<{ data: { requirementId: string } }>(`/api/projects/${projectId}/requirements`, {
-            method: "POST",
-            body:   JSON.stringify(body),
-          })
+          method: "POST",
+          body: JSON.stringify(body),
+        })
         : authFetch(`/api/projects/${projectId}/requirements/${reqId}`, {
-            method: "PUT",
-            body:   JSON.stringify(body),
-          }),
+          method: "PUT",
+          body: JSON.stringify(body),
+        }),
     onSuccess: (res) => {
       toast.success(isNew ? "요구사항이 등록되었습니다." : "저장되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["requirements", projectId] });
@@ -350,7 +353,7 @@ function RequirementDetailPageInner() {
   // ── 변경 이력 조회 ─────────────────────────────────────────────────────────
   const { data: historyData, refetch: refetchHistory } = useQuery({
     queryKey: ["req-history", projectId, reqId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: { items: HistoryItem[]; totalCount: number } }>(
         `/api/projects/${projectId}/requirements/${reqId}/history`
       ).then((r) => r.data),
@@ -425,9 +428,9 @@ function RequirementDetailPageInner() {
     // 어떤 영역이 변경되었는지 감지
     const contentChanged =
       form.originalContent !== (detail?.originalContent ?? "") ||
-      form.currentContent  !== (detail?.currentContent  ?? "");
-    const specChanged  = form.detailSpec    !== (detail?.detailSpec    ?? "");
-    const analyChanged = form.analysisMemo  !== (detail?.analysisMemo  ?? "");
+      form.currentContent !== (detail?.currentContent ?? "");
+    const specChanged = form.detailSpec !== (detail?.detailSpec ?? "");
+    const analyChanged = form.analysisMemo !== (detail?.analysisMemo ?? "");
 
     // 이력 대상 변경이 하나라도 있으면 다이얼로그 표시
     if (contentChanged || specChanged || analyChanged) {
@@ -452,8 +455,8 @@ function RequirementDetailPageInner() {
     return {
       contentChanged:
         form.originalContent !== (detail?.originalContent ?? "") ||
-        form.currentContent  !== (detail?.currentContent  ?? ""),
-      specChanged:  form.detailSpec   !== (detail?.detailSpec   ?? ""),
+        form.currentContent !== (detail?.currentContent ?? ""),
+      specChanged: form.detailSpec !== (detail?.detailSpec ?? ""),
       analyChanged: form.analysisMemo !== (detail?.analysisMemo ?? ""),
     };
   }
@@ -511,9 +514,9 @@ function RequirementDetailPageInner() {
       const res = await fetch(
         `/api/projects/${projectId}/requirements/${reqId}/files`,
         {
-          method:  "POST",
+          method: "POST",
           headers: at ? { Authorization: `Bearer ${at}` } : {},
-          body:    formData,
+          body: formData,
         }
       );
       if (!res.ok) {
@@ -668,389 +671,390 @@ function RequirementDetailPageInner() {
       </div>
 
       <div style={{ padding: "0 24px 24px", maxWidth: 1400 }}>
-      {/* 읽기 전용 안내 — 권한 없는 사용자가 진입한 경우, 왜 입력이 안 되는지 명시 */}
-      {!isNew && !canEdit && (
-        <div style={{
-          margin: "0 0 16px",
-          padding: "10px 14px",
-          background: "var(--color-info-subtle, #f0f4ff)",
-          border: "1px solid var(--color-info, #3b82f6)",
-          borderRadius: 6,
-          fontSize: 12,
-          color: "var(--color-text-secondary)",
-        }}>
-          🔒 <strong>읽기 전용</strong> — 이 요구사항은 OWNER/ADMIN 또는 PM/PL 직무, 혹은 담당자만 수정할 수 있습니다.
-        </div>
-      )}
-      {/* 2단 레이아웃: 왼쪽(기본정보+원문·현행화) / 오른쪽(분석메모·상세명세+근거파일) */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 24, alignItems: "start" }}>
+        {/* 읽기 전용 안내 — 권한 없는 사용자가 진입한 경우, 왜 입력이 안 되는지 명시 */}
+        {!isNew && !canEdit && (
+          <div style={{
+            margin: "0 0 16px",
+            padding: "10px 14px",
+            background: "var(--color-info-subtle, #f0f4ff)",
+            border: "1px solid var(--color-info, #3b82f6)",
+            borderRadius: 6,
+            fontSize: 12,
+            color: "var(--color-text-secondary)",
+          }}>
+            🔒 <strong>읽기 전용</strong> — 이 요구사항은 OWNER/ADMIN 또는 PM/PL 직무, 혹은 담당자만 수정할 수 있습니다.
+          </div>
+        )}
+        {/* 2단 레이아웃: 왼쪽(기본정보+원문·현행화) / 오른쪽(분석메모·상세명세+근거파일) */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 24, alignItems: "start" }}>
 
-        {/* ── 왼쪽 컬럼 ─────────────────────────────────────────────────────── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* ── 왼쪽 컬럼 ─────────────────────────────────────────────────────── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
-          {/* ── AR-00043 기본 정보 ────────────────────────────────────────────── */}
-          <Section>
-            {/* 상위 과업 선택 */}
-            <FormField label="상위 과업">
-              <div className="sp-select-wrap">
-                <select
-                  value={form.taskId ?? ""}
-                  onChange={(e) => handleChange("taskId", e.target.value || "")}
-                  disabled={!canEdit}
-                  className="sp-input"
-                >
-                  <option value="">미분류</option>
-                  {taskOptions.map((t) => (
-                    <option key={t.taskId} value={t.taskId}>{t.name}</option>
-                  ))}
-                </select>
-                <span className="sp-select-arrow"><SelectChevron /></span>
-              </div>
-            </FormField>
-
-            {/* 요구사항명 + 표시 ID — 표시 ID를 오른쪽으로 배치 (7:3 비율) */}
-            <div style={{ display: "grid", gridTemplateColumns: "7fr 3fr", gap: 16 }}>
-              <FormField label="요구사항명" required>
-                <input
-                  type="text"
-                  value={form.name}
-                  placeholder="요구사항명을 입력하세요"
-                  onChange={(e) => handleChange("name", e.target.value)}
-                  readOnly={!canEdit}
-                  className="sp-input"
-                />
-              </FormField>
-              <FormField label="표시 ID">
-                <input
-                  type="text"
-                  value={form.reqDisplayId}
-                  placeholder="예: RQ-00001"
-                  onChange={(e) => handleChange("reqDisplayId", e.target.value)}
-                  readOnly={!canEdit}
-                  className="sp-input"
-                />
-              </FormField>
-            </div>
-
-            {/* 담당자 + 정렬 순서 — 담당자를 한 칸 위로(표시 ID가 있던 자리), 정렬 순서는 그대로 오른쪽 */}
-            {/* 담당자 라벨 옆 작은 시계 아이콘 = 변경 이력 팝업 (신규 등록 모드에서는 숨김) */}
-            {/* FormField 대신 인라인 div — <label> 안에 <button>이 있으면 라벨 빈 영역 클릭이 */}
-            {/*   브라우저 기본 동작으로 버튼에 전달됨 (라벨→내부 form control 포워딩) */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: 16 }}>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
-                  <span>담당자</span>
-                  {!isNew && (
-                    <button
-                      type="button"
-                      onClick={() => setAssigneeHistoryOpen(true)}
-                      title="담당자 변경 이력"
-                      style={inlineIconBtnStyle}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                           stroke="currentColor" strokeWidth="2"
-                           strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <circle cx="12" cy="12" r="9" />
-                        <path d="M12 7v5l3 2" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
+            {/* ── AR-00043 기본 정보 ────────────────────────────────────────────── */}
+            <Section>
+              {/* 상위 과업 선택 */}
+              <FormField label="상위 과업">
                 <div className="sp-select-wrap">
                   <select
-                    value={form.assignMemberId}
-                    onChange={(e) => handleChange("assignMemberId", e.target.value)}
+                    value={form.taskId ?? ""}
+                    onChange={(e) => handleChange("taskId", e.target.value || "")}
                     disabled={!canEdit}
                     className="sp-input"
                   >
-                    <option value="">담당자 없음</option>
-                    {members.map((m) => (
-                      <option key={m.memberId} value={m.memberId}>
-                        {m.name ?? m.email}
-                        {m.memberId === myMemberId ? " (나)" : ""}
-                      </option>
+                    <option value="">미분류</option>
+                    {taskOptions.map((t) => (
+                      <option key={t.taskId} value={t.taskId}>{t.name}</option>
                     ))}
                   </select>
                   <span className="sp-select-arrow"><SelectChevron /></span>
                 </div>
-              </div>
-              <FormField label="정렬 순서">
-                <input
-                  type="number"
-                  min={0}
-                  // 0이면 빈 문자열로 표시해 삭제 후 바로 입력 가능
-                  value={form.sortOrder || ""}
-                  onChange={(e) => setForm((prev) => ({ ...prev, sortOrder: parseInt(e.target.value) || 0 }))}
-                  placeholder="0"
-                  readOnly={!canEdit}
-                  className="sp-input"
-                />
               </FormField>
-            </div>
 
-            {/* 우선순위 + 출처 + RFP 페이지 — 3컬럼 */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-              <FormField label="우선순위" required>
-                <div className="sp-select-wrap">
-                  <select
-                    value={form.priority}
-                    onChange={(e) => handleChange("priority", e.target.value)}
-                    disabled={!canEdit}
-                    className="sp-input"
-                  >
-                    <option value="HIGH">높음 (HIGH)</option>
-                    <option value="MEDIUM">중간 (MEDIUM)</option>
-                    <option value="LOW">낮음 (LOW)</option>
-                  </select>
-                  <span className="sp-select-arrow"><SelectChevron /></span>
-                </div>
-              </FormField>
-              <FormField label="출처" required>
-                <div className="sp-select-wrap">
-                  <select
-                    value={form.source}
-                    onChange={(e) => handleChange("source", e.target.value)}
-                    disabled={!canEdit}
-                    className="sp-input"
-                  >
-                    <option value="RFP">RFP</option>
-                    <option value="ADD">추가</option>
-                    <option value="CHANGE">변경</option>
-                  </select>
-                  <span className="sp-select-arrow"><SelectChevron /></span>
-                </div>
-              </FormField>
-              <FormField label="RFP 페이지">
-                <input
-                  type="text"
-                  value={form.rfpPage}
-                  placeholder="예: p.23"
-                  onChange={(e) => handleChange("rfpPage", e.target.value)}
-                  readOnly={!canEdit}
-                  className="sp-input"
-                />
-              </FormField>
-            </div>
-          </Section>
-
-          {/* ── AR-00044 원문·현행화 ──────────────────────────────────────────── */}
-          <Section compact label={
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
-              <span>요구사항 내용</span>
-              {!isNew && (
-                <button
-                  type="button"
-                  onClick={() => setHistoryOpen(true)}
-                  style={{ padding: "3px 12px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: "pointer" }}
-                >
-                  🕐 이력
-                </button>
-              )}
-            </div>
-          }>
-            {/* 탭 헤더 */}
-            <div style={{ display: "flex", gap: 16, borderBottom: "1px solid var(--color-border)", marginBottom: 6 }}>
-              {(["original", "current"] as const).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setContentTab(tab)}
-                  style={{
-                    padding:      "6px 6px",
-                    border:       "none",
-                    borderBottom: contentTab === tab ? "2px solid var(--color-primary, #1976d2)" : "2px solid transparent",
-                    background:   "transparent",
-                    color:        contentTab === tab ? "var(--color-primary, #1976d2)" : "var(--color-text-secondary)",
-                    fontSize:     14,
-                    fontWeight:   contentTab === tab ? 600 : 500,
-                    cursor:       "pointer",
-                    transition:   "all 0.2s ease",
-                    marginBottom: -1,
-                  }}
-                >
-                  {tab === "original" ? "원문 (RFP·계약서)" : "현행화 (협의·변경 뱐영)"}
-                </button>
-              ))}
-            </div>
-
-            {/* 에디터 본체 */}
-            <div>
-              {contentTab === "current" ? (
-                <RichEditor
-                  value={form.currentContent}
-                  onChange={(html) => handleChange("currentContent", html)}
-                  placeholder="협의 또는 변경 사항이 반영된 최신 내용을 입력하세요"
-                  minHeight={338}
-                  readOnly={!canEdit}
-                />
-              ) : (
-                <RichEditor
-                  value={form.originalContent}
-                  onChange={(html) => handleChange("originalContent", html)}
-                  placeholder="RFP 또는 계약서의 원문 그대로 입력하세요"
-                  minHeight={338}
-                  readOnly={!canEdit}
-                />
-              )}
-            </div>
-          </Section>
-
-          {/* ── AR-00046 첨부파일 (수정 모드에서만) ────────────────────────── */}
-          {!isNew && (
-            <Section title="첨부파일">
-              {files.length === 0 ? (
-                <p style={{ fontSize: 13, color: "#aaa", margin: 0 }}>첨부파일이 없습니다.</p>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
-                  {files.map((file) => (
-                    <div
-                      key={file.fileId}
-                      style={{
-                        display:      "flex",
-                        alignItems:   "center",
-                        gap:          12,
-                        padding:      "8px 12px",
-                        border:       "1px solid var(--color-border)",
-                        borderRadius: 6,
-                        background:   "var(--color-bg-muted)",
-                      }}
-                    >
-                      <span style={{ flex: 1, fontSize: 13, wordBreak: "break-all" }}>
-                        📎 {file.fileName}
-                        <span style={{ color: "#aaa", marginLeft: 8, fontSize: 12 }}>
-                          ({formatFileSize(file.fileSize)})
-                        </span>
-                      </span>
-                      <button
-                        onClick={() => handleDownload(file)}
-                        style={{ ...secondaryBtnStyle, fontSize: 12, padding: "4px 10px" }}
-                      >
-                        다운로드
-                      </button>
-                      {/* 첨부파일 삭제 — 편집 권한자만 */}
-                      {canEdit && (
-                        <button
-                          onClick={() => {
-                            if (confirm(`'${file.fileName}' 파일을 삭제하시겠습니까?`)) {
-                              deleteFileMutation.mutate(file.fileId);
-                            }
-                          }}
-                          disabled={deleteFileMutation.isPending}
-                          style={{ ...dangerBtnStyle, fontSize: 12 }}
-                        >
-                          삭제
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* 파일 첨부 — 편집 권한자만 */}
-              {canEdit && (
-                <>
+              {/* 요구사항명 + RFP 페이지 (7:3 비율) */}
+              {/* 자리 이동: 표시 ID → 정렬 순서 자리, RFP 페이지 → 표시 ID 자리, 정렬 순서 → RFP 페이지 자리 */}
+              <div style={{ display: "grid", gridTemplateColumns: "7fr 3fr", gap: 16 }}>
+                <FormField label="요구사항명" required>
                   <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    style={{ display: "none" }}
-                    onChange={handleFileUpload}
+                    type="text"
+                    value={form.name}
+                    placeholder="요구사항명을 입력하세요"
+                    onChange={(e) => handleChange("name", e.target.value)}
+                    readOnly={!canEdit}
+                    className="sp-input"
                   />
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    style={secondaryBtnStyle}
-                  >
-                    + 파일 첨부
-                  </button>
-                </>
-              )}
+                </FormField>
+                <FormField label="RFP 페이지">
+                  <input
+                    type="text"
+                    value={form.rfpPage}
+                    placeholder="예: p.23"
+                    onChange={(e) => handleChange("rfpPage", e.target.value)}
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </FormField>
+              </div>
+
+              {/* 담당자 + 표시 ID — 50:50 비율 */}
+              {/* 담당자 라벨 옆 작은 시계 아이콘 = 변경 이력 팝업 (신규 등록 모드에서는 숨김) */}
+              {/* FormField 대신 인라인 div — <label> 안에 <button>이 있으면 라벨 빈 영역 클릭이 */}
+              {/*   브라우저 기본 동작으로 버튼에 전달됨 (라벨→내부 form control 포워딩) */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                    <span>담당자</span>
+                    {!isNew && (
+                      <button
+                        type="button"
+                        onClick={() => setAssigneeHistoryOpen(true)}
+                        title="담당자 변경 이력"
+                        style={inlineIconBtnStyle}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" strokeWidth="2"
+                          strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <circle cx="12" cy="12" r="9" />
+                          <path d="M12 7v5l3 2" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                  <div className="sp-select-wrap">
+                    <select
+                      value={form.assignMemberId}
+                      onChange={(e) => handleChange("assignMemberId", e.target.value)}
+                      disabled={!canEdit}
+                      className="sp-input"
+                    >
+                      <option value="">담당자 없음</option>
+                      {members.map((m) => (
+                        <option key={m.memberId} value={m.memberId}>
+                          {m.name ?? m.email}
+                          {m.memberId === myMemberId ? " (나)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
+                </div>
+                <FormField label="표시 ID">
+                  <input
+                    type="text"
+                    value={form.reqDisplayId}
+                    placeholder={`${getPrefix("REQUIREMENT")}-XXXXX (미 입력 시 자동 생성)`}
+                    onChange={(e) => handleChange("reqDisplayId", e.target.value)}
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </FormField>
+              </div>
+
+              {/* 우선순위 + 출처 + 정렬 순서 — 3컬럼 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                <FormField label="우선순위" required>
+                  <div className="sp-select-wrap">
+                    <select
+                      value={form.priority}
+                      onChange={(e) => handleChange("priority", e.target.value)}
+                      disabled={!canEdit}
+                      className="sp-input"
+                    >
+                      <option value="HIGH">높음 (HIGH)</option>
+                      <option value="MEDIUM">중간 (MEDIUM)</option>
+                      <option value="LOW">낮음 (LOW)</option>
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
+                </FormField>
+                <FormField label="출처" required>
+                  <div className="sp-select-wrap">
+                    <select
+                      value={form.source}
+                      onChange={(e) => handleChange("source", e.target.value)}
+                      disabled={!canEdit}
+                      className="sp-input"
+                    >
+                      <option value="RFP">RFP</option>
+                      <option value="ADD">추가</option>
+                      <option value="CHANGE">변경</option>
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
+                </FormField>
+                <FormField label="정렬 순서">
+                  <input
+                    type="number"
+                    min={0}
+                    // 0이면 빈 문자열로 표시해 삭제 후 바로 입력 가능
+                    value={form.sortOrder || ""}
+                    onChange={(e) => setForm((prev) => ({ ...prev, sortOrder: parseInt(e.target.value) || 0 }))}
+                    placeholder="0"
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </FormField>
+              </div>
             </Section>
-          )}
-        </div>
 
-        {/* ── 오른쪽 컬럼 ───────────────────────────────────────────────────── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-
-          {/* ── AR-00045 상세명세·분석메모 ──────────────────────────────────── */}
-          <Section>
-            {/* 상세 명세 (위) */}
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>상세 명세</span>
-                <MarkdownTabButtons tab={specTab} onTabChange={setSpecTab} />
-                <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+            {/* ── AR-00044 원문·현행화 ──────────────────────────────────────────── */}
+            <Section compact label={
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                <span>요구사항 내용</span>
+                {!isNew && (
                   <button
                     type="button"
-                    onClick={() => setSpecExampleOpen(true)}
-                    disabled={!designTmpl?.exampleCn}
-                    style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: designTmpl?.exampleCn ? "pointer" : "not-allowed", opacity: designTmpl?.exampleCn ? 1 : 0.5 }}
+                    onClick={() => setHistoryOpen(true)}
+                    style={{ padding: "3px 12px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: "pointer" }}
                   >
-                    예시
+                    🕐 이력
                   </button>
+                )}
+              </div>
+            }>
+              {/* 탭 헤더 */}
+              <div style={{ display: "flex", gap: 16, borderBottom: "1px solid var(--color-border)", marginBottom: 6 }}>
+                {(["original", "current"] as const).map((tab) => (
                   <button
+                    key={tab}
                     type="button"
-                    onClick={() => {
-                      if (!designTmpl?.templateCn) return;
-                      // 요구사항 양식은 displayId/name 플레이스홀더 없음 — applyTemplateVars는 NOOP로 동작
-                      handleChange("detailSpec", applyTemplateVars(designTmpl.templateCn, {}));
+                    onClick={() => setContentTab(tab)}
+                    style={{
+                      padding: "6px 6px",
+                      border: "none",
+                      borderBottom: contentTab === tab ? "2px solid var(--color-primary, #1976d2)" : "2px solid transparent",
+                      background: "transparent",
+                      color: contentTab === tab ? "var(--color-primary, #1976d2)" : "var(--color-text-secondary)",
+                      fontSize: 14,
+                      fontWeight: contentTab === tab ? 600 : 500,
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                      marginBottom: -1,
                     }}
-                    disabled={!designTmpl?.templateCn || !canEdit}
-                    style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: (designTmpl?.templateCn && canEdit) ? "pointer" : "not-allowed", opacity: (designTmpl?.templateCn && canEdit) ? 1 : 0.5 }}
                   >
-                    템플릿 적용
+                    {tab === "original" ? "원문 (RFP·계약서)" : "현행화 (협의·변경 뱐영)"}
                   </button>
-                  {!isNew && (
-                    <button
-                      type="button"
-                      onClick={() => setSpecChangeHistOpen(true)}
-                      style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: "pointer" }}
-                    >
-                      변경이력
-                    </button>
-                  )}
-                </div>
+                ))}
               </div>
-              <MarkdownEditor
-                value={form.detailSpec}
-                tab={specTab}
-                onTabChange={setSpecTab}
-                onChange={(v) => handleChange("detailSpec", v)}
-                placeholder={`## 기능 상세\n\n- 항목1\n- 항목2`}
-                rows={20}
-                readOnly={!canEdit}
-              />
-            </div>
 
-            {/* 분석 메모 (아래) */}
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>분석 메모</span>
-                <MarkdownTabButtons tab={analyzeTab} onTabChange={setAnalyzeTab} />
-                <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-                  {!isNew && (
+              {/* 에디터 본체 */}
+              <div>
+                {contentTab === "current" ? (
+                  <RichEditor
+                    value={form.currentContent}
+                    onChange={(html) => handleChange("currentContent", html)}
+                    placeholder="협의 또는 변경 사항이 반영된 최신 내용을 입력하세요"
+                    minHeight={338}
+                    readOnly={!canEdit}
+                  />
+                ) : (
+                  <RichEditor
+                    value={form.originalContent}
+                    onChange={(html) => handleChange("originalContent", html)}
+                    placeholder="RFP 또는 계약서의 원문 그대로 입력하세요"
+                    minHeight={338}
+                    readOnly={!canEdit}
+                  />
+                )}
+              </div>
+            </Section>
+
+            {/* ── AR-00046 첨부파일 (수정 모드에서만) ────────────────────────── */}
+            {!isNew && (
+              <Section title="첨부파일">
+                {files.length === 0 ? (
+                  <p style={{ fontSize: 13, color: "#aaa", margin: 0 }}>첨부파일이 없습니다.</p>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                    {files.map((file) => (
+                      <div
+                        key={file.fileId}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          padding: "8px 12px",
+                          border: "1px solid var(--color-border)",
+                          borderRadius: 6,
+                          background: "var(--color-bg-muted)",
+                        }}
+                      >
+                        <span style={{ flex: 1, fontSize: 13, wordBreak: "break-all" }}>
+                          📎 {file.fileName}
+                          <span style={{ color: "#aaa", marginLeft: 8, fontSize: 12 }}>
+                            ({formatFileSize(file.fileSize)})
+                          </span>
+                        </span>
+                        <button
+                          onClick={() => handleDownload(file)}
+                          style={{ ...secondaryBtnStyle, fontSize: 12, padding: "4px 10px" }}
+                        >
+                          다운로드
+                        </button>
+                        {/* 첨부파일 삭제 — 편집 권한자만 */}
+                        {canEdit && (
+                          <button
+                            onClick={() => {
+                              if (confirm(`'${file.fileName}' 파일을 삭제하시겠습니까?`)) {
+                                deleteFileMutation.mutate(file.fileId);
+                              }
+                            }}
+                            disabled={deleteFileMutation.isPending}
+                            style={{ ...dangerBtnStyle, fontSize: 12 }}
+                          >
+                            삭제
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 파일 첨부 — 편집 권한자만 */}
+                {canEdit && (
+                  <>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      style={{ display: "none" }}
+                      onChange={handleFileUpload}
+                    />
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      style={secondaryBtnStyle}
+                    >
+                      + 파일 첨부
+                    </button>
+                  </>
+                )}
+              </Section>
+            )}
+          </div>
+
+          {/* ── 오른쪽 컬럼 ───────────────────────────────────────────────────── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+            {/* ── AR-00045 상세명세·분석메모 ──────────────────────────────────── */}
+            <Section>
+              {/* 상세 명세 (위) */}
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>상세 명세</span>
+                  <MarkdownTabButtons tab={specTab} onTabChange={setSpecTab} />
+                  <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
                     <button
                       type="button"
-                      onClick={() => setAnalyChangeHistOpen(true)}
-                      style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: "pointer" }}
+                      onClick={() => setSpecExampleOpen(true)}
+                      disabled={!designTmpl?.exampleCn}
+                      style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: designTmpl?.exampleCn ? "pointer" : "not-allowed", opacity: designTmpl?.exampleCn ? 1 : 0.5 }}
                     >
-                      변경이력
+                      예시
                     </button>
-                  )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!designTmpl?.templateCn) return;
+                        // 요구사항 양식은 displayId/name 플레이스홀더 없음 — applyTemplateVars는 NOOP로 동작
+                        handleChange("detailSpec", applyTemplateVars(designTmpl.templateCn, {}));
+                      }}
+                      disabled={!designTmpl?.templateCn || !canEdit}
+                      style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: (designTmpl?.templateCn && canEdit) ? "pointer" : "not-allowed", opacity: (designTmpl?.templateCn && canEdit) ? 1 : 0.5 }}
+                    >
+                      템플릿 적용
+                    </button>
+                    {!isNew && (
+                      <button
+                        type="button"
+                        onClick={() => setSpecChangeHistOpen(true)}
+                        style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: "pointer" }}
+                      >
+                        변경이력
+                      </button>
+                    )}
+                  </div>
                 </div>
+                <MarkdownEditor
+                  value={form.detailSpec}
+                  tab={specTab}
+                  onTabChange={setSpecTab}
+                  onChange={(v) => handleChange("detailSpec", v)}
+                  placeholder={`## 기능 상세\n\n- 항목1\n- 항목2`}
+                  rows={20}
+                  readOnly={!canEdit}
+                />
               </div>
-              <MarkdownEditor
-                value={form.analysisMemo}
-                tab={analyzeTab}
-                onTabChange={setAnalyzeTab}
-                onChange={(v) => handleChange("analysisMemo", v)}
-                placeholder={`## 분석 내용\n\n- 항목1\n- 항목2`}
-                rows={20}
-                readOnly={!canEdit}
-              />
-            </div>
-          </Section>
+
+              {/* 분석 메모 (아래) */}
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>분석 메모</span>
+                  <MarkdownTabButtons tab={analyzeTab} onTabChange={setAnalyzeTab} />
+                  <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                    {!isNew && (
+                      <button
+                        type="button"
+                        onClick={() => setAnalyChangeHistOpen(true)}
+                        style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: "pointer" }}
+                      >
+                        변경이력
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <MarkdownEditor
+                  value={form.analysisMemo}
+                  tab={analyzeTab}
+                  onTabChange={setAnalyzeTab}
+                  onChange={(v) => handleChange("analysisMemo", v)}
+                  placeholder={`## 분석 내용\n\n- 항목1\n- 항목2`}
+                  rows={20}
+                  readOnly={!canEdit}
+                />
+              </div>
+            </Section>
+          </div>
         </div>
-      </div>
       </div>
 
       {/* ── 상세 명세 예시 팝업 (DB 양식) ───────────────────────────────────── */}
@@ -1230,7 +1234,7 @@ function ReqDeleteDialog({
   onConfirm,
   isPending,
 }: {
-  onClose:   () => void;
+  onClose: () => void;
   onConfirm: (deleteChildren: boolean) => void;
   isPending: boolean;
 }) {
@@ -1250,7 +1254,7 @@ function ReqDeleteDialog({
         <p style={{ margin: "0 0 16px", fontSize: 14, color: "var(--color-text-secondary)" }}>삭제하면 복구할 수 없습니다.</p>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, cursor: "pointer" }}>
-            <input type="radio" name="reqDeleteType" checked={deleteChildren === true}  onChange={() => setDeleteChildren(true)} />
+            <input type="radio" name="reqDeleteType" checked={deleteChildren === true} onChange={() => setDeleteChildren(true)} />
             하위 사용자스토리 전체 삭제
           </label>
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, cursor: "pointer" }}>
@@ -1285,13 +1289,13 @@ function Section({
   return (
     <div
       style={{
-        border:        "1px solid var(--color-border)",
-        borderRadius:  8,
-        padding:       compact ? "12px 24px" : "20px 24px",
-        background:    "var(--color-bg-card)",
-        display:       "flex",
+        border: "1px solid var(--color-border)",
+        borderRadius: 8,
+        padding: compact ? "12px 24px" : "20px 24px",
+        background: "var(--color-bg-card)",
+        display: "flex",
         flexDirection: "column",
-        gap:           compact ? 8 : 16,
+        gap: compact ? 8 : 16,
       }}
     >
       {/* 큰 헤더 — title 있을 때만 표시 */}
@@ -1315,7 +1319,7 @@ function FormField({
   label, required, children,
 }: {
   // ReactNode 허용 — 라벨에 아이콘 버튼(이력 등) 동반 표시용
-  label:    React.ReactNode;
+  label: React.ReactNode;
   required?: boolean;
   children: React.ReactNode;
 }) {
@@ -1332,25 +1336,25 @@ function FormField({
 
 // 라벨 옆 인라인 아이콘 버튼 — 이력 조회 등 보조 액션을 최소 면적으로 표현
 const inlineIconBtnStyle: React.CSSProperties = {
-  display:        "inline-flex",
-  alignItems:     "center",
+  display: "inline-flex",
+  alignItems: "center",
   justifyContent: "center",
-  width:          18,
-  height:         18,
-  padding:        0,
-  border:         "none",
-  background:     "transparent",
-  color:          "var(--color-text-tertiary)",
-  cursor:         "pointer",
-  borderRadius:   3,
-  lineHeight:     0,
+  width: 18,
+  height: 18,
+  padding: 0,
+  border: "none",
+  background: "transparent",
+  color: "var(--color-text-tertiary)",
+  cursor: "pointer",
+  borderRadius: 3,
+  lineHeight: 0,
 };
 
 // ── 파일 크기 포맷 ───────────────────────────────────────────────────────────
 
 function formatFileSize(bytes: number): string {
-  if (bytes < 1024)         return `${bytes} B`;
-  if (bytes < 1024 * 1024)  return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
@@ -1360,9 +1364,9 @@ function formatFileSize(bytes: number): string {
 // 변경된 블록 내에서는 단어 단위 diff로 변경 부분만 하이라이트.
 
 type DiffBlock = {
-  text:     string;                           // HTML 태그 제거된 텍스트
-  html:     string;                           // 원본 HTML 블록
-  type:     "same" | "del" | "add" | "mod";   // mod: 부분 변경
+  text: string;                           // HTML 태그 제거된 텍스트
+  html: string;                           // 원본 HTML 블록
+  type: "same" | "del" | "add" | "mod";   // mod: 부분 변경
   wordDiff?: { text: string; type: "same" | "del" | "add" }[];
 };
 
@@ -1431,8 +1435,8 @@ function wordDiff(oldStr: string, newStr: string): { text: string; type: "same" 
 function computeDiff(oldHtml: string, newHtml: string): { left: DiffBlock[]; right: DiffBlock[] } {
   const oldBlocks = splitHtmlBlocks(oldHtml);
   const newBlocks = splitHtmlBlocks(newHtml);
-  const oldTexts  = oldBlocks.map(stripHtml);
-  const newTexts  = newBlocks.map(stripHtml);
+  const oldTexts = oldBlocks.map(stripHtml);
+  const newTexts = newBlocks.map(stripHtml);
   const m = oldBlocks.length, n = newBlocks.length;
 
   // LCS
@@ -1444,7 +1448,7 @@ function computeDiff(oldHtml: string, newHtml: string): { left: DiffBlock[]; rig
         : Math.max(dp[i - 1][j], dp[i][j - 1]);
 
   // 역추적
-  const left: DiffBlock[]  = [];
+  const left: DiffBlock[] = [];
   const right: DiffBlock[] = [];
   let i = m, j = n;
   const tL: DiffBlock[] = [], tR: DiffBlock[] = [];
@@ -1482,21 +1486,21 @@ function computeDiff(oldHtml: string, newHtml: string): { left: DiffBlock[]; rig
 function ReqDiffViewerPopup({
   projectId, reqId, items, initialItem, onClose,
 }: {
-  projectId:   string;
-  reqId:       string;
-  items:       HistoryItem[];
+  projectId: string;
+  reqId: string;
+  items: HistoryItem[];
   initialItem: HistoryItem;
-  onClose:     () => void;
+  onClose: () => void;
 }) {
   const initialIdx = items.findIndex((i) => i.historyId === initialItem.historyId);
-  const prevItem   = items[initialIdx + 1];
+  const prevItem = items[initialIdx + 1];
   const [v1Id, setV1Id] = useState<string>(prevItem?.historyId ?? items[items.length - 1]?.historyId ?? "");
   const [v2Id, setV2Id] = useState<string>(initialItem.historyId);
-  const sameSelected    = v1Id === v2Id;
+  const sameSelected = v1Id === v2Id;
 
   const { data, isLoading } = useQuery({
     queryKey: ["req-history-diff", projectId, reqId, v1Id, v2Id],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: DiffResult }>(
         `/api/projects/${projectId}/requirements/${reqId}/history/diff?v1=${v1Id}&v2=${v2Id}`
       ).then((r) => r.data),
@@ -1536,7 +1540,7 @@ function ReqDiffViewerPopup({
           {data && !sameSelected && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               {([
-                { label: "원문",   l: data.v1Content.orgnlCn,  r: data.v2Content.orgnlCn  },
+                { label: "원문", l: data.v1Content.orgnlCn, r: data.v2Content.orgnlCn },
                 { label: "현행화", l: data.v1Content.curncyCn, r: data.v2Content.curncyCn },
               ] as { label: string; l: string; r: string }[]).map(({ label, l, r }) => (
                 <ReqDiffSection key={label} label={label} leftText={l} rightText={r}
@@ -1553,7 +1557,7 @@ function ReqDiffViewerPopup({
 // 단어 diff 블록 렌더링 (삭제 측 / 추가 측 공용)
 function WordDiffSpans({ words, side }: {
   words: { text: string; type: "same" | "del" | "add" }[];
-  side:  "del" | "add";
+  side: "del" | "add";
 }) {
   return (
     <>
@@ -1562,10 +1566,10 @@ function WordDiffSpans({ words, side }: {
         const isDiff = w.type === side;
         return (
           <span key={i} style={{
-            background:      isDiff ? (side === "del" ? "rgba(229,57,53,0.25)" : "rgba(46,125,50,0.25)") : "transparent",
-            color:           isDiff ? (side === "del" ? "#c62828" : "#2e7d32") : "inherit",
-            textDecoration:  isDiff && side === "del" ? "line-through" : "none",
-            borderRadius:    isDiff ? 2 : 0,
+            background: isDiff ? (side === "del" ? "rgba(229,57,53,0.25)" : "rgba(46,125,50,0.25)") : "transparent",
+            color: isDiff ? (side === "del" ? "#c62828" : "#2e7d32") : "inherit",
+            textDecoration: isDiff && side === "del" ? "line-through" : "none",
+            borderRadius: isDiff ? 2 : 0,
           }}>{w.text}</span>
         );
       })}
@@ -1645,10 +1649,10 @@ function SaveOptionDialog({ lastVersion, changedFlags, onClose, onSave, isPendin
   // 요구사항 내용 이력 모드
   type VersionMode = "none" | "minor" | "major";
   const [versionMode, setVersionMode] = useState<VersionMode>("none");
-  const [comment, setComment]         = useState("");
+  const [comment, setComment] = useState("");
 
   // 상세명세·분석메모 이력 저장 여부
-  const [saveSpec,  setSaveSpec]  = useState(false);
+  const [saveSpec, setSaveSpec] = useState(false);
   const [saveAnaly, setSaveAnaly] = useState(false);
 
   // 버전 미리보기
@@ -1663,7 +1667,7 @@ function SaveOptionDialog({ lastVersion, changedFlags, onClose, onSave, isPendin
         ? { saveHistory: true, versionMode, versionComment: comment }
         : {}),
       // 상세명세 이력
-      saveSpecHistory:  changedFlags.specChanged  && saveSpec,
+      saveSpecHistory: changedFlags.specChanged && saveSpec,
       // 분석메모 이력
       saveAnalyHistory: changedFlags.analyChanged && saveAnaly,
     });
@@ -1761,43 +1765,43 @@ function SaveOptionDialog({ lastVersion, changedFlags, onClose, onSave, isPendin
 // ── 스타일 ───────────────────────────────────────────────────────────────────
 
 const primaryBtnStyle: React.CSSProperties = {
-  padding:      "8px 24px",
+  padding: "8px 24px",
   borderRadius: 6,
-  border:       "1px solid transparent",
-  background:   "var(--color-primary, #1976d2)",
-  color:        "#fff",
-  fontSize:     14,
-  fontWeight:   600,
-  cursor:       "pointer",
+  border: "1px solid transparent",
+  background: "var(--color-primary, #1976d2)",
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
 };
 
 const secondaryBtnStyle: React.CSSProperties = {
-  padding:      "8px 16px",
+  padding: "8px 16px",
   borderRadius: 6,
-  border:       "1px solid var(--color-border)",
-  background:   "var(--color-bg-card)",
-  color:        "var(--color-text-primary)",
-  fontSize:     14,
-  cursor:       "pointer",
+  border: "1px solid var(--color-border)",
+  background: "var(--color-bg-card)",
+  color: "var(--color-text-primary)",
+  fontSize: 14,
+  cursor: "pointer",
 };
 
 const dangerBtnStyle: React.CSSProperties = {
-  padding:      "4px 10px",
+  padding: "4px 10px",
   borderRadius: 4,
-  border:       "1px solid #e53935",
-  background:   "transparent",
-  color:        "#e53935",
-  fontSize:     13,
-  cursor:       "pointer",
+  border: "1px solid #e53935",
+  background: "transparent",
+  color: "#e53935",
+  fontSize: 13,
+  cursor: "pointer",
 };
 
 const histGhostBtn: React.CSSProperties = {
-  padding:      "2px 8px",
+  padding: "2px 8px",
   borderRadius: 4,
-  border:       "1px solid var(--color-border)",
-  background:   "none",
-  color:        "var(--color-text-secondary)",
-  fontSize:     11,
-  cursor:       "pointer",
-  whiteSpace:   "nowrap",
+  border: "1px solid var(--color-border)",
+  background: "none",
+  color: "var(--color-text-secondary)",
+  fontSize: 11,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
 };

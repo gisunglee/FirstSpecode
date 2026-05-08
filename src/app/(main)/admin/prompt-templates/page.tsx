@@ -28,43 +28,43 @@ import { type PromptDomain, parsePromptDomain } from "@/lib/prompt-template/doma
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
 type TemplateRow = {
-  tmplId:     string;
-  projectId:  string | null;
-  isSystem:   boolean;
-  tmplNm:     string;
+  tmplId: string;
+  projectId: string | null;
+  isSystem: boolean;
+  tmplNm: string;
   taskTyCode: PromptTemplateTaskType;
-  refTyCode:  PromptTemplateRefType | null;
-  divCode:    string | null;
-  fmtCode:    string | null;
-  tmplDc:     string;
-  useYn:      string;
-  defaultYn:  string;
-  sortOrdr:   number;
-  useCnt:     number;
-  creatDt:    string;
-  mdfcnDt:    string;
+  refTyCode: PromptTemplateRefType | null;
+  divCode: string | null;
+  fmtCode: string | null;
+  tmplDc: string;
+  useYn: string;
+  defaultYn: string;
+  sortOrdr: number;
+  useCnt: number;
+  creatDt: string;
+  mdfcnDt: string;
 };
 
 // ── 상수 ──────────────────────────────────────────────────────────────────────
 
 const REF_TYPE_LABELS: Record<string, string> = {
-  UNIT_WORK:        "단위업무",
-  SCREEN:           "화면",
-  AREA:             "영역 설계",
-  FUNCTION:         "기능 설계",
+  UNIT_WORK: "단위업무",
+  SCREEN: "화면",
+  AREA: "영역 설계",
+  FUNCTION: "기능 설계",
   PLAN_STUDIO_ARTF: "기획실",
 };
 
 const taskTypeBadgeColors: Record<PromptTemplateTaskType, { bg: string; color: string }> = {
-  DESIGN:                    { bg: "var(--color-brand-subtle)",   color: "var(--color-brand)"   },
-  INSPECT:                   { bg: "var(--color-info-subtle)",    color: "var(--color-info)"    },
-  IMPACT:                    { bg: "var(--color-warning-subtle)", color: "var(--color-warning)" },
-  IMPLEMENT:                 { bg: "var(--color-error-subtle)",   color: "var(--color-error)"   },
-  TEST:                      { bg: "var(--color-success-subtle)", color: "var(--color-success)" },
-  PLAN_STUDIO_ARTF_GENERATE: { bg: "var(--color-info-subtle)",    color: "var(--color-info)"    },
-  MOCKUP:    { bg: "var(--color-bg-muted)", color: "var(--color-text-tertiary)" },
-  CUSTOM:    { bg: "var(--color-bg-muted)", color: "var(--color-text-tertiary)" },
-  PRE_IMPL:  { bg: "var(--color-bg-muted)", color: "var(--color-text-tertiary)" },
+  DESIGN: { bg: "var(--color-brand-subtle)", color: "var(--color-brand)" },
+  INSPECT: { bg: "var(--color-info-subtle)", color: "var(--color-info)" },
+  IMPACT: { bg: "var(--color-warning-subtle)", color: "var(--color-warning)" },
+  IMPLEMENT: { bg: "var(--color-error-subtle)", color: "var(--color-error)" },
+  TEST: { bg: "var(--color-success-subtle)", color: "var(--color-success)" },
+  PLAN_STUDIO_ARTF_GENERATE: { bg: "var(--color-info-subtle)", color: "var(--color-info)" },
+  MOCKUP: { bg: "var(--color-bg-muted)", color: "var(--color-text-tertiary)" },
+  CUSTOM: { bg: "var(--color-bg-muted)", color: "var(--color-text-tertiary)" },
+  PRE_IMPL: { bg: "var(--color-bg-muted)", color: "var(--color-text-tertiary)" },
 };
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ export default function AdminPromptTemplatesPage() {
 }
 
 function AdminPromptTemplatesPageInner() {
-  const router       = useRouter();
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   // 도메인 탭 — URL 쿼리 단일 진실의 원천
@@ -93,16 +93,16 @@ function AdminPromptTemplatesPageInner() {
 
   // 필터 상태
   const [taskTypeFilter, setTaskTypeFilter] = useState("");
-  const [refTypeFilter,  setRefTypeFilter]  = useState("");
-  const [divCodeFilter,  setDivCodeFilter]  = useState("");
-  const [useYnFilter,    setUseYnFilter]    = useState("");
+  const [refTypeFilter, setRefTypeFilter] = useState("");
+  const [divCodeFilter, setDivCodeFilter] = useState("");
+  const [useYnFilter, setUseYnFilter] = useState("");
 
   // 페이지 도움말
   const [helpOpen, setHelpOpen] = useState(false);
 
   // 탭 전환 시 다른 도메인 전용 필터 초기화 (잘못된 조회 방지)
   useEffect(() => {
-    if (activeTab === "general")     setDivCodeFilter("");
+    if (activeTab === "general") setDivCodeFilter("");
     if (activeTab === "plan-studio") setRefTypeFilter("");
   }, [activeTab]);
 
@@ -110,7 +110,7 @@ function AdminPromptTemplatesPageInner() {
   const queryParams = new URLSearchParams();
   queryParams.set("domain", activeTab);
   if (taskTypeFilter) queryParams.set("taskType", taskTypeFilter);
-  if (activeTab === "general"     && refTypeFilter) queryParams.set("refType", refTypeFilter);
+  if (activeTab === "general" && refTypeFilter) queryParams.set("refType", refTypeFilter);
   if (activeTab === "plan-studio" && divCodeFilter) queryParams.set("divCode", divCodeFilter);
   if (useYnFilter) queryParams.set("useYn", useYnFilter);
   const qs = `?${queryParams.toString()}`;
@@ -123,7 +123,8 @@ function AdminPromptTemplatesPageInner() {
   });
 
   return (
-    <div>
+    // width: 100% 명시 — 부모 (AdminLayout) 의 padding 영역 안에서 끝까지 사용
+    <div style={{ width: "100%" }}>
       {/* ── 페이지 서브 헤더 ── */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -183,7 +184,7 @@ function AdminPromptTemplatesPageInner() {
         borderBottom: "1px solid var(--color-border)",
         marginBottom: 16,
       }}>
-        <TabButton active={activeTab === "general"}     onClick={() => setActiveTab("general")}     label="일반" />
+        <TabButton active={activeTab === "general"} onClick={() => setActiveTab("general")} label="일반" />
         <TabButton active={activeTab === "plan-studio"} onClick={() => setActiveTab("plan-studio")} label="기획실" />
       </div>
 
@@ -237,7 +238,10 @@ function AdminPromptTemplatesPageInner() {
       <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
         <div style={{
           display: "grid",
-          gridTemplateColumns: "30% 11% 10% 5% 5% 7% 12% 10%",
+          // 8 컬럼 — 설명을 1fr 로 두어 남은 공간을 모두 흡수.
+          // 다른 컬럼은 % 로 비율 고정. 합계 < 100% 가 되어 모자라는 만큼이
+          // 1fr 컬럼으로 흘러들어가 우측 여백 0 으로 만든다.
+          gridTemplateColumns: "26% 1fr 11% 11% 5% 5% 9% 12%",
           padding: "10px 16px",
           background: "var(--color-bg-muted)",
           borderBottom: "1px solid var(--color-border)",
@@ -246,13 +250,13 @@ function AdminPromptTemplatesPageInner() {
           gap: 8, alignItems: "center",
         }}>
           <span>템플릿 명</span>
+          <span>설명</span>
           <span style={{ textAlign: "center" }}>작업 유형</span>
           <span style={{ textAlign: "center" }}>사용처</span>
           <span style={{ textAlign: "right" }}>정렬</span>
           <span style={{ textAlign: "right" }}>이용</span>
           <span style={{ textAlign: "center" }}>사용</span>
           <span>수정일</span>
-          <span style={{ textAlign: "center" }}>액션</span>
         </div>
 
         {isLoading ? (
@@ -265,7 +269,7 @@ function AdminPromptTemplatesPageInner() {
           </div>
         ) : (
           rows.map((row, idx) => {
-            const tc     = taskTypeBadgeColors[row.taskTyCode] ?? { bg: "var(--color-bg-muted)", color: "var(--color-text-secondary)" };
+            const tc = taskTypeBadgeColors[row.taskTyCode] ?? { bg: "var(--color-bg-muted)", color: "var(--color-text-secondary)" };
             const active = row.useYn === "Y";
             return (
               <div
@@ -273,7 +277,8 @@ function AdminPromptTemplatesPageInner() {
                 onClick={() => router.push(`/admin/prompt-templates/${row.tmplId}`)}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "30% 11% 10% 5% 5% 7% 12% 10%",
+                  // 8 컬럼 — 헤더와 동일. 설명을 1fr 로 두어 우측 여백 제거.
+                  gridTemplateColumns: "26% 1fr 11% 11% 5% 5% 9% 12%",
                   padding: "12px 16px",
                   paddingLeft: active ? 16 : 13,
                   borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
@@ -287,33 +292,40 @@ function AdminPromptTemplatesPageInner() {
                 onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-table-hover)")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = active ? "var(--color-bg-card)" : "var(--color-bg-muted)")}
               >
-                {/* 템플릿 명 + DEFAULT 배지 */}
-                <div style={{ overflow: "hidden" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{
-                      fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
-                      background: "var(--color-text-primary)",
-                      color:      "var(--color-text-inverse)",
-                      flexShrink: 0,
-                      letterSpacing: "0.04em",
-                    }}>
-                      DEFAULT
-                    </span>
-                    <span style={{
-                      fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)",
-                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    }}>
-                      {row.tmplNm}
-                    </span>
-                  </div>
-                  {row.tmplDc && (
-                    <div style={{
-                      fontSize: 11, color: "var(--color-text-secondary)", marginTop: 1,
-                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    }}>
-                      {row.tmplDc}
-                    </div>
-                  )}
+                {/* 템플릿 명 + DEFAULT 배지 — 한 컬럼 */}
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  overflow: "hidden",
+                  whiteSpace: "nowrap",
+                }}>
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
+                    background: "var(--color-text-primary)",
+                    color: "var(--color-text-inverse)",
+                    flexShrink: 0,
+                    letterSpacing: "0.04em",
+                  }}>
+                    DEFAULT
+                  </span>
+                  <span style={{
+                    fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)",
+                    overflow: "hidden", textOverflow: "ellipsis",
+                  }}>
+                    {row.tmplNm}
+                  </span>
+                </div>
+
+                {/* 설명 — 별도 컬럼. 길면 ellipsis, 비었으면 dash */}
+                <div style={{
+                  fontSize: 12,
+                  color: "var(--color-text-secondary)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}>
+                  {row.tmplDc || <span style={{ color: "var(--color-text-tertiary)" }}>—</span>}
                 </div>
 
                 {/* 작업 유형 */}
@@ -332,14 +344,14 @@ function AdminPromptTemplatesPageInner() {
                   <span style={{
                     display: "inline-block", padding: "2px 8px",
                     borderRadius: 4, fontSize: 11, fontWeight: 600,
-                    background: row.refTyCode === "FUNCTION"         ? "var(--color-success-subtle)"
-                              : row.refTyCode === "AREA"             ? "var(--color-info-subtle)"
-                              : row.refTyCode === "PLAN_STUDIO_ARTF" ? "var(--color-brand-subtle)"
-                              : "var(--color-bg-muted)",
-                    color:      row.refTyCode === "FUNCTION"         ? "var(--color-success)"
-                              : row.refTyCode === "AREA"             ? "var(--color-info)"
-                              : row.refTyCode === "PLAN_STUDIO_ARTF" ? "var(--color-brand)"
-                              : "var(--color-text-secondary)",
+                    background: row.refTyCode === "FUNCTION" ? "var(--color-success-subtle)"
+                      : row.refTyCode === "AREA" ? "var(--color-info-subtle)"
+                        : row.refTyCode === "PLAN_STUDIO_ARTF" ? "var(--color-brand-subtle)"
+                          : "var(--color-bg-muted)",
+                    color: row.refTyCode === "FUNCTION" ? "var(--color-success)"
+                      : row.refTyCode === "AREA" ? "var(--color-info)"
+                        : row.refTyCode === "PLAN_STUDIO_ARTF" ? "var(--color-brand)"
+                          : "var(--color-text-secondary)",
                     whiteSpace: "nowrap",
                   }}>
                     {row.refTyCode === "PLAN_STUDIO_ARTF" && row.divCode && row.fmtCode
@@ -364,27 +376,17 @@ function AdminPromptTemplatesPageInner() {
                     display: "inline-block", padding: "2px 8px",
                     borderRadius: 4, fontSize: 11, fontWeight: 600,
                     background: active ? "var(--color-success-subtle)" : "transparent",
-                    color:      active ? "var(--color-success)" : "var(--color-text-tertiary)",
-                    border:     active ? "none" : "1px dashed var(--color-border)",
+                    color: active ? "var(--color-success)" : "var(--color-text-tertiary)",
+                    border: active ? "none" : "1px dashed var(--color-border)",
                   }}>
                     {active ? "사용" : "미사용"}
                   </span>
                 </div>
 
-                {/* 수정일 */}
+                {/* 수정일 — 행 전체 클릭으로 편집 진입하므로 별도 [편집] 버튼 없음 */}
                 <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
                   {row.mdfcnDt.slice(0, 10)}
                 </span>
-
-                {/* 액션 — 편집만, 삭제는 정책상 차단 */}
-                <div style={{ display: "flex", gap: 4, justifyContent: "center" }} onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() => router.push(`/admin/prompt-templates/${row.tmplId}`)}
-                    style={secondarySmallBtnStyle}
-                  >
-                    편집
-                  </button>
-                </div>
               </div>
             );
           })
@@ -401,15 +403,15 @@ function TabButton({ active, onClick, label }: { active: boolean; onClick: () =>
     <button
       onClick={onClick}
       style={{
-        padding:    "10px 16px",
+        padding: "10px 16px",
         background: "none",
-        border:     "none",
+        border: "none",
         borderBottom: active ? "2px solid var(--color-brand)" : "2px solid transparent",
         marginBottom: -1,
-        fontSize:   13,
+        fontSize: 13,
         fontWeight: active ? 700 : 500,
-        color:      active ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-        cursor:     "pointer",
+        color: active ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+        cursor: "pointer",
       }}
     >
       {label}
@@ -434,20 +436,20 @@ const secondarySmallBtnStyle: React.CSSProperties = {
 };
 
 const filterSelectStyle: React.CSSProperties = {
-  padding:            "7px 32px 7px 12px",
-  borderRadius:       6,
-  border:             "1px solid var(--color-border)",
-  fontSize:           13,
-  background:         "var(--color-bg-card)",
-  color:              "var(--color-text-primary)",
-  cursor:             "pointer",
-  outline:            "none",
-  appearance:         "none",
-  WebkitAppearance:   "none",
-  backgroundImage:    `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
-  backgroundRepeat:   "no-repeat",
+  padding: "7px 32px 7px 12px",
+  borderRadius: 6,
+  border: "1px solid var(--color-border)",
+  fontSize: 13,
+  background: "var(--color-bg-card)",
+  color: "var(--color-text-primary)",
+  cursor: "pointer",
+  outline: "none",
+  appearance: "none",
+  WebkitAppearance: "none",
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+  backgroundRepeat: "no-repeat",
   backgroundPosition: "right 10px center",
-  minWidth:           120,
+  minWidth: 120,
 };
 
 // ── 도움말 아이콘 ────────────────────────────────────────────────────────────

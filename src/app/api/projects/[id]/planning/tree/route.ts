@@ -31,12 +31,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       prisma.tbRqTask.findMany({
         where:   { prjct_id: projectId },
         orderBy: { sort_ordr: "asc" },
-        select:  { task_id: true, task_display_id: true, task_nm: true, ctgry_code: true, sort_ordr: true },
+        // 담당자 필터(assignee) 지원을 위해 asign_mber_id 포함
+        select:  { task_id: true, task_display_id: true, task_nm: true, ctgry_code: true, sort_ordr: true, asign_mber_id: true },
       }),
       prisma.tbRqRequirement.findMany({
         where:   { prjct_id: projectId },
         orderBy: { sort_ordr: "asc" },
-        select:  { req_id: true, req_display_id: true, req_nm: true, priort_code: true, src_code: true, task_id: true, sort_ordr: true },
+        select:  { req_id: true, req_display_id: true, req_nm: true, priort_code: true, src_code: true, task_id: true, sort_ordr: true, asign_mber_id: true },
       }),
       prisma.tbRqUserStory.findMany({
         where:   { requirement: { prjct_id: projectId } },
@@ -63,19 +64,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const taskNodes = tasks.map((t) => {
       const reqs = reqMap.get(t.task_id) ?? [];
       return {
-        taskId:       t.task_id,
-        displayId:    t.task_display_id,
-        name:         t.task_nm,
-        category:     t.ctgry_code,
-        reqCount:     reqs.length,
+        taskId:         t.task_id,
+        displayId:      t.task_display_id,
+        name:           t.task_nm,
+        category:       t.ctgry_code,
+        assignMemberId: t.asign_mber_id,
+        reqCount:       reqs.length,
         requirements: reqs.map((r) => ({
-          reqId:      r.req_id,
-          displayId:  r.req_display_id,
-          name:       r.req_nm,
-          priority:   r.priort_code,
-          source:     r.src_code,
-          storyCount: (storyMap.get(r.req_id) ?? []).length,
-          stories:    (storyMap.get(r.req_id) ?? []).map((s) => ({
+          reqId:          r.req_id,
+          displayId:      r.req_display_id,
+          name:           r.req_nm,
+          priority:       r.priort_code,
+          source:         r.src_code,
+          assignMemberId: r.asign_mber_id,
+          storyCount:     (storyMap.get(r.req_id) ?? []).length,
+          stories:        (storyMap.get(r.req_id) ?? []).map((s) => ({
             storyId:   s.story_id,
             displayId: s.story_display_id,
             name:      s.story_nm,
@@ -86,13 +89,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // 미분류(task_id = null) 요구사항
     const unclassifiedReqs = (reqMap.get("__none__") ?? []).map((r) => ({
-      reqId:      r.req_id,
-      displayId:  r.req_display_id,
-      name:       r.req_nm,
-      priority:   r.priort_code,
-      source:     r.src_code,
-      storyCount: (storyMap.get(r.req_id) ?? []).length,
-      stories:    (storyMap.get(r.req_id) ?? []).map((s) => ({
+      reqId:          r.req_id,
+      displayId:      r.req_display_id,
+      name:           r.req_nm,
+      priority:       r.priort_code,
+      source:         r.src_code,
+      assignMemberId: r.asign_mber_id,
+      storyCount:     (storyMap.get(r.req_id) ?? []).length,
+      stories:        (storyMap.get(r.req_id) ?? []).map((s) => ({
         storyId:   s.story_id,
         displayId: s.story_display_id,
         name:      s.story_nm,

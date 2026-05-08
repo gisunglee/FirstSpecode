@@ -20,6 +20,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { usePermissions } from "@/hooks/useMyRole";
+import { useIdPrefixes } from "@/hooks/useIdPrefixes";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import { ScreenLayoutEditor, type LayoutRow } from "@/components/ui/ScreenLayoutEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
@@ -62,7 +63,7 @@ type ScreenDetail = {
   categoryM: string;
   categoryS: string;
   // 담당자 — 서버 join으로 내려옴
-  assignMemberId:   string | null;
+  assignMemberId: string | null;
   assignMemberName: string | null;
   unitWorkId: string | null;
   unitWorkName: string;
@@ -89,9 +90,9 @@ type SaveBody = {
 // 프로젝트 멤버 — 담당자 콤보박스 옵션용
 type ProjectMember = {
   memberId: string;
-  name:     string | null;
-  email:    string;
-  role:     string;
+  name: string | null;
+  email: string;
+  role: string;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -115,6 +116,8 @@ function ScreenDetailPageInner() {
   const projectId = params.id;
   const screenId = params.screenId;
   const isNew = screenId === "new";
+  // 표시 ID prefix — 환경설정 기반 placeholder
+  const { getPrefix } = useIdPrefixes(projectId);
 
   // useSearchParams()는 Suspense 안에서만 동작 — 페이지 래퍼에서 보장됨
   const presetUnitWorkId = searchParams.get("unitWorkId") ?? "";
@@ -173,13 +176,13 @@ function ScreenDetailPageInner() {
   // ── 프로젝트 멤버 목록 조회 (담당자 콤보박스용) ─────────────────────────────
   const { data: memberData } = useQuery({
     queryKey: ["project-members", projectId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: { members: ProjectMember[]; myMemberId: string } }>(
         `/api/projects/${projectId}/members`
       ).then((r) => r.data),
     staleTime: 60 * 1000, // 1분
   });
-  const members    = memberData?.members ?? [];
+  const members = memberData?.members ?? [];
   const myMemberId = memberData?.myMemberId ?? "";
 
   // ── 기존 화면 로드 (수정 모드) ─────────────────────────────────────────────
@@ -212,16 +215,16 @@ function ScreenDetailPageInner() {
   useEffect(() => {
     if (!detail) return;
     setForm({
-      unitWorkId:     detail.unitWorkId ?? undefined,
-      displayId:      detail.displayId ?? "",
-      name:           detail.name,
-      description:    detail.description ?? "",
-      comment:        detail.comment ?? "",
-      type:           detail.type,
-      sortOrder:      detail.sortOrder,
-      categoryL:      detail.categoryL,
-      categoryM:      detail.categoryM,
-      categoryS:      detail.categoryS,
+      unitWorkId: detail.unitWorkId ?? undefined,
+      displayId: detail.displayId ?? "",
+      name: detail.name,
+      description: detail.description ?? "",
+      comment: detail.comment ?? "",
+      type: detail.type,
+      sortOrder: detail.sortOrder,
+      categoryL: detail.categoryL,
+      categoryM: detail.categoryM,
+      categoryS: detail.categoryS,
       assignMemberId: detail.assignMemberId ?? "",
     });
     setOriginalDescription(detail.description ?? "");
@@ -464,7 +467,7 @@ function ScreenDetailPageInner() {
                   <input
                     type="text"
                     value={form.displayId ?? ""}
-                    placeholder="미입력 시 자동 생성"
+                    placeholder={`${getPrefix("SCREEN")}-XXXXX (미 입력 시 자동 생성)`}
                     onChange={(e) => handleChange("displayId", e.target.value)}
                     readOnly={!canEdit}
                     className="sp-input"
@@ -489,8 +492,8 @@ function ScreenDetailPageInner() {
                       >
                         {/* 시계(이력) 아이콘 — 14px, currentColor로 테마 대응 */}
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                             stroke="currentColor" strokeWidth="2"
-                             strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          stroke="currentColor" strokeWidth="2"
+                          strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                           <circle cx="12" cy="12" r="9" />
                           <path d="M12 7v5l3 2" />
                         </svg>
@@ -591,7 +594,7 @@ function ScreenDetailPageInner() {
                 <ScreenLayoutEditor
                   title={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>레이아웃 구성<HelpIcon onClick={() => setHelpOpen("layout")} /></span>}
                   value={layoutRows}
-                  onChange={canEdit ? setLayoutRows : () => {}}
+                  onChange={canEdit ? setLayoutRows : () => { }}
                   areas={detail?.areas.map((a) => ({
                     areaId: a.areaId,
                     displayId: a.displayId,
@@ -635,7 +638,7 @@ function ScreenDetailPageInner() {
                       "description",
                       applyTemplateVars(designTmpl.templateCn, {
                         displayId: detail?.displayId ?? "PID-XXXXX",
-                        name:      form.name,
+                        name: form.name,
                       }),
                     );
                   }}
@@ -1031,10 +1034,10 @@ function FormField({
 function areaTypeBadgeStyle(type: string): React.CSSProperties {
   // 신규 분류 5종 — 데이터 성격 기준 (FILTER/LIST/FORM/DETAIL/GENERAL)
   const colors: Record<string, { bg: string; color: string }> = {
-    FILTER:  { bg: "#e3f2fd", color: "#1565c0" },
-    LIST:    { bg: "#e8f5e9", color: "#2e7d32" },
-    FORM:    { bg: "#fff3e0", color: "#e65100" },
-    DETAIL:  { bg: "#f3e5f5", color: "#6a1b9a" },
+    FILTER: { bg: "#e3f2fd", color: "#1565c0" },
+    LIST: { bg: "#e8f5e9", color: "#2e7d32" },
+    FORM: { bg: "#fff3e0", color: "#e65100" },
+    DETAIL: { bg: "#f3e5f5", color: "#6a1b9a" },
     GENERAL: { bg: "#eceff1", color: "#37474f" },
   };
   const c = colors[type] ?? { bg: "#f5f5f5", color: "#555" };
@@ -1074,18 +1077,18 @@ const secondaryBtnStyle: React.CSSProperties = {
 
 // 라벨 옆 인라인 아이콘 버튼 — 이력 조회 등 보조 액션을 최소 면적으로 표현
 const inlineIconBtnStyle: React.CSSProperties = {
-  display:        "inline-flex",
-  alignItems:     "center",
+  display: "inline-flex",
+  alignItems: "center",
   justifyContent: "center",
-  width:          18,
-  height:         18,
-  padding:        0,
-  border:         "none",
-  background:     "transparent",
-  color:          "var(--color-text-tertiary)",
-  cursor:         "pointer",
-  borderRadius:   3,
-  lineHeight:     0,
+  width: 18,
+  height: 18,
+  padding: 0,
+  border: "none",
+  background: "transparent",
+  color: "var(--color-text-tertiary)",
+  cursor: "pointer",
+  borderRadius: 3,
+  lineHeight: 0,
 };
 
 const linkBtnStyle: React.CSSProperties = {

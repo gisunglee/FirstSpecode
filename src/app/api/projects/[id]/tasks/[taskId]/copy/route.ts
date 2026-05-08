@@ -11,6 +11,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTaskWrite } from "@/lib/taskWriteGate";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { createIdPrefixCache } from "@/lib/idPrefix";
 
 type RouteParams = { params: Promise<{ id: string; taskId: string }> };
 
@@ -57,8 +58,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     let reqSeq   = maxReq   ? (parseInt(maxReq.req_display_id.replace(/\D/g, "")) || 0) + 1 : 1;
     const sortOrder = (maxSort?.sort_ordr ?? 0) + 1;
 
+    // 같은 트랜잭션에서 과업 1건 + 다수 요구사항을 채번하므로 캐시로 prefix 조회 절약
+    const prefixCache = createIdPrefixCache(projectId);
+    const taskPrefix  = await prefixCache.get("TASK");
+    const reqPrefix   = await prefixCache.get("REQUIREMENT");
+
     const newTaskId = `${crypto.randomUUID()}`;
-    const newDisplayId = `SFR-${String(taskSeq).padStart(5, "0")}`;
+    const newDisplayId = `${taskPrefix}-${String(taskSeq).padStart(5, "0")}`;
     taskSeq++;
 
     await prisma.$transaction(async (tx) => {
@@ -81,7 +87,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       // 하위 요구사항 복사
       for (const req of original.requirements) {
         const newReqId      = `${crypto.randomUUID()}`;
-        const newReqDisplay = `REQ-${String(reqSeq).padStart(5, "0")}`;
+        const newReqDisplay = `${reqPrefix}-${String(reqSeq).padStart(5, "0")}`;
         reqSeq++;
 
         await tx.tbRqRequirement.create({

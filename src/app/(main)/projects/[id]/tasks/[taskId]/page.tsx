@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import { useCanEditTask } from "@/hooks/useCanEditTask";
+import { useIdPrefixes } from "@/hooks/useIdPrefixes";
 import { renderMarkdown } from "@/lib/renderMarkdown";
 import dynamic from "next/dynamic";
 // TipTap 번들이 초기 로드에 포함되지 않도록 dynamic import
@@ -26,37 +27,37 @@ import { SelectChevron } from "@/components/ui/SelectChevron";
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
 type TaskDetail = {
-  taskId:           string;
-  displayId:        string;
-  name:             string;
-  category:         string;
-  definition:       string | null;
-  content:          string | null;
-  outputInfo:       string | null;
-  rfpPage:          string | null;
+  taskId: string;
+  displayId: string;
+  name: string;
+  category: string;
+  definition: string | null;
+  content: string | null;
+  outputInfo: string | null;
+  rfpPage: string | null;
   // 담당자 — 서버 join으로 내려옴
-  assignMemberId:   string | null;
+  assignMemberId: string | null;
   assignMemberName: string | null;
 };
 
 type SaveBody = {
-  name:            string;
-  displayId:       string;
-  category:        string;
-  definition:      string;
-  content:         string;
-  outputInfo:      string;
-  rfpPage:         string;
+  name: string;
+  displayId: string;
+  category: string;
+  definition: string;
+  content: string;
+  outputInfo: string;
+  rfpPage: string;
   // 담당자 — "" = 미지정, 서버에서 null로 처리
-  assignMemberId:  string;
+  assignMemberId: string;
 };
 
 // 프로젝트 멤버 — 담당자 콤보박스 옵션용
 type ProjectMember = {
   memberId: string;
-  name:     string | null;
-  email:    string;
-  role:     string;
+  name: string | null;
+  email: string;
+  role: string;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -72,12 +73,14 @@ export default function TaskDetailPage() {
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 
 function TaskDetailPageInner() {
-  const params      = useParams<{ id: string; taskId: string }>();
-  const router      = useRouter();
+  const params = useParams<{ id: string; taskId: string }>();
+  const router = useRouter();
   const queryClient = useQueryClient();
-  const projectId   = params.id;
-  const taskId      = params.taskId;
-  const isNew       = taskId === "new";
+  const projectId = params.id;
+  const taskId = params.taskId;
+  const isNew = taskId === "new";
+  // 표시 ID prefix — 환경설정 기반 placeholder
+  const { getPrefix } = useIdPrefixes(projectId);
 
   // ── 폼 상태 ────────────────────────────────────────────────────────────────
   const [form, setForm] = useState<SaveBody>({
@@ -94,7 +97,7 @@ function TaskDetailPageInner() {
   // ── 기존 과업 로드 (수정 모드) ──────────────────────────────────────────────
   const { isLoading, data: taskDetail } = useQuery({
     queryKey: ["task", projectId, taskId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: TaskDetail }>(
         `/api/projects/${projectId}/tasks/${taskId}`
       ).then((r) => {
@@ -106,13 +109,13 @@ function TaskDetailPageInner() {
           ? renderMarkdown(rawContent)
           : rawContent;
         setForm({
-          name:           d.name,
-          displayId:      d.displayId ?? "",
-          category:       d.category,
-          definition:     d.definition ?? "",
+          name: d.name,
+          displayId: d.displayId ?? "",
+          category: d.category,
+          definition: d.definition ?? "",
           content,
-          outputInfo:     d.outputInfo ?? "",
-          rfpPage:        d.rfpPage ?? "",
+          outputInfo: d.outputInfo ?? "",
+          rfpPage: d.rfpPage ?? "",
           assignMemberId: d.assignMemberId ?? "",
         });
         return d;
@@ -123,13 +126,13 @@ function TaskDetailPageInner() {
   // ── 프로젝트 멤버 목록 (담당자 콤보박스용) ──────────────────────────────────
   const { data: memberData } = useQuery({
     queryKey: ["project-members", projectId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: { members: ProjectMember[]; myMemberId: string } }>(
         `/api/projects/${projectId}/members`
       ).then((r) => r.data),
     staleTime: 60 * 1000, // 1분
   });
-  const members    = memberData?.members ?? [];
+  const members = memberData?.members ?? [];
   const myMemberId = memberData?.myMemberId ?? "";
 
   // ── 편집/삭제 가능 여부 — 백엔드 taskWriteGate 와 동일 규칙 ──────────────────
@@ -175,13 +178,13 @@ function TaskDetailPageInner() {
     mutationFn: (body: SaveBody) =>
       isNew
         ? authFetch(`/api/projects/${projectId}/tasks`, {
-            method: "POST",
-            body: JSON.stringify(body),
-          })
+          method: "POST",
+          body: JSON.stringify(body),
+        })
         : authFetch(`/api/projects/${projectId}/tasks/${taskId}`, {
-            method: "PUT",
-            body: JSON.stringify(body),
-          }),
+          method: "PUT",
+          body: JSON.stringify(body),
+        }),
     onSuccess: () => {
       toast.success(isNew ? "과업이 생성되었습니다." : "저장되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["tasks", projectId] });
@@ -291,142 +294,142 @@ function TaskDetailPageInner() {
       </div>
 
       <div style={{ padding: "0 24px 24px", maxWidth: 760 }}>
-      {/* 폼 */}
-      <div
-        style={{
-          border:        "1px solid var(--color-border)",
-          borderRadius:  8,
-          padding:       "24px 28px",
-          background:    "var(--color-bg-card)",
-          display:       "flex",
-          flexDirection: "column",
-          gap:           20,
-        }}
-      >
+        {/* 폼 */}
+        <div
+          style={{
+            border: "1px solid var(--color-border)",
+            borderRadius: 8,
+            padding: "24px 28px",
+            background: "var(--color-bg-card)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 20,
+          }}
+        >
 
-        {/* 과업명 + 표시ID */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <FormField label="과업명" required>
-            <input
-              type="text"
-              value={form.name}
-              placeholder="과업명을 입력하세요"
-              onChange={(e) => handleChange("name", e.target.value)}
-              className="sp-input"
-            />
-          </FormField>
-          <FormField label="표시 ID">
-            <input
-              type="text"
-              value={form.displayId}
-              placeholder="미입력 시 자동 생성"
-              onChange={(e) => handleChange("displayId", e.target.value)}
-              className="sp-input"
-            />
-          </FormField>
-        </div>
-
-        {/* 담당자 + 카테고리 + RFP 페이지 번호 — 담당자에 넓은 공간(2fr) 할당 */}
-        {/* 담당자 라벨 옆 작은 시계 아이콘 = 변경 이력 팝업 (신규 등록 모드에서는 숨김) */}
-        {/* FormField 대신 인라인 div — <label> 안에 <button>이 있으면 라벨 빈 영역 클릭이 */}
-        {/*   브라우저 기본 동작으로 버튼에 전달됨 (라벨→내부 form control 포워딩) */}
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 16 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
-              <span>담당자</span>
-              {!isNew && (
-                <button
-                  type="button"
-                  onClick={() => setAssigneeHistoryOpen(true)}
-                  title="담당자 변경 이력"
-                  style={inlineIconBtnStyle}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                       stroke="currentColor" strokeWidth="2"
-                       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="M12 7v5l3 2" />
-                  </svg>
-                </button>
-              )}
-            </div>
-            <div className="sp-select-wrap">
-              <select
-                value={form.assignMemberId}
-                onChange={(e) => handleChange("assignMemberId", e.target.value)}
+          {/* 과업명 + 표시ID */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <FormField label="과업명" required>
+              <input
+                type="text"
+                value={form.name}
+                placeholder="과업명을 입력하세요"
+                onChange={(e) => handleChange("name", e.target.value)}
                 className="sp-input"
-              >
-                <option value="">담당자 없음</option>
-                {members.map((m) => (
-                  <option key={m.memberId} value={m.memberId}>
-                    {m.name ?? m.email}
-                    {m.memberId === myMemberId ? " (나)" : ""}
-                  </option>
-                ))}
-              </select>
-              <span className="sp-select-arrow"><SelectChevron /></span>
-            </div>
+              />
+            </FormField>
+            <FormField label="표시 ID">
+              <input
+                type="text"
+                value={form.displayId}
+                placeholder={`${getPrefix("TASK")}-XXXXX (미 입력 시 자동 생성)`}
+                onChange={(e) => handleChange("displayId", e.target.value)}
+                className="sp-input"
+              />
+            </FormField>
           </div>
-          <FormField label="카테고리" required>
-            <div className="sp-select-wrap">
-              <select
-                value={form.category}
-                onChange={(e) => handleChange("category", e.target.value)}
-                className="sp-input"
-              >
-                <option value="NEW_DEV">신규개발</option>
-                <option value="IMPROVE">기능개선</option>
-                <option value="MAINTAIN">유지보수</option>
-              </select>
-              <span className="sp-select-arrow"><SelectChevron /></span>
+
+          {/* 담당자 + 카테고리 + RFP 페이지 번호 — 담당자에 넓은 공간(2fr) 할당 */}
+          {/* 담당자 라벨 옆 작은 시계 아이콘 = 변경 이력 팝업 (신규 등록 모드에서는 숨김) */}
+          {/* FormField 대신 인라인 div — <label> 안에 <button>이 있으면 라벨 빈 영역 클릭이 */}
+          {/*   브라우저 기본 동작으로 버튼에 전달됨 (라벨→내부 form control 포워딩) */}
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 16 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                <span>담당자</span>
+                {!isNew && (
+                  <button
+                    type="button"
+                    onClick={() => setAssigneeHistoryOpen(true)}
+                    title="담당자 변경 이력"
+                    style={inlineIconBtnStyle}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" strokeWidth="2"
+                      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M12 7v5l3 2" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              <div className="sp-select-wrap">
+                <select
+                  value={form.assignMemberId}
+                  onChange={(e) => handleChange("assignMemberId", e.target.value)}
+                  className="sp-input"
+                >
+                  <option value="">담당자 없음</option>
+                  {members.map((m) => (
+                    <option key={m.memberId} value={m.memberId}>
+                      {m.name ?? m.email}
+                      {m.memberId === myMemberId ? " (나)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <span className="sp-select-arrow"><SelectChevron /></span>
+              </div>
             </div>
-          </FormField>
-          <FormField label="RFP 페이지">
-            <input
-              type="text"
-              value={form.rfpPage}
-              placeholder="예: p.23"
-              onChange={(e) => handleChange("rfpPage", e.target.value)}
+            <FormField label="카테고리" required>
+              <div className="sp-select-wrap">
+                <select
+                  value={form.category}
+                  onChange={(e) => handleChange("category", e.target.value)}
+                  className="sp-input"
+                >
+                  <option value="NEW_DEV">신규개발</option>
+                  <option value="IMPROVE">기능개선</option>
+                  <option value="MAINTAIN">유지보수</option>
+                </select>
+                <span className="sp-select-arrow"><SelectChevron /></span>
+              </div>
+            </FormField>
+            <FormField label="RFP 페이지">
+              <input
+                type="text"
+                value={form.rfpPage}
+                placeholder="예: p.23"
+                onChange={(e) => handleChange("rfpPage", e.target.value)}
+                className="sp-input"
+              />
+            </FormField>
+          </div>
+
+          {/* 정의 */}
+          <FormField label="정의">
+            <textarea
+              value={form.definition}
+              placeholder="과업 범위를 간략히 설명하세요"
+              rows={3}
+              onChange={(e) => handleChange("definition", e.target.value)}
               className="sp-input"
+              style={{ resize: "vertical" }}
             />
           </FormField>
+
+          {/* 세부내용 — WYSIWYG 에디터 (클립보드 이미지 붙여넣기 지원) */}
+          <FormField label="세부내용">
+            <RichEditor
+              value={form.content}
+              onChange={(html) => handleChange("content", html)}
+              placeholder="내용을 입력하세요. 이미지는 클립보드에서 바로 붙여넣기 가능합니다."
+              minHeight={308}
+            />
+          </FormField>
+
+          {/* 산출물 */}
+          <FormField label="산출물">
+            <textarea
+              value={form.outputInfo}
+              placeholder="예: 화면설계서, ERD, API 명세서"
+              rows={3}
+              onChange={(e) => handleChange("outputInfo", e.target.value)}
+              className="sp-input"
+              style={{ resize: "vertical" }}
+            />
+          </FormField>
+
         </div>
-
-        {/* 정의 */}
-        <FormField label="정의">
-          <textarea
-            value={form.definition}
-            placeholder="과업 범위를 간략히 설명하세요"
-            rows={3}
-            onChange={(e) => handleChange("definition", e.target.value)}
-            className="sp-input"
-            style={{ resize: "vertical" }}
-          />
-        </FormField>
-
-        {/* 세부내용 — WYSIWYG 에디터 (클립보드 이미지 붙여넣기 지원) */}
-        <FormField label="세부내용">
-          <RichEditor
-            value={form.content}
-            onChange={(html) => handleChange("content", html)}
-            placeholder="내용을 입력하세요. 이미지는 클립보드에서 바로 붙여넣기 가능합니다."
-            minHeight={308}
-          />
-        </FormField>
-
-        {/* 산출물 */}
-        <FormField label="산출물">
-          <textarea
-            value={form.outputInfo}
-            placeholder="예: 화면설계서, ERD, API 명세서"
-            rows={3}
-            onChange={(e) => handleChange("outputInfo", e.target.value)}
-            className="sp-input"
-            style={{ resize: "vertical" }}
-          />
-        </FormField>
-
-      </div>
       </div>
 
       {/* 담당자 변경 이력 — 경량 전용 다이얼로그 (diff 없음, 타임라인만) */}
@@ -495,7 +498,7 @@ function FormField({
   label, required, children,
 }: {
   // ReactNode 허용 — 라벨에 아이콘 버튼(이력 등) 동반 표시용
-  label:    React.ReactNode;
+  label: React.ReactNode;
   required?: boolean;
   children: React.ReactNode;
 }) {
@@ -512,18 +515,18 @@ function FormField({
 
 // 라벨 옆 인라인 아이콘 버튼 — 이력 조회 등 보조 액션을 최소 면적으로 표현
 const inlineIconBtnStyle: React.CSSProperties = {
-  display:        "inline-flex",
-  alignItems:     "center",
+  display: "inline-flex",
+  alignItems: "center",
   justifyContent: "center",
-  width:          18,
-  height:         18,
-  padding:        0,
-  border:         "none",
-  background:     "transparent",
-  color:          "var(--color-text-tertiary)",
-  cursor:         "pointer",
-  borderRadius:   3,
-  lineHeight:     0,
+  width: 18,
+  height: 18,
+  padding: 0,
+  border: "none",
+  background: "transparent",
+  color: "var(--color-text-tertiary)",
+  cursor: "pointer",
+  borderRadius: 3,
+  lineHeight: 0,
 };
 
 // ── 간단한 마크다운 → HTML 변환기 (FID-00098) ────────────────────────────────

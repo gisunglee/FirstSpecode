@@ -55,6 +55,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { checkRole } from "@/lib/checkRole";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { createIdPrefixCache } from "@/lib/idPrefix";
 
 // Prisma 인터랙티브 트랜잭션 클라이언트 타입
 // 채번 헬퍼에 tx를 넘겨야 트랜잭션 내 미커밋 데이터를 읽을 수 있음
@@ -129,44 +130,46 @@ type UnitWorkInput = {
 // 반드시 트랜잭션 클라이언트(tx)를 받아서 호출해야 함
 // → 동일 트랜잭션 내 미커밋 INSERT를 읽어야 중복 displayId를 막을 수 있음
 
-async function nextUnitWorkDisplayId(projectId: string, tx: TxClient): Promise<string> {
+// prefix 는 호출자가 미리 캐시에서 받아 인자로 전달 — bulk 채번 시 DB 반복 조회 방지
+
+async function nextUnitWorkDisplayId(projectId: string, tx: TxClient, prefix: string): Promise<string> {
   const max = await tx.tbDsUnitWork.findFirst({
     where:   { prjct_id: projectId },
     orderBy: { unit_work_display_id: "desc" },
     select:  { unit_work_display_id: true },
   });
   const seq = max ? (parseInt(max.unit_work_display_id.replace(/\D/g, "")) || 0) + 1 : 1;
-  return `UW-${String(seq).padStart(5, "0")}`;
+  return `${prefix}-${String(seq).padStart(5, "0")}`;
 }
 
-async function nextScreenDisplayId(projectId: string, tx: TxClient): Promise<string> {
+async function nextScreenDisplayId(projectId: string, tx: TxClient, prefix: string): Promise<string> {
   const max = await tx.tbDsScreen.findFirst({
     where:   { prjct_id: projectId },
     orderBy: { scrn_display_id: "desc" },
     select:  { scrn_display_id: true },
   });
   const seq = max ? (parseInt(max.scrn_display_id.replace(/\D/g, "")) || 0) + 1 : 1;
-  return `SCR-${String(seq).padStart(5, "0")}`;
+  return `${prefix}-${String(seq).padStart(5, "0")}`;
 }
 
-async function nextAreaDisplayId(projectId: string, tx: TxClient): Promise<string> {
+async function nextAreaDisplayId(projectId: string, tx: TxClient, prefix: string): Promise<string> {
   const max = await tx.tbDsArea.findFirst({
     where:   { prjct_id: projectId },
     orderBy: { area_display_id: "desc" },
     select:  { area_display_id: true },
   });
   const seq = max ? (parseInt(max.area_display_id.replace(/\D/g, "")) || 0) + 1 : 1;
-  return `AR-${String(seq).padStart(5, "0")}`;
+  return `${prefix}-${String(seq).padStart(5, "0")}`;
 }
 
-async function nextFunctionDisplayId(projectId: string, tx: TxClient): Promise<string> {
+async function nextFunctionDisplayId(projectId: string, tx: TxClient, prefix: string): Promise<string> {
   const max = await tx.tbDsFunction.findFirst({
     where:   { prjct_id: projectId },
     orderBy: { func_display_id: "desc" },
     select:  { func_display_id: true },
   });
   const seq = max ? (parseInt(max.func_display_id.replace(/\D/g, "")) || 0) + 1 : 1;
-  return `FN-${String(seq).padStart(5, "0")}`;
+  return `${prefix}-${String(seq).padStart(5, "0")}`;
 }
 
 // 프로젝트 내 최대 sort_ordr + 1
@@ -241,6 +244,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   };
 
   try {
+    // 트랜잭션 진입 전에 prefix 4종 한 번에 조회 — 채번 함수 호출 시마다 DB 재조회하지 않도록
+    const prefixCache = createIdPrefixCache(projectId);
+    const uwPrefix = await prefixCache.get("UNIT_WORK");
+    const scrPrefix = await prefixCache.get("SCREEN");
+    const arPrefix = await prefixCache.get("AREA");
+    const fnPrefix = await prefixCache.get("FUNCTION");
+
     await prisma.$transaction(async (tx) => {
       for (const uwInput of unitWorks) {
         if (!uwInput.name?.trim()) continue;
@@ -281,7 +291,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             result.skipped.unitWorks++;
             continue;
           }
-          const displayId  = await nextUnitWorkDisplayId(projectId, tx);
+          const displayId  = await nextUnitWorkDisplayId(projectId, tx, uwPrefix);
           const sortOrder  = await nextUnitWorkSortOrder(projectId, resolvedReqId, tx);
           const created    = await tx.tbDsUnitWork.create({
             data: {
@@ -329,7 +339,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             screenId = scInput.systemId;
             result.updated.screens++;
           } else {
-            const displayId = await nextScreenDisplayId(projectId, tx);
+            const displayId = await nextScreenDisplayId(projectId, tx, scrPrefix);
             const sortOrder = await nextScreenSortOrder(projectId, tx);
             const created   = await tx.tbDsScreen.create({
               data: {
@@ -379,7 +389,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
               areaId = arInput.systemId;
               result.updated.areas++;
             } else {
-              const displayId = await nextAreaDisplayId(projectId, tx);
+              const displayId = await nextAreaDisplayId(projectId, tx, arPrefix);
               const sortOrder = await nextAreaSortOrder(projectId, tx);
               const created   = await tx.tbDsArea.create({
                 data: {
@@ -424,7 +434,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 });
                 result.updated.functions++;
               } else {
-                const displayId = await nextFunctionDisplayId(projectId, tx);
+                const displayId = await nextFunctionDisplayId(projectId, tx, fnPrefix);
                 const sortOrder = await nextFunctionSortOrder(projectId, tx);
                 await tx.tbDsFunction.create({
                   data: {

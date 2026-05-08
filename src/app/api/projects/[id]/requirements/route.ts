@@ -7,6 +7,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { getIdPrefix } from "@/lib/idPrefix";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -100,7 +101,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (!source) return apiError("VALIDATION_ERROR", "출처를 선택해 주세요.", 400);
 
   try {
-    // 표시 ID 채번 (REQ-NNNNN)
+    // 표시 ID 채번 — prefix 는 프로젝트 환경설정에서 조회
     const maxReq = await prisma.tbRqRequirement.findFirst({
       where: { prjct_id: projectId },
       orderBy: { req_display_id: "desc" },
@@ -109,7 +110,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const nextSeq = maxReq
       ? (parseInt(maxReq.req_display_id.replace(/\D/g, "")) || 0) + 1
       : 1;
-    const displayId = `REQ-${String(nextSeq).padStart(5, "0")}`;
+    const reqPrefix = await getIdPrefix(projectId, "REQUIREMENT");
+    const displayId = `${reqPrefix}-${String(nextSeq).padStart(5, "0")}`;
 
     // sort_ordr: 마지막 + 1
     const maxSort = await prisma.tbRqRequirement.findFirst({

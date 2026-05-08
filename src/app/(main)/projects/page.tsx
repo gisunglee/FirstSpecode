@@ -284,7 +284,7 @@ function ProjectsPageInner() {
             <span>프로젝트명</span>
             <span>고객사</span>
             <span>기간</span>
-            <span>역할</span>
+            <span style={{ textAlign: "center" }}>역할</span>
             <span />
           </div>
 
@@ -309,23 +309,22 @@ function ProjectsPageInner() {
             >
               {/* 프로젝트명 */}
               <span style={{
-                fontWeight: 600,
-                fontSize: "var(--text-md)", color: "var(--color-brand)",
+                fontSize: "var(--text-base)", color: "var(--color-text-primary)",
               }}>
                 {item.name}
               </span>
 
-              <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
+              <span style={{ fontSize: "var(--text-base)", color: "var(--color-text-primary)" }}>
                 {item.clientName ?? "-"}
               </span>
 
-              <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
+              <span style={{ fontSize: "var(--text-base)", color: "var(--color-text-primary)" }}>
                 {(item.startDate || item.endDate)
                   ? `${formatDate(item.startDate)} ~ ${formatDate(item.endDate)}`
                   : "-"}
               </span>
 
-              <RoleBadge role={item.myRole} />
+              <div style={{ textAlign: "center" }}><RoleBadge role={item.myRole} /></div>
 
               {/* 설정 아이콘 — 클릭 시 프로젝트 설정 이동 (FID-00055) */}
               <button

@@ -145,13 +145,24 @@ export async function GET(request: NextRequest) {
     },
   });
 
+  // 프로젝트 이름을 함께 보여주기 위해 한 번에 조회 (배너 UI 가 활용)
+  const projectIds = sessions.map((s) => s.prjct_id);
+  const projects = projectIds.length > 0
+    ? await prisma.tbPjProject.findMany({
+        where:  { prjct_id: { in: projectIds } },
+        select: { prjct_id: true, prjct_nm: true },
+      })
+    : [];
+  const projectNameById = new Map(projects.map((p) => [p.prjct_id, p.prjct_nm]));
+
   return apiSuccess({
     items: sessions.map((s) => ({
-      sessId:    s.sess_id,
-      projectId: s.prjct_id,
-      memo:      s.memo,
-      expiresAt: s.expires_dt.toISOString(),
-      createdAt: s.creat_dt.toISOString(),
+      sessId:      s.sess_id,
+      projectId:   s.prjct_id,
+      projectName: projectNameById.get(s.prjct_id) ?? "(이름 없음)",
+      memo:        s.memo,
+      expiresAt:   s.expires_dt.toISOString(),
+      createdAt:   s.creat_dt.toISOString(),
     })),
   });
 }

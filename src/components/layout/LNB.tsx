@@ -55,9 +55,14 @@ const STORAGE_KEY = "specode-lnb-active-group";
 export default function LNB() {
   const pathname = usePathname();
   const { sidebarCollapsed, toggleSidebar, setSidebarCollapsed, currentProjectId } = useAppStore();
-  const { canManageMembers, canAccessSettings } = useMyRole(currentProjectId);
+  const { myRole, canManageMembers, canAccessSettings, isLoading: isRoleLoading } = useMyRole(currentProjectId);
   // SUPER_ADMIN 여부 — "시스템 관리" 그룹 노출 판정에 사용
   const { isSystemAdmin } = useIsSystemAdmin();
+
+  // 지원 세션 모드 — admin 이 본인 멤버 아닌 프로젝트의 컨텍스트에 있을 때.
+  //   · SUPER_ADMIN + currentProjectId 있음 + 역할 조회 끝났는데 myRole 이 null
+  // 이 모드에서는 "프로젝트 목록"(/projects = 본인 목록) 을 숨겨 컨텍스트 혼동 방지.
+  const isSupportSession = isSystemAdmin && !!currentProjectId && !isRoleLoading && !myRole;
 
   // 프로젝트 베이스 경로 — 미선택 시 null → 해당 메뉴들은 비활성 처리
   const pBase = currentProjectId ? `/projects/${currentProjectId}` : null;
@@ -85,8 +90,11 @@ export default function LNB() {
         // 풀 라벨로 표기 — 그룹명("프로젝트")과 중복되더라도 의미가 명확해야 한다는 사용자 피드백 반영.
         // "개인 설정" / "MCP 키" 는 GNB 우상단 아바타 드롭다운에서 진입 → LNB 에서는 제거
         // "환경설정" 은 도구 메타 설정 성격이라 "스펙설정" 그룹으로 이동
+        // "프로젝트 목록"(=본인 프로젝트) 은 지원 세션 모드일 때 숨김 (컨텍스트 혼동 방지).
         items: [
-          { label: "프로젝트 목록", href: "/projects", icon: "i_projectList" },
+          ...(isSupportSession
+            ? []
+            : [{ label: "프로젝트 목록", href: "/projects", icon: "i_projectList" as MenuIconKey }]),
           ...(canAccessSettings && pBase
             ? [{ label: "프로젝트 설정", href: p("/settings"), icon: "i_projectSettings" as MenuIconKey }]
             : []),
@@ -205,7 +213,7 @@ export default function LNB() {
 
     // 빈 그룹은 표시하지 않음 (예: VIEWER는 프로젝트 그룹의 항목 일부만 남거나 비어있을 수 있음)
     return list.filter((g) => g.items.length > 0);
-  }, [pBase, canAccessSettings, canManageMembers, isSystemAdmin]);
+  }, [pBase, canAccessSettings, canManageMembers, isSystemAdmin, isSupportSession]);
 
   // ── URL 기반 자동 활성 그룹/항목 판별 ─────────────────────────────────────
   // 한 번에 가장 긴 prefix 일치 항목을 찾아 그룹키와 href 를 동시에 산출.

@@ -109,9 +109,9 @@ export default function AdminUsersPage() {
           overflow:     "hidden",
         }}
       >
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--text-sm)" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
-            <tr style={{ background: "var(--color-bg-elevated)", borderBottom: "1px solid var(--color-border)" }}>
+            <tr style={{ background: "var(--color-bg-muted)", borderBottom: "1px solid var(--color-border)" }}>
               <Th>이메일</Th>
               <Th>이름</Th>
               <Th>플랜</Th>
@@ -135,10 +135,10 @@ export default function AdminUsersPage() {
                     href={`/admin/users/${u.mberId}`}
                     style={{ color: "var(--color-text-primary)", textDecoration: "none" }}
                   >
-                    {u.email ?? <span style={{ color: "var(--color-text-tertiary)" }}>(없음)</span>}
+                    {u.email ?? <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}
                   </Link>
                 </Td>
-                <Td>{u.name ?? <span style={{ color: "var(--color-text-tertiary)" }}>(없음)</span>}</Td>
+                <Td>{u.name ?? <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}</Td>
                 <Td>{u.plan}</Td>
                 <Td><StatusBadge status={u.status} /></Td>
                 <Td>
@@ -155,7 +155,7 @@ export default function AdminUsersPage() {
                       SUPER_ADMIN
                     </span>
                   ) : (
-                    <span style={{ color: "var(--color-text-tertiary)" }}>—</span>
+                    <span style={{ color: "var(--color-text-tertiary)" }}>-</span>
                   )}
                 </Td>
                 <Td>{u.projectCount}</Td>
@@ -192,17 +192,16 @@ export default function AdminUsersPage() {
   );
 }
 
+// 요구사항 목록 그리드 헤더 톤과 동일 (uppercase 제거, text-secondary)
 function Th({ children }: { children: React.ReactNode }) {
   return (
     <th
       style={{
         padding:    "10px 12px",
         textAlign:  "left",
-        fontSize:   "var(--text-xs)",
+        fontSize:   12,
         fontWeight: 600,
-        color:      "var(--color-text-tertiary)",
-        textTransform: "uppercase",
-        letterSpacing:"0.04em",
+        color:      "var(--color-text-secondary)",
       }}
     >
       {children}

@@ -19,6 +19,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 import {
   ROLE_CODES, ROLE_LABEL,
   JOB_CODES,  JOB_LABEL,
@@ -269,14 +270,14 @@ function MembersPageInner() {
               >
                 {/* 이름 / 이메일 — 한 줄에 수평 배치 (다른 목록 페이지 행 두께와 통일) */}
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8, overflow: "hidden" }}>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: "var(--color-text-primary)", flexShrink: 0 }}>
+                  <span style={{ fontSize: 13, color: "var(--color-text-primary)", flexShrink: 0 }}>
                     {member.name ?? "(이름 없음)"}
                   </span>
                   {isMe && (
-                    <span style={{ fontSize: 11, color: "#888", flexShrink: 0 }}>(나)</span>
+                    <span style={{ fontSize: 13, color: "var(--color-text-secondary)", flexShrink: 0 }}>(나)</span>
                   )}
                   <span style={{
-                    fontSize: 12,
+                    fontSize: 13,
                     color: "var(--color-text-secondary)",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -301,23 +302,26 @@ function MembersPageInner() {
                       {ROLE_LABEL[member.role] ?? member.role}
                     </span>
                   ) : (
-                    <select
-                      value={member.role}
-                      disabled={roleMutation.isPending}
-                      onChange={(e) => {
-                        const newRole = e.target.value as RoleCode;
-                        if (newRole !== member.role) {
-                          roleMutation.mutate({ memberId: member.memberId, role: newRole });
-                        }
-                      }}
-                      style={inlineSelectStyle}
-                    >
-                      {roleOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="sp-select-wrap" style={{ width: 128 }}>
+                      <select
+                        value={member.role}
+                        disabled={roleMutation.isPending}
+                        onChange={(e) => {
+                          const newRole = e.target.value as RoleCode;
+                          if (newRole !== member.role) {
+                            roleMutation.mutate({ memberId: member.memberId, role: newRole });
+                          }
+                        }}
+                        className="sp-input"
+                      >
+                        {roleOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="sp-select-arrow"><SelectChevron /></span>
+                    </div>
                   )}
                 </div>
 
@@ -335,28 +339,31 @@ function MembersPageInner() {
                       {JOB_LABEL[member.job] ?? member.job}
                     </span>
                   ) : (
-                    <select
-                      value={member.job}
-                      disabled={jobMutation.isPending}
-                      onChange={(e) => {
-                        const newJob = e.target.value as JobCode;
-                        if (newJob !== member.job) {
-                          jobMutation.mutate({ memberId: member.memberId, job: newJob });
-                        }
-                      }}
-                      style={inlineSelectStyle}
-                    >
-                      {JOB_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="sp-select-wrap" style={{ width: 128 }}>
+                      <select
+                        value={member.job}
+                        disabled={jobMutation.isPending}
+                        onChange={(e) => {
+                          const newJob = e.target.value as JobCode;
+                          if (newJob !== member.job) {
+                            jobMutation.mutate({ memberId: member.memberId, job: newJob });
+                          }
+                        }}
+                        className="sp-input"
+                      >
+                        {JOB_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="sp-select-arrow"><SelectChevron /></span>
+                    </div>
                   )}
                 </div>
 
                 {/* 합류일 */}
-                <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                <span style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
                   {formatDate(member.joinedAt)}
                 </span>
 
@@ -388,7 +395,7 @@ function MembersPageInner() {
       </div>
 
       {!canChangeRole && (
-        <p style={{ marginTop: 12, fontSize: 12, color: "#aaa" }}>
+        <p style={{ marginTop: 12, fontSize: 12, color: "var(--color-text-tertiary)" }}>
           역할 변경은 OWNER 또는 관리자만 가능합니다.
         </p>
       )}
@@ -420,23 +427,6 @@ function MembersPageInner() {
 }
 
 // ── 버튼·셀렉트 스타일 ────────────────────────────────────────────────────────
-
-// 인라인 드롭다운 공통 스타일 — 역할·직무 양쪽에서 재사용
-const inlineSelectStyle: React.CSSProperties = {
-  padding: "5px 24px 5px 8px",
-  borderRadius: 6,
-  border: "1px solid var(--color-border)",
-  fontSize: 13,
-  background: "var(--color-bg-card)",
-  color: "var(--color-text-primary)",
-  cursor: "pointer",
-  width: 128,
-  appearance: "none",
-  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
-  backgroundRepeat: "no-repeat",
-  backgroundPosition: "right 8px center",
-  backgroundSize: "14px",
-};
 
 const secondaryBtnStyle: React.CSSProperties = {
   padding: "5px 14px",

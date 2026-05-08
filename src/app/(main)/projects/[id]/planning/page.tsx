@@ -21,28 +21,31 @@ import dynamic from "next/dynamic";
 const RichEditor = dynamic(() => import("@/components/ui/RichEditor"), { ssr: false });
 import MarkdownEditor from "@/components/ui/MarkdownEditor";
 import { SelectChevron } from "@/components/ui/SelectChevron";
+import { useIdPrefixes } from "@/hooks/useIdPrefixes";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
 type StoryNode = { storyId: string; displayId: string; name: string };
 
 type ReqNode = {
-  reqId:      string;
-  displayId:  string;
-  name:       string;
-  priority:   string;
-  source:     string;
-  storyCount: number;
-  stories:    StoryNode[];
+  reqId:          string;
+  displayId:      string;
+  name:           string;
+  priority:       string;
+  source:         string;
+  assignMemberId: string | null;
+  storyCount:     number;
+  stories:        StoryNode[];
 };
 
 type TaskNode = {
-  taskId:       string;
-  displayId:    string;
-  name:         string;
-  category:     string;
-  reqCount:     number;
-  requirements: ReqNode[];
+  taskId:         string;
+  displayId:      string;
+  name:           string;
+  category:       string;
+  assignMemberId: string | null;
+  reqCount:       number;
+  requirements:   ReqNode[];
 };
 
 type TreeData = {
@@ -85,10 +88,11 @@ function PlanningTreePageInner() {
   const queryClient = useQueryClient();
   const projectId   = params.id;
 
-  const [keyword,      setKeyword]      = useState("");
-  const [selected,     setSelected]     = useState<SelectedNode | null>(null);
-  const [collapsed,    setCollapsed]    = useState<Set<string>>(new Set());
-  const [deleteTarget, setDeleteTarget] = useState<{ type: string; id: string; name: string } | null>(null);
+  const [keyword,        setKeyword]        = useState("");
+  const [assigneeFilter, setAssigneeFilter] = useState("");  // "" = 전체, "__none__" = 미지정, otherwise = memberId
+  const [selected,       setSelected]       = useState<SelectedNode | null>(null);
+  const [collapsed,      setCollapsed]      = useState<Set<string>>(new Set());
+  const [deleteTarget,   setDeleteTarget]   = useState<{ type: string; id: string; name: string } | null>(null);
 
   // ── 트리 데이터 조회 ────────────────────────────────────────────────────────
   const { data, isLoading } = useQuery({
@@ -99,6 +103,25 @@ function PlanningTreePageInner() {
   });
 
   const tree = data ?? { tasks: [], unclassifiedReqs: [], totalTaskCount: 0, totalReqCount: 0, totalStoryCount: 0 };
+
+  // ── 멤버 목록 — 담당자 필터 select 옵션용 ──
+  const { data: membersData } = useQuery({
+    queryKey: ["project-members", projectId],
+    queryFn:  () =>
+      authFetch<{ data: { members: { memberId: string; name: string | null; email: string }[]; myMemberId: string } }>(
+        `/api/projects/${projectId}/members`
+      ).then((r) => r.data),
+    staleTime: 60_000,
+  });
+  const members      = membersData?.members ?? [];
+  const myMemberId   = membersData?.myMemberId ?? "";
+
+  // 담당자 필터 매칭 — "" = 통과, "__none__" = 담당자 없음만, 그 외 = 정확히 일치
+  function matchesAssignee(memberId: string | null): boolean {
+    if (!assigneeFilter) return true;
+    if (assigneeFilter === "__none__") return !memberId;
+    return memberId === assigneeFilter;
+  }
 
   // ── 접힘 토글 ───────────────────────────────────────────────────────────────
   function toggleCollapse(id: string) {
@@ -265,16 +288,29 @@ function PlanningTreePageInner() {
     dragTaskOverItem.current = null;
   }
 
-  // ── 노드 필터링 (키워드) ────────────────────────────────────────────────────
-  function isTaskVisible(task: TaskNode) {
-    if (!kw) return true;
-    if (matches(task.name) || matches(task.displayId)) return true;
-    return task.requirements.some((r) => isReqVisible(r));
-  }
+  // ── 노드 필터링 (키워드 + 담당자) ──────────────────────────────────────────
+  // 담당자 필터: 본인이 매치 OR 자식 중 매치되는 항목이 있으면 부모도 표시.
+  //   트리 구조 보존을 위해 자식이 보여야 하면 부모도 따라 보이게 함.
   function isReqVisible(req: ReqNode) {
+    // 담당자 필터: 본인이 매치되거나 (요구사항은 스토리가 자식인데 스토리는 담당자가 없어
+    //   부모 요구사항의 담당자를 따른다고 본다) 본인 매치 시에만 통과.
+    if (assigneeFilter && !matchesAssignee(req.assignMemberId)) return false;
+    // 키워드 필터
     if (!kw) return true;
     if (matches(req.name) || matches(req.displayId)) return true;
     return req.stories.some((s) => matches(s.name) || matches(s.displayId));
+  }
+  function isTaskVisible(task: TaskNode) {
+    // 담당자 필터: 본인이 매치 OR 하위 요구사항 중 표시되는 게 있으면 통과.
+    if (assigneeFilter) {
+      const selfMatch  = matchesAssignee(task.assignMemberId);
+      const childMatch = task.requirements.some((r) => matchesAssignee(r.assignMemberId));
+      if (!selfMatch && !childMatch) return false;
+    }
+    // 키워드 필터
+    if (!kw) return true;
+    if (matches(task.name) || matches(task.displayId)) return true;
+    return task.requirements.some((r) => isReqVisible(r));
   }
 
   if (isLoading) {
@@ -282,12 +318,28 @@ function PlanningTreePageInner() {
   }
 
   return (
-    <div style={{ display: "flex", height: "calc(100vh - 48px)", overflow: "hidden", padding: "12px 16px 12px 16px", boxSizing: "border-box", background: "var(--color-bg-content)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 48px)", overflow: "hidden", boxSizing: "border-box", background: "var(--color-bg-content)" }}>
 
-      {/* ── 좌측 트리 패널 (AR-00057) ──────────────────────────────────────── */}
+      {/* ── 페이지 헤더 — 다른 목록 페이지와 동일 패턴 ── */}
       <div style={{
-        width:        340,
-        minWidth:     260,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "10px 24px",
+        background: "var(--color-bg-header)",
+        borderBottom: "1px solid var(--color-border)",
+        flexShrink: 0,
+      }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+          요구분석 일괄 편집
+        </div>
+      </div>
+
+      {/* ── 본체 — 좌우 분할 ── */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden", padding: "12px 16px 12px 16px", boxSizing: "border-box" }}>
+
+      {/* ── 좌측 트리 패널 (AR-00057) — width +15% (340 → 391) */}
+      <div style={{
+        width:        391,
+        minWidth:     300,
         borderRight:  "1px solid var(--color-border)",
         borderTop:    "1px solid var(--color-border)",
         borderLeft:   "1px solid var(--color-border)",
@@ -324,9 +376,27 @@ function PlanningTreePageInner() {
           </button>
         </div>
 
-        {/* 통계 */}
-        <div style={{ padding: "6px 12px", fontSize: 11, color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" }}>
-          과업 {tree.totalTaskCount} · 요구사항 {tree.totalReqCount} · 스토리 {tree.totalStoryCount}
+        {/* 담당자 필터 + 통계 */}
+        <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: 6 }}>
+          <select
+            value={assigneeFilter}
+            onChange={(e) => setAssigneeFilter(e.target.value)}
+            className="sp-input"
+            style={{ width: "100%", fontSize: 12, padding: "5px 8px" }}
+            title="담당자별 필터링"
+          >
+            <option value="">담당자 전체</option>
+            {myMemberId && <option value={myMemberId}>내 담당</option>}
+            <option value="__none__">담당자 없음</option>
+            {members.filter((m) => m.memberId !== myMemberId).map((m) => (
+              <option key={m.memberId} value={m.memberId}>
+                {m.name ?? m.email}
+              </option>
+            ))}
+          </select>
+          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+            과업 {tree.totalTaskCount} · 요구사항 {tree.totalReqCount} · 스토리 {tree.totalStoryCount}
+          </div>
         </div>
 
         {/* 트리 본체 */}
@@ -441,6 +511,7 @@ function PlanningTreePageInner() {
             좌측 트리에서 항목을 선택해 주세요.
           </div>
         )}
+      </div>
       </div>
 
       {/* 삭제 확인 다이얼로그 */}
@@ -598,10 +669,6 @@ function ReqTreeNode({
   const isOpen   = !collapsed.has(req.reqId);
   const isActive = selected?.type === "requirement" && selected.id === req.reqId;
 
-  const priorityColor =
-    req.priority === "HIGH"   ? "#ef5350" :
-    req.priority === "MEDIUM" ? "#ffa726" : "#66bb6a";
-
   // ── 스토리 레벨 드래그 상태 ────────────────────────────────────────────────
   const dragStoryItem     = useRef<number | null>(null);
   const dragStoryOverItem = useRef<number | null>(null);
@@ -633,7 +700,6 @@ function ReqTreeNode({
         displayId={shortId(req.displayId)}
         name={req.name}
         highlight={highlight}
-        badge={<span style={{ width: 8, height: 8, borderRadius: "50%", background: priorityColor, display: "inline-block" }} />}
         isActive={isActive}
         isOpen={isOpen}
         hasChildren={req.storyCount > 0}
@@ -769,30 +835,23 @@ function TreeRow({
       {/* 아이콘 */}
       <span style={{ fontSize: 13, flexShrink: 0 }}>{icon}</span>
 
-      {/* displayId + 명칭 + 배지 (이름 영역 안에 묶음) */}
+      {/* displayId + 명칭 (배지/호버 버튼은 외부에 분리) */}
       <span style={{ fontSize: 11, color: "#aaa", flexShrink: 0 }}>{displayId}</span>
       <span style={{
-        flex:        1,
-        display:     "flex",
-        alignItems:  "center",
-        gap:         5,
-        overflow:    "hidden",
-        minWidth:    0,
+        flex:         1,
+        fontSize:     13,
+        color:        "var(--color-text-primary)",
+        overflow:     "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace:   "nowrap",
+        fontWeight:   isActive ? 600 : 400,
+        minWidth:     0,
       }}>
-        <span style={{
-          fontSize:     13,
-          color:        "var(--color-text-primary)",
-          flex:         1,
-          overflow:     "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace:   "nowrap",
-          fontWeight:   isActive ? 600 : 400,
-        }}>
-          {highlight(name)}
-        </span>
-        {/* 배지 — 이름 바로 옆, 우측 끝이 아닌 콘텐츠 영역 안 */}
-        {badge && <span style={{ flexShrink: 0 }}>{badge}</span>}
+        {highlight(name)}
       </span>
+
+      {/* 배지 — 이름 wrapper 밖, 우측 끝 가까이. 이름이 길어도 배지 영역을 침범하지 않음 */}
+      {badge && <span style={{ flexShrink: 0, marginLeft: 8 }}>{badge}</span>}
 
       {/* 호버 시 버튼 */}
       {(hovered || isActive) && (
@@ -828,37 +887,53 @@ function DetailPanel({
 // ── 과업 상세 패널 ────────────────────────────────────────────────────────────
 
 function TaskDetailPanel({ projectId, taskId, displayId, onSaved }: { projectId: string; taskId: string; displayId: string; onSaved: () => void }) {
-  const [name,       setName]       = useState("");
-  const [category,   setCategory]   = useState("NEW_DEV");
-  const [rfpPage,    setRfpPage]    = useState("");
-  const [definition, setDefinition] = useState("");
-  const [content,    setContent]    = useState("");
-  const [outputInfo, setOutputInfo] = useState("");
-  const [loaded,     setLoaded]     = useState(false);
+  const [name,           setName]           = useState("");
+  const [displayIdInput, setDisplayIdInput] = useState("");
+  const [category,       setCategory]       = useState("NEW_DEV");
+  const [rfpPage,        setRfpPage]        = useState("");
+  const [definition,     setDefinition]     = useState("");
+  const [content,        setContent]        = useState("");
+  const [outputInfo,     setOutputInfo]     = useState("");
+  const [assignMemberId, setAssignMemberId] = useState("");
+  const [loaded,         setLoaded]         = useState(false);
 
   const { isLoading } = useQuery({
     queryKey: ["task-detail", projectId, taskId],
     queryFn:  () =>
-      authFetch<{ data: { name: string; category: string; definition: string | null; content: string | null; outputInfo: string | null; rfpPage: string | null } }>(
+      authFetch<{ data: { name: string; displayId: string | null; category: string; definition: string | null; content: string | null; outputInfo: string | null; rfpPage: string | null; assignMemberId: string | null } }>(
         `/api/projects/${projectId}/tasks/${taskId}`
       ).then((r) => {
         setName(r.data.name);
+        setDisplayIdInput(r.data.displayId ?? "");
         setCategory(r.data.category);
         setRfpPage(r.data.rfpPage ?? "");
         setDefinition(r.data.definition ?? "");
         setContent(r.data.content ?? "");
         setOutputInfo(r.data.outputInfo ?? "");
+        setAssignMemberId(r.data.assignMemberId ?? "");
         setLoaded(true);
         return r.data;
       }),
   });
+
+  // 담당자 콤보박스용 — 과업 상세 페이지와 동일하게 프로젝트 멤버 조회
+  const { data: memberData } = useQuery({
+    queryKey: ["project-members", projectId],
+    queryFn: () =>
+      authFetch<{ data: { members: { memberId: string; name: string | null; email: string }[]; myMemberId: string } }>(
+        `/api/projects/${projectId}/members`
+      ).then((r) => r.data),
+    staleTime: 60 * 1000,
+  });
+  const members = memberData?.members ?? [];
+  const myMemberId = memberData?.myMemberId ?? "";
 
   const saveMutation = useMutation({
     mutationFn: () =>
       authFetch(`/api/projects/${projectId}/tasks/${taskId}`, {
         method:  "PUT",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ name, category, rfpPage, definition, content, outputInfo }),
+        body:    JSON.stringify({ name, displayId: displayIdInput, category, rfpPage, definition, content, outputInfo, assignMemberId }),
       }),
     onSuccess: () => { toast.success("저장되었습니다."); onSaved(); },
     onError:   (err: Error) => toast.error(err.message),
@@ -870,11 +945,32 @@ function TaskDetailPanel({ projectId, taskId, displayId, onSaved }: { projectId:
     <div style={panelStyle}>
       <PanelHeader icon="📁" displayType="과업" displayId={displayId} name={name} onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <PanelField label="과업명 *">
-          <input value={name} onChange={(e) => setName(e.target.value)} className="sp-input" />
-        </PanelField>
-        <div style={{ display: "flex", gap: 16 }}>
-          <PanelField label="카테고리 *" style={{ flex: 1 }}>
+        {/* 과업명 + 표시 ID — 2:1 그리드 (과업 상세 페이지와 동일 패턴) */}
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
+          <PanelField label="과업명 *">
+            <input value={name} onChange={(e) => setName(e.target.value)} className="sp-input" />
+          </PanelField>
+          <PanelField label="표시 ID">
+            <input value={displayIdInput} onChange={(e) => setDisplayIdInput(e.target.value)} placeholder="미입력 시 자동 생성" className="sp-input" />
+          </PanelField>
+        </div>
+        {/* 담당자 + 카테고리 + RFP 페이지 — 3컬럼 */}
+        <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr", gap: 16 }}>
+          <PanelField label="담당자">
+            <div className="sp-select-wrap">
+              <select value={assignMemberId} onChange={(e) => setAssignMemberId(e.target.value)} className="sp-input">
+                <option value="">담당자 없음</option>
+                {members.map((m) => (
+                  <option key={m.memberId} value={m.memberId}>
+                    {m.name ?? m.email}
+                    {m.memberId === myMemberId ? " (나)" : ""}
+                  </option>
+                ))}
+              </select>
+              <span className="sp-select-arrow"><SelectChevron /></span>
+            </div>
+          </PanelField>
+          <PanelField label="카테고리 *">
             <div className="sp-select-wrap">
               <select value={category} onChange={(e) => setCategory(e.target.value)} className="sp-input">
                 <option value="NEW_DEV">신규개발</option>
@@ -884,7 +980,7 @@ function TaskDetailPanel({ projectId, taskId, displayId, onSaved }: { projectId:
               <span className="sp-select-arrow"><SelectChevron /></span>
             </div>
           </PanelField>
-          <PanelField label="RFP 페이지 번호" style={{ flex: 1 }}>
+          <PanelField label="RFP 페이지 번호">
             <input value={rfpPage} onChange={(e) => setRfpPage(e.target.value)} placeholder="예: p.23" className="sp-input" />
           </PanelField>
         </div>
@@ -905,15 +1001,21 @@ function TaskDetailPanel({ projectId, taskId, displayId, onSaved }: { projectId:
 // ── 요구사항 상세 패널 ────────────────────────────────────────────────────────
 
 function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: string; reqId: string; displayId: string; onSaved: () => void }) {
-  const [name,        setName]        = useState("");
-  const [priority,    setPriority]    = useState("MEDIUM");
-  const [source,      setSource]      = useState("RFP");
-  const [orgnlCn,     setOrgnlCn]     = useState("");
-  const [curncyCn,    setCurncyCn]    = useState("");
-  const [analysisCn,  setAnalysisCn]  = useState("");
-  const [specCn,      setSpecCn]      = useState("");
-  const [taskId,      setTaskId]      = useState<string | null>(null);
-  const [loaded,      setLoaded]      = useState(false);
+  // 표시 ID prefix — 환경설정 기반 placeholder
+  const { getPrefix } = useIdPrefixes(projectId);
+  const [name,           setName]           = useState("");
+  const [reqDisplayId,   setReqDisplayId]   = useState("");
+  const [sortOrder,      setSortOrder]      = useState(0);
+  const [priority,       setPriority]       = useState("MEDIUM");
+  const [source,         setSource]         = useState("RFP");
+  const [rfpPage,        setRfpPage]        = useState("");
+  const [assignMemberId, setAssignMemberId] = useState("");
+  const [orgnlCn,        setOrgnlCn]        = useState("");
+  const [curncyCn,       setCurncyCn]       = useState("");
+  const [analysisCn,     setAnalysisCn]     = useState("");
+  const [specCn,         setSpecCn]         = useState("");
+  const [taskId,         setTaskId]         = useState<string | null>(null);
+  const [loaded,         setLoaded]         = useState(false);
   // 원문/현행화 탭 — 현행화가 기본 활성
   const [contentTab,  setContentTab]  = useState<"current" | "original">("current");
   // 분석 메모 / 상세 명세 전환 탭
@@ -927,12 +1029,16 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
   const { isLoading } = useQuery({
     queryKey: ["req-detail-tree", projectId, reqId],
     queryFn:  () =>
-      authFetch<{ data: { name: string; priority: string; source: string; originalContent: string; currentContent: string; analysisMemo: string; detailSpec: string; requirementId: string; taskId: string | null } }>(
+      authFetch<{ data: { name: string; displayId: string | null; sortOrder: number | null; priority: string; source: string; rfpPage: string | null; assignMemberId: string | null; originalContent: string; currentContent: string; analysisMemo: string; detailSpec: string; requirementId: string; taskId: string | null } }>(
         `/api/projects/${projectId}/requirements/${reqId}`
       ).then((r) => {
         setName(r.data.name);
+        setReqDisplayId(r.data.displayId ?? "");
+        setSortOrder(r.data.sortOrder ?? 0);
         setPriority(r.data.priority);
         setSource(r.data.source);
+        setRfpPage(r.data.rfpPage ?? "");
+        setAssignMemberId(r.data.assignMemberId ?? "");
         setOrgnlCn(r.data.originalContent);
         setCurncyCn(r.data.currentContent);
         setAnalysisCn(r.data.analysisMemo);
@@ -943,6 +1049,18 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
       }),
   });
 
+  // 담당자 콤보박스용 — 요구사항 상세 페이지와 동일하게 프로젝트 멤버 조회
+  const { data: memberData } = useQuery({
+    queryKey: ["project-members", projectId],
+    queryFn: () =>
+      authFetch<{ data: { members: { memberId: string; name: string | null; email: string }[]; myMemberId: string } }>(
+        `/api/projects/${projectId}/members`
+      ).then((r) => r.data),
+    staleTime: 60 * 1000,
+  });
+  const members = memberData?.members ?? [];
+  const myMemberId = memberData?.myMemberId ?? "";
+
   const saveMutation = useMutation({
     mutationFn: () =>
       authFetch(`/api/projects/${projectId}/requirements/${reqId}`, {
@@ -950,10 +1068,13 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
           requirementId: reqId,
+          reqDisplayId,
+          sortOrder,
           // taskId를 반드시 포함해야 과업 연결이 유지됨 (누락 시 null로 덮어써져 미분류 처리됨)
           taskId,
           name, priority, source,
-          rfpPage:         "",
+          rfpPage,
+          assignMemberId,
           originalContent: orgnlCn,
           currentContent:  curncyCn,
           analysisMemo:    analysisCn,
@@ -1007,11 +1128,44 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
           </button>
           {basicOpen && (
             <div style={{ padding: "16px 0", display: "flex", flexDirection: "column", gap: 16 }}>
-              <PanelField label="요구사항명 *">
-                <input value={name} onChange={(e) => setName(e.target.value)} className="sp-input" />
-              </PanelField>
-              <div style={{ display: "flex", gap: 16 }}>
-                <PanelField label="우선순위" style={{ flex: 1 }}>
+              {/* 요구사항명 + RFP 페이지 — 7:3 그리드 (요구사항 상세 페이지와 동일 패턴) */}
+              {/* 자리 이동: 표시 ID → 정렬 순서 자리, RFP 페이지 → 표시 ID 자리, 정렬 순서 → RFP 페이지 자리 */}
+              <div style={{ display: "grid", gridTemplateColumns: "7fr 3fr", gap: 16 }}>
+                <PanelField label="요구사항명 *">
+                  <input value={name} onChange={(e) => setName(e.target.value)} className="sp-input" />
+                </PanelField>
+                <PanelField label="RFP 페이지">
+                  <input value={rfpPage} onChange={(e) => setRfpPage(e.target.value)} placeholder="예: p.23" className="sp-input" />
+                </PanelField>
+              </div>
+              {/* 담당자 + 표시 ID — 50:50 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <PanelField label="담당자">
+                  <div className="sp-select-wrap">
+                    <select value={assignMemberId} onChange={(e) => setAssignMemberId(e.target.value)} className="sp-input">
+                      <option value="">담당자 없음</option>
+                      {members.map((m) => (
+                        <option key={m.memberId} value={m.memberId}>
+                          {m.name ?? m.email}
+                          {m.memberId === myMemberId ? " (나)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
+                </PanelField>
+                <PanelField label="표시 ID">
+                  <input
+                    value={reqDisplayId}
+                    onChange={(e) => setReqDisplayId(e.target.value)}
+                    placeholder={`${getPrefix("REQUIREMENT")}-XXXXX (미 입력 시 자동 생성)`}
+                    className="sp-input"
+                  />
+                </PanelField>
+              </div>
+              {/* 우선순위 + 출처 + 정렬 순서 — 3컬럼 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                <PanelField label="우선순위">
                   <div className="sp-select-wrap">
                     <select value={priority} onChange={(e) => setPriority(e.target.value)} className="sp-input">
                       <option value="HIGH">높음 (HIGH)</option>
@@ -1021,7 +1175,7 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
                     <span className="sp-select-arrow"><SelectChevron /></span>
                   </div>
                 </PanelField>
-                <PanelField label="출처" style={{ flex: 1 }}>
+                <PanelField label="출처">
                   <div className="sp-select-wrap">
                     <select value={source} onChange={(e) => setSource(e.target.value)} className="sp-input">
                       <option value="RFP">RFP</option>
@@ -1030,6 +1184,16 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
                     </select>
                     <span className="sp-select-arrow"><SelectChevron /></span>
                   </div>
+                </PanelField>
+                <PanelField label="정렬 순서">
+                  <input
+                    type="number"
+                    min={0}
+                    value={sortOrder || ""}
+                    onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
+                    placeholder="0"
+                    className="sp-input"
+                  />
                 </PanelField>
               </div>
               {/* 원문 / 현행화 탭 */}

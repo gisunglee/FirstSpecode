@@ -114,9 +114,9 @@ export default function AdminAuditPage() {
           overflow:     "hidden",
         }}
       >
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--text-sm)" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
-            <tr style={{ background: "var(--color-bg-elevated)", borderBottom: "1px solid var(--color-border)" }}>
+            <tr style={{ background: "var(--color-bg-muted)", borderBottom: "1px solid var(--color-border)" }}>
               <Th>일시</Th>
               <Th>관리자</Th>
               <Th>행동</Th>
@@ -163,16 +163,16 @@ export default function AdminAuditPage() {
                       )}
                     </>
                   )}
-                  {!a.targetType && <span style={{ color: "var(--color-text-tertiary)" }}>—</span>}
+                  {!a.targetType && <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}
                 </Td>
                 <Td>
                   <div style={{ maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.memo ?? ""}>
-                    {a.memo ?? <span style={{ color: "var(--color-text-tertiary)" }}>—</span>}
+                    {a.memo ?? <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}
                   </div>
                 </Td>
                 <Td>
                   <code style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>
-                    {a.ipAddr ?? "—"}
+                    {a.ipAddr ?? "-"}
                   </code>
                 </Td>
               </tr>
@@ -207,17 +207,16 @@ export default function AdminAuditPage() {
   );
 }
 
+// 요구사항 목록 그리드 헤더 톤과 동일 (uppercase 제거, text-secondary)
 function Th({ children }: { children: React.ReactNode }) {
   return (
     <th
       style={{
         padding:    "10px 12px",
         textAlign:  "left",
-        fontSize:   "var(--text-xs)",
+        fontSize:   12,
         fontWeight: 600,
-        color:      "var(--color-text-tertiary)",
-        textTransform: "uppercase",
-        letterSpacing:"0.04em",
+        color:      "var(--color-text-secondary)",
       }}
     >
       {children}

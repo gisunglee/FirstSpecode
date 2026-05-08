@@ -122,6 +122,20 @@ export default function GNB() {
     }
   }, [projects, currentProjectId, setCurrentProjectId]);
 
+  // ── URL → currentProjectId 동기화 ─────────────────────────────────────────
+  // 외부 링크·북마크·지원 세션 등으로 /projects/{id}/* 에 직접 진입했을 때
+  // GNB 셀렉터/LNB 서브메뉴가 모두 currentProjectId 기반으로 그려지므로
+  // URL 의 projectId 와 전역 상태가 어긋나면 다른 프로젝트의 LNB 가 보인다.
+  // 여기서 한 방향(URL → state) 으로 강제 동기화 — 본인 멤버십 밖 프로젝트
+  // (예: SUPER_ADMIN 지원 세션) 도 컨텍스트 전환이 정상 동작.
+  useEffect(() => {
+    const m = pathname.match(/^\/projects\/([^/]+)/);
+    const urlPrjctId = m?.[1];
+    if (urlPrjctId && urlPrjctId !== currentProjectId) {
+      setCurrentProjectId(urlPrjctId);
+    }
+  }, [pathname, currentProjectId, setCurrentProjectId]);
+
   // 드롭다운 외부 클릭 시 닫기
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

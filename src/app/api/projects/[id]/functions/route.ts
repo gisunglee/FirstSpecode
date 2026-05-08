@@ -9,6 +9,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { getIdPrefix } from "@/lib/idPrefix";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -200,7 +201,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         select:  { func_display_id: true },
       });
       const nextNum = last ? parseInt(last.func_display_id.replace(/\D/g, "")) + 1 : 1;
-      displayId = `FN-${String(nextNum).padStart(5, "0")}`;
+      const fnPrefix = await getIdPrefix(projectId, "FUNCTION");
+      displayId = `${fnPrefix}-${String(nextNum).padStart(5, "0")}`;
     }
 
     const maxSort = await prisma.tbDsFunction.aggregate({

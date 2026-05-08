@@ -115,6 +115,9 @@ export default function AdminProjectsPage() {
   const totalCount = query.data?.pagination.totalCount ?? 0;
   const totalPages = query.data?.pagination.totalPages ?? 1;
 
+  // "지원 세션" 도움말 다이얼로그 상태
+  const [helpOpen, setHelpOpen] = useState(false);
+
   return (
     <div style={{ display: "grid", gap: 16 }}>
       {/* 필터 바 */}
@@ -143,56 +146,91 @@ export default function AdminProjectsPage() {
           overflow:     "hidden",
         }}
       >
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--text-sm)" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <colgroup>
+            {/* 컬럼 폭 — 프로젝트명만 flex(이름이 길면 늘어남), 이메일도 고정 폭.
+                남는 공간은 자연스럽게 프로젝트명으로 흘러가서 줄바꿈 방지. */}
+            <col />
+            <col style={{ width: 290 }} />
+            <col style={{ width: 200 }} />
+            <col style={{ width: 160 }} />
+            <col style={{ width: 220 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 100 }} />
+            <col style={{ width: 130 }} />
+          </colgroup>
           <thead>
-            <tr style={{ background: "var(--color-bg-elevated)", borderBottom: "1px solid var(--color-border)" }}>
+            <tr style={{ background: "var(--color-bg-muted)", borderBottom: "1px solid var(--color-border)" }}>
               <Th>프로젝트명</Th>
+              <Th>프로젝트 ID</Th>
               <Th>고객사</Th>
               <Th>소유자</Th>
-              <Th>멤버</Th>
+              <Th>이메일</Th>
+              <Th align="right">멤버</Th>
               <Th>수정일</Th>
-              <Th align="right">액션</Th>
+              <Th align="center">
+                {/* 헤더 안에 도움말 아이콘 — "지원 세션" 의미 설명 */}
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  액션
+                  <HelpIcon onClick={() => setHelpOpen(true)} />
+                </span>
+              </Th>
             </tr>
           </thead>
           <tbody>
             {query.isLoading && (
-              <tr><Td colSpan={6} align="center">불러오는 중…</Td></tr>
+              <tr><Td colSpan={8} align="center">불러오는 중…</Td></tr>
             )}
             {!query.isLoading && items.length === 0 && (
-              <tr><Td colSpan={6} align="center" muted>프로젝트가 없습니다.</Td></tr>
+              <tr><Td colSpan={8} align="center" muted>프로젝트가 없습니다.</Td></tr>
             )}
             {items.map((p) => (
               <tr key={p.projectId} style={{ borderBottom: "1px solid var(--color-border)" }}>
+                {/* 프로젝트명 */}
+                <Td>{p.name}</Td>
+
+                {/* 프로젝트 ID — 전체 UUID, 모노 회색 */}
                 <Td>
-                  <div style={{ fontWeight: 500 }}>{p.name}</div>
-                  <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", fontFamily: "var(--font-mono)" }}>
+                  <code style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize:   12,
+                    color:      "var(--color-text-tertiary)",
+                  }}>
                     {p.projectId}
-                  </div>
+                  </code>
                 </Td>
-                <Td>{p.clientName ?? "—"}</Td>
+
+                {/* 고객사 */}
                 <Td>
-                  {p.owner
-                    ? <>
-                        {p.owner.name ?? p.owner.email ?? "(이름 없음)"}
-                        {p.owner.email && (
-                          <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>
-                            {p.owner.email}
-                          </div>
-                        )}
-                      </>
-                    : <span style={{ color: "var(--color-text-tertiary)" }}>—</span>}
+                  {p.clientName ?? <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}
                 </Td>
-                <Td>{p.activeMemberCount}</Td>
+
+                {/* 소유자 — 이름만 */}
+                <Td>
+                  {p.owner?.name ?? p.owner?.email ?? (
+                    <span style={{ color: "var(--color-text-tertiary)" }}>-</span>
+                  )}
+                </Td>
+
+                {/* 이메일 — 별도 컬럼 */}
+                <Td>
+                  {p.owner?.email ?? <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}
+                </Td>
+
+                <Td align="right">{p.activeMemberCount}</Td>
                 <Td>
                   {p.modifiedAt
                     ? new Date(p.modifiedAt).toLocaleDateString("ko-KR")
                     : new Date(p.createdAt).toLocaleDateString("ko-KR")}
                 </Td>
-                <Td align="right">
+                <Td align="center">
+                  {/* 명시적 버튼 모양 — ghost 만으로는 텍스트처럼 보여 클릭 가능 신호가 약함.
+                      brand 색 외곽선 + subtle 배경으로 "버튼"임을 인지시킨다. */}
                   <button
-                    className="sp-btn sp-btn-ghost"
                     onClick={() => openSupportModal(p)}
-                    style={{ fontSize: "var(--text-xs)" }}
+                    style={supportSessionBtnStyle}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-brand)"; e.currentTarget.style.color = "var(--color-text-inverse)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "var(--color-brand-subtle)"; e.currentTarget.style.color = "var(--color-brand)"; }}
                   >
                     지원 세션
                   </button>
@@ -226,6 +264,51 @@ export default function AdminProjectsPage() {
         </div>
       )}
 
+      {/* "지원 세션" 도움말 — prompt-templates 페이지와 동일 톤의 다이얼로그 */}
+      {helpOpen && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 1200,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+          onClick={() => setHelpOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background:   "var(--color-bg-card)",
+              borderRadius: 12, padding: "24px 28px",
+              minWidth: 480, maxWidth: 560,
+              boxShadow:    "var(--shadow-lg)",
+              color:        "var(--color-text-primary)",
+            }}
+          >
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              marginBottom: 16,
+            }}>
+              <span style={{ fontSize: 15, fontWeight: 700 }}>지원 세션이란?</span>
+              <button
+                onClick={() => setHelpOpen(false)}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{
+              fontSize: 13, color: "var(--color-text-primary)",
+              lineHeight: 1.8, whiteSpace: "pre-line",
+            }}>
+              {SUPPORT_SESSION_HELP}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 지원 세션 개설 모달 */}
       {modalTarget && (
         <SupportSessionModal
@@ -241,19 +324,51 @@ export default function AdminProjectsPage() {
   );
 }
 
+// ─── 상수: "지원 세션" 도움말 본문 ─────────────────────────────────────────
+const SUPPORT_SESSION_HELP =
+`시스템 관리자가 고객 프로젝트에 잠시 진입해 내용을 확인할 수 있는 임시 권한 세션입니다.
+
+· 진입 사유(메모) 를 반드시 남겨야 시작됩니다 (감사 로그에 기록).
+· 세션 시간: 30분 (자동 종료).
+· 세션 중에는 읽기 전용 — 데이터 변경/삭제는 차단됩니다.
+· 세션 내 모든 활동은 감사 로그에 기록됩니다.
+· 종료는 [세션 종료] 또는 30분 경과 시 자동.
+
+사용 예: 고객이 "데이터가 안 보여요" 라고 문의했을 때, 직접 화면을 확인하기 위해 사용.`;
+
 // ─── 보조 컴포넌트 ─────────────────────────────────────────────────────────
 
-function Th({ children, align }: { children: React.ReactNode; align?: "left" | "right" }) {
+// 도움말 ? 아이콘 — 클릭 시 부모가 다이얼로그 오픈 (prompt-templates 의 HelpIcon 동일 톤)
+function HelpIcon({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      title="도움말"
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: 16, height: 16, borderRadius: "50%",
+        border: "1.5px solid var(--color-text-secondary)",
+        background: "transparent", color: "var(--color-text-secondary)",
+        fontSize: 10, fontWeight: 700, cursor: "pointer", padding: 0, lineHeight: 1,
+      }}
+    >
+      ?
+    </button>
+  );
+}
+
+// 요구사항 목록(/projects/.../requirements) 의 그리드 헤더 스타일과 동일 톤으로 정렬.
+// uppercase + letter-spacing 제거, 색상은 text-secondary, fontSize 12.
+function Th({ children, align }: { children: React.ReactNode; align?: "left" | "center" | "right" }) {
   return (
     <th
       style={{
         padding:    "10px 12px",
         textAlign:  align ?? "left",
-        fontSize:   "var(--text-xs)",
+        fontSize:   12,
         fontWeight: 600,
-        color:      "var(--color-text-tertiary)",
-        textTransform: "uppercase",
-        letterSpacing:"0.04em",
+        color:      "var(--color-text-secondary)",
       }}
     >
       {children}
@@ -273,7 +388,7 @@ function Td({
     <td
       colSpan={colSpan}
       style={{
-        padding:   "10px 12px",
+        padding:   "12px 12px",
         textAlign: align ?? "left",
         color:     muted ? "var(--color-text-tertiary)" : "var(--color-text-primary)",
         verticalAlign: "top",
@@ -283,6 +398,21 @@ function Td({
     </td>
   );
 }
+
+// "지원 세션" 액션 버튼 — 명시적 외곽선 + brand subtle 배경으로 버튼임을 강하게 시그널.
+const supportSessionBtnStyle: React.CSSProperties = {
+  display:        "inline-flex",
+  alignItems:     "center",
+  padding:        "5px 14px",
+  fontSize:       12,
+  fontWeight:     600,
+  background:     "var(--color-brand-subtle)",
+  color:          "var(--color-brand)",
+  border:         "1px solid var(--color-brand-border, var(--color-brand))",
+  borderRadius:   "var(--radius-sm)",
+  cursor:         "pointer",
+  transition:     "background 0.15s, color 0.15s",
+};
 
 function SupportSessionModal({
   project,

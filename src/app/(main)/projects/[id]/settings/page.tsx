@@ -19,6 +19,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────
 type ProjectDetail = {
@@ -230,7 +231,8 @@ function ProjectSettingsInner() {
           <BasicInfoTab projectId={projectId} project={project} isOwner={isOwner} queryClient={queryClient} />
 
           {/* 멤버 관리 및 초대 바로가기 — 기본정보 탭에서만 노출 (FID-00074) */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 28, marginBottom: 20 }}>
+          {/* 위/아래 카드와 균일한 간격(20px)으로 맞춤 — 이전 marginTop 28 은 너무 떨어져 보였음 */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 20, marginBottom: 20 }}>
             <NavCard
               title="멤버 관리"
               description="참여 인원 목록 및 역할을 관리합니다"
@@ -283,6 +285,8 @@ function BasicInfoTab({
 }) {
   const [name,        setName]        = useState(project.name);
   const [description, setDescription] = useState(project.description ?? "");
+  // 설명 마크다운 에디터 탭 (편집/미리보기) — 다른 페이지(AI 태스크 상세 등)와 동일 패턴
+  const [descTab,     setDescTab]     = useState<"edit" | "preview">("edit");
   const [startDate,   setStartDate]   = useState(project.startDate?.slice(0, 10) ?? "");
   const [endDate,     setEndDate]     = useState(project.endDate?.slice(0, 10) ?? "");
   const [clientName,  setClientName]  = useState(project.clientName ?? "");
@@ -314,8 +318,20 @@ function BasicInfoTab({
           <input className="sp-input" value={name} onChange={(e) => setName(e.target.value)} readOnly={ro} />
         </div>
         <div>
-          <label className="sp-label">설명</label>
-          <textarea className="sp-input" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} readOnly={ro} style={{ resize: "vertical" }} />
+          {/* 설명 — 마크다운 에디터 (편집/미리보기 탭) */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+            <label className="sp-label" style={{ marginBottom: 0 }}>설명</label>
+            <MarkdownTabButtons tab={descTab} onTabChange={setDescTab} />
+          </div>
+          <MarkdownEditor
+            value={description}
+            onChange={setDescription}
+            readOnly={ro}
+            tab={descTab}
+            onTabChange={setDescTab}
+            rows={9}
+            placeholder="프로젝트에 대한 설명을 마크다운으로 작성하세요."
+          />
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <div style={{ flex: 1 }}>

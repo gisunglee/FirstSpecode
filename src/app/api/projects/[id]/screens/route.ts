@@ -10,6 +10,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { getIdPrefix } from "@/lib/idPrefix";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -215,7 +216,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const nextSeq = maxScr
         ? (parseInt(maxScr.scrn_display_id.replace(/\D/g, "")) || 0) + 1
         : 1;
-      displayId = `SCR-${String(nextSeq).padStart(5, "0")}`;
+      const scrPrefix = await getIdPrefix(projectId, "SCREEN");
+      displayId = `${scrPrefix}-${String(nextSeq).padStart(5, "0")}`;
     }
 
     // sort_ordr: 전체 마지막 + 1

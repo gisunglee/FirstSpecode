@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { JOB_CODES, JOB_LABEL, type JobCode } from "@/lib/permissions";
 import { type InvitationStatus, INVITATION_STATUS_LABEL, INVITATION_STATUS_COLOR } from "@/constants/codes";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────
 type InvitationItem = {
@@ -157,26 +158,30 @@ function InviteDialog({
                     onChange={(e) => { updateRow(i, "email", e.target.value); setErrors((err) => err.map((v, idx) => idx === i ? "" : v)); }}
                     style={{ borderColor: errors[i] ? "var(--color-error)" : undefined }}
                   />
-                  <select
-                    className="sp-input"
-                    value={row.role}
-                    onChange={(e) => updateRow(i, "role", e.target.value)}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <option value="MEMBER">MEMBER</option>
-                    <option value="ADMIN">ADMIN</option>
-                    <option value="VIEWER">VIEWER</option>
-                  </select>
-                  <select
-                    className="sp-input"
-                    value={row.job}
-                    onChange={(e) => updateRow(i, "job", e.target.value)}
-                    style={{ cursor: "pointer" }}
-                  >
-                    {JOB_CODES.map((code) => (
-                      <option key={code} value={code}>{JOB_LABEL[code]}</option>
-                    ))}
-                  </select>
+                  <div className="sp-select-wrap">
+                    <select
+                      className="sp-input"
+                      value={row.role}
+                      onChange={(e) => updateRow(i, "role", e.target.value)}
+                    >
+                      <option value="MEMBER">MEMBER</option>
+                      <option value="ADMIN">ADMIN</option>
+                      <option value="VIEWER">VIEWER</option>
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
+                  <div className="sp-select-wrap">
+                    <select
+                      className="sp-input"
+                      value={row.job}
+                      onChange={(e) => updateRow(i, "job", e.target.value)}
+                    >
+                      {JOB_CODES.map((code) => (
+                        <option key={code} value={code}>{JOB_LABEL[code]}</option>
+                      ))}
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
                   <button
                     type="button"
                     onClick={() => removeRow(i)}
@@ -328,30 +333,32 @@ function InvitationsInner() {
         <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius-card)", overflow: "hidden" }}>
           {/* 헤더 */}
           <div style={{
-            display: "grid", gridTemplateColumns: "1fr 80px 80px 100px 100px 160px",
+            display: "grid", gridTemplateColumns: "1fr 80px 80px 100px 100px 120px",
             padding: "8px 16px", gap: 12,
             background: "var(--color-bg-elevated)", borderBottom: "1px solid var(--color-border)",
             fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", fontWeight: 600,
           }}>
-            <span>이메일</span><span>역할</span><span>상태</span>
-            <span>초대일</span><span>만료일</span><span>액션</span>
+            <span>이메일</span><span>역할</span>
+            <span style={{ textAlign: "center" }}>상태</span>
+            <span>초대일</span><span>만료일</span>
+            <span style={{ textAlign: "center" }}>액션</span>
           </div>
 
           {items.map((item, i) => (
             <div key={item.invitationId} style={{
-              display: "grid", gridTemplateColumns: "1fr 80px 80px 100px 100px 160px",
+              display: "grid", gridTemplateColumns: "1fr 80px 80px 100px 100px 120px",
               padding: "10px 16px", gap: 12, alignItems: "center",
               borderBottom: i < items.length - 1 ? "1px solid var(--color-border-subtle)" : "none",
               background: "var(--color-bg-card)",
             }}>
-              <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-primary)" }}>{item.email}</span>
-              <span style={{ fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--color-text-secondary)" }}>{item.role}</span>
-              <StatusBadge status={item.status} />
-              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>{formatDate(item.invitedAt)}</span>
-              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>{formatDate(item.expiresAt)}</span>
+              <span style={{ fontSize: "var(--text-base)", color: "var(--color-text-primary)" }}>{item.email}</span>
+              <span style={{ fontSize: "var(--text-base)", color: "var(--color-text-primary)" }}>{item.role}</span>
+              <div style={{ textAlign: "center" }}><StatusBadge status={item.status} /></div>
+              <span style={{ fontSize: "var(--text-base)", color: "var(--color-text-primary)" }}>{formatDate(item.invitedAt)}</span>
+              <span style={{ fontSize: "var(--text-base)", color: "var(--color-text-primary)" }}>{formatDate(item.expiresAt)}</span>
 
               {/* 액션 */}
-              <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "center", flexWrap: "wrap" }}>
                 {cancelConfirm === item.invitationId ? (
                   // 인라인 취소 확인
                   <>

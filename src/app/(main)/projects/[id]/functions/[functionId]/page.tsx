@@ -22,6 +22,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { usePermissions } from "@/hooks/useMyRole";
+import { useIdPrefixes } from "@/hooks/useIdPrefixes";
 import { renderMarkdown } from "@/lib/renderMarkdown";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
@@ -103,6 +104,8 @@ function FunctionDetailPageInner() {
   const functionId = params.functionId;
   const isNew = functionId === "new";
   const presetAreaId = searchParams.get("areaId") ?? "";
+  // 표시 ID prefix — 환경설정 기반 placeholder 제공
+  const { getPrefix } = useIdPrefixes(projectId);
 
   // ── 설명 예시 팝업 상태 ────────────────────────────────────────────────────
   const [descExampleOpen, setDescExampleOpen] = useState(false);
@@ -191,7 +194,7 @@ function FunctionDetailPageInner() {
   // ── 본인 회원 ID + 편집 권한 계산 ─────────────────────────────────────────
   const { data: memberData } = useQuery({
     queryKey: ["project-members", projectId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: { myMemberId: string } }>(`/api/projects/${projectId}/members`).then((r) => r.data),
     staleTime: 60 * 1000,
   });
@@ -827,7 +830,7 @@ function FunctionDetailPageInner() {
                     type="text"
                     value={displayId}
                     onChange={(e) => setDisplayId(e.target.value)}
-                    placeholder="미입력 시 자동 생성"
+                    placeholder={`${getPrefix("FUNCTION")}-XXXXX (미 입력 시 자동 생성)`}
                     readOnly={!canEdit}
                     className="sp-input"
                   />

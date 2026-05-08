@@ -192,10 +192,11 @@ function AdminDesignTemplatesPageInner() {
 
       {/* ── 테이블 ── */}
       <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-        {/* 헤더 */}
+        {/* 헤더 — 7 컬럼: 템플릿 명 / 설명 / 대상 계층 / 예시·템플릿 / 정렬 / 사용 / 수정일
+            (액션 컬럼 제거 — 행 전체 클릭으로 편집 진입) */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "1fr 110px 110px 60px 70px 110px 80px",
+          gridTemplateColumns: "22% 1fr 110px 110px 60px 70px 110px",
           padding: "10px 16px",
           background: "var(--color-bg-muted)",
           borderBottom: "1px solid var(--color-border)",
@@ -204,12 +205,12 @@ function AdminDesignTemplatesPageInner() {
           gap: 8, alignItems: "center",
         }}>
           <span>템플릿 명</span>
+          <span>설명</span>
           <span style={{ textAlign: "center" }}>대상 계층</span>
           <span style={{ textAlign: "center" }}>예시/템플릿</span>
           <span style={{ textAlign: "right" }}>정렬</span>
           <span style={{ textAlign: "center" }}>사용</span>
           <span>수정일</span>
-          <span style={{ textAlign: "center" }}>액션</span>
         </div>
 
         {/* 바디 */}
@@ -231,7 +232,8 @@ function AdminDesignTemplatesPageInner() {
                 onClick={() => router.push(`/admin/design-templates/${row.dsgnTmplId}`)}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 110px 110px 60px 70px 110px 80px",
+                  // 헤더와 동일한 7 컬럼 (액션 컬럼 제거)
+                  gridTemplateColumns: "22% 1fr 110px 110px 60px 70px 110px",
                   padding: "12px 16px",
                   paddingLeft: active ? 16 : 13,
                   borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
@@ -245,33 +247,37 @@ function AdminDesignTemplatesPageInner() {
                 onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-table-hover)")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = active ? "var(--color-bg-card)" : "var(--color-bg-muted)")}
               >
-                {/* 템플릿 명 + DEFAULT 뱃지 */}
-                <div style={{ overflow: "hidden" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{
-                      fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
-                      background: "var(--color-text-primary)",
-                      color:      "var(--color-text-inverse)",
-                      flexShrink: 0,
-                      letterSpacing: "0.04em",
-                    }}>
-                      DEFAULT
-                    </span>
-                    <span style={{
-                      fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)",
-                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    }}>
-                      {row.tmplNm}
-                    </span>
-                  </div>
-                  {row.tmplDc && (
-                    <div style={{
-                      fontSize: 11, color: "var(--color-text-secondary)", marginTop: 1,
-                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    }}>
-                      {row.tmplDc}
-                    </div>
-                  )}
+                {/* 템플릿 명 + DEFAULT 뱃지 — 한 컬럼 */}
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  overflow: "hidden", whiteSpace: "nowrap",
+                }}>
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
+                    background: "var(--color-text-primary)",
+                    color:      "var(--color-text-inverse)",
+                    flexShrink: 0,
+                    letterSpacing: "0.04em",
+                  }}>
+                    DEFAULT
+                  </span>
+                  <span style={{
+                    fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)",
+                    overflow: "hidden", textOverflow: "ellipsis",
+                  }}>
+                    {row.tmplNm}
+                  </span>
+                </div>
+
+                {/* 설명 — 별도 컬럼 */}
+                <div style={{
+                  fontSize:     12,
+                  color:        "var(--color-text-secondary)",
+                  overflow:     "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace:   "nowrap",
+                }}>
+                  {row.tmplDc || <span style={{ color: "var(--color-text-tertiary)" }}>—</span>}
                 </div>
 
                 {/* 대상 계층 */}
@@ -314,20 +320,10 @@ function AdminDesignTemplatesPageInner() {
                   </span>
                 </div>
 
-                {/* 수정일 */}
+                {/* 수정일 — 행 전체 클릭으로 편집 진입하므로 별도 [편집] 버튼 없음 */}
                 <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
                   {row.mdfcnDt.slice(0, 10)}
                 </span>
-
-                {/* 액션 — 편집 버튼만. 삭제는 정책상 차단 → UI 노출 X */}
-                <div style={{ display: "flex", gap: 4, justifyContent: "center" }} onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() => router.push(`/admin/design-templates/${row.dsgnTmplId}`)}
-                    style={secondarySmallBtnStyle}
-                  >
-                    편집
-                  </button>
-                </div>
               </div>
             );
           })

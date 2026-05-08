@@ -22,6 +22,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { usePermissions } from "@/hooks/useMyRole";
+import { useIdPrefixes } from "@/hooks/useIdPrefixes";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
@@ -40,59 +41,59 @@ import { type AiTaskStatus, AI_TASK_STATUS_LABEL, AI_TASK_STATUS_DOT } from "@/c
 
 type RequirementOption = {
   requirementId: string;
-  displayId:     string;
-  name:          string;
+  displayId: string;
+  name: string;
 };
 
 type AiTaskInfo = { aiTaskId: string; status: string };
 
 type UnitWorkDetail = {
-  unitWorkId:       string;
-  displayId:        string;
-  name:             string;
-  description:      string;
-  comment:          string;
-  assignMemberId:   string | null;
+  unitWorkId: string;
+  displayId: string;
+  name: string;
+  description: string;
+  comment: string;
+  assignMemberId: string | null;
   // 담당자 이름 — 서버에서 join으로 내려줌. 퇴장한 멤버면 null
   assignMemberName: string | null;
-  startDate:        string | null;
-  endDate:          string | null;
-  progress:         number;
-  sortOrder:        number;
-  reqId:            string;
-  reqDisplayId:     string;
-  reqName:          string;
-  aiTasks:          Record<string, AiTaskInfo>;
+  startDate: string | null;
+  endDate: string | null;
+  progress: number;
+  sortOrder: number;
+  reqId: string;
+  reqDisplayId: string;
+  reqName: string;
+  aiTasks: Record<string, AiTaskInfo>;
   screens: {
-    screenId:  string;
+    screenId: string;
     displayId: string;
-    name:      string;
-    type:      string;
-    urlPath:   string;
+    name: string;
+    type: string;
+    urlPath: string;
   }[];
 };
 
 // 프로젝트 멤버 — 담당자 콤보박스 옵션용 (GET /api/projects/[id]/members)
 type ProjectMember = {
   memberId: string;
-  name:     string | null;
-  email:    string;
-  role:     string;
-  job:      string;
+  name: string | null;
+  email: string;
+  role: string;
+  job: string;
 };
 
 type SaveBody = {
-  reqId:           string;
-  name:            string;
-  displayId?:      string;
-  description:     string;
-  comment:         string;
+  reqId: string;
+  name: string;
+  displayId?: string;
+  description: string;
+  comment: string;
   assignMemberId?: string;
-  startDate?:      string;
-  endDate?:        string;
-  progress:        number;
-  sortOrder:       number;
-  saveHistory?:    boolean;
+  startDate?: string;
+  endDate?: string;
+  progress: number;
+  sortOrder: number;
+  saveHistory?: boolean;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -108,14 +109,16 @@ export default function UnitWorkDetailPage() {
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 
 function UnitWorkDetailPageInner() {
-  const params        = useParams<{ id: string; unitWorkId: string }>();
-  const searchParams  = useSearchParams();
-  const router        = useRouter();
-  const queryClient   = useQueryClient();
+  const params = useParams<{ id: string; unitWorkId: string }>();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const { setBreadcrumb } = useAppStore();
-  const projectId     = params.id;
-  const unitWorkId    = params.unitWorkId;
-  const isNew         = unitWorkId === "new";
+  const projectId = params.id;
+  const unitWorkId = params.unitWorkId;
+  const isNew = unitWorkId === "new";
+  // 표시 ID prefix — 환경설정 기반 placeholder
+  const { getPrefix } = useIdPrefixes(projectId);
 
   // useSearchParams()는 Suspense 안에서만 동작 — 페이지 래퍼에서 보장됨
   // new 모드: URL의 reqId 파라미터로 상위 요구사항 pre-select
@@ -123,20 +126,20 @@ function UnitWorkDetailPageInner() {
 
   // ── 폼 상태 ────────────────────────────────────────────────────────────────
   const [form, setForm] = useState<SaveBody>({
-    reqId:       presetReqId,
-    name:        "",
-    displayId:   "",
+    reqId: presetReqId,
+    name: "",
+    displayId: "",
     description: "",
-    comment:     "",
-    progress:    0,
-    sortOrder:   0,
+    comment: "",
+    progress: 0,
+    sortOrder: 0,
   });
 
   // 원본 설명 추적: 이력 저장 여부 판단용 (수정 모드에서만 의미 있음)
   const [originalDescription, setOriginalDescription] = useState<string>("");
 
   // 이력 저장 다이얼로그 상태
-  const [prdOpen,           setPrdOpen]           = useState(false);
+  const [prdOpen, setPrdOpen] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
 
   // 이력 조회 팝업 상태
@@ -154,7 +157,7 @@ function UnitWorkDetailPageInner() {
   // ── 요구사항 목록 조회 (reqId 선택용) ───────────────────────────────────────
   const { data: reqData } = useQuery({
     queryKey: ["requirements-for-select", projectId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: { items: RequirementOption[] } }>(
         `/api/projects/${projectId}/requirements`
       ).then((r) => r.data.items),
@@ -165,7 +168,7 @@ function UnitWorkDetailPageInner() {
   // myMemberId로 본인 판별 — 프론트에서 이니셜/아이콘 등 파생 표시 가능
   const { data: memberData } = useQuery({
     queryKey: ["project-members", projectId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: { members: ProjectMember[]; myMemberId: string } }>(
         `/api/projects/${projectId}/members`
       ).then((r) => r.data),
@@ -177,23 +180,23 @@ function UnitWorkDetailPageInner() {
   // ── 기존 단위업무 로드 (수정 모드) ─────────────────────────────────────────
   const { data: detail, isLoading: isDetailLoading, refetch: refetchDetail } = useQuery({
     queryKey: ["unit-work", projectId, unitWorkId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: UnitWorkDetail }>(
         `/api/projects/${projectId}/unit-works/${unitWorkId}`
       ).then((r) => {
-        const d    = r.data;
+        const d = r.data;
         const desc = d.description ?? "";
         setForm({
-          reqId:           d.reqId,
-          name:            d.name,
-          displayId:       d.displayId ?? "",
-          description:     desc,
-          comment:         d.comment ?? "",
-          assignMemberId:  d.assignMemberId ?? undefined,
-          startDate:       d.startDate ?? undefined,
-          endDate:         d.endDate ?? undefined,
-          progress:        d.progress,
-          sortOrder:       d.sortOrder,
+          reqId: d.reqId,
+          name: d.name,
+          displayId: d.displayId ?? "",
+          description: desc,
+          comment: d.comment ?? "",
+          assignMemberId: d.assignMemberId ?? undefined,
+          startDate: d.startDate ?? undefined,
+          endDate: d.endDate ?? undefined,
+          progress: d.progress,
+          sortOrder: d.sortOrder,
         });
         // 원본 설명 저장 — 변경 여부 비교용
         setOriginalDescription(desc);
@@ -218,13 +221,13 @@ function UnitWorkDetailPageInner() {
     mutationFn: (body: SaveBody) =>
       isNew
         ? authFetch(`/api/projects/${projectId}/unit-works`, {
-            method: "POST",
-            body:   JSON.stringify(body),
-          })
+          method: "POST",
+          body: JSON.stringify(body),
+        })
         : authFetch(`/api/projects/${projectId}/unit-works/${unitWorkId}`, {
-            method: "PUT",
-            body:   JSON.stringify(body),
-          }),
+          method: "PUT",
+          body: JSON.stringify(body),
+        }),
     onSuccess: (_, variables) => {
       toast.success("저장되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["unit-works", projectId] });
@@ -240,14 +243,14 @@ function UnitWorkDetailPageInner() {
   });
 
   // ── AI 작업 ───────────────────────────────────────────────────────────────
-  const [aiPanelOpen,  setAiPanelOpen]  = useState(false);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const aiPanelRef = useRef<HTMLDivElement>(null);
-  const [aiConfirm,       setAiConfirm]       = useState<{ taskType: string; label: string } | null>(null);
-  const [taskPrompt,      setTaskPrompt]      = useState<{ tmplId: string; tmplNm: string } | null | "loading" | "none">(null);
+  const [aiConfirm, setAiConfirm] = useState<{ taskType: string; label: string } | null>(null);
+  const [taskPrompt, setTaskPrompt] = useState<{ tmplId: string; tmplNm: string } | null | "loading" | "none">(null);
 
   // AI 요청 팝업의 참고 이미지 — multipart로 함께 전송, 팝업 종료 시 초기화
   const [aiPickedFiles, setAiPickedFiles] = useState<File[]>([]);
-  const [aiDetailTaskId,  setAiDetailTaskId]  = useState<string | null>(null);
+  const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
   const [aiHistoryTaskType, setAiHistoryTaskType] = useState<string | null>(null);
 
   // 패널 외부 클릭 시 닫기
@@ -286,14 +289,14 @@ function UnitWorkDetailPageInner() {
   const aiMutation = useMutation({
     mutationFn: async ({ taskType }: { taskType: string }) => {
       const fd = new FormData();
-      fd.append("taskType",  taskType);
+      fd.append("taskType", taskType);
       fd.append("coment_cn", form.comment.trim());
       aiPickedFiles.forEach((f) => fd.append("files", f));
 
-      const at  = typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
+      const at = typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
       const res = await fetch(`/api/projects/${projectId}/unit-works/${unitWorkId}/ai`, {
-        method:  "POST",
-        body:    fd,
+        method: "POST",
+        body: fd,
         headers: at ? { Authorization: `Bearer ${at}` } : {},
       });
       if (!res.ok) {
@@ -304,7 +307,7 @@ function UnitWorkDetailPageInner() {
     },
     onSuccess: (_res, vars) => {
       const labels: Record<string, string> = {
-        DESIGN:  "AI 설계 요청이 접수되었습니다.",
+        DESIGN: "AI 설계 요청이 접수되었습니다.",
         INSPECT: "AI 점검 요청이 접수되었습니다.",
       };
       toast.success(labels[vars.taskType] ?? "AI 요청이 접수되었습니다.");
@@ -714,11 +717,11 @@ function UnitWorkDetailPageInner() {
 
       {/* 타이틀 행 — full-width 배경 */}
       <div style={{
-        display:      "flex",
-        alignItems:   "center",
-        gap:          16,
-        padding:      "10px 24px",
-        background:   "var(--color-bg-card)",
+        display: "flex",
+        alignItems: "center",
+        gap: 16,
+        padding: "10px 24px",
+        background: "var(--color-bg-card)",
         borderBottom: "1px solid var(--color-border)",
         marginBottom: 16,
       }}>
@@ -781,12 +784,12 @@ function UnitWorkDetailPageInner() {
                   {/* AI 작업 카드 목록 */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {UW_AI_TASK_CONFIGS.map(({ taskType, label, desc, icon }) => {
-                      const info              = detail?.aiTasks?.[taskType];
+                      const info = detail?.aiTasks?.[taskType];
                       const isMutationPending = aiMutation.isPending && aiMutation.variables?.taskType === taskType;
-                      const isSpinning        = isMutationPending || !!(info && ["PENDING", "IN_PROGRESS"].includes(info.status));
-                      const hasDone           = !!(info && ["DONE", "APPLIED", "REJECTED", "FAILED"].includes(info.status));
-                      const dotColor          = info ? (AI_TASK_STATUS_DOT[info.status as AiTaskStatus] ?? "#ccc") : "#ccc";
-                      const statusLabel       = isMutationPending && !info ? "대기 중..." : info ? (AI_TASK_STATUS_LABEL[info.status as AiTaskStatus] ?? info.status) : "-";
+                      const isSpinning = isMutationPending || !!(info && ["PENDING", "IN_PROGRESS"].includes(info.status));
+                      const hasDone = !!(info && ["DONE", "APPLIED", "REJECTED", "FAILED"].includes(info.status));
+                      const dotColor = info ? (AI_TASK_STATUS_DOT[info.status as AiTaskStatus] ?? "#ccc") : "#ccc";
+                      const statusLabel = isMutationPending && !info ? "대기 중..." : info ? (AI_TASK_STATUS_LABEL[info.status as AiTaskStatus] ?? info.status) : "-";
 
                       return (
                         <div key={taskType} className="uw-ai-task-card" style={{
@@ -909,246 +912,246 @@ function UnitWorkDetailPageInner() {
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
-      {/* 읽기 전용 안내 — 권한 없는 사용자가 진입한 경우 입력이 안 되는 이유 명시 */}
-      {!isNew && !canEdit && (
-        <div style={{
-          margin: "0 0 16px",
-          padding: "10px 14px",
-          background: "var(--color-info-subtle, #f0f4ff)",
-          border: "1px solid var(--color-info, #3b82f6)",
-          borderRadius: 6,
-          fontSize: 12,
-          color: "var(--color-text-secondary)",
-        }}>
-          🔒 <strong>읽기 전용</strong> — 이 단위업무는 OWNER/ADMIN 또는 PM/PL 직무, 혹은 담당자만 수정할 수 있습니다.
-        </div>
-      )}
-      {/* 폼 — 2단 레이아웃 (좌: 메타 정보+코멘트, 우: 설명) */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: 20, alignItems: "start" }}>
+        {/* 읽기 전용 안내 — 권한 없는 사용자가 진입한 경우 입력이 안 되는 이유 명시 */}
+        {!isNew && !canEdit && (
+          <div style={{
+            margin: "0 0 16px",
+            padding: "10px 14px",
+            background: "var(--color-info-subtle, #f0f4ff)",
+            border: "1px solid var(--color-info, #3b82f6)",
+            borderRadius: 6,
+            fontSize: 12,
+            color: "var(--color-text-secondary)",
+          }}>
+            🔒 <strong>읽기 전용</strong> — 이 단위업무는 OWNER/ADMIN 또는 PM/PL 직무, 혹은 담당자만 수정할 수 있습니다.
+          </div>
+        )}
+        {/* 폼 — 2단 레이아웃 (좌: 메타 정보+코멘트, 우: 설명) */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: 20, alignItems: "start" }}>
 
-        {/* ── 왼쪽 컬럼 ── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* ── 왼쪽 컬럼 ── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-        {/* ── 왼쪽 카드: 메타 정보 ── */}
-        <div
-          style={{
-            border:        "1px solid var(--color-border)",
-            borderRadius:  8,
-            background:    "var(--color-bg-card)",
-            padding:       "24px 28px",
-            display:       "flex",
-            flexDirection: "column",
-            gap:           20,
-          }}
-        >
-          {/* 상위 요구사항 선택 */}
-          <FormField label="상위 요구사항" required>
-            <div className="sp-select-wrap">
-              <select
-                value={form.reqId}
-                onChange={(e) => handleChange("reqId", e.target.value)}
-                disabled={!canEdit}
-                className="sp-input"
-              >
-                <option value="">요구사항을 선택하세요</option>
-                {reqOptions.map((r) => (
-                  <option key={r.requirementId} value={r.requirementId}>
-                    {r.displayId} — {r.name}
-                  </option>
-                ))}
-              </select>
-              <span className="sp-select-arrow"><SelectChevron /></span>
+            {/* ── 왼쪽 카드: 메타 정보 ── */}
+            <div
+              style={{
+                border: "1px solid var(--color-border)",
+                borderRadius: 8,
+                background: "var(--color-bg-card)",
+                padding: "24px 28px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 20,
+              }}
+            >
+              {/* 상위 요구사항 선택 */}
+              <FormField label="상위 요구사항" required>
+                <div className="sp-select-wrap">
+                  <select
+                    value={form.reqId}
+                    onChange={(e) => handleChange("reqId", e.target.value)}
+                    disabled={!canEdit}
+                    className="sp-input"
+                  >
+                    <option value="">요구사항을 선택하세요</option>
+                    {reqOptions.map((r) => (
+                      <option key={r.requirementId} value={r.requirementId}>
+                        {r.displayId} — {r.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="sp-select-arrow"><SelectChevron /></span>
+                </div>
+              </FormField>
+
+              {/* 단위업무명 + 표시 ID */}
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
+                <FormField label="단위업무명" required>
+                  <input
+                    type="text"
+                    value={form.name}
+                    placeholder="단위업무명을 입력하세요"
+                    onChange={(e) => handleChange("name", e.target.value)}
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </FormField>
+                <FormField label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>표시 ID<DisplayIdHelp /></span>}>
+                  <input
+                    type="text"
+                    value={form.displayId ?? ""}
+                    placeholder={`${getPrefix("UNIT_WORK")}-XXXXX (미 입력 시 자동 생성)`}
+                    onChange={(e) => handleChange("displayId", e.target.value)}
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </FormField>
+              </div>
+
+              {/* 시작일 + 종료일 — 2컬럼 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <FormField label="시작일">
+                  <input
+                    type="date"
+                    value={form.startDate ?? ""}
+                    onChange={(e) => handleChange("startDate", e.target.value)}
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </FormField>
+                <FormField label="종료일">
+                  <input
+                    type="date"
+                    value={form.endDate ?? ""}
+                    onChange={(e) => handleChange("endDate", e.target.value)}
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </FormField>
+              </div>
+
+              {/* 담당자 + 진행률 + 정렬순서 — 담당자에 더 넓은 공간(2fr) 할당 */}
+              {/* 담당자 라벨 옆의 작은 시계 아이콘 = 변경 이력 팝업 (신규 등록 모드에서는 숨김) */}
+              {/* FormField 대신 인라인 div 사용 — <label> 요소 안에 <button>을 두면 */}
+              {/*   라벨 빈 영역 클릭이 브라우저 기본 동작으로 버튼에 전달됨 (라벨→내부 form control) */}
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 12 }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                    <span>담당자</span>
+                    {!isNew && (
+                      <button
+                        type="button"
+                        onClick={() => setAssigneeHistoryOpen(true)}
+                        title="담당자 변경 이력"
+                        style={inlineIconBtnStyle}
+                      >
+                        {/* 시계(이력) 아이콘 — 14px, currentColor로 테마 대응 */}
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" strokeWidth="2"
+                          strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <circle cx="12" cy="12" r="9" />
+                          <path d="M12 7v5l3 2" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                  <div className="sp-select-wrap">
+                    <select
+                      value={form.assignMemberId ?? ""}
+                      onChange={(e) => handleChange("assignMemberId", e.target.value)}
+                      disabled={!canEdit}
+                      className="sp-input"
+                    >
+                      <option value="">담당자 없음</option>
+                      {members.map((m) => (
+                        <option key={m.memberId} value={m.memberId}>
+                          {m.name ?? m.email}
+                          {m.memberId === myMemberId ? " (나)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
+                </div>
+                <FormField label="진행률 (%)">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={form.progress}
+                    onChange={(e) => handleChange("progress", Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </FormField>
+                <FormField label="정렬순서">
+                  <input
+                    type="number"
+                    min={0}
+                    value={form.sortOrder}
+                    onChange={(e) => handleChange("sortOrder", parseInt(e.target.value) || 0)}
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </FormField>
+              </div>
+
             </div>
-          </FormField>
 
-          {/* 단위업무명 + 표시 ID */}
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
-            <FormField label="단위업무명" required>
-              <input
-                type="text"
-                value={form.name}
-                placeholder="단위업무명을 입력하세요"
-                onChange={(e) => handleChange("name", e.target.value)}
-                readOnly={!canEdit}
-                className="sp-input"
-              />
-            </FormField>
-            <FormField label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>표시 ID<DisplayIdHelp /></span>}>
-              <input
-                type="text"
-                value={form.displayId ?? ""}
-                placeholder="미입력 시 자동 생성"
-                onChange={(e) => handleChange("displayId", e.target.value)}
-                readOnly={!canEdit}
-                className="sp-input"
-              />
-            </FormField>
-          </div>
+          </div>{/* ── 왼쪽 컬럼 끝 ── */}
 
-          {/* 시작일 + 종료일 — 2컬럼 */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <FormField label="시작일">
-              <input
-                type="date"
-                value={form.startDate ?? ""}
-                onChange={(e) => handleChange("startDate", e.target.value)}
-                readOnly={!canEdit}
-                className="sp-input"
-              />
-            </FormField>
-            <FormField label="종료일">
-              <input
-                type="date"
-                value={form.endDate ?? ""}
-                onChange={(e) => handleChange("endDate", e.target.value)}
-                readOnly={!canEdit}
-                className="sp-input"
-              />
-            </FormField>
-          </div>
-
-          {/* 담당자 + 진행률 + 정렬순서 — 담당자에 더 넓은 공간(2fr) 할당 */}
-          {/* 담당자 라벨 옆의 작은 시계 아이콘 = 변경 이력 팝업 (신규 등록 모드에서는 숨김) */}
-          {/* FormField 대신 인라인 div 사용 — <label> 요소 안에 <button>을 두면 */}
-          {/*   라벨 빈 영역 클릭이 브라우저 기본 동작으로 버튼에 전달됨 (라벨→내부 form control) */}
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 12 }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
-                <span>담당자</span>
+          {/* ── 오른쪽 카드: 설명 ── */}
+          <div
+            style={{
+              border: "1px solid var(--color-border)",
+              borderRadius: 8,
+              background: "var(--color-bg-card)",
+              padding: "24px 28px",
+              display: "flex",
+              flexDirection: "column",
+              height: "calc(100vh - 161px)",  // 뷰포트 - (상단바40 + 브레드크럼40 + 타이틀57 + 하단패딩24)
+              boxSizing: "border-box",
+            }}
+          >
+            {/* 라벨 + 탭 버튼 + 기타 버튼 행 */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                  설명
+                </label>
+                <MarkdownTabButtons tab={descTab} onTabChange={setDescTab} />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {/* 예시 버튼 — DB 설계 양식에서 로드 */}
+                <button
+                  onClick={() => setExampleOpen(true)}
+                  disabled={!designTmpl?.exampleCn}
+                  style={{ ...descSubBtnStyle, opacity: designTmpl?.exampleCn ? 1 : 0.5, cursor: designTmpl?.exampleCn ? "pointer" : "not-allowed" }}
+                >
+                  예시
+                </button>
+                {/* 템플릿 삽입 버튼 — DB 템플릿 + {{displayId}}/{{name}} 치환 */}
+                <button
+                  onClick={() => {
+                    if (!designTmpl?.templateCn) return;
+                    handleChange("description", applyTemplateVars(designTmpl.templateCn, {
+                      displayId: detail?.displayId,
+                      name: form.name,
+                    }));
+                  }}
+                  disabled={!designTmpl?.templateCn}
+                  style={{ ...descSubBtnStyle, opacity: designTmpl?.templateCn ? 1 : 0.5, cursor: designTmpl?.templateCn ? "pointer" : "not-allowed" }}
+                >
+                  템플릿 삽입
+                </button>
+                {/* 변경 이력 버튼 */}
                 {!isNew && (
                   <button
-                    type="button"
-                    onClick={() => setAssigneeHistoryOpen(true)}
-                    title="담당자 변경 이력"
-                    style={inlineIconBtnStyle}
+                    onClick={() => setHistoryViewOpen(true)}
+                    style={{ ...descSubBtnStyle, display: "flex", alignItems: "center", gap: 4 }}
                   >
-                    {/* 시계(이력) 아이콘 — 14px, currentColor로 테마 대응 */}
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" strokeWidth="2"
-                         strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <circle cx="12" cy="12" r="9" />
-                      <path d="M12 7v5l3 2" />
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
                     </svg>
+                    변경 이력
                   </button>
                 )}
               </div>
-              <div className="sp-select-wrap">
-                <select
-                  value={form.assignMemberId ?? ""}
-                  onChange={(e) => handleChange("assignMemberId", e.target.value)}
-                  disabled={!canEdit}
-                  className="sp-input"
-                >
-                  <option value="">담당자 없음</option>
-                  {members.map((m) => (
-                    <option key={m.memberId} value={m.memberId}>
-                      {m.name ?? m.email}
-                      {m.memberId === myMemberId ? " (나)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <span className="sp-select-arrow"><SelectChevron /></span>
-              </div>
             </div>
-            <FormField label="진행률 (%)">
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={form.progress}
-                onChange={(e) => handleChange("progress", Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                readOnly={!canEdit}
-                className="sp-input"
-              />
-            </FormField>
-            <FormField label="정렬순서">
-              <input
-                type="number"
-                min={0}
-                value={form.sortOrder}
-                onChange={(e) => handleChange("sortOrder", parseInt(e.target.value) || 0)}
-                readOnly={!canEdit}
-                className="sp-input"
-              />
-            </FormField>
+
+            <MarkdownEditor
+              value={form.description}
+              onChange={(md) => handleChange("description", md)}
+              placeholder="단위업무 설명 (선택)"
+              tab={descTab}
+              onTabChange={setDescTab}
+              fullHeight
+              readOnly={!canEdit}
+            />
           </div>
 
         </div>
-
-        </div>{/* ── 왼쪽 컬럼 끝 ── */}
-
-        {/* ── 오른쪽 카드: 설명 ── */}
-        <div
-          style={{
-            border:        "1px solid var(--color-border)",
-            borderRadius:  8,
-            background:    "var(--color-bg-card)",
-            padding:       "24px 28px",
-            display:       "flex",
-            flexDirection: "column",
-            height:        "calc(100vh - 161px)",  // 뷰포트 - (상단바40 + 브레드크럼40 + 타이틀57 + 하단패딩24)
-            boxSizing:     "border-box",
-          }}
-        >
-          {/* 라벨 + 탭 버튼 + 기타 버튼 행 */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <label style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
-                설명
-              </label>
-              <MarkdownTabButtons tab={descTab} onTabChange={setDescTab} />
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              {/* 예시 버튼 — DB 설계 양식에서 로드 */}
-              <button
-                onClick={() => setExampleOpen(true)}
-                disabled={!designTmpl?.exampleCn}
-                style={{ ...descSubBtnStyle, opacity: designTmpl?.exampleCn ? 1 : 0.5, cursor: designTmpl?.exampleCn ? "pointer" : "not-allowed" }}
-              >
-                예시
-              </button>
-              {/* 템플릿 삽입 버튼 — DB 템플릿 + {{displayId}}/{{name}} 치환 */}
-              <button
-                onClick={() => {
-                  if (!designTmpl?.templateCn) return;
-                  handleChange("description", applyTemplateVars(designTmpl.templateCn, {
-                    displayId: detail?.displayId,
-                    name:      form.name,
-                  }));
-                }}
-                disabled={!designTmpl?.templateCn}
-                style={{ ...descSubBtnStyle, opacity: designTmpl?.templateCn ? 1 : 0.5, cursor: designTmpl?.templateCn ? "pointer" : "not-allowed" }}
-              >
-                템플릿 삽입
-              </button>
-              {/* 변경 이력 버튼 */}
-              {!isNew && (
-                <button
-                  onClick={() => setHistoryViewOpen(true)}
-                  style={{ ...descSubBtnStyle, display: "flex", alignItems: "center", gap: 4 }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
-                  </svg>
-                  변경 이력
-                </button>
-              )}
-            </div>
-          </div>
-
-          <MarkdownEditor
-            value={form.description}
-            onChange={(md) => handleChange("description", md)}
-            placeholder="단위업무 설명 (선택)"
-            tab={descTab}
-            onTabChange={setDescTab}
-            fullHeight
-            readOnly={!canEdit}
-          />
-        </div>
-
-      </div>
       </div>
     </div>
   );
@@ -1159,7 +1162,7 @@ function UnitWorkDetailPageInner() {
 function FormField({
   label, required, children,
 }: {
-  label:    React.ReactNode;
+  label: React.ReactNode;
   required?: boolean;
   children: React.ReactNode;
 }) {
@@ -1242,58 +1245,58 @@ function DisplayIdHelp() {
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
 const primaryBtnStyle: React.CSSProperties = {
-  padding:      "8px 24px",
+  padding: "8px 24px",
   borderRadius: 6,
-  border:       "1px solid transparent",
-  background:   "var(--color-primary, #1976d2)",
-  color:        "#fff",
-  fontSize:     14,
-  fontWeight:   600,
-  cursor:       "pointer",
+  border: "1px solid transparent",
+  background: "var(--color-primary, #1976d2)",
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
 };
 
 const secondaryBtnStyle: React.CSSProperties = {
-  padding:      "8px 16px",
+  padding: "8px 16px",
   borderRadius: 6,
-  border:       "1px solid var(--color-border)",
-  background:   "var(--color-bg-card)",
-  color:        "var(--color-text-primary)",
-  fontSize:     14,
-  cursor:       "pointer",
+  border: "1px solid var(--color-border)",
+  background: "var(--color-bg-card)",
+  color: "var(--color-text-primary)",
+  fontSize: 14,
+  cursor: "pointer",
 };
 
 const descSubBtnStyle: React.CSSProperties = {
-  padding:      "3px 10px",
+  padding: "3px 10px",
   borderRadius: 5,
-  border:       "1px solid var(--color-border)",
-  background:   "var(--color-bg-base)",
-  color:        "var(--color-text-secondary)",
-  fontSize:     12,
-  cursor:       "pointer",
+  border: "1px solid var(--color-border)",
+  background: "var(--color-bg-base)",
+  color: "var(--color-text-secondary)",
+  fontSize: 12,
+  cursor: "pointer",
 };
 
 // 라벨 옆 인라인 아이콘 버튼 — 테두리·배경 없음, hover 시만 색 변화
 // FormField 라벨의 보조 액션(이력 조회 등)을 최소 면적으로 표현할 때 사용
 const inlineIconBtnStyle: React.CSSProperties = {
-  display:       "inline-flex",
-  alignItems:    "center",
-  justifyContent:"center",
-  width:         18,
-  height:        18,
-  padding:       0,
-  border:        "none",
-  background:    "transparent",
-  color:         "var(--color-text-tertiary)",
-  cursor:        "pointer",
-  borderRadius:  3,
-  lineHeight:    0,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 18,
+  height: 18,
+  padding: 0,
+  border: "none",
+  background: "transparent",
+  color: "var(--color-text-tertiary)",
+  cursor: "pointer",
+  borderRadius: 3,
+  lineHeight: 0,
 };
 
 // ── AI 태스크 설정 ────────────────────────────────────────────────────────────
 
 const UW_AI_TASK_CONFIGS = [
-  { taskType: "DESIGN",  label: "AI 설계",  desc: "설계 양식 적합성 확인",               icon: { bg: "#e8eaf6", emoji: "⊞" } },
-  { taskType: "INSPECT", label: "AI 점검",  desc: "전체 화면·영역·기능\ntop-down 점검", icon: { bg: "#e8f5e9", emoji: "✓" } },
+  { taskType: "DESIGN", label: "AI 설계", desc: "설계 양식 적합성 확인", icon: { bg: "#e8eaf6", emoji: "⊞" } },
+  { taskType: "INSPECT", label: "AI 점검", desc: "전체 화면·영역·기능\ntop-down 점검", icon: { bg: "#e8f5e9", emoji: "✓" } },
 ] as const;
 
 // AI 상태 라벨/도트 색상은 공용 codes 모듈(@/constants/codes) 사용
