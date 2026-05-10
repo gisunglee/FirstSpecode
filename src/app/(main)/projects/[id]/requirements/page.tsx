@@ -16,6 +16,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
+import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -221,12 +222,22 @@ function RequirementsPageInner() {
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           요구사항 목록
         </div>
-        <button
-          onClick={() => router.push(`/projects/${projectId}/requirements/new`)}
-          style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
-        >
-          + 신규 등록
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <ExcelDownloadButton
+            href={`/api/projects/${projectId}/requirements/export${
+              effectiveAssignedTo
+                ? `?assignedTo=${encodeURIComponent(effectiveAssignedTo)}`
+                : ""
+            }`}
+            entityKey="requirements"
+          />
+          <button
+            onClick={() => router.push(`/projects/${projectId}/requirements/new`)}
+            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
+          >
+            + 신규 등록
+          </button>
+        </div>
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>

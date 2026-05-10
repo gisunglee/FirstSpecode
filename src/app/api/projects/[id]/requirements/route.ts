@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
+import { fetchProjectRequirements } from "@/lib/exports/requirements-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -24,50 +25,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const assigneeFilter = assignedTo === "me" ? gate.mberId : (assignedTo || undefined);
 
   try {
-    const requirements = await prisma.tbRqRequirement.findMany({
-      where: {
-        prjct_id: projectId,
-        ...(assigneeFilter ? { asign_mber_id: assigneeFilter } : {}),
-      },
-      include: {
-        task:   { select: { task_id: true, task_nm: true } },
-        // 단위업무 수 집계 — 목록에 배지로 표시
-        _count: { select: { unitWorks: true } },
-      },
-      orderBy: [
-        { task: { sort_ordr: "asc" } },  // 과업 정렬순서 우선
-        { sort_ordr: "asc" },             // 요구사항 정렬순서
-      ],
-    });
-
-    // 담당자 mberId → 이름 배치 조회 (N+1 방지)
-    const assigneeIds = [
-      ...new Set(requirements.map((r) => r.asign_mber_id).filter((v): v is string => !!v)),
-    ];
-    const assigneeMembers = assigneeIds.length > 0
-      ? await prisma.tbCmMember.findMany({
-          where:  { mber_id: { in: assigneeIds } },
-          // email_addr를 fallback으로 — mber_nm 미설정 계정도 식별 가능
-          select: { mber_id: true, mber_nm: true, email_addr: true },
-        })
-      : [];
-    const assigneeMap = new Map(assigneeMembers.map((m) => [m.mber_id, m.mber_nm || m.email_addr || null]));
-
-    const items = requirements.map((r) => ({
-      requirementId:    r.req_id,
-      displayId:        r.req_display_id,
-      name:             r.req_nm,
-      priority:         r.priort_code,
-      source:           r.src_code,
-      taskId:           r.task_id ?? null,
-      taskName:         r.task?.task_nm ?? "미분류",
-      // 담당자 — 미지정/퇴장 멤버면 null
-      assignMemberId:   r.asign_mber_id ?? null,
-      assignMemberName: r.asign_mber_id ? (assigneeMap.get(r.asign_mber_id) ?? null) : null,
-      unitWorkCount:    r._count.unitWorks,
-      sortOrder:        r.sort_ordr,
-    }));
-
+    // 데이터 조회+가공 로직은 service 로 분리 — export 라우트와 동일 결과 보장
+    const items = await fetchProjectRequirements({ projectId, assigneeFilter });
     return apiSuccess({ items, totalCount: items.length });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/requirements] DB 오류:`, err);

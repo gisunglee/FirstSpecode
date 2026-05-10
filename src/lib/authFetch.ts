@@ -6,6 +6,11 @@
  *   - 401 (TOKEN_EXPIRED) 응답 시 자동 토큰 갱신 및 재시도 (FID-00014)
  *   - 여러 API가 동시에 만료되었을 때 갱신 요청이 한 번만 가도록 제어 (Lock)
  *   - RT 갱신 실패 / UNAUTHORIZED 응답 시 토큰 정리 후 로그인 페이지로 자동 이동
+ *
+ * 변형:
+ *   - authFetch<T>(url, options): JSON 응답 자동 파싱 → T 반환 (대부분의 API용)
+ *   - authFetchRaw(url, options): Response 그대로 반환 (Blob/파일 다운로드용)
+ *     인증/갱신/리다이렉트 흐름은 authFetch 와 동일.
  */
 
 import { toast } from "sonner";
@@ -114,6 +119,57 @@ export async function authFetch<T>(url: string, options?: RequestInit): Promise<
     // 이미 갱신 후 재시도 중 발생한 에러는 상위로 전파
     throw err;
   }
+}
+
+/**
+ * authFetchRaw — Blob/파일 다운로드용 인증 호출
+ *
+ * authFetch 와 같은 인증 흐름(토큰 갱신, 401 처리, 로그인 리다이렉트)을 따르되,
+ * 응답을 JSON 으로 파싱하지 않고 Response 객체를 그대로 반환한다.
+ * 호출자가 res.blob() / res.arrayBuffer() / res.json() 중 적절한 것을 선택할 수 있다.
+ *
+ * 사용 예 (엑셀 다운로드):
+ *   const res = await authFetchRaw(`/api/projects/${id}/tasks/export`);
+ *   if (!res.ok) { ... }
+ *   const blob = await res.blob();
+ */
+export async function authFetchRaw(url: string, options?: RequestInit): Promise<Response> {
+  const getAccessToken = () =>
+    typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
+
+  const at = getAccessToken();
+  // Blob 다운로드는 Content-Type 을 강제하지 않는다 (서버가 정함).
+  // authFetch 가 Content-Type: application/json 을 강제하던 것과 다른 점.
+  const headers = {
+    ...(options?.headers ?? {}),
+    ...(at ? { Authorization: `Bearer ${at}` } : {}),
+  } as Record<string, string>;
+
+  const response = await fetch(url, { ...options, headers });
+
+  // 401 처리 — authFetch 와 동일한 분기
+  if (response.status === 401) {
+    const errorBody = await response.clone().json().catch(() => ({}));
+
+    if (errorBody.code === "TOKEN_EXPIRED") {
+      const newAT = await handleRefreshToken();
+      if (newAT) {
+        headers["Authorization"] = `Bearer ${newAT}`;
+        // 재시도는 fetch 직접 호출 — 또 한번 401 이 오면 갱신 루프 방지를 위해 여기서 끝
+        return fetch(url, { ...options, headers });
+      }
+      redirectToLogin("expired");
+      throw new Error("세션이 만료되었습니다. 다시 로그인해 주세요.");
+    }
+
+    if (errorBody.code === "UNAUTHORIZED") {
+      redirectToLogin("unauthorized");
+      throw new Error(errorBody.message || "로그인이 필요합니다.");
+    }
+  }
+
+  // 그 외(2xx/4xx/5xx)는 호출자가 res.ok 와 res.json/blob 으로 처리
+  return response;
 }
 
 /**

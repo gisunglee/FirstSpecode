@@ -23,6 +23,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
+import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -259,6 +260,12 @@ function FunctionsPageInner() {
           >
             저장
           </button>
+          <ExcelDownloadButton
+            href={`/api/projects/${projectId}/functions/export${
+              areaIdFilter ? `?areaId=${encodeURIComponent(areaIdFilter)}` : ""
+            }`}
+            entityKey="functions"
+          />
           <button
             onClick={() => {
               const url = areaIdFilter

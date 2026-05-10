@@ -1,0 +1,593 @@
+"use client";
+
+/**
+ * DocumentLibraryPage — 문서실 (도움창고 > 문서실)
+ *
+ * 역할:
+ *   - 프로젝트의 요건정의서(요구사항 단위) / 프로그램 사양서(단위업무 단위) 를 한 화면에서 일람
+ *   - 행별 [Word ↓] 버튼으로 개별 .docx 다운로드 (현재 작업본)
+ *   - 체크박스 + [선택 zip 다운로드] 로 일괄 zip 다운로드
+ *
+ * 권한 (UI 단):
+ *   - 진입 / 목록 조회 — 모든 멤버 (content.read)
+ *   - 다운로드 버튼 — content.export (MEMBER 이상). VIEWER 는 버튼 숨김
+ *   - 시스템 관리자 지원 세션은 다운로드 API 측에서 자동 차단되므로 UI 단 추가 분기 없음
+ *
+ * 데이터 흐름:
+ *   - GET /api/projects/[id]/requirements      — 요구사항 평면 목록
+ *   - GET /api/projects/[id]/unit-works        — 단위업무 평면 목록
+ *   - GET /api/projects/[id]/requirements/[reqId]/export/docx       — 개별 요건정의서
+ *   - GET /api/projects/[id]/unit-works/[uwId]/export/docx          — 개별 프로그램사양서
+ *   - POST /api/projects/[id]/document-library/zip                  — 일괄 zip
+ */
+
+import { Suspense, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { authFetch } from "@/lib/authFetch";
+import { usePermissions } from "@/hooks/useMyRole";
+import { buildDocxFilename } from "@/lib/exports/filename";
+
+// ── 타입 ──────────────────────────────────────────────────────────────────────
+
+type RequirementRow = {
+  requirementId:    string;
+  displayId:        string;
+  name:             string;
+  priority:         string;
+  source:           string;
+  taskName:         string;
+  assignMemberName: string | null;
+  unitWorkCount:    number;
+};
+
+type UnitWorkRow = {
+  unitWorkId:       string;
+  displayId:        string;
+  name:             string;
+  reqDisplayId:     string;
+  reqName:          string;
+  assignMemberName: string | null;
+  progress:         number;
+  screenCount:      number;
+};
+
+const PRIORITY_LABEL: Record<string, string> = {
+  HIGH:   "높음",
+  MEDIUM: "중간",
+  LOW:    "낮음",
+};
+
+// ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
+
+export default function DocumentLibraryPage() {
+  return (
+    <Suspense fallback={null}>
+      <DocumentLibraryInner />
+    </Suspense>
+  );
+}
+
+// ── 메인 ─────────────────────────────────────────────────────────────────────
+
+function DocumentLibraryInner() {
+  const { id: projectId } = useParams<{ id: string }>();
+  const { has: hasPerm } = usePermissions(projectId);
+
+  // 출력 권한 — VIEWER 면 버튼 숨김. content.export 는 MEMBER 이상.
+  const canExport = hasPerm("content.export");
+
+  // ── 데이터 조회 ──
+  const { data: reqRaw, isLoading: reqLoading } = useQuery({
+    queryKey: ["doc-library-reqs", projectId],
+    queryFn: () =>
+      authFetch<{ data: { items: RequirementRow[]; totalCount: number } }>(
+        `/api/projects/${projectId}/requirements`
+      ).then((r) => r.data),
+    enabled: !!projectId,
+    staleTime: 30_000,
+  });
+
+  const { data: uwRaw, isLoading: uwLoading } = useQuery({
+    queryKey: ["doc-library-uws", projectId],
+    queryFn: () =>
+      authFetch<{ data: { items: UnitWorkRow[]; totalCount: number } }>(
+        `/api/projects/${projectId}/unit-works`
+      ).then((r) => r.data),
+    enabled: !!projectId,
+    staleTime: 30_000,
+  });
+
+  const requirements = reqRaw?.items ?? [];
+  const unitWorks    = uwRaw?.items  ?? [];
+
+  // ── 검색 필터 ──
+  const [reqSearch, setReqSearch] = useState("");
+  const [uwSearch,  setUwSearch]  = useState("");
+
+  const filteredRequirements = useMemo(() => {
+    const q = reqSearch.trim().toLowerCase();
+    if (!q) return requirements;
+    return requirements.filter((r) =>
+      r.displayId.toLowerCase().includes(q) ||
+      r.name.toLowerCase().includes(q)
+    );
+  }, [requirements, reqSearch]);
+
+  const filteredUnitWorks = useMemo(() => {
+    const q = uwSearch.trim().toLowerCase();
+    if (!q) return unitWorks;
+    return unitWorks.filter((u) =>
+      u.displayId.toLowerCase().includes(q) ||
+      u.name.toLowerCase().includes(q) ||
+      u.reqDisplayId.toLowerCase().includes(q)
+    );
+  }, [unitWorks, uwSearch]);
+
+  // ── 선택 상태 ──
+  // 검색 필터를 바꿔도 선택 상태는 유지 — 검색은 표시 필터일 뿐 선택 해제 의미 X
+  const [selectedReqIds, setSelectedReqIds] = useState<Set<string>>(new Set());
+  const [selectedUwIds,  setSelectedUwIds]  = useState<Set<string>>(new Set());
+
+  function toggleReq(id: string) {
+    setSelectedReqIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function toggleUw(id: string) {
+    setSelectedUwIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  // 현재 보이는 항목(필터 후) 전체 선택/해제 — 다른 페이지의 항목은 건드리지 않는다.
+  const allReqVisibleSelected = filteredRequirements.length > 0 &&
+    filteredRequirements.every((r) => selectedReqIds.has(r.requirementId));
+  const allUwVisibleSelected  = filteredUnitWorks.length > 0 &&
+    filteredUnitWorks.every((u) => selectedUwIds.has(u.unitWorkId));
+
+  function toggleAllReq() {
+    setSelectedReqIds((prev) => {
+      const next = new Set(prev);
+      if (allReqVisibleSelected) {
+        filteredRequirements.forEach((r) => next.delete(r.requirementId));
+      } else {
+        filteredRequirements.forEach((r) => next.add(r.requirementId));
+      }
+      return next;
+    });
+  }
+  function toggleAllUw() {
+    setSelectedUwIds((prev) => {
+      const next = new Set(prev);
+      if (allUwVisibleSelected) {
+        filteredUnitWorks.forEach((u) => next.delete(u.unitWorkId));
+      } else {
+        filteredUnitWorks.forEach((u) => next.add(u.unitWorkId));
+      }
+      return next;
+    });
+  }
+
+  const totalSelected = selectedReqIds.size + selectedUwIds.size;
+
+  // ── 개별 다운로드 ─────────────────────────────────────────────────────────
+  // 요구사항/단위업무 상세 페이지의 handleExportDocx 패턴과 동일.
+  const [singleBusyId, setSingleBusyId] = useState<string | null>(null);
+
+  async function downloadSingle(
+    kind: "REQ" | "UW",
+    id: string,
+    fallbackName: string,
+  ) {
+    const at = typeof window !== "undefined"
+      ? (sessionStorage.getItem("access_token") ?? "")
+      : "";
+
+    const url = kind === "REQ"
+      ? `/api/projects/${projectId}/requirements/${id}/export/docx`
+      : `/api/projects/${projectId}/unit-works/${id}/export/docx`;
+
+    setSingleBusyId(`${kind}:${id}`);
+    try {
+      const res = await fetch(url, { headers: at ? { Authorization: `Bearer ${at}` } : {} });
+      if (!res.ok) {
+        let msg = `요청 실패 (${res.status})`;
+        try { const err = await res.json(); if (err?.message) msg = err.message; }
+        catch { /* JSON 아니면 기본 메시지 */ }
+        toast.error(msg);
+        return;
+      }
+
+      // 서버가 RFC 5987 인코딩된 한글 파일명을 보냄
+      const disposition = res.headers.get("content-disposition") ?? "";
+      const m = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+      const filename = m ? decodeURIComponent(m[1]) : fallbackName;
+
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success("Word 파일이 다운로드되었습니다.");
+    } catch {
+      toast.error("Word 파일 생성에 실패했습니다.");
+    } finally {
+      setSingleBusyId(null);
+    }
+  }
+
+  // ── 일괄 zip 다운로드 ─────────────────────────────────────────────────────
+  const [zipBusy, setZipBusy] = useState(false);
+
+  async function downloadZip() {
+    if (totalSelected === 0) {
+      toast.error("다운로드할 항목을 1개 이상 선택해 주세요.");
+      return;
+    }
+
+    const at = typeof window !== "undefined"
+      ? (sessionStorage.getItem("access_token") ?? "")
+      : "";
+
+    setZipBusy(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/document-library/zip`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":  "application/json",
+            ...(at ? { Authorization: `Bearer ${at}` } : {}),
+          },
+          body: JSON.stringify({
+            reqIds:      Array.from(selectedReqIds),
+            unitWorkIds: Array.from(selectedUwIds),
+          }),
+        },
+      );
+
+      if (!res.ok) {
+        let msg = `요청 실패 (${res.status})`;
+        try { const err = await res.json(); if (err?.message) msg = err.message; }
+        catch { /* ignore */ }
+        toast.error(msg);
+        return;
+      }
+
+      const disposition = res.headers.get("content-disposition") ?? "";
+      const m = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+      const filename = m ? decodeURIComponent(m[1]) : `문서실_${new Date().toISOString().slice(0, 10)}.zip`;
+
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success(`${totalSelected}건이 zip으로 다운로드되었습니다.`);
+    } catch {
+      toast.error("ZIP 다운로드에 실패했습니다.");
+    } finally {
+      setZipBusy(false);
+    }
+  }
+
+  // ── 렌더링 ────────────────────────────────────────────────────────────────
+  const isLoading = reqLoading || uwLoading;
+  if (isLoading) {
+    return <div style={{ padding: "40px 32px", color: "#888" }}>로딩 중...</div>;
+  }
+
+  return (
+    <div style={{ padding: 0 }}>
+      {/* ── 헤더 바 ── */}
+      <div style={headerBarStyle}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+            문서실
+          </div>
+          <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
+            요건정의서·프로그램사양서를 일람하고 한꺼번에 내려받습니다.
+          </div>
+        </div>
+        {canExport && (
+          <button
+            onClick={downloadZip}
+            disabled={zipBusy || totalSelected === 0}
+            style={{
+              ...primaryBtnStyle,
+              opacity:    zipBusy || totalSelected === 0 ? 0.5 : 1,
+              cursor:     zipBusy ? "wait" : (totalSelected === 0 ? "not-allowed" : "pointer"),
+            }}
+            title={totalSelected === 0 ? "선택된 항목이 없습니다." : `${totalSelected}건을 zip으로 다운로드`}
+          >
+            {zipBusy ? "ZIP 생성 중..." : `선택 ZIP 다운로드 (${totalSelected})`}
+          </button>
+        )}
+      </div>
+
+      <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: 28 }}>
+
+        {/* ═══ 요건정의서 (요구사항) ═══════════════════════════════════ */}
+        <section>
+          <SectionHeader
+            title="요건정의서"
+            count={requirements.length}
+            filteredCount={filteredRequirements.length}
+            search={reqSearch}
+            onSearchChange={setReqSearch}
+            placeholder="ID 또는 요구사항명 검색..."
+          />
+
+          <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+            {/* 헤더 행 */}
+            <div style={reqGridHeaderStyle}>
+              <div style={{ textAlign: "center" }}>
+                <input
+                  type="checkbox"
+                  checked={allReqVisibleSelected}
+                  onChange={toggleAllReq}
+                  disabled={filteredRequirements.length === 0}
+                  aria-label="현재 보이는 요구사항 전체 선택"
+                />
+              </div>
+              <div>요구사항 ID</div>
+              <div>요구사항명</div>
+              <div style={{ textAlign: "center" }}>우선순위</div>
+              <div>담당자</div>
+              <div style={{ textAlign: "center" }}>단위업무</div>
+              <div style={{ textAlign: "center" }}>다운로드</div>
+            </div>
+
+            {filteredRequirements.length === 0 ? (
+              <div style={emptyStyle}>
+                {requirements.length === 0
+                  ? "등록된 요구사항이 없습니다."
+                  : "검색 결과가 없습니다."}
+              </div>
+            ) : (
+              filteredRequirements.map((r) => {
+                const busy = singleBusyId === `REQ:${r.requirementId}`;
+                const checked = selectedReqIds.has(r.requirementId);
+                return (
+                  <div key={r.requirementId} style={reqGridRowStyle}>
+                    <div style={{ textAlign: "center" }}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleReq(r.requirementId)}
+                        aria-label={`${r.displayId} 선택`}
+                      />
+                    </div>
+                    <div style={idCellStyle}>{r.displayId}</div>
+                    <div style={nameCellStyle} title={r.name}>{r.name || "(이름 미지정)"}</div>
+                    <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>
+                      {PRIORITY_LABEL[r.priority] ?? r.priority}
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {r.assignMemberName ?? "-"}
+                    </div>
+                    <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>
+                      {r.unitWorkCount}
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      {canExport && (
+                        <button
+                          onClick={() =>
+                            downloadSingle(
+                              "REQ",
+                              r.requirementId,
+                              buildDocxFilename(r.displayId, r.name, "요구사항명세서"),
+                            )
+                          }
+                          disabled={busy}
+                          style={{ ...rowDownloadBtnStyle, opacity: busy ? 0.5 : 1, cursor: busy ? "wait" : "pointer" }}
+                        >
+                          {busy ? "..." : "Word ↓"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </section>
+
+        {/* ═══ 프로그램 사양서 (단위업무) ═══════════════════════════════ */}
+        <section>
+          <SectionHeader
+            title="프로그램 사양서"
+            count={unitWorks.length}
+            filteredCount={filteredUnitWorks.length}
+            search={uwSearch}
+            onSearchChange={setUwSearch}
+            placeholder="ID / 단위업무명 / 상위 요구사항 ID 검색..."
+          />
+
+          <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+            <div style={uwGridHeaderStyle}>
+              <div style={{ textAlign: "center" }}>
+                <input
+                  type="checkbox"
+                  checked={allUwVisibleSelected}
+                  onChange={toggleAllUw}
+                  disabled={filteredUnitWorks.length === 0}
+                  aria-label="현재 보이는 단위업무 전체 선택"
+                />
+              </div>
+              <div>단위업무 ID</div>
+              <div>단위업무명</div>
+              <div>상위 요구사항</div>
+              <div>담당자</div>
+              <div style={{ textAlign: "center" }}>진행률</div>
+              <div style={{ textAlign: "center" }}>화면</div>
+              <div style={{ textAlign: "center" }}>다운로드</div>
+            </div>
+
+            {filteredUnitWorks.length === 0 ? (
+              <div style={emptyStyle}>
+                {unitWorks.length === 0
+                  ? "등록된 단위업무가 없습니다."
+                  : "검색 결과가 없습니다."}
+              </div>
+            ) : (
+              filteredUnitWorks.map((u) => {
+                const busy = singleBusyId === `UW:${u.unitWorkId}`;
+                const checked = selectedUwIds.has(u.unitWorkId);
+                return (
+                  <div key={u.unitWorkId} style={uwGridRowStyle}>
+                    <div style={{ textAlign: "center" }}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleUw(u.unitWorkId)}
+                        aria-label={`${u.displayId} 선택`}
+                      />
+                    </div>
+                    <div style={idCellStyle}>{u.displayId}</div>
+                    <div style={nameCellStyle} title={u.name}>{u.name || "(이름 미지정)"}</div>
+                    <div style={{ fontSize: 12, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={`${u.reqDisplayId} ${u.reqName}`}>
+                      <span style={{ fontFamily: "monospace", marginRight: 6 }}>{u.reqDisplayId}</span>
+                      {u.reqName}
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {u.assignMemberName ?? "-"}
+                    </div>
+                    <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>
+                      {u.progress}%
+                    </div>
+                    <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>
+                      {u.screenCount}
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      {canExport && (
+                        <button
+                          onClick={() =>
+                            downloadSingle(
+                              "UW",
+                              u.unitWorkId,
+                              buildDocxFilename(u.displayId, u.name, "프로그램사양서"),
+                            )
+                          }
+                          disabled={busy}
+                          style={{ ...rowDownloadBtnStyle, opacity: busy ? 0.5 : 1, cursor: busy ? "wait" : "pointer" }}
+                        >
+                          {busy ? "..." : "Word ↓"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </section>
+
+      </div>
+    </div>
+  );
+}
+
+// ── 섹션 헤더 (제목 + 건수 + 검색창) ─────────────────────────────────────────
+function SectionHeader({
+  title, count, filteredCount, search, onSearchChange, placeholder,
+}: {
+  title:          string;
+  count:          number;
+  filteredCount:  number;
+  search:         string;
+  onSearchChange: (v: string) => void;
+  placeholder:    string;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
+        {title}
+      </div>
+      <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+        {search.trim() ? `${filteredCount} / ${count}건` : `총 ${count}건`}
+      </div>
+      <input
+        value={search}
+        onChange={(e) => onSearchChange(e.target.value)}
+        placeholder={placeholder}
+        className="sp-input"
+        style={{ width: 280, marginLeft: "auto" }}
+      />
+    </div>
+  );
+}
+
+// ── 스타일 ────────────────────────────────────────────────────────────────────
+
+const headerBarStyle: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 12,
+  padding: "10px 24px",
+  background: "var(--color-bg-card)",
+  borderBottom: "1px solid var(--color-border)",
+  marginBottom: 16,
+};
+
+const primaryBtnStyle: React.CSSProperties = {
+  padding: "8px 18px", borderRadius: 6, border: "1px solid transparent",
+  background: "var(--color-primary, #1976d2)", color: "#fff",
+  fontSize: 13, fontWeight: 600,
+};
+
+const rowDownloadBtnStyle: React.CSSProperties = {
+  padding: "4px 10px", borderRadius: 5, fontSize: 12, fontWeight: 600,
+  border: "1px solid var(--color-border)",
+  background: "var(--color-bg-card)",
+  color: "var(--color-text-primary)",
+};
+
+// 요구사항 표 그리드: 체크 / ID / 이름(가변) / 우선 / 담당 / UW수 / 다운로드
+const REQ_GRID_TEMPLATE = "44px 110px 1fr 80px 130px 90px 110px";
+// 단위업무 표 그리드: 체크 / ID / 이름(가변) / 상위RQ / 담당 / 진척 / 화면 / 다운로드
+const UW_GRID_TEMPLATE  = "44px 110px 1fr 200px 130px 80px 70px 110px";
+
+const reqGridHeaderStyle: React.CSSProperties = {
+  display: "grid", gridTemplateColumns: REQ_GRID_TEMPLATE, gap: 8,
+  padding: "10px 16px", background: "var(--color-bg-muted)",
+  fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)",
+  borderBottom: "1px solid var(--color-border)", alignItems: "center",
+};
+const reqGridRowStyle: React.CSSProperties = {
+  display: "grid", gridTemplateColumns: REQ_GRID_TEMPLATE, gap: 8,
+  padding: "10px 16px", alignItems: "center",
+  background: "var(--color-bg-card)",
+  borderTop: "1px solid var(--color-border)",
+};
+
+const uwGridHeaderStyle: React.CSSProperties = {
+  display: "grid", gridTemplateColumns: UW_GRID_TEMPLATE, gap: 8,
+  padding: "10px 16px", background: "var(--color-bg-muted)",
+  fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)",
+  borderBottom: "1px solid var(--color-border)", alignItems: "center",
+};
+const uwGridRowStyle: React.CSSProperties = {
+  display: "grid", gridTemplateColumns: UW_GRID_TEMPLATE, gap: 8,
+  padding: "10px 16px", alignItems: "center",
+  background: "var(--color-bg-card)",
+  borderTop: "1px solid var(--color-border)",
+};
+
+const idCellStyle: React.CSSProperties = {
+  fontFamily: "monospace", fontSize: 12, color: "var(--color-text-primary)",
+};
+const nameCellStyle: React.CSSProperties = {
+  fontSize: 13, color: "var(--color-text-primary)",
+  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+};
+
+const emptyStyle: React.CSSProperties = {
+  padding: "48px 0", textAlign: "center", color: "#aaa", fontSize: 13,
+};

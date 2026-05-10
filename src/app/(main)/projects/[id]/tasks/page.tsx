@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import { useCanEditTask } from "@/hooks/useCanEditTask";
+import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -229,15 +230,28 @@ function TaskListPageInner() {
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           과업 목록
         </div>
-        {/* 등록 권한자만 노출 — 권한 없는 사용자는 버튼 자체가 보이지 않음 */}
-        {canCreateTask && (
-          <button
-            onClick={() => router.push(`/projects/${projectId}/tasks/new`)}
-            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
-          >
-            + 과업 추가
-          </button>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* 엑셀 다운로드 — 화면의 담당자 필터를 그대로 querystring 으로 전달해
+              화면-엑셀 결과 일치 보장 ("me" 는 서버가 인증 mberId 로 변환) */}
+          <ExcelDownloadButton
+            href={`/api/projects/${projectId}/tasks/export${
+              effectiveAssignedTo
+                ? `?assignedTo=${encodeURIComponent(effectiveAssignedTo)}`
+                : ""
+            }`}
+            entityKey="tasks"
+            disabled={!hasLoadedProfile}
+          />
+          {/* 등록 권한자만 노출 — 권한 없는 사용자는 버튼 자체가 보이지 않음 */}
+          {canCreateTask && (
+            <button
+              onClick={() => router.push(`/projects/${projectId}/tasks/new`)}
+              style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
+            >
+              + 과업 추가
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>

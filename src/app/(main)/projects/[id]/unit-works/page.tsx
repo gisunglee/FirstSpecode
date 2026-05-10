@@ -23,6 +23,7 @@ import { authFetch } from "@/lib/authFetch";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import { type AiTaskStatus, AI_TASK_STATUS_LABEL, AI_TASK_STATUS_BADGE } from "@/constants/codes";
 import { useAppStore } from "@/store/appStore";
+import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -463,6 +464,20 @@ function UnitWorksPageInner() {
               </div>
             )}
           </div>
+
+          {(() => {
+            // 화면 useQuery 와 동일한 필터를 그대로 querystring 으로 직렬화 — 화면-엑셀 일치
+            const exportQs = new URLSearchParams();
+            if (filterReqId)         exportQs.set("reqId", filterReqId);
+            if (effectiveAssignedTo) exportQs.set("assignedTo", effectiveAssignedTo);
+            const qsStr = exportQs.toString();
+            return (
+              <ExcelDownloadButton
+                href={`/api/projects/${projectId}/unit-works/export${qsStr ? `?${qsStr}` : ""}`}
+                entityKey="unit-works"
+              />
+            );
+          })()}
 
           <button
             onClick={() => router.push(`/projects/${projectId}/unit-works/new`)}

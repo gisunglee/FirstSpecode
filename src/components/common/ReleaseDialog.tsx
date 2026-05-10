@@ -32,7 +32,8 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────
-export type ReleaseDocKind = "REQUIREMENT"; // 추후 "UNIT_WORK" | "SCREEN" 등 추가
+// 백엔드 SUPPORTED_DOC_KINDS 와 동기화 — 추가 시 양쪽을 함께 수정해야 함.
+export type ReleaseDocKind = "REQUIREMENT" | "UNIT_WORK";
 
 type ReleaseDialogProps = {
   open:       boolean;

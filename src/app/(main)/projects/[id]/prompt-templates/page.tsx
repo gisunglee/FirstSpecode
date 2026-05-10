@@ -30,6 +30,7 @@ import {
 import { ARTF_DIV } from "@/constants/planStudio";
 import { type PromptDomain, parsePromptDomain } from "@/lib/prompt-template/domain";
 import { useIsSystemAdmin, useMyRole } from "@/hooks/useMyRole";
+import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -188,15 +189,22 @@ function PromptTemplatesPageInner() {
           프롬프트 관리
           <HelpIcon onClick={() => setHelpOpen(true)} />
         </div>
-        {/* 신규 등록 — OWNER/ADMIN 또는 SUPER_ADMIN 만. 나머지는 버튼 자체 노출 X */}
-        {canCreateOrCopy && (
-          <button
-            onClick={() => router.push(`/projects/${projectId}/prompt-templates/new`)}
-            style={primaryBtnStyle}
-          >
-            + 신규 등록
-          </button>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* 화면 useQuery 와 동일한 querystring 을 그대로 사용 — 화면-엑셀 일치 */}
+          <ExcelDownloadButton
+            href={`/api/projects/${projectId}/prompt-templates/export${qs}`}
+            entityKey="prompt-templates"
+          />
+          {/* 신규 등록 — OWNER/ADMIN 또는 SUPER_ADMIN 만. 나머지는 버튼 자체 노출 X */}
+          {canCreateOrCopy && (
+            <button
+              onClick={() => router.push(`/projects/${projectId}/prompt-templates/new`)}
+              style={primaryBtnStyle}
+            >
+              + 신규 등록
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── 도메인 탭 — 일반 / 기획실 ── */}

@@ -27,6 +27,11 @@ import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEdit
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
+import ExportMenu from "@/components/common/ExportMenu";
+import ReleaseDialog from "@/components/common/ReleaseDialog";
+import ReleaseHistoryDialog from "@/components/documents/ReleaseHistoryDialog";
+import { bumpMinorVersion } from "@/lib/exports/version";
+import { buildDocxFilename } from "@/lib/exports/filename";
 import { useAppStore } from "@/store/appStore";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
@@ -215,6 +220,96 @@ function UnitWorkDetailPageInner() {
   const originalAssigneeId = detail?.assignMemberId ?? null;
   const isAssignee = !!myMemberId && originalAssigneeId === myMemberId;
   const canEdit = isNew ? true : (matrixUpdateOK || isAssignee);
+
+  // ── Word 출력 / 발행 권한 — 요구사항 페이지와 동일 정책 ───────────────────
+  // content.export = MEMBER 이상. 신규 모드에선 출력할 데이터가 없어서 비활성.
+  // 시스템 관리자 지원 세션은 API 측에서 자동 차단되므로 UI 분기 불필요.
+  const canExport = !isNew && hasPerm("content.export");
+  const canRelease = canExport;
+
+  // ── 출력 / 발행 모달 상태 ─────────────────────────────────────────────────
+  const [isExporting, setIsExporting] = useState(false);
+  const [isReleaseOpen, setIsReleaseOpen] = useState(false);
+  const [isReleaseHistoryOpen, setIsReleaseHistoryOpen] = useState(false);
+  // 발행 후 재조회 트리거 — releaseListData / ReleaseHistoryDialog 양쪽 캐시 무효화
+  const [releaseRefreshTag, setReleaseRefreshTag] = useState(0);
+
+  // 발행 이력 — ReleaseHistoryDialog 와 같은 queryKey 로 캐시 공유
+  const { data: releaseListData } = useQuery({
+    queryKey: ["release-history", projectId, "UNIT_WORK", unitWorkId, releaseRefreshTag],
+    queryFn: () =>
+      authFetch<{ data: { releases: { releaseId: string; version: string }[] } }>(
+        `/api/projects/${projectId}/documents/release?docKind=UNIT_WORK&refId=${encodeURIComponent(unitWorkId)}`
+      ).then((r) => r.data),
+    enabled: !isNew && !!unitWorkId,
+    staleTime: 30_000,
+  });
+
+  // 프로젝트 문서 설정 — 모달 defaults 의 승인자/문서버전용
+  const { data: docSettingsData } = useQuery({
+    queryKey: ["document-settings", projectId],
+    queryFn: () =>
+      authFetch<{ data: { copyrightHolder: string | null; docVersionDefault: string | null; approverName: string | null } }>(
+        `/api/projects/${projectId}/settings/document`
+      ).then((r) => r.data),
+    enabled: canRelease,
+    staleTime: 60_000,
+  });
+
+  // 발행 모달 defaults — 직전 발행 버전 마이너 +1 자동 채움
+  // 단위업무 담당자명을 author 기본값으로 사용 (요구사항 페이지와 동일 정책)
+  const lastReleasedVersion = releaseListData?.releases?.[0]?.version;
+  const releaseDefaults = {
+    version: lastReleasedVersion
+      ? bumpMinorVersion(lastReleasedVersion)
+      : (docSettingsData?.docVersionDefault ?? "v1.0"),
+    author:   detail?.assignMemberName ?? "",
+    approver: docSettingsData?.approverName ?? "",
+  };
+
+  // ── Word 출력 핸들러 ──────────────────────────────────────────────────────
+  // 서버가 RFC 5987 형식의 한글 파일명을 보내므로 그대로 디코딩해서 사용.
+  async function handleExportDocx() {
+    if (!detail) return;
+
+    const at = typeof window !== "undefined"
+      ? (sessionStorage.getItem("access_token") ?? "")
+      : "";
+
+    setIsExporting(true);
+    try {
+      const url = `/api/projects/${projectId}/unit-works/${unitWorkId}/export/docx`;
+      const res = await fetch(url, { headers: at ? { Authorization: `Bearer ${at}` } : {} });
+
+      if (!res.ok) {
+        let msg = `요청 실패 (${res.status})`;
+        try {
+          const err = await res.json();
+          if (err?.message) msg = err.message;
+        } catch { /* JSON 아니면 기본 메시지 */ }
+        toast.error(msg);
+        return;
+      }
+
+      const disposition = res.headers.get("content-disposition") ?? "";
+      const m = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+      const filename = m
+        ? decodeURIComponent(m[1])
+        : buildDocxFilename(detail.displayId, detail.name, "프로그램사양서");
+
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success("Word 파일이 다운로드되었습니다.");
+    } catch {
+      toast.error("Word 파일 생성에 실패했습니다.");
+    } finally {
+      setIsExporting(false);
+    }
+  }
 
   // ── 저장 뮤테이션 ──────────────────────────────────────────────────────────
   const saveMutation = useMutation({
@@ -881,6 +976,17 @@ function UnitWorkDetailPageInner() {
               PRD ↓
             </button>
           )}
+          {/* 출력 액션 그룹 — 프로그램 사양서 Word 출력 / 발행하기 / 발행 이력 보기.
+              요구사항 상세 페이지와 동일 패턴 (공통 ExportMenu 컴포넌트). */}
+          {canExport && (
+            <ExportMenu
+              isExporting={isExporting}
+              canRelease={canRelease}
+              onExportDocx={handleExportDocx}
+              onRelease={() => setIsReleaseOpen(true)}
+              onViewHistory={() => setIsReleaseHistoryOpen(true)}
+            />
+          )}
           <button
             onClick={() => router.push(`/projects/${projectId}/unit-works`)}
             disabled={saveMutation.isPending}
@@ -1153,6 +1259,35 @@ function UnitWorkDetailPageInner() {
 
         </div>
       </div>
+
+      {/* 발행 모달 — ExportMenu 의 [발행하기] 메뉴 항목에서 열림 */}
+      {!isNew && (
+        <ReleaseDialog
+          open={isReleaseOpen}
+          projectId={projectId}
+          docKind="UNIT_WORK"
+          refId={unitWorkId}
+          defaults={releaseDefaults}
+          onClose={() => setIsReleaseOpen(false)}
+          onSuccess={() => {
+            setIsReleaseOpen(false);
+            // 발행 이력 목록 + Word 출력의 변경이력 표 캐시 무효화
+            setReleaseRefreshTag((t) => t + 1);
+          }}
+        />
+      )}
+
+      {/* 발행 이력 보기 모달 — ExportMenu 의 [발행 이력 보기] 메뉴 항목에서 열림 */}
+      {!isNew && (
+        <ReleaseHistoryDialog
+          open={isReleaseHistoryOpen}
+          onClose={() => setIsReleaseHistoryOpen(false)}
+          projectId={projectId}
+          docKind="UNIT_WORK"
+          refId={unitWorkId}
+          refreshTag={releaseRefreshTag}
+        />
+      )}
     </div>
   );
 }

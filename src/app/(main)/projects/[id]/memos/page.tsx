@@ -13,6 +13,7 @@ import { Suspense, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
+import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -100,6 +101,10 @@ function MemoListInner() {
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
           메모
         </div>
+        <ExcelDownloadButton
+          href={`/api/projects/${projectId}/memos/export${qs ? `?${qs}` : ""}`}
+          entityKey="memos"
+        />
         <button
           onClick={() => router.push(`/projects/${projectId}/memos/new`)}
           style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}

@@ -29,7 +29,7 @@ import {
   SIZE_HEADING_1,
   CONTENT_WIDTH,
 } from "./tokens";
-import { p, labelCell, valueCell, headerCell, bulletItem, numberedItem } from "./helpers";
+import { p, labelCell, valueCell, headerCell, bulletItem, numberedItem, codeBlock } from "./helpers";
 import { buildDocument, heading1, heading2 } from "./frame";
 
 // ─── 입력 타입 ────────────────────────────────────────────
@@ -90,7 +90,8 @@ type SpecBlock =
   | { kind: "bullet";  text: string }
   | { kind: "number";  text: string }
   | { kind: "plain";   text: string }
-  | { kind: "table";   header: string[]; rows: string[][] };
+  | { kind: "table";   header: string[]; rows: string[][] }
+  | { kind: "code";    text: string };
 
 // "|----|---|" 같은 GFM 표 구분선 판정 — `-` 가 적어도 1개 있고, 셀 내용이 -, :, 공백, | 로만 구성.
 function isTableSeparator(line: string): boolean {
@@ -113,10 +114,30 @@ function parseSpec(markdown: string): SpecBlock[] {
   let i = 0;
 
   while (i < lines.length) {
-    const line = lines[i].trim();
+    const rawLine = lines[i];
+    const line = rawLine.trim();
 
     // 빈 줄 — 블록 구분자, 출력엔 영향 없음
     if (!line) { i++; continue; }
+
+    // ── 코드 블록 인식 (```) ──────────────────────────────
+    // ASCII mockup / 화면 박스 등을 monospace 로 보존.
+    // 시작 ``` 이후 닫는 ``` 까지의 모든 줄을 그대로(트림 X) 보존 — 박스 정렬 깨짐 방지.
+    if (/^```/.test(line)) {
+      i++; // 여는 ``` 건너뛰기
+      const buf: string[] = [];
+      while (i < lines.length) {
+        const t = lines[i];
+        if (/^```\s*$/.test(t.trim())) {
+          i++; // 닫는 ```
+          break;
+        }
+        buf.push(t); // 트림 안 함 — 들여쓰기 보존
+        i++;
+      }
+      blocks.push({ kind: "code", text: buf.join("\n") });
+      continue;
+    }
 
     // ── 표 인식 (헤더 + 구분선이 연속해야 표로 인정) ──────────
     if (looksLikeTableRow(line) && isTableSeparator((lines[i + 1] ?? "").trim())) {
@@ -201,6 +222,9 @@ function renderSpec(spec: string): (Paragraph | Table)[] {
         break;
       case "table":
         result.push(buildSpecTable(b.header, b.rows));
+        break;
+      case "code":
+        result.push(codeBlock(b.text));
         break;
     }
   }

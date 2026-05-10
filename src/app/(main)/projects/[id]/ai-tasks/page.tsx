@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
+import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 import {
   type AiTaskStatus,
   AI_TASK_STATUS_LABEL, AI_TASK_STATUS_BADGE, AI_TASK_TYPE_LABEL,
@@ -298,6 +299,21 @@ function AiTasksPageInner() {
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           AI 태스크 목록
         </div>
+        {(() => {
+          // 화면 useQuery 와 동일한 필터를 그대로 querystring 으로 직렬화 — 화면-엑셀 일치
+          const exportQs = new URLSearchParams();
+          if (filterStatus)        exportQs.set("status",     filterStatus);
+          if (filterTaskType)      exportQs.set("taskType",   filterTaskType);
+          if (filterRefType)       exportQs.set("refType",    filterRefType);
+          if (effectiveReqMberId)  exportQs.set("reqMberId",  effectiveReqMberId);
+          const qsStr = exportQs.toString();
+          return (
+            <ExcelDownloadButton
+              href={`/api/projects/${projectId}/ai-tasks/export${qsStr ? `?${qsStr}` : ""}`}
+              entityKey="ai-tasks"
+            />
+          );
+        })()}
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>

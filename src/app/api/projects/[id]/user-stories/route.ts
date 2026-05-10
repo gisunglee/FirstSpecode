@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
+import { fetchProjectUserStories } from "@/lib/exports/user-stories-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -24,68 +25,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const keyword      = url.searchParams.get("keyword")      || undefined;
 
   try {
-    // 요구사항 필터: taskId가 있으면 해당 과업의 요구사항만, 없으면 프로젝트 전체
-    // requirementId가 명시되면 해당 요구사항만
-    let reqIds: string[] | undefined;
-
-    if (requirementId) {
-      reqIds = [requirementId];
-    } else if (taskId) {
-      const reqs = await prisma.tbRqRequirement.findMany({
-        where:  { prjct_id: projectId, task_id: taskId },
-        select: { req_id: true },
-      });
-      reqIds = reqs.map((r) => r.req_id);
-    }
-
-    const stories = await prisma.tbRqUserStory.findMany({
-      where: {
-        requirement: { prjct_id: projectId },
-        // reqIds가 정의된 경우에만 IN 필터 적용
-        ...(reqIds !== undefined ? { req_id: { in: reqIds } } : {}),
-        // 키워드: 스토리명 또는 페르소나 부분 일치
-        ...(keyword
-          ? {
-              OR: [
-                { story_nm:   { contains: keyword, mode: "insensitive" } },
-                { persona_cn: { contains: keyword, mode: "insensitive" } },
-              ],
-            }
-          : {}),
-      },
-      include: {
-        requirement: {
-          select: {
-            req_id:         true,
-            req_display_id: true,
-            req_nm:         true,
-            task_id:        true,
-            task:           { select: { task_id: true, task_nm: true } },
-          },
-        },
-        acceptanceCriteria: { select: { ac_id: true } },
-      },
-      // 요구사항 표시번호(req_display_id) ASC → 스토리 정렬순 ASC → 생성일 DESC
-      orderBy: [
-        { requirement: { req_display_id: "asc" } },
-        { sort_ordr: "asc" },
-        { creat_dt:  "desc" },
-      ],
-    });
-
-    const items = stories.map((s) => ({
-      storyId:                 s.story_id,
-      displayId:               s.story_display_id,
-      name:                    s.story_nm,
-      persona:                 s.persona_cn ?? "",
-      requirementId:           s.req_id,
-      requirementDisplayId:    s.requirement.req_display_id,
-      requirementName:         s.requirement.req_nm,
-      taskId:                  s.requirement.task_id ?? null,
-      taskName:                s.requirement.task?.task_nm ?? "미분류",
-      acceptanceCriteriaCount: s.acceptanceCriteria.length,
-    }));
-
+    // 데이터 조회+가공 로직은 service 로 분리 — export 라우트와 동일 결과 보장
+    const items = await fetchProjectUserStories({ projectId, taskId, requirementId, keyword });
     return apiSuccess({ items, totalCount: items.length });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/user-stories] DB 오류:`, err);

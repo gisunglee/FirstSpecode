@@ -9,6 +9,7 @@ import { requirePermission } from "@/lib/requirePermission";
 import { requireTaskWrite } from "@/lib/taskWriteGate";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
+import { fetchProjectTasks } from "@/lib/exports/tasks-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -23,60 +24,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   if (gate instanceof Response) return gate;
 
   // assignedTo="me" → 로그인 사용자 mberId, 그 외 truthy 값은 그대로
+  // (인증 컨텍스트는 라우트에서 풀고, service 에는 mberId 또는 undefined 만 넘김)
   const assigneeFilter = assignedTo === "me" ? gate.mberId : (assignedTo || undefined);
 
   try {
-    const tasks = await prisma.tbRqTask.findMany({
-      where: {
-        prjct_id: projectId,
-        ...(assigneeFilter ? { asign_mber_id: assigneeFilter } : {}),
-      },
-      include: {
-        requirements: {
-          select: { req_id: true, priort_code: true },
-        },
-      },
-      orderBy: [
-        { task_display_id: "asc" },
-        { creat_dt: "desc" },
-      ],
-    });
-
-    // 담당자 mberId → 이름 배치 조회 (N+1 방지)
-    const assigneeIds = [
-      ...new Set(tasks.map((t) => t.asign_mber_id).filter((v): v is string => !!v)),
-    ];
-    const assigneeMembers = assigneeIds.length > 0
-      ? await prisma.tbCmMember.findMany({
-          where:  { mber_id: { in: assigneeIds } },
-          // email_addr를 fallback으로 — mber_nm 미설정 계정도 식별 가능
-          select: { mber_id: true, mber_nm: true, email_addr: true },
-        })
-      : [];
-    const assigneeMap = new Map(assigneeMembers.map((m) => [m.mber_id, m.mber_nm || m.email_addr || null]));
-
-    const items = tasks.map((t) => {
-      const reqs  = t.requirements;
-      const high   = reqs.filter((r) => r.priort_code === "HIGH").length;
-      const medium = reqs.filter((r) => r.priort_code === "MEDIUM").length;
-      const low    = reqs.filter((r) => r.priort_code === "LOW").length;
-
-      return {
-        taskId:           t.task_id,
-        displayId:        t.task_display_id,
-        name:             t.task_nm,
-        category:         t.ctgry_code,
-        rfpPageNo:        t.rfp_page_no ?? "",
-        outputInfo:       t.output_info_cn ?? "",
-        // 담당자 — 미지정/퇴장 멤버면 null (프론트에서 "-" 처리)
-        assignMemberId:   t.asign_mber_id ?? null,
-        assignMemberName: t.asign_mber_id ? (assigneeMap.get(t.asign_mber_id) ?? null) : null,
-        requirementCount: reqs.length,
-        prioritySummary:  { high, medium, low },
-        sortOrder:        t.sort_ordr,
-      };
-    });
-
+    // 데이터 조회+가공 로직은 service 로 분리 — export 라우트와 동일 결과 보장
+    const items = await fetchProjectTasks({ projectId, assigneeFilter });
     return apiSuccess({ tasks: items, totalCount: items.length });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/tasks] DB 오류:`, err);

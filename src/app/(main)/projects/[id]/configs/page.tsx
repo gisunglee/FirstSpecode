@@ -14,6 +14,7 @@ import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -110,6 +111,10 @@ function ConfigsInner() {
             ?
           </button>
         </div>
+        <ExcelDownloadButton
+          href={`/api/projects/${projectId}/configs/export`}
+          entityKey="configs"
+        />
       </div>
 
       {/* ── 건수 ── */}
@@ -121,7 +126,6 @@ function ConfigsInner() {
       {allItems.length === 0 ? (
         <div style={{ padding: "60px 24px", textAlign: "center", color: "#888", fontSize: 13, lineHeight: 1.7 }}>
           이 프로젝트에 적용된 환경설정 항목이 없습니다.<br />
-          시스템 관리자가 <code>/admin/config-templates</code> 에 표준 항목을 등록하면 다음 신규 프로젝트부터 자동 복사됩니다.
         </div>
       ) : (
         <div style={{ padding: "0 24px 48px" }}>

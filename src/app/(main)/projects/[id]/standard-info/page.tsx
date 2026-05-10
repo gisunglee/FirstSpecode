@@ -42,6 +42,7 @@ import {
 } from "./_constants";
 import { StdInfoEditModal }    from "./_components/StdInfoEditModal";
 import { StdInfoDetailDialog } from "./_components/StdInfoDetailDialog";
+import { StdInfoHelp }         from "./_components/StdInfoHelp";
 import { SelectChevron } from "@/components/ui/SelectChevron";
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -147,8 +148,10 @@ function StandardInfoPageInner() {
 
       {/* ── 헤더 ── */}
       <div style={headerBarStyle}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+        <div style={{ display: "flex", alignItems: "center", fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           기준 정보 관리
+          {/* 도움말 — 페이지 제목 옆 (?) 아이콘. 클릭 시 의미·필드 안내 패널 토글. */}
+          <StdInfoHelp />
         </div>
         <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
           총 <strong>{filtered.length}</strong>건

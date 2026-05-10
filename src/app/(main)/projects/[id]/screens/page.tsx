@@ -23,6 +23,7 @@ import { authFetch } from "@/lib/authFetch";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import { type AiTaskStatus, AI_TASK_STATUS_LABEL, AI_TASK_STATUS_BADGE } from "@/constants/codes";
 import { useAppStore } from "@/store/appStore";
+import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -260,12 +261,22 @@ function ScreensPageInner() {
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           화면 목록
         </div>
-        <button
-          onClick={() => router.push(`/projects/${projectId}/screens/new`)}
-          style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
-        >
-          + 신규 등록
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <ExcelDownloadButton
+            href={`/api/projects/${projectId}/screens/export${
+              effectiveAssignedTo
+                ? `?assignedTo=${encodeURIComponent(effectiveAssignedTo)}`
+                : ""
+            }`}
+            entityKey="screens"
+          />
+          <button
+            onClick={() => router.push(`/projects/${projectId}/screens/new`)}
+            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
+          >
+            + 신규 등록
+          </button>
+        </div>
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>

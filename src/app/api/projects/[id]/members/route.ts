@@ -11,6 +11,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { fetchProjectMembers } from "@/lib/exports/members-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -29,39 +30,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const memberships = await prisma.tbPjProjectMember.findMany({
-      where: { prjct_id: projectId, mber_sttus_code: "ACTIVE" },
-      include: {
-        member: { select: { mber_id: true, mber_nm: true, email_addr: true } },
-      },
-      orderBy: [
-        // OWNER 먼저, 그 다음 가입일 순
-        { role_code: "asc" },
-        { join_dt: "asc" },
-      ],
-    });
+    // 데이터 조회+가공 로직은 service 로 분리 — export 라우트와 동일 결과 보장
+    const members = await fetchProjectMembers({ projectId });
 
     // OWNER 수 카운트 (마지막 OWNER 비활성화 판별용)
-    const ownerCount = memberships.filter((m) => m.role_code === "OWNER").length;
-
-    const members = memberships.map((m) => ({
-      memberId:       m.mber_id,
-      name:           m.member.mber_nm ?? null,
-      email:          m.member.email_addr ?? "",
-      role:           m.role_code,
-      job:            m.job_title_code,   // 신규 — 직무
-      joinedAt:       m.join_dt,
-      lastAccessedAt: m.last_acces_dt ?? null,
-      // TODO: tb_ds_screen/tb_ds_function 구현 후 실제 담당 여부로 교체
-      hasWork: false,
-    }));
+    const ownerCount = members.filter((m) => m.role === "OWNER").length;
 
     return apiSuccess({
       members,
       totalCount:   members.length,
       myRole:       myMembership.role_code,
-      myJob:        myMembership.job_title_code,  // 신규
-      myMemberId:   auth.mberId,                  // 신규 — 프론트에서 atob 디코딩 대체
+      myJob:        myMembership.job_title_code,
+      myMemberId:   auth.mberId,
       ownerCount,
     });
   } catch (err) {

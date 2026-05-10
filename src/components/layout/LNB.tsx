@@ -170,9 +170,11 @@ export default function LNB() {
         icon: "g_help",
         items: [
           // DOCS — 공식 문서. 프로젝트 무관 시스템 콘텐츠라 pBase 없이 고정 경로
-          { label: "DOCS",      href: "/docs",       icon: "i_docs" },
-          { label: "리뷰 요청", href: p("/reviews"), icon: "i_review" },
-          { label: "메모",      href: p("/memos"),   icon: "i_memo" },
+          { label: "DOCS",      href: "/docs",                 icon: "i_docs" },
+          // 문서실 — 요건정의서·프로그램사양서 일람·일괄 다운로드 (프로젝트별)
+          { label: "문서실",    href: p("/document-library"),  icon: "i_library" },
+          { label: "리뷰 요청", href: p("/reviews"),           icon: "i_review" },
+          { label: "메모",      href: p("/memos"),             icon: "i_memo" },
         ],
       },
       {

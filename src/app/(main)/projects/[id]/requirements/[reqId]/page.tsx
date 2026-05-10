@@ -18,6 +18,7 @@ import { authFetch } from "@/lib/authFetch";
 import { usePermissions } from "@/hooks/useMyRole";
 import { useIdPrefixes } from "@/hooks/useIdPrefixes";
 import { bumpMinorVersion } from "@/lib/exports/version";
+import { buildDocxFilename } from "@/lib/exports/filename";
 import { renderMarkdown } from "@/lib/renderMarkdown";
 import { useAppStore } from "@/store/appStore";
 import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
@@ -566,7 +567,7 @@ function RequirementDetailPageInner() {
       const m = disposition.match(/filename\*=UTF-8''([^;]+)/i);
       const filename = m
         ? decodeURIComponent(m[1])
-        : `${detail.displayId}_요구사항명세서.docx`;
+        : buildDocxFilename(detail.displayId, detail.name, "요구사항명세서");
 
       const blob = await res.blob();
       const a = document.createElement("a");

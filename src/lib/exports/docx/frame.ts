@@ -101,11 +101,13 @@ function buildFooter(copyright: string): Footer {
 /**
  * "1. 요구사항 개요" 같은 1차 섹션 헤딩 — 진청, 굵게.
  * Heading1 스타일을 적용하므로 자동 목차(TOC)에 잡힌다.
+ *
+ * spacing 정책: 위쪽은 섹션 구분이 보이게 어느 정도 띄우되, 아래쪽은 본문에 바로 붙도록 좁게.
  */
 export function heading1(text: string): Paragraph {
   return new Paragraph({
     heading: HeadingLevel.HEADING_1,
-    spacing: { before: 360, after: 240 },
+    spacing: { before: 240, after: 120 },
     children: [
       new TextRun({ text, font: FONT, size: SIZE_HEADING_1, bold: true, color: COLOR_PRIMARY }),
     ],
@@ -118,7 +120,7 @@ export function heading1(text: string): Paragraph {
 export function heading2(text: string): Paragraph {
   return new Paragraph({
     heading: HeadingLevel.HEADING_2,
-    spacing: { before: 300, after: 180 },
+    spacing: { before: 180, after: 80 },
     children: [
       new TextRun({ text, font: FONT, size: SIZE_HEADING_2, bold: true, color: COLOR_PRIMARY }),
     ],
@@ -163,12 +165,12 @@ export function buildDocument(opts: BuildDocumentOptions): Document {
         {
           id: "Heading1", name: "Heading 1", basedOn: "Normal", next: "Normal", quickFormat: true,
           run:       { size: SIZE_HEADING_1, bold: true, font: FONT, color: COLOR_PRIMARY },
-          paragraph: { spacing: { before: 360, after: 240 }, outlineLevel: 0 },
+          paragraph: { spacing: { before: 240, after: 120 }, outlineLevel: 0 },
         },
         {
           id: "Heading2", name: "Heading 2", basedOn: "Normal", next: "Normal", quickFormat: true,
           run:       { size: SIZE_HEADING_2, bold: true, font: FONT, color: COLOR_PRIMARY },
-          paragraph: { spacing: { before: 300, after: 180 }, outlineLevel: 1 },
+          paragraph: { spacing: { before: 180, after: 80 }, outlineLevel: 1 },
         },
       ],
     },

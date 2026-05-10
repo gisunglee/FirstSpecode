@@ -56,7 +56,7 @@ export type MenuIconKey =
   | "i_standardGuide" | "i_commonCode" | "i_referenceInfo"
   | "i_aiTask" | "i_planImport" | "i_designImport" | "i_promptTemplate"
   | "i_designTemplate"
-  | "i_review" | "i_memo" | "i_docs"
+  | "i_review" | "i_memo" | "i_docs" | "i_library"
   | "i_graph" | "i_changeLog" | "i_diffTest" | "i_cleanup";
 
 const ICONS: Record<MenuIconKey, ReactNode> = {
@@ -360,6 +360,16 @@ const ICONS: Record<MenuIconKey, ReactNode> = {
       <path d="M7 12h2" />
       <path d="M15 8h2" />
       <path d="M15 12h2" />
+    </>
+  ),
+  // 책장 — "산출물 도서관/문서실" 메뉴용 (책 3권 세로로 꽂혀 있는 형태)
+  i_library: (
+    <>
+      <path d="M5 4v16" />
+      <path d="M3 4h4v16H3z" />
+      <path d="M9 4h4v16H9z" />
+      <path d="M11 8h0.01" />
+      <path d="M15 4l3 1-3 15-3-1z" />
     </>
   ),
   // 휴지통 — "정보 삭제" / cleanup 메뉴용

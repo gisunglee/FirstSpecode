@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import { useIsSystemAdmin, useMyRole } from "@/hooks/useMyRole";
+import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -152,15 +153,30 @@ function DesignTemplatesPageInner() {
           설계 양식
           <HelpIcon onClick={() => setHelpOpen(true)} />
         </div>
-        {/* 신규 등록 — OWNER/ADMIN 또는 SUPER_ADMIN 만 */}
-        {canCreateOrCopy && (
-          <button
-            onClick={() => router.push(`/projects/${projectId}/design-templates/new`)}
-            style={primaryBtnStyle}
-          >
-            + 신규 등록
-          </button>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {(() => {
+            const exportQs = new URLSearchParams();
+            if (refTypeFilter) exportQs.set("refType", refTypeFilter);
+            if (useYnFilter)   exportQs.set("useYn",   useYnFilter);
+            if (scopeFilter)   exportQs.set("scope",   scopeFilter);
+            const qs = exportQs.toString();
+            return (
+              <ExcelDownloadButton
+                href={`/api/projects/${projectId}/design-templates/export${qs ? `?${qs}` : ""}`}
+                entityKey="design-templates"
+              />
+            );
+          })()}
+          {/* 신규 등록 — OWNER/ADMIN 또는 SUPER_ADMIN 만 */}
+          {canCreateOrCopy && (
+            <button
+              onClick={() => router.push(`/projects/${projectId}/design-templates/new`)}
+              style={primaryBtnStyle}
+            >
+              + 신규 등록
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>

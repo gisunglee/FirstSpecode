@@ -20,6 +20,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { SelectChevron } from "@/components/ui/SelectChevron";
+import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 import {
   ROLE_CODES, ROLE_LABEL,
   JOB_CODES,  JOB_LABEL,
@@ -209,6 +210,10 @@ function MembersPageInner() {
           </button>
           <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>멤버 목록</span>
         </div>
+        <ExcelDownloadButton
+          href={`/api/projects/${projectId}/members/export`}
+          entityKey="members"
+        />
       </div>
 
       <div style={{ padding: "0 24px 24px", maxWidth: 900 }}>

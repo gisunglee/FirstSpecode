@@ -31,11 +31,16 @@ import {
   buildRequirementDocx,
   type RequirementExportInput,
 } from "@/lib/exports/docx/requirement";
+import {
+  buildUnitWorkDocx,
+  type UnitWorkExportInput,
+} from "@/lib/exports/docx/unit-work";
 
 type RouteParams = { params: Promise<{ id: string; releaseId: string }> };
 
 const MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const DOC_KIND_REQUIREMENT = "REQUIREMENT";
+const DOC_KIND_UNIT_WORK   = "UNIT_WORK";
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, releaseId } = await params;
@@ -61,23 +66,24 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "발행 이력을 찾을 수 없습니다.", 404);
     }
 
-    // ③ 산출물 종류별 빌더 분기 — 현재는 REQUIREMENT 만
-    if (release.doc_kind !== DOC_KIND_REQUIREMENT) {
+    // ③ 산출물 종류별 빌더 분기
+    //   snapshot_data 는 발행 당시 *ExportInput 객체 통째로 박제됐다는 가정 하에 캐스팅.
+    //   깨진 데이터면 buildXxxDocx 내부에서 런타임 에러 → catch 블록에서 잡힘.
+    let buffer: Buffer;
+    let filename: string;
+
+    if (release.doc_kind === DOC_KIND_REQUIREMENT) {
+      const input = release.snapshot_data as unknown as RequirementExportInput;
+      buffer = await buildRequirementDocx(input);
+      // 파일명 패턴: REQ-00023_요구사항명세서_v1.0.docx
+      filename = `${input.reqDisplayId}_요구사항명세서_${release.vrsn_no}.docx`;
+    } else if (release.doc_kind === DOC_KIND_UNIT_WORK) {
+      const input = release.snapshot_data as unknown as UnitWorkExportInput;
+      buffer = await buildUnitWorkDocx(input);
+      filename = `${input.unitWorkDisplayId}_프로그램사양서_${release.vrsn_no}.docx`;
+    } else {
       return apiError("UNSUPPORTED_DOC_KIND", "이 산출물 종류는 아직 다운로드할 수 없습니다.", 400);
     }
-
-    // ④ 스냅샷 → RequirementExportInput 복원
-    //   snapshot_data 는 Prisma 가 JsonValue 로 반환. 우리가 발행 시 RequirementExportInput
-    //   객체 그대로 박제했으므로 형태가 일치한다는 가정 하에 캐스팅.
-    //   (혹시 깨진 데이터가 들어있으면 buildRequirementDocx 내부에서 런타임 에러로 잡힘 → catch)
-    const input = release.snapshot_data as unknown as RequirementExportInput;
-
-    // ⑤ docx 생성
-    const buffer = await buildRequirementDocx(input);
-
-    // ⑥ 다운로드 응답
-    //   파일명 패턴: REQ-00023_요구사항명세서_v1.0.docx — 버전 명시로 식별성 ↑
-    const filename = `${input.reqDisplayId}_요구사항명세서_${release.vrsn_no}.docx`;
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {

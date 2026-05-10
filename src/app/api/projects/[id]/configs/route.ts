@@ -15,6 +15,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { fetchProjectConfigs } from "@/lib/exports/configs-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -26,34 +27,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   if (gate instanceof Response) return gate;
 
   try {
-    const configs = await prisma.tbPjProjectConfig.findMany({
-      where: { prjct_id: projectId },
-      orderBy: [{ config_group: "asc" }, { sort_ordr: "asc" }],
-    });
-
-    // 그룹별로 묶기
-    const groupMap = new Map<string, typeof configs>();
-    for (const c of configs) {
-      const list = groupMap.get(c.config_group) ?? [];
-      list.push(c);
-      groupMap.set(c.config_group, list);
-    }
-
-    const groups = Array.from(groupMap.entries()).map(([group, items]) => ({
-      group,
-      items: items.map((c) => ({
-        configId:      c.config_id,
-        key:           c.config_key,
-        value:         c.config_value,
-        label:         c.config_label,
-        description:   c.config_dc,
-        valueType:     c.value_type,
-        defaultValue:  c.default_value,
-        selectOptions: c.select_options,
-        sortOrder:     c.sort_ordr,
-      })),
-    }));
-
+    // 데이터 조회+가공 로직은 service 로 분리 — export 라우트와 동일 결과 보장
+    const groups = await fetchProjectConfigs({ projectId });
     return apiSuccess({ groups });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/configs]`, err);

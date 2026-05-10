@@ -6,11 +6,11 @@
  */
 
 import { NextRequest } from "next/server";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
+import { fetchProjectScreens } from "@/lib/exports/screens-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -25,144 +25,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const gate = await requirePermission(request, projectId, "content.read");
   if (gate instanceof Response) return gate;
 
-  // assignedTo="me" → 로그인 사용자 mberId, 그 외 truthy 값은 그대로
   const assigneeFilter = assignedTo === "me" ? gate.mberId : (assignedTo || undefined);
 
   try {
-    const screens = await prisma.tbDsScreen.findMany({
-      where: {
-        prjct_id: projectId,
-        ...(unitWorkId ? { unit_work_id: unitWorkId } : {}),
-        ...(assigneeFilter ? { asign_mber_id: assigneeFilter } : {}),
-      },
-      include: {
-        unitWork: {
-          select: {
-            unit_work_id: true,
-            unit_work_nm: true,
-            requirement: {
-              select: {
-                req_id: true,
-                req_nm: true,
-                req_display_id: true,
-              },
-            },
-          },
-        },
-        // 하위 영역 수 집계
-        _count: { select: { areas: true } },
-      },
-      orderBy: [
-        { unitWork: { requirement: { sort_ordr: "asc" } } },  // 요구사항 정렬순서
-        { unitWork: { sort_ordr: "asc" } },                    // 단위업무 정렬순서
-        { sort_ordr: "asc" },                                  // 화면 정렬순서
-      ],
-    });
-
-    // DB 레벨에서 화면별 진척률 집계 — 화면 → 영역 → 기능 → tb_cm_progress
-    type ScreenAgg = {
-      scrn_id: string;
-      avg_design_rt: number;
-      avg_impl_rt: number;
-      avg_test_rt: number;
-    };
-    let progMap = new Map<string, { designRt: number; implRt: number; testRt: number }>();
-
-    if (screens.length > 0) {
-      const screenIds = Prisma.join(screens.map(s => s.scrn_id));
-      const aggRows = await prisma.$queryRaw<ScreenAgg[]>`
-        SELECT a.scrn_id,
-               COALESCE(AVG(p.design_rt), 0) AS avg_design_rt,
-               COALESCE(AVG(p.impl_rt),   0) AS avg_impl_rt,
-               COALESCE(AVG(p.test_rt),   0) AS avg_test_rt
-          FROM tb_ds_area a
-          JOIN tb_ds_function f ON f.area_id = a.area_id
-          LEFT JOIN tb_cm_progress p
-            ON p.ref_tbl_nm = 'tb_ds_function' AND p.ref_id = f.func_id
-         WHERE a.scrn_id IN (${screenIds})
-         GROUP BY a.scrn_id
-      `;
-      progMap = new Map(aggRows.map(r => [r.scrn_id, {
-        designRt: Math.round(Number(r.avg_design_rt)),
-        implRt:   Math.round(Number(r.avg_impl_rt)),
-        testRt:   Math.round(Number(r.avg_test_rt)),
-      }]));
-    }
-
-    // 담당자 mberId → 이름 배치 조회 (N+1 방지)
-    const assigneeIds = [
-      ...new Set(screens.map((s) => s.asign_mber_id).filter((v): v is string => !!v)),
-    ];
-    const assigneeMembers = assigneeIds.length > 0
-      ? await prisma.tbCmMember.findMany({
-          where:  { mber_id: { in: assigneeIds } },
-          // email_addr를 fallback으로 — mber_nm 미설정 계정도 식별 가능
-          select: { mber_id: true, mber_nm: true, email_addr: true },
-        })
-      : [];
-    const assigneeMap = new Map(assigneeMembers.map((m) => [m.mber_id, m.mber_nm || m.email_addr || null]));
-
-    // ── AI 구현 요청 정보 — 화면 단위 스냅샷 → IMPLEMENT 태스크 최신 1건 ─────
-    const implTaskMap = new Map<string, { aiTaskId: string; status: string; requestedAt: Date }>();
-    if (screens.length > 0) {
-      const screenIds = screens.map((s) => s.scrn_id);
-      const implSnapshots = await prisma.tbSpImplSnapshot.findMany({
-        where:  { ref_tbl_nm: "tb_ds_screen", ref_id: { in: screenIds } },
-        select: { ref_id: true, ai_task_id: true, creat_dt: true },
-        orderBy: { creat_dt: "desc" },
-      });
-      if (implSnapshots.length > 0) {
-        const allTaskIds = [...new Set(implSnapshots.map((s) => s.ai_task_id))];
-        const implTasks = await prisma.tbAiTask.findMany({
-          where:  { ai_task_id: { in: allTaskIds }, task_ty_code: "IMPLEMENT" },
-          select: { ai_task_id: true, task_sttus_code: true, req_dt: true },
-        });
-        const taskInfoMap = new Map(implTasks.map((t) => [t.ai_task_id, t]));
-
-        // 스냅샷 desc 정렬이므로 첫 매칭이 최신
-        for (const snap of implSnapshots) {
-          if (implTaskMap.has(snap.ref_id)) continue;
-          const task = taskInfoMap.get(snap.ai_task_id);
-          if (!task) continue;
-          implTaskMap.set(snap.ref_id, {
-            aiTaskId:    task.ai_task_id,
-            status:      task.task_sttus_code,
-            requestedAt: task.req_dt,
-          });
-        }
-      }
-    }
-
-    const items = screens.map((s) => {
-      const prog = progMap.get(s.scrn_id);
-      const impl = implTaskMap.get(s.scrn_id);
-      return {
-        screenId:         s.scrn_id,
-        displayId:        s.scrn_display_id,
-        name:             s.scrn_nm,
-        type:             s.scrn_ty_code,
-        categoryL:        s.ctgry_l_nm ?? "",
-        categoryM:        s.ctgry_m_nm ?? "",
-        categoryS:        s.ctgry_s_nm ?? "",
-        unitWorkId:       s.unit_work_id ?? null,
-        unitWorkName:     s.unitWork?.unit_work_nm ?? "미분류",
-        // 담당자 — 미지정/퇴장 멤버면 null
-        assignMemberId:   s.asign_mber_id ?? null,
-        assignMemberName: s.asign_mber_id ? (assigneeMap.get(s.asign_mber_id) ?? null) : null,
-        requirementId:   s.unitWork?.requirement?.req_id ?? null,
-        requirementName: s.unitWork?.requirement
-          ? s.unitWork.requirement.req_nm
-          : "미분류",
-        areaCount:       s._count.areas,
-        sortOrder:       s.sort_ordr,
-        avgDesignRt:     prog?.designRt ?? 0,
-        avgImplRt:       prog?.implRt ?? 0,
-        avgTestRt:       prog?.testRt ?? 0,
-        // AI 구현 요청 정보 (스냅샷 → IMPLEMENT 태스크 최신 1건)
-        implTask:        impl ? { aiTaskId: impl.aiTaskId, status: impl.status, requestedAt: impl.requestedAt } : null,
-      };
-    });
-
+    // 데이터 조회+가공 로직은 service 로 분리 — export 라우트와 동일 결과 보장
+    const items = await fetchProjectScreens({ projectId, unitWorkId, assigneeFilter });
     return apiSuccess({ items, totalCount: items.length });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/screens] DB 오류:`, err);

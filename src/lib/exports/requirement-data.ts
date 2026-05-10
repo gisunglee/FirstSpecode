@@ -21,7 +21,9 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import type { RequirementExportInput } from "@/lib/exports/docx/requirement";
+import { buildRequirementDocx, type RequirementExportInput } from "@/lib/exports/docx/requirement";
+import { bumpMinorVersion } from "@/lib/exports/version";
+import { buildDocxFilename } from "@/lib/exports/filename";
 
 // ─── 코드 → 라벨 매핑 ────────────────────────────────────────
 // 화면(requirements/page.tsx) 와 동일한 라벨. 향후 공통 코드 테이블로 옮기면 한 곳에서 관리.
@@ -217,4 +219,94 @@ export async function buildRequirementExportInput(
   };
 
   return { ok: true, input };
+}
+
+// ─── 헬퍼: input → 변경이력 표 구성 → docx Buffer ──────────
+/**
+ * 요건정의서 1건의 docx Buffer 와 다운로드 파일명을 한 번에 만든다.
+ *
+ * 동일 흐름이 단일 export route 와 zip 일괄 다운로드 route 양쪽에서 필요하므로
+ * 여기에서 한 번 정의해서 양쪽이 재사용한다.
+ *
+ * 흐름:
+ *   1) buildRequirementExportInput()  — DB → 양식 입력 객체
+ *   2) tbDsDocumentRelease.findMany() — 발행 이력 조회
+ *   3) hasContentChanged()            — 직전 발행 후 본문 변경 여부 판정
+ *   4) input.history 구성              — "현재 작업 중" 행 + 발행 이력
+ *   5) buildRequirementDocx(input)    — docx Buffer 생성
+ *
+ * @returns 성공 시 buffer + filename + displayId, 실패 시 httpStatus + code + message
+ */
+export async function buildRequirementDocxWithHistory(
+  projectId: string,
+  reqId: string,
+): Promise<
+  | { ok: true; buffer: Buffer; filename: string; displayId: string }
+  | { ok: false; httpStatus: number; code: string; message: string }
+> {
+  const result = await buildRequirementExportInput(projectId, reqId);
+  if (!result.ok) return result;
+  const input = result.input;
+
+  // 발행 이력 조회 — 변경이력 표 구성용
+  const releases = await prisma.tbDsDocumentRelease.findMany({
+    where:   { prjct_id: projectId, doc_kind: "REQUIREMENT", ref_id: reqId },
+    orderBy: { released_dt: "desc" },
+    select: {
+      vrsn_no:       true,
+      change_cn:     true,
+      author_nm:     true,
+      approver_nm:   true,
+      released_dt:   true,
+      snapshot_data: true,
+    },
+  });
+
+  // 본문 변경 여부 판정 (발행 0건이면 항상 "최초 작성" 행 표시)
+  let showCurrentRow = true;
+  if (releases.length > 0) {
+    const lastSnapshot = releases[0].snapshot_data as Partial<RequirementExportInput>;
+    showCurrentRow = hasContentChanged(lastSnapshot, input);
+  }
+
+  const releaseRows = releases.map((r) => ({
+    version:  r.vrsn_no,
+    date:     r.released_dt.toISOString().slice(0, 10),
+    change:   r.change_cn   ?? "",
+    author:   r.author_nm   ?? "",
+    approver: r.approver_nm ?? "",
+  }));
+
+  if (showCurrentRow) {
+    const today = new Date().toISOString().slice(0, 10);
+    const currentVersion = releases.length > 0
+      ? bumpMinorVersion(releases[0].vrsn_no)
+      : input.documentVersion;
+    const currentChange = releases.length > 0
+      ? "(현재 작업 중)"
+      : REQUIREMENT_EXPORT_FALLBACK.historyChange;
+    input.history = [
+      {
+        version:  currentVersion,
+        date:     today,
+        change:   currentChange,
+        author:   input.authorName,
+        approver: input.approverName,
+      },
+      ...releaseRows,
+    ];
+  } else {
+    input.history = releaseRows;
+  }
+
+  const buffer = await buildRequirementDocx(input);
+  // 파일명: <RQ-ID>_<요구사항명>_요구사항명세서.docx — 이름 비면 두 번째 부분 생략
+  const filename = buildDocxFilename(input.reqDisplayId, input.reqName, "요구사항명세서");
+
+  return {
+    ok:        true,
+    buffer,
+    filename,
+    displayId: input.reqDisplayId,
+  };
 }

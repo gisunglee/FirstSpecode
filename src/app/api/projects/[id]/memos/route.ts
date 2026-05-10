@@ -11,6 +11,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { fetchProjectMemos } from "@/lib/exports/memos-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -28,68 +29,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const shareFilter = url.searchParams.get("share") ?? undefined; // "mine" | "shared" | undefined(전체)
 
   try {
-    // 조회 범위: 본인 메모 + 공유 메모
-    const where: Record<string, unknown> = {
-      prjct_id: projectId,
-      OR: [
-        { creat_mber_id: gate.mberId },
-        { share_yn: "Y" },
-      ],
-    };
-
-    // refType + refId 필터 (상세 페이지에서 연결 메모만 볼 때)
-    if (refType && refId) {
-      where.ref_ty_code = refType;
-      where.ref_id = refId;
-    }
-
-    // 검색 키워드
-    if (search) {
-      where.memo_sj = { contains: search, mode: "insensitive" };
-    }
-
-    // 공유 필터
-    if (shareFilter === "mine") {
-      // 내 메모만 — OR 조건 제거
-      delete where.OR;
-      where.creat_mber_id = gate.mberId;
-    } else if (shareFilter === "shared") {
-      // 공유 메모만
-      delete where.OR;
-      where.share_yn = "Y";
-    }
-
-    const memos = await prisma.tbDsMemo.findMany({
-      where,
-      orderBy: { creat_dt: "desc" },
-      take: 200,
+    // 데이터 조회+가공 로직은 service 로 분리 — export 라우트와 동일 결과 보장
+    const items = await fetchProjectMemos({
+      projectId,
+      mberId: gate.mberId,
+      refType, refId, search, shareFilter,
     });
-
-    // 작성자 이름 조회 (고유 mber_id 수집)
-    const mberIds = [...new Set(memos.map((m) => m.creat_mber_id))];
-    const members = await prisma.tbCmMember.findMany({
-      where: { mber_id: { in: mberIds } },
-      select: { mber_id: true, mber_nm: true },
-    });
-    const mberMap = new Map(members.map((m) => [m.mber_id, m.mber_nm]));
-
-    // 연결 엔티티 이름 조회 (ref_ty_code별 일괄)
-    const refNameMap = await resolveRefNames(memos);
-
-    const items = memos.map((m) => ({
-      memoId:       m.memo_id,
-      subject:      m.memo_sj,
-      shareYn:      m.share_yn,
-      refTyCode:    m.ref_ty_code,
-      refId:        m.ref_id,
-      refName:      m.ref_id ? (refNameMap.get(m.ref_id) ?? "") : "",
-      viewCnt:      m.view_cnt,
-      creatMberId:  m.creat_mber_id,
-      creatMberName: mberMap.get(m.creat_mber_id) ?? "",
-      isMine:       m.creat_mber_id === gate.mberId,
-      creatDt:      m.creat_dt,
-    }));
-
     return apiSuccess({ items });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/memos]`, err);
@@ -142,56 +87,3 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// ── 연결 엔티티 이름 일괄 조회 유틸 ──────────────────────────────────────────
-async function resolveRefNames(
-  memos: { ref_ty_code: string | null; ref_id: string | null }[]
-): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
-
-  // ref_ty_code별로 ID 수집
-  const groups: Record<string, string[]> = {};
-  for (const m of memos) {
-    if (!m.ref_ty_code || !m.ref_id) continue;
-    if (!groups[m.ref_ty_code]) groups[m.ref_ty_code] = [];
-    groups[m.ref_ty_code].push(m.ref_id);
-  }
-
-  // 각 타입별 일괄 조회
-  const queries: Promise<void>[] = [];
-
-  if (groups.FUNCTION?.length) {
-    queries.push(
-      prisma.tbDsFunction.findMany({
-        where: { func_id: { in: groups.FUNCTION } },
-        select: { func_id: true, func_nm: true },
-      }).then((rows) => rows.forEach((r) => map.set(r.func_id, r.func_nm)))
-    );
-  }
-  if (groups.AREA?.length) {
-    queries.push(
-      prisma.tbDsArea.findMany({
-        where: { area_id: { in: groups.AREA } },
-        select: { area_id: true, area_nm: true },
-      }).then((rows) => rows.forEach((r) => map.set(r.area_id, r.area_nm)))
-    );
-  }
-  if (groups.SCREEN?.length) {
-    queries.push(
-      prisma.tbDsScreen.findMany({
-        where: { scrn_id: { in: groups.SCREEN } },
-        select: { scrn_id: true, scrn_nm: true },
-      }).then((rows) => rows.forEach((r) => map.set(r.scrn_id, r.scrn_nm)))
-    );
-  }
-  if (groups.UNIT_WORK?.length) {
-    queries.push(
-      prisma.tbDsUnitWork.findMany({
-        where: { unit_work_id: { in: groups.UNIT_WORK } },
-        select: { unit_work_id: true, unit_work_nm: true },
-      }).then((rows) => rows.forEach((r) => map.set(r.unit_work_id, r.unit_work_nm)))
-    );
-  }
-
-  await Promise.all(queries);
-  return map;
-}

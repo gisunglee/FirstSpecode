@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import DdlBulkImportDialog from "@/components/ui/DdlBulkImportDialog";
+import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 // 매핑 인사이트 Phase 2 — IO 프로필 아이콘, 커버리지 텍스트 배지
 import { IoProfileIcon, CoverageText } from "@/components/db-table/TableInsightBadges";
 import type { IoProfile } from "@/lib/dbTableUsage";
@@ -200,7 +201,14 @@ function DbTablesPageInner() {
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           DB 테이블 관리
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <ExcelDownloadButton
+            href={`/api/projects/${projectId}/db-tables/export${
+              filterAssignedTo === "me" ? "?assignedTo=me" : ""
+            }`}
+            entityKey="db-tables"
+            disabled={!hasLoadedProfile}
+          />
           {/* DDL 일괄 등록 — 여러 CREATE TABLE 을 한 번에 파싱·등록 */}
           <button onClick={() => setBulkOpen(true)} style={bulkBtnStyle}>
             + DDL 일괄 등록

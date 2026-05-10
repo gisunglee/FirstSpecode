@@ -28,41 +28,41 @@ import { useIsSystemAdmin, useMyRole } from "@/hooks/useMyRole";
 type DesignRefType = "REQUIREMENT" | "UNIT_WORK" | "SCREEN" | "AREA" | "FUNCTION";
 
 type LinkedPromptTemplate = {
-  tmplId:     string;
-  tmplNm:     string;
-  isSystem:   boolean;
+  tmplId: string;
+  tmplNm: string;
+  isSystem: boolean;
   taskTyCode: string;
-  defaultYn:  string;
+  defaultYn: string;
 };
 
 type TemplateDetail = {
-  dsgnTmplId:  string;
-  projectId:   string | null;
-  isSystem:    boolean;
-  defaultYn:   string;
-  refTyCode:   DesignRefType;
-  tmplNm:      string;
-  tmplDc:      string;
-  exampleCn:   string;
-  templateCn:  string;
-  useYn:       string;
-  sortOrdr:    number;
+  dsgnTmplId: string;
+  projectId: string | null;
+  isSystem: boolean;
+  defaultYn: string;
+  refTyCode: DesignRefType;
+  tmplNm: string;
+  tmplDc: string;
+  exampleCn: string;
+  templateCn: string;
+  useYn: string;
+  sortOrdr: number;
   creatMberId: string | null;
-  creatDt:     string;
-  mdfcnDt:     string;
-  myRole:      string;
+  creatDt: string;
+  mdfcnDt: string;
+  myRole: string;
   linkedPromptTemplateCount: number;
-  linkedPromptTemplates:     LinkedPromptTemplate[];
+  linkedPromptTemplates: LinkedPromptTemplate[];
 };
 
 // ── 상수 ──────────────────────────────────────────────────────────────────────
 
 const REF_TYPE_OPTIONS: { value: DesignRefType; label: string }[] = [
   { value: "REQUIREMENT", label: "요구사항" },
-  { value: "UNIT_WORK",   label: "단위업무" },
-  { value: "SCREEN",      label: "화면" },
-  { value: "AREA",        label: "영역" },
-  { value: "FUNCTION",    label: "기능" },
+  { value: "UNIT_WORK", label: "단위업무" },
+  { value: "SCREEN", label: "화면" },
+  { value: "AREA", label: "영역" },
+  { value: "FUNCTION", label: "기능" },
 ];
 
 // ── 페이지 래퍼 ───────────────────────────────────────────────────────────────
@@ -78,12 +78,12 @@ export default function DesignTemplateDetailPage() {
 // ── 메인 ──────────────────────────────────────────────────────────────────────
 
 function DesignTemplateDetailPageInner() {
-  const params     = useParams();
-  const router     = useRouter();
-  const qc         = useQueryClient();
-  const projectId  = params.id as string;
+  const params = useParams();
+  const router = useRouter();
+  const qc = useQueryClient();
+  const projectId = params.id as string;
   const dsgnTmplId = params.dsgnTmplId as string;
-  const isNew      = dsgnTmplId === "new";
+  const isNew = dsgnTmplId === "new";
 
   const { setBreadcrumb } = useAppStore();
 
@@ -91,16 +91,16 @@ function DesignTemplateDetailPageInner() {
   const [copyConfirm, setCopyConfirm] = useState(false);
 
   // 탭 상태 — 예시/템플릿 마크다운 에디터별
-  const [exampleTab,  setExampleTab]  = useState<"edit" | "preview">("edit");
+  const [exampleTab, setExampleTab] = useState<"edit" | "preview">("edit");
   const [templateTab, setTemplateTab] = useState<"edit" | "preview">("edit");
 
   // 폼 상태
-  const [tmplNm,     setTmplNm]     = useState("");
-  const [refTyCode,  setRefTyCode]  = useState<DesignRefType>("SCREEN");
-  const [tmplDc,     setTmplDc]     = useState("");
-  const [useYn,      setUseYn]      = useState("Y");
-  const [sortOrdr,   setSortOrdr]   = useState(0);
-  const [exampleCn,  setExampleCn]  = useState("");
+  const [tmplNm, setTmplNm] = useState("");
+  const [refTyCode, setRefTyCode] = useState<DesignRefType>("SCREEN");
+  const [tmplDc, setTmplDc] = useState("");
+  const [useYn, setUseYn] = useState("Y");
+  const [sortOrdr, setSortOrdr] = useState(0);
+  const [exampleCn, setExampleCn] = useState("");
   const [templateCn, setTemplateCn] = useState("");
 
   // 상세 조회 (수정 모드만)
@@ -134,7 +134,7 @@ function DesignTemplateDetailPageInner() {
   }, [setBreadcrumb, projectId, isNew, detail?.tmplNm]);
 
   const isDefault = !isNew && (detail?.defaultYn === "Y");
-  const isSystem  = !isNew && (detail?.isSystem ?? false);
+  const isSystem = !isNew && (detail?.isSystem ?? false);
   // DEFAULT = 시스템 공통(prjct_id=null) 또는 default_yn='Y' 중 하나 (서버의 isDefault 판정과 동일)
   const isDefaultOrSystem = isSystem || isDefault;
 
@@ -143,7 +143,7 @@ function DesignTemplateDetailPageInner() {
   // OWNER/ADMIN 또는 PM/PL 이면 프로젝트 사본 편집·복사·생성 가능
   const isProjectEditor =
     currentProjectRole === "OWNER" || currentProjectRole === "ADMIN" ||
-    currentProjectJob  === "PM"    || currentProjectJob  === "PL";
+    currentProjectJob === "PM" || currentProjectJob === "PL";
   const isPermissionLoading = isSysAdminLoading || isRoleLoading;
 
   // 편집 가능 여부 (2026-05-06 정책 변경):
@@ -165,8 +165,8 @@ function DesignTemplateDetailPageInner() {
       const body = {
         tmplNm,
         refTyCode,
-        tmplDc:     tmplDc     || null,
-        exampleCn:  exampleCn  || null,
+        tmplDc: tmplDc || null,
+        exampleCn: exampleCn || null,
         templateCn: templateCn || null,
         useYn,
         sortOrdr,
@@ -217,12 +217,12 @@ function DesignTemplateDetailPageInner() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            tmplNm:     `${tmplNm} (복사본)`,
+            tmplNm: `${tmplNm} (복사본)`,
             refTyCode,
-            tmplDc:     tmplDc     || null,
-            exampleCn:  exampleCn  || null,
+            tmplDc: tmplDc || null,
+            exampleCn: exampleCn || null,
             templateCn: templateCn || null,
-            useYn:      "Y",        // 복사본은 바로 사용 가능하도록 활성으로 생성
+            useYn: "Y",        // 복사본은 바로 사용 가능하도록 활성으로 생성
             sortOrdr,
           }),
         },
@@ -336,7 +336,7 @@ function DesignTemplateDetailPageInner() {
                         fontSize: 11, fontWeight: 700, padding: "3px 9px",
                         borderRadius: 4,
                         background: "var(--color-brand)",
-                        color:      "var(--color-text-inverse)",
+                        color: "var(--color-text-inverse)",
                         letterSpacing: "0.04em",
                       }}>
                         공통
@@ -347,7 +347,7 @@ function DesignTemplateDetailPageInner() {
                         fontSize: 11, fontWeight: 700, padding: "3px 9px",
                         borderRadius: 4,
                         background: "var(--color-text-primary)",
-                        color:      "var(--color-text-inverse)",
+                        color: "var(--color-text-inverse)",
                         letterSpacing: "0.06em",
                       }}>
                         DEFAULT
@@ -356,7 +356,7 @@ function DesignTemplateDetailPageInner() {
                     {/* 일반 페이지에서는 DEFAULT 가 항상 read-only.
                         SUPER_ADMIN 의 편집은 /admin/design-templates 에서. */}
                     <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-error)" }}>
-                      읽기 전용 (수정은 시스템 관리자 페이지에서)
+                      읽기 전용
                     </span>
                   </div>
                 ) : <div />}
@@ -378,9 +378,9 @@ function DesignTemplateDetailPageInner() {
                 <div style={{
                   padding: "10px 14px", borderRadius: 6,
                   background: "var(--color-warning-subtle)",
-                  border:     "1px solid var(--color-warning-border)",
-                  fontSize:   13,
-                  color:      "var(--color-warning)",
+                  border: "1px solid var(--color-warning-border)",
+                  fontSize: 13,
+                  color: "var(--color-warning)",
                   lineHeight: 1.6,
                 }}>
                   ⚠️ 이 양식은 <strong>{isSystem ? "시스템 공통" : "기본"} 양식</strong>입니다.
@@ -591,8 +591,8 @@ function LinkedPromptsCard({
   projectId, isNew, detail,
 }: {
   projectId: string;
-  isNew:     boolean;
-  detail:    TemplateDetail | undefined;
+  isNew: boolean;
+  detail: TemplateDetail | undefined;
 }) {
   if (isNew) {
     return (
@@ -607,7 +607,7 @@ function LinkedPromptsCard({
   if (!detail) return null;
 
   const count = detail.linkedPromptTemplateCount ?? 0;
-  const list  = detail.linkedPromptTemplates ?? [];
+  const list = detail.linkedPromptTemplates ?? [];
 
   return (
     <div style={sideCardStyle}>
@@ -641,7 +641,7 @@ function LinkedPromptsCard({
                   <span style={{
                     fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
                     background: "var(--color-text-primary)",
-                    color:      "var(--color-text-inverse)",
+                    color: "var(--color-text-inverse)",
                     marginRight: 4,
                   }}>
                     DEFAULT
@@ -680,9 +680,9 @@ function LinkedPromptsCard({
 // ── FormField ────────────────────────────────────────────────────────────────
 
 function FormField({ label, required, children }: {
-  label:     string;
+  label: string;
   required?: boolean;
-  children:  React.ReactNode;
+  children: React.ReactNode;
 }) {
   return (
     <div>

@@ -282,7 +282,16 @@
       "Bash(node scripts/p0-smoke.mjs)",
       "Bash(rm scripts/p0-smoke.mjs)",
       "Bash(grep -nA3 \"model TbCmAttachFile\" prisma/schema.prisma)",
-      "Bash(grep -rn 'projects/\\\\${currentProjectId}\\\\|projects/\" \\\\+ currentProjectId' src --include=\"*.tsx\" --include=\"*.ts\")"
+      "Bash(grep -rn 'projects/\\\\${currentProjectId}\\\\|projects/\" \\\\+ currentProjectId' src --include=\"*.tsx\" --include=\"*.ts\")",
+      "Bash(taskkill //PID 34492 //F)",
+      "Bash(taskkill //IM node.exe //F)",
+      "PowerShell(Stop-Process -Id 34492 -Force)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 3000,3001 -ErrorAction SilentlyContinue)",
+      "Bash(tee /tmp/tsc-doclib.txt)",
+      "Bash(tee /tmp/build-doclib.txt)",
+      "Bash(tee /tmp/tsc-fn.txt)",
+      "Bash(tee /tmp/tsc-tight.txt)",
+      "Bash(tee /tmp/tsc-code.txt)"
     ]
   }
 }

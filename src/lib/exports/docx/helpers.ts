@@ -15,7 +15,7 @@
  */
 
 import {
-  Paragraph, TextRun, TableCell, AlignmentType,
+  Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType,
   BorderStyle, WidthType, ShadingType, VerticalAlign, LevelFormat,
 } from "docx";
 import {
@@ -23,6 +23,7 @@ import {
   COLOR_PRIMARY, COLOR_LABEL_BG, COLOR_BORDER,
   COLOR_TEXT_INVERT,
   SIZE_BODY, SIZE_TABLE_CELL,
+  CONTENT_WIDTH,
 } from "./tokens";
 
 // ─── 보더 ────────────────────────────────────────────────
@@ -52,13 +53,17 @@ type ParagraphOptions = {
 /**
  * 일반 문단 — 본문, 표 셀, 헤더 등 텍스트 한 줄을 만들 때 사용.
  * size·color 등은 모두 토큰값 기반 기본값을 가지므로 호출부는 텍스트만 전달해도 동작.
+ *
+ * spacing 기본값 (DXA, 1440=1inch):
+ *   - before/after = 30 → 문단 간 위아래 여유 최소화 (휑함 방지)
+ *   - line         = 260 → 13.0pt 줄간격 (본문 11pt 대비 1.18배, 한국어 가독성 양호)
  */
 export function p(text: string, opts: ParagraphOptions = {}): Paragraph {
   return new Paragraph({
     spacing: {
-      before: opts.before ?? 60,
-      after:  opts.after  ?? 60,
-      line:   opts.line   ?? 300,
+      before: opts.before ?? 30,
+      after:  opts.after  ?? 30,
+      line:   opts.line   ?? 260,
     },
     alignment: opts.align ?? AlignmentType.LEFT,
     children: [
@@ -74,18 +79,30 @@ export function p(text: string, opts: ParagraphOptions = {}): Paragraph {
 }
 
 // ─── 표 셀 ───────────────────────────────────────────────
+type LabelCellOptions = {
+  /** 1보다 크면 표의 여러 컬럼에 걸쳐 셀이 병합됨 (그룹 헤더용) */
+  columnSpan?: number;
+};
+
 /**
  * 라벨 셀 — 회색 배경에 가운데 정렬한 굵은 텍스트.
- * 메타데이터 표 좌측 컬럼에 사용.
+ * 메타데이터 표 좌측 컬럼이 기본 용도이지만, columnSpan 옵션으로 여러 컬럼에 걸친
+ * 그룹 헤더 행으로도 사용 가능.
  */
-export function labelCell(text: string, width: number): TableCell {
+export function labelCell(text: string, width: number, opts: LabelCellOptions = {}): TableCell {
   return new TableCell({
     borders: cellBorders,
     width:   { size: width, type: WidthType.DXA },
     shading: { fill: COLOR_LABEL_BG, type: ShadingType.CLEAR },
-    margins: { top: 100, bottom: 100, left: 140, right: 140 },
+    // margins 축소 — 셀 행 높이 압축 (이전 100/140 → 60/120)
+    margins: { top: 60, bottom: 60, left: 120, right: 120 },
     verticalAlign: VerticalAlign.CENTER,
-    children: [p(text, { bold: true, size: SIZE_TABLE_CELL, align: AlignmentType.CENTER })],
+    columnSpan: opts.columnSpan,
+    children: [p(text, {
+      bold: true, size: SIZE_TABLE_CELL, align: AlignmentType.CENTER,
+      // 셀 안 paragraph 자체 spacing 도 0으로 — 셀 margins 만으로 여백 결정
+      before: 0, after: 0, line: 240,
+    })],
   });
 }
 
@@ -106,10 +123,13 @@ export function valueCell(
   return new TableCell({
     borders: cellBorders,
     width:   { size: width, type: WidthType.DXA },
-    margins: { top: 100, bottom: 100, left: 140, right: 140 },
+    margins: { top: 60, bottom: 60, left: 120, right: 120 },
     verticalAlign: VerticalAlign.CENTER,
     columnSpan: opts.columnSpan,
-    children: lines.map((line) => p(line, { size: SIZE_TABLE_CELL, align: opts.align })),
+    children: lines.map((line) => p(line, {
+      size: SIZE_TABLE_CELL, align: opts.align,
+      before: 0, after: 0, line: 240,
+    })),
   });
 }
 
@@ -121,14 +141,16 @@ export function headerCell(text: string, width: number): TableCell {
     borders: cellBorders,
     width:   { size: width, type: WidthType.DXA },
     shading: { fill: COLOR_PRIMARY, type: ShadingType.CLEAR },
-    margins: { top: 120, bottom: 120, left: 140, right: 140 },
+    // 헤더는 가독성 위해 약간 더 두께감 — value/label 보다 살짝 큰 margins 유지
+    margins: { top: 80, bottom: 80, left: 120, right: 120 },
     verticalAlign: VerticalAlign.CENTER,
     children: [
       p(text, {
-        bold:  true,
-        size:  SIZE_TABLE_CELL,
-        color: COLOR_TEXT_INVERT,
-        align: AlignmentType.CENTER,
+        bold:   true,
+        size:   SIZE_TABLE_CELL,
+        color:  COLOR_TEXT_INVERT,
+        align:  AlignmentType.CENTER,
+        before: 0, after: 0, line: 240,
       }),
     ],
   });
@@ -141,7 +163,7 @@ export function headerCell(text: string, width: number): TableCell {
 export function bulletItem(text: string): Paragraph {
   return new Paragraph({
     numbering: { reference: "bullets", level: 0 },
-    spacing:   { before: 40, after: 40, line: 300 },
+    spacing:   { before: 20, after: 20, line: 260 },
     children:  [new TextRun({ text, font: FONT, size: SIZE_BODY })],
   });
 }
@@ -152,8 +174,63 @@ export function bulletItem(text: string): Paragraph {
 export function numberedItem(text: string): Paragraph {
   return new Paragraph({
     numbering: { reference: "numbers", level: 0 },
-    spacing:   { before: 40, after: 40, line: 300 },
+    spacing:   { before: 20, after: 20, line: 260 },
     children:  [new TextRun({ text, font: FONT, size: SIZE_BODY })],
+  });
+}
+
+// ─── 코드 블록 (ASCII 화면 mockup, 등폭 텍스트) ──────────
+/**
+ * 마크다운의 ``` 코드 블록을 docx 표 1셀로 렌더링한다.
+ *
+ * 의도:
+ *   - ASCII 박스(─ │ ┌ ┐ + - |) 같은 mockup 이 깨지지 않도록 monospace 폰트 + 줄바꿈 보존
+ *   - 회색 배경 + 1px 테두리로 본문과 시각 구분
+ *   - 한 paragraph 안에서 break 로 라인을 연결 — paragraph 분리 시 줄간격 벌어지는 문제 회피
+ *
+ * 폰트:
+ *   - "Consolas" — Windows 기본 탑재. 한글 → fallback 자동 (대부분 환경에서 잘 보임)
+ *   - 한글이 등장해도 OS 의 fallback 글꼴로 자연스럽게 처리됨
+ *
+ * 폰트 크기:
+ *   - 18 (= 9pt). 본문 11pt 보다 작아 ASCII 라인이 정렬되기 쉽고, 박스가 한 줄에 들어갈 확률 ↑
+ */
+export function codeBlock(text: string): Table {
+  const CODE_FONT = "Consolas";
+  const CODE_SIZE = 18;
+  const CODE_BG   = "F5F5F5"; // 옅은 회색
+
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  // 한 paragraph 안에 break 로 라인을 연결
+  const runs: TextRun[] = [];
+  lines.forEach((line, i) => {
+    if (i > 0) runs.push(new TextRun({ break: 1 }));
+    // 빈 줄도 break 후 빈 TextRun 으로 자리 차지 — 그래야 박스 사이 빈 줄 보존
+    runs.push(new TextRun({ text: line, font: CODE_FONT, size: CODE_SIZE }));
+  });
+
+  return new Table({
+    width:        { size: CONTENT_WIDTH, type: WidthType.DXA },
+    columnWidths: [CONTENT_WIDTH],
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            borders: cellBorders,
+            width:   { size: CONTENT_WIDTH, type: WidthType.DXA },
+            shading: { fill: CODE_BG, type: ShadingType.CLEAR },
+            margins: { top: 120, bottom: 120, left: 160, right: 160 },
+            verticalAlign: VerticalAlign.TOP,
+            children: [
+              new Paragraph({
+                spacing: { before: 0, after: 0, line: 240 },
+                children: runs,
+              }),
+            ],
+          }),
+        ],
+      }),
+    ],
   });
 }
 

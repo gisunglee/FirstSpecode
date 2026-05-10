@@ -16,6 +16,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { DESIGN_REF_TYPES } from "@/lib/designTemplate";
+import { fetchProjectDesignTemplates } from "@/lib/exports/design-templates-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -30,50 +31,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const url         = new URL(request.url);
   const refTyCode   = url.searchParams.get("refType") ?? null;
   const useYnFilter = url.searchParams.get("useYn")   ?? null;
-  // scope: "all"(기본) | "system"(공통만) | "project"(프로젝트만)
   const scope       = url.searchParams.get("scope")   ?? "all";
 
   try {
-    // 단일 쿼리로 메타 + 본문까지 조회 후 서버에서 존재 여부 플래그만 계산.
-    // 본문(example_cn/template_cn)은 최대 수십 KB 수준의 마크다운이므로
-    // 네트워크 페이로드 우려가 있으나, 목록 페이지 데이터 건수가 크지 않고(5~수십)
-    // DB 왕복 2회를 절감하는 편이 체감 성능에 유리.
-    // 필요 시 response에서만 본문을 떼어 전송해 페이로드를 줄인다.
-    const templates = await prisma.tbAiDesignTemplate.findMany({
-      where: {
-        ...(scope === "system"
-          ? { prjct_id: null }
-          : scope === "project"
-            ? { prjct_id: projectId }
-            : { OR: [{ prjct_id: projectId }, { prjct_id: null }] }),
-        ...(refTyCode   ? { ref_ty_code: refTyCode }   : {}),
-        ...(useYnFilter ? { use_yn:      useYnFilter } : {}),
-      },
-      orderBy: [
-        { sort_ordr: "asc" },
-        { creat_dt:  "asc" },
-      ],
+    // 데이터 조회+가공 로직은 service 로 분리 — export 라우트와 동일 결과 보장
+    const items = await fetchProjectDesignTemplates({
+      projectId, refTyCode, useYnFilter, scope,
     });
-
-    return apiSuccess(
-      templates.map((t) => ({
-        dsgnTmplId:  t.dsgn_tmpl_id,
-        projectId:   t.prjct_id ?? null,
-        isSystem:    t.prjct_id === null,
-        refTyCode:   t.ref_ty_code,
-        tmplNm:      t.tmpl_nm,
-        tmplDc:      t.tmpl_dc ?? "",
-        // 본문 존재 여부만 플래그로 전송 — 목록에는 전체 본문 불필요
-        hasExample:  !!(t.example_cn  && t.example_cn.trim().length > 0),
-        hasTemplate: !!(t.template_cn && t.template_cn.trim().length > 0),
-        useYn:       t.use_yn,
-        defaultYn:   t.default_yn,
-        sortOrdr:    t.sort_ordr,
-        creatMberId: t.creat_mber_id ?? null,
-        creatDt:     t.creat_dt.toISOString(),
-        mdfcnDt:     t.mdfcn_dt.toISOString(),
-      }))
-    );
+    return apiSuccess(items);
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/design-templates] DB 오류:`, err);
     return apiError("DB_ERROR", "설계 양식 목록 조회에 실패했습니다.", 500);

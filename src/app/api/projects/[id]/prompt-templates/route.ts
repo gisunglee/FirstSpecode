@@ -12,7 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { ARTF_DIV, ARTF_FMT } from "@/constants/planStudio";
-import { buildPromptDomainWhere, parsePromptDomain } from "@/lib/prompt-template/domain";
+import { fetchProjectPromptTemplates } from "@/lib/exports/prompt-templates-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -28,17 +28,6 @@ const TASK_TYPE_PLAN_STUDIO = "PLAN_STUDIO_ARTF_GENERATE";
 const VALID_DIV_CODES = Object.keys(ARTF_DIV);  // ["IA", "JOURNEY", "FLOW", "MOCKUP", "ERD", "PROCESS"]
 const VALID_FMT_CODES = Object.keys(ARTF_FMT);  // ["MD", "MERMAID", "HTML"]
 
-// 시스템 프롬프트 미리보기 — 200자 절단. 본문이 짧으면 그대로 반환.
-// AI 요청 팝업의 "전달 내용" 박스에서 살짝 노출용 (전체 본문은 프롬프트 관리 화면에서 봄).
-const SYS_PROMPT_PREVIEW_LEN = 200;
-function buildSysPromptPreview(raw: string | null): string {
-  if (!raw) return "";
-  const trimmed = raw.trim();
-  return trimmed.length > SYS_PROMPT_PREVIEW_LEN
-    ? trimmed.slice(0, SYS_PROMPT_PREVIEW_LEN) + "…"
-    : trimmed;
-}
-
 // ── GET: 목록 조회 ────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
@@ -47,72 +36,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const gate = await requirePermission(request, projectId, "content.read");
   if (gate instanceof Response) return gate;
 
-  // 쿼리 파라미터
-  const url          = new URL(request.url);
-  const taskTyCode   = url.searchParams.get("taskType")  ?? null;
-  const refTyCode    = url.searchParams.get("refType")   ?? null;
-  const useYnFilter  = url.searchParams.get("useYn")     ?? null;
-  // 도메인 탭 필터 (general / plan-studio) — 잘못된 값은 무시(null) 후 전체 반환
-  const domain       = parsePromptDomain(url.searchParams.get("domain"));
-  // 기획실 탭 전용 — (구분 × 형식) 매트릭스로 좁히기. domain 미지정이면 무시.
-  const divCodeFilter = url.searchParams.get("divCode") ?? null;
-  const fmtCodeFilter = url.searchParams.get("fmtCode") ?? null;
+  const url            = new URL(request.url);
+  const taskTyCode     = url.searchParams.get("taskType")  ?? null;
+  const refTyCode      = url.searchParams.get("refType")   ?? null;
+  const useYnFilter    = url.searchParams.get("useYn")     ?? null;
+  const domainParam    = url.searchParams.get("domain");
+  const divCodeFilter  = url.searchParams.get("divCode")   ?? null;
+  const fmtCodeFilter  = url.searchParams.get("fmtCode")   ?? null;
 
   try {
-    const templates = await prisma.tbAiPromptTemplate.findMany({
-      where: {
-        // 프로젝트 OR + 도메인 OR 두 개를 AND 로 묶음.
-        // 단순 스프레드(...)로 합치면 두 번째 `OR` 키가 첫 번째 `OR` 키를 덮어써
-        // **다른 프로젝트의 템플릿이 노출되는 데이터 누출 버그**가 발생한다.
-        // (예: domain='general' 일 때 buildPromptDomainWhere 의 OR 가 프로젝트 OR 를 침식)
-        AND: [
-          // ① 해당 프로젝트 + 시스템 공통(prjct_id=null) 만 노출
-          {
-            OR: [
-              { prjct_id: projectId },
-              { prjct_id: null },
-            ],
-          },
-          // ② 도메인(일반/기획실) 분류는 lib 헬퍼에서 일원화 — 서버·클라이언트 정의 일치 보장
-          buildPromptDomainWhere(domain),
-        ],
-        ...(taskTyCode  ? { task_ty_code: taskTyCode }  : {}),
-        ...(refTyCode   ? { ref_ty_code:  refTyCode }   : {}),
-        ...(useYnFilter ? { use_yn:       useYnFilter } : {}),
-        // 기획실 도메인일 때만 div_code/fmt_code 필터 의미 있음 — 일반 도메인에는 둘 다 NULL
-        ...(domain === "plan-studio" && divCodeFilter ? { div_code: divCodeFilter } : {}),
-        ...(domain === "plan-studio" && fmtCodeFilter ? { fmt_code: fmtCodeFilter } : {}),
-      },
-      orderBy: [
-        { sort_ordr: "asc" },
-        { creat_dt:  "asc" },
-      ],
+    // 데이터 조회+가공 로직은 service 로 분리 — export 라우트와 동일 결과 보장
+    const items = await fetchProjectPromptTemplates({
+      projectId, taskTyCode, refTyCode, useYnFilter,
+      domainParam, divCodeFilter, fmtCodeFilter,
     });
-
-    return apiSuccess(
-      templates.map((t) => ({
-        tmplId:       t.tmpl_id,
-        projectId:    t.prjct_id ?? null,
-        isSystem:     t.prjct_id === null, // 시스템 공통 템플릿 여부
-        tmplNm:       t.tmpl_nm,
-        taskTyCode:   t.task_ty_code,
-        refTyCode:    t.ref_ty_code   ?? null,
-        // 기획실(PLAN_STUDIO_ARTF) 전용 매트릭스 차원 — 그 외 사용처는 NULL
-        divCode:      t.div_code      ?? null,
-        fmtCode:      t.fmt_code      ?? null,
-        tmplDc:       t.tmpl_dc       ?? "",
-        // 시스템 프롬프트 짧은 미리보기 — AI 요청 팝업의 "전달 내용" 박스에서 살짝 노출용.
-        // 본문 전체를 목록 응답에 박지 않는 것은 페이로드 비대화 방지 + 본문은 상세 페이지에서.
-        sysPromptPreview: buildSysPromptPreview(t.sys_prompt_cn),
-        useYn:        t.use_yn,
-        defaultYn:    t.default_yn,
-        sortOrdr:     t.sort_ordr,
-        useCnt:       t.use_cnt,
-        creatMberId:  t.creat_mber_id ?? null,
-        creatDt:      t.creat_dt.toISOString(),
-        mdfcnDt:      t.mdfcn_dt.toISOString(),
-      }))
-    );
+    return apiSuccess(items);
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/prompt-templates] DB 오류:`, err);
     return apiError("DB_ERROR", "프롬프트 템플릿 목록 조회에 실패했습니다.", 500);

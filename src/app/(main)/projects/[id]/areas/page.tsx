@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import { type AiTaskStatus, AI_TASK_STATUS_LABEL, AI_TASK_STATUS_BADGE } from "@/constants/codes";
+import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -178,17 +179,25 @@ function AreasPageInner() {
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           영역 목록
         </div>
-        <button
-          onClick={() => {
-            const url = screenFilter
-              ? `/projects/${projectId}/areas/new?screenId=${screenFilter}`
-              : `/projects/${projectId}/areas/new`;
-            router.push(url);
-          }}
-          style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
-        >
-          + 신규 등록
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <ExcelDownloadButton
+            href={`/api/projects/${projectId}/areas/export${
+              screenFilter ? `?screenId=${encodeURIComponent(screenFilter)}` : ""
+            }`}
+            entityKey="areas"
+          />
+          <button
+            onClick={() => {
+              const url = screenFilter
+                ? `/projects/${projectId}/areas/new?screenId=${screenFilter}`
+                : `/projects/${projectId}/areas/new`;
+              router.push(url);
+            }}
+            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
+          >
+            + 신규 등록
+          </button>
+        </div>
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>

@@ -20,6 +20,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
+import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────
 type ProjectItem = {
@@ -234,9 +235,15 @@ function ProjectsPageInner() {
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           프로젝트 목록
         </div>
-        <button className="sp-btn sp-btn-primary" style={{ fontSize: 12, padding: "5px 14px" }} onClick={() => setCreateOpen(true)}>
-          + 프로젝트 생성
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <ExcelDownloadButton
+            href="/api/projects/export"
+            entityKey="projects"
+          />
+          <button className="sp-btn sp-btn-primary" style={{ fontSize: 12, padding: "5px 14px" }} onClick={() => setCreateOpen(true)}>
+            + 프로젝트 생성
+          </button>
+        </div>
       </div>
 
       <div style={{ padding: "0 24px 24px", maxWidth: 900 }}>

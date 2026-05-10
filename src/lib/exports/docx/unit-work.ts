@@ -1,0 +1,782 @@
+/**
+ * exports/docx/unit-work.ts — 프로그램 사양서(단위업무 단위) docx 빌더
+ *
+ * 역할:
+ *   - 단위업무 1건과 그 하위 트리(화면 → 영역 → 기능 + 컬럼 매핑) 데이터를
+ *     공공 SI 양식의 표지/변경이력/목차 + SPECODE 도메인을 충실히 풀어쓰는
+ *     본문으로 묶어 Word 파일 Buffer 로 돌려준다.
+ *
+ * 양식 방침:
+ *   - 표지 / 변경이력 / 목차 = 한국 SI 양식 패턴 (요구사항 명세서와 일관)
+ *   - 본문 = SPECODE 데이터 위주 — 빈 표·placeholder 없이 실제 정보만 출력
+ *
+ * 본문 구조:
+ *   1. 단위업무 정보 (메타 표 + 설명 마크다운)
+ *   2. 화면 목록 (요약 표 — 한눈에)
+ *   3. 화면별 상세
+ *      3.X 화면 (메타 + 설명)
+ *        3.X.Y 영역 (메타 + 설명 + 영역 직접 매핑 + 기능들)
+ *          기능 (메타 + 설명 + 기능 컬럼 매핑)
+ *
+ * 책임 분리:
+ *   - 데이터 매핑(DB → UnitWorkExportInput): unit-work-data.ts
+ *   - 양식 토큰: tokens.ts
+ *   - 빌딩 블록: helpers.ts
+ *   - 문서 프레임: frame.ts
+ *   - 이 파일: 양식 "구성"만
+ */
+
+import {
+  Packer, Paragraph, Table, TableRow, TextRun, PageBreak, TableOfContents,
+  AlignmentType, WidthType,
+} from "docx";
+import {
+  COLOR_PRIMARY,
+  SIZE_TITLE_LARGE, SIZE_TITLE_MID, SIZE_TITLE_SMALL,
+  SIZE_HEADING_1, SIZE_HEADING_2, SIZE_BODY,
+  CONTENT_WIDTH,
+} from "./tokens";
+import { p, labelCell, valueCell, headerCell, bulletItem, numberedItem, codeBlock } from "./helpers";
+import { buildDocument, heading1, heading2 } from "./frame";
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  입력 타입
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** 컬럼 매핑 표의 한 행 — 영역/기능에 매핑된 1컬럼. */
+export type ColMappingRow = {
+  no:            number;
+  itemName:      string; // 사용 목적 또는 컬럼 한글명
+  io:            string; // I / O / I/O
+  uiType:        string; // UI 타입 (Text/Sbox/Check/Btn 등)
+  colLogical:    string; // 컬럼 한글명
+  colPhysical:   string; // 컬럼 물리명
+  dataType:      string; // 데이터 타입 (varchar(20) 등)
+  tableLogical:  string; // 테이블 한글명
+  tablePhysical: string; // 테이블 물리명
+};
+
+/** 영역 하위 기능 1건 — 메타 + 설명 + 기능별 매핑. */
+export type FunctionItem = {
+  displayId:   string; // FID-XXXXX
+  name:        string;
+  description: string; // 마크다운
+  funcType:    string; // 한글 라벨
+  priority:    string; // 한글 라벨
+  complexity:  string; // 한글 라벨
+  effort:      string; // 공수 (자유 텍스트)
+  assigneeName: string; // 담당자명 ("미지정" fallback)
+  mappings:    ColMappingRow[];
+};
+
+/** 화면 내 영역 1건 — 메타 + 설명 + (영역 직접 매핑) + 기능 목록. */
+export type AreaSection = {
+  displayId:        string; // AR-XXXXX
+  name:             string;
+  description:      string; // 마크다운
+  areaType:         string; // 한글 라벨
+  displayForm:      string; // 한글 라벨
+  /** 영역 자체에 매핑된 컬럼 (ref_ty_code='AREA'). 비면 표 출력 생략. */
+  directMappings:   ColMappingRow[];
+  functions:        FunctionItem[];
+};
+
+/** 단위업무 하위 화면 1건 — 메타 + 설명 + 영역 목록. */
+export type ScreenSection = {
+  displayId:    string; // PID-XXXXX
+  name:         string;
+  description:  string; // 마크다운
+  screenType:   string; // 한글 라벨
+  urlPath:      string;
+  category:     string; // 카테고리 L > M > S 합쳐서
+  assigneeName: string; // 담당자명
+  areas:        AreaSection[];
+};
+
+/** "2. 화면 목록" 요약 표의 한 행. */
+export type ScreenSummaryRow = {
+  no:         number;
+  displayId:  string;
+  name:       string;
+  screenType: string;
+  areaCount:  number;
+  funcCount:  number;
+};
+
+/**
+ * 프로그램 사양서 docx 빌드에 필요한 모든 데이터.
+ *
+ * DB 정비 전이라도 호출부(API route)에서 fallback 값을 채워서 넘기면 양식은 그대로 동작.
+ * 모든 필드는 호출부 책임 — 이 모듈에서는 비어 있어도 깨지지 않게만 처리.
+ */
+export type UnitWorkExportInput = {
+  // ── 발주처/문서 메타 ────────────────────────────
+  ordererName: string;
+  copyright:   string;
+
+  // ── 프로젝트 ───────────────────────────────────
+  projectName: string;
+
+  // ── 단위업무 메타 ──────────────────────────────
+  unitWorkDisplayId:   string; // UW-XXXXX
+  unitWorkName:        string;
+  unitWorkDescription: string; // 마크다운
+  parentRequirement:   string; // "REQ-XXXXX 요구사항명"  (없으면 "-")
+  assigneeName:        string; // "미지정" fallback
+  startDate:           string; // YYYY-MM-DD 또는 "-"
+  endDate:             string;
+  progressRate:        number; // 0-100
+  sortOrder:           number;
+
+  // ── 트리 ─────────────────────────────────────
+  screens:        ScreenSection[];
+  screenSummary:  ScreenSummaryRow[]; // = screens 에서 파생되지만 빌더 단순화 위해 미리 만들어 받음
+
+  // ── 표지 작성정보 ──────────────────────────────
+  documentVersion: string;
+  writtenAt:       string;
+  authorName:      string;
+  approverName:    string;
+
+  // ── 변경 이력 ──────────────────────────────────
+  history: Array<{
+    version:  string;
+    date:     string;
+    change:   string;
+    author:   string;
+    approver: string;
+  }>;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  마크다운 → docx 단순 렌더 (헤딩/불릿/번호/표/문단)
+//
+//  요구사항 빌더(requirement.ts)의 parseSpec 과 거의 동일하지만, 자동 번호 prefix
+//  ("2.X ...") 를 붙이지 않고 일반 굵은 문단으로 처리한다 — 단위업무 본문은
+//  이미 1/2/3 큰 섹션 헤딩이 있고 그 안의 마크다운까지 자동번호하면 위계가 꼬임.
+// ═══════════════════════════════════════════════════════════════════════════
+
+type MdBlock =
+  | { kind: "heading"; text: string; level: number }
+  | { kind: "bullet";  text: string }
+  | { kind: "number";  text: string }
+  | { kind: "plain";   text: string }
+  | { kind: "table";   header: string[]; rows: string[][] }
+  | { kind: "code";    text: string };
+
+function isTableSeparator(line: string): boolean {
+  return /^\|[\s\-:|]+\|$/.test(line) && line.includes("-");
+}
+
+function splitTableRow(line: string): string[] {
+  return line.slice(1, -1).split("|").map((c) => c.trim());
+}
+
+function looksLikeTableRow(line: string): boolean {
+  return line.startsWith("|") && line.endsWith("|") && line.length > 2 && line.includes("|", 1);
+}
+
+function parseMd(markdown: string): MdBlock[] {
+  const lines = markdown.split(/\r?\n/);
+  const out: MdBlock[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i].trim();
+    if (!line) { i++; continue; }
+
+    // 코드 블록 인식 (```) — ASCII mockup / 화면 박스 보존
+    if (/^```/.test(line)) {
+      i++;
+      const buf: string[] = [];
+      while (i < lines.length) {
+        const t = lines[i];
+        if (/^```\s*$/.test(t.trim())) {
+          i++;
+          break;
+        }
+        buf.push(t); // 트림 안 함 — 들여쓰기 보존
+        i++;
+      }
+      out.push({ kind: "code", text: buf.join("\n") });
+      continue;
+    }
+
+    // 표 인식 — 헤더 + 구분선 연속
+    if (looksLikeTableRow(line) && isTableSeparator((lines[i + 1] ?? "").trim())) {
+      const header = splitTableRow(line);
+      const rows: string[][] = [];
+      i += 2;
+      while (i < lines.length) {
+        const t = lines[i].trim();
+        if (!looksLikeTableRow(t)) break;
+        const cells = splitTableRow(t);
+        while (cells.length < header.length) cells.push("");
+        rows.push(cells.slice(0, header.length));
+        i++;
+      }
+      out.push({ kind: "table", header, rows });
+      continue;
+    }
+
+    if (line.startsWith("### ")) out.push({ kind: "heading", text: line.slice(4), level: 3 });
+    else if (line.startsWith("## "))  out.push({ kind: "heading", text: line.slice(3), level: 2 });
+    else if (line.startsWith("# "))   out.push({ kind: "heading", text: line.slice(2), level: 1 });
+    else if (/^[-*]\s+/.test(line))   out.push({ kind: "bullet", text: line.replace(/^[-*]\s+/, "") });
+    else if (/^\d+[.)]\s+/.test(line)) out.push({ kind: "number", text: line.replace(/^\d+[.)]\s+/, "") });
+    else out.push({ kind: "plain", text: line });
+    i++;
+  }
+  return out;
+}
+
+function buildMdTable(header: string[], rows: string[][]): Table {
+  const colCount = header.length;
+  const baseW = Math.floor(CONTENT_WIDTH / colCount);
+  const widths = header.map((_, i) =>
+    i === colCount - 1 ? CONTENT_WIDTH - baseW * (colCount - 1) : baseW
+  );
+  return new Table({
+    width:        { size: CONTENT_WIDTH, type: WidthType.DXA },
+    columnWidths: widths,
+    rows: [
+      new TableRow({
+        tableHeader: true,
+        children: header.map((h, i) => headerCell(h, widths[i])),
+      }),
+      ...rows.map((r) => new TableRow({
+        children: r.map((cell, i) => valueCell(cell, widths[i])),
+      })),
+    ],
+  });
+}
+
+/**
+ * 자유 마크다운 문자열 → docx 요소 배열.
+ *
+ * @param md         원본 마크다운
+ * @param emptyText  공백 입력 시 출력할 placeholder (없으면 빈 배열)
+ */
+function renderMarkdown(md: string, emptyText: string | null = null): (Paragraph | Table)[] {
+  if (!md.trim()) {
+    return emptyText
+      ? [p(emptyText, { color: "808080" })]
+      : [];
+  }
+
+  const blocks = parseMd(md);
+  const out: (Paragraph | Table)[] = [];
+
+  for (const b of blocks) {
+    switch (b.kind) {
+      case "heading":
+        // 본문 안 마크다운 헤딩 — 일반 굵은 텍스트로 (자동번호·outline 비활성)
+        out.push(new Paragraph({
+          spacing: { before: 200, after: 100 },
+          children: [
+            new TextRun({
+              text:  b.text,
+              font:  "맑은 고딕",
+              size:  b.level <= 1 ? SIZE_HEADING_2 : SIZE_BODY,
+              bold:  true,
+              color: COLOR_PRIMARY,
+            }),
+          ],
+        }));
+        break;
+      case "bullet":  out.push(bulletItem(b.text));  break;
+      case "number":  out.push(numberedItem(b.text)); break;
+      case "plain":   out.push(p(b.text));            break;
+      case "table":   out.push(buildMdTable(b.header, b.rows)); break;
+      case "code":    out.push(codeBlock(b.text));    break;
+    }
+  }
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  표지 / 변경이력 / 목차 — 요구사항 빌더와 일관된 형태 (양식 통일)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function buildCover(input: UnitWorkExportInput, docKind: string): (Paragraph | Table)[] {
+  const blank = (size: number) =>
+    new Paragraph({ spacing: { before: size }, children: [new TextRun("")] });
+
+  const COVER_LABEL_W = 1800;
+  const COVER_VALUE_W = 3600;
+  const coverInfoTable = new Table({
+    width:        { size: COVER_LABEL_W + COVER_VALUE_W, type: WidthType.DXA },
+    columnWidths: [COVER_LABEL_W, COVER_VALUE_W],
+    alignment:    AlignmentType.CENTER,
+    rows: [
+      new TableRow({ children: [labelCell("작성일",   COVER_LABEL_W), valueCell(input.writtenAt,       COVER_VALUE_W)] }),
+      new TableRow({ children: [labelCell("문서 버전", COVER_LABEL_W), valueCell(input.documentVersion, COVER_VALUE_W)] }),
+      new TableRow({ children: [labelCell("작성자",   COVER_LABEL_W), valueCell(input.authorName,      COVER_VALUE_W)] }),
+      new TableRow({ children: [labelCell("승인자",   COVER_LABEL_W), valueCell(input.approverName,    COVER_VALUE_W)] }),
+    ],
+  });
+
+  return [
+    blank(2000),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing:   { before: 0, after: 200 },
+      children:  [new TextRun({ text: input.projectName, font: "맑은 고딕", size: SIZE_TITLE_SMALL, bold: true })],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing:   { before: 0, after: 400 },
+      children:  [new TextRun({ text: docKind, font: "맑은 고딕", size: SIZE_TITLE_LARGE, bold: true, color: COLOR_PRIMARY })],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing:   { before: 0, after: 1200 },
+      children:  [new TextRun({ text: `(${input.unitWorkName})`, font: "맑은 고딕", size: SIZE_TITLE_MID, bold: true, color: COLOR_PRIMARY })],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing:   { before: 0, after: 100 },
+      children:  [new TextRun({ text: input.unitWorkDisplayId, font: "맑은 고딕", size: SIZE_TITLE_MID, bold: true })],
+    }),
+    blank(1600),
+    coverInfoTable,
+    new Paragraph({ children: [new PageBreak()] }),
+  ];
+}
+
+function buildHistory(input: UnitWorkExportInput): (Paragraph | Table)[] {
+  const W = [1100, 1500, CONTENT_WIDTH - 1100 - 1500 - 1500 - 1500, 1500, 1500];
+  const headerRow = new TableRow({
+    tableHeader: true,
+    children: [
+      headerCell("버전",      W[0]),
+      headerCell("작성일",    W[1]),
+      headerCell("변경 내용", W[2]),
+      headerCell("작성자",    W[3]),
+      headerCell("승인자",    W[4]),
+    ],
+  });
+  const dataRows = input.history.length === 0
+    ? [
+        new TableRow({
+          children: [
+            valueCell("(이력 없음)", W[0] + W[1] + W[2] + W[3] + W[4], {
+              columnSpan: 5, align: AlignmentType.CENTER,
+            }),
+          ],
+        }),
+      ]
+    : input.history.map((h) => new TableRow({
+        children: [
+          valueCell(h.version,  W[0], { align: AlignmentType.CENTER }),
+          valueCell(h.date,     W[1], { align: AlignmentType.CENTER }),
+          valueCell(h.change,   W[2]),
+          valueCell(h.author,   W[3], { align: AlignmentType.CENTER }),
+          valueCell(h.approver, W[4], { align: AlignmentType.CENTER }),
+        ],
+      }));
+
+  return [
+    new Paragraph({
+      spacing: { before: 0, after: 240 },
+      children: [
+        new TextRun({ text: "변경 이력", font: "맑은 고딕", size: SIZE_HEADING_1, bold: true, color: COLOR_PRIMARY }),
+      ],
+    }),
+    p("본 문서의 작성·검토·승인 이력은 다음과 같습니다.", { after: 200 }),
+    new Table({
+      width:        { size: CONTENT_WIDTH, type: WidthType.DXA },
+      columnWidths: W,
+      rows:         [headerRow, ...dataRows],
+    }),
+    new Paragraph({ children: [new PageBreak()] }),
+  ];
+}
+
+function buildToc(): (Paragraph | TableOfContents)[] {
+  return [
+    new Paragraph({
+      spacing: { before: 0, after: 240 },
+      children: [
+        new TextRun({ text: "목차", font: "맑은 고딕", size: SIZE_HEADING_1, bold: true, color: COLOR_PRIMARY }),
+      ],
+    }),
+    new TableOfContents("목차", {
+      hyperlink:         true,
+      headingStyleRange: "1-2",
+    }),
+    new Paragraph({ children: [new PageBreak()] }),
+  ];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  본문 1 — 단위업무 정보
+// ═══════════════════════════════════════════════════════════════════════════
+
+function buildUnitWorkSection(input: UnitWorkExportInput): (Paragraph | Table)[] {
+  const META_LABEL_W = 1700;
+  const META_VALUE_W = (CONTENT_WIDTH - META_LABEL_W * 2) / 2;
+  const W4 = [META_LABEL_W, META_VALUE_W, META_LABEL_W, META_VALUE_W];
+
+  // 4컬럼 (라벨 / 값 / 라벨 / 값) 메타 표
+  const metaTable = new Table({
+    width:        { size: CONTENT_WIDTH, type: WidthType.DXA },
+    columnWidths: W4,
+    rows: [
+      new TableRow({
+        children: [
+          labelCell("단위업무 ID", W4[0]), valueCell(input.unitWorkDisplayId, W4[1]),
+          labelCell("단위업무명",  W4[2]), valueCell(input.unitWorkName,      W4[3]),
+        ],
+      }),
+      new TableRow({
+        children: [
+          labelCell("상위 요구사항", W4[0]),
+          // 요구사항 셀은 폭이 좁으면 줄바꿈 어색 → 한 셀에 2칸 폭 사용
+          valueCell(input.parentRequirement, W4[1] + META_LABEL_W + W4[3], { columnSpan: 3 }),
+        ],
+      }),
+      new TableRow({
+        children: [
+          labelCell("담당자",     W4[0]), valueCell(input.assigneeName, W4[1]),
+          labelCell("진행률",     W4[2]), valueCell(`${input.progressRate}%`, W4[3]),
+        ],
+      }),
+      new TableRow({
+        children: [
+          labelCell("시작일",    W4[0]), valueCell(input.startDate, W4[1]),
+          labelCell("종료일",    W4[2]), valueCell(input.endDate,   W4[3]),
+        ],
+      }),
+    ],
+  });
+
+  return [
+    heading1("1. 단위업무 정보"),
+    metaTable,
+    // 설명 (마크다운)
+    heading2("1.1 단위업무 설명"),
+    ...renderMarkdown(input.unitWorkDescription, "(설명이 작성되지 않았습니다.)"),
+  ];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  본문 2 — 화면 목록 (요약 표)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function buildScreenSummary(input: UnitWorkExportInput): (Paragraph | Table)[] {
+  if (input.screenSummary.length === 0) {
+    return [
+      heading1("2. 화면 목록"),
+      p("(화면이 등록되지 않았습니다.)", { color: "808080" }),
+    ];
+  }
+
+  // 컬럼 폭 — 화면명에 가장 많이, 나머지는 좁게
+  const W_NO   = 600;
+  const W_ID   = 1300;
+  const W_TY   = 1100;
+  const W_CNT  = 800;
+  const W_NM   = CONTENT_WIDTH - W_NO - W_ID - W_TY - W_CNT * 2;
+  const W = [W_NO, W_ID, W_NM, W_TY, W_CNT, W_CNT];
+
+  const headerRow = new TableRow({
+    tableHeader: true,
+    children: [
+      headerCell("No",       W[0]),
+      headerCell("화면 ID",  W[1]),
+      headerCell("화면명",   W[2]),
+      headerCell("화면 유형", W[3]),
+      headerCell("영역 수",  W[4]),
+      headerCell("기능 수",  W[5]),
+    ],
+  });
+
+  const rows = input.screenSummary.map((s) => new TableRow({
+    children: [
+      valueCell(String(s.no),         W[0], { align: AlignmentType.CENTER }),
+      valueCell(s.displayId,           W[1], { align: AlignmentType.CENTER }),
+      valueCell(s.name,                W[2]),
+      valueCell(s.screenType || "-",   W[3], { align: AlignmentType.CENTER }),
+      valueCell(String(s.areaCount),   W[4], { align: AlignmentType.CENTER }),
+      valueCell(String(s.funcCount),   W[5], { align: AlignmentType.CENTER }),
+    ],
+  }));
+
+  return [
+    heading1("2. 화면 목록"),
+    new Table({
+      width:        { size: CONTENT_WIDTH, type: WidthType.DXA },
+      columnWidths: W,
+      rows:         [headerRow, ...rows],
+    }),
+  ];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  컬럼 매핑 표 (영역 직접 + 기능별 공통)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function buildMappingTable(rows: ColMappingRow[]): Table {
+  // 컬럼 폭 — 항목명/엔터티/속성을 충분히. 데이터타입은 좁게.
+  const W_NO  = 500;
+  const W_NM  = 1500;
+  const W_IO  = 500;
+  const W_UI  = 700;
+  const W_ENT = 1500;
+  const W_ATT = 1500;
+  const W_COL = 1500;
+  const W_DT  = CONTENT_WIDTH - W_NO - W_NM - W_IO - W_UI - W_ENT - W_ATT - W_COL;
+  const W = [W_NO, W_NM, W_IO, W_UI, W_ENT, W_ATT, W_COL, W_DT];
+
+  const headerRow = new TableRow({
+    tableHeader: true,
+    children: [
+      headerCell("No",       W[0]),
+      headerCell("항목명",   W[1]),
+      headerCell("I/O",      W[2]),
+      headerCell("UI 타입",  W[3]),
+      headerCell("엔터티",   W[4]),
+      headerCell("속성",     W[5]),
+      headerCell("컬럼명",   W[6]),
+      headerCell("데이터타입", W[7]),
+    ],
+  });
+
+  const dataRows = rows.map((m) => new TableRow({
+    children: [
+      valueCell(String(m.no),    W[0], { align: AlignmentType.CENTER }),
+      valueCell(m.itemName,      W[1]),
+      valueCell(m.io,            W[2], { align: AlignmentType.CENTER }),
+      valueCell(m.uiType,        W[3], { align: AlignmentType.CENTER }),
+      valueCell(m.tableLogical,  W[4]),
+      valueCell(m.colLogical,    W[5]),
+      valueCell(m.colPhysical,   W[6]),
+      valueCell(m.dataType,      W[7], { align: AlignmentType.CENTER }),
+    ],
+  }));
+
+  return new Table({
+    width:        { size: CONTENT_WIDTH, type: WidthType.DXA },
+    columnWidths: W,
+    rows:         [headerRow, ...dataRows],
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  기능 1건 (메타 + 설명 + 매핑)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function buildFunctionBlock(fn: FunctionItem, indexLabel: string): (Paragraph | Table)[] {
+  // "3.1.2.1 [FID-XXXXX] 기능명" 같은 헤더 — heading 보다 작은 4단계 굵은 문단
+  const head = new Paragraph({
+    spacing: { before: 240, after: 120 },
+    children: [
+      new TextRun({
+        text:  `${indexLabel} [${fn.displayId}] ${fn.name || "(기능명 미지정)"}`,
+        font:  "맑은 고딕",
+        size:  SIZE_BODY,
+        bold:  true,
+        color: COLOR_PRIMARY,
+      }),
+    ],
+  });
+
+  // 메타 표 (1행 4셀: 유형/우선순위/복잡도/공수, 1행 2셀: 담당자)
+  const META_LABEL_W = 1300;
+  const META_VALUE_W = (CONTENT_WIDTH - META_LABEL_W * 4) / 4;
+  const W = [META_LABEL_W, META_VALUE_W, META_LABEL_W, META_VALUE_W];
+
+  const metaTable = new Table({
+    width:        { size: CONTENT_WIDTH, type: WidthType.DXA },
+    columnWidths: [W[0], W[1], W[2], W[3], META_LABEL_W, META_VALUE_W, META_LABEL_W, META_VALUE_W],
+    rows: [
+      new TableRow({
+        children: [
+          labelCell("유형",     W[0]), valueCell(fn.funcType   || "-", W[1]),
+          labelCell("우선순위", W[2]), valueCell(fn.priority   || "-", W[3]),
+          labelCell("복잡도",   W[0]), valueCell(fn.complexity || "-", W[1]),
+          labelCell("공수",     W[2]), valueCell(fn.effort     || "-", W[3]),
+        ],
+      }),
+      new TableRow({
+        children: [
+          labelCell("담당자", W[0]),
+          valueCell(fn.assigneeName, W[1] + META_LABEL_W + W[3] + META_LABEL_W + W[1] + META_LABEL_W + W[3], { columnSpan: 7 }),
+        ],
+      }),
+    ],
+  });
+
+  const blocks: (Paragraph | Table)[] = [head, metaTable];
+
+  // 설명
+  if (fn.description?.trim()) {
+    blocks.push(...renderMarkdown(fn.description));
+  }
+
+  // 컬럼 매핑 (있으면)
+  if (fn.mappings.length > 0) {
+    blocks.push(p("컬럼 매핑", { bold: true, before: 160, after: 80 }));
+    blocks.push(buildMappingTable(fn.mappings));
+  }
+
+  return blocks;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  영역 1건 (메타 + 설명 + 영역 직접 매핑 + 기능 목록)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function buildAreaBlock(area: AreaSection, indexLabel: string): (Paragraph | Table)[] {
+  const blocks: (Paragraph | Table)[] = [];
+
+  // "3.1.1 [AR-XXXXX] 영역명" — heading2 (TOC 자동수집)
+  blocks.push(heading2(`${indexLabel} [${area.displayId}] ${area.name || "(영역명 미지정)"}`));
+
+  // 메타 표 (4컬럼)
+  const META_LABEL_W = 1500;
+  const META_VALUE_W = (CONTENT_WIDTH - META_LABEL_W * 2) / 2;
+  const W4 = [META_LABEL_W, META_VALUE_W, META_LABEL_W, META_VALUE_W];
+
+  blocks.push(new Table({
+    width:        { size: CONTENT_WIDTH, type: WidthType.DXA },
+    columnWidths: W4,
+    rows: [
+      new TableRow({
+        children: [
+          labelCell("영역 유형",  W4[0]), valueCell(area.areaType    || "-", W4[1]),
+          labelCell("표시 형태",  W4[2]), valueCell(area.displayForm || "-", W4[3]),
+        ],
+      }),
+    ],
+  }));
+
+  // 설명
+  if (area.description?.trim()) {
+    blocks.push(...renderMarkdown(area.description));
+  }
+
+  // 영역 직접 매핑 (있으면)
+  if (area.directMappings.length > 0) {
+    blocks.push(p("영역 직접 매핑", { bold: true, before: 200, after: 80 }));
+    blocks.push(buildMappingTable(area.directMappings));
+  }
+
+  // 기능 목록
+  if (area.functions.length > 0) {
+    blocks.push(p(`기능 (${area.functions.length}건)`, { bold: true, before: 240, after: 80 }));
+    area.functions.forEach((fn, i) => {
+      const fnLabel = `${indexLabel}.${i + 1}`;
+      blocks.push(...buildFunctionBlock(fn, fnLabel));
+    });
+  } else if (area.directMappings.length === 0) {
+    // 매핑도 없고 기능도 없는 영역 — 안내
+    blocks.push(p("(이 영역에 등록된 기능 / 매핑이 없습니다.)", { color: "808080", before: 100 }));
+  }
+
+  return blocks;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  화면 1건 (메타 + 설명 + 영역 목록)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function buildScreenBlock(screen: ScreenSection, screenNo: number): (Paragraph | Table)[] {
+  const blocks: (Paragraph | Table)[] = [];
+
+  // "3.X [PID-XXXXX] 화면명" — heading2
+  blocks.push(heading2(`3.${screenNo} [${screen.displayId}] ${screen.name || "(화면명 미지정)"}`));
+
+  // 메타 표 (2행 4셀)
+  const META_LABEL_W = 1500;
+  const META_VALUE_W = (CONTENT_WIDTH - META_LABEL_W * 2) / 2;
+  const W4 = [META_LABEL_W, META_VALUE_W, META_LABEL_W, META_VALUE_W];
+
+  blocks.push(new Table({
+    width:        { size: CONTENT_WIDTH, type: WidthType.DXA },
+    columnWidths: W4,
+    rows: [
+      new TableRow({
+        children: [
+          labelCell("화면 유형", W4[0]), valueCell(screen.screenType || "-", W4[1]),
+          labelCell("URL 경로", W4[2]), valueCell(screen.urlPath    || "-", W4[3]),
+        ],
+      }),
+      new TableRow({
+        children: [
+          labelCell("카테고리",  W4[0]), valueCell(screen.category    || "-", W4[1]),
+          labelCell("담당자",    W4[2]), valueCell(screen.assigneeName,       W4[3]),
+        ],
+      }),
+    ],
+  }));
+
+  // 설명
+  if (screen.description?.trim()) {
+    blocks.push(...renderMarkdown(screen.description));
+  }
+
+  // 영역 목록
+  if (screen.areas.length === 0) {
+    blocks.push(p("(이 화면에 등록된 영역이 없습니다.)", { color: "808080", before: 200 }));
+  } else {
+    screen.areas.forEach((area, ai) => {
+      const areaLabel = `3.${screenNo}.${ai + 1}`;
+      blocks.push(...buildAreaBlock(area, areaLabel));
+    });
+  }
+
+  return blocks;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  본문 3 — 화면별 상세
+// ═══════════════════════════════════════════════════════════════════════════
+
+function buildScreensDetail(input: UnitWorkExportInput): (Paragraph | Table)[] {
+  const blocks: (Paragraph | Table)[] = [heading1("3. 화면별 상세")];
+
+  if (input.screens.length === 0) {
+    blocks.push(p("(화면이 등록되지 않았습니다.)", { color: "808080" }));
+    return blocks;
+  }
+
+  input.screens.forEach((sc, i) => {
+    blocks.push(...buildScreenBlock(sc, i + 1));
+    // 화면 사이 페이지 구분 — 마지막 화면이 아니면
+    if (i < input.screens.length - 1) {
+      blocks.push(new Paragraph({ children: [new PageBreak()] }));
+    }
+  });
+
+  return blocks;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  메인
+// ═══════════════════════════════════════════════════════════════════════════
+
+const DOC_KIND = "프로그램 사양서";
+
+/**
+ * 단위업무 1건의 프로그램 사양서 docx 파일 Buffer 를 만든다.
+ */
+export async function buildUnitWorkDocx(input: UnitWorkExportInput): Promise<Buffer> {
+  const doc = buildDocument({
+    ordererName: input.ordererName,
+    docKind:     DOC_KIND,
+    copyright:   input.copyright,
+    title:       `${input.unitWorkDisplayId} ${DOC_KIND}`,
+    description: `${input.unitWorkDisplayId} ${input.unitWorkName} - ${input.ordererName}`,
+    children: [
+      ...buildCover(input, DOC_KIND),
+      ...buildHistory(input),
+      ...buildToc(),
+      ...buildUnitWorkSection(input),
+      ...buildScreenSummary(input),
+      ...buildScreensDetail(input),
+    ],
+  });
+
+  return Packer.toBuffer(doc);
+}

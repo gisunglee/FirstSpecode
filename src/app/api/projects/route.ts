@@ -7,7 +7,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
-import { ACTIVE_PROJECT_RELATION_WHERE } from "@/lib/projectGuard";
+import { fetchMyProjects } from "@/lib/exports/projects-data";
 
 // ─── GET: 내 프로젝트 목록 ─────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
@@ -16,49 +16,12 @@ export async function GET(request: NextRequest) {
 
   try {
     // 내가 ACTIVE 상태로 참여 중인 프로젝트만 조회.
-    // MCP scope 키로 인증된 경우 allowedPrjctId에 해당하는 프로젝트만 노출 —
-    // "이 키는 프로젝트 A 전용"인데 /api/projects로 전체 목록이 넘어가면 정보 노출.
-    const memberships = await prisma.tbPjProjectMember.findMany({
-      where: {
-        mber_id: auth.mberId,
-        mber_sttus_code: "ACTIVE",
-        ...(auth.allowedPrjctId ? { prjct_id: auth.allowedPrjctId } : {}),
-        // 삭제 예정(soft-deleted) 프로젝트는 일반 사용자 목록에서 제외.
-        // SUPER_ADMIN 어드민 화면(/admin/projects)에서는 별도로 노출.
-        project: ACTIVE_PROJECT_RELATION_WHERE,
-      },
-      include: {
-        project: {
-          select: {
-            prjct_id:  true,
-            prjct_nm:  true,
-            client_nm: true,
-            bgng_de:   true,
-            end_de:    true,
-            mdfcn_dt:  true,
-            creat_dt:  true,
-          },
-        },
-      },
-      orderBy: { join_dt: "desc" },
+    // MCP scope 키로 인증된 경우 allowedPrjctId에 해당하는 프로젝트만 노출.
+    // 데이터 조회+가공 로직은 service 로 분리 — export 라우트와 동일 결과 보장.
+    const items = await fetchMyProjects({
+      mberId: auth.mberId,
+      allowedPrjctId: auth.allowedPrjctId ?? null,
     });
-
-    const items = memberships
-      // 최근 수정일 기준 내림차순 정렬
-      .sort((a, b) => {
-        const aTime = (a.project.mdfcn_dt ?? a.project.creat_dt).getTime();
-        const bTime = (b.project.mdfcn_dt ?? b.project.creat_dt).getTime();
-        return bTime - aTime;
-      })
-      .map((m) => ({
-        projectId:  m.project.prjct_id,
-        name:       m.project.prjct_nm,
-        clientName: m.project.client_nm ?? null,
-        startDate:  m.project.bgng_de   ?? null,
-        endDate:    m.project.end_de    ?? null,
-        myRole:     m.role_code,
-      }));
-
     return apiSuccess({ items, totalCount: items.length });
   } catch (err) {
     console.error("[GET /api/projects] DB 오류:", err);

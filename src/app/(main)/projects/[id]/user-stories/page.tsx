@@ -13,6 +13,7 @@ import { Suspense, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
+import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -124,12 +125,20 @@ function UserStoriesPageInner() {
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           사용자스토리 목록
         </div>
-        <button
-          onClick={() => router.push(`/projects/${projectId}/user-stories/new`)}
-          style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
-        >
-          + 스토리 추가
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <ExcelDownloadButton
+            href={`/api/projects/${projectId}/user-stories/export${
+              qParams.toString() ? `?${qParams.toString()}` : ""
+            }`}
+            entityKey="user-stories"
+          />
+          <button
+            onClick={() => router.push(`/projects/${projectId}/user-stories/new`)}
+            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
+          >
+            + 스토리 추가
+          </button>
+        </div>
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>

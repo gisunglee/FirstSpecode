@@ -26,12 +26,16 @@ import {
   buildRequirementExportInput,
   REQUIREMENT_EXPORT_FALLBACK,
 } from "@/lib/exports/requirement-data";
+import {
+  buildUnitWorkExportInput,
+  UNIT_WORK_EXPORT_FALLBACK,
+} from "@/lib/exports/unit-work-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 // ─── 산출물 종류 화이트리스트 ────────────────────────────────
-// 향후 단위업무/화면 추가 시 이 배열에 추가 + 각 종류별 스냅샷 빌더 분기 필요.
-const SUPPORTED_DOC_KINDS = ["REQUIREMENT"] as const;
+// 추가 도메인은 이 배열 + 아래 buildSnapshotInput 분기에 등록.
+const SUPPORTED_DOC_KINDS = ["REQUIREMENT", "UNIT_WORK"] as const;
 type DocKind = (typeof SUPPORTED_DOC_KINDS)[number];
 
 function isDocKind(v: unknown): v is DocKind {
@@ -93,8 +97,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   try {
     // ── 양식 입력 객체 조립 (현재 시점 데이터로) ─────────────────
-    // doc_kind 별 분기 — 현재는 REQUIREMENT 만, 추후 UNIT_WORK 등 추가 시 switch 확장
-    const result = await buildRequirementExportInput(projectId, refId);
+    // doc_kind 별 빌더 분기. 두 input 모두 공통으로 documentVersion/authorName/
+    // approverName/history 필드를 갖고 있어 발행 후처리는 동일 로직으로 묶을 수 있다.
+    const result = docKind === "REQUIREMENT"
+      ? await buildRequirementExportInput(projectId, refId)
+      : await buildUnitWorkExportInput(projectId, refId);
     if (!result.ok) {
       return apiError(result.code, result.message, result.httpStatus);
     }
@@ -102,9 +109,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // ── 사용자 입력으로 일부 덮어쓰기 ────────────────────────────
     // 발행 시 사용자가 모달에서 변경한 값 우선. 비워두면 양식 입력 객체의 fallback 값 유지.
+    // 변경 내용 fallback 라벨도 doc_kind 별로 다른 상수에서 가져옴.
+    const fallbackHistoryChange = docKind === "REQUIREMENT"
+      ? REQUIREMENT_EXPORT_FALLBACK.historyChange
+      : UNIT_WORK_EXPORT_FALLBACK.historyChange;
     const finalAuthor   = authorNm?.trim()   || input.authorName;
     const finalApprover = approverNm?.trim() || input.approverName;
-    const finalChange   = changeCn?.trim()   || REQUIREMENT_EXPORT_FALLBACK.historyChange;
+    const finalChange   = changeCn?.trim()   || fallbackHistoryChange;
 
     input.documentVersion = vrsnNo.trim();
     input.authorName      = finalAuthor;

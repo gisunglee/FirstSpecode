@@ -29,7 +29,7 @@ import { useIsSystemAdmin, useMyRole } from "@/hooks/useMyRole";
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
 type TaskType = PromptTemplateTaskType;
-type RefType  = PromptTemplateRefType;
+type RefType = PromptTemplateRefType;
 
 type TemplateDetail = {
   tmplId: string;
@@ -153,7 +153,7 @@ function PromptTemplateDetailPageInner() {
   // OWNER/ADMIN 또는 PM/PL 이면 프로젝트 사본 편집·복사·생성 가능
   const isProjectEditor =
     currentProjectRole === "OWNER" || currentProjectRole === "ADMIN" ||
-    currentProjectJob  === "PM"    || currentProjectJob  === "PL";
+    currentProjectJob === "PM" || currentProjectJob === "PL";
   const isPermissionLoading = isSysAdminLoading || isRoleLoading;
 
   // 편집 가능 여부 (2026-05-06 정책 변경):
@@ -353,7 +353,7 @@ function PromptTemplateDetailPageInner() {
                       fontSize: 11, fontWeight: 700, padding: "3px 9px",
                       borderRadius: 4,
                       background: "var(--color-text-primary)",
-                      color:      "var(--color-text-inverse)",
+                      color: "var(--color-text-inverse)",
                       letterSpacing: "0.06em",
                     }}>
                       DEFAULT
@@ -361,7 +361,7 @@ function PromptTemplateDetailPageInner() {
                     {/* 일반 페이지에서는 DEFAULT 가 항상 read-only.
                         SUPER_ADMIN 의 편집은 /admin/prompt-templates 에서. */}
                     <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-error)" }}>
-                      읽기 전용 (수정은 시스템 관리자 페이지에서)
+                      읽기 전용
                     </span>
                   </div>
                 ) : <div />}
@@ -383,9 +383,9 @@ function PromptTemplateDetailPageInner() {
                 <div style={{
                   padding: "10px 14px", borderRadius: 6,
                   background: "var(--color-warning-subtle)",
-                  border:     "1px solid var(--color-warning-border)",
-                  fontSize:   13,
-                  color:      "var(--color-warning)",
+                  border: "1px solid var(--color-warning-border)",
+                  fontSize: 13,
+                  color: "var(--color-warning)",
                   lineHeight: 1.6,
                 }}>
                   ⚠️ 이 템플릿은 <strong>시스템 공통 템플릿</strong>입니다.
@@ -412,9 +412,9 @@ function PromptTemplateDetailPageInner() {
             <div style={{
               padding: "10px 14px", borderRadius: 6,
               background: "var(--color-warning-subtle)",
-              border:     "1px solid var(--color-warning-border)",
-              fontSize:   13,
-              color:      "var(--color-text-secondary)",
+              border: "1px solid var(--color-warning-border)",
+              fontSize: 13,
+              color: "var(--color-text-secondary)",
               lineHeight: 1.6,
             }}>
               ⚠️ 이 템플릿의 작업 유형 <strong>"{DEPRECATED_TASK_TYPES[taskTyCode]}"</strong>은(는) 더 이상 사용하지 않는 유형입니다.

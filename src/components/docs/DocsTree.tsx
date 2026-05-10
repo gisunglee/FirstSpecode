@@ -66,12 +66,26 @@ export default function DocsTree({ sections }: { sections: DocsSection[] }) {
   const pathname = usePathname();
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [search,   setSearch]   = useState("");
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   // 첫 렌더 후 sessionStorage 복원 — SSR 일치를 위해 초기값은 빈 Set 으로 시작
   // (서버에서 sessionStorage 접근 불가 → hydration mismatch 방지)
+  //
+  // 저장된 상태가 없으면(최초 진입) 모든 섹션을 펼친 상태로 시작한다.
+  // — 사용자가 트리를 일일이 클릭하지 않아도 전체 문서 구조를 한눈에 볼 수 있도록.
+  // sections 가 비동기로 로드되므로 sections.length > 0 일 때까지 기다림.
   useEffect(() => {
-    setExpanded(loadExpanded());
-  }, []);
+    if (hasInitialized) return;
+    if (sections.length === 0) return;
+
+    const raw = typeof window !== "undefined" ? sessionStorage.getItem(STORAGE_KEY) : null;
+    if (raw) {
+      setExpanded(loadExpanded());
+    } else {
+      setExpanded(new Set(sections.map((s) => s.sectSlug)));
+    }
+    setHasInitialized(true);
+  }, [sections, hasInitialized]);
 
   // 활성 페이지 자동 펼침 — 직접 URL로 진입해도 해당 섹션이 자동 열림
   // 현재 path 가 /docs/<section>/<page> 형태인지 확인
