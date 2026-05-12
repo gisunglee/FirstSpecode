@@ -39,13 +39,13 @@ export type AiTaskStatus =
   | "TIMEOUT";
 
 export const AI_TASK_STATUS_LABEL: Record<AiTaskStatus, string> = {
-  PENDING:     "대기",
+  PENDING: "대기",
   IN_PROGRESS: "처리중",
-  DONE:        "완료",
-  APPLIED:     "반영됨",
-  REJECTED:    "반려",
-  FAILED:      "실패",
-  TIMEOUT:     "시간초과",
+  DONE: "완료",
+  APPLIED: "반영됨",
+  REJECTED: "반려",
+  FAILED: "실패",
+  TIMEOUT: "시간초과",
 };
 
 /**
@@ -53,13 +53,13 @@ export const AI_TASK_STATUS_LABEL: Record<AiTaskStatus, string> = {
  * 13개 파일에 중복되어 있던 배지 색상을 단일화한 것
  */
 export const AI_TASK_STATUS_BADGE: Record<AiTaskStatus, { bg: string; fg: string }> = {
-  PENDING:     { bg: "#f5f5f5", fg: "#666666" },
+  PENDING: { bg: "#f5f5f5", fg: "#666666" },
   IN_PROGRESS: { bg: "#e3f2fd", fg: "#1565c0" },
-  DONE:        { bg: "#e8f5e9", fg: "#2e7d32" },
-  APPLIED:     { bg: "#e8eaf6", fg: "#283593" },
-  REJECTED:    { bg: "#fff3e0", fg: "#e65100" },
-  FAILED:      { bg: "#ffebee", fg: "#c62828" },
-  TIMEOUT:     { bg: "#fff3e0", fg: "#e65100" },
+  DONE: { bg: "#e8f5e9", fg: "#2e7d32" },
+  APPLIED: { bg: "#e8eaf6", fg: "#283593" },
+  REJECTED: { bg: "#fff3e0", fg: "#e65100" },
+  FAILED: { bg: "#ffebee", fg: "#c62828" },
+  TIMEOUT: { bg: "#fff3e0", fg: "#e65100" },
 };
 
 /**
@@ -67,13 +67,13 @@ export const AI_TASK_STATUS_BADGE: Record<AiTaskStatus, { bg: string; fg: string
  * AiImplementCard·상세 페이지들에 중복되어 있던 단색 팔레트
  */
 export const AI_TASK_STATUS_DOT: Record<AiTaskStatus, string> = {
-  PENDING:     "#f57c00",
+  PENDING: "#f57c00",
   IN_PROGRESS: "#1565c0",
-  DONE:        "#2e7d32",
-  APPLIED:     "#6a1b9a",
-  REJECTED:    "#c62828",
-  FAILED:      "#c62828",
-  TIMEOUT:     "#757575",
+  DONE: "#2e7d32",
+  APPLIED: "#6a1b9a",
+  REJECTED: "#c62828",
+  FAILED: "#c62828",
+  TIMEOUT: "#757575",
 };
 
 // ── 태스크 타입 (task_ty_code) ───────────────────────────────────────────────
@@ -94,13 +94,13 @@ export type AiTaskType =
   | "PRE_IMPL";
 
 export const AI_TASK_TYPE_LABEL: Record<AiTaskType, string> = {
-  INSPECT:   "명세 검토",
-  DESIGN:    "설계",
+  INSPECT: "명세 검토",
+  DESIGN: "설계",
   IMPLEMENT: "구현",
-  MOCKUP:    "목업",
-  IMPACT:    "영향도 분석",
-  CUSTOM:    "자유 요청",
-  PRE_IMPL:  "선 구현",
+  MOCKUP: "목업",
+  IMPACT: "영향도 분석",
+  CUSTOM: "자유 요청",
+  PRE_IMPL: "선 구현",
 };
 
 // ── 참조 엔티티 타입 (ref_ty_code) ───────────────────────────────────────────
@@ -113,10 +113,10 @@ export type AiRefType =
   | "PLAN_STUDIO_ARTF";
 
 export const AI_REF_TYPE_LABEL: Record<AiRefType, string> = {
-  UNIT_WORK:        "단위업무",
-  SCREEN:           "화면",
-  AREA:             "영역",
-  FUNCTION:         "기능",
+  UNIT_WORK: "단위업무",
+  SCREEN: "화면",
+  AREA: "영역",
+  FUNCTION: "기능",
   PLAN_STUDIO_ARTF: "기획실 산출물",
 };
 
@@ -127,7 +127,7 @@ export const AI_REF_TYPE_LABEL: Record<AiRefType, string> = {
 /**
  * 프롬프트 템플릿이 적용되는 태스크 타입
  *   - AiTaskType                  : 일반 AI 작업 (DESIGN/INSPECT/IMPACT/IMPLEMENT/CUSTOM/...)
- *   - "TEST"                       : 프롬프트 작성 화면에서만 쓰이는 테스트 실행용 (실제 태스크로 저장 안 됨)
+ *   - "TEST"                       : 프롬프트 작성 화면에서만 쓰이는 결과 작성 (실제 태스크로 저장 안 됨)
  *   - "PLAN_STUDIO_ARTF_GENERATE"  : 기획실 산출물 생성 (단일값 — 구분/형식은 div_code/fmt_code 컬럼으로 분리)
  *
  * 기획실 프롬프트도 같은 테이블(tb_ai_prompt_template)에서 관리되며,
@@ -151,10 +151,10 @@ export const PROMPT_TEMPLATE_TASK_TYPE_LABEL: Record<PromptTemplateTaskType, str
 export type PromptTemplateRefType = AiRefType;
 
 export const PROMPT_TEMPLATE_REF_TYPE_LABEL: Record<PromptTemplateRefType, string> = {
-  UNIT_WORK:        "단위업무",
-  SCREEN:           "화면",
-  AREA:             "영역",
-  FUNCTION:         "기능",
+  UNIT_WORK: "단위업무",
+  SCREEN: "화면",
+  AREA: "영역",
+  FUNCTION: "기능",
   PLAN_STUDIO_ARTF: "기획실 산출물",
 };
 
@@ -185,16 +185,16 @@ export const GUIDE_CATEGORIES: readonly GuideCategory[] = [
 ] as const;
 
 export const GUIDE_CATEGORY_LABEL: Record<GuideCategory, string> = {
-  UI:       "UI 가이드",
-  DATA:     "데이터 모델",
-  AUTH:     "인증",
-  API:      "API 명세",
-  COMMON:   "공통 규칙",
+  UI: "UI 가이드",
+  DATA: "데이터 모델",
+  AUTH: "인증",
+  API: "API 명세",
+  COMMON: "공통 규칙",
   SECURITY: "보안 정책",
-  FILE:     "파일 처리",
-  ERROR:    "에러 처리",
-  BATCH:    "배치",
-  REPORT:   "리포트",
+  FILE: "파일 처리",
+  ERROR: "에러 처리",
+  BATCH: "배치",
+  REPORT: "리포트",
 };
 
 /**
@@ -202,16 +202,16 @@ export const GUIDE_CATEGORY_LABEL: Record<GuideCategory, string> = {
  * 기존 AI_TASK_STATUS_BADGE 와 동일 포맷(bg+fg)으로 유지
  */
 export const GUIDE_CATEGORY_BADGE: Record<GuideCategory, { bg: string; fg: string }> = {
-  UI:       { bg: "#e3f2fd", fg: "#1565c0" },  // 파랑
-  DATA:     { bg: "#fff8e1", fg: "#f57f17" },  // 앰버
-  AUTH:     { bg: "#f3e5f5", fg: "#6a1b9a" },  // 보라
-  API:      { bg: "#e0f2f1", fg: "#00695c" },  // 틸
-  COMMON:   { bg: "#eceff1", fg: "#455a64" },  // 회색
+  UI: { bg: "#e3f2fd", fg: "#1565c0" },  // 파랑
+  DATA: { bg: "#fff8e1", fg: "#f57f17" },  // 앰버
+  AUTH: { bg: "#f3e5f5", fg: "#6a1b9a" },  // 보라
+  API: { bg: "#e0f2f1", fg: "#00695c" },  // 틸
+  COMMON: { bg: "#eceff1", fg: "#455a64" },  // 회색
   SECURITY: { bg: "#fff3e0", fg: "#e65100" },  // 주황
-  FILE:     { bg: "#e8f5e9", fg: "#2e7d32" },  // 녹색
-  ERROR:    { bg: "#ffebee", fg: "#c62828" },  // 빨강
-  BATCH:    { bg: "#e8eaf6", fg: "#283593" },  // 인디고
-  REPORT:   { bg: "#fce4ec", fg: "#ad1457" },  // 핑크
+  FILE: { bg: "#e8f5e9", fg: "#2e7d32" },  // 녹색
+  ERROR: { bg: "#ffebee", fg: "#c62828" },  // 빨강
+  BATCH: { bg: "#e8eaf6", fg: "#283593" },  // 인디고
+  REPORT: { bg: "#fce4ec", fg: "#ad1457" },  // 핑크
 };
 
 /** 런타임 검증 — 외부 입력(API body, query)이 유효한 카테고리인지 체크 */
@@ -226,9 +226,9 @@ export function isGuideCategory(value: unknown): value is GuideCategory {
 export type InvitationStatus = "PENDING" | "ACCEPTED" | "EXPIRED" | "CANCELLED";
 
 export const INVITATION_STATUS_LABEL: Record<InvitationStatus, string> = {
-  PENDING:   "대기중",
-  ACCEPTED:  "수락",
-  EXPIRED:   "만료",
+  PENDING: "대기중",
+  ACCEPTED: "수락",
+  EXPIRED: "만료",
   CANCELLED: "취소",
 };
 
@@ -237,9 +237,9 @@ export const INVITATION_STATUS_LABEL: Record<InvitationStatus, string> = {
  * 배지용이 아니라 단색(브랜드/성공/tertiary)이므로 AI_TASK_STATUS_DOT 와 다른 형태.
  */
 export const INVITATION_STATUS_COLOR: Record<InvitationStatus, string> = {
-  PENDING:   "var(--color-brand)",
-  ACCEPTED:  "var(--color-success, #22c55e)",
-  EXPIRED:   "var(--color-text-tertiary)",
+  PENDING: "var(--color-brand)",
+  ACCEPTED: "var(--color-success, #22c55e)",
+  EXPIRED: "var(--color-text-tertiary)",
   // CANCELLED 는 "취소 당함"을 강조하기 위해 error 색상 사용 (기존 invitations 페이지 규칙)
   CANCELLED: "var(--color-error)",
 };

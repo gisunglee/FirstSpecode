@@ -28,66 +28,58 @@ import TestRunPanel from "@/components/test-specs/TestRunPanel";
 
 type UnitWorkLink = {
   unitWorkId: string;
-  displayId:  string | null;
-  name:       string | null;
+  displayId: string | null;
+  name: string | null;
 };
 
 type TestCase = {
-  testCaseId?:     string;       // 신규 행은 없음
-  caseNo:          number;
-  ctgryCode:       "CHECKLIST" | "FUNCTIONAL";
-  scenarioCn:      string;
-  expectedCn:      string;
+  testCaseId?: string;       // 신규 행은 없음
+  caseNo: number;
+  ctgryCode: "CHECKLIST" | "FUNCTIONAL";
+  scenarioCn: string;
+  expectedCn: string;
   preconditionCn?: string | null;
-  testDataCn?:     string | null;
-  testAccountCn?:  string | null;
-  priortCode?:     "HIGH" | "MEDIUM" | "LOW";
-  applicableYn?:   "Y" | "N";
-  remarkCn?:       string | null;
-  aiGenYn:         string;
-  sortOrdr?:       number;
+  testDataCn?: string | null;
+  testAccountCn?: string | null;
+  priortCode?: "HIGH" | "MEDIUM" | "LOW";
+  applicableYn?: "Y" | "N";
+  remarkCn?: string | null;
+  aiGenYn: string;
+  sortOrdr?: number;
 };
 
 type TestSpecDetail = {
-  testSpecId:    string;
-  displayId:     string;
-  testKindCode:  "UNIT" | "INTEGRATION";
-  testSpecNm:    string;
-  testSpecDc:    string | null;
-  sttusCode:     string;
+  testSpecId: string;
+  displayId: string;
+  testKindCode: "UNIT" | "INTEGRATION";
+  testSpecNm: string;
+  testSpecDc: string | null;
+  sttusCode: string;
   asignMemberId: string | null;
-  unitWorks:     UnitWorkLink[];
-  cases:         TestCase[];
+  unitWorks: UnitWorkLink[];
+  cases: TestCase[];
 };
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
 const KIND_LABEL: Record<string, string> = {
-  UNIT:        "단위 테스트 명세서",
+  UNIT: "단위 테스트 명세서",
   INTEGRATION: "통합 테스트 명세서",
 };
 const STATUS_LABEL: Record<string, string> = {
-  DRAFT:       "작성중",
+  DRAFT: "작성중",
   IN_PROGRESS: "진행중",
-  PASSED:      "합격",
-  FAILED:      "불합격",
+  PASSED: "합격",
+  FAILED: "불합격",
 };
 const STATUS_OPTIONS = ["DRAFT", "IN_PROGRESS", "PASSED", "FAILED"] as const;
 const CTGRY_LABEL: Record<string, string> = {
-  CHECKLIST:  "공통 점검",
+  CHECKLIST: "공통 점검",
   FUNCTIONAL: "기능 시나리오",
 };
 
-const PRIORITY_LABEL: Record<string, string> = {
-  HIGH:   "높음",
-  MEDIUM: "중간",
-  LOW:    "낮음",
-};
-const PRIORITY_COLOR: Record<string, { bg: string; fg: string }> = {
-  HIGH:   { bg: "#ffebee", fg: "#c62828" },
-  MEDIUM: { bg: "#fff3e0", fg: "#e65100" },
-  LOW:    { bg: "#e8f5e9", fg: "#2e7d32" },
-};
+// 우선순위(priortCode) 는 DB 데이터 보존을 위해 TestCase 타입엔 유지하지만
+// UI 에선 컬럼·셀렉트 모두 제거 — 신규 케이스는 "MEDIUM" 기본값 (addCase 에서 설정).
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
 
@@ -98,36 +90,36 @@ export default function TestSpecPage() {
 // ── 메인 ─────────────────────────────────────────────────────────────────────
 
 function TestSpecInner() {
-  const params       = useParams<{ id: string; specId: string }>();
-  const router       = useRouter();
+  const params = useParams<{ id: string; specId: string }>();
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const queryClient  = useQueryClient();
+  const queryClient = useQueryClient();
 
   const projectId = params.id;
-  const specId    = params.specId;
-  const isNew     = specId === "new";
+  const specId = params.specId;
+  const isNew = specId === "new";
 
   // 신규 모드 — URL 쿼리에서 종류·단위업무 받음
   const newKind = (searchParams.get("kind") ?? "UNIT") as "UNIT" | "INTEGRATION";
-  const newUw   = searchParams.get("unitWorkId") ?? "";
+  const newUw = searchParams.get("unitWorkId") ?? "";
 
   // ── 폼 상태 ────────────────────────────────────────────────────────────────
   const [form, setForm] = useState<TestSpecDetail>({
-    testSpecId:    "",
-    displayId:     "",
-    testKindCode:  newKind,
-    testSpecNm:    "",
-    testSpecDc:    "",
-    sttusCode:     "DRAFT",
+    testSpecId: "",
+    displayId: "",
+    testKindCode: newKind,
+    testSpecNm: "",
+    testSpecDc: "",
+    sttusCode: "DRAFT",
     asignMemberId: null,
-    unitWorks:     [],
-    cases:         [],
+    unitWorks: [],
+    cases: [],
   });
 
   // ── 단위업무 후보 (통합 테스트의 매핑 추가용) ─────────────────────────────
   const { data: uwOptions = [] } = useQuery<{ unitWorkId: string; displayId: string; name: string }[]>({
     queryKey: ["uw-options", projectId],
-    queryFn:  async () => {
+    queryFn: async () => {
       const res = await authFetch<{ data: { items: { unitWorkId: string; displayId: string; name: string }[] } }>(
         `/api/projects/${projectId}/unit-works`
       );
@@ -140,7 +132,7 @@ function TestSpecInner() {
   // 단위업무 페이지: useQuery → r.data ({ members, myMemberId }) 통째로 캐시.
   const { data: memberData } = useQuery<{ members: { memberId: string; name: string | null; email: string }[] }>({
     queryKey: ["project-members", projectId],
-    queryFn:  () =>
+    queryFn: () =>
       authFetch<{ data: { members: { memberId: string; name: string | null; email: string }[]; myMemberId: string } }>(
         `/api/projects/${projectId}/members`
       ).then((r) => r.data),
@@ -165,7 +157,7 @@ function TestSpecInner() {
   // ── 기존 명세서 로드 ─────────────────────────────────────────────────────
   const { data: detail, isLoading } = useQuery<TestSpecDetail>({
     queryKey: ["test-spec", projectId, specId],
-    queryFn:  async () => {
+    queryFn: async () => {
       const res = await authFetch<{ data: TestSpecDetail }>(`/api/projects/${projectId}/test-specs/${specId}`);
       return res.data;
     },
@@ -175,6 +167,16 @@ function TestSpecInner() {
   useEffect(() => {
     if (detail) setForm(detail);
   }, [detail]);
+
+  // 명세서 상세 진입 시 URL 에 ?kind= 자동 보강 — LNB 가 단위/통합 항목을 정확히 강조하기 위함.
+  // router.replace 로 next 라우터에 반영 → useSearchParams 동기화.
+  // scroll:false 로 스크롤 위치 유지. 동일 값이면 skip (무한 루프 방지).
+  useEffect(() => {
+    if (isNew || !detail) return;
+    const currentKind = searchParams.get("kind");
+    if (currentKind === detail.testKindCode) return;
+    router.replace(`/projects/${projectId}/test-specs/${specId}?kind=${detail.testKindCode}`, { scroll: false });
+  }, [detail, isNew, searchParams, router, projectId, specId]);
 
   // ── 저장 (POST 신규 / PUT 수정) ──────────────────────────────────────────
   const saveMutation = useMutation({
@@ -193,11 +195,11 @@ function TestSpecInner() {
           {
             method: "POST",
             body: JSON.stringify({
-              testKindCode:  form.testKindCode,
-              testSpecNm:    form.testSpecNm,
-              testSpecDc:    form.testSpecDc,
+              testKindCode: form.testKindCode,
+              testSpecNm: form.testSpecNm,
+              testSpecDc: form.testSpecDc,
               asignMemberId: form.asignMemberId,
-              unitWorkIds:   form.unitWorks.map((u) => u.unitWorkId),
+              unitWorkIds: form.unitWorks.map((u) => u.unitWorkId),
             }),
           }
         );
@@ -207,19 +209,19 @@ function TestSpecInner() {
         await authFetch(`/api/projects/${projectId}/test-specs/${specId}`, {
           method: "PUT",
           body: JSON.stringify({
-            testSpecNm:    form.testSpecNm,
-            testSpecDc:    form.testSpecDc,
-            sttusCode:     form.sttusCode,
+            testSpecNm: form.testSpecNm,
+            testSpecDc: form.testSpecDc,
+            sttusCode: form.sttusCode,
             asignMemberId: form.asignMemberId,
-            unitWorkIds:   form.unitWorks.map((u) => u.unitWorkId),
-            cases:         form.cases.map((c) => ({
-                             testCaseId: c.testCaseId,
-                             caseNo:     c.caseNo,
-                             ctgryCode:  c.ctgryCode,
-                             scenarioCn: c.scenarioCn,
-                             expectedCn: c.expectedCn,
-                             aiGenYn:    c.aiGenYn,
-                           })),
+            unitWorkIds: form.unitWorks.map((u) => u.unitWorkId),
+            cases: form.cases.map((c) => ({
+              testCaseId: c.testCaseId,
+              caseNo: c.caseNo,
+              ctgryCode: c.ctgryCode,
+              scenarioCn: c.scenarioCn,
+              expectedCn: c.expectedCn,
+              aiGenYn: c.aiGenYn,
+            })),
           }),
         });
         return specId;
@@ -256,13 +258,13 @@ function TestSpecInner() {
         cases: [
           ...f.cases,
           {
-            caseNo:        nextNo,
+            caseNo: nextNo,
             ctgryCode,
-            scenarioCn:    "",
-            expectedCn:    "",
-            priortCode:    "MEDIUM",
-            applicableYn:  "Y",
-            aiGenYn:       "N",
+            scenarioCn: "",
+            expectedCn: "",
+            priortCode: "MEDIUM",
+            applicableYn: "Y",
+            aiGenYn: "N",
           },
         ],
       };
@@ -292,13 +294,13 @@ function TestSpecInner() {
       for (const it of items) {
         if (existing.has(it.scenarioCn.trim())) continue;  // 중복 스킵
         added.push({
-          caseNo:        nextNo++,
-          ctgryCode:     "CHECKLIST",
-          scenarioCn:    it.scenarioCn,
-          expectedCn:    it.expectedCn,
-          priortCode:    "MEDIUM",
-          applicableYn:  "Y",
-          aiGenYn:       "N",
+          caseNo: nextNo++,
+          ctgryCode: "CHECKLIST",
+          scenarioCn: it.scenarioCn,
+          expectedCn: it.expectedCn,
+          priortCode: "MEDIUM",
+          applicableYn: "Y",
+          aiGenYn: "N",
         });
       }
       if (added.length === 0) {
@@ -310,7 +312,7 @@ function TestSpecInner() {
     });
   }
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  // 모드 탭 — "spec" 명세 작성 / "run" 테스트 실행 (회차 + 결과 입력)
+  // 모드 탭 — "spec" 명세 작성 / "run" 결과 작성 (회차 + 결과 입력)
   // 신규 모드(isNew)에서는 실행 탭 비활성 (저장 후 사용 가능)
   const [mode, setMode] = useState<"spec" | "run">("spec");
   function updateCase(idx: number, patch: Partial<TestCase>) {
@@ -342,7 +344,7 @@ function TestSpecInner() {
     return <div style={{ padding: 40, color: "#888" }}>로딩 중...</div>;
   }
 
-  const checklistCases  = form.cases.filter((c) => c.ctgryCode === "CHECKLIST");
+  const checklistCases = form.cases.filter((c) => c.ctgryCode === "CHECKLIST");
   const functionalCases = form.cases.filter((c) => c.ctgryCode === "FUNCTIONAL");
 
   return (
@@ -379,7 +381,7 @@ function TestSpecInner() {
         </div>
       </div>
 
-      {/* 모드 탭 — 명세 작성 / 테스트 실행 */}
+      {/* 모드 탭 — 명세 작성 / 결과 작성 */}
       {!isNew && (
         <div style={{ padding: "0 24px 12px", display: "flex", gap: 4 }}>
           {(["spec", "run"] as const).map((m) => {
@@ -392,11 +394,11 @@ function TestSpecInner() {
                   padding: "6px 16px", borderRadius: 6,
                   border: "1px solid var(--color-border)",
                   background: active ? "var(--color-primary, #1976d2)" : "var(--color-bg-card)",
-                  color:      active ? "#fff" : "var(--color-text-secondary)",
+                  color: active ? "#fff" : "var(--color-text-secondary)",
                   fontSize: 13, fontWeight: active ? 700 : 500, cursor: "pointer",
                 }}
               >
-                {m === "spec" ? "📝 명세 작성" : "▶ 테스트 실행"}
+                {m === "spec" ? "📝 명세 작성" : "▶ 결과 작성"}
               </button>
             );
           })}
@@ -408,160 +410,160 @@ function TestSpecInner() {
           <TestRunPanel projectId={projectId} specId={specId} members={members} />
         </div>
       ) : (
-      <div style={{ padding: "0 24px 24px", maxWidth: 1200 }}>
-        {/* 메타 카드 */}
-        <div style={cardStyle}>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
-            <FormField label="명세서명" required>
-              <input
-                type="text"
-                value={form.testSpecNm}
-                placeholder="예: 회원가입 단위 테스트"
-                onChange={(e) => setForm((f) => ({ ...f, testSpecNm: e.target.value }))}
-                className="sp-input"
-              />
-            </FormField>
-            <FormField label="상태">
-              <div className="sp-select-wrap">
-                <select
-                  value={form.sttusCode}
-                  onChange={(e) => setForm((f) => ({ ...f, sttusCode: e.target.value }))}
+        <div style={{ padding: "0 24px 24px", maxWidth: 1200 }}>
+          {/* 메타 카드 */}
+          <div style={cardStyle}>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
+              <FormField label="명세서명" required>
+                <input
+                  type="text"
+                  value={form.testSpecNm}
+                  placeholder="예: 회원가입 단위 테스트"
+                  onChange={(e) => setForm((f) => ({ ...f, testSpecNm: e.target.value }))}
                   className="sp-input"
-                  disabled={isNew}
-                >
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>{STATUS_LABEL[s]}</option>
-                  ))}
-                </select>
-                <span className="sp-select-arrow"><SelectChevron /></span>
-              </div>
-            </FormField>
-            <FormField label="담당자">
-              <div className="sp-select-wrap">
-                <select
-                  value={form.asignMemberId ?? ""}
-                  onChange={(e) => setForm((f) => ({ ...f, asignMemberId: e.target.value || null }))}
-                  className="sp-input"
-                >
-                  <option value="">담당자 없음</option>
-                  {members.map((m) => (
-                    <option key={m.memberId} value={m.memberId}>
-                      {m.name ?? m.email}
-                    </option>
-                  ))}
-                </select>
-                <span className="sp-select-arrow"><SelectChevron /></span>
-              </div>
-            </FormField>
-          </div>
-
-          <FormField label="설명">
-            <textarea
-              value={form.testSpecDc ?? ""}
-              placeholder="명세서 개요·주의사항 등"
-              rows={2}
-              onChange={(e) => setForm((f) => ({ ...f, testSpecDc: e.target.value }))}
-              className="sp-input"
-              style={{ resize: "vertical" }}
-            />
-          </FormField>
-
-          {/* 연결 단위업무 */}
-          <div style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 6 }}>
-              연결 단위업무 {form.testKindCode === "UNIT" ? "(1개 필수)" : "(1개 이상)"}
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-              {form.unitWorks.length === 0 ? (
-                <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>아직 연결된 단위업무가 없습니다.</span>
-              ) : (
-                form.unitWorks.map((u) => (
-                  <span key={u.unitWorkId} style={chipStyle}>
-                    <strong>{u.displayId}</strong> {u.name}
-                    {(form.testKindCode === "INTEGRATION" || form.unitWorks.length > 1) && (
-                      <button onClick={() => removeUw(u.unitWorkId)} style={chipCloseBtnStyle}>×</button>
-                    )}
-                  </span>
-                ))
-              )}
-            </div>
-            {/* 추가 셀렉트 — UNIT 은 1개 채워지면 비활성, INTEGRATION 은 항상 가능 */}
-            {(form.testKindCode === "INTEGRATION" || form.unitWorks.length === 0) && (
-              <div className="sp-select-wrap" style={{ maxWidth: 360 }}>
-                <select
-                  value=""
-                  onChange={(e) => { if (e.target.value) addUw(e.target.value); }}
-                  className="sp-input"
-                >
-                  <option value="">+ 단위업무 추가...</option>
-                  {uwOptions
-                    .filter((o) => !form.unitWorks.some((u) => u.unitWorkId === o.unitWorkId))
-                    .map((o) => (
-                      <option key={o.unitWorkId} value={o.unitWorkId}>
-                        {o.displayId} {o.name}
+                />
+              </FormField>
+              <FormField label="상태">
+                <div className="sp-select-wrap">
+                  <select
+                    value={form.sttusCode}
+                    onChange={(e) => setForm((f) => ({ ...f, sttusCode: e.target.value }))}
+                    className="sp-input"
+                    disabled={isNew}
+                  >
+                    {STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+                    ))}
+                  </select>
+                  <span className="sp-select-arrow"><SelectChevron /></span>
+                </div>
+              </FormField>
+              <FormField label="담당자">
+                <div className="sp-select-wrap">
+                  <select
+                    value={form.asignMemberId ?? ""}
+                    onChange={(e) => setForm((f) => ({ ...f, asignMemberId: e.target.value || null }))}
+                    className="sp-input"
+                  >
+                    <option value="">담당자 없음</option>
+                    {members.map((m) => (
+                      <option key={m.memberId} value={m.memberId}>
+                        {m.name ?? m.email}
                       </option>
                     ))}
-                </select>
-                <span className="sp-select-arrow"><SelectChevron /></span>
-              </div>
-            )}
-          </div>
-        </div>
+                  </select>
+                  <span className="sp-select-arrow"><SelectChevron /></span>
+                </div>
+              </FormField>
+            </div>
 
-        {/* 케이스 카드 — 신규 모드에서는 저장 후 활성 (specId 가 있어야 case bulk PUT 가능) */}
-        {isNew ? (
-          <div style={{ ...cardStyle, marginTop: 16, color: "var(--color-text-tertiary)", fontSize: 13 }}>
-            먼저 [저장] 후 케이스를 추가할 수 있습니다.
-          </div>
-        ) : (
-          <div style={{ ...cardStyle, marginTop: 16 }}>
-            <CaseList
-              title="공통 점검 (Checklist)"
-              cases={checklistCases}
-              onAdd={() => addCase("CHECKLIST")}
-              extraActions={(
-                <button
-                  onClick={() => setImportDialogOpen(true)}
-                  style={importBtnStyle}
-                  title="시스템 공통 + 프로젝트 전용 점검 항목 가져오기"
-                >
-                  ⇩ 공통 점검 가져오기
-                </button>
+            <FormField label="설명">
+              <textarea
+                value={form.testSpecDc ?? ""}
+                placeholder="명세서 개요·주의사항 등"
+                rows={2}
+                onChange={(e) => setForm((f) => ({ ...f, testSpecDc: e.target.value }))}
+                className="sp-input"
+                style={{ resize: "vertical" }}
+              />
+            </FormField>
+
+            {/* 연결 단위업무 */}
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 6 }}>
+                연결 단위업무 {form.testKindCode === "UNIT" ? "(1개 필수)" : "(1개 이상)"}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                {form.unitWorks.length === 0 ? (
+                  <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>아직 연결된 단위업무가 없습니다.</span>
+                ) : (
+                  form.unitWorks.map((u) => (
+                    <span key={u.unitWorkId} style={chipStyle}>
+                      <strong>{u.displayId}</strong> {u.name}
+                      {(form.testKindCode === "INTEGRATION" || form.unitWorks.length > 1) && (
+                        <button onClick={() => removeUw(u.unitWorkId)} style={chipCloseBtnStyle}>×</button>
+                      )}
+                    </span>
+                  ))
+                )}
+              </div>
+              {/* 추가 셀렉트 — UNIT 은 1개 채워지면 비활성, INTEGRATION 은 항상 가능 */}
+              {(form.testKindCode === "INTEGRATION" || form.unitWorks.length === 0) && (
+                <div className="sp-select-wrap" style={{ maxWidth: 360 }}>
+                  <select
+                    value=""
+                    onChange={(e) => { if (e.target.value) addUw(e.target.value); }}
+                    className="sp-input"
+                  >
+                    <option value="">+ 단위업무 추가...</option>
+                    {uwOptions
+                      .filter((o) => !form.unitWorks.some((u) => u.unitWorkId === o.unitWorkId))
+                      .map((o) => (
+                        <option key={o.unitWorkId} value={o.unitWorkId}>
+                          {o.displayId} {o.name}
+                        </option>
+                      ))}
+                  </select>
+                  <span className="sp-select-arrow"><SelectChevron /></span>
+                </div>
               )}
-              onUpdate={(localIdx, patch) => {
-                const globalIdx = form.cases.findIndex((c) => c === checklistCases[localIdx]);
-                if (globalIdx >= 0) updateCase(globalIdx, patch);
-              }}
-              onRemove={(localIdx) => {
-                const globalIdx = form.cases.findIndex((c) => c === checklistCases[localIdx]);
-                if (globalIdx >= 0) removeCase(globalIdx);
-              }}
-              onDuplicate={(localIdx) => {
-                const globalIdx = form.cases.findIndex((c) => c === checklistCases[localIdx]);
-                if (globalIdx >= 0) duplicateCase(globalIdx);
-              }}
-            />
-            <div style={{ height: 24 }} />
-            <CaseList
-              title="기능 시나리오 (Functional)"
-              cases={functionalCases}
-              onAdd={() => addCase("FUNCTIONAL")}
-              onUpdate={(localIdx, patch) => {
-                const globalIdx = form.cases.findIndex((c) => c === functionalCases[localIdx]);
-                if (globalIdx >= 0) updateCase(globalIdx, patch);
-              }}
-              onRemove={(localIdx) => {
-                const globalIdx = form.cases.findIndex((c) => c === functionalCases[localIdx]);
-                if (globalIdx >= 0) removeCase(globalIdx);
-              }}
-              onDuplicate={(localIdx) => {
-                const globalIdx = form.cases.findIndex((c) => c === functionalCases[localIdx]);
-                if (globalIdx >= 0) duplicateCase(globalIdx);
-              }}
-            />
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* 케이스 영역 — 외곽 cardStyle 제거. 각 CaseList 가 자체 외곽 박스(border) 보유 */}
+          {/* 결과 작성 화면과 동일한 깔끔한 그리드 톤 */}
+          {isNew ? (
+            <div style={{ ...cardStyle, marginTop: 16, color: "var(--color-text-tertiary)", fontSize: 13 }}>
+              먼저 [저장] 후 케이스를 추가할 수 있습니다.
+            </div>
+          ) : (
+            <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 24 }}>
+              <CaseList
+                title="공통 점검 (Checklist)"
+                cases={checklistCases}
+                onAdd={() => addCase("CHECKLIST")}
+                extraActions={(
+                  <button
+                    onClick={() => setImportDialogOpen(true)}
+                    style={importBtnStyle}
+                    title="시스템 공통 + 프로젝트 전용 점검 항목 가져오기"
+                  >
+                    ⇩ 공통 점검 가져오기
+                  </button>
+                )}
+                onUpdate={(localIdx, patch) => {
+                  const globalIdx = form.cases.findIndex((c) => c === checklistCases[localIdx]);
+                  if (globalIdx >= 0) updateCase(globalIdx, patch);
+                }}
+                onRemove={(localIdx) => {
+                  const globalIdx = form.cases.findIndex((c) => c === checklistCases[localIdx]);
+                  if (globalIdx >= 0) removeCase(globalIdx);
+                }}
+                onDuplicate={(localIdx) => {
+                  const globalIdx = form.cases.findIndex((c) => c === checklistCases[localIdx]);
+                  if (globalIdx >= 0) duplicateCase(globalIdx);
+                }}
+              />
+              <CaseList
+                title="기능 시나리오 (Functional)"
+                cases={functionalCases}
+                onAdd={() => addCase("FUNCTIONAL")}
+                onUpdate={(localIdx, patch) => {
+                  const globalIdx = form.cases.findIndex((c) => c === functionalCases[localIdx]);
+                  if (globalIdx >= 0) updateCase(globalIdx, patch);
+                }}
+                onRemove={(localIdx) => {
+                  const globalIdx = form.cases.findIndex((c) => c === functionalCases[localIdx]);
+                  if (globalIdx >= 0) removeCase(globalIdx);
+                }}
+                onDuplicate={(localIdx) => {
+                  const globalIdx = form.cases.findIndex((c) => c === functionalCases[localIdx]);
+                  if (globalIdx >= 0) duplicateCase(globalIdx);
+                }}
+              />
+            </div>
+          )}
+        </div>
       )}
 
       {/* 공통 점검 가져오기 모달 — 모드 무관 (run 모드에서도 띄울 일 없으면 inert) */}
@@ -580,12 +582,12 @@ function TestSpecInner() {
 function CaseList({
   title, cases, onAdd, onUpdate, onRemove, onDuplicate, extraActions,
 }: {
-  title:         string;
-  cases:         TestCase[];
-  onAdd:         () => void;
-  onUpdate:      (idx: number, patch: Partial<TestCase>) => void;
-  onRemove:      (idx: number) => void;
-  onDuplicate:   (idx: number) => void;
+  title: string;
+  cases: TestCase[];
+  onAdd: () => void;
+  onUpdate: (idx: number, patch: Partial<TestCase>) => void;
+  onRemove: (idx: number) => void;
+  onDuplicate: (idx: number) => void;
   // 헤더 우측에 추가로 노출할 액션 (예: 공통 점검 가져오기)
   extraActions?: React.ReactNode;
 }) {
@@ -609,11 +611,20 @@ function CaseList({
           케이스가 없습니다. 위의 [+ 케이스 추가] 버튼으로 등록하세요.
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        // 두 카테고리 모두 외곽 박스 1개 + 행 사이 구분선의 데이터 그리드 스타일
+        // 헤더 행은 카테고리별 컬럼 구성에 맞춰 분기 (Checklist 와 Functional 의 컬럼 다름)
+        <div style={{
+          border: "1px solid var(--color-border)",
+          borderRadius: 6,
+          overflow: "hidden",
+          background: "var(--color-bg-card)",
+        }}>
+          {cases[0].ctgryCode === "CHECKLIST" ? <ChecklistHeader /> : <FunctionalHeader />}
           {cases.map((c, i) => (
             <CaseCard
               key={c.testCaseId ?? `new-${c.ctgryCode}-${i}`}
               c={c}
+              isLast={i === cases.length - 1}
               onUpdate={(patch) => onUpdate(i, patch)}
               onRemove={() => onRemove(i)}
               onDuplicate={() => onDuplicate(i)}
@@ -625,12 +636,57 @@ function CaseList({
   );
 }
 
+// ── 그리드 헤더 행 — Checklist / Functional 분리 ───────────────────────────
+// 각 카테고리의 행 grid columns 와 정확히 일치해야 컬럼 정렬이 맞음.
+
+function ChecklistHeader() {
+  return (
+    <div style={{
+      ...gridHeaderStyle,
+      gridTemplateColumns: "44px 80px 1fr 1fr auto",
+      padding: "8px 8px",
+    }}>
+      <span>No</span>
+      <span style={{ textAlign: "center" }}>해당</span>
+      <span>시나리오 *</span>
+      <span>예상 결과 *</span>
+      <span style={{ width: 80 /* SubInfoToggle(28) + 복제(20) + 삭제(20) + gap */ }} />
+    </div>
+  );
+}
+
+function FunctionalHeader() {
+  return (
+    <div style={{
+      ...gridHeaderStyle,
+      gridTemplateColumns: "44px 1fr 1fr auto",
+      padding: "8px 8px",
+    }}>
+      <span>No</span>
+      <span>시나리오 *</span>
+      <span>예상 결과 *</span>
+      <span style={{ width: 80 /* SubInfoToggle + 복제 + 삭제 */ }} />
+    </div>
+  );
+}
+
+const gridHeaderStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 6,
+  background: "var(--color-bg-muted)",
+  borderBottom: "1px solid var(--color-border)",
+  fontSize: 13,
+  fontWeight: 700,
+  color: "var(--color-text-secondary)",
+};
+
 // ── 케이스 카드 (한 행 = 1 카드) ─────────────────────────────────────────────
 
 function CaseCard(props: {
   c: TestCase;
-  onUpdate:    (patch: Partial<TestCase>) => void;
-  onRemove:    () => void;
+  isLast?: boolean;
+  onUpdate: (patch: Partial<TestCase>) => void;
+  onRemove: () => void;
   onDuplicate: () => void;
 }) {
   // CHECKLIST 는 점검 문장이 짧으니 한 행 컴팩트 레이아웃 — 시각 부담 최소
@@ -648,63 +704,69 @@ function CaseCard(props: {
 // 부가정보(전제조건·테스트데이터·계정·비고)는 같은 카드 아래로 접이식 펼침.
 
 function ChecklistRow({
-  c, onUpdate, onRemove, onDuplicate,
+  c, isLast, onUpdate, onRemove, onDuplicate,
 }: {
   c: TestCase;
-  onUpdate:    (patch: Partial<TestCase>) => void;
-  onRemove:    () => void;
+  isLast?: boolean;
+  onUpdate: (patch: Partial<TestCase>) => void;
+  onRemove: () => void;
   onDuplicate: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [hover, setHover] = useState(false);
   const inactive = c.applicableYn === "N";
-  const priorColor = PRIORITY_COLOR[c.priortCode ?? "MEDIUM"];
+
+  // 데이터 그리드 셀 input — 평소엔 보더 없이, hover/focus 시 옅은 강조
+  const cellInputStyle: React.CSSProperties = {
+    width: "100%",
+    border: "1px solid transparent",
+    borderRadius: 4,
+    background: "transparent",
+    fontSize: 13,
+    padding: "6px 8px",
+    outline: "none",
+    color: "var(--color-text-primary)",
+    transition: "border-color 0.1s, background 0.1s",
+  };
 
   return (
-    <div style={{
-      border: "1px solid var(--color-border)",
-      borderRadius: 6,
-      background: inactive ? "var(--color-bg-muted)" : "var(--color-bg-card)",
-      opacity:    inactive ? 0.65 : 1,
-      transition: "opacity 0.15s, background 0.15s",
-    }}>
-      {/* 한 행 — gridTemplateColumns 로 입력 영역 폭 균등 (50:50) */}
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        borderBottom: isLast ? "none" : "1px solid var(--color-border)",
+        background: inactive
+          ? "var(--color-bg-muted)"
+          : hover
+            ? "rgba(0,0,0,0.02)"
+            : "transparent",
+        opacity: inactive ? 0.6 : 1,
+        transition: "background 0.1s, opacity 0.15s",
+      }}
+    >
+      {/* 한 행 — gridTemplateColumns: No / 해당여부 / 시나리오 / 예상결과 / 액션 */}
       <div style={{
         display: "grid",
-        // No / 우선순위 / 해당여부 / 시나리오 / 예상결과 / [부가·복제·삭제]
-        gridTemplateColumns: "44px 76px 88px 1fr 1fr auto",
+        gridTemplateColumns: "44px 80px 1fr 1fr auto",
         alignItems: "center",
-        gap: 8,
-        padding: "6px 10px",
+        gap: 6,
+        padding: "3px 8px",
       }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--color-text-secondary)" }}>
-          No.{c.caseNo}
+        <span style={{ fontSize: 13, color: "var(--color-text-primary)", paddingLeft: 4 }}>
+          {c.caseNo}
         </span>
 
-        <select
-          value={c.priortCode ?? "MEDIUM"}
-          onChange={(e) => onUpdate({ priortCode: e.target.value as TestCase["priortCode"] })}
-          style={{
-            padding: "3px 4px", borderRadius: 10,
-            border: `1px solid ${priorColor.fg}33`,
-            background: priorColor.bg, color: priorColor.fg,
-            fontSize: 11, fontWeight: 700, cursor: "pointer", width: "100%",
-          }}
-          title="우선순위"
-        >
-          <option value="HIGH">높음</option>
-          <option value="MEDIUM">중간</option>
-          <option value="LOW">낮음</option>
-        </select>
-
+        {/* 해당여부 — borderless */}
         <select
           value={c.applicableYn ?? "Y"}
           onChange={(e) => onUpdate({ applicableYn: e.target.value as "Y" | "N" })}
           style={{
-            padding: "3px 4px", borderRadius: 10,
-            border: "1px solid var(--color-border)",
-            background: inactive ? "#f5f5f5" : "var(--color-bg-card)",
+            padding: "1px 4px", borderRadius: 8,
+            border: "1px solid transparent",
+            background: "transparent",
             color: inactive ? "#888" : "var(--color-text-primary)",
-            fontSize: 11, fontWeight: 600, cursor: "pointer", width: "100%",
+            fontSize: 13, cursor: "pointer", width: "100%",
+            outline: "none",
           }}
           title="해당 여부"
         >
@@ -712,27 +774,30 @@ function ChecklistRow({
           <option value="N">해당없음</option>
         </select>
 
+        {/* borderless input — focus 시에만 옅은 보더 (CSS focus-within) */}
         <input
           type="text"
           value={c.scenarioCn}
           onChange={(e) => onUpdate({ scenarioCn: e.target.value })}
-          placeholder="시나리오 *"
-          className="sp-input"
-          style={{ width: "100%", fontSize: 12, padding: "5px 8px" }}
+          placeholder="시나리오"
+          style={cellInputStyle}
+          onFocus={(e) => { e.currentTarget.style.borderColor = "var(--color-border)"; e.currentTarget.style.background = "var(--color-bg-card)"; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
         />
         <input
           type="text"
           value={c.expectedCn}
           onChange={(e) => onUpdate({ expectedCn: e.target.value })}
-          placeholder="예상 결과 *"
-          className="sp-input"
-          style={{ width: "100%", fontSize: 12, padding: "5px 8px" }}
+          placeholder="예상 결과"
+          style={cellInputStyle}
+          onFocus={(e) => { e.currentTarget.style.borderColor = "var(--color-border)"; e.currentTarget.style.background = "var(--color-bg-card)"; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
         />
 
-        <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
           {c.aiGenYn === "Y" && (
             <span style={{
-              padding: "1px 6px", borderRadius: 8,
+              padding: "1px 5px", borderRadius: 6,
               background: "rgba(103,80,164,0.1)", color: "rgba(103,80,164,1)",
               fontSize: 9, fontWeight: 700, marginRight: 2,
             }}>✨</span>
@@ -759,14 +824,14 @@ function SubInfoGrid({
       padding: "8px 10px 10px",
       display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8,
     }}>
-      <SubField label="전제조건"     placeholder="예: OWNER 로그인, 프로젝트 1개 보유"
+      <SubField label="전제조건" placeholder="예: OWNER 로그인, 프로젝트 1개 보유"
         value={c.preconditionCn ?? ""} onChange={(v) => onUpdate({ preconditionCn: v })} />
       <SubField label="테스트 데이터" placeholder="예: 이메일 a@b.com / 비번 Test1234!"
-        value={c.testDataCn ?? ""}     onChange={(v) => onUpdate({ testDataCn: v })} />
-      <SubField label="테스트 계정"   placeholder="예: OWNER 계정 / MEMBER 계정"
-        value={c.testAccountCn ?? ""}  onChange={(v) => onUpdate({ testAccountCn: v })} />
-      <SubField label="비고"          placeholder="관련 이슈·보충 설명"
-        value={c.remarkCn ?? ""}       onChange={(v) => onUpdate({ remarkCn: v })} />
+        value={c.testDataCn ?? ""} onChange={(v) => onUpdate({ testDataCn: v })} />
+      <SubField label="테스트 계정" placeholder="예: OWNER 계정 / MEMBER 계정"
+        value={c.testAccountCn ?? ""} onChange={(v) => onUpdate({ testAccountCn: v })} />
+      <SubField label="비고" placeholder="관련 이슈·보충 설명"
+        value={c.remarkCn ?? ""} onChange={(v) => onUpdate({ remarkCn: v })} />
     </div>
   );
 }
@@ -774,114 +839,66 @@ function SubInfoGrid({
 // ── FUNCTIONAL — 카드 형태 (기존) ───────────────────────────────────────────
 
 function FunctionalCard({
-  c, onUpdate, onRemove, onDuplicate,
+  c, isLast, onUpdate, onRemove, onDuplicate,
 }: {
   c: TestCase;
-  onUpdate:    (patch: Partial<TestCase>) => void;
-  onRemove:    () => void;
+  isLast?: boolean;
+  onUpdate: (patch: Partial<TestCase>) => void;
+  onRemove: () => void;
   onDuplicate: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const inactive = c.applicableYn === "N";       // 해당없음 → 흐리게
-  const priorColor = PRIORITY_COLOR[c.priortCode ?? "MEDIUM"];
 
+  // 컬럼 순서: No (좌) / 시나리오 / 예상결과 / 액션 (우)
+  // 우선순위는 제거됨 (DB priort_code 는 "MEDIUM" 기본값 유지 — 데이터 보존)
   return (
     <div style={{
-      border: "1px solid var(--color-border)",
-      borderRadius: 8,
-      background: inactive ? "var(--color-bg-muted)" : "var(--color-bg-card)",
-      opacity:    inactive ? 0.65 : 1,
-      transition: "opacity 0.15s, background 0.15s",
+      borderBottom: isLast ? "none" : "1px solid var(--color-border)",
     }}>
-      {/* 헤더 — No, 우선순위, 해당여부, 액션 */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 8,
-        padding: "5px 10px",
-        borderBottom: "1px solid var(--color-border)",
-        background: "rgba(0,0,0,0.015)",
-        borderTopLeftRadius: 8, borderTopRightRadius: 8,
-      }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--color-text-secondary)", minWidth: 36 }}>
-          No.{c.caseNo}
-        </span>
-
-        {/* 우선순위 select (배지 스타일) */}
-        <select
-          value={c.priortCode ?? "MEDIUM"}
-          onChange={(e) => onUpdate({ priortCode: e.target.value as TestCase["priortCode"] })}
-          style={{
-            padding: "2px 6px", borderRadius: 10,
-            border: `1px solid ${priorColor.fg}33`,
-            background: priorColor.bg, color: priorColor.fg,
-            fontSize: 11, fontWeight: 700, cursor: "pointer",
-          }}
-        >
-          <option value="HIGH">우선순위 높음</option>
-          <option value="MEDIUM">우선순위 중간</option>
-          <option value="LOW">우선순위 낮음</option>
-        </select>
-
-        {/* 해당 여부 select */}
-        <select
-          value={c.applicableYn ?? "Y"}
-          onChange={(e) => onUpdate({ applicableYn: e.target.value as "Y" | "N" })}
-          style={{
-            padding: "2px 6px", borderRadius: 10,
-            border: "1px solid var(--color-border)",
-            background: inactive ? "#f5f5f5" : "var(--color-bg-card)",
-            color: inactive ? "#888" : "var(--color-text-primary)",
-            fontSize: 11, fontWeight: 600, cursor: "pointer",
-          }}
-        >
-          <option value="Y">해당됨</option>
-          <option value="N">해당없음 (N/A)</option>
-        </select>
-
-        {c.aiGenYn === "Y" && (
-          <span style={{
-            padding: "2px 8px", borderRadius: 10,
-            background: "rgba(103,80,164,0.1)", color: "rgba(103,80,164,1)",
-            fontSize: 10, fontWeight: 700,
-          }}>✨ AI 생성</span>
-        )}
-
-        <span style={{ flex: 1 }} />
-
-        {/* 부가정보 토글 — Checklist 와 동일 패턴 (헤더 통합) */}
-        <SubInfoToggle expanded={expanded} hasData={hasSubInfo(c)} onToggle={() => setExpanded((v) => !v)} />
-        <button onClick={onDuplicate} title="이 케이스 복제" style={iconBtnStyle}>⎘</button>
-        <button onClick={onRemove} title="케이스 삭제" style={{ ...iconBtnStyle, color: "#e53935" }}>×</button>
-      </div>
-
-      {/* 본문 — FUNCTIONAL: textarea 110px (좀 더 컴팩트) + 50:50 비율 */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "1fr 1fr",
+        gridTemplateColumns: "44px 1fr 1fr auto",
         gap: 8, padding: 8,
+        alignItems: "start",
       }}>
-        <div>
-          <Label>시나리오 *</Label>
-          <textarea
-            value={c.scenarioCn}
-            onChange={(e) => onUpdate({ scenarioCn: e.target.value })}
-            placeholder="테스트 내용 (어떻게 수행하는가)"
-            className="sp-input"
-            style={{ width: "100%", minHeight: 110, resize: "vertical", fontSize: 13, lineHeight: 1.5, padding: "6px 8px" }}
-          />
+        {/* No + AI 배지 */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, paddingTop: 6 }}>
+          <span style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
+            {c.caseNo}
+          </span>
+          {c.aiGenYn === "Y" && (
+            <span style={{
+              padding: "1px 5px", borderRadius: 6,
+              background: "rgba(103,80,164,0.1)", color: "rgba(103,80,164,1)",
+              fontSize: 9, fontWeight: 700,
+            }}>✨</span>
+          )}
         </div>
-        <div>
-          <Label>예상 결과 *</Label>
-          <textarea
-            value={c.expectedCn}
-            onChange={(e) => onUpdate({ expectedCn: e.target.value })}
-            placeholder="무엇이 일어나야 정상인가"
-            className="sp-input"
-            style={{ width: "100%", minHeight: 110, resize: "vertical", fontSize: 13, lineHeight: 1.5, padding: "6px 8px" }}
-          />
+
+        <textarea
+          value={c.scenarioCn}
+          onChange={(e) => onUpdate({ scenarioCn: e.target.value })}
+          placeholder="테스트 내용 (어떻게 수행하는가)"
+          className="sp-input"
+          style={{ width: "100%", minHeight: 80, resize: "vertical", fontSize: 13, lineHeight: 1.5, padding: "6px 8px" }}
+        />
+        <textarea
+          value={c.expectedCn}
+          onChange={(e) => onUpdate({ expectedCn: e.target.value })}
+          placeholder="무엇이 일어나야 정상인가"
+          className="sp-input"
+          style={{ width: "100%", minHeight: 80, resize: "vertical", fontSize: 13, lineHeight: 1.5, padding: "6px 8px" }}
+        />
+
+        {/* 우측 세로 액션 컬럼 — Checklist 와 일관 */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, paddingTop: 4 }}>
+          <SubInfoToggle expanded={expanded} hasData={hasSubInfo(c)} onToggle={() => setExpanded((v) => !v)} />
+          <button onClick={onDuplicate} title="이 케이스 복제" style={iconBtnStyle}>⎘</button>
+          <button onClick={onRemove} title="케이스 삭제" style={{ ...iconBtnStyle, color: "#e53935" }}>×</button>
         </div>
       </div>
 
-      {/* 부가정보 — 펼침 시에만 (헤더 토글로 제어) */}
+      {/* 부가정보 — 펼침 시에만 */}
       {expanded && <SubInfoGrid c={c} onUpdate={onUpdate} />}
     </div>
   );
@@ -1040,10 +1057,10 @@ const chipCloseBtnStyle: React.CSSProperties = {
 
 function statusBadge(code: string): React.CSSProperties {
   const colors: Record<string, { bg: string; fg: string }> = {
-    DRAFT:       { bg: "#f5f5f5", fg: "#616161" },
+    DRAFT: { bg: "#f5f5f5", fg: "#616161" },
     IN_PROGRESS: { bg: "#e3f2fd", fg: "#1565c0" },
-    PASSED:      { bg: "#e8f5e9", fg: "#2e7d32" },
-    FAILED:      { bg: "#ffebee", fg: "#c62828" },
+    PASSED: { bg: "#e8f5e9", fg: "#2e7d32" },
+    FAILED: { bg: "#ffebee", fg: "#c62828" },
   };
   const c = colors[code] ?? colors.DRAFT;
   return {

@@ -16,7 +16,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
+import { usePermissions } from "@/hooks/useMyRole";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
+import ReleaseDialog from "@/components/common/ReleaseDialog";
+import ReleaseHistoryDialog from "@/components/documents/ReleaseHistoryDialog";
+import { bumpMinorVersion } from "@/lib/exports/version";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -63,6 +67,47 @@ function RequirementsPageInner() {
   const initialTaskFilter = searchParams.get("taskId") ?? "";
   const [taskFilter, setTaskFilter] = useState(initialTaskFilter);
   const [keyword, setKeyword]       = useState("");
+
+  // ── 요구사항 정의서 발행/이력 ─────────────────────────────────────────────
+  // 정의서 발행은 프로젝트 단위 — refId = projectId (한 프로젝트 = 한 라인 산출물).
+  // 권한: content.export (MEMBER+). VIEWER 는 버튼 자체 숨김.
+  const { has: hasPerm } = usePermissions(projectId);
+  const canRelease       = hasPerm("content.export");
+  const [isReleaseOpen,         setIsReleaseOpen]         = useState(false);
+  const [isReleaseHistoryOpen,  setIsReleaseHistoryOpen]  = useState(false);
+  const [releaseRefreshTag,     setReleaseRefreshTag]     = useState(0);
+
+  // 발행 이력 — 발행 모달 defaults 의 직전 버전 자동 채움용
+  const { data: releaseListData } = useQuery({
+    queryKey: ["release-history", projectId, "REQUIREMENTS_DEF", projectId, releaseRefreshTag],
+    queryFn: () =>
+      authFetch<{ data: { releases: { releaseId: string; version: string }[] } }>(
+        `/api/projects/${projectId}/documents/release?docKind=REQUIREMENTS_DEF&refId=${encodeURIComponent(projectId)}`
+      ).then((r) => r.data),
+    enabled: !!projectId && canRelease,
+    staleTime: 30_000,
+  });
+
+  // 프로젝트 문서 설정 — 모달 defaults 의 승인자/문서 버전용
+  const { data: docSettingsData } = useQuery({
+    queryKey: ["document-settings", projectId],
+    queryFn: () =>
+      authFetch<{ data: { copyrightHolder: string | null; docVersionDefault: string | null; approverName: string | null } }>(
+        `/api/projects/${projectId}/settings/document`
+      ).then((r) => r.data),
+    enabled: canRelease,
+    staleTime: 60_000,
+  });
+
+  // 발행 모달 defaults — 직전 발행본의 마이너+1, 작성자는 승인자(PM)와 동일 (정의서 정책)
+  const lastReleasedVersion = releaseListData?.releases?.[0]?.version;
+  const releaseDefaults = {
+    version: lastReleasedVersion
+      ? bumpMinorVersion(lastReleasedVersion)
+      : (docSettingsData?.docVersionDefault ?? "v1.0"),
+    author:   docSettingsData?.approverName ?? "",
+    approver: docSettingsData?.approverName ?? "",
+  };
   // 담당자 필터 — 전역 appStore.myAssigneeMode 구독 (GNB 토글과 양방향 바인딩)
   const filterAssignedTo  = useAppStore((s) => s.myAssigneeMode);
   const setMyAssigneeMode = useAppStore((s) => s.setMyAssigneeMode);
@@ -231,6 +276,31 @@ function RequirementsPageInner() {
             }`}
             entityKey="requirements"
           />
+          {/* 요구사항 정의서 발행/이력 — 협의 결과 박제. baseline 폐기 후 이 시스템으로 일원화. */}
+          {canRelease && (
+            <>
+              <button
+                onClick={() => setIsReleaseHistoryOpen(true)}
+                style={{
+                  fontSize: 12, fontWeight: 600, padding: "5px 12px", borderRadius: 6,
+                  border: "1px solid var(--color-border)",
+                  background: "var(--color-bg-card)",
+                  color: "var(--color-text-primary)",
+                  cursor: "pointer",
+                }}
+                title="요구사항 정의서 발행 이력 보기"
+              >
+                발행 이력
+              </button>
+              <button
+                onClick={() => setIsReleaseOpen(true)}
+                style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
+                title="현재 시점 요구사항을 정의서로 발행 (그 시점 모든 RQ 박제)"
+              >
+                요구사항 정의서 발행
+              </button>
+            </>
+          )}
           <button
             onClick={() => router.push(`/projects/${projectId}/requirements/new`)}
             style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
@@ -429,6 +499,32 @@ function RequirementsPageInner() {
           }}
         />
       )}
+
+      {/* 요구사항 정의서 발행 모달 — 헤더의 [요구사항 정의서 발행] 버튼에서 열림.
+          refId 는 projectId (정의서는 프로젝트 단위 산출물 — 한 프로젝트 = 한 라인) */}
+      <ReleaseDialog
+        open={isReleaseOpen}
+        projectId={projectId}
+        docKind="REQUIREMENTS_DEF"
+        refId={projectId}
+        defaults={releaseDefaults}
+        onClose={() => setIsReleaseOpen(false)}
+        onSuccess={() => {
+          setIsReleaseOpen(false);
+          setReleaseRefreshTag((t) => t + 1);
+          toast.success("요구사항 정의서가 발행되었습니다.");
+        }}
+      />
+
+      {/* 발행 이력 다이얼로그 — [발행 이력] 버튼에서 열림. */}
+      <ReleaseHistoryDialog
+        open={isReleaseHistoryOpen}
+        onClose={() => setIsReleaseHistoryOpen(false)}
+        projectId={projectId}
+        docKind="REQUIREMENTS_DEF"
+        refId={projectId}
+        refreshTag={releaseRefreshTag}
+      />
     </div>
   );
 }
@@ -679,16 +775,6 @@ const secondaryBtnStyle: React.CSSProperties = {
   background:   "var(--color-bg-card)",
   color:        "var(--color-text-primary)",
   fontSize:     14,
-  cursor:       "pointer",
-};
-
-const dangerBtnStyle: React.CSSProperties = {
-  padding:      "4px 12px",
-  borderRadius: 4,
-  border:       "1px solid #e53935",
-  background:   "transparent",
-  color:        "#e53935",
-  fontSize:     12,
   cursor:       "pointer",
 };
 

@@ -419,7 +419,7 @@ body {
   outline: none; transition: all var(--transition-fast); -webkit-appearance: none;
   line-height: 1.4;
 }
-.sp-input::placeholder { color: var(--color-text-disabled); }
+.sp-input::placeholder { color: var(--color-text-tertiary); opacity: 1; }
 .sp-input:hover  { border-color: var(--color-border-strong); background: var(--color-bg-input-hover); }
 .sp-input:focus  { border-color: var(--color-border-focus); box-shadow: var(--shadow-focus); background: var(--color-bg-input-hover); }
 .sp-input:disabled { opacity: 0.45; cursor: not-allowed; }

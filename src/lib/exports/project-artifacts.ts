@@ -50,6 +50,12 @@ export type ProjectArtifact = {
   formats:     ArtifactFormatSpec[];
   /** 다운로드 옵션 — 있으면 카드 클릭 시 다이얼로그 오픈. 없으면 즉시 다운로드. */
   options?:    ArtifactOption[];
+  /**
+   * 발행 이력 보기 지원 시 그 산출물의 ReleaseDocKind.
+   * 있으면 카드에 [이력] 버튼 노출 → ReleaseHistoryDialog 오픈.
+   * 없으면 발행/이력 시스템 미연결 산출물.
+   */
+  historyDocKind?: "REQUIREMENT" | "UNIT_WORK" | "REQUIREMENTS_DEF";
 };
 
 export const PROJECT_ARTIFACTS: ProjectArtifact[] = [
@@ -87,6 +93,8 @@ export const PROJECT_ARTIFACTS: ProjectArtifact[] = [
         defaultValue: false,
       },
     ],
+    // 정의서는 발행 시스템 연결됨 — 카드에 [이력] 버튼 노출
+    historyDocKind: "REQUIREMENTS_DEF",
   },
   {
     key:         "TASK_MATRIX",

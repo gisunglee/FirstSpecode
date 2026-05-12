@@ -35,12 +35,17 @@ import {
   buildUnitWorkDocx,
   type UnitWorkExportInput,
 } from "@/lib/exports/docx/unit-work";
+import {
+  buildRequirementsDefDocx,
+  type RequirementsDefExportInput,
+} from "@/lib/exports/docx/requirements-def";
 
 type RouteParams = { params: Promise<{ id: string; releaseId: string }> };
 
 const MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-const DOC_KIND_REQUIREMENT = "REQUIREMENT";
-const DOC_KIND_UNIT_WORK   = "UNIT_WORK";
+const DOC_KIND_REQUIREMENT      = "REQUIREMENT";
+const DOC_KIND_UNIT_WORK        = "UNIT_WORK";
+const DOC_KIND_REQUIREMENTS_DEF = "REQUIREMENTS_DEF";
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, releaseId } = await params;
@@ -75,12 +80,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (release.doc_kind === DOC_KIND_REQUIREMENT) {
       const input = release.snapshot_data as unknown as RequirementExportInput;
       buffer = await buildRequirementDocx(input);
-      // 파일명 패턴: REQ-00023_요구사항명세서_v1.0.docx
       filename = `${input.reqDisplayId}_요구사항명세서_${release.vrsn_no}.docx`;
     } else if (release.doc_kind === DOC_KIND_UNIT_WORK) {
       const input = release.snapshot_data as unknown as UnitWorkExportInput;
       buffer = await buildUnitWorkDocx(input);
       filename = `${input.unitWorkDisplayId}_프로그램사양서_${release.vrsn_no}.docx`;
+    } else if (release.doc_kind === DOC_KIND_REQUIREMENTS_DEF) {
+      const input = release.snapshot_data as unknown as RequirementsDefExportInput;
+      buffer = await buildRequirementsDefDocx(input);
+      // 정의서는 프로젝트 단위 — 파일명에 프로젝트명 + 버전
+      filename = `${input.projectName}_요구사항정의서_${release.vrsn_no}.docx`;
     } else {
       return apiError("UNSUPPORTED_DOC_KIND", "이 산출물 종류는 아직 다운로드할 수 없습니다.", 400);
     }

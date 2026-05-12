@@ -28,12 +28,13 @@
  */
 
 import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────
 // 백엔드 SUPPORTED_DOC_KINDS 와 동기화 — 추가 시 양쪽을 함께 수정해야 함.
-export type ReleaseDocKind = "REQUIREMENT" | "UNIT_WORK";
+export type ReleaseDocKind = "REQUIREMENT" | "UNIT_WORK" | "REQUIREMENTS_DEF";
 
 type ReleaseDialogProps = {
   open:       boolean;
@@ -78,6 +79,36 @@ export default function ReleaseDialog({
   const [approver,  setApprover]  = useState(defaults.approver);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const queryClient = useQueryClient();
+
+  // 발행 이력 조회 — 모달 내에서 최종/이전 버전 + 직전 변경 내용까지 참고용으로 표시.
+  // 사용자가 다음 버전과 변경 내용을 작성할 때 일관성 유지에 도움.
+  const { data: historyData } = useQuery({
+    queryKey: ["release-history", projectId, docKind, refId, "dialog-peek"],
+    queryFn: () =>
+      authFetch<{ data: { releases: Array<{
+        releaseId:  string;
+        version:    string;
+        releasedAt: string;
+        change:     string; // 변경 내용 — 직전 작성 패턴 참고용
+      }> } }>(
+        `/api/projects/${projectId}/documents/release?docKind=${encodeURIComponent(docKind)}&refId=${encodeURIComponent(refId)}`
+      ).then((r) => r.data),
+    enabled: open && !!projectId && !!refId,
+    staleTime: 10_000,
+  });
+  const prevReleases = historyData?.releases ?? [];
+
+  // ── doc_kind 별 타이틀 ────────────────────────────────────
+  // 동작은 동일하지만 사용자가 어떤 산출물을 발행하는지 명확히 알도록 타이틀만 차별화.
+  // 안내문/활용 예/필드 구성은 모두 공통 — 한 컴포넌트로 유지.
+  const titleByDocKind: Record<ReleaseDocKind, string> = {
+    REQUIREMENT:      "요구사항 명세서 발행",
+    UNIT_WORK:        "프로그램 사양서 발행",
+    REQUIREMENTS_DEF: "요구사항 정의서 발행",
+  };
+  const dialogTitle = titleByDocKind[docKind] ?? "산출물 발행";
+
   // 모달이 새로 열릴 때마다 defaults 반영 — 다른 산출물에서 재사용 가능하게
   useEffect(() => {
     if (open) {
@@ -120,6 +151,9 @@ export default function ReleaseDialog({
         }
       );
       toast.success(`${res.data.vrsnNo} 버전으로 발행되었습니다.`);
+      // 본인 다이얼로그 + 모든 동일 산출물 발행 이력 캐시 무효화
+      // (prefix 매칭 — dialog-peek 키 / 외부 이력 다이얼로그 키 모두 갱신)
+      queryClient.invalidateQueries({ queryKey: ["release-history", projectId, docKind, refId] });
       onSuccess({ releaseId: res.data.releaseId, version: res.data.vrsnNo });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "발행에 실패했습니다.");
@@ -141,14 +175,76 @@ export default function ReleaseDialog({
           id="release-dialog-title"
           style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}
         >
-          산출물 발행
+          {dialogTitle}
         </h3>
-        <p style={{ margin: "0 0 18px", fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
-          현재 시점의 산출물 양식을 새 버전으로 박제합니다.
-          이후 데이터가 바뀌어도 이 발행본은 그대로 다운로드 가능합니다.
+        <p style={{ margin: "0 0 14px", fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.7 }}>
+          현재 시점의 산출물을 새 버전으로 <strong style={{ color: "var(--color-text-primary)" }}>스냅샷</strong>해 보관합니다.
+          이후 본문이 변경되어도 발행본은 그대로 유지되어, 문서실에서 언제든지 다운로드할 수 있습니다.
+          <br />
+          아래 <strong style={{ color: "var(--color-text-primary)" }}>변경 내용</strong>은 향후 이 산출물의 변경 이력으로 사용됩니다.
         </p>
+        <div style={{
+          margin: "0 0 18px",
+          padding: "8px 12px",
+          background: "var(--color-bg-muted)",
+          borderRadius: 6,
+          fontSize: 12,
+          color: "var(--color-text-secondary)",
+          lineHeight: 1.6,
+        }}>
+          💡 <strong style={{ color: "var(--color-text-primary)" }}>활용 예</strong> — 요구사항 정의서 고객 합의 시점, 설계 확정 시점 등
+          협의 결과를 공식 버전으로 남길 때.
+        </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {/* 이전 발행 이력 안내 — 버전·변경 내용 작성 시 일관성 유지에 참고.
+              발행 이력 0건이면 "첫 발행" 안내, 1건 이상이면 최대 5건 표시. */}
+          <div style={prevReleasesStyle}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 6 }}>
+              이전 발행 이력 (참고용)
+            </div>
+            {prevReleases.length === 0 ? (
+              <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+                아직 발행 이력이 없습니다 — 이번이 첫 발행입니다.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {prevReleases.slice(0, 5).map((r, idx) => (
+                  <div key={r.releaseId} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12, color: "var(--color-text-secondary)" }}>
+                    {idx === 0 && <span style={latestBadgeStyle}>최종</span>}
+                    <span style={{
+                      fontFamily: "monospace",
+                      fontWeight: idx === 0 ? 700 : 600,
+                      color:      idx === 0 ? "var(--color-primary, #1976d2)" : "var(--color-text-primary)",
+                      whiteSpace: "nowrap",
+                    }}>
+                      {r.version}
+                    </span>
+                    <span style={{ fontSize: 11, whiteSpace: "nowrap", color: "var(--color-text-tertiary)" }}>
+                      {r.releasedAt.slice(0, 10)}
+                    </span>
+                    {/* 변경 내용 — 길면 한 줄로 ellipsis 처리.
+                        새 변경 내용 작성할 때 직전 패턴 (어조/길이) 참고용 */}
+                    {r.change && (
+                      <span style={{
+                        flex: 1, minWidth: 0,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        fontSize: 12, color: "var(--color-text-secondary)",
+                      }} title={r.change}>
+                        — {r.change}
+                      </span>
+                    )}
+                  </div>
+                ))}
+                {prevReleases.length > 5 && (
+                  <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginTop: 2 }}>
+                    … 이전 {prevReleases.length - 5}건 더 (발행 이력에서 확인)
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="sp-label" htmlFor="rl-version">
               발행 버전 <span style={{ color: "var(--color-error)" }}>*</span>
@@ -271,4 +367,24 @@ const secondaryBtnStyle: React.CSSProperties = {
   color:        "var(--color-text-primary)",
   fontSize:     14,
   cursor:       "pointer",
+};
+
+// 이전 발행 이력 안내 패널 — 발행 버전 입력 위에 표시
+const prevReleasesStyle: React.CSSProperties = {
+  padding:      "10px 12px",
+  background:   "var(--color-bg-muted)",
+  borderRadius: 6,
+  border:       "1px solid var(--color-border)",
+};
+
+const latestBadgeStyle: React.CSSProperties = {
+  display:      "inline-block",
+  padding:      "1px 6px",
+  fontSize:     10,
+  fontWeight:   700,
+  lineHeight:   1.4,
+  borderRadius: 3,
+  background:   "var(--color-primary, #1976d2)",
+  color:        "#fff",
+  letterSpacing: "0.04em",
 };

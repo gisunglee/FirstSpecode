@@ -86,6 +86,7 @@ export default function LNB() {
         // URL 은 프로젝트 prefix 없이 단일 경로로 유지 — 기존 /dashboard 와 동일한 패턴.
         items: [
           { label: "대시보드", href: "/dashboard", icon: "i_dashboard" },
+          { label: "PM",       href: "/pm",        icon: "i_pm" },
           { label: "활동",     href: "/activity",  icon: "i_activity" },
           { label: "포커스",   href: "/focus",     icon: "i_focus" },
           { label: "캘린더",   href: "/calendar",  icon: "i_calendar" },
@@ -119,7 +120,6 @@ export default function LNB() {
           { label: "과업",              href: p("/tasks"),         icon: "i_task" },
           { label: "요구사항",          href: p("/requirements"),  icon: "i_requirement" },
           { label: "사용자스토리",      href: p("/user-stories"),  icon: "i_userStory" },
-          { label: "요구사항 확정",     href: p("/baseline"),      icon: "i_baseline" },
           { label: "요구분석 일괄 편집", href: p("/planning"),     icon: "i_planningBatch" },
           { label: "기획실",            href: p("/plan-studio"),   icon: "i_planStudio" },
         ],
@@ -261,18 +261,22 @@ export default function LNB() {
           pathname === itPath || pathname.startsWith(itPath + "/");
         if (!pathMatches) continue;
 
-        // 기본 점수 = path 길이 (가장 긴 prefix 가 이김)
+        // 점수 정책:
+        //   path 만 매칭        → itPath.length * 10        (그룹 활성용 fallback)
+        //   path + query 정확   → itPath.length * 10 + 1000 (확실한 항목 활성)
+        //
+        // query 가 있는 메뉴 (예: ?kind=UNIT|INTEGRATION) 가 path 만 매칭되는 경우,
+        // 정확 매칭이 없으면 첫 메뉴가 그룹을 활성화시키는 fallback 역할.
+        // 항목 강조(activeItemHref) 는 score 가장 높은 1개 — 정확 매칭이 우선.
         let score = itPath.length * 10;
         if (itQuery) {
-          // query 까지 정확히 일치해야 가산점 — 일치하면 +1000 (확실히 이김),
-          // 불일치면 path 만 매칭이라 0점 (다른 query 메뉴에 밀림)
           const itParams = new URLSearchParams(itQuery);
           let allMatch = true;
           for (const [k, v] of itParams) {
             if (searchParams.get(k) !== v) { allMatch = false; break; }
           }
           if (allMatch) score += 1000;
-          else continue;  // 같은 path 의 다른 query 항목 — 이 메뉴는 활성 X
+          // 불일치 시에도 path 매칭만으로 그룹은 통과 — 명세서 상세 같은 자식 경로에서 그룹 자동 활성용
         }
         if (score > bestScore) {
           bestGroupKey = g.key;

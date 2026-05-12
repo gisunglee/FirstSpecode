@@ -114,11 +114,8 @@ export const PERMISSIONS = {
   // VIEWER 도 화면을 볼 수는 있어야 한다는 정책이지만, 파일로 빼가는 건 멤버 이상만 허용.
   "content.export":     { roles: ["OWNER", "ADMIN", "MEMBER"] },
 
-  // ── 요구사항 확정(기준선 스냅샷) — 계약 변경 범위 추적이 비즈니스 목적이라
-  // 일반 content 보다 좁게: 기획·리딩 라인(OWNER/ADMIN 또는 PM/PL 직무)만 허용.
-  // "확정 생성" 과 "확정 삭제(전체 폐기)" 모두 같은 권한으로 묶음 — 단, 한번 확정된
-  // 개별 요구사항 이력 버전은 PRD UW-00017 기준 영구 삭제 불가.
-  "requirement.confirm": { roles: ["OWNER", "ADMIN"], jobs: ["PM", "PL"] },
+  // 요구사항 확정(baseline) 시스템은 폐기됨 (2026-05-12) — 정의서 발행 시스템으로 통합.
+  // 발행은 content.export 권한 사용. 별도의 confirm 권한 불필요.
 
   // ── 요구사항 편집/삭제 — 일반 content 보다 좁게.
   // 매트릭스로는 OWNER/ADMIN 역할 또는 PM/PL 직무만 통과.

@@ -100,13 +100,13 @@ function buildCoverSheet(wb: ExcelJS.Workbook, input: RequirementsDefExportInput
     properties: { tabColor: { argb: HEADER_FILL_COLOR } },
   });
 
-  // 컬럼 폭 — 라벨 2 컬럼 + 값 2 컬럼 (총 4 컬럼, 표지에서는 사용 안 하지만 후속 행 위해 준비)
+  // 컬럼 폭 — 라벨 + 값 2열
   ws.columns = [
     { width: 18 },
     { width: 42 },
   ];
 
-  // 빈 줄로 상단 여백 — 표지 톤
+  // 상단 여백
   ws.addRow([]);
   ws.addRow([]);
 
@@ -117,7 +117,7 @@ function buildCoverSheet(wb: ExcelJS.Workbook, input: RequirementsDefExportInput
   projRow.alignment = { vertical: "middle", horizontal: "center" };
   projRow.height = 30;
 
-  // 산출물명 — 더 큰 글씨, 진청
+  // 산출물명
   const titleRow = ws.addRow(["요구사항 정의서"]);
   ws.mergeCells(titleRow.number, 1, titleRow.number, 2);
   titleRow.font = { size: 28, bold: true, color: { argb: HEADER_FILL_COLOR } };
@@ -138,15 +138,16 @@ function buildCoverSheet(wb: ExcelJS.Workbook, input: RequirementsDefExportInput
   subtitleRow.alignment = { vertical: "middle", horizontal: "center" };
   subtitleRow.height = 22;
 
-  // 작성정보 표 — 라벨/값 (2열)
-  ws.addRow([]);
-  ws.addRow([]);
+  // 작성정보 표 — 타이틀과 사이에 여백을 더 줘서 시각적 무게 분산
+  for (let i = 0; i < 6; i++) ws.addRow([]);
+
+  // 메타 표 — 발주처 제거. 작성자/승인자 모두 표시.
+  // 값은 데이터 매핑 단계에서 통일됨 (requirements-def-data.ts 참고) — 빌더는 그대로 표시.
   const metaRows: [string, string][] = [
-    ["발주처",     input.ordererName],
-    ["작성일",     input.writtenAt],
-    ["문서 버전",  input.documentVersion],
-    ["작성자",     input.authorName],
-    ["승인자",     input.approverName],
+    ["작성일",    input.writtenAt],
+    ["문서 버전", input.documentVersion],
+    ["작성자",    input.authorName],
+    ["승인자",    input.approverName],
   ];
   for (const [label, value] of metaRows) {
     const r = ws.addRow([label, value]);

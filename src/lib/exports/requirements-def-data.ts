@@ -206,13 +206,15 @@ export async function buildRequirementsDefExportInput(
 
     documentVersion,
     writtenAt,
-    authorName:   REQUIREMENTS_DEF_FALLBACK.authorName,
+    // 정책: 요구사항 정의서는 프로젝트 단위 산출물 — 작성·승인 모두 PM(프로젝트 설정의
+    // 기본 승인자) 책임으로 통일. xlsx/docx 양쪽 표지·변경이력에 동일 적용된다.
+    authorName:   approverName,
     approverName,
     history: [{
       version:  documentVersion,
       date:     writtenAt,
       change:   REQUIREMENTS_DEF_FALLBACK.historyChange,
-      author:   REQUIREMENTS_DEF_FALLBACK.authorName,
+      author:   approverName,
       approver: approverName,
     }],
   };

@@ -23,7 +23,8 @@
  *   />
  */
 
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import type { ReleaseDocKind } from "@/components/common/ReleaseDialog";
@@ -58,7 +59,26 @@ async function downloadReleaseDocx(projectId: string, releaseId: string): Promis
       ? (sessionStorage.getItem("access_token") ?? "")
       : "";
 
-  const url = `/api/projects/${projectId}/documents/release/${releaseId}/docx`;
+  await downloadReleaseFile(projectId, releaseId, "docx");
+}
+
+/**
+ * 발행본 파일 다운로드 (형식 통합).
+ *   - format="docx" : 모든 doc_kind 지원
+ *   - format="xlsx" : REQUIREMENTS_DEF 만 지원 (다른 doc_kind 는 서버가 400 반환)
+ *
+ * 공통 흐름: fetch → blob → a.download → revoke.
+ */
+async function downloadReleaseFile(
+  projectId: string,
+  releaseId: string,
+  format:    "docx" | "xlsx",
+) {
+  const at = typeof window !== "undefined"
+    ? (sessionStorage.getItem("access_token") ?? "")
+    : "";
+
+  const url = `/api/projects/${projectId}/documents/release/${releaseId}/${format}`;
   const res = await fetch(url, { headers: at ? { Authorization: `Bearer ${at}` } : {} });
 
   if (!res.ok) {
@@ -70,10 +90,9 @@ async function downloadReleaseDocx(projectId: string, releaseId: string): Promis
     throw new Error(msg);
   }
 
-  // 파일명 — Content-Disposition 의 RFC 5987 형식 그대로 사용
   const disposition = res.headers.get("content-disposition") ?? "";
   const m = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-  const filename = m ? decodeURIComponent(m[1]) : `release-${releaseId}.docx`;
+  const filename = m ? decodeURIComponent(m[1]) : `release-${releaseId}.${format}`;
 
   const blob = await res.blob();
   const a = document.createElement("a");
@@ -91,7 +110,13 @@ export default function ReleaseHistorySection({
   refreshTag,
 }: Props) {
   const { data, isLoading } = useQuery({
-    // refreshTag 가 변하면 즉시 재조회 — 발행 직후 호출부에서 trigger 가능
+    // refreshTag 가 변하면 즉시 재조회 — 발행 직후 호출부에서 trigger 가능.
+    //
+    // 캐시 키 구조 — 후임자 주의:
+    //   ReleaseDialog 와 deleteMutation 의 invalidateQueries 는 4항목 prefix
+    //   ["release-history", projectId, docKind, refId] 로 매칭한다.
+    //   따라서 refreshTag 는 *반드시* 키 배열의 마지막에 위치할 것.
+    //   중간에 넣거나 빼면 prefix 매칭이 깨져 다이얼로그/외부 발행 시 자동 갱신이 안 된다.
     queryKey: ["release-history", projectId, docKind, refId, refreshTag],
     queryFn: () =>
       authFetch<{ data: ReleaseListResponse }>(
@@ -101,15 +126,41 @@ export default function ReleaseHistorySection({
   });
 
   const releases = data?.releases ?? [];
+  const queryClient = useQueryClient();
 
-  async function handleDownload(item: ReleaseItem) {
+  // 삭제 확인 대상 — null 이면 다이얼로그 닫힘.
+  // hard delete 라 사용자 확인을 명시적으로 받는다 (snapshot_data 도 같이 사라짐).
+  const [deleteTarget, setDeleteTarget] = useState<ReleaseItem | null>(null);
+
+  // 삭제 mutation — 권한은 서버에서 한 번 더 검증 (content.export)
+  const deleteMutation = useMutation({
+    mutationFn: (releaseId: string) =>
+      authFetch(`/api/projects/${projectId}/documents/release/${releaseId}`, {
+        method: "DELETE",
+      }),
+    onSuccess: (_data, releaseId) => {
+      toast.success("발행 이력이 삭제되었습니다.");
+      setDeleteTarget(null);
+      // 같은 queryKey 캐시 모두 무효화 — refreshTag 다른 마운트 위치도 동기화
+      queryClient.invalidateQueries({ queryKey: ["release-history", projectId, docKind, refId] });
+      // releaseId 는 onSuccess 시그니처 호환을 위해 받음 (실제 사용 안 함)
+      void releaseId;
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  async function handleDownload(item: ReleaseItem, format: "docx" | "xlsx") {
     try {
-      await downloadReleaseDocx(projectId, item.releaseId);
-      toast.success(`${item.version} 버전이 다운로드되었습니다.`);
+      await downloadReleaseFile(projectId, item.releaseId, format);
+      toast.success(`${item.version} ${format.toUpperCase()} 다운로드 완료`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "다운로드에 실패했습니다.");
     }
   }
+
+  // Excel 발행본은 현재 REQUIREMENTS_DEF 만 빌더 보유 — 다른 산출물은 docx 만 노출.
+  // 추후 도메인별 xlsx 빌더 추가 시 이 조건을 확장.
+  const supportsXlsx = docKind === "REQUIREMENTS_DEF";
 
   return (
     <section style={cardStyle} aria-labelledby="release-history-title">
@@ -149,18 +200,73 @@ export default function ReleaseHistorySection({
                   <td style={{ ...tdStyle, whiteSpace: "pre-wrap" }}>{r.change || "—"}</td>
                   <td style={tdStyle}>{r.author || "—"}</td>
                   <td style={tdStyle}>{r.approver || "—"}</td>
-                  <td style={{ ...tdStyle, textAlign: "right" }}>
+                  <td style={{ ...tdStyle, textAlign: "right", whiteSpace: "nowrap" }}>
                     <button
-                      onClick={() => handleDownload(r)}
+                      onClick={() => handleDownload(r, "docx")}
                       style={downloadBtnStyle}
+                      title="Word(.docx) 다운로드"
                     >
-                      다운로드
+                      Word ↓
+                    </button>
+                    {supportsXlsx && (
+                      <button
+                        onClick={() => handleDownload(r, "xlsx")}
+                        style={{ ...downloadBtnStyle, marginLeft: 4 }}
+                        title="Excel(.xlsx) 다운로드"
+                      >
+                        Excel ↓
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setDeleteTarget(r)}
+                      style={deleteBtnStyle}
+                      title="이 발행 이력을 삭제합니다 (되돌릴 수 없음)"
+                    >
+                      삭제
                     </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* 삭제 확인 — hard delete 라 한 번 더 묻고 진행 */}
+      {deleteTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => deleteMutation.isPending ? null : setDeleteTarget(null)}
+          style={overlayStyle}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={confirmPanelStyle}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8, color: "var(--color-text-primary)" }}>
+              발행 이력 삭제
+            </div>
+            <div style={{ fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: 16 }}>
+              <strong style={{ color: "var(--color-text-primary)" }}>{deleteTarget.version}</strong>{" "}
+              ({deleteTarget.releasedAt.slice(0, 10)}) 발행 이력을 삭제합니다.
+              <br />
+              박제된 스냅샷이 영구 삭제되어 그 버전의 docx 를 다시 받을 수 없습니다.
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleteMutation.isPending}
+                style={ghostBtnStyle}
+              >
+                취소
+              </button>
+              <button
+                onClick={() => deleteMutation.mutate(deleteTarget.releaseId)}
+                disabled={deleteMutation.isPending}
+                style={dangerBtnStyle}
+              >
+                {deleteMutation.isPending ? "삭제 중..." : "삭제"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>
@@ -220,4 +326,46 @@ const downloadBtnStyle: React.CSSProperties = {
   color:        "var(--color-text-primary)",
   fontSize:     "var(--text-xs)",
   cursor:       "pointer",
+};
+
+const deleteBtnStyle: React.CSSProperties = {
+  marginLeft:   4,
+  padding:      "4px 10px",
+  borderRadius: 4,
+  border:       "1px solid var(--color-danger, #e53935)",
+  background:   "var(--color-bg-card)",
+  color:        "var(--color-danger, #e53935)",
+  fontSize:     "var(--text-xs)",
+  cursor:       "pointer",
+};
+
+// 삭제 확인 모달
+const overlayStyle: React.CSSProperties = {
+  position: "fixed", inset: 0,
+  background: "rgba(0,0,0,0.4)",
+  display: "flex", alignItems: "center", justifyContent: "center",
+  zIndex: 1100, // ReleaseHistoryDialog(1000) 위에 떠야 함
+};
+const confirmPanelStyle: React.CSSProperties = {
+  width: "min(420px, 92vw)",
+  background: "var(--color-bg-card)",
+  borderRadius: 8,
+  boxShadow: "0 12px 32px rgba(0,0,0,0.25)",
+  padding: "20px 22px",
+};
+const ghostBtnStyle: React.CSSProperties = {
+  padding: "7px 16px", borderRadius: 6,
+  border: "1px solid var(--color-border)",
+  background: "var(--color-bg-card)",
+  color: "var(--color-text-primary)",
+  fontSize: 13, fontWeight: 600,
+  cursor: "pointer",
+};
+const dangerBtnStyle: React.CSSProperties = {
+  padding: "7px 18px", borderRadius: 6,
+  border: "1px solid transparent",
+  background: "var(--color-danger, #e53935)",
+  color: "#fff",
+  fontSize: 13, fontWeight: 600,
+  cursor: "pointer",
 };

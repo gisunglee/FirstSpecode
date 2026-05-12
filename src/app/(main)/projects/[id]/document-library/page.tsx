@@ -33,6 +33,7 @@ import {
   type ProjectArtifact, type ArtifactFormatSpec,
 } from "@/lib/exports/project-artifacts";
 import ArtifactOptionsDialog from "@/components/common/ArtifactOptionsDialog";
+import ReleaseHistoryDialog from "@/components/documents/ReleaseHistoryDialog";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -257,6 +258,9 @@ function DocumentLibraryInner() {
     artifact: ProjectArtifact;
     format:   ArtifactFormatSpec;
   } | null>(null);
+  // 발행 이력 다이얼로그 — 카드 [이력] 버튼에서 열림.
+  // historyDocKind 가 정의된 산출물만 이력 시스템 연결됨.
+  const [historyArtifact, setHistoryArtifact] = useState<ProjectArtifact | null>(null);
 
   // 카드 안의 형식 버튼 onClick — 옵션 유무에 따라 분기
   function onArtifactFormatClick(artifact: ProjectArtifact, format: ArtifactFormatSpec) {
@@ -434,45 +438,72 @@ function DocumentLibraryInner() {
               const cardOpacity = disabled ? 0.6 : 1;
               return (
                 <div key={art.key} style={{ ...artifactCardStyle, opacity: cardOpacity }}>
-                  <div style={{ fontSize: 28, lineHeight: 1 }}>{art.icon}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "var(--color-text-primary)" }}>
-                      {art.title}
-                      {disabled && <span style={badgeStyle}>준비 중</span>}
-                    </div>
-                    <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
-                      {art.description}
+                  {/* 상단 — 아이콘 + 제목/설명 (가로 배치, 카드 폭 가득) */}
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                    <div style={{ fontSize: 28, lineHeight: 1, flexShrink: 0 }}>{art.icon}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                        {art.title}
+                        {disabled && <span style={badgeStyle}>준비 중</span>}
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 4, lineHeight: 1.5 }}>
+                        {art.description}
+                      </div>
                     </div>
                   </div>
 
-                  {/* 형식별 버튼들 — formats 배열 길이만큼 노출 (Word/Excel 등) */}
-                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                    {art.formats.map((fmt) => {
-                      const busyKey = `${art.key}:${fmt.type}`;
-                      const busy    = artifactBusyKey === busyKey;
-                      // VIEWER(content.export 없음) 면 다운로드 버튼 숨김 — 카드는 노출 (프리뷰성)
-                      if (!canExport) return null;
-                      return (
-                        <button
-                          key={fmt.type}
-                          onClick={() => onArtifactFormatClick(art, fmt)}
-                          disabled={busy || disabled}
-                          style={{
-                            ...formatBtnStyle,
-                            opacity: busy || disabled ? 0.5 : 1,
-                            cursor:  busy ? "wait" : (disabled ? "not-allowed" : "pointer"),
-                          }}
-                          title={
-                            disabled ? `${art.title} — 준비 중` :
-                            busy     ? "생성 중..." :
-                            `${art.title} ${fmt.type.toUpperCase()} 다운로드`
-                          }
-                        >
-                          {busy ? "..." : fmt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {/* 하단 — 안내문 + 형식별 버튼들 (카드 폭 가득, 좌우 분리) */}
+                  {canExport && (
+                    <div style={cardFooterStyle}>
+                      {/* 좌측 안내 — historyDocKind 가 있는 산출물만 (발행 시스템 연결됨) */}
+                      <span style={cardHintStyle}>
+                        {art.historyDocKind
+                          ? "Word·Excel = 최신본 / 이력 = 발행본"
+                          : "최신본 다운로드"}
+                      </span>
+                      {/* 우측 버튼 그룹 */}
+                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                        {art.formats.map((fmt) => {
+                          const busyKey = `${art.key}:${fmt.type}`;
+                          const busy    = artifactBusyKey === busyKey;
+                          return (
+                            <button
+                              key={fmt.type}
+                              onClick={() => onArtifactFormatClick(art, fmt)}
+                              disabled={busy || disabled}
+                              style={{
+                                ...formatBtnStyle,
+                                opacity: busy || disabled ? 0.5 : 1,
+                                cursor:  busy ? "wait" : (disabled ? "not-allowed" : "pointer"),
+                              }}
+                              title={
+                                disabled ? `${art.title} — 준비 중` :
+                                busy     ? "생성 중..." :
+                                `${art.title} ${fmt.type.toUpperCase()} — 현재 시점 최신본 다운로드`
+                              }
+                            >
+                              {busy ? "..." : fmt.label}
+                            </button>
+                          );
+                        })}
+                        {/* 발행 이력 진입 — historyDocKind 있는 산출물만 */}
+                        {art.historyDocKind && (
+                          <button
+                            onClick={() => setHistoryArtifact(art)}
+                            disabled={disabled}
+                            style={{
+                              ...formatBtnStyle,
+                              opacity: disabled ? 0.5 : 1,
+                              cursor:  disabled ? "not-allowed" : "pointer",
+                            }}
+                            title="발행 이력 — 박제된 시점의 발행본 다운로드"
+                          >
+                            이력
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -657,15 +688,27 @@ function DocumentLibraryInner() {
 
       </div>
 
-      {/* 산출물 옵션 다이얼로그 — 옵션이 정의된 산출물의 형식 버튼 클릭 시 열림.
-          확정 시 onArtifactOptionsConfirm 으로 선택값 받아 query string 으로 다운로드.
-          다이얼로그는 형식 정보를 모름 — pendingArtifact 가 보관 후 confirm 핸들러에서 사용. */}
+      {/* 산출물 옵션 다이얼로그 — 옵션이 정의된 산출물의 형식 버튼 클릭 시 열림. */}
       <ArtifactOptionsDialog
         open={!!pendingArtifact}
         artifact={pendingArtifact?.artifact ?? null}
         onClose={() => setPendingArtifact(null)}
         onConfirm={onArtifactOptionsConfirm}
       />
+
+      {/* 발행 이력 다이얼로그 — historyDocKind 가 있는 산출물에 한해, [이력] 버튼에서 열림.
+          refId 는 산출물별로 다르므로 historyDocKind 와 함께 결정한다.
+          현재 카탈로그상 REQUIREMENTS_DEF 만 historyDocKind 가짐 → refId = projectId */}
+      {historyArtifact?.historyDocKind && (
+        <ReleaseHistoryDialog
+          open={!!historyArtifact}
+          onClose={() => setHistoryArtifact(null)}
+          projectId={projectId}
+          docKind={historyArtifact.historyDocKind}
+          refId={projectId}
+          refreshTag={0}
+        />
+      )}
     </div>
   );
 }
@@ -723,20 +766,40 @@ const rowDownloadBtnStyle: React.CSSProperties = {
   color: "var(--color-text-primary)",
 };
 
-// 프로젝트 산출물 카드 그리드 — auto-fill 로 화면 폭에 따라 1~4열 자동 조정
+// 프로젝트 산출물 카드 그리드 — auto-fill 로 화면 폭에 따라 1~3열 자동 조정.
+// minmax 320px: 세로 2단 카드(상단 아이콘+제목 / 하단 안내+버튼 3개) 가
+// 줄바꿈 폭주 없이 들어가는 최소 폭.
 const artifactGridStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
   gap: 12,
 };
 
-// 카드 — 좌측 아이콘 + 제목/설명 + 우측에 형식별 버튼들 (Word/Excel 등)
+// 카드 — 세로 2단 (상단: 아이콘+제목/설명, 하단: 안내+버튼)
+// 좁은 카드 폭에서도 제목이 줄바꿈 폭주하지 않도록 가로 배치 대신 세로 배치 채택.
 const artifactCardStyle: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: 14,
+  display: "flex", flexDirection: "column", gap: 12,
   padding: "14px 16px",
   borderRadius: 8,
   border: "1px solid var(--color-border)",
   background: "var(--color-bg-card)",
+};
+
+// 카드 하단 footer — 좌측 안내 / 우측 버튼 그룹 좌우 분리
+const cardFooterStyle: React.CSSProperties = {
+  display: "flex", alignItems: "center", justifyContent: "space-between",
+  gap: 8,
+  paddingTop: 8,
+  borderTop: "1px solid var(--color-border-subtle, var(--color-border))",
+};
+
+// 좌측 안내문 — 작고 옅게, 줄바꿈 허용 (좁은 폭에서 두 줄 가능)
+const cardHintStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: "var(--color-text-tertiary, var(--color-text-secondary))",
+  lineHeight: 1.4,
+  flex: 1,
+  minWidth: 0,
 };
 
 // 카드 안 형식 버튼 (Word/Excel/...) — 작은 outline 톤

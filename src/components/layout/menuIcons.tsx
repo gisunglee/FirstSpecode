@@ -52,15 +52,15 @@ export type MenuIconKey =
   // 항목 (서브 패널)
   | "i_dashboard"
   | "i_projectList" | "i_projectSettings" | "i_members" | "i_profile" | "i_envSettings"
-  | "i_task" | "i_requirement" | "i_userStory" | "i_baseline" | "i_planningBatch" | "i_planStudio"
+  | "i_task" | "i_requirement" | "i_userStory" | "i_planningBatch" | "i_planStudio"
   | "i_unitWork" | "i_screen" | "i_area" | "i_function" | "i_dbTable"
   | "i_standardGuide" | "i_commonCode" | "i_referenceInfo"
   | "i_aiTask" | "i_planImport" | "i_designImport" | "i_promptTemplate"
   | "i_designTemplate"
   | "i_review" | "i_memo" | "i_docs" | "i_library"
   | "i_graph" | "i_changeLog" | "i_diffTest" | "i_cleanup"
-  // 신규 대시보드 메뉴 (활동/포커스/캘린더)
-  | "i_activity" | "i_focus" | "i_calendar"
+  // 신규 대시보드 메뉴 (활동/포커스/캘린더/PM)
+  | "i_activity" | "i_focus" | "i_calendar" | "i_pm"
   // 테스트 항목 — 단위(단일 박스)·통합(연결된 박스들)
   | "i_testSpecUnit" | "i_testSpecIntegration";
 
@@ -218,12 +218,6 @@ const ICONS: Record<MenuIconKey, ReactNode> = {
     <>
       <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
       <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
-    </>
-  ),
-  i_baseline: (
-    <>
-      <path d="M4 21V4" />
-      <path d="M4 4h12l-2 4 2 4H4" />
     </>
   ),
   i_planningBatch: (
@@ -440,6 +434,15 @@ const ICONS: Record<MenuIconKey, ReactNode> = {
       <path d="M3 10h18" />
       <path d="M8 3v4" />
       <path d="M16 3v4" />
+    </>
+  ),
+  // PM 대시보드 — 사람 + 막대그래프 (자원·일정 관리 시각)
+  i_pm: (
+    <>
+      <circle cx="9" cy="6" r="3" />
+      <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+      <path d="M17 17V9" />
+      <path d="M20 17v-4" />
     </>
   ),
   // 단위 테스트 명세서 — 단일 박스 + 체크 마크

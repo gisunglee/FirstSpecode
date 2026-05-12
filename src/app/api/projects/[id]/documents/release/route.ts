@@ -30,12 +30,17 @@ import {
   buildUnitWorkExportInput,
   UNIT_WORK_EXPORT_FALLBACK,
 } from "@/lib/exports/unit-work-data";
+import {
+  buildRequirementsDefExportInput,
+  REQUIREMENTS_DEF_FALLBACK,
+} from "@/lib/exports/requirements-def-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 // ─── 산출물 종류 화이트리스트 ────────────────────────────────
-// 추가 도메인은 이 배열 + 아래 buildSnapshotInput 분기에 등록.
-const SUPPORTED_DOC_KINDS = ["REQUIREMENT", "UNIT_WORK"] as const;
+// 추가 도메인은 이 배열 + 아래 빌더 분기에 등록.
+// REQUIREMENTS_DEF: 프로젝트 단위 정의서 — refId = projectId (한 프로젝트 = 한 라인)
+const SUPPORTED_DOC_KINDS = ["REQUIREMENT", "UNIT_WORK", "REQUIREMENTS_DEF"] as const;
 type DocKind = (typeof SUPPORTED_DOC_KINDS)[number];
 
 function isDocKind(v: unknown): v is DocKind {
@@ -47,6 +52,19 @@ const MAX_VRSN_NO    = 50;
 const MAX_CHANGE_CN  = 2000;
 const MAX_AUTHOR     = 100;
 const MAX_APPROVER   = 100;
+// refId 는 도메인 PK(UUID 36자) 또는 projectId(UUID). 상한을 넉넉히 두되 비정상 입력 차단.
+const MAX_REF_ID     = 64;
+
+/**
+ * REQUIREMENTS_DEF 는 프로젝트 단위 산출물 — refId 는 항상 projectId 와 동일해야 함.
+ * 클라이언트가 다른 값을 보내도 강제 보정해 DB 일관성과 조회 키 단순성을 보장.
+ * REQUIREMENT / UNIT_WORK 는 도메인 단건 ID 그대로 사용.
+ *
+ * 본 헬퍼는 POST/GET 두 핸들러에서 공통 사용 — 새 doc_kind 추가 시 한 곳만 수정.
+ */
+function resolveRefId(docKind: DocKind, refId: string, projectId: string): string {
+  return docKind === "REQUIREMENTS_DEF" ? projectId : refId;
+}
 
 // ─── POST: 새 발행 등록 ─────────────────────────────────────
 export async function POST(request: NextRequest, { params }: RouteParams) {
@@ -79,6 +97,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (!refId || typeof refId !== "string" || !refId.trim()) {
     return apiError("VALIDATION_ERROR", "산출물 ID(refId) 가 필요합니다.", 400);
   }
+  // refId 길이 상한 — 비정상적으로 긴 값이 DB 컬럼 overflow 로 500 응답되는 걸 차단
+  if (refId.length > MAX_REF_ID) {
+    return apiError("VALIDATION_ERROR", `산출물 ID(refId) 가 너무 깁니다.`, 400);
+  }
   if (!vrsnNo || typeof vrsnNo !== "string" || !vrsnNo.trim()) {
     return apiError("VALIDATION_ERROR", "발행 버전(vrsnNo) 을 입력해 주세요.", 400);
   }
@@ -95,13 +117,25 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", `승인자명은 ${MAX_APPROVER}자 이내로 입력해 주세요.`, 400);
   }
 
+  // ── refId 보정 ────────────────────────────────────────────
+  // doc_kind 정책에 따라 안전한 ID 로 보정. 자세한 정책은 resolveRefId() 참조.
+  const effectiveRefId = resolveRefId(docKind, refId, projectId);
+
   try {
     // ── 양식 입력 객체 조립 (현재 시점 데이터로) ─────────────────
-    // doc_kind 별 빌더 분기. 두 input 모두 공통으로 documentVersion/authorName/
+    // doc_kind 별 빌더 분기. 모든 input 이 공통으로 documentVersion/authorName/
     // approverName/history 필드를 갖고 있어 발행 후처리는 동일 로직으로 묶을 수 있다.
+    //
+    // REQUIREMENTS_DEF: 옵션(includeOriginal/includeHistory) 은 발행 시 false 로 박제 —
+    //   박제는 "이 시점의 모든 현행본"이 핵심이고, 출력 옵션은 다운로드 시점에 선택.
     const result = docKind === "REQUIREMENT"
-      ? await buildRequirementExportInput(projectId, refId)
-      : await buildUnitWorkExportInput(projectId, refId);
+      ? await buildRequirementExportInput(projectId, effectiveRefId)
+      : docKind === "UNIT_WORK"
+      ? await buildUnitWorkExportInput(projectId, effectiveRefId)
+      : await buildRequirementsDefExportInput(projectId, {
+          includeOriginal: false,
+          includeHistory:  false,
+        });
     if (!result.ok) {
       return apiError(result.code, result.message, result.httpStatus);
     }
@@ -110,9 +144,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // ── 사용자 입력으로 일부 덮어쓰기 ────────────────────────────
     // 발행 시 사용자가 모달에서 변경한 값 우선. 비워두면 양식 입력 객체의 fallback 값 유지.
     // 변경 내용 fallback 라벨도 doc_kind 별로 다른 상수에서 가져옴.
-    const fallbackHistoryChange = docKind === "REQUIREMENT"
-      ? REQUIREMENT_EXPORT_FALLBACK.historyChange
-      : UNIT_WORK_EXPORT_FALLBACK.historyChange;
+    const fallbackHistoryChange =
+      docKind === "REQUIREMENT" ? REQUIREMENT_EXPORT_FALLBACK.historyChange :
+      docKind === "UNIT_WORK"   ? UNIT_WORK_EXPORT_FALLBACK.historyChange   :
+      REQUIREMENTS_DEF_FALLBACK.historyChange;
     const finalAuthor   = authorNm?.trim()   || input.authorName;
     const finalApprover = approverNm?.trim() || input.approverName;
     const finalChange   = changeCn?.trim()   || fallbackHistoryChange;
@@ -138,7 +173,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       data: {
         prjct_id:        projectId,
         doc_kind:        docKind,
-        ref_id:          refId,
+        ref_id:          effectiveRefId, // REQUIREMENTS_DEF 는 projectId 로 강제 보정됨
         vrsn_no:         input.documentVersion,
         change_cn:       finalChange,
         author_nm:       finalAuthor,
@@ -183,9 +218,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "산출물 ID(refId) 가 필요합니다.", 400);
   }
 
+  // POST 와 동일한 보정 정책 — resolveRefId() 한 곳에서 관리.
+  const effectiveRefId = resolveRefId(docKind, refId, projectId);
+
   try {
     const releases = await prisma.tbDsDocumentRelease.findMany({
-      where:   { prjct_id: projectId, doc_kind: docKind, ref_id: refId },
+      where:   { prjct_id: projectId, doc_kind: docKind, ref_id: effectiveRefId },
       orderBy: { released_dt: "desc" },
       select: {
         release_id:      true,

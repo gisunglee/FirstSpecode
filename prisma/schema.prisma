@@ -220,7 +220,6 @@ model TbPjProject {
   progresses        TbCmProgress[]
   aiTasks           TbAiTask[]
   attachFiles       TbCmAttachFile[]
-  baselineSnapshots TbRqBaselineSnapshot[]
   reviewRequests    tb_ds_review_request[]
   codeGroups        TbCmCodeGroup[]
   codes             TbCmCode[]
@@ -815,21 +814,6 @@ model TbRqRequirementHistory {
   @@map("tb_rq_requirement_history")
 }
 
-model TbRqBaselineSnapshot {
-  basln_id      String   @id @default(uuid())
-  prjct_id      String
-  basln_nm      String
-  coment_cn     String?
-  req_cnt       Int      @default(0)
-  snapshot_data Json
-  cnfrm_mber_id String?
-  cnfrm_dt      DateTime @default(now())
-
-  // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
-  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_rq_baseline_snapshot_prjct_fk")
-
-  @@map("tb_rq_baseline_snapshot")
-}
 
 /// AI 프롬프트 템플릿 — tb_ai_prompt_template
 ///
