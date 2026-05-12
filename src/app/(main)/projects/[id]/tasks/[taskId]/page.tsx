@@ -23,6 +23,8 @@ import dynamic from "next/dynamic";
 const RichEditor = dynamic(() => import("@/components/ui/RichEditor"), { ssr: false });
 import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
 import { SelectChevron } from "@/components/ui/SelectChevron";
+import TextCounter from "@/components/ui/TextCounter";
+import { TEXT_LIMITS } from "@/lib/constants/textLimits";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -396,24 +398,29 @@ function TaskDetailPageInner() {
           </div>
 
           {/* 정의 */}
+          {/* maxLength: textLimits.taskDefinition 한도 강제. UI 카운터(TextCounter) 별도 표시. */}
           <FormField label="정의">
             <textarea
               value={form.definition}
               placeholder="과업 범위를 간략히 설명하세요"
               rows={3}
+              maxLength={TEXT_LIMITS.taskDefinition}
               onChange={(e) => handleChange("definition", e.target.value)}
               className="sp-input"
               style={{ resize: "vertical" }}
             />
+            <TextCounter field="taskDefinition" value={form.definition} />
           </FormField>
 
           {/* 세부내용 — WYSIWYG 에디터 (클립보드 이미지 붙여넣기 지원) */}
+          {/* RichEditor 내부에 카운터 자동 표시 (field 지정 시) */}
           <FormField label="세부내용">
             <RichEditor
               value={form.content}
               onChange={(html) => handleChange("content", html)}
               placeholder="내용을 입력하세요. 이미지는 클립보드에서 바로 붙여넣기 가능합니다."
               minHeight={308}
+              field="taskDefinition"
             />
           </FormField>
 
@@ -423,10 +430,12 @@ function TaskDetailPageInner() {
               value={form.outputInfo}
               placeholder="예: 화면설계서, ERD, API 명세서"
               rows={3}
+              maxLength={TEXT_LIMITS.taskDefinition}
               onChange={(e) => handleChange("outputInfo", e.target.value)}
               className="sp-input"
               style={{ resize: "vertical" }}
             />
+            <TextCounter field="taskDefinition" value={form.outputInfo} />
           </FormField>
 
         </div>

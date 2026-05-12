@@ -15,6 +15,7 @@ import {
   type RoleCode, type JobCode,
 } from "@/lib/permissions";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 
 type RouteParams = { params: Promise<{ id: string; functionId: string }> };
 
@@ -219,6 +220,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "기능명을 입력해 주세요.", 400);
+
+  // 장문 텍스트 한도 검증 — 정책은 src/lib/constants/textLimits.ts
+  const limitErr = apiTextLimitGuard([
+    ["name",        name],
+    ["displayId",   displayId],
+    ["description", description],
+    ["comment",     commentCn],
+  ]);
+  if (limitErr) return limitErr;
 
   if (implStartDate && implEndDate && implStartDate > implEndDate) {
     return apiError("VALIDATION_ERROR", "구현 종료일은 시작일 이후여야 합니다.", 400);

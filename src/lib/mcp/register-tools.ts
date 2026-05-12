@@ -21,6 +21,11 @@
  *   일으키지 못하도록 delete_* 도구를 일괄 제거했다. 삭제는 UI(웹) 채널에서만 가능하며,
  *   API DELETE 라우트는 그대로 유지된다.
  *
+ * 정책 — 대시보드 summary 미등록:
+ *   /api/projects/[id]/dashboard/manage-summary 와 /me-summary 는 의도적으로 등록하지 않는다.
+ *   화면 첫 페인트용 집계 응답이라 AI 가 사용해도 의미가 없고(개별 list_* 도구로 동일 정보를
+ *   얻을 수 있다), 응답 구조가 UI 카드와 강하게 결합되어 있어 인터페이스 안정성도 낮다.
+ *
  * 계층 관계:
  *   기획: 과업(Task) → 요구사항(Requirement) → 사용자스토리(UserStory)
  *   설계: 단위업무(UnitWork) → 화면(Screen) → 영역(Area) → 기능(Function)

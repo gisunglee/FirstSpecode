@@ -33,11 +33,12 @@ import {
 import {
   COLOR_PRIMARY,
   SIZE_TITLE_LARGE, SIZE_TITLE_MID, SIZE_TITLE_SMALL,
-  SIZE_HEADING_1, SIZE_HEADING_2, SIZE_BODY,
+  SIZE_HEADING_1, SIZE_BODY,
   CONTENT_WIDTH,
 } from "./tokens";
-import { p, labelCell, valueCell, headerCell, bulletItem, numberedItem, codeBlock } from "./helpers";
+import { p, labelCell, valueCell, headerCell } from "./helpers";
 import { buildDocument, heading1, heading2 } from "./frame";
+import { renderMarkdown } from "./markdown";
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  입력 타입
@@ -51,7 +52,6 @@ export type ColMappingRow = {
   uiType:        string; // UI 타입 (Text/Sbox/Check/Btn 등)
   colLogical:    string; // 컬럼 한글명
   colPhysical:   string; // 컬럼 물리명
-  dataType:      string; // 데이터 타입 (varchar(20) 등)
   tableLogical:  string; // 테이블 한글명
   tablePhysical: string; // 테이블 물리명
 };
@@ -149,149 +149,9 @@ export type UnitWorkExportInput = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  마크다운 → docx 단순 렌더 (헤딩/불릿/번호/표/문단)
-//
-//  요구사항 빌더(requirement.ts)의 parseSpec 과 거의 동일하지만, 자동 번호 prefix
-//  ("2.X ...") 를 붙이지 않고 일반 굵은 문단으로 처리한다 — 단위업무 본문은
-//  이미 1/2/3 큰 섹션 헤딩이 있고 그 안의 마크다운까지 자동번호하면 위계가 꼬임.
+//  마크다운 렌더링 — 단위업무 본문은 이미 1/2/3 큰 섹션 헤딩이 있으므로
+//  내부 마크다운 헤딩은 자동번호 X (markdown.ts 기본 동작 그대로 사용).
 // ═══════════════════════════════════════════════════════════════════════════
-
-type MdBlock =
-  | { kind: "heading"; text: string; level: number }
-  | { kind: "bullet";  text: string }
-  | { kind: "number";  text: string }
-  | { kind: "plain";   text: string }
-  | { kind: "table";   header: string[]; rows: string[][] }
-  | { kind: "code";    text: string };
-
-function isTableSeparator(line: string): boolean {
-  return /^\|[\s\-:|]+\|$/.test(line) && line.includes("-");
-}
-
-function splitTableRow(line: string): string[] {
-  return line.slice(1, -1).split("|").map((c) => c.trim());
-}
-
-function looksLikeTableRow(line: string): boolean {
-  return line.startsWith("|") && line.endsWith("|") && line.length > 2 && line.includes("|", 1);
-}
-
-function parseMd(markdown: string): MdBlock[] {
-  const lines = markdown.split(/\r?\n/);
-  const out: MdBlock[] = [];
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i].trim();
-    if (!line) { i++; continue; }
-
-    // 코드 블록 인식 (```) — ASCII mockup / 화면 박스 보존
-    if (/^```/.test(line)) {
-      i++;
-      const buf: string[] = [];
-      while (i < lines.length) {
-        const t = lines[i];
-        if (/^```\s*$/.test(t.trim())) {
-          i++;
-          break;
-        }
-        buf.push(t); // 트림 안 함 — 들여쓰기 보존
-        i++;
-      }
-      out.push({ kind: "code", text: buf.join("\n") });
-      continue;
-    }
-
-    // 표 인식 — 헤더 + 구분선 연속
-    if (looksLikeTableRow(line) && isTableSeparator((lines[i + 1] ?? "").trim())) {
-      const header = splitTableRow(line);
-      const rows: string[][] = [];
-      i += 2;
-      while (i < lines.length) {
-        const t = lines[i].trim();
-        if (!looksLikeTableRow(t)) break;
-        const cells = splitTableRow(t);
-        while (cells.length < header.length) cells.push("");
-        rows.push(cells.slice(0, header.length));
-        i++;
-      }
-      out.push({ kind: "table", header, rows });
-      continue;
-    }
-
-    if (line.startsWith("### ")) out.push({ kind: "heading", text: line.slice(4), level: 3 });
-    else if (line.startsWith("## "))  out.push({ kind: "heading", text: line.slice(3), level: 2 });
-    else if (line.startsWith("# "))   out.push({ kind: "heading", text: line.slice(2), level: 1 });
-    else if (/^[-*]\s+/.test(line))   out.push({ kind: "bullet", text: line.replace(/^[-*]\s+/, "") });
-    else if (/^\d+[.)]\s+/.test(line)) out.push({ kind: "number", text: line.replace(/^\d+[.)]\s+/, "") });
-    else out.push({ kind: "plain", text: line });
-    i++;
-  }
-  return out;
-}
-
-function buildMdTable(header: string[], rows: string[][]): Table {
-  const colCount = header.length;
-  const baseW = Math.floor(CONTENT_WIDTH / colCount);
-  const widths = header.map((_, i) =>
-    i === colCount - 1 ? CONTENT_WIDTH - baseW * (colCount - 1) : baseW
-  );
-  return new Table({
-    width:        { size: CONTENT_WIDTH, type: WidthType.DXA },
-    columnWidths: widths,
-    rows: [
-      new TableRow({
-        tableHeader: true,
-        children: header.map((h, i) => headerCell(h, widths[i])),
-      }),
-      ...rows.map((r) => new TableRow({
-        children: r.map((cell, i) => valueCell(cell, widths[i])),
-      })),
-    ],
-  });
-}
-
-/**
- * 자유 마크다운 문자열 → docx 요소 배열.
- *
- * @param md         원본 마크다운
- * @param emptyText  공백 입력 시 출력할 placeholder (없으면 빈 배열)
- */
-function renderMarkdown(md: string, emptyText: string | null = null): (Paragraph | Table)[] {
-  if (!md.trim()) {
-    return emptyText
-      ? [p(emptyText, { color: "808080" })]
-      : [];
-  }
-
-  const blocks = parseMd(md);
-  const out: (Paragraph | Table)[] = [];
-
-  for (const b of blocks) {
-    switch (b.kind) {
-      case "heading":
-        // 본문 안 마크다운 헤딩 — 일반 굵은 텍스트로 (자동번호·outline 비활성)
-        out.push(new Paragraph({
-          spacing: { before: 200, after: 100 },
-          children: [
-            new TextRun({
-              text:  b.text,
-              font:  "맑은 고딕",
-              size:  b.level <= 1 ? SIZE_HEADING_2 : SIZE_BODY,
-              bold:  true,
-              color: COLOR_PRIMARY,
-            }),
-          ],
-        }));
-        break;
-      case "bullet":  out.push(bulletItem(b.text));  break;
-      case "number":  out.push(numberedItem(b.text)); break;
-      case "plain":   out.push(p(b.text));            break;
-      case "table":   out.push(buildMdTable(b.header, b.rows)); break;
-      case "code":    out.push(codeBlock(b.text));    break;
-    }
-  }
-  return out;
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  표지 / 변경이력 / 목차 — 요구사항 빌더와 일관된 형태 (양식 통일)
@@ -455,7 +315,7 @@ function buildUnitWorkSection(input: UnitWorkExportInput): (Paragraph | Table)[]
     metaTable,
     // 설명 (마크다운)
     heading2("1.1 단위업무 설명"),
-    ...renderMarkdown(input.unitWorkDescription, "(설명이 작성되지 않았습니다.)"),
+    ...renderMarkdown(input.unitWorkDescription, { emptyText: "(설명이 작성되지 않았습니다.)" }),
   ];
 }
 
@@ -517,41 +377,41 @@ function buildScreenSummary(input: UnitWorkExportInput): (Paragraph | Table)[] {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function buildMappingTable(rows: ColMappingRow[]): Table {
-  // 컬럼 폭 — 항목명/엔터티/속성을 충분히. 데이터타입은 좁게.
+  // 컬럼 폭 — 7컬럼 (데이터타입 제거 후 폭 재배분).
+  // 항목명·엔터티·속성·컬럼명에 충분한 가로폭 → 줄바꿈 최소화.
+  // W_UI 950 — 헤더 "UI 타입" 4글자가 한 줄에 들어가도록 (이전 800은 줄바꿈 발생)
   const W_NO  = 500;
-  const W_NM  = 1500;
   const W_IO  = 500;
-  const W_UI  = 700;
-  const W_ENT = 1500;
-  const W_ATT = 1500;
-  const W_COL = 1500;
-  const W_DT  = CONTENT_WIDTH - W_NO - W_NM - W_IO - W_UI - W_ENT - W_ATT - W_COL;
-  const W = [W_NO, W_NM, W_IO, W_UI, W_ENT, W_ATT, W_COL, W_DT];
+  const W_UI  = 950;
+  const REST  = CONTENT_WIDTH - W_NO - W_IO - W_UI; // 항목명/엔터티/속성/컬럼명 4칸
+  const W_NM  = Math.floor(REST * 0.28);
+  const W_ENT = Math.floor(REST * 0.22);
+  const W_ATT = Math.floor(REST * 0.22);
+  const W_COL = REST - W_NM - W_ENT - W_ATT;        // 마지막이 자투리 흡수
+  const W = [W_NO, W_NM, W_IO, W_UI, W_ENT, W_ATT, W_COL];
 
   const headerRow = new TableRow({
     tableHeader: true,
     children: [
-      headerCell("No",       W[0]),
-      headerCell("항목명",   W[1]),
-      headerCell("I/O",      W[2]),
-      headerCell("UI 타입",  W[3]),
-      headerCell("엔터티",   W[4]),
-      headerCell("속성",     W[5]),
-      headerCell("컬럼명",   W[6]),
-      headerCell("데이터타입", W[7]),
+      headerCell("No",      W[0]),
+      headerCell("항목명",  W[1]),
+      headerCell("I/O",     W[2]),
+      headerCell("UI 타입", W[3]),
+      headerCell("엔터티",  W[4]),
+      headerCell("속성",    W[5]),
+      headerCell("컬럼명",  W[6]),
     ],
   });
 
   const dataRows = rows.map((m) => new TableRow({
     children: [
-      valueCell(String(m.no),    W[0], { align: AlignmentType.CENTER }),
-      valueCell(m.itemName,      W[1]),
-      valueCell(m.io,            W[2], { align: AlignmentType.CENTER }),
-      valueCell(m.uiType,        W[3], { align: AlignmentType.CENTER }),
-      valueCell(m.tableLogical,  W[4]),
-      valueCell(m.colLogical,    W[5]),
-      valueCell(m.colPhysical,   W[6]),
-      valueCell(m.dataType,      W[7], { align: AlignmentType.CENTER }),
+      valueCell(String(m.no),   W[0], { align: AlignmentType.CENTER }),
+      valueCell(m.itemName,     W[1]),
+      valueCell(m.io,           W[2], { align: AlignmentType.CENTER }),
+      valueCell(m.uiType,       W[3], { align: AlignmentType.CENTER }),
+      valueCell(m.tableLogical, W[4]),
+      valueCell(m.colLogical,   W[5]),
+      valueCell(m.colPhysical,  W[6]),
     ],
   }));
 

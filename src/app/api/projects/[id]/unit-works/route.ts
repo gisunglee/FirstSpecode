@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
+import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 import { fetchProjectUnitWorks } from "@/lib/exports/unit-works-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -62,6 +63,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   if (!reqId?.trim())  return apiError("VALIDATION_ERROR", "상위 요구사항을 선택해 주세요.", 400);
   if (!name?.trim())   return apiError("VALIDATION_ERROR", "단위업무명을 입력해 주세요.", 400);
+
+  // 장문 텍스트 한도 검증 — 정책은 src/lib/constants/textLimits.ts
+  const limitErr = apiTextLimitGuard([
+    ["name",        name],
+    ["displayId",   inputDisplayId],
+    ["description", description],
+  ]);
+  if (limitErr) return limitErr;
 
   // 요구사항이 이 프로젝트에 속하는지 확인 (보안: 다른 프로젝트 요구사항 연결 차단)
   const req = await prisma.tbRqRequirement.findUnique({ where: { req_id: reqId } });

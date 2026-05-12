@@ -294,7 +294,16 @@
       "Bash(tee /tmp/tsc-code.txt)",
       "Bash(cp .env.local.example .env.local && ls -la .env.local)",
       "Bash(npm --version)",
-      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(48\\).toString\\('base64'\\)\\)\")"
+      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(48\\).toString\\('base64'\\)\\)\")",
+      "Bash(where pdftoppm *)",
+      "Bash(tee /tmp/tsc-md.txt)",
+      "Bash(tee /tmp/tsc-md2.txt)",
+      "Bash(tee /tmp/tsc-art.txt)",
+      "Bash(tee /tmp/tsc-rf.txt)",
+      "Bash(tee /tmp/tsc-rd.txt)",
+      "Bash(tee /tmp/build-rd.txt)",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('.claude/settings.local.json','utf8'\\)\\); console.log\\('JSON OK'\\)\")",
+      "Bash(git rebase *)"
     ],
     "additionalDirectories": [
       "c:\\source\\FirstSpecode"

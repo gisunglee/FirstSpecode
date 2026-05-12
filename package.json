@@ -11,6 +11,8 @@
     "db:generate": "dotenv -e .env.local -- prisma generate",
     "test:ddl": "npx tsx scripts/test-ddl-parser.ts && npx tsx scripts/test-ddl-parser-2.ts",
     "test:codes": "npx tsx scripts/test-codes.ts",
+    "test:text-limits": "npx tsx scripts/test-text-limits.ts",
+    "scan:text-lengths": "dotenv -e .env.local -- npx tsx scripts/scan-text-lengths.ts",
     "postinstall": "node -e \"const fs=require('fs'),f='node_modules/@excalidraw/excalidraw/dist/dev/index.css';if(fs.existsSync(f)){const c=fs.readFileSync(f,'utf8');fs.writeFileSync(f,c.replace(/\\/\\*#\\s*sourceMappingURL=[^*]*\\*\\//g,''));}\""
   },
   "keywords": [],
@@ -38,6 +40,7 @@
     "diff": "^8.0.4",
     "docx": "^9.6.1",
     "exceljs": "^4.4.0",
+    "image-size": "^2.0.2",
     "jsonwebtoken": "^9.0.3",
     "jszip": "^3.10.1",
     "marked": "^17.0.5",

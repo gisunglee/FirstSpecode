@@ -667,6 +667,7 @@ function ScreenDetailPageInner() {
               tab={descTab}
               onTabChange={setDescTab}
               readOnly={!canEdit}
+              field="description"
             />
           </Section>
 

@@ -20,7 +20,7 @@
  */
 
 import { useState } from "react";
-import { marked } from "marked";
+import { renderMarkdown } from "@/lib/renderMarkdown";
 
 type Props = {
   title:     string;
@@ -40,11 +40,6 @@ const EXAMPLE_CSS = [
   ".dt-example ul{padding-left:18px;margin:4px 0}",
   ".dt-example strong{font-weight:700}",
 ].join(" ");
-
-function parseMarkdown(md: string): string {
-  const r = marked.parse(md, { async: false });
-  return typeof r === "string" ? r : "";
-}
 
 export default function DesignExamplePopup({ title, contentMd, onClose }: Props) {
   const [tab, setTab]       = useState<"raw" | "preview">("preview");
@@ -139,7 +134,7 @@ export default function DesignExamplePopup({ title, contentMd, onClose }: Props)
               <div
                 className="dt-example"
                 style={{ fontSize: 13, lineHeight: 1.8, color: "var(--color-text-primary)" }}
-                dangerouslySetInnerHTML={{ __html: parseMarkdown(contentMd) }}
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(contentMd) }}
               />
             </>
           )}

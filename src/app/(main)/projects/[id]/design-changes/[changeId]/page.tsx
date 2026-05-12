@@ -14,7 +14,7 @@
 import { Suspense, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { marked } from "marked";
+import { renderMarkdown } from "@/lib/renderMarkdown";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 
@@ -332,12 +332,12 @@ function SnapshotField({ fieldKey, value }: { fieldKey: string; value: unknown }
     if (typeof value === "string") {
       // 마크다운 감지 — 길이가 충분하고 패턴 매칭
       if (value.length > 60 && looksLikeMarkdown(value)) {
-        const html = marked.parse(value, { async: false }) as string;
+        const html = renderMarkdown(value);
         return (
           <div style={{ position: "relative" }}>
             <span style={modeBadgeStyle}>Markdown</span>
             <div
-              className="markdown-body"
+              className="sp-markdown"
               style={mdViewerStyle}
               dangerouslySetInnerHTML={{ __html: html }}
             />

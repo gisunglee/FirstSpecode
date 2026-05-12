@@ -9,6 +9,7 @@ import { requirePermission } from "@/lib/requirePermission";
 import { requireTaskWrite } from "@/lib/taskWriteGate";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
+import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 import { fetchProjectTasks } from "@/lib/exports/tasks-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -59,6 +60,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "과업명을 입력해 주세요.", 400);
   if (!category?.trim()) return apiError("VALIDATION_ERROR", "카테고리를 선택해 주세요.", 400);
+
+  // 장문 텍스트 한도 검증 — 정책은 src/lib/constants/textLimits.ts
+  // definition/content/outputInfo 모두 과업 본문 → taskDefinition 한도(50K)
+  const limitErr = apiTextLimitGuard([
+    ["name",           name],
+    ["displayId",      inputDisplayId],
+    ["taskDefinition", definition],
+    ["taskDefinition", content],
+    ["taskDefinition", outputInfo],
+  ]);
+  if (limitErr) return limitErr;
 
   try {
     // 표시 ID: 사용자가 입력하면 그대로 사용, 미입력 시 자동 채번

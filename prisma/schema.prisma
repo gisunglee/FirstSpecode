@@ -226,6 +226,15 @@ model TbPjProject {
   codes             TbCmCode[]
   memos             TbDsMemo[]
   stdGuides         TbSgStdGuide[]
+  // 2026-05-10 — QA 도메인 (테스트 명세서·케이스·회차·결과·결함·증적)
+  testSpecs         TbQaTestSpec[]
+  testCases         TbQaTestCase[]
+  testRounds        TbQaTestRound[]
+  testResults       TbQaTestResult[]
+  defects           TbQaDefect[]
+  evidences         TbQaEvidence[]
+  // 2026-05-11 — 공통 점검 마스터 (프로젝트 전용 항목)
+  checkMasters      TbQaCheckMaster[]
 
   // 배치(project-hard-delete) 가 매일 스캔하는 인덱스
   // (del_yn='Y' AND hard_del_dt <= now()) 조건을 빠르게 추리기 위함
@@ -403,6 +412,10 @@ model TbDsDesignChange {
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
   project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_design_change_prjct_fk")
 
+  // 대시보드 "최근 변경" + "팀 활동(7일)" 카드용 인덱스.
+  // (prjct_id, chg_dt DESC) 로 프로젝트별 최신순 페이지네이션·범위 스캔 모두 효율화.
+  @@index([prjct_id, chg_dt(sort: Desc)], map: "idx_ds_design_change_prjct_dt")
+
   @@map("tb_ds_design_change")
 }
 
@@ -466,11 +479,16 @@ model TbDsUnitWork {
   mdfcn_dt             DateTime?
   coment_cn            String?
   screens              TbDsScreen[]
+  // 2026-05-10 — 테스트 명세서 매핑 (단위테스트는 1행 / 통합테스트는 N행)
+  testSpecLinks        TbQaTestSpecUw[]
   requirement          TbRqRequirement @relation(fields: [req_id], references: [req_id])
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 보강)
   project              TbPjProject     @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_unit_work_prjct_fk")
 
   @@index([prjct_id], map: "tb_ds_unit_work_prjct_idx")
+  // 대시보드 "내 마감 임박" + "정체된 일" 카드 — (prjct_id, asign_mber_id) 동등 조건이 자주 옴.
+  // end_de 까지 인덱스에 넣지는 않음 — text 컬럼이라 정렬 효과 작고, 보조 정렬은 PostgreSQL 옵티마이저에 위임.
+  @@index([prjct_id, asign_mber_id], map: "idx_ds_unit_work_prjct_asignee")
   @@map("tb_ds_unit_work")
 }
 
@@ -676,6 +694,11 @@ model TbAiTask {
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
   // 자식인 tb_sp_impl_snapshot 은 ai_task FK 가 이미 CASCADE 라 자동 따라 정리됨
   project           TbPjProject        @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ai_task_prjct_fk")
+
+  // 대시보드 "AI 사용(이번 달)" 카드 — (prjct_id, req_dt) 범위 스캔
+  @@index([prjct_id, req_dt(sort: Desc)], map: "idx_ai_task_prjct_dt")
+  // 대시보드 "내 AI 결과(미적용)" 카드 — (prjct_id, req_mber_id, task_sttus_code) 동등 조건 매칭
+  @@index([prjct_id, req_mber_id, task_sttus_code], map: "idx_ai_task_prjct_mber_status")
 
   @@map("tb_ai_task")
 }
@@ -1358,4 +1381,219 @@ model TbCmBatchJobItem {
 
   @@index([job_id, sttus_code], map: "tb_cm_batch_job_item_job_sttus_idx")
   @@map("tb_cm_batch_job_item")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// QA 도메인 — 테스트 명세서·케이스·회차·결과·결함·증적 (2026-05-10 도입)
+// ─────────────────────────────────────────────────────────────────────────
+//
+// 모델 관계:
+//   TbQaTestSpec (1) ─── (N) TbQaTestSpecUw (N) ─── (1) TbDsUnitWork
+//   TbQaTestSpec (1) ─── (N) TbQaTestCase
+//   TbQaTestSpec (1) ─── (N) TbQaTestRound
+//   TbQaTestRound × TbQaTestCase = TbQaTestResult (회차×케이스 결과)
+//   TbQaTestResult (1) ─── (N) TbQaDefect / TbQaEvidence
+//
+// 단위(UNIT) vs 통합(INTEGRATION):
+//   동일 스키마 + test_kind_code 분기. UNIT 은 testSpecLinks 가 정확히 1개,
+//   INTEGRATION 은 N개. 강제는 application 레벨 검증(생성·수정 시).
+//
+// 모든 자식 테이블에 prjct_id 를 보유 — 프로젝트 격리·CASCADE 정리·권한 체크 단순화.
+
+/// 공통 점검 마스터 — 모든 명세서에 재사용되는 체크리스트 풀(pool)
+///
+/// prjct_id 정책:
+///   - NULL  → 시스템 공통 (모든 프로젝트에 노출, SUPER_ADMIN 관리)
+///   - UUID  → 해당 프로젝트 전용 (OWNER/ADMIN 추가)
+///
+/// 가져오기 흐름:
+///   명세서 페이지에서 "공통 점검 가져오기" → 마스터 목록(시스템 공통 + 프로젝트 전용)
+///   → 사용자 선택 → 선택 항목이 tb_qa_test_case 로 복사 (ctgry_code="CHECKLIST")
+///
+/// 카테고리(ctgry_code) 예: INIT_SCREEN | QUERY | INPUT_QUERY | INPUT | SECURITY | ETC
+model TbQaCheckMaster {
+  check_id        String    @id @default(uuid())
+  prjct_id        String?   // NULL 시스템 공통
+  ctgry_code      String    // 세부 카테고리
+  scenario_cn     String
+  expected_cn     String?
+  sort_ordr       Int       @default(0)
+  use_yn          String    @default("Y") @db.Char(1)
+  creat_mber_id   String?
+  creat_dt        DateTime  @default(now())
+  mdfr_mber_id    String?
+  mdfcn_dt        DateTime?
+
+  // 프로젝트 전용일 때만 CASCADE — 시스템 공통(prjct_id NULL)은 영향 없음
+  project  TbPjProject? @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_qa_check_master_prjct_fk")
+
+  @@index([prjct_id, use_yn, ctgry_code, sort_ordr], map: "tb_qa_check_master_idx")
+  @@map("tb_qa_check_master")
+}
+
+/// 테스트 명세서 — 단위 테스트 / 통합 테스트 명세 헤더
+model TbQaTestSpec {
+  test_spec_id         String    @id @default(uuid())
+  prjct_id             String
+  test_spec_display_id String    // TS-00001 — 자동 채번 (수동 입력도 허용)
+  test_kind_code       String    // UNIT | INTEGRATION
+  test_spec_nm         String
+  test_spec_dc         String?
+  // 진행 상태 — DRAFT(작성중) | IN_PROGRESS(진행중) | PASSED(합격) | FAILED(불합격)
+  sttus_code           String    @default("DRAFT")
+  asign_mber_id        String?   // 담당자 (테스트 책임자)
+  sort_ordr            Int       @default(0)
+  creat_dt             DateTime  @default(now())
+  mdfcn_dt             DateTime?
+
+  uwLinks  TbQaTestSpecUw[]
+  cases    TbQaTestCase[]
+  rounds   TbQaTestRound[]
+
+  project  TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_qa_test_spec_prjct_fk")
+
+  @@index([prjct_id], map: "tb_qa_test_spec_prjct_idx")
+  @@map("tb_qa_test_spec")
+}
+
+/// 테스트 명세서 ↔ 단위업무 매핑.
+/// UNIT: 행 1개만 허용 / INTEGRATION: N개 허용 (application 검증).
+model TbQaTestSpecUw {
+  test_spec_id  String
+  unit_work_id  String
+  sort_ordr     Int    @default(0)
+
+  testSpec  TbQaTestSpec  @relation(fields: [test_spec_id], references: [test_spec_id], onDelete: Cascade, map: "tb_qa_test_spec_uw_spec_fk")
+  unitWork  TbDsUnitWork  @relation(fields: [unit_work_id], references: [unit_work_id], onDelete: Cascade, map: "tb_qa_test_spec_uw_uw_fk")
+
+  @@id([test_spec_id, unit_work_id])
+  @@index([unit_work_id], map: "tb_qa_test_spec_uw_uw_idx")
+  @@map("tb_qa_test_spec_uw")
+}
+
+/// 테스트 케이스 — 체크리스트 항목 또는 기능 시나리오.
+///
+/// 부가 항목 (전제조건/데이터/계정/우선순위/해당여부):
+///   - 실무 명세서에서 자주 쓰이는 컨텍스트 컬럼. 모두 nullable 또는 기본값.
+///   - UI 는 시나리오·예상결과만 항상 노출, 나머지는 접이식 펼치기.
+model TbQaTestCase {
+  test_case_id      String    @id @default(uuid())
+  prjct_id          String    // 프로젝트 격리·권한 체크용
+  test_spec_id      String
+  case_no           Int       // 명세서 내 일련번호 (1, 2, 3 ...)
+  // 카테고리 — CHECKLIST(공통 점검) | FUNCTIONAL(기능 시나리오)
+  ctgry_code        String
+  scenario_cn       String    // 테스트 내용 (필수)
+  expected_cn       String    // 예상 결과 (필수)
+  // ── 부가 컨텍스트 (옵션) ──
+  precondition_cn   String?   // 전제조건 — 예: "OWNER 로그인, 프로젝트 1개 생성"
+  test_data_cn      String?   // 테스트 데이터 — 예: "이메일: a@b.com / 비번: Test1234!"
+  test_account_cn   String?   // 테스트 계정 — 예: "OWNER 계정 / MEMBER 계정"
+  priort_code       String    @default("MEDIUM")  // HIGH | MEDIUM | LOW
+  // 해당 여부 — 공통 체크리스트에서 "이 화면엔 검색 없음 → N(N/A)" 처리용
+  // Y = 적용 (결과 입력 받음) / N = 해당없음 (결과 입력 비활성)
+  applicable_yn     String    @default("Y")
+  remark_cn         String?   // 비고
+  ai_gen_yn         String    @default("N")  // AI 자동 생성 여부 (Y/N)
+  sort_ordr         Int       @default(0)
+  creat_dt          DateTime  @default(now())
+  mdfcn_dt          DateTime?
+
+  testSpec  TbQaTestSpec     @relation(fields: [test_spec_id], references: [test_spec_id], onDelete: Cascade, map: "tb_qa_test_case_spec_fk")
+  project   TbPjProject      @relation(fields: [prjct_id],     references: [prjct_id],     onDelete: Cascade, map: "tb_qa_test_case_prjct_fk")
+  results   TbQaTestResult[]
+
+  @@index([prjct_id],     map: "tb_qa_test_case_prjct_idx")
+  @@index([test_spec_id], map: "tb_qa_test_case_spec_idx")
+  @@map("tb_qa_test_case")
+}
+
+/// 테스트 회차 — 1차/2차/3차 등 재테스트 사이클.
+model TbQaTestRound {
+  round_id      String    @id @default(uuid())
+  prjct_id      String
+  test_spec_id  String
+  round_no      Int       // 1, 2, 3 ... 회차 번호
+  envir_code    String    @default("DEV")          // DEV | STG | PROD
+  bld_vrsn_nm   String?                            // 빌드/커밋 버전
+  bgng_dt       DateTime?
+  end_dt        DateTime?
+  // 회차 상태 — IN_PROGRESS(진행중) | DONE(완료)
+  sttus_code    String    @default("IN_PROGRESS")
+  creat_dt      DateTime  @default(now())
+
+  testSpec  TbQaTestSpec     @relation(fields: [test_spec_id], references: [test_spec_id], onDelete: Cascade, map: "tb_qa_test_round_spec_fk")
+  project   TbPjProject      @relation(fields: [prjct_id],     references: [prjct_id],     onDelete: Cascade, map: "tb_qa_test_round_prjct_fk")
+  results   TbQaTestResult[]
+
+  @@unique([test_spec_id, round_no], map: "tb_qa_test_round_uniq")  // 명세서당 회차 번호 중복 방지
+  @@index([prjct_id],                 map: "tb_qa_test_round_prjct_idx")
+  @@map("tb_qa_test_round")
+}
+
+/// 케이스 × 회차 결과 — 한 케이스의 한 회차에서의 합부 판정.
+model TbQaTestResult {
+  result_id     String    @id @default(uuid())
+  prjct_id      String
+  round_id      String
+  test_case_id  String
+  // 합부 — PASS(적합) | FAIL(부적합) | BLOCKED(차단됨) | NA(해당없음)
+  result_code   String    @default("NA")
+  remark_cn     String?                     // 비고 (결함 외 일반 메모)
+  test_mber_id  String?                     // 테스트 수행자
+  test_dt       DateTime?
+  creat_dt      DateTime  @default(now())
+  mdfcn_dt      DateTime?
+
+  round      TbQaTestRound  @relation(fields: [round_id],     references: [round_id],     onDelete: Cascade, map: "tb_qa_test_result_round_fk")
+  testCase   TbQaTestCase   @relation(fields: [test_case_id], references: [test_case_id], onDelete: Cascade, map: "tb_qa_test_result_case_fk")
+  project    TbPjProject    @relation(fields: [prjct_id],     references: [prjct_id],     onDelete: Cascade, map: "tb_qa_test_result_prjct_fk")
+  defects    TbQaDefect[]
+  evidences  TbQaEvidence[]
+
+  @@unique([round_id, test_case_id], map: "tb_qa_test_result_uniq")  // 회차당 케이스 1결과
+  @@index([prjct_id],                map: "tb_qa_test_result_prjct_idx")
+  @@map("tb_qa_test_result")
+}
+
+/// 결함 — 테스트 결과(FAIL)에 연결된 결함 row. 상태·담당·조치 이력 보유.
+model TbQaDefect {
+  defect_id          String    @id @default(uuid())
+  prjct_id           String
+  result_id          String
+  defect_display_id  String    // DF-00001 — 자동 채번
+  defect_cn          String    // 결함 내용
+  // 결함 상태 — OPEN(미조치) | FIXED(수정완료) | CLOSED(닫힘) | REOPENED(재발)
+  sttus_code         String    @default("OPEN")
+  asign_mber_id      String?                       // 조치 담당자
+  fix_cn             String?                       // 조치 결과
+  fix_dt             DateTime?
+  creat_dt           DateTime  @default(now())
+  mdfcn_dt           DateTime?
+
+  result   TbQaTestResult @relation(fields: [result_id], references: [result_id], onDelete: Cascade, map: "tb_qa_defect_result_fk")
+  project  TbPjProject    @relation(fields: [prjct_id],  references: [prjct_id],  onDelete: Cascade, map: "tb_qa_defect_prjct_fk")
+
+  @@index([prjct_id],  map: "tb_qa_defect_prjct_idx")
+  @@index([result_id], map: "tb_qa_defect_result_idx")
+  @@map("tb_qa_defect")
+}
+
+/// 증적 — 스크린샷·로그 등 결과별 첨부파일 (N개 가능).
+model TbQaEvidence {
+  evidence_id     String    @id @default(uuid())
+  prjct_id        String
+  result_id       String
+  file_nm         String
+  file_path       String                    // Supabase Storage 경로 (다른 첨부 모델과 통일)
+  file_size       Int
+  mime_ty_code    String?
+  upload_mber_id  String?
+  creat_dt        DateTime  @default(now())
+
+  result   TbQaTestResult @relation(fields: [result_id], references: [result_id], onDelete: Cascade, map: "tb_qa_evidence_result_fk")
+  project  TbPjProject    @relation(fields: [prjct_id],  references: [prjct_id],  onDelete: Cascade, map: "tb_qa_evidence_prjct_fk")
+
+  @@index([prjct_id], map: "tb_qa_evidence_prjct_idx")
+  @@map("tb_qa_evidence")
 }

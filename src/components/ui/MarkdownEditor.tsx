@@ -11,6 +11,10 @@
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { renderMarkdown } from "@/lib/renderMarkdown";
+import {
+  TEXT_LIMITS, countChars,
+  type TextLimitField,
+} from "@/lib/constants/textLimits";
 
 /**
  * HTML 문서 여부 판별 — <!DOCTYPE, <html, <head, <body 등
@@ -32,16 +36,35 @@ type Props = {
   tab?:           "edit" | "preview";
   onTabChange?:   (tab: "edit" | "preview") => void;
   fullHeight?:    boolean;
+  /**
+   * 길이 제한 정책 키 — src/lib/constants/textLimits.ts 의 키.
+   * 지정 시: 우하단 카운터 표시 + 한도 도달 시 입력 차단(maxLength).
+   * 미지정 시: 무제한 (예: AI 결과 표시용).
+   */
+  field?:         TextLimitField;
 };
 
 export default function MarkdownEditor({
   value, onChange, placeholder, rows = 14, readOnly = false,
   tab: externalTab, onTabChange: _onTabChange,
   fullHeight = false,
+  field,
 }: Props) {
   // 외부 탭이 없으면 내부 state로 fallback (탭 버튼은 외부 MarkdownTabButtons에서 제어)
   const [internalTab] = useState<"edit" | "preview">("edit");
   const tab = externalTab ?? internalTab;
+
+  // ── 길이 제한 (field prop 지정 시) ───────────────────────────────────────
+  // current 는 글자수 기준 (이모지·서로게이트 안전).
+  // textarea maxLength 는 UTF-16 코드 유닛 단위라 이모지 포함 시 약간 작게 차단되지만
+  // API 검증이 정확한 글자수로 한 번 더 잡으므로 UI 는 근사로 충분.
+  const max     = field ? TEXT_LIMITS[field] : undefined;
+  const current = useMemo(() => (field ? countChars(value) : 0), [field, value]);
+  const ratio   = max ? current / max : 0;
+  const counterColor =
+    ratio >= 1   ? "var(--color-error, #e53935)" :
+    ratio >= 0.8 ? "#e57c00" :
+                   "var(--color-text-tertiary)";
 
   // HTML 문서 여부를 메모이제이션 — 불필요한 재계산 방지
   const isHtml = useMemo(() => isFullHtmlDocument(value), [value]);
@@ -112,6 +135,9 @@ export default function MarkdownEditor({
           value={value}
           placeholder={placeholder}
           readOnly={readOnly}
+          // maxLength: field 지정 시 한도 강제. UTF-16 단위라 글자수보다 약간 후하게 끊지만
+          // API 가 정확한 글자수로 다시 검증하므로 UI 는 1차 차단 역할.
+          maxLength={max}
           onChange={(e) => onChange(e.target.value)}
           style={{
             width:        "100%",
@@ -167,6 +193,21 @@ export default function MarkdownEditor({
           }}
           dangerouslySetInnerHTML={{ __html: renderMarkdown(value) || "<p style='color:#aaa;font-size:13px'>내용 없음</p>" }}
         />
+      )}
+
+      {/* 길이 카운터 — field 지정 시에만 노출. 우하단 정렬. */}
+      {/* 비율 ≥80% 주황, ≥100% 빨강 — 사용자가 한도 임박 인지 가능. */}
+      {field && max && (
+        <div style={{
+          marginTop:   4,
+          fontSize:    11,
+          color:       counterColor,
+          textAlign:   "right",
+          fontVariantNumeric: "tabular-nums",
+          flexShrink:  0,
+        }}>
+          {current.toLocaleString()} / {max.toLocaleString()}
+        </div>
       )}
     </div>
   );

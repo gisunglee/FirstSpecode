@@ -39,6 +39,56 @@ export const noBorders = {
   top: noBorder, bottom: noBorder, left: noBorder, right: noBorder,
 };
 
+// ─── 인라인 마크다운 (**굵게** + `code`) ──────────────────
+/**
+ * 텍스트 안의 `**굵게**` / `` `code` `` 패턴을 분리해 TextRun 배열로 만든다.
+ *
+ * - 닫는 마커 없으면 그대로 일반 텍스트 (강제 변환 X)
+ * - 두 패턴이 겹치면 먼저 매치된 쪽 우선 (백틱 안의 `**`은 코드의 일부로 처리됨)
+ * - `*기울임*` / `_..._` / `__...__` 는 처리 안 함 — 단일 `*` 오인식 위험
+ *
+ * 코드 토큰 스타일:
+ *   - 폰트: Consolas (한글 fallback 자동)
+ *   - 크기: baseRun.size 와 동일 (자연스러운 줄높이 유지)
+ *
+ * @param text     원본 텍스트
+ * @param baseRun  TextRun 공통 옵션
+ */
+export function parseInline(
+  text: string,
+  baseRun: { font: string; size: number; bold?: boolean; color?: string },
+): TextRun[] {
+  if (!text) {
+    return [new TextRun({ ...baseRun, text: "" })];
+  }
+
+  // (1) `code`  또는  (2) **bold** — 둘 중 먼저 매치되는 쪽으로 처리
+  const regex = /(`[^`\n]+?`)|(\*\*[^*\n]+?\*\*)/g;
+  const out: TextRun[] = [];
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      out.push(new TextRun({ ...baseRun, text: text.slice(lastIdx, match.index) }));
+    }
+    if (match[1]) {
+      // 인라인 코드 — 백틱 제거하고 monospace 폰트로
+      const inner = match[1].slice(1, -1);
+      out.push(new TextRun({ ...baseRun, font: "Consolas", text: inner }));
+    } else if (match[2]) {
+      // 굵게 — `**` 제거
+      const inner = match[2].slice(2, -2);
+      out.push(new TextRun({ ...baseRun, bold: true, text: inner }));
+    }
+    lastIdx = match.index + match[0].length;
+  }
+  if (lastIdx < text.length) {
+    out.push(new TextRun({ ...baseRun, text: text.slice(lastIdx) }));
+  }
+  return out.length > 0 ? out : [new TextRun({ ...baseRun, text })];
+}
+
 // ─── 문단 ────────────────────────────────────────────────
 type ParagraphOptions = {
   size?:    number;
@@ -66,15 +116,13 @@ export function p(text: string, opts: ParagraphOptions = {}): Paragraph {
       line:   opts.line   ?? 260,
     },
     alignment: opts.align ?? AlignmentType.LEFT,
-    children: [
-      new TextRun({
-        text,
-        font:  FONT,
-        size:  opts.size  ?? SIZE_BODY,
-        bold:  opts.bold  ?? false,
-        color: opts.color,
-      }),
-    ],
+    // `**굵게**` 인라인 마크다운 처리 — 표 셀/리스트/문단 어디서든 자동 적용.
+    children: parseInline(text, {
+      font:  FONT,
+      size:  opts.size  ?? SIZE_BODY,
+      bold:  opts.bold  ?? false,
+      color: opts.color,
+    }),
   });
 }
 
@@ -176,6 +224,43 @@ export function numberedItem(text: string): Paragraph {
     numbering: { reference: "numbers", level: 0 },
     spacing:   { before: 20, after: 20, line: 260 },
     children:  [new TextRun({ text, font: FONT, size: SIZE_BODY })],
+  });
+}
+
+// ─── 인용문 (`> `) ──────────────────────────────────────
+/**
+ * 마크다운 `> 텍스트` 인용문을 표현하는 paragraph.
+ *
+ * 시각:
+ *   - 좌측 두꺼운 회색 보더 (Word 기본 인용 스타일과 유사)
+ *   - 좌측 들여쓰기로 본문과 구분
+ *   - 텍스트 색상 살짝 회색 (보조적인 어조)
+ */
+export function quoteParagraph(text: string): Paragraph {
+  return new Paragraph({
+    spacing: { before: 60, after: 60, line: 280 },
+    indent:  { left: 360 }, // 0.25inch 들여쓰기
+    border: {
+      left: { style: BorderStyle.SINGLE, size: 24, color: "BFBFBF", space: 8 },
+    },
+    // baseRun.color 로 회색 강조 — parseInline 안에서 모든 조각에 적용됨
+    children: parseInline(text, {
+      font: FONT, size: SIZE_BODY, color: "595959",
+    }),
+  });
+}
+
+// ─── 수평선 (`---`) ────────────────────────────────────
+/**
+ * 마크다운 `---` 수평선을 표현하는 빈 paragraph (bottom border).
+ */
+export function horizontalRule(): Paragraph {
+  return new Paragraph({
+    spacing: { before: 120, after: 120 },
+    border: {
+      bottom: { style: BorderStyle.SINGLE, size: 6, color: "BFBFBF", space: 1 },
+    },
+    children: [new TextRun({ text: "" })],
   });
 }
 

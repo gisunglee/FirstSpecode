@@ -45,6 +45,7 @@ function S({ children, size = 18 }: { children: ReactNode; size?: number }) {
 export type MenuIconKey =
   // 그룹 (레일)
   | "g_dashboard" | "g_project" | "g_analysis" | "g_design"
+  | "g_test"     // 신규 — 테스트 그룹 (체크박스+체크)
   | "g_common" | "g_ai" | "g_spec_config" | "g_help" | "g_data"
   // 시스템 관리 (SUPER_ADMIN 전용) — 방패 아이콘으로 차별화
   | "g_admin"
@@ -57,7 +58,11 @@ export type MenuIconKey =
   | "i_aiTask" | "i_planImport" | "i_designImport" | "i_promptTemplate"
   | "i_designTemplate"
   | "i_review" | "i_memo" | "i_docs" | "i_library"
-  | "i_graph" | "i_changeLog" | "i_diffTest" | "i_cleanup";
+  | "i_graph" | "i_changeLog" | "i_diffTest" | "i_cleanup"
+  // 신규 대시보드 메뉴 (활동/포커스/캘린더)
+  | "i_activity" | "i_focus" | "i_calendar"
+  // 테스트 항목 — 단위(단일 박스)·통합(연결된 박스들)
+  | "i_testSpecUnit" | "i_testSpecIntegration";
 
 const ICONS: Record<MenuIconKey, ReactNode> = {
   // ── 그룹 아이콘 (레일) ──────────────────────────────────────────────────────
@@ -89,6 +94,14 @@ const ICONS: Record<MenuIconKey, ReactNode> = {
       <path d="M4 4h16v4H4z" />
       <path d="M10 8v12" />
       <path d="M14 8v12" />
+    </>
+  ),
+  // 테스트 — 클립보드 + 체크 (QA 의미)
+  g_test: (
+    <>
+      <rect x="6" y="4" width="12" height="17" rx="1.5" />
+      <path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1" />
+      <path d="M9 11l2 2 4-4" />
     </>
   ),
   // 공통 설계 — 책
@@ -402,6 +415,48 @@ const ICONS: Record<MenuIconKey, ReactNode> = {
     <>
       <path d="M16 18l6-6-6-6" />
       <path d="M8 6l-6 6 6 6" />
+    </>
+  ),
+  // 활동 피드 — 가로 라인 세 줄(스트림)
+  i_activity: (
+    <>
+      <path d="M4 7h16" />
+      <path d="M4 12h10" />
+      <path d="M4 17h13" />
+    </>
+  ),
+  // 포커스 — 과녁(타깃)
+  i_focus: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="5" />
+      <circle cx="12" cy="12" r="1.5" />
+    </>
+  ),
+  // 캘린더 — 달력
+  i_calendar: (
+    <>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 10h18" />
+      <path d="M8 3v4" />
+      <path d="M16 3v4" />
+    </>
+  ),
+  // 단위 테스트 명세서 — 단일 박스 + 체크 마크
+  i_testSpecUnit: (
+    <>
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <path d="M8 12l2.5 2.5L16 9" />
+    </>
+  ),
+  // 통합 테스트 명세서 — 박스 3개 연결 (여러 단위업무 묶임 표현)
+  i_testSpecIntegration: (
+    <>
+      <rect x="3"  y="9"  width="6" height="6" rx="1" />
+      <rect x="15" y="3"  width="6" height="6" rx="1" />
+      <rect x="15" y="15" width="6" height="6" rx="1" />
+      <path d="M9 12h3l3 -6" />
+      <path d="M9 12h3l3  6" />
     </>
   ),
 };

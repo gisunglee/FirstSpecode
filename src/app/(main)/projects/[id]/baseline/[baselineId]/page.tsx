@@ -12,7 +12,7 @@ import { Suspense, useState, useMemo, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { marked } from "marked";
+import { renderMarkdown } from "@/lib/renderMarkdown";
 import { authFetch } from "@/lib/authFetch";
 import { usePermissions } from "@/hooks/useMyRole";
 
@@ -438,14 +438,9 @@ function ReqDetail({ req }: { req: SnapshotReq }) {
   // 상세 명세 뷰 모드
   const [specMode, setSpecMode] = useState<"preview" | "source">("preview");
 
-  const specHtml = useMemo(() => {
-    if (!req.specCn) return "";
-    try {
-      return marked.parse(req.specCn) as string;
-    } catch {
-      return req.specCn;
-    }
-  }, [req.specCn]);
+  // 공통 유틸 사용 — gfm:true 설정으로 표(table) 등 GFM 문법 렌더링 보장
+  // (marked.parse 직접 호출 시 옵션 미설정으로 표가 plain text 로 보이는 문제 발생했음)
+  const specHtml = useMemo(() => renderMarkdown(req.specCn), [req.specCn]);
 
   const pr = req.priority ? PRIORITY_MAP[req.priority] : null;
 
@@ -542,9 +537,10 @@ function ReqDetail({ req }: { req: SnapshotReq }) {
           </div>
 
           {specMode === "preview" ? (
+            // sp-markdown — components.css 의 마크다운 스타일 (h1~h3, ul/ol, table, code 등) 적용
             <div
               style={{ fontSize: 13, lineHeight: 1.8, color: "var(--color-text-primary)" }}
-              className="markdown-body"
+              className="sp-markdown"
               dangerouslySetInnerHTML={{ __html: specHtml }}
             />
           ) : (

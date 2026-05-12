@@ -22,7 +22,7 @@
  */
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "@/store/appStore";
 import { useMyRole, useIsSystemAdmin } from "@/hooks/useMyRole";
@@ -53,7 +53,10 @@ type MenuGroup = {
 const STORAGE_KEY = "specode-lnb-active-group";
 
 export default function LNB() {
-  const pathname = usePathname();
+  const pathname     = usePathname();
+  // 활성 메뉴 판별에 search params 도 사용 (예: ?kind=UNIT vs ?kind=INTEGRATION)
+  // — 같은 path 두 메뉴를 정확히 구분하기 위함. 다른 메뉴는 href 에 쿼리가 없어 영향 없음.
+  const searchParams = useSearchParams();
   const { sidebarCollapsed, toggleSidebar, setSidebarCollapsed, currentProjectId } = useAppStore();
   const { myRole, canManageMembers, canAccessSettings, isLoading: isRoleLoading } = useMyRole(currentProjectId);
   // SUPER_ADMIN 여부 — "시스템 관리" 그룹 노출 판정에 사용
@@ -79,8 +82,13 @@ export default function LNB() {
         key: "dashboard",
         label: "대시보드",
         icon: "g_dashboard",
+        // 신규 3종 대시보드는 모두 현재 프로젝트(currentProjectId) 컨텍스트에서 동작.
+        // URL 은 프로젝트 prefix 없이 단일 경로로 유지 — 기존 /dashboard 와 동일한 패턴.
         items: [
           { label: "대시보드", href: "/dashboard", icon: "i_dashboard" },
+          { label: "활동",     href: "/activity",  icon: "i_activity" },
+          { label: "포커스",   href: "/focus",     icon: "i_focus" },
+          { label: "캘린더",   href: "/calendar",  icon: "i_calendar" },
         ],
       },
       {
@@ -128,6 +136,17 @@ export default function LNB() {
           { label: "영역",      href: p("/areas"),      icon: "i_area", indent: true },
           { label: "기능",      href: p("/functions"),  icon: "i_function" },
           { label: "DB 테이블", href: p("/db-tables"),  icon: "i_dbTable" },
+        ],
+      },
+      {
+        key: "test",
+        label: "테스트",
+        icon: "g_test",
+        // 단위/통합 테스트 명세서 — 같은 목록 페이지를 kind 쿼리로 분기
+        // (탭 1개 페이지로 두면 코드·진입 모두 단순. specId 라우트와 충돌 없음)
+        items: [
+          { label: "단위 테스트 명세서", href: p("/test-specs?kind=UNIT"),        icon: "i_testSpecUnit" },
+          { label: "통합 테스트 명세서", href: p("/test-specs?kind=INTEGRATION"), icon: "i_testSpecIntegration" },
         ],
       },
       {
@@ -232,22 +251,38 @@ export default function LNB() {
   }>(() => {
     let bestGroupKey: string | null = null;
     let bestHref:     string | null = null;
-    let bestLen      = 0;
+    let bestScore    = -1;
     for (const g of groups) {
       for (const it of g.items) {
         if (it.href === "#") continue;
-        // 정확 일치 또는 prefix + "/" 로 시작
-        const matches =
-          pathname === it.href || pathname.startsWith(it.href + "/");
-        if (matches && it.href.length > bestLen) {
+        // href 에서 path 와 query 분리 — query 가 있으면 정확 매칭 가중치 추가
+        const [itPath, itQuery] = it.href.split("?");
+        const pathMatches =
+          pathname === itPath || pathname.startsWith(itPath + "/");
+        if (!pathMatches) continue;
+
+        // 기본 점수 = path 길이 (가장 긴 prefix 가 이김)
+        let score = itPath.length * 10;
+        if (itQuery) {
+          // query 까지 정확히 일치해야 가산점 — 일치하면 +1000 (확실히 이김),
+          // 불일치면 path 만 매칭이라 0점 (다른 query 메뉴에 밀림)
+          const itParams = new URLSearchParams(itQuery);
+          let allMatch = true;
+          for (const [k, v] of itParams) {
+            if (searchParams.get(k) !== v) { allMatch = false; break; }
+          }
+          if (allMatch) score += 1000;
+          else continue;  // 같은 path 의 다른 query 항목 — 이 메뉴는 활성 X
+        }
+        if (score > bestScore) {
           bestGroupKey = g.key;
           bestHref     = it.href;
-          bestLen      = it.href.length;
+          bestScore    = score;
         }
       }
     }
     return { groupByUrl: bestGroupKey, activeItemHref: bestHref };
-  }, [pathname, groups]);
+  }, [pathname, searchParams, groups]);
 
   // ── 활성 그룹 상태 ─────────────────────────────────────────────────────────
   // 우선순위: URL이 어떤 그룹에 매칭되면 → 그 그룹

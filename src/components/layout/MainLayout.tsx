@@ -24,7 +24,7 @@
  *     </body>
  */
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -136,7 +136,10 @@ export default function MainLayout({
       {/* 중간 영역: LNB + 메인 컨텐츠 */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {/* 좌측 LNB */}
-        <LNB />
+        {/* LNB 가 useSearchParams 를 사용 — Next.js 16 에서 Suspense 경계 필수 */}
+        <Suspense fallback={null}>
+          <LNB />
+        </Suspense>
 
         {/* 메인 워크스페이스 (AR-00097) */}
         <main

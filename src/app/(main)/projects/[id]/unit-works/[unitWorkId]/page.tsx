@@ -24,6 +24,7 @@ import { authFetch } from "@/lib/authFetch";
 import { usePermissions } from "@/hooks/useMyRole";
 import { useIdPrefixes } from "@/hooks/useIdPrefixes";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
+import UwTestSpecMenu from "@/components/test-specs/UwTestSpecMenu";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
@@ -833,8 +834,13 @@ function UnitWorkDetailPageInner() {
           </span>
         </div>
 
-        {/* 우: AI 작업 + PRD 다운로드 + 취소·저장 */}
+        {/* 우: 테스트 명세 + AI 작업 + PRD 다운로드 + 취소·저장 */}
         <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+          {/* 🧪 테스트 명세 드롭다운 — 단위업무에 묶인 단위/통합 명세서 진입 */}
+          {!isNew && (
+            <UwTestSpecMenu projectId={projectId} unitWorkId={unitWorkId} />
+          )}
+
           {/* ★ AI 작업 드롭다운 */}
           {!isNew && (
             <div ref={aiPanelRef} style={{ position: "relative" }}>
@@ -1032,25 +1038,29 @@ function UnitWorkDetailPageInner() {
             🔒 <strong>읽기 전용</strong> — 이 단위업무는 OWNER/ADMIN 또는 PM/PL 직무, 혹은 담당자만 수정할 수 있습니다.
           </div>
         )}
-        {/* 폼 — 2단 레이아웃 (좌: 메타 정보+코멘트, 우: 설명) */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: 20, alignItems: "start" }}>
+        {/* 폼 — 상하 레이아웃 (상: 메타 정보 2줄, 하: 설명) */}
+        {/* height: 뷰포트 + 여유분 → 설명 에디터에 충분한 높이 확보 (페이지 스크롤 허용) */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "calc(100vh + 240px)" }}>
 
-          {/* ── 왼쪽 컬럼 ── */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-
-            {/* ── 왼쪽 카드: 메타 정보 ── */}
-            <div
-              style={{
-                border: "1px solid var(--color-border)",
-                borderRadius: 8,
-                background: "var(--color-bg-card)",
-                padding: "24px 28px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 20,
-              }}
-            >
-              {/* 상위 요구사항 선택 */}
+          {/* ── 상단 카드: 메타 정보 (2줄) ── */}
+          {/* 설명 에디터에 최대 높이 양보 → 카드 패딩·행간을 컴팩트하게 유지 */}
+          <div
+            style={{
+              border: "1px solid var(--color-border)",
+              borderRadius: 8,
+              background: "var(--color-bg-card)",
+              padding: "12px 20px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+              flexShrink: 0,
+            }}
+          >
+            {/* Row 1: 상위 요구사항 + 단위업무명 + 표시 ID + 담당자 */}
+            {/* 담당자 라벨 옆의 작은 시계 아이콘 = 변경 이력 팝업 (신규 등록 모드에서는 숨김) */}
+            {/* FormField 대신 인라인 div 사용 — <label> 요소 안에 <button>을 두면 */}
+            {/*   라벨 빈 영역 클릭이 브라우저 기본 동작으로 버튼에 전달됨 (라벨→내부 form control) */}
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1fr 2fr", gap: 12 }}>
               <FormField label="상위 요구사항" required>
                 <div className="sp-select-wrap">
                   <select
@@ -1069,133 +1079,122 @@ function UnitWorkDetailPageInner() {
                   <span className="sp-select-arrow"><SelectChevron /></span>
                 </div>
               </FormField>
-
-              {/* 단위업무명 + 표시 ID */}
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
-                <FormField label="단위업무명" required>
-                  <input
-                    type="text"
-                    value={form.name}
-                    placeholder="단위업무명을 입력하세요"
-                    onChange={(e) => handleChange("name", e.target.value)}
-                    readOnly={!canEdit}
-                    className="sp-input"
-                  />
-                </FormField>
-                <FormField label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>표시 ID<DisplayIdHelp /></span>}>
-                  <input
-                    type="text"
-                    value={form.displayId ?? ""}
-                    placeholder={`${getPrefix("UNIT_WORK")}-XXXXX (미 입력 시 자동 생성)`}
-                    onChange={(e) => handleChange("displayId", e.target.value)}
-                    readOnly={!canEdit}
-                    className="sp-input"
-                  />
-                </FormField>
-              </div>
-
-              {/* 시작일 + 종료일 — 2컬럼 */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <FormField label="시작일">
-                  <input
-                    type="date"
-                    value={form.startDate ?? ""}
-                    onChange={(e) => handleChange("startDate", e.target.value)}
-                    readOnly={!canEdit}
-                    className="sp-input"
-                  />
-                </FormField>
-                <FormField label="종료일">
-                  <input
-                    type="date"
-                    value={form.endDate ?? ""}
-                    onChange={(e) => handleChange("endDate", e.target.value)}
-                    readOnly={!canEdit}
-                    className="sp-input"
-                  />
-                </FormField>
-              </div>
-
-              {/* 담당자 + 진행률 + 정렬순서 — 담당자에 더 넓은 공간(2fr) 할당 */}
-              {/* 담당자 라벨 옆의 작은 시계 아이콘 = 변경 이력 팝업 (신규 등록 모드에서는 숨김) */}
-              {/* FormField 대신 인라인 div 사용 — <label> 요소 안에 <button>을 두면 */}
-              {/*   라벨 빈 영역 클릭이 브라우저 기본 동작으로 버튼에 전달됨 (라벨→내부 form control) */}
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 12 }}>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
-                    <span>담당자</span>
-                    {!isNew && (
-                      <button
-                        type="button"
-                        onClick={() => setAssigneeHistoryOpen(true)}
-                        title="담당자 변경 이력"
-                        style={inlineIconBtnStyle}
-                      >
-                        {/* 시계(이력) 아이콘 — 14px, currentColor로 테마 대응 */}
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                          stroke="currentColor" strokeWidth="2"
-                          strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <circle cx="12" cy="12" r="9" />
-                          <path d="M12 7v5l3 2" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-                  <div className="sp-select-wrap">
-                    <select
-                      value={form.assignMemberId ?? ""}
-                      onChange={(e) => handleChange("assignMemberId", e.target.value)}
-                      disabled={!canEdit}
-                      className="sp-input"
+              <FormField label="단위업무명" required>
+                <input
+                  type="text"
+                  value={form.name}
+                  placeholder="단위업무명을 입력하세요"
+                  onChange={(e) => handleChange("name", e.target.value)}
+                  readOnly={!canEdit}
+                  className="sp-input"
+                />
+              </FormField>
+              <FormField label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>표시 ID<DisplayIdHelp /></span>}>
+                <input
+                  type="text"
+                  value={form.displayId ?? ""}
+                  placeholder={`${getPrefix("UNIT_WORK")}-XXXXX (미 입력 시 자동 생성)`}
+                  onChange={(e) => handleChange("displayId", e.target.value)}
+                  readOnly={!canEdit}
+                  className="sp-input"
+                />
+              </FormField>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                  <span>담당자</span>
+                  {!isNew && (
+                    <button
+                      type="button"
+                      onClick={() => setAssigneeHistoryOpen(true)}
+                      title="담당자 변경 이력"
+                      style={inlineIconBtnStyle}
                     >
-                      <option value="">담당자 없음</option>
-                      {members.map((m) => (
-                        <option key={m.memberId} value={m.memberId}>
-                          {m.name ?? m.email}
-                          {m.memberId === myMemberId ? " (나)" : ""}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="sp-select-arrow"><SelectChevron /></span>
-                  </div>
+                      {/* 시계(이력) 아이콘 — 14px, currentColor로 테마 대응 */}
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2"
+                        strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M12 7v5l3 2" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
-                <FormField label="진행률 (%)">
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={form.progress}
-                    onChange={(e) => handleChange("progress", Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                    readOnly={!canEdit}
+                <div className="sp-select-wrap">
+                  <select
+                    value={form.assignMemberId ?? ""}
+                    onChange={(e) => handleChange("assignMemberId", e.target.value)}
+                    disabled={!canEdit}
                     className="sp-input"
-                  />
-                </FormField>
-                <FormField label="정렬순서">
-                  <input
-                    type="number"
-                    min={0}
-                    value={form.sortOrder}
-                    onChange={(e) => handleChange("sortOrder", parseInt(e.target.value) || 0)}
-                    readOnly={!canEdit}
-                    className="sp-input"
-                  />
-                </FormField>
+                  >
+                    <option value="">담당자 없음</option>
+                    {members.map((m) => (
+                      <option key={m.memberId} value={m.memberId}>
+                        {m.name ?? m.email}
+                        {m.memberId === myMemberId ? " (나)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="sp-select-arrow"><SelectChevron /></span>
+                </div>
               </div>
-
             </div>
 
-          </div>{/* ── 왼쪽 컬럼 끝 ── */}
+            {/* Row 2: 시작일 + 종료일 + 진행률 + 정렬순서 */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12 }}>
+              <FormField label="시작일">
+                <input
+                  type="date"
+                  value={form.startDate ?? ""}
+                  onChange={(e) => handleChange("startDate", e.target.value)}
+                  readOnly={!canEdit}
+                  className="sp-input"
+                />
+              </FormField>
+              <FormField label="종료일">
+                <input
+                  type="date"
+                  value={form.endDate ?? ""}
+                  onChange={(e) => handleChange("endDate", e.target.value)}
+                  readOnly={!canEdit}
+                  className="sp-input"
+                />
+              </FormField>
+              <FormField label="진행률 (%)">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={form.progress}
+                  onChange={(e) => handleChange("progress", Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                  readOnly={!canEdit}
+                  className="sp-input"
+                />
+              </FormField>
+              <FormField label="정렬순서">
+                <input
+                  type="number"
+                  min={0}
+                  value={form.sortOrder}
+                  onChange={(e) => handleChange("sortOrder", parseInt(e.target.value) || 0)}
+                  readOnly={!canEdit}
+                  className="sp-input"
+                />
+              </FormField>
+            </div>
+          </div>
 
-          {/* ── 오른쪽 카드: 설명 ── */}
+          {/* ── 하단 카드: 설명 ── */}
+          {/* flex: 1로 남은 영역을 모두 차지. minHeight: 0은 flex 자식이 내용 크기보다 작아질 수 있게 함 */}
           <div
             style={{
               border: "1px solid var(--color-border)",
               borderRadius: 8,
               background: "var(--color-bg-card)",
-              padding: "24px 28px",
+              padding: "14px 24px 18px",
               display: "flex",
               flexDirection: "column",
-              height: "calc(100vh - 161px)",  // 뷰포트 - (상단바40 + 브레드크럼40 + 타이틀57 + 하단패딩24)
+              flex: 1,
+              minHeight: 0,
               boxSizing: "border-box",
             }}
           >
@@ -1254,6 +1253,7 @@ function UnitWorkDetailPageInner() {
               onTabChange={setDescTab}
               fullHeight
               readOnly={!canEdit}
+              field="description"
             />
           </div>
 

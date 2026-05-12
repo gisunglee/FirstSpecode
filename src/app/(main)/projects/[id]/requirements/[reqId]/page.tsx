@@ -11,6 +11,7 @@
  */
 
 import { Suspense, useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -887,6 +888,7 @@ function RequirementDetailPageInner() {
                     placeholder="협의 또는 변경 사항이 반영된 최신 내용을 입력하세요"
                     minHeight={338}
                     readOnly={!canEdit}
+                    field="htmlContent"
                   />
                 ) : (
                   <RichEditor
@@ -895,6 +897,7 @@ function RequirementDetailPageInner() {
                     placeholder="RFP 또는 계약서의 원문 그대로 입력하세요"
                     minHeight={338}
                     readOnly={!canEdit}
+                    field="htmlContent"
                   />
                 )}
               </div>
@@ -981,7 +984,10 @@ function RequirementDetailPageInner() {
               {/* 상세 명세 (위) */}
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>상세 명세</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                    상세 명세
+                    <FieldHelp title="상세 명세" body={SPEC_HELP_BODY} />
+                  </span>
                   <MarkdownTabButtons tab={specTab} onTabChange={setSpecTab} />
                   <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
                     <button
@@ -1023,13 +1029,17 @@ function RequirementDetailPageInner() {
                   placeholder={`## 기능 상세\n\n- 항목1\n- 항목2`}
                   rows={20}
                   readOnly={!canEdit}
+                  field="detailSpec"
                 />
               </div>
 
               {/* 분석 메모 (아래) */}
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>분석 메모</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                    분석 메모
+                    <FieldHelp title="분석 메모" body={ANALYSIS_MEMO_HELP_BODY} />
+                  </span>
                   <MarkdownTabButtons tab={analyzeTab} onTabChange={setAnalyzeTab} />
                   <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
                     {!isNew && (
@@ -1051,6 +1061,7 @@ function RequirementDetailPageInner() {
                   placeholder={`## 분석 내용\n\n- 항목1\n- 항목2`}
                   rows={20}
                   readOnly={!canEdit}
+                  field="analysisMemo"
                 />
               </div>
             </Section>
@@ -1806,3 +1817,95 @@ const histGhostBtn: React.CSSProperties = {
   cursor: "pointer",
   whiteSpace: "nowrap",
 };
+
+// ── 라벨 옆 도움말(?) 버튼 ───────────────────────────────────────────────────
+//
+// 영역 편집 페이지([areaId]/page.tsx) 의 FieldHelp 와 동일한 시각/동작.
+// 통일성 우선이라 의도적으로 같은 컴포넌트를 로컬 복제(기존 areas 페이지 주석과 같은 방침).
+//
+// createPortal 로 document.body 직접 마운트:
+//   1) 부모 라벨(fontWeight:600) 의 굵기 상속을 모달 본문이 받지 않도록 차단
+//   2) 상위 z-index/transform 컨테이너 영향 차단 (본 페이지의 다른 모달 위/아래 무관)
+// 닫기: 우상단 ×, 백드롭 클릭, ESC 키.
+
+function FieldHelp({ title, body }: { title: string; body: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // SSR-safe — document.body 는 클라이언트에서만 존재
+  useEffect(() => { setMounted(true); }, []);
+
+  // ESC 닫기 — 열렸을 때만 리스너 활성화
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const overlay = open ? (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5000 }}
+      onClick={() => setOpen(false)}
+    >
+      <div
+        style={{ background: "var(--color-bg-card)", borderRadius: 12, padding: "24px 28px", minWidth: 420, maxWidth: 560, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>{title}</span>
+          <button
+            onClick={() => setOpen(false)}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}
+          >×</button>
+        </div>
+        {body}
+      </div>
+    </div>
+  ) : null;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+        title={`${title} 도움말`}
+        style={{
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: 16, height: 16, borderRadius: "50%",
+          border: "1.5px solid var(--color-text-secondary)",
+          background: "transparent", color: "var(--color-text-secondary)",
+          fontSize: 10, fontWeight: 700, cursor: "pointer", padding: 0, lineHeight: 1,
+        }}
+      >?</button>
+      {mounted && overlay && createPortal(overlay, document.body)}
+    </>
+  );
+}
+
+// ── 도움말 본문 정의 ─────────────────────────────────────────────────────────
+// fontWeight:400 명시 — 부모 라벨(600) 상속이 포털로도 한 번 차단되지만, 명시적으로 한 번 더.
+
+const SPEC_HELP_BODY = (
+  <div style={{ fontSize: 13, fontWeight: 400, color: "var(--color-text-primary)", lineHeight: 1.7 }}>
+    <p style={{ margin: 0 }}>
+      요구사항 <strong>명세서 본문</strong>에 들어가는 내용이에요.
+    </p>
+    <p style={{ margin: "8px 0 0", color: "var(--color-text-secondary)" }}>
+      출력 문서에 그대로 담깁니다.
+    </p>
+  </div>
+);
+
+const ANALYSIS_MEMO_HELP_BODY = (
+  <div style={{ fontSize: 13, fontWeight: 400, color: "var(--color-text-primary)", lineHeight: 1.7 }}>
+    <p style={{ margin: 0 }}>
+      명세서에는 포함되지 않는 <strong>자유로운 분석 메모</strong>예요.
+    </p>
+    <p style={{ margin: "8px 0 0", color: "var(--color-text-secondary)" }}>
+      향후 <strong>&quot;기획실&quot;</strong> 에서 활용됩니다.
+    </p>
+  </div>
+);

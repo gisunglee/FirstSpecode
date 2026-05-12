@@ -44,3 +44,28 @@ export function isEmpty(value: unknown): boolean {
   if (typeof value === "string") return value.trim().length === 0;
   return false;
 }
+
+// ─── 상대 시간 포매터 ─────────────────────────────────────────────────────────
+// "방금 전 / N분 전 / N시간 전 / N일 전 / YYYY-MM-DD"
+// 외부 라이브러리 의존 없이 한국어로 표시. 30일 이상은 그냥 날짜로 폴백.
+//
+// 입력은 ISO 문자열 또는 Date 객체 모두 허용.
+// 잘못된 입력이 들어오면 빈 문자열 반환 (UI 깨짐 방지).
+export function formatRelativeKo(input: string | Date | null | undefined): string {
+  if (!input) return "";
+  const ms = typeof input === "string" ? Date.parse(input) : input.getTime();
+  if (Number.isNaN(ms)) return "";
+
+  const sec = Math.floor((Date.now() - ms) / 1000);
+  if (sec < 0)   return "방금 전";  // 시계 오차로 미래 시각이 들어오는 경우
+  if (sec < 60)  return "방금 전";
+  const min = Math.floor(sec / 60);
+  if (min < 60)  return `${min}분 전`;
+  const hr  = Math.floor(min / 60);
+  if (hr  < 24)  return `${hr}시간 전`;
+  const day = Math.floor(hr / 24);
+  if (day < 30)  return `${day}일 전`;
+  // 30일 넘어가면 날짜로 — 입력이 string 이면 ISO 앞 10자리, Date 면 toISOString 후 자르기
+  const iso = typeof input === "string" ? input : input.toISOString();
+  return iso.slice(0, 10);
+}

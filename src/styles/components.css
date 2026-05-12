@@ -1170,3 +1170,20 @@ body {
 [data-theme="dark-purple"] input[type="week"] {
   color-scheme: dark;
 }
+
+/* ================================================================
+   DASHBOARD GRID — 대시보드 카드 자동 레이아웃
+   - 카드 폭 최소 320px 보장, 화면 폭에 따라 1~3열 자동 분할
+   - 모바일 1열, 태블릿 2열, 데스크톱 3열을 minmax/auto-fit 으로 처리
+   - 카드 자체는 sp-group 사용 → 그리드 셀이 카드 셸을 그대로 채움
+================================================================ */
+.sp-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-4);
+}
+
+/* 대시보드 카드 행 hover — 클릭 가능한 항목임을 알림 */
+.sp-dashboard-row:hover {
+  background: var(--color-bg-elevated);
+}

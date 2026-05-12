@@ -17,6 +17,7 @@ import {
   type RoleCode, type JobCode,
 } from "@/lib/permissions";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 
 type RouteParams = { params: Promise<{ id: string; unitWorkId: string }> };
 
@@ -200,6 +201,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   if (progress !== undefined && (progress < 0 || progress > 100)) {
     return apiError("VALIDATION_ERROR", "진행률은 0~100 사이여야 합니다.", 400);
   }
+
+  // 장문 텍스트 한도 검증 — 정책은 src/lib/constants/textLimits.ts
+  const limitErr = apiTextLimitGuard([
+    ["name",        name],
+    ["displayId",   displayId],
+    ["description", description],
+    ["comment",     comment],
+  ]);
+  if (limitErr) return limitErr;
 
   try {
     const existing = await prisma.tbDsUnitWork.findUnique({ where: { unit_work_id: unitWorkId } });

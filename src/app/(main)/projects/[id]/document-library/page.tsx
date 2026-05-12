@@ -27,7 +27,12 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { usePermissions } from "@/hooks/useMyRole";
-import { buildDocxFilename } from "@/lib/exports/filename";
+import { buildDocxFilename, filenameSafe } from "@/lib/exports/filename";
+import {
+  PROJECT_ARTIFACTS,
+  type ProjectArtifact, type ArtifactFormatSpec,
+} from "@/lib/exports/project-artifacts";
+import ArtifactOptionsDialog from "@/components/common/ArtifactOptionsDialog";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -98,6 +103,19 @@ function DocumentLibraryInner() {
     enabled: !!projectId,
     staleTime: 30_000,
   });
+
+  // 프로젝트명 — 카드 다운로드 시 fallback 파일명에 사용 (서버 disposition 가 우선)
+  const { data: projectMeta } = useQuery({
+    queryKey: ["doc-library-project", projectId],
+    queryFn: () =>
+      authFetch<{ data: { project: { prjctNm?: string; name?: string } } }>(
+        `/api/projects/${projectId}`
+      ).then((r) => r.data),
+    enabled: !!projectId,
+    staleTime: 60_000,
+  });
+  const projectName =
+    filenameSafe(projectMeta?.project?.prjctNm ?? projectMeta?.project?.name) || "프로젝트";
 
   const requirements = reqRaw?.items ?? [];
   const unitWorks    = uwRaw?.items  ?? [];
@@ -223,6 +241,93 @@ function DocumentLibraryInner() {
     }
   }
 
+  // ── 프로젝트 산출물 카드 다운로드 ─────────────────────────────────────────
+  // 한 카드 = 1 산출물. 산출물은 여러 출력 형식(formats: docx/xlsx) 을 가질 수 있고,
+  // 카드 안에 형식별 버튼이 노출된다.
+  //
+  // 흐름:
+  //   - enabled=false        → "준비 중" 토스트
+  //   - options 있음          → 옵션 다이얼로그 오픈 (해당 형식 정보를 같이 보관)
+  //   - options 없음          → 즉시 다운로드
+  //
+  // busy 키는 "{artifactKey}:{formatType}" 형태 — 같은 산출물의 다른 형식이 동시에
+  // 진행 중일 때 각각 비활성 표시 가능.
+  const [artifactBusyKey, setArtifactBusyKey] = useState<string | null>(null);
+  const [pendingArtifact, setPendingArtifact] = useState<{
+    artifact: ProjectArtifact;
+    format:   ArtifactFormatSpec;
+  } | null>(null);
+
+  // 카드 안의 형식 버튼 onClick — 옵션 유무에 따라 분기
+  function onArtifactFormatClick(artifact: ProjectArtifact, format: ArtifactFormatSpec) {
+    if (!artifact.enabled) {
+      toast.message("준비 중입니다.", { description: artifact.title });
+      return;
+    }
+    if (artifact.options && artifact.options.length > 0) {
+      setPendingArtifact({ artifact, format });
+      return;
+    }
+    runArtifactDownload(artifact, format, {});
+  }
+
+  // 다이얼로그 [다운로드] 확정 — 보관된 형식 + 선택된 옵션으로 다운로드
+  function onArtifactOptionsConfirm(values: Record<string, boolean>) {
+    if (!pendingArtifact) return;
+    const { artifact, format } = pendingArtifact;
+    setPendingArtifact(null);
+    runArtifactDownload(artifact, format, values);
+  }
+
+  async function runArtifactDownload(
+    artifact: ProjectArtifact,
+    format:   ArtifactFormatSpec,
+    options:  Record<string, boolean>,
+  ) {
+    const at = typeof window !== "undefined"
+      ? (sessionStorage.getItem("access_token") ?? "")
+      : "";
+
+    const queryString = Object.keys(options).length > 0
+      ? "?" + new URLSearchParams(
+          Object.entries(options).map(([k, v]) => [k, String(v)])
+        ).toString()
+      : "";
+
+    const busyKey = `${artifact.key}:${format.type}`;
+    setArtifactBusyKey(busyKey);
+    try {
+      const res = await fetch(format.apiPath(projectId) + queryString, {
+        headers: at ? { Authorization: `Bearer ${at}` } : {},
+      });
+      if (!res.ok) {
+        let msg = `요청 실패 (${res.status})`;
+        try { const err = await res.json(); if (err?.message) msg = err.message; }
+        catch { /* ignore */ }
+        toast.error(msg);
+        return;
+      }
+
+      const disposition = res.headers.get("content-disposition") ?? "";
+      const m = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+      const filename = m
+        ? decodeURIComponent(m[1])
+        : format.fallbackFilename(projectName);
+
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success(`${artifact.title} (${format.type.toUpperCase()}) 다운로드 완료`);
+    } catch {
+      toast.error(`${artifact.title} 생성에 실패했습니다.`);
+    } finally {
+      setArtifactBusyKey(null);
+    }
+  }
+
   // ── 일괄 zip 다운로드 ─────────────────────────────────────────────────────
   const [zipBusy, setZipBusy] = useState(false);
 
@@ -314,6 +419,65 @@ function DocumentLibraryInner() {
       </div>
 
       <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: 28 }}>
+
+        {/* ═══ 프로젝트 산출물 (단일 파일 다운로드) ═══════════════════════ */}
+        <section>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 4 }}>
+            프로젝트 산출물
+          </div>
+          <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 12 }}>
+            프로젝트 전체를 한 파일로 받습니다. 각 카드를 클릭하면 즉시 다운로드됩니다.
+          </div>
+          <div style={artifactGridStyle}>
+            {PROJECT_ARTIFACTS.map((art) => {
+              const disabled    = !art.enabled;
+              const cardOpacity = disabled ? 0.6 : 1;
+              return (
+                <div key={art.key} style={{ ...artifactCardStyle, opacity: cardOpacity }}>
+                  <div style={{ fontSize: 28, lineHeight: 1 }}>{art.icon}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                      {art.title}
+                      {disabled && <span style={badgeStyle}>준비 중</span>}
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
+                      {art.description}
+                    </div>
+                  </div>
+
+                  {/* 형식별 버튼들 — formats 배열 길이만큼 노출 (Word/Excel 등) */}
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    {art.formats.map((fmt) => {
+                      const busyKey = `${art.key}:${fmt.type}`;
+                      const busy    = artifactBusyKey === busyKey;
+                      // VIEWER(content.export 없음) 면 다운로드 버튼 숨김 — 카드는 노출 (프리뷰성)
+                      if (!canExport) return null;
+                      return (
+                        <button
+                          key={fmt.type}
+                          onClick={() => onArtifactFormatClick(art, fmt)}
+                          disabled={busy || disabled}
+                          style={{
+                            ...formatBtnStyle,
+                            opacity: busy || disabled ? 0.5 : 1,
+                            cursor:  busy ? "wait" : (disabled ? "not-allowed" : "pointer"),
+                          }}
+                          title={
+                            disabled ? `${art.title} — 준비 중` :
+                            busy     ? "생성 중..." :
+                            `${art.title} ${fmt.type.toUpperCase()} 다운로드`
+                          }
+                        >
+                          {busy ? "..." : fmt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
         {/* ═══ 요건정의서 (요구사항) ═══════════════════════════════════ */}
         <section>
@@ -492,6 +656,16 @@ function DocumentLibraryInner() {
         </section>
 
       </div>
+
+      {/* 산출물 옵션 다이얼로그 — 옵션이 정의된 산출물의 형식 버튼 클릭 시 열림.
+          확정 시 onArtifactOptionsConfirm 으로 선택값 받아 query string 으로 다운로드.
+          다이얼로그는 형식 정보를 모름 — pendingArtifact 가 보관 후 confirm 핸들러에서 사용. */}
+      <ArtifactOptionsDialog
+        open={!!pendingArtifact}
+        artifact={pendingArtifact?.artifact ?? null}
+        onClose={() => setPendingArtifact(null)}
+        onConfirm={onArtifactOptionsConfirm}
+      />
     </div>
   );
 }
@@ -547,6 +721,43 @@ const rowDownloadBtnStyle: React.CSSProperties = {
   border: "1px solid var(--color-border)",
   background: "var(--color-bg-card)",
   color: "var(--color-text-primary)",
+};
+
+// 프로젝트 산출물 카드 그리드 — auto-fill 로 화면 폭에 따라 1~4열 자동 조정
+const artifactGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+  gap: 12,
+};
+
+// 카드 — 좌측 아이콘 + 제목/설명 + 우측에 형식별 버튼들 (Word/Excel 등)
+const artifactCardStyle: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 14,
+  padding: "14px 16px",
+  borderRadius: 8,
+  border: "1px solid var(--color-border)",
+  background: "var(--color-bg-card)",
+};
+
+// 카드 안 형식 버튼 (Word/Excel/...) — 작은 outline 톤
+const formatBtnStyle: React.CSSProperties = {
+  padding: "5px 12px", borderRadius: 5, fontSize: 12, fontWeight: 600,
+  border: "1px solid var(--color-border)",
+  background: "var(--color-bg-card)",
+  color: "var(--color-text-primary)",
+  whiteSpace: "nowrap",
+};
+
+// "준비 중" 작은 배지 — 카드 제목 옆에 inline 으로 노출
+const badgeStyle: React.CSSProperties = {
+  display: "inline-block",
+  marginLeft: 8,
+  padding: "2px 6px",
+  fontSize: 10, fontWeight: 700, lineHeight: 1.2,
+  borderRadius: 4,
+  background: "var(--color-bg-muted)",
+  color: "var(--color-text-secondary)",
+  letterSpacing: "0.04em",
 };
 
 // 요구사항 표 그리드: 체크 / ID / 이름(가변) / 우선 / 담당 / UW수 / 다운로드

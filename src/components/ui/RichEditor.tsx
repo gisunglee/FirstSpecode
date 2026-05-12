@@ -24,7 +24,11 @@ import TableHeader from "@tiptap/extension-table-header";
 import TableCell from "@tiptap/extension-table-cell";
 import Placeholder from "@tiptap/extension-placeholder";
 import { ResizableImage } from "./ResizableImage";
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, useMemo } from "react";
+import {
+  TEXT_LIMITS, countChars,
+  type TextLimitField,
+} from "@/lib/constants/textLimits";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -34,6 +38,12 @@ type Props = {
   placeholder?: string;
   minHeight?:   number;
   readOnly?:    boolean;
+  /**
+   * 길이 제한 정책 키 — src/lib/constants/textLimits.ts 의 키.
+   * 지정 시: 우하단 카운터 표시 (HTML 글자수 기준).
+   * TipTap 은 maxLength 강제 차단이 까다로워 카운터만 표시 — 한도 초과는 저장 시 API 가 차단.
+   */
+  field?:       TextLimitField;
 };
 
 // ── 이미지 리사이즈 유틸 ───────────────────────────────────────────────────────
@@ -71,8 +81,20 @@ export default function RichEditor({
   placeholder = "내용을 입력하세요...",
   minHeight = 240,
   readOnly = false,
+  field,
 }: Props) {
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
+
+  // ── 길이 제한 (field 지정 시 카운터 표시용) ──────────────────────────────
+  // HTML 태그 포함 전체 길이 — htmlContent 한도(100K)는 태그 오버헤드 감안한 수치.
+  // 사용자에게는 "체감"보다 큰 숫자가 보일 수 있지만 실제 저장 길이라 정직한 지표.
+  const max     = field ? TEXT_LIMITS[field] : undefined;
+  const current = useMemo(() => (field ? countChars(value) : 0), [field, value]);
+  const ratio   = max ? current / max : 0;
+  const counterColor =
+    ratio >= 1   ? "var(--color-error, #e53935)" :
+    ratio >= 0.8 ? "#e57c00" :
+                   "var(--color-text-tertiary)";
 
   const editor = useEditor({
     immediatelyRender: false,  // Next.js SSR hydration 불일치 방지
@@ -210,6 +232,21 @@ export default function RichEditor({
       >
         <EditorContent editor={editor} className="sp-rich-editor" />
       </div>
+
+      {/* 길이 카운터 — field 지정 시에만 노출. 에디터 본문 아래 우측 정렬. */}
+      {field && max && (
+        <div style={{
+          padding:     "4px 10px 6px",
+          borderTop:   "1px solid var(--color-border)",
+          background:  "var(--color-bg-muted)",
+          fontSize:    11,
+          color:       counterColor,
+          textAlign:   "right",
+          fontVariantNumeric: "tabular-nums",
+        }}>
+          {current.toLocaleString()} / {max.toLocaleString()}
+        </div>
+      )}
     </div>
   );
 }

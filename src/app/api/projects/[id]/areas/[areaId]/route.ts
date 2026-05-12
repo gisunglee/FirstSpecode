@@ -17,6 +17,7 @@ import {
   type RoleCode, type JobCode,
 } from "@/lib/permissions";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 
 type RouteParams = { params: Promise<{ id: string; areaId: string }> };
 
@@ -241,6 +242,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "영역명을 입력해 주세요.", 400);
+
+  // 장문 텍스트 한도 검증 — 정책은 src/lib/constants/textLimits.ts
+  const limitErr = apiTextLimitGuard([
+    ["name",        name],
+    ["displayId",   displayId],
+    ["description", description],
+    ["comment",     commentCn],
+  ]);
+  if (limitErr) return limitErr;
 
   try {
     const existing = await prisma.tbDsArea.findUnique({ where: { area_id: areaId } });

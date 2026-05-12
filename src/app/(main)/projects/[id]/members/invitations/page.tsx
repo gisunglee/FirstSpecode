@@ -6,7 +6,9 @@
  * 역할:
  *   - 초대 현황 목록 조회 (FID-00066)
  *   - 멤버 초대 POPUP (PID-00019, FID-00065)
- *   - 초대 취소 인라인 확인 (FID-00067)
+ *   - 초대 취소·삭제 인라인 확인 (FID-00067)
+ *     · PENDING/EXPIRED → "취소" (상태만 CANCELLED 로 변경, 이력 보존)
+ *     · CANCELLED       → "삭제" (목록에서 영구 제거)
  *   - 초대 재발송 + 60초 쿨타임 (FID-00068)
  */
 
@@ -277,8 +279,9 @@ function InvitationsInner() {
   const queryClient = useQueryClient();
   const projectId   = params.id as string;
 
-  const [inviteOpen,    setInviteOpen]    = useState(false);
-  const [cancelConfirm, setCancelConfirm] = useState<string | null>(null); // invitationId
+  const [inviteOpen,     setInviteOpen]     = useState(false);
+  // 인라인 확인 대상 — 한 번에 한 행만 확인 모드. action 으로 메시지/토스트 분기.
+  const [confirmTarget,  setConfirmTarget]  = useState<{ id: string; action: "cancel" | "delete" } | null>(null);
 
   const { data, isLoading } = useQuery<{ data: { items: InvitationItem[]; totalCount: number } }>({
     queryKey: ["invitations", projectId],
@@ -288,12 +291,14 @@ function InvitationsInner() {
 
   const items = data?.data?.items ?? [];
 
+  // 동일 DELETE 엔드포인트가 현재 상태에 따라 cancel/delete 를 알아서 처리.
+  // 클라이언트는 토스트 메시지 분기를 위해서만 action 을 보관.
   const cancelMutation = useMutation({
-    mutationFn: (invitationId: string) =>
-      authFetch(`/api/projects/${projectId}/invitations/${invitationId}`, { method: "DELETE" }),
-    onSuccess: () => {
-      toast.success("초대를 취소했습니다.");
-      setCancelConfirm(null);
+    mutationFn: ({ id }: { id: string; action: "cancel" | "delete" }) =>
+      authFetch(`/api/projects/${projectId}/invitations/${id}`, { method: "DELETE" }),
+    onSuccess: (_data, vars) => {
+      toast.success(vars.action === "delete" ? "초대를 삭제했습니다." : "초대를 취소했습니다.");
+      setConfirmTarget(null);
       queryClient.invalidateQueries({ queryKey: ["invitations", projectId] });
     },
     onError: (err: Error) => toast.error(err.message),
@@ -359,12 +364,14 @@ function InvitationsInner() {
 
               {/* 액션 */}
               <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "center", flexWrap: "wrap" }}>
-                {cancelConfirm === item.invitationId ? (
-                  // 인라인 취소 확인
+                {confirmTarget?.id === item.invitationId ? (
+                  // 인라인 취소·삭제 확인 — action 에 따라 메시지가 달라짐
                   <>
-                    <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>정말 취소?</span>
+                    <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
+                      {confirmTarget.action === "delete" ? "정말 삭제?" : "정말 취소?"}
+                    </span>
                     <button
-                      onClick={() => cancelMutation.mutate(item.invitationId)}
+                      onClick={() => cancelMutation.mutate({ id: item.invitationId, action: confirmTarget.action })}
                       disabled={cancelMutation.isPending}
                       style={{
                         padding: "2px 8px", fontSize: "var(--text-xs)", fontWeight: 600,
@@ -373,7 +380,7 @@ function InvitationsInner() {
                       }}
                     >확인</button>
                     <button
-                      onClick={() => setCancelConfirm(null)}
+                      onClick={() => setConfirmTarget(null)}
                       className="sp-btn sp-btn-secondary"
                       style={{ fontSize: "var(--text-xs)", padding: "2px 8px" }}
                     >아니오</button>
@@ -382,10 +389,17 @@ function InvitationsInner() {
                   <>
                     {item.status === "PENDING" && (
                       <button
-                        onClick={() => setCancelConfirm(item.invitationId)}
+                        onClick={() => setConfirmTarget({ id: item.invitationId, action: "cancel" })}
                         className="sp-btn sp-btn-secondary"
                         style={{ fontSize: "var(--text-xs)", padding: "2px 8px" }}
                       >취소</button>
+                    )}
+                    {item.status === "CANCELLED" && (
+                      <button
+                        onClick={() => setConfirmTarget({ id: item.invitationId, action: "delete" })}
+                        className="sp-btn sp-btn-secondary"
+                        style={{ fontSize: "var(--text-xs)", padding: "2px 8px", color: "var(--color-error)" }}
+                      >삭제</button>
                     )}
                     {(item.status === "PENDING" || item.status === "EXPIRED") && (
                       <ResendButton projectId={projectId} invitationId={item.invitationId} onDone={refresh} />

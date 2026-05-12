@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
+import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 import { fetchProjectRequirements } from "@/lib/exports/requirements-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -58,6 +59,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "요구사항명을 입력해 주세요.", 400);
   if (!priority) return apiError("VALIDATION_ERROR", "우선순위를 선택해 주세요.", 400);
   if (!source) return apiError("VALIDATION_ERROR", "출처를 선택해 주세요.", 400);
+
+  // 장문 텍스트 한도 검증 — 정책은 src/lib/constants/textLimits.ts
+  // orgnl/curncy 는 RichEditor HTML 출력 → htmlContent 한도(100K) 적용
+  const limitErr = apiTextLimitGuard([
+    ["name",         name],
+    ["htmlContent",  originalContent],
+    ["htmlContent",  currentContent],
+    ["analysisMemo", analysisMemo],
+    ["detailSpec",   detailSpec],
+  ]);
+  if (limitErr) return limitErr;
 
   try {
     // 표시 ID 채번 — prefix 는 프로젝트 환경설정에서 조회

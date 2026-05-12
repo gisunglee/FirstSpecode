@@ -29,8 +29,9 @@ import {
   SIZE_HEADING_1,
   CONTENT_WIDTH,
 } from "./tokens";
-import { p, labelCell, valueCell, headerCell, bulletItem, numberedItem, codeBlock } from "./helpers";
+import { p, labelCell, valueCell, headerCell } from "./helpers";
 import { buildDocument, heading1, heading2 } from "./frame";
+import { renderMarkdown } from "./markdown";
 
 // ─── 입력 타입 ────────────────────────────────────────────
 /**
@@ -75,160 +76,18 @@ export type RequirementExportInput = {
   }>;
 };
 
-// ─── 상세 명세 마크다운 파싱 ──────────────────────────────
-// 호출부에서 그대로 마크다운을 넘겨도 양식이 그럴듯하게 보이도록 가벼운 파싱.
-// 정식 마크다운 파서를 쓰지 않는 이유: 헤더/리스트/표만 잡으면 충분하고, 의존성 부담 회피.
+// ─── 상세 명세 마크다운 렌더링 ────────────────────────────
+// 사용자 입력 마크다운을 docx 요소로 변환. 본 양식의 "2. 상세 명세" 섹션 안에서는
+// 마크다운 헤딩(##/###...)을 "2.1, 2.2 ..." 자동 번호 + heading2 스타일로 출력해
+// 본문 위계 ("2."로 시작) 와 통일감 있게 보이도록 한다.
 //
-// 인식하는 블록:
-//   - ###/##/# 헤딩
-//   - "- " 또는 "* " 불릿
-//   - "1. " 또는 "1) " 번호 항목
-//   - "| col | col |" 형태의 GFM 표 (헤더 + 구분선 + 데이터)
-//   - 그 외 일반 문단
-type SpecBlock =
-  | { kind: "heading"; text: string }
-  | { kind: "bullet";  text: string }
-  | { kind: "number";  text: string }
-  | { kind: "plain";   text: string }
-  | { kind: "table";   header: string[]; rows: string[][] }
-  | { kind: "code";    text: string };
-
-// "|----|---|" 같은 GFM 표 구분선 판정 — `-` 가 적어도 1개 있고, 셀 내용이 -, :, 공백, | 로만 구성.
-function isTableSeparator(line: string): boolean {
-  return /^\|[\s\-:|]+\|$/.test(line) && line.includes("-");
-}
-
-// "| a | b | c |" → ["a", "b", "c"]  (앞뒤 | 제거 후 split)
-function splitTableRow(line: string): string[] {
-  return line.slice(1, -1).split("|").map((c) => c.trim());
-}
-
-// 라인이 표 행 형태인지 — 양 끝이 | 이고 내부에 | 가 있어야 함 (즉 셀이 2개 이상)
-function looksLikeTableRow(line: string): boolean {
-  return line.startsWith("|") && line.endsWith("|") && line.length > 2 && line.includes("|", 1);
-}
-
-function parseSpec(markdown: string): SpecBlock[] {
-  const lines = markdown.split(/\r?\n/);
-  const blocks: SpecBlock[] = [];
-  let i = 0;
-
-  while (i < lines.length) {
-    const rawLine = lines[i];
-    const line = rawLine.trim();
-
-    // 빈 줄 — 블록 구분자, 출력엔 영향 없음
-    if (!line) { i++; continue; }
-
-    // ── 코드 블록 인식 (```) ──────────────────────────────
-    // ASCII mockup / 화면 박스 등을 monospace 로 보존.
-    // 시작 ``` 이후 닫는 ``` 까지의 모든 줄을 그대로(트림 X) 보존 — 박스 정렬 깨짐 방지.
-    if (/^```/.test(line)) {
-      i++; // 여는 ``` 건너뛰기
-      const buf: string[] = [];
-      while (i < lines.length) {
-        const t = lines[i];
-        if (/^```\s*$/.test(t.trim())) {
-          i++; // 닫는 ```
-          break;
-        }
-        buf.push(t); // 트림 안 함 — 들여쓰기 보존
-        i++;
-      }
-      blocks.push({ kind: "code", text: buf.join("\n") });
-      continue;
-    }
-
-    // ── 표 인식 (헤더 + 구분선이 연속해야 표로 인정) ──────────
-    if (looksLikeTableRow(line) && isTableSeparator((lines[i + 1] ?? "").trim())) {
-      const header = splitTableRow(line);
-      const rows: string[][] = [];
-      i += 2; // 헤더, 구분선 건너뛰기
-      while (i < lines.length) {
-        const t = lines[i].trim();
-        if (!looksLikeTableRow(t)) break;
-        const cells = splitTableRow(t);
-        // 셀 수가 헤더와 다르면 헤더 길이에 맞춰 채우거나 자른다
-        while (cells.length < header.length) cells.push("");
-        rows.push(cells.slice(0, header.length));
-        i++;
-      }
-      blocks.push({ kind: "table", header, rows });
-      continue;
-    }
-
-    // ── 단일 라인 블록들 ─────────────────────────────────────
-    if (line.startsWith("### ")) blocks.push({ kind: "heading", text: line.slice(4) });
-    else if (line.startsWith("## "))  blocks.push({ kind: "heading", text: line.slice(3) });
-    else if (line.startsWith("# "))   blocks.push({ kind: "heading", text: line.slice(2) });
-    else if (/^[-*]\s+/.test(line))   blocks.push({ kind: "bullet", text: line.replace(/^[-*]\s+/, "") });
-    else if (/^\d+[.)]\s+/.test(line)) blocks.push({ kind: "number", text: line.replace(/^\d+[.)]\s+/, "") });
-    else blocks.push({ kind: "plain", text: line });
-
-    i++;
-  }
-  return blocks;
-}
-
-// 마크다운 표 → docx Table.
-// 컬럼 폭은 균등 분할. 마지막 컬럼이 자투리(나머지)를 흡수해 합계가 CONTENT_WIDTH 와 정확히 일치.
-function buildSpecTable(header: string[], rows: string[][]): Table {
-  const colCount = header.length;
-  const baseW = Math.floor(CONTENT_WIDTH / colCount);
-  const widths = header.map((_, i) =>
-    i === colCount - 1 ? CONTENT_WIDTH - baseW * (colCount - 1) : baseW
-  );
-
-  return new Table({
-    width:        { size: CONTENT_WIDTH, type: WidthType.DXA },
-    columnWidths: widths,
-    rows: [
-      new TableRow({
-        tableHeader: true,
-        children: header.map((h, i) => headerCell(h, widths[i])),
-      }),
-      ...rows.map((r) => new TableRow({
-        children: r.map((cell, i) => valueCell(cell, widths[i])),
-      })),
-    ],
-  });
-}
-
-/**
- * 파싱된 spec 블록들을 docx 요소들(문단/표)로 변환.
- * 헤딩은 "2.1, 2.2 ..." 자동 번호로 heading2 스타일.
- */
+// 일반 마크다운 처리(불릿/번호/표/코드/인용/수평선)는 markdown.ts 공통 모듈 사용.
 function renderSpec(spec: string): (Paragraph | Table)[] {
-  if (!spec.trim()) return [p("(상세 명세가 작성되지 않았습니다.)", { color: "808080" })];
-
-  const blocks = parseSpec(spec);
-  const result: (Paragraph | Table)[] = [];
-  let subIdx = 0;
-
-  for (const b of blocks) {
-    switch (b.kind) {
-      case "heading":
-        subIdx++;
-        result.push(heading2(`2.${subIdx} ${b.text}`));
-        break;
-      case "bullet":
-        result.push(bulletItem(b.text));
-        break;
-      case "number":
-        result.push(numberedItem(b.text));
-        break;
-      case "plain":
-        result.push(p(b.text));
-        break;
-      case "table":
-        result.push(buildSpecTable(b.header, b.rows));
-        break;
-      case "code":
-        result.push(codeBlock(b.text));
-        break;
-    }
-  }
-  return result;
+  return renderMarkdown(spec, {
+    emptyText: "(상세 명세가 작성되지 않았습니다.)",
+    // headingIdx 가 1부터 매번 증가 — "2.1", "2.2", ... 자동 부여
+    renderHeading: (text, _level, idx) => heading2(`2.${idx} ${text}`),
+  });
 }
 
 // ─── 표지 ────────────────────────────────────────────────

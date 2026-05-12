@@ -177,7 +177,6 @@ function toMappingRow(
     tablePhysical: string;
     colLogical:    string;
     colPhysical:   string;
-    dataType:      string;
   } | null,
 ): ColMappingRow {
   // 항목명 — 사용목적 → 컬럼 설명 → 컬럼 한글명 → 물리명
@@ -195,7 +194,6 @@ function toMappingRow(
     uiType:        mapping.ui_ty_code ?? "",
     colLogical:    colInfo?.colLogical    ?? "",
     colPhysical:   colInfo?.colPhysical   ?? "",
-    dataType:      colInfo?.dataType      ?? "",
     tableLogical:  colInfo?.tableLogical  ?? "",
     tablePhysical: colInfo?.tablePhysical ?? "",
   };
@@ -342,7 +340,6 @@ export async function buildUnitWorkExportInput(
       tbl_id:        true,
       col_physcl_nm: true,
       col_lgcl_nm:   true,
-      data_ty_nm:    true,
     },
   });
 
@@ -382,7 +379,6 @@ export async function buildUnitWorkExportInput(
     tablePhysical: string;
     colLogical:    string;
     colPhysical:   string;
-    dataType:      string;
   }>();
   const tblInfoByTblId = new Map<string, { logical: string; physical: string }>();
   for (const t of tables) {
@@ -398,7 +394,6 @@ export async function buildUnitWorkExportInput(
       tablePhysical: tbl?.physical ?? "",
       colLogical:    c.col_lgcl_nm?.trim() || c.col_physcl_nm,
       colPhysical:   c.col_physcl_nm,
-      dataType:      c.data_ty_nm?.trim() || "",
     });
   }
 

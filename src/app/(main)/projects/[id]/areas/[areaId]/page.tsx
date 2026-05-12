@@ -1218,6 +1218,7 @@ function AreaDetailPageInner() {
                 tab={descTab}
                 onTabChange={setDescTab}
                 readOnly={!canEdit}
+                field="description"
               />
             </section>
           </div>

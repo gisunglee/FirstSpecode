@@ -26,7 +26,9 @@ export type EntityKind =
   | "UNIT_WORK"
   | "SCREEN"
   | "AREA"
-  | "FUNCTION";
+  | "FUNCTION"
+  | "TEST_SPEC"   // 테스트 명세서 (TS-XXXXX)
+  | "DEFECT";     // 결함 (DF-XXXXX)
 
 // 엔티티 → 환경설정 키
 const CONFIG_KEY: Record<EntityKind, string> = {
@@ -37,6 +39,8 @@ const CONFIG_KEY: Record<EntityKind, string> = {
   SCREEN:      "PREFIX_SCREEN",
   AREA:        "PREFIX_AREA",
   FUNCTION:    "PREFIX_FUNCTION",
+  TEST_SPEC:   "PREFIX_TEST_SPEC",
+  DEFECT:      "PREFIX_DEFECT",
 };
 
 // 환경설정 누락 시 사용할 fallback — 기존 하드코딩 prefix 와 동일하게 유지
@@ -49,6 +53,8 @@ const FALLBACK_PREFIX: Record<EntityKind, string> = {
   SCREEN:      "SCR",
   AREA:        "AR",
   FUNCTION:    "FN",
+  TEST_SPEC:   "TS",
+  DEFECT:      "DF",
 };
 
 /**
