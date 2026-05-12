@@ -303,7 +303,8 @@
       "Bash(tee /tmp/tsc-rd.txt)",
       "Bash(tee /tmp/build-rd.txt)",
       "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('.claude/settings.local.json','utf8'\\)\\); console.log\\('JSON OK'\\)\")",
-      "Bash(git rebase *)"
+      "Bash(git rebase *)",
+      "Bash(git fetch *)"
     ],
     "additionalDirectories": [
       "c:\\source\\FirstSpecode"
