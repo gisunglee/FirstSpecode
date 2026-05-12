@@ -291,7 +291,13 @@
       "Bash(tee /tmp/build-doclib.txt)",
       "Bash(tee /tmp/tsc-fn.txt)",
       "Bash(tee /tmp/tsc-tight.txt)",
-      "Bash(tee /tmp/tsc-code.txt)"
+      "Bash(tee /tmp/tsc-code.txt)",
+      "Bash(cp .env.local.example .env.local && ls -la .env.local)",
+      "Bash(npm --version)",
+      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(48\\).toString\\('base64'\\)\\)\")"
+    ],
+    "additionalDirectories": [
+      "c:\\source\\FirstSpecode"
     ]
   }
 }
