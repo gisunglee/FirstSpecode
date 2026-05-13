@@ -40,6 +40,7 @@ type ResultRow = {
   testCaseId: string;
   caseNo: number;
   ctgryCode: string;
+  grpNm: string | null;       // 구분(그룹명) — FUNCTIONAL 만 사용. 결과 작성에선 read-only 표시
   scenarioCn: string;
   expectedCn: string;
   applicableYn: string;
@@ -401,10 +402,11 @@ export default function TestRunPanel({
 
                 // 카테고리별 컬럼 비율
                 //   CHECKLIST: 시나리오 길고 예상결과 짧음 → 7:3
-                //   FUNCTIONAL: 시나리오·예상결과 균등에 가깝게 → 6:4
-                const colTemplate = ctgry === "CHECKLIST"
-                  ? "44px 7fr 3fr 230px"
-                  : "44px 6fr 4fr 230px";
+                //   FUNCTIONAL: 구분(120px) + 시나리오·예상결과 균등에 가깝게 → 6:4
+                const isFunc     = ctgry === "FUNCTIONAL";
+                const colTemplate = isFunc
+                  ? "44px 120px 6fr 4fr 230px"
+                  : "44px 7fr 3fr 230px";
 
                 return (
                   <div key={ctgry} style={{
@@ -438,6 +440,7 @@ export default function TestRunPanel({
                       color: "var(--color-text-secondary)",
                     }}>
                       <span>No</span>
+                      {isFunc && <span>구분</span>}
                       <span>시나리오</span>
                       <span>예상 결과</span>
                       <span style={{ textAlign: "center" }}>결과</span>
@@ -445,15 +448,16 @@ export default function TestRunPanel({
 
                     {/* 결과 행들 */}
                     {rows.map(({ r, i: idx }, rowIdx) => {
-                      const inactive = r.applicableYn === "N";
-                      const isFail = r.resultCode === "FAIL";
-                      const isPass = r.resultCode === "PASS";
-                      const isLast = rowIdx === rows.length - 1;
+                      const inactive  = r.applicableYn === "N";
+                      const isFail    = r.resultCode === "FAIL";
+                      const isPass    = r.resultCode === "PASS";
+                      const isLast    = rowIdx === rows.length - 1;
                       const hasRemark = !!(r.remarkCn?.trim());
-                      // PASS 펼침 조건: 입력값 있거나 사용자가 ✎ 클릭한 경우
-                      const passOpen = isPass && !inactive && (hasRemark || remarkOpenSet.has(r.resultId));
-                      // 펼침 영역 노출 여부 — FAIL 자동 / PASS 명시 토글
-                      const showExpand = isFail || passOpen;
+                      const hasDefect = !!(r.defects[0]?.defectCn?.trim());
+                      // PASS / FAIL 모두 ✎ 토글로 펼침. 입력값(비고·결함) 있으면 자동 펼침 유지.
+                      // NA / 해당없음 은 토글 자체 노출 X.
+                      const canToggle  = (isPass || isFail) && !inactive;
+                      const showExpand = canToggle && (hasRemark || hasDefect || remarkOpenSet.has(r.resultId));
 
                       return (
                         <div
@@ -475,6 +479,17 @@ export default function TestRunPanel({
                             <span style={{ fontSize: 13, color: "var(--color-text-primary)", paddingTop: 6 }}>
                               {r.caseNo}
                             </span>
+                            {/* 구분(그룹명) — FUNCTIONAL 만. 결과 작성 화면에서는 편집 X, 표시만. */}
+                            {isFunc && (
+                              <span style={{
+                                fontSize: 13, color: "var(--color-text-secondary)",
+                                paddingTop: 6,
+                                wordBreak: "break-word",
+                                whiteSpace: "pre-wrap",
+                              }}>
+                                {r.grpNm || ""}
+                              </span>
+                            )}
                             <span style={{
                               fontSize: 13, color: "var(--color-text-primary)",
                               paddingTop: 6,
@@ -497,21 +512,23 @@ export default function TestRunPanel({
                                   onChange={(code) => updateResult(idx, { resultCode: code })}
                                 />
                               </div>
-                              {/* 비고 토글 — PASS 일 때만 노출. 클릭 시 행 아래 펼침 영역 토글.
+                              {/* 비고/결함 토글 — PASS/FAIL 모두 노출. 클릭 시 행 아래 펼침 영역 토글.
                                   빈 자리 차지(width 고정)로 다른 행 정렬 영향 X */}
                               <div style={{ width: 24, flexShrink: 0 }}>
-                                {isPass && !inactive && (
+                                {canToggle && (
                                   <button
                                     type="button"
                                     onClick={() => toggleRemark(r.resultId)}
                                     disabled={form.sttusCode === "DONE"}
-                                    title={passOpen ? "비고 닫기" : "비고 추가"}
+                                    title={showExpand
+                                      ? (isFail ? "결함·비고 닫기" : "비고 닫기")
+                                      : (isFail ? "결함·비고 추가" : "비고 추가")}
                                     style={{
                                       width: 24, height: 24,
                                       padding: 0, borderRadius: 4,
-                                      border: `1px solid ${hasRemark || passOpen ? "rgba(103,80,164,0.4)" : "var(--color-border)"}`,
-                                      background: hasRemark || passOpen ? "rgba(103,80,164,0.08)" : "transparent",
-                                      color: hasRemark || passOpen ? "rgba(103,80,164,1)" : "var(--color-text-tertiary)",
+                                      border: `1px solid ${(hasRemark || hasDefect || showExpand) ? "rgba(103,80,164,0.4)" : "var(--color-border)"}`,
+                                      background: (hasRemark || hasDefect || showExpand) ? "rgba(103,80,164,0.08)" : "transparent",
+                                      color: (hasRemark || hasDefect || showExpand) ? "rgba(103,80,164,1)" : "var(--color-text-tertiary)",
                                       cursor: form.sttusCode === "DONE" ? "not-allowed" : "pointer",
                                       display: "inline-flex", alignItems: "center", justifyContent: "center",
                                       fontSize: 13,
@@ -522,7 +539,7 @@ export default function TestRunPanel({
                             </div>
                           </div>
 
-                          {/* 펼침 영역 — FAIL 자동 노출 / PASS 는 ✎ 토글 시 노출
+                          {/* 펼침 영역 — PASS/FAIL 모두 ✎ 토글 시 노출 (또는 입력값 있을 때 자동).
                               두 경우 모두 [결함] + [비고] 6:4 — PASS 시 결함은 disabled(회색) */}
                           {showExpand && (
                             <div style={{ padding: "0 16px 10px 60px" }}>

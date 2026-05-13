@@ -1467,6 +1467,9 @@ model TbQaTestCase {
   case_no           Int       // 명세서 내 일련번호 (1, 2, 3 ...)
   // 카테고리 — CHECKLIST(공통 점검) | FUNCTIONAL(기능 시나리오)
   ctgry_code        String
+  // 구분(그룹명) — FUNCTIONAL 만 사용. 도메인 그룹핑 (예: "회원", "승인", "관리")
+  // CHECKLIST 에서는 항상 NULL 유지 (UI 노출 X).
+  grp_nm            String?
   scenario_cn       String    // 테스트 내용 (필수)
   expected_cn       String    // 예상 결과 (필수)
   // ── 부가 컨텍스트 (옵션) ──

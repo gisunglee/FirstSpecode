@@ -15,7 +15,7 @@
  *   - 기존 case_id 가 있으면 UPDATE, 없으면 INSERT, 누락된 기존 case 는 DELETE
  */
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -36,6 +36,7 @@ type TestCase = {
   testCaseId?: string;       // 신규 행은 없음
   caseNo: number;
   ctgryCode: "CHECKLIST" | "FUNCTIONAL";
+  grpNm?: string | null;     // 구분(그룹명) — FUNCTIONAL 만 사용 (예: "회원", "승인", "관리")
   scenarioCn: string;
   expectedCn: string;
   preconditionCn?: string | null;
@@ -73,10 +74,6 @@ const STATUS_LABEL: Record<string, string> = {
   FAILED: "불합격",
 };
 const STATUS_OPTIONS = ["DRAFT", "IN_PROGRESS", "PASSED", "FAILED"] as const;
-const CTGRY_LABEL: Record<string, string> = {
-  CHECKLIST: "공통 점검",
-  FUNCTIONAL: "기능 시나리오",
-};
 
 // 우선순위(priortCode) 는 DB 데이터 보존을 위해 TestCase 타입엔 유지하지만
 // UI 에선 컬럼·셀렉트 모두 제거 — 신규 케이스는 "MEDIUM" 기본값 (addCase 에서 설정).
@@ -215,12 +212,19 @@ function TestSpecInner() {
             asignMemberId: form.asignMemberId,
             unitWorkIds: form.unitWorks.map((u) => u.unitWorkId),
             cases: form.cases.map((c) => ({
-              testCaseId: c.testCaseId,
-              caseNo: c.caseNo,
-              ctgryCode: c.ctgryCode,
-              scenarioCn: c.scenarioCn,
-              expectedCn: c.expectedCn,
-              aiGenYn: c.aiGenYn,
+              testCaseId:     c.testCaseId,
+              caseNo:         c.caseNo,
+              ctgryCode:      c.ctgryCode,
+              grpNm:          c.grpNm,
+              scenarioCn:     c.scenarioCn,
+              expectedCn:     c.expectedCn,
+              preconditionCn: c.preconditionCn,
+              testDataCn:     c.testDataCn,
+              testAccountCn:  c.testAccountCn,
+              priortCode:     c.priortCode,
+              applicableYn:   c.applicableYn,
+              remarkCn:       c.remarkCn,
+              aiGenYn:        c.aiGenYn,
             })),
           }),
         });
@@ -406,11 +410,11 @@ function TestSpecInner() {
       )}
 
       {mode === "run" && !isNew ? (
-        <div style={{ padding: "0 24px 24px", maxWidth: 1200 }}>
+        <div style={{ padding: "0 24px 120px", maxWidth: 1200 }}>
           <TestRunPanel projectId={projectId} specId={specId} members={members} />
         </div>
       ) : (
-        <div style={{ padding: "0 24px 24px", maxWidth: 1200 }}>
+        <div style={{ padding: "0 24px 120px", maxWidth: 1200 }}>
           {/* 메타 카드 */}
           <div style={cardStyle}>
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
@@ -640,31 +644,37 @@ function CaseList({
 // 각 카테고리의 행 grid columns 와 정확히 일치해야 컬럼 정렬이 맞음.
 
 function ChecklistHeader() {
+  // 헤더 셀 좌측 패딩을 행의 셀(input/select) 좌측 패딩과 동일하게 맞춰 컬럼 정렬 일치.
+  // No 컬럼: 행의 숫자가 paddingLeft 4 → 헤더도 4
+  // 해당여부/시나리오/예상결과: 행의 input padding "6px 8px" → 헤더 paddingLeft 8
+  // 외곽 좌우 padding 16 — 테스트 실행(결과 작성) 화면과 동일한 들여쓰기로 통일
   return (
     <div style={{
       ...gridHeaderStyle,
-      gridTemplateColumns: "44px 80px 1fr 1fr auto",
-      padding: "8px 8px",
+      gridTemplateColumns: "44px 80px 6fr 4fr auto",
+      padding: "8px 16px",
     }}>
-      <span>No</span>
-      <span style={{ textAlign: "center" }}>해당</span>
-      <span>시나리오 *</span>
-      <span>예상 결과 *</span>
+      <span style={{ paddingLeft: 4 }}>No</span>
+      <span style={{ textAlign: "center" }}>해당여부</span>
+      <span style={{ paddingLeft: 8 }}>시나리오 *</span>
+      <span style={{ paddingLeft: 8 }}>예상 결과 *</span>
       <span style={{ width: 80 /* SubInfoToggle(28) + 복제(20) + 삭제(20) + gap */ }} />
     </div>
   );
 }
 
 function FunctionalHeader() {
+  // 구분 컬럼 추가 — 도메인 그룹핑(예: "회원", "승인", "관리")
   return (
     <div style={{
       ...gridHeaderStyle,
-      gridTemplateColumns: "44px 1fr 1fr auto",
-      padding: "8px 8px",
+      gridTemplateColumns: "44px 120px 1fr 1fr auto",
+      padding: "8px 16px",
     }}>
-      <span>No</span>
-      <span>시나리오 *</span>
-      <span>예상 결과 *</span>
+      <span style={{ paddingLeft: 4 }}>No</span>
+      <span style={{ paddingLeft: 4 }}>구분</span>
+      <span style={{ paddingLeft: 4 }}>시나리오 *</span>
+      <span style={{ paddingLeft: 4 }}>예상 결과 *</span>
       <span style={{ width: 80 /* SubInfoToggle + 복제 + 삭제 */ }} />
     </div>
   );
@@ -695,6 +705,89 @@ function CaseCard(props: {
     return <ChecklistRow {...props} />;
   }
   return <FunctionalCard {...props} />;
+}
+
+// ── 해당여부 토글 — iOS 스타일 스위치 + 라벨 ───────────────────────────────
+// Y(해당됨) / N(해당없음) 두 상태. 클릭 시 즉시 전환.
+function ApplicableToggle({
+  value, onChange,
+}: {
+  value:    "Y" | "N";
+  onChange: (v: "Y" | "N") => void;
+}) {
+  const isOn = value === "Y";
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(isOn ? "N" : "Y")}
+      title={isOn ? "해당됨 (클릭 시 해당없음)" : "해당없음 (클릭 시 해당됨)"}
+      style={{
+        display: "inline-flex", alignItems: "center",
+        background: "transparent", border: "none",
+        padding: "4px 8px", cursor: "pointer",
+      }}
+    >
+      {/* 스위치 트랙 */}
+      <span style={{
+        position: "relative", display: "inline-block",
+        width: 28, height: 16, borderRadius: 8,
+        background: isOn ? "rgba(103,80,164,0.85)" : "var(--color-border-strong, #cfd2dc)",
+        transition: "background 0.15s",
+        flexShrink: 0,
+      }}>
+        {/* 노브 */}
+        <span style={{
+          position: "absolute", top: 2,
+          left: isOn ? 14 : 2,
+          width: 12, height: 12, borderRadius: "50%",
+          background: "#fff",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+          transition: "left 0.15s",
+        }} />
+      </span>
+    </button>
+  );
+}
+
+// ── 자동 높이 textarea — 내용 길이에 따라 자동 wrap + height 조절 ─────────
+// 같은 그리드 안에서 input 처럼 한 줄로 시작하되 긴 텍스트가 잘리지 않도록.
+function AutoSizeTextarea({
+  value, onChange, placeholder, style, onFocus, onBlur,
+}: {
+  value:        string;
+  onChange:     (v: string) => void;
+  placeholder?: string;
+  style?:       React.CSSProperties;
+  onFocus?:     (e: React.FocusEvent<HTMLTextAreaElement>) => void;
+  onBlur?:      (e: React.FocusEvent<HTMLTextAreaElement>) => void;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  // mount + value 변경 시마다 scrollHeight 기준으로 height 재계산
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      rows={1}
+      onFocus={onFocus}
+      onBlur={onBlur}
+      style={{
+        ...style,
+        resize: "none",
+        overflow: "hidden",
+        wordBreak: "break-word",
+        lineHeight: 1.5,
+      }}
+    />
+  );
 }
 
 // ── CHECKLIST — 한 줄 컴팩트 행 ─────────────────────────────────────────────
@@ -744,50 +837,39 @@ function ChecklistRow({
         transition: "background 0.1s, opacity 0.15s",
       }}
     >
-      {/* 한 행 — gridTemplateColumns: No / 해당여부 / 시나리오 / 예상결과 / 액션 */}
+      {/* 한 행 — gridTemplateColumns: No / 해당여부 / 시나리오 / 예상결과 / 액션
+          좌우 padding 16 — 헤더와 동일 (외곽 박스 안쪽 들여쓰기) */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "44px 80px 1fr 1fr auto",
-        alignItems: "center",
+        gridTemplateColumns: "44px 80px 6fr 4fr auto",
+        alignItems: "start",
         gap: 6,
-        padding: "3px 8px",
+        padding: "5px 16px",
       }}>
         <span style={{ fontSize: 13, color: "var(--color-text-primary)", paddingLeft: 4 }}>
           {c.caseNo}
         </span>
 
-        {/* 해당여부 — borderless */}
-        <select
-          value={c.applicableYn ?? "Y"}
-          onChange={(e) => onUpdate({ applicableYn: e.target.value as "Y" | "N" })}
-          style={{
-            padding: "1px 4px", borderRadius: 8,
-            border: "1px solid transparent",
-            background: "transparent",
-            color: inactive ? "#888" : "var(--color-text-primary)",
-            fontSize: 13, cursor: "pointer", width: "100%",
-            outline: "none",
-          }}
-          title="해당 여부"
-        >
-          <option value="Y">해당됨</option>
-          <option value="N">해당없음</option>
-        </select>
+        {/* 해당여부 — iOS 스타일 토글. 셀 안에서 가운데 정렬 (헤더 라벨과 일치) */}
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <ApplicableToggle
+            value={c.applicableYn ?? "Y"}
+            onChange={(v) => onUpdate({ applicableYn: v })}
+          />
+        </div>
 
-        {/* borderless input — focus 시에만 옅은 보더 (CSS focus-within) */}
-        <input
-          type="text"
+        {/* borderless textarea — 자동 wrap + height 조절. focus 시 옅은 보더 */}
+        <AutoSizeTextarea
           value={c.scenarioCn}
-          onChange={(e) => onUpdate({ scenarioCn: e.target.value })}
+          onChange={(v) => onUpdate({ scenarioCn: v })}
           placeholder="시나리오"
           style={cellInputStyle}
           onFocus={(e) => { e.currentTarget.style.borderColor = "var(--color-border)"; e.currentTarget.style.background = "var(--color-bg-card)"; }}
           onBlur={(e) => { e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
         />
-        <input
-          type="text"
+        <AutoSizeTextarea
           value={c.expectedCn}
-          onChange={(e) => onUpdate({ expectedCn: e.target.value })}
+          onChange={(v) => onUpdate({ expectedCn: v })}
           placeholder="예상 결과"
           style={cellInputStyle}
           onFocus={(e) => { e.currentTarget.style.borderColor = "var(--color-border)"; e.currentTarget.style.background = "var(--color-bg-card)"; }}
@@ -857,8 +939,9 @@ function FunctionalCard({
     }}>
       <div style={{
         display: "grid",
-        gridTemplateColumns: "44px 1fr 1fr auto",
-        gap: 8, padding: 8,
+        gridTemplateColumns: "44px 120px 1fr 1fr auto",
+        gap: 8,
+        padding: "8px 16px",
         alignItems: "start",
       }}>
         {/* No + AI 배지 */}
@@ -875,6 +958,15 @@ function FunctionalCard({
           )}
         </div>
 
+        {/* 구분(그룹명) — 자유 입력. 같은 그룹끼리 정렬하면 자연스럽게 묶임.
+            시나리오·예상결과와 통일성을 위해 textarea 사용 (긴 그룹명도 줄바꿈 가능) */}
+        <textarea
+          value={c.grpNm ?? ""}
+          onChange={(e) => onUpdate({ grpNm: e.target.value })}
+          placeholder="예: 회원"
+          className="sp-input"
+          style={{ width: "100%", minHeight: 80, resize: "vertical", fontSize: 13, lineHeight: 1.5, padding: "6px 8px" }}
+        />
         <textarea
           value={c.scenarioCn}
           onChange={(e) => onUpdate({ scenarioCn: e.target.value })}
@@ -1039,10 +1131,6 @@ const importBtnStyle: React.CSSProperties = {
   background: "var(--color-bg-muted)",
   color: "var(--color-text-primary)",
   fontSize: 12, fontWeight: 600, cursor: "pointer",
-};
-const removeRowBtnStyle: React.CSSProperties = {
-  background: "none", border: "none", cursor: "pointer",
-  color: "#e53935", fontSize: 16, padding: 0, lineHeight: 1,
 };
 const chipStyle: React.CSSProperties = {
   display: "inline-flex", alignItems: "center", gap: 6,

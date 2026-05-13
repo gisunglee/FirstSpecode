@@ -64,6 +64,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           testCaseId:     r.test_case_id,
           caseNo:         r.testCase.case_no,
           ctgryCode:      r.testCase.ctgry_code,
+          grpNm:          r.testCase.grp_nm,   // 구분(그룹명) — FUNCTIONAL 만 사용
           scenarioCn:     r.testCase.scenario_cn,
           expectedCn:     r.testCase.expected_cn,
           applicableYn:   r.testCase.applicable_yn,

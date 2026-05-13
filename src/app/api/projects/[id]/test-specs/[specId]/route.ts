@@ -62,6 +62,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
                        testCaseId:     c.test_case_id,
                        caseNo:         c.case_no,
                        ctgryCode:      c.ctgry_code,
+                       grpNm:          c.grp_nm,
                        scenarioCn:     c.scenario_cn,
                        expectedCn:     c.expected_cn,
                        preconditionCn: c.precondition_cn,
@@ -103,6 +104,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       testCaseId?:     string;
       caseNo:          number;
       ctgryCode:       string;
+      grpNm?:          string | null;   // 구분(그룹명) — FUNCTIONAL 만 사용
       scenarioCn:      string;
       expectedCn:      string;
       preconditionCn?: string | null;
@@ -133,6 +135,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   for (const c of cases) {
     limitChecks.push(["description", c.scenarioCn]);
     limitChecks.push(["description", c.expectedCn]);
+    limitChecks.push(["name",        c.grpNm]);
     limitChecks.push(["description", c.preconditionCn]);
     limitChecks.push(["description", c.testDataCn]);
     limitChecks.push(["description", c.testAccountCn]);
@@ -204,6 +207,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         const caseData = {
           case_no:          c.caseNo,
           ctgry_code:       c.ctgryCode,
+          grp_nm:           c.grpNm?.trim() || null,
           scenario_cn:      c.scenarioCn,
           expected_cn:      c.expectedCn,
           precondition_cn:  c.preconditionCn?.trim() || null,
