@@ -391,7 +391,7 @@ const GRID = "130px 100px minmax(220px,420px) 80px 100px 100px 150px 1fr 80px";
 
 const headerBarStyle: React.CSSProperties = {
   display: "flex", alignItems: "center", justifyContent: "space-between",
-  padding: "10px 24px",
+  padding: "10px 24px", position: "sticky", top: 0, zIndex: 10,
   background: "var(--color-bg-card)",
   borderBottom: "1px solid var(--color-border)",
   marginBottom: 16,

@@ -295,7 +295,7 @@ function AiTasksPageInner() {
 
   return (
     <div style={{ padding: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", minHeight: 52, background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", position: "sticky", top: 0, zIndex: 10, minHeight: 52, background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
           AI 태스크 목록
         </div>

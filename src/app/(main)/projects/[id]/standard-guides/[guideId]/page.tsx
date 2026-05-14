@@ -177,7 +177,7 @@ function StandardGuideDetailInner() {
       {/* ── 헤더 타이틀 바 (우상단 [삭제][취소][저장]) ── */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "10px 24px", minHeight: 52,
+        padding: "10px 24px", position: "sticky", top: 0, zIndex: 10, minHeight: 52,
         background: "var(--color-bg-card)",
         borderBottom: "1px solid var(--color-border)",
         marginBottom: 16,

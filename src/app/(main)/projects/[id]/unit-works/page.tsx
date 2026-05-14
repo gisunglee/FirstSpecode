@@ -367,7 +367,7 @@ function UnitWorksPageInner() {
   return (
     <div style={{ padding: 0 }}>
       {/* ── 헤더 타이틀 ──────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", position: "sticky", top: 0, zIndex: 10, background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
             단위업무 목록

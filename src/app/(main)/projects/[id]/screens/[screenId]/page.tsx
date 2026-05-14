@@ -350,7 +350,7 @@ function ScreenDetailPageInner() {
       {/* 타이틀 행 — full-width 배경 */}
       <div style={{
         display: "flex", alignItems: "center", gap: 16,
-        padding: "10px 24px",
+        padding: "10px 24px", position: "sticky", top: 0, zIndex: 10,
         background: "var(--color-bg-card)",
         borderBottom: "1px solid var(--color-border)",
         marginBottom: 16,

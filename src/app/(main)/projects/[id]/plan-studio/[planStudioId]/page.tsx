@@ -353,7 +353,7 @@ function DetailInner() {
   return (
     <div style={{ padding: 0, height: "100%", display: "flex", flexDirection: "column" }}>
       {/* 상단 헤더 */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", position: "sticky", top: 0, zIndex: 10, background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button onClick={() => router.push(`/projects/${projectId}/plan-studio`)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#666" }}>←</button>
           {/* 엔티티 타입 배지 — 다른 상세 페이지(요구사항/화면/영역)의 "{타입} 편집" 헤더와 톤을 맞춤.

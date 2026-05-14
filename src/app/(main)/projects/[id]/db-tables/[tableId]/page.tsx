@@ -346,7 +346,7 @@ function DbTableDetailPageInner() {
       {/* ── 헤더 ── */}
       <div style={{
         display: "flex", alignItems: "center", gap: 12,
-        padding: "10px 24px",
+        padding: "10px 24px", position: "sticky", top: 0, zIndex: 10,
         background: "var(--color-bg-card)",
         borderBottom: "1px solid var(--color-border)",
         flexShrink: 0,

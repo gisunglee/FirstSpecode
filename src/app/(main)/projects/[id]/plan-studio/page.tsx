@@ -71,7 +71,7 @@ function Inner() {
   return (
     <div style={{ padding: 0 }}>
       {/* 헤더 */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", position: "sticky", top: 0, zIndex: 10, background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)" }}>
         <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>기획실</span>
         <button onClick={() => { setCreateOpen(true); setCreateName(""); }} style={primaryBtn}>+ 생성</button>
       </div>

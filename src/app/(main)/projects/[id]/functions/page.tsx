@@ -240,7 +240,7 @@ function FunctionsPageInner() {
       {/* 헤더 타이틀 — full-width 배경, 좌: 타이틀 | 우: 버튼 */}
       <div style={{
         display: "flex", alignItems: "center", gap: 12,
-        padding: "10px 24px",
+        padding: "10px 24px", position: "sticky", top: 0, zIndex: 10,
         background: "var(--color-bg-card)",
         borderBottom: "1px solid var(--color-border)",
         marginBottom: 16,
