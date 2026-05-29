@@ -34,14 +34,22 @@ export function filenameSafe(s: string | null | undefined): string {
  * @param displayId  외부 표시 ID (예: "RQ-00001")
  * @param name       산출물의 도메인 이름 (예: "사용자 로그인")
  * @param docKindKo  한글 문서 종류 (예: "요구사항명세서", "프로그램사양서")
+ * @param opts       opts.projectAbbr — 지정 시 파일명 앞에 "<ABBR>_" prefix 가 붙는다
+ *                     예) projectAbbr="GBMS" → "GBMS_RQ-00001_사용자로그인_요구사항명세서.docx"
+ *                   null/빈문자열이면 prefix 생략 — 약어 미설정 프로젝트 호환.
  */
 export function buildDocxFilename(
   displayId: string,
   name:      string | null | undefined,
   docKindKo: string,
+  opts?:     { projectAbbr?: string | null },
 ): string {
-  const safeName = filenameSafe(name);
-  return safeName
-    ? `${displayId}_${safeName}_${docKindKo}.docx`
-    : `${displayId}_${docKindKo}.docx`;
+  const safeName   = filenameSafe(name);
+  const safeAbbr   = filenameSafe(opts?.projectAbbr);
+  const corePart   = safeName
+    ? `${displayId}_${safeName}_${docKindKo}`
+    : `${displayId}_${docKindKo}`;
+  return safeAbbr
+    ? `${safeAbbr}_${corePart}.docx`
+    : `${corePart}.docx`;
 }

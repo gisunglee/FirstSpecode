@@ -96,10 +96,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   try { body = await request.json(); } catch {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
+  const rawBody = body as Record<string, unknown>;
+  // testMemberId 는 명시 전송된 경우만 변경 — 키 자체가 없으면 기존 값 유지
+  // (이전 버전이 매 저장마다 null 로 덮어쓰던 데이터 손실 방지)
+  const hasTestMemberId = "testMemberId" in rawBody;
   const { envirCode, bldVrsnNm, testMemberId, sttusCode, endDt, results } = body as {
     envirCode?:    string;
     bldVrsnNm?:    string;
-    testMemberId?: string;
+    testMemberId?: string | null;
     sttusCode?:    string;        // IN_PROGRESS | DONE
     endDt?:        string | null;
     results?: Array<{
@@ -137,25 +141,40 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     await prisma.$transaction(async (tx) => {
       // 1) 회차 메타 업데이트
+      //    end_dt 규칙:
+      //      - DONE 으로 전이 → 지금 시각으로 종료
+      //      - IN_PROGRESS 로 복귀(재오픈) → end_dt = null
+      //      - 그 외 → 명시 endDt 우선, 없으면 기존값 유지
       await tx.tbQaTestRound.update({
         where: { round_id: roundId },
         data: {
           envir_code:   envirCode      || round.envir_code,
           bld_vrsn_nm:  bldVrsnNm !== undefined ? (bldVrsnNm?.trim() || null) : round.bld_vrsn_nm,
           sttus_code:   sttusCode      || round.sttus_code,
-          end_dt:       sttusCode === "DONE" ? new Date() : (endDt ? new Date(endDt) : round.end_dt),
+          end_dt:
+            sttusCode === "DONE"        ? new Date() :
+            sttusCode === "IN_PROGRESS" ? null :
+            endDt ? new Date(endDt) : round.end_dt,
         },
       });
 
       // 2) 각 결과 UPDATE + 결함 재구성
+      //    test_dt 규칙:
+      //      - 클라이언트가 testDt 필드를 보낸 경우(값/null 모두) → 그대로 반영 (사용자 수정값 우선)
+      //      - 보내지 않은 경우 → 기존값 유지 (Prisma 의 undefined = 변경 없음)
       for (const r of results ?? []) {
         await tx.tbQaTestResult.update({
           where: { result_id: r.resultId },
           data: {
             result_code:  r.resultCode,
             remark_cn:    r.remarkCn?.trim() || null,
-            test_mber_id: testMemberId || null,
-            test_dt:      r.testDt ? new Date(r.testDt) : new Date(),
+            // testMemberId 키 누락 시 변경 없음, 명시된 경우만 적용 (빈문자열은 null 로 정규화)
+            test_mber_id: hasTestMemberId
+                            ? (testMemberId ? testMemberId : null)
+                            : undefined,
+            test_dt:      "testDt" in r
+                            ? (r.testDt ? new Date(r.testDt) : null)
+                            : undefined,
             mdfcn_dt:     new Date(),
           },
         });
@@ -189,7 +208,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         }
       }
 
-      // 3) 회차 종료(DONE) 시 명세서 상태 자동 전이
+      // 3) 회차 상태 전이에 따른 명세서 상태 자동 전이
+      //    - DONE 으로 종료      → 회차 결과로 PASSED / FAILED 판정
+      //    - IN_PROGRESS 로 재오픈 → 회차가 다시 진행중이므로 명세서도 IN_PROGRESS 로 복원
+      //      (배지·아이콘이 회차 상태와 안 맞는 시각적 불일치 방지)
       if (sttusCode === "DONE") {
         const counts = await tx.tbQaTestResult.groupBy({
           by: ["result_code"],
@@ -203,6 +225,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           where: { test_spec_id: specId },
           data: {
             sttus_code: failBlocked > 0 ? "FAILED" : "PASSED",
+            mdfcn_dt:   new Date(),
+          },
+        });
+      } else if (sttusCode === "IN_PROGRESS") {
+        await tx.tbQaTestSpec.update({
+          where: { test_spec_id: specId },
+          data: {
+            sttus_code: "IN_PROGRESS",
             mdfcn_dt:   new Date(),
           },
         });

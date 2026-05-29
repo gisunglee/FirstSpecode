@@ -175,6 +175,11 @@ model TbCmSocialAccount {
 model TbPjProject {
   prjct_id      String    @id @default(uuid())
   prjct_nm      String
+  // 프로젝트 약어/이니셜 — docx 표지·머리말·파일명, 목록·GNB 부제 등에 사용.
+  // 신규 생성/수정 시 API 가 ^[A-Za-z0-9]{2,10}$ 로 검증한다.
+  // 기존 데이터 호환을 위해 DB 는 nullable 유지 — UI/문서 출력은 null 일 때
+  // prjct_nm 으로 fallback.
+  prjct_abrv    String?   @db.VarChar(10)
   prjct_dc      String?
   client_nm     String?
   bgng_de       DateTime?

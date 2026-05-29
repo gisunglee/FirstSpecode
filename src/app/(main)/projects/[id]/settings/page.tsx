@@ -20,16 +20,22 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
+import {
+  parseProjectAbbrInput,
+  PROJECT_ABBR_MAX_LEN,
+  PROJECT_ABBR_PLACEHOLDER,
+} from "@/lib/constants/projectAbbr";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────
 type ProjectDetail = {
-  projectId:   string;
-  name:        string;
-  description: string | null;
-  startDate:   string | null;
-  endDate:     string | null;
-  clientName:  string | null;
-  myRole:      string;
+  projectId:    string;
+  name:         string;
+  abbreviation: string | null;
+  description:  string | null;
+  startDate:    string | null;
+  endDate:      string | null;
+  clientName:   string | null;
+  myRole:       string;
 };
 
 type ApiKeyItem = { keyId: string; provider: string; maskedKey: string };
@@ -283,13 +289,14 @@ function BasicInfoTab({
   isOwner: boolean;
   queryClient: ReturnType<typeof useQueryClient>;
 }) {
-  const [name,        setName]        = useState(project.name);
-  const [description, setDescription] = useState(project.description ?? "");
+  const [name,         setName]         = useState(project.name);
+  const [abbreviation, setAbbreviation] = useState(project.abbreviation ?? "");
+  const [description,  setDescription]  = useState(project.description ?? "");
   // 설명 마크다운 에디터 탭 (편집/미리보기) — 다른 페이지(AI 태스크 상세 등)와 동일 패턴
-  const [descTab,     setDescTab]     = useState<"edit" | "preview">("edit");
-  const [startDate,   setStartDate]   = useState(project.startDate?.slice(0, 10) ?? "");
-  const [endDate,     setEndDate]     = useState(project.endDate?.slice(0, 10) ?? "");
-  const [clientName,  setClientName]  = useState(project.clientName ?? "");
+  const [descTab,      setDescTab]      = useState<"edit" | "preview">("edit");
+  const [startDate,    setStartDate]    = useState(project.startDate?.slice(0, 10) ?? "");
+  const [endDate,      setEndDate]      = useState(project.endDate?.slice(0, 10) ?? "");
+  const [clientName,   setClientName]   = useState(project.clientName ?? "");
 
   const saveMutation = useMutation({
     mutationFn: (body: object) =>
@@ -298,6 +305,7 @@ function BasicInfoTab({
       toast.success("저장되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["projects", "my"] });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -305,8 +313,18 @@ function BasicInfoTab({
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) { toast.error("프로젝트명을 입력해 주세요."); return; }
+    // 수정은 약어 선택 — 빈 값은 null 로 보내 서버에서 약어 제거 처리.
+    const abbrParsed = parseProjectAbbrInput(abbreviation, { required: false });
+    if ("error" in abbrParsed) { toast.error(abbrParsed.error); return; }
     if (startDate && endDate && endDate < startDate) { toast.error("종료일은 시작일 이후여야 합니다."); return; }
-    saveMutation.mutate({ name, description, startDate: startDate || undefined, endDate: endDate || undefined, clientName });
+    saveMutation.mutate({
+      name,
+      abbreviation: abbrParsed.value,
+      description,
+      startDate:  startDate || undefined,
+      endDate:    endDate   || undefined,
+      clientName,
+    });
   }
 
   const ro = !isOwner;
@@ -316,6 +334,21 @@ function BasicInfoTab({
         <div>
           <label className="sp-label">프로젝트명 <span style={{ color: "var(--color-error)" }}>*</span></label>
           <input className="sp-input" value={name} onChange={(e) => setName(e.target.value)} readOnly={ro} />
+        </div>
+        <div>
+          {/* 약어는 기존 프로젝트 호환 위해 선택 — 비워두면 문서 출력 시 프로젝트명으로 대체. */}
+          <label className="sp-label">약어</label>
+          <input
+            className="sp-input"
+            placeholder={PROJECT_ABBR_PLACEHOLDER}
+            value={abbreviation}
+            onChange={(e) => setAbbreviation(e.target.value)}
+            readOnly={ro}
+            maxLength={PROJECT_ABBR_MAX_LEN}
+          />
+          <p style={{ margin: "4px 0 0", fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
+            영문/숫자 2~10자. 문서 출력(표지·머리말·파일명)과 목록 부제에 사용됩니다. 비워두면 프로젝트명으로 대체됩니다.
+          </p>
         </div>
         <div>
           {/* 설명 — 마크다운 에디터 (편집/미리보기 탭) */}

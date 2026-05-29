@@ -32,11 +32,11 @@ import {
 } from "docx";
 import {
   COLOR_PRIMARY,
-  SIZE_TITLE_LARGE, SIZE_TITLE_MID, SIZE_TITLE_SMALL,
+  SIZE_TITLE_LARGE, SIZE_TITLE_MID,
   SIZE_HEADING_1, SIZE_BODY,
   CONTENT_WIDTH,
 } from "./tokens";
-import { p, labelCell, valueCell, headerCell } from "./helpers";
+import { p, labelCell, valueCell, headerCell, projectTitleRuns } from "./helpers";
 import { buildDocument, heading1, heading2 } from "./frame";
 import { renderMarkdown } from "./markdown";
 
@@ -116,6 +116,9 @@ export type UnitWorkExportInput = {
 
   // ── 프로젝트 ───────────────────────────────────
   projectName: string;
+  // 프로젝트 약어 — 표지의 프로젝트명 옆에 "[ABBR]" 식으로 표시.
+  // null/undefined 면 칩 자체를 생략 (약어 미설정 프로젝트 호환).
+  projectAbbr?: string | null;
 
   // ── 단위업무 메타 ──────────────────────────────
   unitWorkDisplayId:   string; // UW-XXXXX
@@ -180,7 +183,7 @@ function buildCover(input: UnitWorkExportInput, docKind: string): (Paragraph | T
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing:   { before: 0, after: 200 },
-      children:  [new TextRun({ text: input.projectName, font: "맑은 고딕", size: SIZE_TITLE_SMALL, bold: true })],
+      children:  projectTitleRuns(input.projectName, input.projectAbbr),
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,

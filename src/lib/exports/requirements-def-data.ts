@@ -85,7 +85,7 @@ export async function buildRequirementsDefExportInput(
   const [project, settings] = await Promise.all([
     prisma.tbPjProject.findUnique({
       where:  { prjct_id: projectId },
-      select: { prjct_nm: true, client_nm: true },
+      select: { prjct_nm: true, prjct_abrv: true, client_nm: true },
     }),
     prisma.tbPjProjectSettings.findUnique({
       where:  { prjct_id: projectId },
@@ -198,6 +198,7 @@ export async function buildRequirementsDefExportInput(
     ordererName,
     copyright:   copyrightText,
     projectName: project.prjct_nm,
+    projectAbbr: project.prjct_abrv ?? null,
 
     requirements: items,
 
@@ -246,9 +247,11 @@ export async function buildRequirementsDefDocxWithHistory(
   if (!result.ok) return result;
   const input = result.input;
 
-  const buffer   = await buildRequirementsDefDocx(input);
-  const safeName = filenameSafe(input.projectName) || "프로젝트";
-  const filename = `${safeName}_요구사항정의서${buildOptionSuffix(opts)}.docx`;
+  const buffer = await buildRequirementsDefDocx(input);
+  // 파일명 prefix 우선순위: 약어 → 프로젝트명 → "프로젝트"
+  //   약어가 있으면 짧고 안전한 ASCII 라서 우선 사용 (Content-Disposition 인코딩 단순화)
+  const prefix = filenameSafe(input.projectAbbr) || filenameSafe(input.projectName) || "프로젝트";
+  const filename = `${prefix}_요구사항정의서${buildOptionSuffix(opts)}.docx`;
 
   return {
     ok: true,
@@ -274,9 +277,10 @@ export async function buildRequirementsDefXlsxWithHistory(
   if (!result.ok) return result;
   const input = result.input;
 
-  const buffer   = await buildRequirementsDefXlsx(input);
-  const safeName = filenameSafe(input.projectName) || "프로젝트";
-  const filename = `${safeName}_요구사항정의서${buildOptionSuffix(opts)}.xlsx`;
+  const buffer = await buildRequirementsDefXlsx(input);
+  // docx 와 동일 정책 — 약어 우선
+  const prefix = filenameSafe(input.projectAbbr) || filenameSafe(input.projectName) || "프로젝트";
+  const filename = `${prefix}_요구사항정의서${buildOptionSuffix(opts)}.xlsx`;
 
   return {
     ok: true,

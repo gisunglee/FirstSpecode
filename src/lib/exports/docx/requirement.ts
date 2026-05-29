@@ -25,11 +25,11 @@ import {
 } from "docx";
 import {
   COLOR_PRIMARY,
-  SIZE_TITLE_LARGE, SIZE_TITLE_MID, SIZE_TITLE_SMALL,
+  SIZE_TITLE_LARGE, SIZE_TITLE_MID,
   SIZE_HEADING_1,
   CONTENT_WIDTH,
 } from "./tokens";
-import { p, labelCell, valueCell, headerCell } from "./helpers";
+import { p, labelCell, valueCell, headerCell, projectTitleRuns } from "./helpers";
 import { buildDocument, heading1, heading2 } from "./frame";
 import { renderMarkdown } from "./markdown";
 
@@ -47,6 +47,9 @@ export type RequirementExportInput = {
 
   // ── 프로젝트 ───────────────────────────────────
   projectName: string;     // 표지 상단 (예: "SPECODE 프로젝트")
+  // 프로젝트 약어 — 표지의 프로젝트명 옆에 "[GBMS]" 식으로 표시.
+  // null/undefined 면 약어 칩 자체를 생략 (약어 미설정 프로젝트 호환).
+  projectAbbr?: string | null;
 
   // ── 요구사항 본체 ──────────────────────────────
   reqDisplayId:    string; // 표시 ID (예: "REQ-00023")
@@ -112,11 +115,10 @@ function buildCover(input: RequirementExportInput, docKind: string): (Paragraph 
 
   return [
     blank(2000),
-    // 프로젝트명
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing:   { before: 0, after: 200 },
-      children:  [new TextRun({ text: input.projectName, font: "맑은 고딕", size: SIZE_TITLE_SMALL, bold: true })],
+      children:  projectTitleRuns(input.projectName, input.projectAbbr),
     }),
     // 큰 타이틀
     new Paragraph({

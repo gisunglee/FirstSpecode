@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { fetchMyProjects } from "@/lib/exports/projects-data";
+import { parseProjectAbbrInput } from "@/lib/constants/projectAbbr";
 
 // ─── GET: 내 프로젝트 목록 ─────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
@@ -41,8 +42,9 @@ export async function POST(request: NextRequest) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { name, description, startDate, endDate, clientName } = body as {
+  const { name, abbreviation, description, startDate, endDate, clientName } = body as {
     name?: string;
+    abbreviation?: string;
     description?: string;
     startDate?: string;
     endDate?: string;
@@ -53,6 +55,14 @@ export async function POST(request: NextRequest) {
   if (!name || !name.trim()) {
     return apiError("VALIDATION_ERROR", "프로젝트명을 입력해 주세요.", 400);
   }
+
+  // 신규 생성은 약어 필수 — parseProjectAbbrInput 가 required 모드로 빈 값까지 거부.
+  const abbrParsed = parseProjectAbbrInput(abbreviation, { required: true });
+  if ("error" in abbrParsed) {
+    return apiError("VALIDATION_ERROR", abbrParsed.error, 400);
+  }
+  // required:true 분기에선 value 가 항상 string — 타입 좁히기
+  const abbrTrimmed = abbrParsed.value as string;
 
   // 날짜 검증 — 종료일이 시작일 이전인지 확인
   if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
@@ -65,6 +75,7 @@ export async function POST(request: NextRequest) {
       const created = await tx.tbPjProject.create({
         data: {
           prjct_nm:      name.trim(),
+          prjct_abrv:    abbrTrimmed,
           prjct_dc:      description?.trim() || null,
           bgng_de:       startDate  ? new Date(startDate)  : null,
           end_de:        endDate    ? new Date(endDate)     : null,

@@ -106,6 +106,7 @@ export const UNIT_WORK_EXPORT_FALLBACK = {
 export const UNIT_WORK_CONTENT_FIELDS: readonly (keyof UnitWorkExportInput)[] = [
   "ordererName",
   "projectName",
+  "projectAbbr",
   "unitWorkDisplayId",
   "unitWorkName",
   "unitWorkDescription",
@@ -236,7 +237,7 @@ export async function buildUnitWorkExportInput(
   const [project, settings] = await Promise.all([
     prisma.tbPjProject.findUnique({
       where:  { prjct_id: projectId },
-      select: { prjct_nm: true, client_nm: true },
+      select: { prjct_nm: true, prjct_abrv: true, client_nm: true },
     }),
     prisma.tbPjProjectSettings.findUnique({
       where:  { prjct_id: projectId },
@@ -516,6 +517,7 @@ export async function buildUnitWorkExportInput(
     ordererName,
     copyright:   copyrightText,
     projectName: project.prjct_nm,
+    projectAbbr: project.prjct_abrv ?? null,
 
     unitWorkDisplayId:   unitWork.unit_work_display_id,
     unitWorkName:        unitWork.unit_work_nm?.trim() || unitWork.unit_work_display_id,
@@ -615,8 +617,12 @@ export async function buildUnitWorkDocxWithHistory(
   }
 
   const buffer   = await buildUnitWorkDocx(input);
-  // 파일명: <UW-ID>_<단위업무명>_프로그램사양서.docx — 이름 비면 두 번째 부분 생략
-  const filename = buildDocxFilename(input.unitWorkDisplayId, input.unitWorkName, "프로그램사양서");
+  // 파일명: [<ABBR>_]<UW-ID>_<단위업무명>_프로그램사양서.docx
+  //   - 약어 있으면 prefix, 없으면 기존 형식. 이름 비면 두 번째 부분 생략.
+  const filename = buildDocxFilename(
+    input.unitWorkDisplayId, input.unitWorkName, "프로그램사양서",
+    { projectAbbr: input.projectAbbr },
+  );
 
   return {
     ok:        true,

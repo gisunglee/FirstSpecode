@@ -6,10 +6,12 @@
 export type Theme = "dark" | "light" | "dark-purple";
 
 // GNB 프로젝트 셀렉터용
+// prjct_abrv : 약어/이니셜 (없으면 null) — 셀렉터 부제로 표시
 export type ProjectOption = {
-  prjct_id: string;
-  prjct_nm: string;
-  role_code: string;
+  prjct_id:   string;
+  prjct_nm:   string;
+  prjct_abrv: string | null;
+  role_code:  string;
 };
 
 // 상태바 이벤트 피드

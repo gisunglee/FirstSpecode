@@ -309,7 +309,11 @@
       "Bash(findstr \":3001 :3000\")",
       "Bash(cmd //c \"taskkill /F /PID 38420\")",
       "Bash(Select-String -Pattern \"^\\(gradlew|package\\\\.json|pom\\\\.xml|build\\\\.gradle\\)\")",
-      "Bash(Select-Object -First 10)"
+      "Bash(Select-Object -First 10)",
+      "Bash(Get-ChildItem -Path \"c:\\\\source\\\\FirstSpecode\\\\src\\\\app\" -Recurse -Directory)",
+      "Bash(Measure-Object)",
+      "Bash(Select-Object Count)",
+      "Bash(git log *)"
     ],
     "additionalDirectories": [
       "c:\\source\\FirstSpecode",

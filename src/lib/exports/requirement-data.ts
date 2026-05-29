@@ -60,6 +60,7 @@ export const REQUIREMENT_EXPORT_FALLBACK = {
 export const REQUIREMENT_CONTENT_FIELDS: readonly (keyof RequirementExportInput)[] = [
   "ordererName",
   "projectName",
+  "projectAbbr",
   "reqDisplayId",
   "reqName",
   "parentTaskName",
@@ -132,7 +133,7 @@ export async function buildRequirementExportInput(
   const [project, settings, members] = await Promise.all([
     prisma.tbPjProject.findUnique({
       where:  { prjct_id: projectId },
-      select: { prjct_nm: true, client_nm: true },
+      select: { prjct_nm: true, prjct_abrv: true, client_nm: true },
     }),
     prisma.tbPjProjectSettings.findUnique({
       where:  { prjct_id: projectId },
@@ -193,6 +194,7 @@ export async function buildRequirementExportInput(
     ordererName,
     copyright:   copyrightText,
     projectName: project.prjct_nm,
+    projectAbbr: project.prjct_abrv ?? null,
 
     reqDisplayId:   req.req_display_id,
     reqName:        req.req_nm,
@@ -300,8 +302,13 @@ export async function buildRequirementDocxWithHistory(
   }
 
   const buffer = await buildRequirementDocx(input);
-  // 파일명: <RQ-ID>_<요구사항명>_요구사항명세서.docx — 이름 비면 두 번째 부분 생략
-  const filename = buildDocxFilename(input.reqDisplayId, input.reqName, "요구사항명세서");
+  // 파일명: [<ABBR>_]<RQ-ID>_<요구사항명>_요구사항명세서.docx
+  //   - ABBR 가 있으면 prefix 로 붙고, 없으면 기존 형식 그대로
+  //   - 이름 비면 두 번째 부분 생략
+  const filename = buildDocxFilename(
+    input.reqDisplayId, input.reqName, "요구사항명세서",
+    { projectAbbr: input.projectAbbr },
+  );
 
   return {
     ok:        true,

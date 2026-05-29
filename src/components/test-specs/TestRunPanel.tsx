@@ -17,6 +17,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { SelectChevron } from "@/components/ui/SelectChevron";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -160,6 +161,9 @@ export default function TestRunPanel({
   });
 
   // ── 회차 메타 + 결과 저장 ────────────────────────────────────────────────
+  // testMemberId 는 의도적으로 전송 안 함 — 회차 생성 시점에 기록된 테스터를 매 저장마다
+  // 덮어쓰지 않도록 (이전 버전에서 newTester 빈값으로 null 초기화되던 버그 방지).
+  // 향후 회차 테스터 인라인 편집 UI 가 생기면 그때 명시적으로 전송.
   const saveMutation = useMutation({
     mutationFn: (closeRound: boolean) => {
       if (!form) throw new Error("회차 데이터가 없습니다.");
@@ -170,13 +174,15 @@ export default function TestRunPanel({
           body: JSON.stringify({
             envirCode: form.envirCode,
             bldVrsnNm: form.bldVrsnNm,
-            testMemberId: newTester || null,   // 회차 테스터 — 한 회차 1명
             sttusCode: closeRound ? "DONE" : "IN_PROGRESS",
             results: form.results.map((r) => ({
-              resultId: r.resultId,
+              resultId:   r.resultId,
               resultCode: r.resultCode,
-              remarkCn: r.remarkCn,
-              defects: r.defects.filter((d) => d.defectCn.trim()),
+              remarkCn:   r.remarkCn,
+              // testDt 는 ISO 문자열 또는 null — 서버는 "in" 체크로 변경 의도 판정.
+              // 사용자가 명시적으로 비웠으면 null 로 보내 서버 측에서도 null 처리.
+              testDt:     r.testDt ?? null,
+              defects:    r.defects.filter((d) => d.defectCn.trim()),
             })),
           }),
         }
@@ -192,11 +198,42 @@ export default function TestRunPanel({
   });
 
   // ── 결과 셀 편집 ───────────────────────────────────────────────────────────
+  // 결과 코드를 바꾸는데 testDt 가 비어있으면 자동으로 현재 시각 채움 (사용자가 명시 수정한 값은 보존).
   function updateResult(idx: number, patch: Partial<ResultRow>) {
     setForm((f) => f && {
       ...f,
-      results: f.results.map((r, i) => (i === idx ? { ...r, ...patch } : r)),
+      results: f.results.map((r, i) => {
+        if (i !== idx) return r;
+        const next = { ...r, ...patch };
+        const codeChanged = patch.resultCode !== undefined && patch.resultCode !== r.resultCode;
+        if (codeChanged && !next.testDt) {
+          next.testDt = new Date().toISOString();
+        }
+        return next;
+      }),
     });
+  }
+
+  // datetime-local input 값 ↔ ISO 변환
+  // input 은 "YYYY-MM-DDTHH:mm" 형식만 받으므로 timezone 정보 잘라서 표시한다.
+  function isoToDatetimeLocal(iso: string | null): string {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  function datetimeLocalToIso(v: string): string | null {
+    if (!v) return null;
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  function formatRoundDate(iso: string | null): string {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "—";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
   // 결함은 행당 1개만. 텍스트 비우면 결함 row 없음, 입력 있으면 1개 row.
   // 여러 결함이 있어도 사용자가 "1. ... 2. ..." 형태로 한 본문에 정리.
@@ -228,6 +265,60 @@ export default function TestRunPanel({
 
   // ── 새 회차 추가 폼 펼침 상태 (조회 영역과 시각 분리) ──────────────────────
   const [addFormOpen, setAddFormOpen] = useState(false);
+
+  // ── 회차 삭제 / 재오픈 확인 다이얼로그 상태 ───────────────────────────────
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
+
+  // 회차 삭제 — 결과·결함까지 cascade 로 함께 사라짐. 삭제 후 가장 최신 남은 회차로 전환.
+  const deleteRoundMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedRoundId) throw new Error("선택된 회차가 없습니다.");
+      return authFetch(
+        `/api/projects/${projectId}/test-specs/${specId}/rounds/${selectedRoundId}`,
+        { method: "DELETE" }
+      );
+    },
+    onSuccess: () => {
+      toast.success("회차를 삭제했습니다.");
+      setDeleteDialogOpen(false);
+      // 남은 회차 중 가장 최신으로 자동 전환 (현재 삭제 대상 제외)
+      const remaining = rounds.filter((r) => r.roundId !== selectedRoundId);
+      setSelectedRoundId(remaining.length > 0 ? remaining[remaining.length - 1].roundId : null);
+      setForm(null);
+      queryClient.invalidateQueries({ queryKey: ["test-rounds", projectId, specId] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // 회차 재오픈 — DONE → IN_PROGRESS, 서버에서 end_dt 자동 클리어.
+  // 현재 form 의 결과·메타 그대로 PUT 으로 보냄 (불필요한 분기 없이 sttusCode 만 바꿈).
+  const reopenRoundMutation = useMutation({
+    mutationFn: () => {
+      if (!form) throw new Error("회차 데이터가 없습니다.");
+      return authFetch(
+        `/api/projects/${projectId}/test-specs/${specId}/rounds/${form.roundId}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            envirCode:   form.envirCode,
+            bldVrsnNm:   form.bldVrsnNm,
+            sttusCode:   "IN_PROGRESS",
+            // 재오픈 시점에는 results 변경 없이 회차 메타만 갱신 — 빈 배열 보냄.
+            results: [],
+          }),
+        }
+      );
+    },
+    onSuccess: () => {
+      toast.success("회차를 재오픈했습니다.");
+      setReopenDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["test-round-detail", projectId, specId, selectedRoundId] });
+      queryClient.invalidateQueries({ queryKey: ["test-rounds", projectId, specId] });
+      queryClient.invalidateQueries({ queryKey: ["test-spec", projectId, specId] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
 
   // ── PASS 행의 비고 펼침 상태 — Set 으로 행 단위 토글 (여러 행 동시 펼침 가능)
   // 비고 입력값이 있으면 자동 펼침 (입력 데이터 보존)
@@ -269,6 +360,26 @@ export default function TestRunPanel({
             </select>
             <span className="sp-select-arrow"><SelectChevron /></span>
           </div>
+          {/* 선택된 회차 삭제 — 결과·결함 모두 제거되므로 ConfirmDialog 필수 */}
+          {selectedRoundId && (
+            <button
+              type="button"
+              onClick={() => setDeleteDialogOpen(true)}
+              disabled={deleteRoundMutation.isPending}
+              title="이 회차 삭제"
+              style={{
+                ...iconBtnStyle,
+                opacity: deleteRoundMutation.isPending ? 0.45 : 1,
+                cursor:  deleteRoundMutation.isPending ? "not-allowed" : "pointer",
+              }}
+            >🗑</button>
+          )}
+          {/* 회차 메타 한 줄 — 시작 / 종료 일자 (단순 정보 표시) */}
+          {form && (
+            <span style={{ fontSize: 12, color: "var(--color-text-tertiary)", marginLeft: 4 }}>
+              시작 {formatRoundDate(form.bgngDt)} · {form.sttusCode === "DONE" ? `종료 ${formatRoundDate(form.endDt)}` : "진행중"}
+            </span>
+          )}
           <span style={{ flex: 1 }} />
           <button
             onClick={() => setAddFormOpen((v) => !v)}
@@ -367,10 +478,26 @@ export default function TestRunPanel({
                 </span>
               ))}
               <span style={{ flex: 1 }} />
+              {/* 종료된 회차에는 [재오픈] 버튼 노출 — 결과 수정하려면 반드시 재오픈 후 진행 */}
+              {form.sttusCode === "DONE" && (
+                <button
+                  type="button"
+                  onClick={() => setReopenDialogOpen(true)}
+                  disabled={reopenRoundMutation.isPending}
+                  style={secondaryBtnStyle}
+                  title="종료된 회차를 다시 진행중으로 되돌립니다"
+                >↻ 재오픈</button>
+              )}
+              {/* 저장 — 종료 회차는 disabled (시각도 명확히 흐려서 표시) */}
               <button
                 onClick={() => saveMutation.mutate(false)}
                 disabled={saveMutation.isPending || form.sttusCode === "DONE"}
-                style={secondaryBtnStyle}
+                title={form.sttusCode === "DONE" ? "종료된 회차입니다. 재오픈 후 수정하세요." : undefined}
+                style={{
+                  ...secondaryBtnStyle,
+                  opacity:  form.sttusCode === "DONE" ? 0.45 : 1,
+                  cursor:   form.sttusCode === "DONE" ? "not-allowed" : "pointer",
+                }}
               >저장</button>
               <button
                 onClick={() => {
@@ -380,7 +507,9 @@ export default function TestRunPanel({
                   }
                 }}
                 disabled={saveMutation.isPending || form.sttusCode === "DONE"}
-                style={form.sttusCode === "DONE" ? { ...secondaryBtnStyle, opacity: 0.5 } : primaryBtnStyle}
+                style={form.sttusCode === "DONE"
+                  ? { ...secondaryBtnStyle, opacity: 0.45, cursor: "not-allowed" }
+                  : primaryBtnStyle}
               >
                 {form.sttusCode === "DONE" ? "회차 종료됨" : "회차 종료"}
               </button>
@@ -540,7 +669,8 @@ export default function TestRunPanel({
                           </div>
 
                           {/* 펼침 영역 — PASS/FAIL 모두 ✎ 토글 시 노출 (또는 입력값 있을 때 자동).
-                              두 경우 모두 [결함] + [비고] 6:4 — PASS 시 결함은 disabled(회색) */}
+                              두 경우 모두 [결함] + [비고] 6:4 — PASS 시 결함은 disabled(회색)
+                              하단에 테스트 일시 한 줄 (자동 채워지지만 수정 가능) */}
                           {showExpand && (
                             <div style={{ padding: "0 16px 10px 60px" }}>
                               <div style={{ display: "grid", gridTemplateColumns: "6fr 4fr", gap: 6 }}>
@@ -566,6 +696,34 @@ export default function TestRunPanel({
                                   style={{ fontSize: 13, padding: "6px 8px", resize: "vertical", width: "100%" }}
                                 />
                               </div>
+                              {/* 테스트 일시 — 결과 코드 첫 변경 시 자동 채워짐, 사용자가 직접 수정 가능 */}
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+                                <span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>테스트 일시</span>
+                                <input
+                                  type="datetime-local"
+                                  value={isoToDatetimeLocal(r.testDt)}
+                                  onChange={(e) => updateResult(idx, { testDt: datetimeLocalToIso(e.target.value) })}
+                                  disabled={form.sttusCode === "DONE"}
+                                  className="sp-input"
+                                  style={{ fontSize: 12, padding: "3px 6px", width: 190 }}
+                                />
+                                {r.testDt && (
+                                  <button
+                                    type="button"
+                                    onClick={() => updateResult(idx, { testDt: null })}
+                                    disabled={form.sttusCode === "DONE"}
+                                    title="테스트 일시 비우기"
+                                    style={{
+                                      padding: "2px 8px", fontSize: 11,
+                                      border: "1px solid var(--color-border)",
+                                      background: "transparent",
+                                      color: "var(--color-text-tertiary)",
+                                      borderRadius: 4,
+                                      cursor: form.sttusCode === "DONE" ? "not-allowed" : "pointer",
+                                    }}
+                                  >지우기</button>
+                                )}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -578,6 +736,28 @@ export default function TestRunPanel({
           )}
         </>
       )}
+
+      {/* ── 회차 삭제 확인 ───────────────────────────────────────────────── */}
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        title="회차 삭제"
+        description={`${form?.roundNo ?? ""}차 회차를 삭제합니다. 이 회차의 모든 결과와 결함이 함께 사라집니다. 계속할까요?`}
+        confirmLabel="삭제"
+        loading={deleteRoundMutation.isPending}
+        onConfirm={() => deleteRoundMutation.mutate()}
+        onCancel={() => setDeleteDialogOpen(false)}
+      />
+
+      {/* ── 회차 재오픈 확인 ─────────────────────────────────────────────── */}
+      <ConfirmDialog
+        open={reopenDialogOpen}
+        title="회차 재오픈"
+        description={`${form?.roundNo ?? ""}차 회차를 다시 진행중 상태로 되돌립니다. 이후 결과를 수정할 수 있습니다. 계속할까요?`}
+        confirmLabel="재오픈"
+        loading={reopenRoundMutation.isPending}
+        onConfirm={() => reopenRoundMutation.mutate()}
+        onCancel={() => setReopenDialogOpen(false)}
+      />
     </div>
   );
 }
@@ -652,4 +832,14 @@ const secondaryBtnStyle: React.CSSProperties = {
   background: "var(--color-bg-card)",
   color: "var(--color-text-primary)",
   fontSize: 12, cursor: "pointer", whiteSpace: "nowrap",
+};
+// 회차 셀렉트 옆 삭제 아이콘 — 위험 액션이지만 자주 안 보여야 해서 작고 옅게
+const iconBtnStyle: React.CSSProperties = {
+  width: 28, height: 28,
+  padding: 0, borderRadius: 6,
+  border: "1px solid var(--color-border)",
+  background: "var(--color-bg-card)",
+  color: "var(--color-text-tertiary)",
+  fontSize: 13, cursor: "pointer",
+  display: "inline-flex", alignItems: "center", justifyContent: "center",
 };

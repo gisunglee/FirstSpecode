@@ -250,6 +250,45 @@ function TestSpecInner() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  // ── 엑셀 다운로드 — Bearer 인증 헤더 필요해서 fetch + blob 패턴 사용 ───────
+  // document-library 의 산출물 다운로드와 동일 흐름.
+  // kind: "spec" = 설계 시점 명세서 / "result" = 구현 시점 결과서
+  const [xlsxBusyKind, setXlsxBusyKind] = useState<"spec" | "result" | null>(null);
+  async function downloadXlsx(kind: "spec" | "result") {
+    setXlsxBusyKind(kind);
+    try {
+      const at = typeof window !== "undefined"
+        ? (sessionStorage.getItem("access_token") ?? "")
+        : "";
+      const res = await fetch(`/api/projects/${projectId}/test-specs/${specId}/xlsx?kind=${kind}`, {
+        headers: at ? { Authorization: `Bearer ${at}` } : {},
+      });
+      if (!res.ok) {
+        let msg = `요청 실패 (${res.status})`;
+        try { const err = await res.json(); if (err?.message) msg = err.message; } catch { /* ignore */ }
+        toast.error(msg);
+        return;
+      }
+      const disposition = res.headers.get("content-disposition") ?? "";
+      const m = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+      const filename = m
+        ? decodeURIComponent(m[1])
+        : `${form.displayId || "test-spec"}.xlsx`;
+
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success(`${kind === "spec" ? "명세서" : "결과서"} 다운로드 완료`);
+    } catch {
+      toast.error("엑셀 다운로드에 실패했습니다.");
+    } finally {
+      setXlsxBusyKind(null);
+    }
+  }
+
   // ── 삭제 ─────────────────────────────────────────────────────────────────
   const deleteMutation = useMutation({
     mutationFn: () =>
@@ -377,13 +416,38 @@ function TestSpecInner() {
         </div>
         <div style={{ display: "flex", gap: 6 }}>
           {!isNew && (
-            <button
-              onClick={() => {
-                if (confirm("정말 삭제하시겠습니까? 케이스·결과·결함 모두 함께 삭제됩니다.")) deleteMutation.mutate();
-              }}
-              style={dangerBtnStyle}
-              disabled={deleteMutation.isPending}
-            >삭제</button>
+            <>
+              {/* 엑셀 다운로드 — 단계별 2개 (설계=명세서 / 구현=결과서). 신규 모드에선 숨김. */}
+              <button
+                type="button"
+                onClick={() => downloadXlsx("spec")}
+                disabled={xlsxBusyKind !== null}
+                style={{
+                  ...secondaryBtnStyle,
+                  opacity: xlsxBusyKind === "spec" ? 0.6 : 1,
+                  cursor:  xlsxBusyKind !== null ? "wait" : "pointer",
+                }}
+                title="설계 시점 — 결과/결함 컬럼 없이 명세 항목만 출력"
+              >{xlsxBusyKind === "spec" ? "다운로드 중..." : "📥 명세서"}</button>
+              <button
+                type="button"
+                onClick={() => downloadXlsx("result")}
+                disabled={xlsxBusyKind !== null}
+                style={{
+                  ...secondaryBtnStyle,
+                  opacity: xlsxBusyKind === "result" ? 0.6 : 1,
+                  cursor:  xlsxBusyKind !== null ? "wait" : "pointer",
+                }}
+                title="구현 시점 — 최신 회차의 결과/결함/조치까지 함께 출력"
+              >{xlsxBusyKind === "result" ? "다운로드 중..." : "📥 결과서"}</button>
+              <button
+                onClick={() => {
+                  if (confirm("정말 삭제하시겠습니까? 케이스·결과·결함 모두 함께 삭제됩니다.")) deleteMutation.mutate();
+                }}
+                style={dangerBtnStyle}
+                disabled={deleteMutation.isPending}
+              >삭제</button>
+            </>
           )}
           <button onClick={() => router.back()} style={secondaryBtnStyle}>취소</button>
           {mode === "spec" && (

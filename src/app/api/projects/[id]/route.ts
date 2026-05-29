@@ -8,6 +8,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { parseProjectAbbrInput } from "@/lib/constants/projectAbbr";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -43,13 +44,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     return apiSuccess({
-      projectId:   project.prjct_id,
-      name:        project.prjct_nm,
-      description: project.prjct_dc  ?? null,
-      startDate:   project.bgng_de   ?? null,
-      endDate:     project.end_de    ?? null,
-      clientName:  project.client_nm ?? null,
-      myRole:      membership.role_code,
+      projectId:    project.prjct_id,
+      name:         project.prjct_nm,
+      abbreviation: project.prjct_abrv ?? null,
+      description:  project.prjct_dc   ?? null,
+      startDate:    project.bgng_de    ?? null,
+      endDate:      project.end_de     ?? null,
+      clientName:   project.client_nm  ?? null,
+      myRole:       membership.role_code,
     });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}] DB 오류:`, err);
@@ -82,8 +84,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { name, description, startDate, endDate, clientName } = body as {
+  const { name, abbreviation, description, startDate, endDate, clientName } = body as {
     name?: string;
+    abbreviation?: string;
     description?: string;
     startDate?: string;
     endDate?: string;
@@ -93,6 +96,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   if (!name || !name.trim()) {
     return apiError("VALIDATION_ERROR", "프로젝트명을 입력해 주세요.", 400);
   }
+  // 수정은 약어 선택 — undefined(변경 의도 없음) / 빈 문자열(약어 제거) / 정상값 분기
+  // 를 parseProjectAbbrInput 이 모두 처리. required:false 분기에서만 undefined 가 반환된다.
+  const abbrParsed = parseProjectAbbrInput(abbreviation, { required: false });
+  if ("error" in abbrParsed) {
+    return apiError("VALIDATION_ERROR", abbrParsed.error, 400);
+  }
+  const abbrToSave = abbrParsed.value;
   if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
     return apiError("VALIDATION_ERROR", "종료일은 시작일 이후여야 합니다.", 400);
   }
@@ -101,7 +111,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // 변경 이력 기록을 위해 현재값 조회 — del_yn 도 함께 확인
     const current = await prisma.tbPjProject.findUnique({
       where: { prjct_id: projectId },
-      select: { prjct_nm: true, client_nm: true, bgng_de: true, end_de: true, del_yn: true },
+      select: { prjct_nm: true, prjct_abrv: true, client_nm: true, bgng_de: true, end_de: true, del_yn: true },
     });
 
     // 삭제 예정 프로젝트는 수정 불가 — 복구 후에 수정해야 한다.
@@ -114,6 +124,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         where: { prjct_id: projectId },
         data: {
           prjct_nm:  name.trim(),
+          ...(abbrToSave !== undefined ? { prjct_abrv: abbrToSave } : {}),
           ...(description !== undefined ? { prjct_dc: description?.trim() || null } : {}),
           ...(startDate !== undefined ? { bgng_de: startDate ? new Date(startDate) : null } : {}),
           ...(endDate !== undefined ? { end_de: endDate ? new Date(endDate) : null } : {}),
@@ -136,6 +147,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             chg_item_nm: "프로젝트명",
             bfr_val_cn: current.prjct_nm,
             aftr_val_cn: newName,
+          });
+        }
+        // 약어 변경 이력 — abbrToSave 가 undefined (변경 의도 없음) 이면 비교 스킵
+        if (abbrToSave !== undefined && (current.prjct_abrv ?? null) !== abbrToSave) {
+          historyEntries.push({
+            prjct_id: projectId, chg_mber_id: auth.mberId,
+            chg_item_nm: "프로젝트 약어",
+            bfr_val_cn: current.prjct_abrv ?? undefined,
+            aftr_val_cn: abbrToSave ?? undefined,
           });
         }
         const newClient = clientName?.trim() || null;

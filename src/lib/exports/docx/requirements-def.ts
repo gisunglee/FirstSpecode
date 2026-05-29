@@ -31,11 +31,11 @@ import {
 } from "docx";
 import {
   COLOR_PRIMARY,
-  SIZE_TITLE_LARGE, SIZE_TITLE_MID, SIZE_TITLE_SMALL,
+  SIZE_TITLE_LARGE, SIZE_TITLE_MID,
   SIZE_HEADING_1,
   CONTENT_WIDTH,
 } from "./tokens";
-import { p, labelCell, valueCell, headerCell } from "./helpers";
+import { p, labelCell, valueCell, headerCell, projectTitleRuns } from "./helpers";
 import { buildDocument, heading1, heading2 } from "./frame";
 import { renderMarkdown } from "./markdown";
 
@@ -79,6 +79,8 @@ export type RequirementsDefExportInput = {
 
   // ── 프로젝트 ───────────────────────────────────
   projectName: string;
+  // 프로젝트 약어 — 표지의 프로젝트명 옆 "[ABBR]" 칩. 미설정이면 생략.
+  projectAbbr?: string | null;
 
   // ── 요구사항 목록 ──────────────────────────────
   requirements: RequirementItem[];
@@ -141,7 +143,7 @@ function buildCover(input: RequirementsDefExportInput, docKind: string): (Paragr
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing:   { before: 0, after: 200 },
-      children:  [new TextRun({ text: input.projectName, font: "맑은 고딕", size: SIZE_TITLE_SMALL, bold: true })],
+      children:  projectTitleRuns(input.projectName, input.projectAbbr),
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,

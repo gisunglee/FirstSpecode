@@ -21,15 +21,23 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
+import ProjectAbbrChip from "@/components/ui/ProjectAbbrChip";
+import {
+  parseProjectAbbrInput,
+  PROJECT_ABBR_MAX_LEN,
+  PROJECT_ABBR_PLACEHOLDER,
+} from "@/lib/constants/projectAbbr";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────
 type ProjectItem = {
-  projectId:  string;
-  name:       string;
-  clientName: string | null;
-  startDate:  string | null;
-  endDate:    string | null;
-  myRole:     string;
+  projectId:    string;
+  name:         string;
+  // 약어/이니셜 — 표시용 부제. 미설정 프로젝트는 null
+  abbreviation: string | null;
+  clientName:   string | null;
+  startDate:    string | null;
+  endDate:      string | null;
+  myRole:       string;
 };
 
 type ProjectsResponse = {
@@ -73,11 +81,12 @@ function CreateProjectDialog({
   onClose: () => void;
   onCreated: (projectId: string) => void;
 }) {
-  const [name,        setName]        = useState("");
-  const [description, setDescription] = useState("");
-  const [startDate,   setStartDate]   = useState("");
-  const [endDate,     setEndDate]     = useState("");
-  const [clientName,  setClientName]  = useState("");
+  const [name,         setName]         = useState("");
+  const [abbreviation, setAbbreviation] = useState("");
+  const [description,  setDescription]  = useState("");
+  const [startDate,    setStartDate]    = useState("");
+  const [endDate,      setEndDate]      = useState("");
+  const [clientName,   setClientName]   = useState("");
 
   const mutation = useMutation({
     mutationFn: (body: object) =>
@@ -95,10 +104,19 @@ function CreateProjectDialog({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) { toast.error("프로젝트명을 입력해 주세요."); return; }
+    const abbrParsed = parseProjectAbbrInput(abbreviation, { required: true });
+    if ("error" in abbrParsed) { toast.error(abbrParsed.error); return; }
     if (startDate && endDate && endDate < startDate) {
       toast.error("종료일은 시작일 이후여야 합니다."); return;
     }
-    mutation.mutate({ name, description, startDate: startDate || undefined, endDate: endDate || undefined, clientName });
+    mutation.mutate({
+      name,
+      abbreviation: abbrParsed.value as string,
+      description,
+      startDate: startDate || undefined,
+      endDate:   endDate   || undefined,
+      clientName,
+    });
   }
 
   return (
@@ -136,6 +154,22 @@ function CreateProjectDialog({
               onChange={(e) => setName(e.target.value)}
               autoFocus
             />
+          </div>
+
+          <div>
+            <label className="sp-label">
+              약어 <span style={{ color: "var(--color-error)" }}>*</span>
+            </label>
+            <input
+              className="sp-input"
+              placeholder={PROJECT_ABBR_PLACEHOLDER}
+              value={abbreviation}
+              onChange={(e) => setAbbreviation(e.target.value)}
+              maxLength={PROJECT_ABBR_MAX_LEN}
+            />
+            <p style={{ margin: "4px 0 0", fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
+              영문/숫자 2~10자. 문서 출력(표지·머리말·파일명)과 목록 부제에 사용됩니다.
+            </p>
           </div>
 
           {/* 설명 */}
@@ -314,11 +348,19 @@ function ProjectsPageInner() {
                 cursor: "pointer",
               }}
             >
-              {/* 프로젝트명 */}
-              <span style={{
-                fontSize: "var(--text-base)", color: "var(--color-text-primary)",
-              }}>
-                {item.name}
+              <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                <span
+                  style={{
+                    fontSize:     "var(--text-base)",
+                    color:        "var(--color-text-primary)",
+                    overflow:     "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace:   "nowrap",
+                  }}
+                >
+                  {item.name}
+                </span>
+                <ProjectAbbrChip value={item.abbreviation} />
               </span>
 
               <span style={{ fontSize: "var(--text-base)", color: "var(--color-text-primary)" }}>

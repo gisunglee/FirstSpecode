@@ -6,12 +6,15 @@ import { prisma } from "@/lib/prisma";
 import { ACTIVE_PROJECT_RELATION_WHERE } from "@/lib/projectGuard";
 
 export type ProjectListItem = {
-  projectId:  string;
-  name:       string;
-  clientName: string | null;
-  startDate:  Date | null;
-  endDate:    Date | null;
-  myRole:     string;
+  projectId:    string;
+  name:         string;
+  // 프로젝트 약어/이니셜 — 목록·GNB 셀렉터·문서 출력에서 부제/파일명으로 사용.
+  // 기존 데이터(약어 미설정)는 null 로 응답되며, UI 는 null 일 때 표시 생략.
+  abbreviation: string | null;
+  clientName:   string | null;
+  startDate:    Date | null;
+  endDate:      Date | null;
+  myRole:       string;
 };
 
 /**
@@ -36,13 +39,14 @@ export async function fetchMyProjects(opts: {
     include: {
       project: {
         select: {
-          prjct_id:  true,
-          prjct_nm:  true,
-          client_nm: true,
-          bgng_de:   true,
-          end_de:    true,
-          mdfcn_dt:  true,
-          creat_dt:  true,
+          prjct_id:   true,
+          prjct_nm:   true,
+          prjct_abrv: true,
+          client_nm:  true,
+          bgng_de:    true,
+          end_de:     true,
+          mdfcn_dt:   true,
+          creat_dt:   true,
         },
       },
     },
@@ -56,11 +60,12 @@ export async function fetchMyProjects(opts: {
       return bTime - aTime;
     })
     .map((m) => ({
-      projectId:  m.project.prjct_id,
-      name:       m.project.prjct_nm,
-      clientName: m.project.client_nm ?? null,
-      startDate:  m.project.bgng_de   ?? null,
-      endDate:    m.project.end_de    ?? null,
-      myRole:     m.role_code,
+      projectId:    m.project.prjct_id,
+      name:         m.project.prjct_nm,
+      abbreviation: m.project.prjct_abrv ?? null,
+      clientName:   m.project.client_nm  ?? null,
+      startDate:    m.project.bgng_de    ?? null,
+      endDate:      m.project.end_de     ?? null,
+      myRole:       m.role_code,
     }));
 }

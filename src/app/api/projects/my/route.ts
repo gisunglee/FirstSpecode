@@ -29,8 +29,9 @@ export async function GET(request: NextRequest) {
       include: {
         project: {
           select: {
-            prjct_id: true,
-            prjct_nm: true,
+            prjct_id:   true,
+            prjct_nm:   true,
+            prjct_abrv: true,
           },
         },
       },
@@ -41,9 +42,10 @@ export async function GET(request: NextRequest) {
     });
 
     const items = memberships.map((m) => ({
-      prjct_id:  m.project.prjct_id,
-      prjct_nm:  m.project.prjct_nm,
-      role_code: m.role_code,
+      prjct_id:   m.project.prjct_id,
+      prjct_nm:   m.project.prjct_nm,
+      prjct_abrv: m.project.prjct_abrv ?? null,
+      role_code:  m.role_code,
     }));
 
     return apiSuccess({ items, totalCount: items.length });

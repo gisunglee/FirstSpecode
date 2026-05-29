@@ -19,14 +19,16 @@ import {
 } from "@/lib/exports/projects-data";
 
 const columns: ExcelColumn<ProjectListItem>[] = [
-  { key: "name",       header: "프로젝트명",  width: 30 },
-  { key: "clientName", header: "고객사",     width: 24,
+  { key: "name",         header: "프로젝트명",  width: 30 },
+  { key: "abbreviation", header: "약어",       width: 12,
+    format: (r) => r.abbreviation ?? "" },
+  { key: "clientName",   header: "고객사",     width: 24,
     format: (r) => r.clientName ?? "" },
-  { key: "myRole",     header: "내 역할",    width: 12,
+  { key: "myRole",       header: "내 역할",    width: 12,
     format: (r) => (isRoleCode(r.myRole) ? ROLE_LABEL[r.myRole] : r.myRole) },
-  { key: "startDate",  header: "시작일",     width: 14,
+  { key: "startDate",    header: "시작일",     width: 14,
     format: (r) => r.startDate ?? "" },
-  { key: "endDate",    header: "종료일",     width: 14,
+  { key: "endDate",      header: "종료일",     width: 14,
     format: (r) => r.endDate ?? "" },
 ];
 

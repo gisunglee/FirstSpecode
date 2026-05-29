@@ -268,7 +268,8 @@ body {
   border-left-color: var(--color-brand);
 }
 .sp-rail-label {
-  font-size: 11px;
+  /* 2026-05-29: 11 → 12. 좌측 레일 라벨(대시보드/프로젝트/분석…) 가독성 개선 */
+  font-size: 12px;
   /* weight 미지정 (기본 400) — 600 은 너무 굵어 보였음 */
   /* 음수 letter-spacing 제거 — 작은 폰트에서 흐릿함의 원인 */
   line-height: 1.15;
@@ -288,7 +289,8 @@ body {
 }
 .sp-subpane-title {
   padding: 14px 14px 10px;
-  font-size: 15px;
+  /* 2026-05-29: 15 → 16. 서브패널 제목(분석/설계/프로젝트 등) */
+  font-size: 16px;
   font-weight: 700;
   /* heading → primary: light 테마 대비 강화 (#2e3248 → #1e2135) */
   color: var(--color-text-primary);
@@ -310,7 +312,8 @@ body {
   align-items: center;
   gap: 10px;
   padding: 8px 14px;
-  font-size: 13.5px;
+  /* 2026-05-29: 13.5 → 14.5. 서브패널 메뉴 항목(단위업무/화면/영역…) */
+  font-size: 14.5px;
   /* weight 미지정 (기본 400) — 500 은 살짝 뚱뚱해 보였음 */
   /* secondary → primary: 흐릿함 제거. VSCode 사이드바 가독성 기준 */
   color: var(--color-text-primary);
@@ -901,7 +904,9 @@ body {
 /* ── Markdown Preview ────────────────────────────────────────────────────── */
 /* renderMarkdown() 결과를 감싸는 컨테이너에 sp-markdown 클래스 적용 */
 .sp-markdown {
-  font-size: var(--text-sm);
+  /* 2026-05-29: base → lg(15px). 웹에디터(.sp-rich-editor)와 동일 크기로 맞춤.
+     상세 명세/분석 메모 미리보기에서 장문 가독성이 가장 중요한 영역. */
+  font-size: var(--text-lg);
   line-height: 1.75;
   color: var(--color-text-primary);
 }
@@ -1006,7 +1011,8 @@ body {
 /* EditorContent 내부 ProseMirror 컨테이너 스타일 */
 .sp-rich-editor .ProseMirror {
   outline: none;
-  font-size: var(--text-base, 15px);
+  /* 리치 에디터 본문 — base보다 한 단계 키움. 장문 편집에서 답답함 해소 */
+  font-size: var(--text-lg);
   line-height: 1.75;
   color: var(--color-text-primary);
   padding: 12px 16px;

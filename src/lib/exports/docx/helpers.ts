@@ -22,7 +22,7 @@ import {
   FONT,
   COLOR_PRIMARY, COLOR_LABEL_BG, COLOR_BORDER,
   COLOR_TEXT_INVERT,
-  SIZE_BODY, SIZE_TABLE_CELL,
+  SIZE_BODY, SIZE_TABLE_CELL, SIZE_TITLE_SMALL,
   CONTENT_WIDTH,
 } from "./tokens";
 
@@ -346,3 +346,27 @@ export const numberingConfig = [
     }],
   },
 ];
+
+// ─── 표지 프로젝트 타이틀 ─────────────────────────────────
+/**
+ * 표지 상단의 "프로젝트명 [ABBR]" 한 줄을 구성하는 TextRun 배열.
+ * abbr 가 비면 프로젝트명만 반환 — 호출부의 conditional 흡수.
+ * 3개 docx 빌더(요구사항·단위업무·요구사항정의서)가 동일 패턴을 공유.
+ */
+export function projectTitleRuns(
+  projectName: string,
+  projectAbbr?: string | null,
+): TextRun[] {
+  const runs: TextRun[] = [
+    new TextRun({ text: projectName, font: FONT, size: SIZE_TITLE_SMALL, bold: true }),
+  ];
+  if (projectAbbr) {
+    runs.push(new TextRun({
+      text:  `  [${projectAbbr}]`,
+      font:  FONT,
+      size:  SIZE_TITLE_SMALL,
+      color: COLOR_PRIMARY,
+    }));
+  }
+  return runs;
+}
