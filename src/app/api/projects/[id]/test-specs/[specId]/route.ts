@@ -26,6 +26,15 @@ import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 
 type RouteParams = { params: Promise<{ id: string; specId: string }> };
 
+// 진척률을 0~100 정수로 강제 (잘못된 입력은 0)
+function clampProgress(v: unknown): number {
+  if (typeof v !== "number" || !Number.isFinite(v)) return 0;
+  const n = Math.round(v);
+  if (n < 0)   return 0;
+  if (n > 100) return 100;
+  return n;
+}
+
 // ─── GET: 상세 조회 ─────────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, specId } = await params;
@@ -53,6 +62,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       testSpecDc:    spec.test_spec_dc,
       sttusCode:     spec.sttus_code,
       asignMemberId: spec.asign_mber_id,
+      prgrsRt:       spec.prgrs_rt,
       unitWorks:     spec.uwLinks.map((u) => ({
                        unitWorkId: u.unit_work_id,
                        displayId:  u.unitWork?.unit_work_display_id ?? null,
@@ -94,11 +104,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { testSpecNm, testSpecDc, sttusCode, asignMemberId, unitWorkIds, cases } = body as {
+  const { testSpecNm, testSpecDc, sttusCode, asignMemberId, prgrsRt, unitWorkIds, cases } = body as {
     testSpecNm?:    string;
     testSpecDc?:    string;
     sttusCode?:     string;
     asignMemberId?: string;
+    prgrsRt?:       number;
     unitWorkIds?:   string[];
     cases?: Array<{
       testCaseId?:     string;
@@ -176,6 +187,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           test_spec_dc:   testSpecDc?.trim() || null,
           sttus_code:     sttusCode || undefined,
           asign_mber_id:  asignMemberId || null,
+          // 진척률 — 미전송 시 변경 없음, 전송된 경우 0~100 으로 강제
+          prgrs_rt:       typeof prgrsRt === "number" ? clampProgress(prgrsRt) : undefined,
           mdfcn_dt:       new Date(),
         },
       });

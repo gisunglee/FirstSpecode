@@ -57,6 +57,7 @@ type TestSpecDetail = {
   testSpecDc: string | null;
   sttusCode: string;
   asignMemberId: string | null;
+  prgrsRt: number;  // 진척률 0~100 (10단위로 입력)
   unitWorks: UnitWorkLink[];
   cases: TestCase[];
 };
@@ -74,6 +75,9 @@ const STATUS_LABEL: Record<string, string> = {
   FAILED: "불합격",
 };
 const STATUS_OPTIONS = ["DRAFT", "IN_PROGRESS", "PASSED", "FAILED"] as const;
+
+// 진척률 선택지 — 0~100 을 10 단위로
+const PROGRESS_OPTIONS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100] as const;
 
 // 우선순위(priortCode) 는 DB 데이터 보존을 위해 TestCase 타입엔 유지하지만
 // UI 에선 컬럼·셀렉트 모두 제거 — 신규 케이스는 "MEDIUM" 기본값 (addCase 에서 설정).
@@ -109,6 +113,7 @@ function TestSpecInner() {
     testSpecDc: "",
     sttusCode: "DRAFT",
     asignMemberId: null,
+    prgrsRt: 0,
     unitWorks: [],
     cases: [],
   });
@@ -196,6 +201,7 @@ function TestSpecInner() {
               testSpecNm: form.testSpecNm,
               testSpecDc: form.testSpecDc,
               asignMemberId: form.asignMemberId,
+              prgrsRt: form.prgrsRt,
               unitWorkIds: form.unitWorks.map((u) => u.unitWorkId),
             }),
           }
@@ -210,6 +216,7 @@ function TestSpecInner() {
             testSpecDc: form.testSpecDc,
             sttusCode: form.sttusCode,
             asignMemberId: form.asignMemberId,
+            prgrsRt: form.prgrsRt,
             unitWorkIds: form.unitWorks.map((u) => u.unitWorkId),
             cases: form.cases.map((c) => ({
               testCaseId:     c.testCaseId,
@@ -233,7 +240,9 @@ function TestSpecInner() {
     },
     onSuccess: (savedId) => {
       toast.success(isNew ? "명세서를 생성했습니다." : "저장했습니다.");
+      // 상세 캐시 + 목록 캐시(단위/통합 양쪽 모두) 같이 무효화 — 목록 진입 시 즉시 반영
       queryClient.invalidateQueries({ queryKey: ["test-spec", projectId, specId] });
+      queryClient.invalidateQueries({ queryKey: ["test-specs", projectId] });
       if (isNew) {
         router.replace(`/projects/${projectId}/test-specs/${savedId}`);
       }
@@ -247,6 +256,8 @@ function TestSpecInner() {
       authFetch(`/api/projects/${projectId}/test-specs/${specId}`, { method: "DELETE" }),
     onSuccess: () => {
       toast.success("삭제했습니다.");
+      // 목록으로 돌아갈 때 stale 캐시 보이지 않도록 같이 무효화
+      queryClient.invalidateQueries({ queryKey: ["test-specs", projectId] });
       router.back();
     },
     onError: (err: Error) => toast.error(err.message),
@@ -417,7 +428,8 @@ function TestSpecInner() {
         <div style={{ padding: "0 24px 120px", maxWidth: 1200 }}>
           {/* 메타 카드 */}
           <div style={cardStyle}>
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
+            {/* 명세서명 / 상태 / 담당자 / 진척률 — 상태·진척률은 콘텐츠 적어 폭 줄임 */}
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 0.5fr 1fr 0.5fr", gap: 12, marginBottom: 14 }}>
               <FormField label="명세서명" required>
                 <input
                   type="text"
@@ -454,6 +466,20 @@ function TestSpecInner() {
                       <option key={m.memberId} value={m.memberId}>
                         {m.name ?? m.email}
                       </option>
+                    ))}
+                  </select>
+                  <span className="sp-select-arrow"><SelectChevron /></span>
+                </div>
+              </FormField>
+              <FormField label="진척률">
+                <div className="sp-select-wrap">
+                  <select
+                    value={form.prgrsRt}
+                    onChange={(e) => setForm((f) => ({ ...f, prgrsRt: Number(e.target.value) }))}
+                    className="sp-input"
+                  >
+                    {PROGRESS_OPTIONS.map((p) => (
+                      <option key={p} value={p}>{p}%</option>
                     ))}
                   </select>
                   <span className="sp-select-arrow"><SelectChevron /></span>

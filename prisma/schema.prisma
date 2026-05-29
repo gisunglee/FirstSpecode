@@ -1426,6 +1426,8 @@ model TbQaTestSpec {
   // 진행 상태 — DRAFT(작성중) | IN_PROGRESS(진행중) | PASSED(합격) | FAILED(불합격)
   sttus_code           String    @default("DRAFT")
   asign_mber_id        String?   // 담당자 (테스트 책임자)
+  // 진척률 — 0~100 (10 단위 권장). UI 선택값은 0,10,20,...100.
+  prgrs_rt             Int       @default(0)
   sort_ordr            Int       @default(0)
   creat_dt             DateTime  @default(now())
   mdfcn_dt             DateTime?

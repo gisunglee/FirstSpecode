@@ -32,6 +32,7 @@ type SpecListItem = {
   testSpecDc:    string | null;
   sttusCode:     string;
   asignMemberId: string | null;
+  prgrsRt:       number;  // 진척률 0~100
   unitWorks:     { unitWorkId: string; displayId: string | null; name: string | null }[];
   caseCount:     number;
   roundCount:    number;
@@ -184,6 +185,7 @@ function TestSpecListInner() {
             <span style={{ textAlign: "center" }}>케이스</span>
             <span style={{ textAlign: "center" }}>회차</span>
             <span style={{ textAlign: "center" }}>상태</span>
+            <span style={{ textAlign: "center" }}>진척률</span>
             <span>수정일</span>
           </div>
 
@@ -229,6 +231,10 @@ function TestSpecListInner() {
                       fontSize: 11, fontWeight: 700,
                     }}>{STATUS_LABEL[s.sttusCode] ?? s.sttusCode}</span>
                   </span>
+                  {/* 진척률 — 막대 + % 표기. 100% 는 brand 색, 그 외는 secondary. */}
+                  <span style={{ textAlign: "center" }}>
+                    <ProgressBar value={s.prgrsRt ?? 0} />
+                  </span>
                   <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>
                     {(s.updatedAt ?? s.createdAt).slice(0, 10)}
                   </span>
@@ -246,11 +252,38 @@ function TestSpecListInner() {
 
 const gridStyle: React.CSSProperties = {
   display: "grid",
-  // 표시ID / 명세서명 / 단위업무 / 케이스 / 회차 / 상태 / 수정일
-  gridTemplateColumns: "100px 1.6fr 2fr 70px 70px 80px 110px",
+  // 표시ID / 명세서명 / 단위업무 / 케이스 / 회차 / 상태 / 진척률 / 수정일
+  gridTemplateColumns: "100px 1.5fr 1.8fr 60px 60px 80px 100px 100px",
   gap: 12,
   alignItems: "center",
 };
+
+// 진척률 막대 — 0~100. 디자인 토큰만 사용 (브랜드/borders/text)
+// 막대·% 라벨을 inline-flex 로 묶어 칸 가운데 정렬 (flex stretch 사용 안 함).
+function ProgressBar({ value }: { value: number }) {
+  const pct = Math.max(0, Math.min(100, value));
+  return (
+    <span style={{ display: "flex", justifyContent: "center" }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <span style={{
+          position: "relative",
+          width: 50, height: 6,
+          background: "var(--color-bg-muted)",
+          borderRadius: 3, overflow: "hidden",
+        }}>
+          <span style={{
+            position: "absolute", inset: 0, width: `${pct}%`,
+            background: "var(--color-primary, #1976d2)",
+            transition: "width 0.2s",
+          }} />
+        </span>
+        <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+          {pct}%
+        </span>
+      </span>
+    </span>
+  );
+}
 
 const tabsWrapStyle: React.CSSProperties = {
   display: "flex", gap: 2,

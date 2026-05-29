@@ -24,6 +24,16 @@ import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
+// 진척률을 0~100 정수로 강제 (잘못된 입력은 0)
+// 화면 드롭다운은 10단위지만 서버는 범위만 보장하고 값은 그대로 보관
+function clampProgress(v: unknown): number {
+  if (typeof v !== "number" || !Number.isFinite(v)) return 0;
+  const n = Math.round(v);
+  if (n < 0)   return 0;
+  if (n > 100) return 100;
+  return n;
+}
+
 // ─── GET: 목록 조회 ─────────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id: projectId } = await params;
@@ -62,6 +72,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       testSpecDc:        s.test_spec_dc,
       sttusCode:         s.sttus_code,
       asignMemberId:     s.asign_mber_id,
+      prgrsRt:           s.prgrs_rt,
       unitWorks:         s.uwLinks.map((u) => ({
                            unitWorkId: u.unit_work_id,
                            displayId:  u.unitWork?.unit_work_display_id ?? null,
@@ -91,11 +102,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { testKindCode, testSpecNm, testSpecDc, asignMemberId, unitWorkIds, displayId: inputDisplayId } = body as {
+  const { testKindCode, testSpecNm, testSpecDc, asignMemberId, prgrsRt, unitWorkIds, displayId: inputDisplayId } = body as {
     testKindCode?:  string;
     testSpecNm?:    string;
     testSpecDc?:    string;
     asignMemberId?: string;
+    prgrsRt?:       number;
     unitWorkIds?:   string[];
     displayId?:     string;
   };
@@ -166,6 +178,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           test_spec_nm:         testSpecNm.trim(),
           test_spec_dc:         testSpecDc?.trim() || null,
           asign_mber_id:        asignMemberId || null,
+          // 진척률 — 0~100 범위 강제, 그 외 입력은 0 으로 fallback
+          prgrs_rt:             clampProgress(prgrsRt),
           sort_ordr:            (maxSort?.sort_ordr ?? 0) + 1,
         },
       });

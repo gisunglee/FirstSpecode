@@ -31,10 +31,14 @@ $$ LANGUAGE plpgsql;
 SELECT pg_temp.rename_pk('tb_ai_prompt_template', 'pk_ai_prompt_template');
 SELECT pg_temp.rename_pk('tb_ai_design_template', 'pk_ai_design_template');
 
--- ── 기본 이름(<table>_pkey) 사용 — drift 가 의심되는 6개 ────────────────
+-- ── 기본 이름(<table>_pkey) 사용 — drift 가 의심되는 테이블 ──────────────
 SELECT pg_temp.rename_pk('tb_ds_document_release', 'tb_ds_document_release_pkey');
 SELECT pg_temp.rename_pk('tb_sg_std_guide',        'tb_sg_std_guide_pkey');
 SELECT pg_temp.rename_pk('tb_sys_attach_file',     'tb_sys_attach_file_pkey');
 SELECT pg_temp.rename_pk('tb_sys_config_template', 'tb_sys_config_template_pkey');
 SELECT pg_temp.rename_pk('tb_sys_docs_page',       'tb_sys_docs_page_pkey');
 SELECT pg_temp.rename_pk('tb_sys_docs_section',    'tb_sys_docs_section_pkey');
+
+-- 2026-05-29 추가 — _pk 접미사 사용 중인 두 테이블도 같이 정렬
+SELECT pg_temp.rename_pk('tb_cm_batch_job',        'tb_cm_batch_job_pkey');
+SELECT pg_temp.rename_pk('tb_cm_batch_job_item',   'tb_cm_batch_job_item_pkey');
