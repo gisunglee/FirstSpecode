@@ -22,6 +22,21 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* ─────────────────────────────────────────────────────────────────────
+     UI 전체 10% 확대 (2026-05-29)
+     이유:
+       - --p-text-base 가 13px 로 초기 커밋부터 작게 잡혀 있음
+       - 인라인 fontSize 가 1,524군데 하드코딩되어 토큰 변경으로는 일괄 확대 불가
+       - 27" 모니터에서 전체적으로 답답한 밀도 → 사용자 피드백
+     방식:
+       - zoom 속성은 px·rem·em·padding·margin·border 까지 한 번에 스케일링
+       - Chromium 계열(Chrome/Edge) 표준 지원. Firefox 는 미지원이지만 사내 사용엔 무관
+       - transform: scale 과 달리 레이아웃 흐름 정상 계산됨 (스크롤·hit-test OK)
+     되돌리는 방법:
+       - 이 zoom 한 줄만 삭제하면 원상복구
+  ───────────────────────────────────────────────────────────────────── */
+  zoom: 1.1;
 }
 
 /* ================================================================
@@ -228,7 +243,8 @@ body {
 
 /* ── 좌측 레일 (그룹 아이콘) ─────────────────────────────────────────────── */
 .sp-rail {
-  width: 64px;
+  /* 2026-05-29: 64 → 68 (+5%). 2줄 라벨(공통 설계/시스템 관리) 여유 확보 */
+  width: 68px;
   flex-shrink: 0;
   background: var(--color-bg-sidebar);
   border-right: 1px solid var(--color-border);
@@ -268,8 +284,7 @@ body {
   border-left-color: var(--color-brand);
 }
 .sp-rail-label {
-  /* 2026-05-29: 11 → 12. 좌측 레일 라벨(대시보드/프로젝트/분석…) 가독성 개선 */
-  font-size: 12px;
+  font-size: 11px;
   /* weight 미지정 (기본 400) — 600 은 너무 굵어 보였음 */
   /* 음수 letter-spacing 제거 — 작은 폰트에서 흐릿함의 원인 */
   line-height: 1.15;
@@ -289,8 +304,7 @@ body {
 }
 .sp-subpane-title {
   padding: 14px 14px 10px;
-  /* 2026-05-29: 15 → 16. 서브패널 제목(분석/설계/프로젝트 등) */
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   /* heading → primary: light 테마 대비 강화 (#2e3248 → #1e2135) */
   color: var(--color-text-primary);
@@ -312,8 +326,7 @@ body {
   align-items: center;
   gap: 10px;
   padding: 8px 14px;
-  /* 2026-05-29: 13.5 → 14.5. 서브패널 메뉴 항목(단위업무/화면/영역…) */
-  font-size: 14.5px;
+  font-size: 13.5px;
   /* weight 미지정 (기본 400) — 500 은 살짝 뚱뚱해 보였음 */
   /* secondary → primary: 흐릿함 제거. VSCode 사이드바 가독성 기준 */
   color: var(--color-text-primary);
@@ -904,9 +917,7 @@ body {
 /* ── Markdown Preview ────────────────────────────────────────────────────── */
 /* renderMarkdown() 결과를 감싸는 컨테이너에 sp-markdown 클래스 적용 */
 .sp-markdown {
-  /* 2026-05-29: base → lg(15px). 웹에디터(.sp-rich-editor)와 동일 크기로 맞춤.
-     상세 명세/분석 메모 미리보기에서 장문 가독성이 가장 중요한 영역. */
-  font-size: var(--text-lg);
+  font-size: var(--text-sm);
   line-height: 1.75;
   color: var(--color-text-primary);
 }
@@ -1011,8 +1022,7 @@ body {
 /* EditorContent 내부 ProseMirror 컨테이너 스타일 */
 .sp-rich-editor .ProseMirror {
   outline: none;
-  /* 리치 에디터 본문 — base보다 한 단계 키움. 장문 편집에서 답답함 해소 */
-  font-size: var(--text-lg);
+  font-size: var(--text-base, 15px);
   line-height: 1.75;
   color: var(--color-text-primary);
   padding: 12px 16px;

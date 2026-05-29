@@ -24,6 +24,8 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* UI 전체 10% 확대 — Chromium zoom. 인라인 fontSize 까지 스케일링됨 */
+  zoom: 1.1;
 }
 
 /* ================================================================

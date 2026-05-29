@@ -82,18 +82,17 @@
   --p-space-12: 48px;
   --p-space-16: 64px;
 
-  /* ── Font sizes ──
-     2026-05-29: 전체 +1px 상향. 27" 모니터에서 13px base 가독성 개선. */
-  --p-text-2xs: 10.5px;
-  --p-text-xs:  12px;
-  --p-text-sm:  13px;
-  --p-text-md:  13.5px;
-  --p-text-base:14px;
-  --p-text-lg:  15px;
-  --p-text-xl:  17px;
-  --p-text-2xl: 21px;
-  --p-text-3xl: 25px;
-  --p-text-4xl: 31px;
+  /* ── Font sizes ── */
+  --p-text-2xs: 9.5px;
+  --p-text-xs:  11px;
+  --p-text-sm:  12px;
+  --p-text-md:  12.5px;
+  --p-text-base:13px;
+  --p-text-lg:  14px;
+  --p-text-xl:  16px;
+  --p-text-2xl: 20px;
+  --p-text-3xl: 24px;
+  --p-text-4xl: 30px;
 
   /* ── Border radius ── */
   --p-r-0:  0px;
@@ -389,7 +388,7 @@
   --transition-slow:   var(--p-dur-slow)   var(--p-ease-default);
   --transition-spring: var(--p-dur-slow)   var(--p-ease-spring);
 
-  --sidebar-width:           230px;
+  --sidebar-width:           200px;
   --sidebar-width-collapsed: 47px;
 
   --height-titlebar:  34px;

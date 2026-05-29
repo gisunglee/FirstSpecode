@@ -82,19 +82,17 @@
   --p-space-12: 48px;
   --p-space-16: 64px;
 
-  /* ── Font sizes ──
-     2026-05-29: 전체 +1px 상향. 27" 모니터에서 13px base는 너무 답답하다는
-     사용자 피드백 반영. 토큰만 손대고 컴포넌트 단위 font-size 는 손대지 않음. */
-  --p-text-2xs: 10.5px;
-  --p-text-xs:  12px;
-  --p-text-sm:  13px;
-  --p-text-md:  13.5px;
-  --p-text-base:14px;
-  --p-text-lg:  15px;
-  --p-text-xl:  17px;
-  --p-text-2xl: 21px;
-  --p-text-3xl: 25px;
-  --p-text-4xl: 31px;
+  /* ── Font sizes ── */
+  --p-text-2xs: 9.5px;
+  --p-text-xs:  11px;
+  --p-text-sm:  12px;
+  --p-text-md:  12.5px;
+  --p-text-base:13px;
+  --p-text-lg:  14px;
+  --p-text-xl:  16px;
+  --p-text-2xl: 20px;
+  --p-text-3xl: 24px;
+  --p-text-4xl: 30px;
 
   /* ── Border radius ── */
   --p-r-0:  0px;
@@ -420,8 +418,7 @@
   --transition-slow:   var(--p-dur-slow)   var(--p-ease-default);
   --transition-spring: var(--p-dur-slow)   var(--p-ease-spring);
 
-  /* 2026-05-29: 200 → 230. 메뉴 폰트 +1px 상향에 맞춰 좌측 서브패널 여유 확보 */
-  --sidebar-width:           230px;
+  --sidebar-width:           200px;
   --sidebar-width-collapsed: 47px;
 
   --height-titlebar:  34px;

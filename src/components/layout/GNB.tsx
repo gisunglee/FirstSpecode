@@ -706,8 +706,7 @@ function BreadcrumbChip({ label, href, tag, isLast, onNavigate }: {
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 6,
       padding: "3px 10px", borderRadius: 14,
-      // 2026-05-29: 12 → 13. 27" 모니터에서 12px 가 너무 작다는 피드백 반영
-      fontSize: 13, lineHeight: 1.2,
+      fontSize: 12, lineHeight: 1.2,
       background: "transparent",
       border: "1px solid transparent",
       transition: "all 0.15s",
@@ -715,8 +714,7 @@ function BreadcrumbChip({ label, href, tag, isLast, onNavigate }: {
       {/* tag 배지 — badge(ID prefix)가 없고 tag가 있을 때 표시 */}
       {!badge && tag && (
         <span className="sp-badge" style={{
-          // 2026-05-29: 10 → 11. "과업" 등 태그가 깨질 정도로 작던 문제
-          fontSize: 11, fontWeight: 600,
+          fontSize: 10, fontWeight: 600,
           padding: "1px 5px", borderRadius: 3,
           background: tagColor?.bg ?? "#f5f5f5",
           color: tagColor?.color ?? "#757575",
@@ -728,8 +726,7 @@ function BreadcrumbChip({ label, href, tag, isLast, onNavigate }: {
       )}
       {badge && (
         <span className="sp-badge" style={{
-          // 2026-05-29: 10 → 11. ID prefix(REQ-00001 등) 가독성 개선
-          fontSize: 11, fontWeight: 700,
+          fontSize: 10, fontWeight: 700,
           padding: "1px 5px", borderRadius: 3,
           background: color.bg, color: color.color,
           fontFamily: "monospace", letterSpacing: "0.02em",
