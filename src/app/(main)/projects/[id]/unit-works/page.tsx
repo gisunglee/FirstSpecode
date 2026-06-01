@@ -204,12 +204,17 @@ function UnitWorksPageInner() {
   const reqOptions = reqData ?? [];
 
   // ── 순서 변경 뮤테이션 ──────────────────────────────────────────────────────
+  // 성공 시 invalidate → 서버 정렬 결과를 다시 받아와 화면 동기화 (낙관적 업데이트 보강).
+  // 실패 시에도 invalidate → 잘못된 낙관적 상태 되돌림.
   const sortMutation = useMutation({
     mutationFn: (orders: { unitWorkId: string; sortOrder: number }[]) =>
       authFetch(`/api/projects/${projectId}/unit-works/sort`, {
         method: "PUT",
         body:   JSON.stringify({ orders }),
       }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["unit-works", projectId] });
+    },
     onError: () => {
       toast.error("순서 변경에 실패했습니다.");
       queryClient.invalidateQueries({ queryKey: ["unit-works", projectId] });
@@ -262,9 +267,10 @@ function UnitWorksPageInner() {
     if (!moved) return;
     reordered.splice(to, 0, moved);
 
-    // 낙관적 업데이트 후 서버 동기화
+    // 낙관적 업데이트 후 서버 동기화 — queryKey 는 실제 useQuery 와 동일하게
+    // (filterReqId + effectiveAssignedTo 4-튜플). 이전엔 3-튜플로 어긋나 캐시에 안 반영됐음.
     queryClient.setQueryData(
-      ["unit-works", projectId, filterReqId],
+      ["unit-works", projectId, filterReqId, effectiveAssignedTo],
       { items: reordered, totalCount: reordered.length }
     );
 

@@ -32,6 +32,17 @@ type UnitWorkLink = {
   name: string | null;
 };
 
+type ScreenLink = {
+  screenId:  string;
+  displayId: string | null;
+  name:      string | null;
+};
+
+// 매핑 종류 — 한 명세서는 단위업무 또는 화면 중 한 종류로만 연결 (UI 단순화)
+//   - "UW"     : 통합 테스트의 자연스러운 단위
+//   - "SCREEN" : 단위 테스트의 자연스러운 단위 (감리 시 "이 화면 테스트했어요" 답)
+type MappingType = "UW" | "SCREEN";
+
 type TestCase = {
   testCaseId?: string;       // 신규 행은 없음
   caseNo: number;
@@ -59,6 +70,7 @@ type TestSpecDetail = {
   asignMemberId: string | null;
   prgrsRt: number;  // 진척률 0~100 (10단위로 입력)
   unitWorks: UnitWorkLink[];
+  screens:   ScreenLink[];
   cases: TestCase[];
 };
 
@@ -115,8 +127,15 @@ function TestSpecInner() {
     asignMemberId: null,
     prgrsRt: 0,
     unitWorks: [],
+    screens:   [],
     cases: [],
   });
+
+  // 매핑 종류 선택 — 단위 테스트 기본 SCREEN(화면 단위가 자연), 통합 테스트 기본 UW.
+  // URL 쿼리로 unitWorkId 가 명시되어 들어오는 경우는 UW 로 시작 (LNB 흐름).
+  const [mappingType, setMappingType] = useState<MappingType>(
+    () => (newKind === "UNIT" && !searchParams.get("unitWorkId") ? "SCREEN" : "UW"),
+  );
 
   // ── 단위업무 후보 (통합 테스트의 매핑 추가용) ─────────────────────────────
   const { data: uwOptions = [] } = useQuery<{ unitWorkId: string; displayId: string; name: string }[]>({
@@ -124,6 +143,18 @@ function TestSpecInner() {
     queryFn: async () => {
       const res = await authFetch<{ data: { items: { unitWorkId: string; displayId: string; name: string }[] } }>(
         `/api/projects/${projectId}/unit-works`
+      );
+      return res.data.items;
+    },
+  });
+
+  // ── 화면 후보 (단위 테스트 등 화면 단위 매핑용) ───────────────────────────
+  // 응답 items[].screenId/displayId/name — fetchProjectScreens 와 동일.
+  const { data: screenOptions = [] } = useQuery<{ screenId: string; displayId: string; name: string }[]>({
+    queryKey: ["screen-options", projectId],
+    queryFn: async () => {
+      const res = await authFetch<{ data: { items: { screenId: string; displayId: string; name: string }[] } }>(
+        `/api/projects/${projectId}/screens`
       );
       return res.data.items;
     },
@@ -167,7 +198,12 @@ function TestSpecInner() {
   });
 
   useEffect(() => {
-    if (detail) setForm(detail);
+    if (!detail) return;
+    setForm(detail);
+    // 매핑 종류 추론 — 화면 매핑이 있으면 SCREEN, 없고 UW 가 있으면 UW.
+    // 둘 다 없으면 기존 mappingType 유지 (사용자가 선택한 상태 보존).
+    if (detail.screens.length > 0)        setMappingType("SCREEN");
+    else if (detail.unitWorks.length > 0) setMappingType("UW");
   }, [detail]);
 
   // 명세서 상세 진입 시 URL 에 ?kind= 자동 보강 — LNB 가 단위/통합 항목을 정확히 강조하기 위함.
@@ -185,9 +221,15 @@ function TestSpecInner() {
     mutationFn: async () => {
       // 입력 검증 (서버에서도 하지만 UX 위해 미리)
       if (!form.testSpecNm.trim()) throw new Error("명세서명을 입력해 주세요.");
-      if (form.unitWorks.length === 0) throw new Error("연결할 단위업무를 1개 이상 선택해 주세요.");
-      if (form.testKindCode === "UNIT" && form.unitWorks.length !== 1) {
-        throw new Error("단위 테스트는 단위업무 1개에만 연결할 수 있습니다.");
+      // 현재 선택된 매핑 종류만 전송 — 다른 쪽은 빈 배열로 정리되어 서버에서도 비워짐.
+      const unitWorkIds = mappingType === "UW"     ? form.unitWorks.map((u) => u.unitWorkId) : [];
+      const screenIds   = mappingType === "SCREEN" ? form.screens.map((s) => s.screenId)     : [];
+      if (unitWorkIds.length === 0 && screenIds.length === 0) {
+        throw new Error(
+          mappingType === "UW"
+            ? "연결할 단위업무를 1개 이상 선택해 주세요."
+            : "연결할 화면을 1개 이상 선택해 주세요.",
+        );
       }
 
       if (isNew) {
@@ -202,7 +244,8 @@ function TestSpecInner() {
               testSpecDc: form.testSpecDc,
               asignMemberId: form.asignMemberId,
               prgrsRt: form.prgrsRt,
-              unitWorkIds: form.unitWorks.map((u) => u.unitWorkId),
+              unitWorkIds,
+              screenIds,
             }),
           }
         );
@@ -217,7 +260,8 @@ function TestSpecInner() {
             sttusCode: form.sttusCode,
             asignMemberId: form.asignMemberId,
             prgrsRt: form.prgrsRt,
-            unitWorkIds: form.unitWorks.map((u) => u.unitWorkId),
+            unitWorkIds,
+            screenIds,
             cases: form.cases.map((c) => ({
               testCaseId:     c.testCaseId,
               caseNo:         c.caseNo,
@@ -379,7 +423,7 @@ function TestSpecInner() {
     setForm((f) => ({ ...f, cases: f.cases.filter((_, i) => i !== idx) }));
   }
 
-  // ── 단위업무 매핑 조작 (통합 테스트만) ────────────────────────────────────
+  // ── 단위업무 매핑 조작 ────────────────────────────────────────────────────
   function addUw(uwId: string) {
     if (form.unitWorks.some((u) => u.unitWorkId === uwId)) return;
     const uw = uwOptions.find((u) => u.unitWorkId === uwId);
@@ -391,6 +435,20 @@ function TestSpecInner() {
   }
   function removeUw(uwId: string) {
     setForm((f) => ({ ...f, unitWorks: f.unitWorks.filter((u) => u.unitWorkId !== uwId) }));
+  }
+
+  // ── 화면 매핑 조작 ────────────────────────────────────────────────────────
+  function addScreen(scrId: string) {
+    if (form.screens.some((s) => s.screenId === scrId)) return;
+    const sc = screenOptions.find((s) => s.screenId === scrId);
+    if (!sc) return;
+    setForm((f) => ({
+      ...f,
+      screens: [...f.screens, { screenId: sc.screenId, displayId: sc.displayId, name: sc.name }],
+    }));
+  }
+  function removeScreen(scrId: string) {
+    setForm((f) => ({ ...f, screens: f.screens.filter((s) => s.screenId !== scrId) }));
   }
 
   // ── 렌더 ─────────────────────────────────────────────────────────────────
@@ -562,44 +620,99 @@ function TestSpecInner() {
               />
             </FormField>
 
-            {/* 연결 단위업무 */}
+            {/* 테스트 대상 매핑 — 라디오로 종류 선택, 선택된 쪽만 멀티 추가 */}
             <div style={{ marginTop: 14 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 6 }}>
-                연결 단위업무 {form.testKindCode === "UNIT" ? "(1개 필수)" : "(1개 이상)"}
+              <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                  테스트 대상
+                </span>
+                <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, cursor: "pointer" }}>
+                  <input
+                    type="radio"
+                    name="mappingType"
+                    checked={mappingType === "SCREEN"}
+                    onChange={() => setMappingType("SCREEN")}
+                  />
+                  화면
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, cursor: "pointer" }}>
+                  <input
+                    type="radio"
+                    name="mappingType"
+                    checked={mappingType === "UW"}
+                    onChange={() => setMappingType("UW")}
+                  />
+                  단위업무
+                </label>
+                <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>
+                  (1개 이상)
+                </span>
               </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-                {form.unitWorks.length === 0 ? (
-                  <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>아직 연결된 단위업무가 없습니다.</span>
-                ) : (
-                  form.unitWorks.map((u) => (
-                    <span key={u.unitWorkId} style={chipStyle}>
-                      <strong>{u.displayId}</strong> {u.name}
-                      {(form.testKindCode === "INTEGRATION" || form.unitWorks.length > 1) && (
-                        <button onClick={() => removeUw(u.unitWorkId)} style={chipCloseBtnStyle}>×</button>
-                      )}
-                    </span>
-                  ))
-                )}
-              </div>
-              {/* 추가 셀렉트 — UNIT 은 1개 채워지면 비활성, INTEGRATION 은 항상 가능 */}
-              {(form.testKindCode === "INTEGRATION" || form.unitWorks.length === 0) && (
-                <div className="sp-select-wrap" style={{ maxWidth: 360 }}>
-                  <select
-                    value=""
-                    onChange={(e) => { if (e.target.value) addUw(e.target.value); }}
-                    className="sp-input"
-                  >
-                    <option value="">+ 단위업무 추가...</option>
-                    {uwOptions
-                      .filter((o) => !form.unitWorks.some((u) => u.unitWorkId === o.unitWorkId))
-                      .map((o) => (
-                        <option key={o.unitWorkId} value={o.unitWorkId}>
-                          {o.displayId} {o.name}
-                        </option>
-                      ))}
-                  </select>
-                  <span className="sp-select-arrow"><SelectChevron /></span>
-                </div>
+
+              {mappingType === "SCREEN" ? (
+                <>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                    {form.screens.length === 0 ? (
+                      <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>아직 연결된 화면이 없습니다.</span>
+                    ) : (
+                      form.screens.map((s) => (
+                        <span key={s.screenId} style={chipStyle}>
+                          <strong>{s.displayId}</strong> {s.name}
+                          <button onClick={() => removeScreen(s.screenId)} style={chipCloseBtnStyle}>×</button>
+                        </span>
+                      ))
+                    )}
+                  </div>
+                  <div className="sp-select-wrap" style={{ maxWidth: 360 }}>
+                    <select
+                      value=""
+                      onChange={(e) => { if (e.target.value) addScreen(e.target.value); }}
+                      className="sp-input"
+                    >
+                      <option value="">+ 화면 추가...</option>
+                      {screenOptions
+                        .filter((o) => !form.screens.some((s) => s.screenId === o.screenId))
+                        .map((o) => (
+                          <option key={o.screenId} value={o.screenId}>
+                            {o.displayId} {o.name}
+                          </option>
+                        ))}
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                    {form.unitWorks.length === 0 ? (
+                      <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>아직 연결된 단위업무가 없습니다.</span>
+                    ) : (
+                      form.unitWorks.map((u) => (
+                        <span key={u.unitWorkId} style={chipStyle}>
+                          <strong>{u.displayId}</strong> {u.name}
+                          <button onClick={() => removeUw(u.unitWorkId)} style={chipCloseBtnStyle}>×</button>
+                        </span>
+                      ))
+                    )}
+                  </div>
+                  <div className="sp-select-wrap" style={{ maxWidth: 360 }}>
+                    <select
+                      value=""
+                      onChange={(e) => { if (e.target.value) addUw(e.target.value); }}
+                      className="sp-input"
+                    >
+                      <option value="">+ 단위업무 추가...</option>
+                      {uwOptions
+                        .filter((o) => !form.unitWorks.some((u) => u.unitWorkId === o.unitWorkId))
+                        .map((o) => (
+                          <option key={o.unitWorkId} value={o.unitWorkId}>
+                            {o.displayId} {o.name}
+                          </option>
+                        ))}
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
+                </>
               )}
             </div>
           </div>

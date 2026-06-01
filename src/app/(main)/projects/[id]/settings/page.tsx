@@ -31,6 +31,7 @@ type ProjectDetail = {
   projectId:    string;
   name:         string;
   abbreviation: string | null;
+  fullName:     string | null;  // 정식 명칭 — 단순 정보 보관 (출력·검증 없음)
   description:  string | null;
   startDate:    string | null;
   endDate:      string | null;
@@ -291,6 +292,7 @@ function BasicInfoTab({
 }) {
   const [name,         setName]         = useState(project.name);
   const [abbreviation, setAbbreviation] = useState(project.abbreviation ?? "");
+  const [fullName,     setFullName]     = useState(project.fullName ?? "");
   const [description,  setDescription]  = useState(project.description ?? "");
   // 설명 마크다운 에디터 탭 (편집/미리보기) — 다른 페이지(AI 태스크 상세 등)와 동일 패턴
   const [descTab,      setDescTab]      = useState<"edit" | "preview">("edit");
@@ -320,6 +322,7 @@ function BasicInfoTab({
     saveMutation.mutate({
       name,
       abbreviation: abbrParsed.value,
+      fullName,
       description,
       startDate:  startDate || undefined,
       endDate:    endDate   || undefined,
@@ -335,20 +338,37 @@ function BasicInfoTab({
           <label className="sp-label">프로젝트명 <span style={{ color: "var(--color-error)" }}>*</span></label>
           <input className="sp-input" value={name} onChange={(e) => setName(e.target.value)} readOnly={ro} />
         </div>
-        <div>
-          {/* 약어는 기존 프로젝트 호환 위해 선택 — 비워두면 문서 출력 시 프로젝트명으로 대체. */}
-          <label className="sp-label">약어</label>
-          <input
-            className="sp-input"
-            placeholder={PROJECT_ABBR_PLACEHOLDER}
-            value={abbreviation}
-            onChange={(e) => setAbbreviation(e.target.value)}
-            readOnly={ro}
-            maxLength={PROJECT_ABBR_MAX_LEN}
-          />
-          <p style={{ margin: "4px 0 0", fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
-            영문/숫자 2~10자. 문서 출력(표지·머리말·파일명)과 목록 부제에 사용됩니다. 비워두면 프로젝트명으로 대체됩니다.
-          </p>
+        {/* 약어 + 정식 명칭(Full Name) 한 줄로 — 약어는 좁게, FullName 은 나머지 채움 */}
+        <div style={{ display: "flex", gap: 10 }}>
+          <div style={{ width: 200, flexShrink: 0 }}>
+            <label className="sp-label">약어</label>
+            <input
+              className="sp-input"
+              placeholder={PROJECT_ABBR_PLACEHOLDER}
+              value={abbreviation}
+              onChange={(e) => setAbbreviation(e.target.value)}
+              readOnly={ro}
+              maxLength={PROJECT_ABBR_MAX_LEN}
+            />
+            <p style={{ margin: "4px 0 0", fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
+              영문/숫자 2~10자. 문서 출력에 사용.
+            </p>
+          </div>
+          <div style={{ flex: 1 }}>
+            {/* FullName — 단순 정보 보관용. 현재 출력·검증 어디에도 쓰이지 않음. */}
+            <label className="sp-label">Full Name</label>
+            <input
+              className="sp-input"
+              placeholder="프로젝트 정식 명칭"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              readOnly={ro}
+              maxLength={100}
+            />
+            <p style={{ margin: "4px 0 0", fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
+              프로젝트의 공식 정식 명칭 (선택).
+            </p>
+          </div>
         </div>
         <div>
           {/* 설명 — 마크다운 에디터 (편집/미리보기 탭) */}

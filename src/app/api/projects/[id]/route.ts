@@ -46,11 +46,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return apiSuccess({
       projectId:    project.prjct_id,
       name:         project.prjct_nm,
-      abbreviation: project.prjct_abrv ?? null,
-      description:  project.prjct_dc   ?? null,
-      startDate:    project.bgng_de    ?? null,
-      endDate:      project.end_de     ?? null,
-      clientName:   project.client_nm  ?? null,
+      abbreviation: project.prjct_abrv     ?? null,
+      fullName:     project.prjct_full_nm  ?? null,
+      description:  project.prjct_dc       ?? null,
+      startDate:    project.bgng_de        ?? null,
+      endDate:      project.end_de         ?? null,
+      clientName:   project.client_nm      ?? null,
       myRole:       membership.role_code,
     });
   } catch (err) {
@@ -84,9 +85,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { name, abbreviation, description, startDate, endDate, clientName } = body as {
+  const { name, abbreviation, fullName, description, startDate, endDate, clientName } = body as {
     name?: string;
     abbreviation?: string;
+    fullName?: string;        // 정식 명칭 — 단순 텍스트 필드, 검증·역할 없음
     description?: string;
     startDate?: string;
     endDate?: string;
@@ -125,6 +127,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         data: {
           prjct_nm:  name.trim(),
           ...(abbrToSave !== undefined ? { prjct_abrv: abbrToSave } : {}),
+          // fullName: 키 누락 시 변경 없음, 빈 문자열은 null 로 정규화.
+          ...(fullName !== undefined ? { prjct_full_nm: fullName?.trim() || null } : {}),
           ...(description !== undefined ? { prjct_dc: description?.trim() || null } : {}),
           ...(startDate !== undefined ? { bgng_de: startDate ? new Date(startDate) : null } : {}),
           ...(endDate !== undefined ? { end_de: endDate ? new Date(endDate) : null } : {}),

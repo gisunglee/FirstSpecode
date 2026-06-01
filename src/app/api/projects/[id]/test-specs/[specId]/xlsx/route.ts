@@ -75,6 +75,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           include: { unitWork: { select: { unit_work_display_id: true, unit_work_nm: true } } },
           orderBy: { sort_ordr: "asc" },
         },
+        screenLinks: {
+          include: { screen: { select: { scrn_display_id: true, scrn_nm: true } } },
+          orderBy: { sort_ordr: "asc" },
+        },
         cases:   { orderBy: [{ ctgry_code: "asc" }, { case_no: "asc" }] },
         rounds: {
           orderBy: { round_no: "desc" },
@@ -144,8 +148,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     });
 
     // ⑤ 상단 박스용 텍스트
-    const programIds = spec.uwLinks.map((u) => u.unitWork?.unit_work_display_id ?? "").filter(Boolean).join(", ");
-    const subtitle   = spec.uwLinks.map((u) => u.unitWork?.unit_work_nm ?? "").filter(Boolean).join(", ");
+    //   "프로그램 ID" 는 실제 테스트한 화면들의 displayId 가 우선 — 감리 시
+    //   "어떤 화면을 테스트했냐" 에 답할 수 있어야 함 (사용자 양식 기준).
+    //   화면 매핑이 없으면(주로 통합 테스트) 단위업무 displayId 로 fallback.
+    const screenIds = spec.screenLinks.map((s) => s.screen?.scrn_display_id ?? "").filter(Boolean);
+    const screenNms = spec.screenLinks.map((s) => s.screen?.scrn_nm ?? "").filter(Boolean);
+    const uwIds     = spec.uwLinks.map((u) => u.unitWork?.unit_work_display_id ?? "").filter(Boolean);
+    const uwNms     = spec.uwLinks.map((u) => u.unitWork?.unit_work_nm ?? "").filter(Boolean);
+
+    const programIds = (screenIds.length > 0 ? screenIds : uwIds).join(", ");
+    const subtitle   = (screenNms.length > 0 ? screenNms : uwNms).join(", ");
 
     // ⑥ 빌더 호출 — testKindLabel 은 종류만("단위 테스트"/"통합 테스트"),
     //    "명세서"/"결과서" 어미는 빌더가 docKind 로 자동 부착.
@@ -165,12 +177,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       functional,
     });
 
-    // ⑦ 파일명 — "[<ABBR>_]TS-00003 단위 테스트 명세서.xlsx" (약어 없으면 prefix 생략)
-    const docSuffix = docKind === "spec" ? "명세서" : "결과서";
+    // ⑦ 파일명 — "[<ABBR>_]<문서종류>_<표시ID>_<테스트명>.xlsx"
+    //   예) "GBMS_단위 테스트 명세서_TS-00003_게시판 관리.xlsx"
+    //   문서종류를 앞에 두는 이유: 폴더 정렬 시 "명세서끼리, 결과서끼리" 그룹지어 보이도록.
+    //   (이름·약어가 비면 해당 토큰 생략)
+    const docSuffix  = docKind === "spec" ? "명세서" : "결과서";
+    const docFull    = `${testKindBase} ${docSuffix}`;
+    const safeName   = filenameSafe(spec.test_spec_nm);
     const abbrPrefix = filenameSafe(projectAbbr);
+    const corePart   = safeName
+      ? `${docFull}_${spec.test_spec_display_id}_${safeName}`
+      : `${docFull}_${spec.test_spec_display_id}`;
     const filename = abbrPrefix
-      ? `${abbrPrefix}_${spec.test_spec_display_id} ${testKindBase} ${docSuffix}.xlsx`
-      : `${spec.test_spec_display_id} ${testKindBase} ${docSuffix}.xlsx`;
+      ? `${abbrPrefix}_${corePart}.xlsx`
+      : `${corePart}.xlsx`;
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,

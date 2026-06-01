@@ -313,11 +313,13 @@
       "Bash(Get-ChildItem -Path \"c:\\\\source\\\\FirstSpecode\\\\src\\\\app\" -Recurse -Directory)",
       "Bash(Measure-Object)",
       "Bash(Select-Object Count)",
-      "Bash(git log *)"
+      "Bash(git log *)",
+      "Bash(rm -rf \"src/app/api/projects/[id]/tasks/sort\")"
     ],
     "additionalDirectories": [
       "c:\\source\\FirstSpecode",
-      "d:\\source\\FirstSpecode\\src\\app\\api\\projects\\[id]"
+      "d:\\source\\FirstSpecode\\src\\app\\api\\projects\\[id]",
+      "c:\\source\\FirstSpecode\\src\\app\\api\\projects\\[id]\\tasks\\sort"
     ]
   }
 }

@@ -28,15 +28,22 @@ export function filenameSafe(s: string | null | undefined): string {
 }
 
 /**
- * "<displayId>_<이름>_<문서유형>.docx" 형식 파일명 생성.
- * 이름이 비어있으면 "_<이름>_" 부분을 생략해 "<displayId>_<문서유형>.docx" 로 fallback.
+ * "[<ABBR>_]<문서유형>_<displayId>_<이름>.docx" 형식 파일명 생성.
+ *
+ * 토큰 순서 정책 (2026-05-30):
+ *   문서유형을 앞에 배치한다 — 폴더 정렬 시 "요구사항명세서끼리, 프로그램사양서끼리"
+ *   그룹지어 보이도록. ID·이름이 먼저면 도메인별로 명세서/결과서가 섞여 가독성↓.
+ *
+ *   예) GBMS_요구사항명세서_RQ-00001_사용자 로그인.docx
+ *       GBMS_프로그램사양서_UW-00001_프로젝트 생성·관리.docx
+ *
+ *   - 이름이 비면 마지막 "_<이름>" 토큰 생략
+ *   - 약어가 없으면 앞쪽 "<ABBR>_" prefix 생략
  *
  * @param displayId  외부 표시 ID (예: "RQ-00001")
  * @param name       산출물의 도메인 이름 (예: "사용자 로그인")
  * @param docKindKo  한글 문서 종류 (예: "요구사항명세서", "프로그램사양서")
- * @param opts       opts.projectAbbr — 지정 시 파일명 앞에 "<ABBR>_" prefix 가 붙는다
- *                     예) projectAbbr="GBMS" → "GBMS_RQ-00001_사용자로그인_요구사항명세서.docx"
- *                   null/빈문자열이면 prefix 생략 — 약어 미설정 프로젝트 호환.
+ * @param opts       opts.projectAbbr — 약어 prefix (null/빈문자열이면 생략)
  */
 export function buildDocxFilename(
   displayId: string,
@@ -44,11 +51,11 @@ export function buildDocxFilename(
   docKindKo: string,
   opts?:     { projectAbbr?: string | null },
 ): string {
-  const safeName   = filenameSafe(name);
-  const safeAbbr   = filenameSafe(opts?.projectAbbr);
-  const corePart   = safeName
-    ? `${displayId}_${safeName}_${docKindKo}`
-    : `${displayId}_${docKindKo}`;
+  const safeName = filenameSafe(name);
+  const safeAbbr = filenameSafe(opts?.projectAbbr);
+  const corePart = safeName
+    ? `${docKindKo}_${displayId}_${safeName}`
+    : `${docKindKo}_${displayId}`;
   return safeAbbr
     ? `${safeAbbr}_${corePart}.docx`
     : `${corePart}.docx`;

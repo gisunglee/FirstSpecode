@@ -151,7 +151,8 @@ export default function MarkdownEditor({
             outline:      "none",
             resize:       "none",
             fontFamily:   "var(--font-mono, monospace)",
-            fontSize:     12,
+            // 2026-05-29: 12 → 13. 단위업무/요구사항 등 장문 편집에서 답답함 해소
+            fontSize:     13,
             lineHeight:   1.5,
             flex:         fullHeight ? 1 : "none",
             minHeight:    0,

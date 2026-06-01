@@ -11,8 +11,14 @@
  *   - testSpecNm:   string (필수)
  *   - testSpecDc?:  string
  *   - asignMemberId?: string
- *   - unitWorkIds:  string[]  (UNIT 은 정확히 1개, INTEGRATION 은 1개 이상)
+ *   - unitWorkIds?: string[]  연결할 단위업무 (선택)
+ *   - screenIds?:   string[]  연결할 화면 (선택)
  *   - displayId?:   string (없으면 TS-NNNNN 자동 채번)
+ *
+ *   매핑 정책:
+ *     - UNIT: 단위업무 0~1개 + 화면 N개. 최소 한 종류 1개 이상.
+ *     - INTEGRATION: 단위업무 N개 + 화면 N개. 최소 한 종류 1개 이상.
+ *     - 단위 테스트는 보통 화면 단위로 작성하고, 통합 테스트는 단위업무가 자연스러움.
  */
 
 import { NextRequest } from "next/server";
@@ -58,6 +64,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         uwLinks: {
           include: { unitWork: { select: { unit_work_display_id: true, unit_work_nm: true } } },
         },
+        screenLinks: {
+          include: { screen: { select: { scrn_display_id: true, scrn_nm: true } } },
+          orderBy: { sort_ordr: "asc" },
+        },
         _count: { select: { cases: true, rounds: true } },
       },
       orderBy: [{ sort_ordr: "asc" }, { creat_dt: "desc" }],
@@ -77,6 +87,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
                            unitWorkId: u.unit_work_id,
                            displayId:  u.unitWork?.unit_work_display_id ?? null,
                            name:       u.unitWork?.unit_work_nm ?? null,
+                         })),
+      screens:           s.screenLinks.map((sl) => ({
+                           screenId:  sl.scrn_id,
+                           displayId: sl.screen?.scrn_display_id ?? null,
+                           name:      sl.screen?.scrn_nm ?? null,
                          })),
       caseCount:         s._count.cases,
       roundCount:        s._count.rounds,
@@ -102,13 +117,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { testKindCode, testSpecNm, testSpecDc, asignMemberId, prgrsRt, unitWorkIds, displayId: inputDisplayId } = body as {
+  const { testKindCode, testSpecNm, testSpecDc, asignMemberId, prgrsRt, unitWorkIds, screenIds, displayId: inputDisplayId } = body as {
     testKindCode?:  string;
     testSpecNm?:    string;
     testSpecDc?:    string;
     asignMemberId?: string;
     prgrsRt?:       number;
     unitWorkIds?:   string[];
+    screenIds?:     string[];
     displayId?:     string;
   };
 
@@ -119,12 +135,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (!testSpecNm?.trim()) {
     return apiError("VALIDATION_ERROR", "명세서명을 입력해 주세요.", 400);
   }
-  if (!Array.isArray(unitWorkIds) || unitWorkIds.length === 0) {
-    return apiError("VALIDATION_ERROR", "연결할 단위업무를 1개 이상 선택해 주세요.", 400);
-  }
-  // UNIT 은 단위업무 1개만 허용 — 정의에 따라 강제
-  if (testKindCode === "UNIT" && unitWorkIds.length !== 1) {
-    return apiError("VALIDATION_ERROR", "단위 테스트는 단위업무 1개에만 연결할 수 있습니다.", 400);
+  const uwList     = Array.isArray(unitWorkIds) ? unitWorkIds : [];
+  const screenList = Array.isArray(screenIds)   ? screenIds   : [];
+  // 단위업무 또는 화면 중 최소 한 종류는 1개 이상 — 둘 다 비면 "테스트 대상" 이 모호해진다
+  if (uwList.length === 0 && screenList.length === 0) {
+    return apiError("VALIDATION_ERROR", "연결할 단위업무 또는 화면을 1개 이상 선택해 주세요.", 400);
   }
 
   const limitErr = apiTextLimitGuard([
@@ -134,13 +149,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   ]);
   if (limitErr) return limitErr;
 
-  // 모든 unitWorkIds 가 이 프로젝트 소속인지 확인 (보안)
-  const uws = await prisma.tbDsUnitWork.findMany({
-    where: { unit_work_id: { in: unitWorkIds }, prjct_id: projectId },
-    select: { unit_work_id: true },
-  });
-  if (uws.length !== unitWorkIds.length) {
-    return apiError("NOT_FOUND", "선택한 단위업무 중 존재하지 않는 항목이 있습니다.", 404);
+  // 프로젝트 소속 검증 — UW/화면 양쪽 다 (보안)
+  if (uwList.length > 0) {
+    const uws = await prisma.tbDsUnitWork.findMany({
+      where: { unit_work_id: { in: uwList }, prjct_id: projectId },
+      select: { unit_work_id: true },
+    });
+    if (uws.length !== uwList.length) {
+      return apiError("NOT_FOUND", "선택한 단위업무 중 존재하지 않는 항목이 있습니다.", 404);
+    }
+  }
+  if (screenList.length > 0) {
+    const scrs = await prisma.tbDsScreen.findMany({
+      where: { scrn_id: { in: screenList }, prjct_id: projectId },
+      select: { scrn_id: true },
+    });
+    if (scrs.length !== screenList.length) {
+      return apiError("NOT_FOUND", "선택한 화면 중 존재하지 않는 항목이 있습니다.", 404);
+    }
   }
 
   try {
@@ -168,7 +194,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       select:  { sort_ordr: true },
     });
 
-    // 단일 트랜잭션 — spec 생성 + uwLinks 일괄 매핑
+    // 단일 트랜잭션 — spec 생성 + uwLinks + screenLinks 일괄 매핑
     const spec = await prisma.$transaction(async (tx) => {
       const created = await tx.tbQaTestSpec.create({
         data: {
@@ -183,13 +209,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           sort_ordr:            (maxSort?.sort_ordr ?? 0) + 1,
         },
       });
-      await tx.tbQaTestSpecUw.createMany({
-        data: unitWorkIds.map((uwId, i) => ({
-          test_spec_id: created.test_spec_id,
-          unit_work_id: uwId,
-          sort_ordr:    i,
-        })),
-      });
+      if (uwList.length > 0) {
+        await tx.tbQaTestSpecUw.createMany({
+          data: uwList.map((uwId, i) => ({
+            test_spec_id: created.test_spec_id,
+            unit_work_id: uwId,
+            sort_ordr:    i,
+          })),
+        });
+      }
+      if (screenList.length > 0) {
+        await tx.tbQaTestSpecScreen.createMany({
+          data: screenList.map((scrId, i) => ({
+            test_spec_id: created.test_spec_id,
+            scrn_id:      scrId,
+            sort_ordr:    i,
+          })),
+        });
+      }
       return created;
     });
 

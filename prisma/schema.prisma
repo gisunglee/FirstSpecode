@@ -180,6 +180,9 @@ model TbPjProject {
   // 기존 데이터 호환을 위해 DB 는 nullable 유지 — UI/문서 출력은 null 일 때
   // prjct_nm 으로 fallback.
   prjct_abrv    String?   @db.VarChar(10)
+  // 프로젝트 정식 명칭 (Full Name) — 현재는 단순 정보 보관용.
+  // 출력·검증·역할 없음. 향후 표지·머리말 등에 활용 검토.
+  prjct_full_nm String?   @db.VarChar(100)
   prjct_dc      String?
   client_nm     String?
   bgng_de       DateTime?
@@ -517,6 +520,8 @@ model TbDsScreen {
   coment_cn       String?
   areas           TbDsArea[]
   unitWork        TbDsUnitWork? @relation(fields: [unit_work_id], references: [unit_work_id])
+  // 테스트 명세서 매핑 — 단위 테스트가 이 화면을 대상으로 작성되었음을 의미
+  testSpecLinks   TbQaTestSpecScreen[]
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 보강)
   project         TbPjProject   @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_screen_prjct_fk")
 
@@ -1437,9 +1442,10 @@ model TbQaTestSpec {
   creat_dt             DateTime  @default(now())
   mdfcn_dt             DateTime?
 
-  uwLinks  TbQaTestSpecUw[]
-  cases    TbQaTestCase[]
-  rounds   TbQaTestRound[]
+  uwLinks      TbQaTestSpecUw[]
+  screenLinks  TbQaTestSpecScreen[]
+  cases        TbQaTestCase[]
+  rounds       TbQaTestRound[]
 
   project  TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_qa_test_spec_prjct_fk")
 
@@ -1460,6 +1466,23 @@ model TbQaTestSpecUw {
   @@id([test_spec_id, unit_work_id])
   @@index([unit_work_id], map: "tb_qa_test_spec_uw_uw_idx")
   @@map("tb_qa_test_spec_uw")
+}
+
+/// 테스트 명세서 ↔ 화면 매핑.
+/// UW 매핑(tb_qa_test_spec_uw)과 병존 — 단위 테스트는 보통 화면 단위,
+/// 통합 테스트는 UW/화면 자유. 명세서 본문 박스의 "프로그램 ID" 는
+/// 우선 이 매핑의 화면 displayId 들이 들어가고, 없으면 UW 매핑으로 fallback.
+model TbQaTestSpecScreen {
+  test_spec_id  String
+  scrn_id       String
+  sort_ordr     Int    @default(0)
+
+  testSpec  TbQaTestSpec @relation(fields: [test_spec_id], references: [test_spec_id], onDelete: Cascade, map: "tb_qa_test_spec_screen_spec_fk")
+  screen    TbDsScreen   @relation(fields: [scrn_id],      references: [scrn_id],      onDelete: Cascade, map: "tb_qa_test_spec_screen_scrn_fk")
+
+  @@id([test_spec_id, scrn_id])
+  @@index([scrn_id], map: "tb_qa_test_spec_screen_scrn_idx")
+  @@map("tb_qa_test_spec_screen")
 }
 
 /// 테스트 케이스 — 체크리스트 항목 또는 기능 시나리오.

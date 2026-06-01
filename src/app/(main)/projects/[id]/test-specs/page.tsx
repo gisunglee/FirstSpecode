@@ -34,11 +34,20 @@ type SpecListItem = {
   asignMemberId: string | null;
   prgrsRt:       number;  // 진척률 0~100
   unitWorks:     { unitWorkId: string; displayId: string | null; name: string | null }[];
+  screens:       { screenId:   string; displayId: string | null; name: string | null }[];
   caseCount:     number;
   roundCount:    number;
   createdAt:     string;
   updatedAt:     string | null;
 };
+
+// "<displayId> <name> 외 N개" 형태 요약. 첫 항목 + 나머지 개수 — 폭 좁은 컬럼에서도 가독성 유지.
+// 검색 매칭에는 별도 함수 — 요약 텍스트가 아닌 원본 항목 전체를 본다.
+function formatTargets(items: { displayId: string | null; name: string | null }[]): string {
+  if (items.length === 0) return "";
+  const first = `${items[0].displayId ?? "?"} ${items[0].name ?? ""}`.trim();
+  return items.length === 1 ? first : `${first} 외 ${items.length - 1}개`;
+}
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -90,15 +99,20 @@ function TestSpecListInner() {
   });
 
   // 클라이언트 필터 (DB 부하 없도록 — 향후 row 많아지면 서버 쿼리로 이전)
+  // 검색 대상: 명세서명·표시ID + 연결 단위업무·화면의 displayId/name 양쪽 모두.
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((s) => {
       if (sttusFilter !== "ALL" && s.sttusCode !== sttusFilter) return false;
       if (!q) return true;
+      const matchTarget = (t: { displayId: string | null; name: string | null }) =>
+        (t.name ?? "").toLowerCase().includes(q) ||
+        (t.displayId ?? "").toLowerCase().includes(q);
       return (
         s.testSpecNm.toLowerCase().includes(q) ||
         s.displayId.toLowerCase().includes(q) ||
-        s.unitWorks.some((u) => (u.name ?? "").toLowerCase().includes(q))
+        s.unitWorks.some(matchTarget) ||
+        s.screens.some(matchTarget)
       );
     });
   }, [items, search, sttusFilter]);
@@ -146,7 +160,7 @@ function TestSpecListInner() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="명세서명·표시ID·단위업무 검색"
+            placeholder="명세서명·표시ID·테스트 대상 검색"
             className="sp-input"
             style={{ width: 260, fontSize: 13 }}
           />
@@ -181,7 +195,7 @@ function TestSpecListInner() {
           <div style={{ ...gridStyle, padding: "10px 16px", background: "var(--color-bg-muted)", borderBottom: "1px solid var(--color-border)", fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>
             <span>표시 ID</span>
             <span>명세서명</span>
-            <span>연결 단위업무</span>
+            <span>테스트 대상</span>
             <span style={{ textAlign: "center" }}>케이스</span>
             <span style={{ textAlign: "center" }}>회차</span>
             <span style={{ textAlign: "center" }}>상태</span>
@@ -217,10 +231,26 @@ function TestSpecListInner() {
                 >
                   <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-brand, #1976d2)" }}>{s.displayId}</span>
                   <span style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.testSpecNm}</span>
-                  <span style={{ fontSize: 12, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {s.unitWorks.length === 0
-                      ? <em style={{ color: "var(--color-text-tertiary)" }}>(연결 없음)</em>
-                      : s.unitWorks.map((u) => `${u.displayId ?? "?"} ${u.name ?? ""}`.trim()).join(", ")}
+                  {/* 테스트 대상 — 화면 매핑이 있으면 화면, 없으면 단위업무.
+                      종류 라벨(작은 회색 칩)을 앞에 붙여 어떤 단위인지 즉시 인지. */}
+                  <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--color-text-secondary)", overflow: "hidden" }}>
+                    {s.screens.length === 0 && s.unitWorks.length === 0 ? (
+                      <em style={{ color: "var(--color-text-tertiary)" }}>(연결 없음)</em>
+                    ) : s.screens.length > 0 ? (
+                      <>
+                        <span style={targetKindChipStyle}>화면</span>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {formatTargets(s.screens)}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span style={targetKindChipStyle}>단위업무</span>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {formatTargets(s.unitWorks)}
+                        </span>
+                      </>
+                    )}
                   </span>
                   <span style={{ fontSize: 12, textAlign: "center", color: "var(--color-text-secondary)" }}>{s.caseCount}</span>
                   <span style={{ fontSize: 12, textAlign: "center", color: "var(--color-text-secondary)" }}>{s.roundCount}</span>
@@ -252,10 +282,21 @@ function TestSpecListInner() {
 
 const gridStyle: React.CSSProperties = {
   display: "grid",
-  // 표시ID / 명세서명 / 단위업무 / 케이스 / 회차 / 상태 / 진척률 / 수정일
+  // 표시ID / 명세서명 / 테스트 대상 / 케이스 / 회차 / 상태 / 진척률 / 수정일
   gridTemplateColumns: "100px 1.5fr 1.8fr 60px 60px 80px 100px 100px",
   gap: 12,
   alignItems: "center",
+};
+
+// 테스트 대상 종류 칩 — "화면" / "단위업무" 라벨용. 통합 톤으로 작게.
+const targetKindChipStyle: React.CSSProperties = {
+  fontSize:     11,
+  fontWeight:   600,
+  color:        "var(--color-text-tertiary)",
+  padding:      "1px 6px",
+  background:   "var(--color-bg-muted)",
+  borderRadius: "var(--radius-sm, 3px)",
+  flexShrink:   0,
 };
 
 // 진척률 막대 — 0~100. 디자인 토큰만 사용 (브랜드/borders/text)

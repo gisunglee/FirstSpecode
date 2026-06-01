@@ -260,8 +260,8 @@ function buildCasesSheet(wb: ExcelJS.Workbook, input: TestSpecXlsxInput): void {
   ws.getColumn(COL.group ).width = 14;
   ws.getColumn(COL.desc  ).width = isResult ? 38 : 50;
   ws.getColumn(COL.exp   ).width = isResult ? 28 : 38;
-  ws.getColumn(COL.date  ).width = 13;
-  ws.getColumn(COL.result).width = 10;
+  ws.getColumn(COL.date  ).width = 14;
+  ws.getColumn(COL.result).width = 13;
   ws.getColumn(COL.defect).width = 28;
   ws.getColumn(COL.fixDt ).width = 13;
   ws.getColumn(COL.fixRs ).width = 24;
@@ -304,7 +304,7 @@ function buildCasesSheet(wb: ExcelJS.Workbook, input: TestSpecXlsxInput): void {
 
   // Checklist 헤더 행 — Checklist 명은 D-E 합쳐서 넓게. 결과/결함/조치는 결과서일 때만.
   const chkHeader = ws.addRow([]);
-  chkHeader.getCell(COL.no    ).value = "Checklist No";
+  chkHeader.getCell(COL.no    ).value = "No";
   chkHeader.getCell(COL.group ).value = "구분";
   chkHeader.getCell(COL.desc  ).value = "Checklist 명";
   if (isResult) {
@@ -366,7 +366,7 @@ function buildCasesSheet(wb: ExcelJS.Workbook, input: TestSpecXlsxInput): void {
 
   // 기능 헤더 행 — 결과서일 때만 결과/결함/조치 컬럼 추가
   const fnHeader = ws.addRow([]);
-  fnHeader.getCell(COL.no    ).value = "CASE No";
+  fnHeader.getCell(COL.no    ).value = "No";
   fnHeader.getCell(COL.group ).value = "CASE 명";
   fnHeader.getCell(COL.desc  ).value = "테스트 내용";
   fnHeader.getCell(COL.exp   ).value = "예상 결과";

@@ -5,12 +5,15 @@
  *
  * 역할:
  *   - 과업 목록 조회 (FID-00092)
- *   - HTML5 드래그앤드롭으로 순서 조정 (FID-00093)
  *   - 복사 (FID-00094)
  *   - 삭제 모달 + ALL/TASK_ONLY 옵션 (FID-00095)
+ *
+ * 정렬 정책:
+ *   서버는 task_display_id asc 로 정렬한다. (드래그 정렬은 2026-05-30 제거됨 —
+ *   sort_ordr 컬럼은 신규 생성 시 채워지지만 조회 정렬엔 사용되지 않는다.)
  */
 
-import { Suspense, useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -115,11 +118,7 @@ function TaskListPageInner() {
   //   - 그 외 → undefined
   const effectiveAssignedTo = filterMember || (filterAssignedTo === "me" ? "me" : "");
 
-  // 로컬 순서 — 드래그 중 즉시 반영용
-  const [orderedTasks, setOrderedTasks] = useState<Task[]>([]);
   const [deletingTask, setDeletingTask] = useState<Task | null>(null);
-  const dragItem    = useRef<number | null>(null);
-  const dragOverItem = useRef<number | null>(null);
 
   // "내 담당" 필터 URL 동기화 — 공유 URL 복원 가능
   useEffect(() => {
@@ -145,11 +144,7 @@ function TaskListPageInner() {
     queryKey: ["tasks", projectId, effectiveAssignedTo],
     queryFn:  () => {
       const qs = effectiveAssignedTo ? `?assignedTo=${encodeURIComponent(effectiveAssignedTo)}` : "";
-      return authFetch<{ data: TasksResponse }>(`/api/projects/${projectId}/tasks${qs}`)
-        .then((r) => {
-          setOrderedTasks(r.data.tasks);
-          return r.data;
-        });
+      return authFetch<{ data: TasksResponse }>(`/api/projects/${projectId}/tasks${qs}`).then((r) => r.data);
     },
     enabled: hasLoadedProfile,
   });
@@ -180,39 +175,6 @@ function TaskListPageInner() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // ── 순서 저장 ──────────────────────────────────────────────────────────────
-  const sortMutation = useMutation({
-    mutationFn: (taskIds: string[]) =>
-      authFetch(`/api/projects/${projectId}/tasks/sort`, {
-        method: "PUT",
-        body: JSON.stringify({ taskIds }),
-      }),
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  // ── 드래그앤드롭 핸들러 ────────────────────────────────────────────────────
-  function handleDragStart(idx: number) {
-    dragItem.current = idx;
-  }
-  function handleDragEnter(idx: number) {
-    dragOverItem.current = idx;
-    if (dragItem.current === null || dragItem.current === idx) return;
-
-    const copy = [...orderedTasks];
-    const [moved] = copy.splice(dragItem.current, 1);
-    if (!moved) return;
-    copy.splice(idx, 0, moved);
-    dragItem.current = idx;
-    setOrderedTasks(copy);
-  }
-  function handleDragEnd() {
-    if (dragItem.current !== null) {
-      sortMutation.mutate(orderedTasks.map((t) => t.taskId));
-    }
-    dragItem.current = null;
-    dragOverItem.current = null;
-  }
-
   // ── 렌더링 ─────────────────────────────────────────────────────────────────
   if (isLoading) {
     return <div style={{ padding: "40px 32px", color: "#888" }}>로딩 중...</div>;
@@ -220,7 +182,7 @@ function TaskListPageInner() {
   
   // 에러 발생 시 빈 목록처럼 처리하되 안내 문구만 다르게 (사용자 요청: 심플하게)
   const isError = !!error;
-  const tasks = isError ? [] : (orderedTasks.length > 0 ? orderedTasks : data?.tasks ?? []);
+  const tasks = isError ? [] : (data?.tasks ?? []);
   const totalCount = isError ? 0 : data?.totalCount ?? 0;
 
   return (
@@ -299,10 +261,10 @@ function TaskListPageInner() {
         borderRadius: 8,
         overflow: "hidden",
       }}>
-        {/* 헤더 — 담당자 컬럼 추가 (과업명 뒤) */}
+        {/* 헤더 — 드래그 핸들 컬럼 제거 (2026-05-30) */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "32px 1fr 110px 10% 80px 1.2fr 8% 12%",
+          gridTemplateColumns: "1fr 110px 10% 80px 1.2fr 8% 12%",
           padding: "10px 16px",
           background: "var(--color-bg-muted)",
           borderBottom: "1px solid var(--color-border)",
@@ -311,7 +273,6 @@ function TaskListPageInner() {
           gap: 12,
           alignItems: "center",
         }}>
-          <span />
           <span>과업명</span>
           <span>담당자</span>
           <span style={{ textAlign: "center" }}>카테고리</span>
@@ -332,15 +293,10 @@ function TaskListPageInner() {
             return (
               <div
                 key={task.taskId}
-                draggable={canCreateTask}
-                onDragStart={canCreateTask ? () => handleDragStart(idx) : undefined}
-                onDragEnter={canCreateTask ? () => handleDragEnter(idx) : undefined}
-                onDragEnd={canCreateTask ? handleDragEnd : undefined}
-                onDragOver={canCreateTask ? (e) => e.preventDefault() : undefined}
                 onClick={() => router.push(`/projects/${projectId}/tasks/${task.taskId}`)}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "32px 1fr 110px 10% 80px 1.2fr 8% 12%",
+                  gridTemplateColumns: "1fr 110px 10% 80px 1.2fr 8% 12%",
                   padding: "12px 16px",
                   borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
                   alignItems: "center",
@@ -350,18 +306,6 @@ function TaskListPageInner() {
                   transition: "background 0.1s",
                 }}
               >
-                {/* 드래그 핸들 — 정렬 권한 있을 때만 노출 */}
-                {canCreateTask ? (
-                  <span
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ color: "#bbb", fontSize: 16, cursor: "grab", userSelect: "none" }}
-                  >
-                    ≡
-                  </span>
-                ) : (
-                  <span />
-                )}
-
                 {/* 과업명 */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 13, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
