@@ -28,6 +28,8 @@ import {
 } from "@/lib/exports/docx/requirements-def";
 import { buildRequirementsDefXlsx } from "@/lib/exports/xlsx/requirements-def";
 import { filenameSafe } from "@/lib/exports/filename";
+import { resolveDocMeta, type DocMetaSettings } from "@/lib/exports/doc-meta";
+import { findDocMeta } from "@/lib/exports/doc-meta-catalog";
 
 // ─── 코드 → 라벨 매핑 ───────────────────────────────────────
 const PRIORITY_LABELS: Record<string, string> = {
@@ -93,6 +95,10 @@ export async function buildRequirementsDefExportInput(
         copyright_holder:    true,
         doc_version_default: true,
         approver_nm:         true,
+        system_nm:           true,
+        system_code:         true,
+        doc_no_template:     true,
+        artifact_meta_json:  true,
       },
     }),
   ]);
@@ -191,7 +197,23 @@ export async function buildRequirementsDefExportInput(
   const copyrightText   = settings?.copyright_holder?.trim()    || REQUIREMENTS_DEF_FALLBACK.copyright;
   const documentVersion = settings?.doc_version_default?.trim() || REQUIREMENTS_DEF_FALLBACK.documentVersion;
   const approverName    = settings?.approver_nm?.trim()         || REQUIREMENTS_DEF_FALLBACK.approverName;
-  const writtenAt = new Date().toISOString().slice(0, 10);
+  const now       = new Date();
+  const writtenAt = now.toISOString().slice(0, 10);
+
+  // 문서 메타/번호 — 카탈로그(요구사항정의서 기본값) ← 설정 오버라이드 머지 후 문서번호 생성
+  const docMetaSettings: DocMetaSettings = {
+    systemNm:      settings?.system_nm,
+    systemCode:    settings?.system_code,
+    docNoTemplate: settings?.doc_no_template,
+    artifactMeta:  (settings?.artifact_meta_json ?? null) as DocMetaSettings["artifactMeta"],
+  };
+  const docMeta = resolveDocMeta({
+    catalogMeta: findDocMeta("REQUIREMENTS_DEF"),
+    artifactKey: "REQUIREMENTS_DEF",
+    settings:    docMetaSettings,
+    project:     { projectName: project.prjct_nm, projectAbbr: project.prjct_abrv },
+    year:        now.getFullYear(),
+  });
 
   // ── ⑦ input 조립 ──────────────────────────────────────────
   const input: RequirementsDefExportInput = {
@@ -207,10 +229,10 @@ export async function buildRequirementsDefExportInput(
 
     documentVersion,
     writtenAt,
-    // 정책: 요구사항 정의서는 프로젝트 단위 산출물 — 작성·승인 모두 PM(프로젝트 설정의
-    // 기본 승인자) 책임으로 통일. xlsx/docx 양쪽 표지·변경이력에 동일 적용된다.
+    // 작성·승인 모두 PM(설정의 기본 승인자)으로 통일. 발행/이력 시스템이 이 값을 사용.
     authorName:   approverName,
     approverName,
+    docMeta,
     history: [{
       version:  documentVersion,
       date:     writtenAt,

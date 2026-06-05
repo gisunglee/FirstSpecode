@@ -40,6 +40,10 @@ export type ArtifactOption = {
   defaultValue:  boolean;      // 다이얼로그 초기 체크 상태
 };
 
+/**
+ * 산출물 단계/활동/작업/문서코드 메타는 별도 카탈로그(doc-meta-catalog.ts)로 분리됨.
+ * (문서실 카드가 없는 per-entity 산출물도 함께 다루기 위함)
+ */
 export type ProjectArtifact = {
   key:         ProjectArtifactKey;
   title:       string;
@@ -99,15 +103,36 @@ export const PROJECT_ARTIFACTS: ProjectArtifact[] = [
   {
     key:         "TASK_MATRIX",
     title:       "과업대비표",
-    description: "과업 × 요구사항/단위업무 매트릭스",
+    description: "RFP/제안서 과업이 요구사항으로 어떻게 반영됐는지 매핑 (과업↔요구사항)",
     icon:        "📊",
-    enabled:     false,
+    enabled:     true,
     formats: [
       {
         type:             "docx",
         label:            "Word ↓",
         apiPath:          (id) => `/api/projects/${id}/artifacts/task-matrix/docx`,
         fallbackFilename: (name) => `${name}_과업대비표.docx`,
+      },
+      {
+        type:             "xlsx",
+        label:            "Excel ↓",
+        apiPath:          (id) => `/api/projects/${id}/artifacts/task-matrix/xlsx`,
+        fallbackFilename: (name) => `${name}_과업대비표.xlsx`,
+      },
+    ],
+    // 본문 포함 옵션 — 기본 OFF (과업대비표는 원래 "매핑만". 감리 요청 시 본문 동봉).
+    options: [
+      {
+        key:          "includeTaskContent",
+        label:        "과업 본문 포함",
+        description:  "과업의 상세 내용(제안서/수행 내용)을 컬럼에 함께 표시합니다.",
+        defaultValue: false,
+      },
+      {
+        key:          "includeReqContent",
+        label:        "요구사항 본문(현행본) 포함",
+        description:  "요구사항정의서의 현행본 내용을 컬럼에 함께 표시합니다.",
+        defaultValue: false,
       },
     ],
   },

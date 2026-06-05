@@ -29,9 +29,11 @@ import {
   SIZE_HEADING_1,
   CONTENT_WIDTH,
 } from "./tokens";
-import { p, labelCell, valueCell, headerCell, projectTitleRuns } from "./helpers";
+import { p, labelCell, valueCell, headerCell, projectTitleRuns, buildCoverMetaTable } from "./helpers";
 import { buildDocument, heading1, heading2 } from "./frame";
 import { renderMarkdown } from "./markdown";
+import { shrinkDocxFonts } from "./shrink-fonts";
+import { docMetaCoverRows, type ResolvedDocMeta } from "@/lib/exports/doc-meta";
 
 // ─── 입력 타입 ────────────────────────────────────────────
 /**
@@ -62,11 +64,15 @@ export type RequirementExportInput = {
   sortOrder:       number; // 정렬 순서
   detailSpec:      string; // 상세 명세 (마크다운 가능, 빈 문자열이면 섹션 생략)
 
-  // ── 표지 작성정보 ──────────────────────────────
+  // ── 작성정보 (변경이력 표 + 발행 시스템이 사용) ──
+  // 표지엔 미표시(변경이력에만). documentVersion/authorName/approverName 은 발행/이력 시스템도 사용.
   documentVersion: string; // (예: "v1.0")
   writtenAt:       string; // (예: "2026-04-26")
   authorName:      string; // 작성자명
   approverName:    string; // 승인자명
+
+  // ── 문서 메타/번호 (시스템명·단계·활동·작업·문서번호) ──
+  docMeta: ResolvedDocMeta;
 
   // ── 변경 이력 ──────────────────────────────────
   // 최신이 위. 빈 배열이면 표 헤더만 표시.
@@ -98,20 +104,15 @@ function buildCover(input: RequirementExportInput, docKind: string): (Paragraph 
   // 표지 상단 여백
   const blank = (size: number) => new Paragraph({ spacing: { before: size }, children: [new TextRun("")] });
 
-  // 작성정보 표 (작성일/문서버전/작성자/승인자)
+  // 표지 메타표 — 시스템명/단계/활동/작업 + 문서번호 (다른 산출물과 동일 컨셉).
+  // 작성일/문서버전/작성자/승인자는 변경이력 표에 있어 표지에선 생략 (중복 제거).
   const COVER_LABEL_W = 1800;
   const COVER_VALUE_W = 3600;
-  const coverInfoTable = new Table({
-    width:        { size: COVER_LABEL_W + COVER_VALUE_W, type: WidthType.DXA },
-    columnWidths: [COVER_LABEL_W, COVER_VALUE_W],
-    alignment:    AlignmentType.CENTER,
-    rows: [
-      new TableRow({ children: [labelCell("작성일",   COVER_LABEL_W), valueCell(input.writtenAt,       COVER_VALUE_W)] }),
-      new TableRow({ children: [labelCell("문서 버전", COVER_LABEL_W), valueCell(input.documentVersion, COVER_VALUE_W)] }),
-      new TableRow({ children: [labelCell("작성자",   COVER_LABEL_W), valueCell(input.authorName,      COVER_VALUE_W)] }),
-      new TableRow({ children: [labelCell("승인자",   COVER_LABEL_W), valueCell(input.approverName,    COVER_VALUE_W)] }),
-    ],
-  });
+  const coverInfoTable = buildCoverMetaTable(
+    docMetaCoverRows(input.docMeta, { includeDocNo: true }),
+    COVER_LABEL_W,
+    COVER_VALUE_W,
+  );
 
   return [
     blank(2000),
@@ -278,6 +279,7 @@ export async function buildRequirementDocx(input: RequirementExportInput): Promi
     copyright:   input.copyright,
     title:       `${input.reqDisplayId} ${DOC_KIND}`,
     description: `${input.reqDisplayId} ${input.reqName} - ${input.ordererName}`,
+    docNo:       input.docMeta.docNo, // 머리글 우측 문서번호
     children: [
       ...buildCover(input, DOC_KIND),
       ...buildHistory(input),
@@ -286,5 +288,7 @@ export async function buildRequirementDocx(input: RequirementExportInput): Promi
     ],
   });
 
-  return Packer.toBuffer(doc);
+  // 10pt 초과 글꼴을 1pt 축소 (10pt 이하 유지) — 다른 Word 산출물과 동일 정책.
+  const buffer = await Packer.toBuffer(doc);
+  return shrinkDocxFonts(buffer);
 }

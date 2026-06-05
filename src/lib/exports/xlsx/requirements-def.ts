@@ -22,6 +22,7 @@
 import ExcelJS from "exceljs";
 import type { RequirementsDefExportInput } from "@/lib/exports/docx/requirements-def";
 import { htmlToPlainText } from "@/lib/exports/docx/html";
+import { docMetaCoverRows } from "@/lib/exports/doc-meta";
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  스타일 상수 — 시트 간 톤 일관성 유지를 위해 한 곳에 모음
@@ -100,15 +101,20 @@ function buildCoverSheet(wb: ExcelJS.Workbook, input: RequirementsDefExportInput
     properties: { tabColor: { argb: HEADER_FILL_COLOR } },
   });
 
+  // 인쇄 시 표지 내용을 페이지 정중앙으로 — 좌상단 치우침 방지.
+  // 가로는 페이지 정중앙. 세로는 명시적 여백으로 위치 제어(verticalCentered 끔) —
+  // 그래야 타이틀(상단 여백)과 메타표(간격)를 따로 올리고 내릴 수 있다.
+  ws.pageSetup.horizontalCentered = true;
+  ws.pageSetup.verticalCentered   = false;
+
   // 컬럼 폭 — 라벨 + 값 2열
   ws.columns = [
     { width: 18 },
     { width: 42 },
   ];
 
-  // 상단 여백
-  ws.addRow([]);
-  ws.addRow([]);
+  // 상단 여백 — 타이틀의 세로 위치 결정 (작을수록 타이틀이 위로).
+  for (let i = 0; i < 8; i++) ws.addRow([]);
 
   // 프로젝트명 — 큰 글씨
   const projRow = ws.addRow([input.projectName]);
@@ -138,17 +144,12 @@ function buildCoverSheet(wb: ExcelJS.Workbook, input: RequirementsDefExportInput
   subtitleRow.alignment = { vertical: "middle", horizontal: "center" };
   subtitleRow.height = 22;
 
-  // 작성정보 표 — 타이틀과 사이에 여백을 더 줘서 시각적 무게 분산
-  for (let i = 0; i < 6; i++) ws.addRow([]);
+  // 제목 블록과 메타표 사이 간격 — 메타표의 세로 위치 결정 (클수록 메타표가 더 아래로).
+  for (let i = 0; i < 15; i++) ws.addRow([]);
 
-  // 메타 표 — 발주처 제거. 작성자/승인자 모두 표시.
-  // 값은 데이터 매핑 단계에서 통일됨 (requirements-def-data.ts 참고) — 빌더는 그대로 표시.
-  const metaRows: [string, string][] = [
-    ["작성일",    input.writtenAt],
-    ["문서 버전", input.documentVersion],
-    ["작성자",    input.authorName],
-    ["승인자",    input.approverName],
-  ];
+  // 메타 표 — 시스템명/단계/활동/작업/문서번호 (docx 표지와 통일).
+  // 작성일/문서버전/작성자/승인자는 "변경 이력" 시트에 있어 표지에선 생략 (중복 제거).
+  const metaRows: [string, string][] = docMetaCoverRows(input.docMeta, { includeDocNo: true });
   for (const [label, value] of metaRows) {
     const r = ws.addRow([label, value]);
     applyLabelCellStyle(r.getCell(1));

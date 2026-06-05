@@ -71,15 +71,17 @@ export default function DocsContent({ data }: { data: DocsPageDetail }) {
       style={{
         flex:         1,
         overflowY:    "auto",
-        padding:      "32px 48px 64px",
-        background:   "var(--color-bg-root)",
+        padding:      "48px 64px 96px",
+        // 본문은 흰 서피스 레이어 사용 — light 테마의 회청색 root(#e8eaf2) 대신
+        // 순백(#ffffff)으로 깔끔하게. OpenAI/Claude docs 처럼 종이 같은 읽기 면.
+        background:   "var(--color-bg-surface)",
         // 본문은 가독성 위해 폭 제한 — 너무 넓으면 한 줄이 길어 읽기 피로
         // 단, 표/이미지가 있을 수 있어 max-width 만, width 는 자유
         maxWidth:     "100%",
         boxSizing:    "border-box",
       }}
     >
-      <div style={{ maxWidth: 820, margin: "0 auto" }}>
+      <div style={{ maxWidth: 760, margin: "0 auto" }}>
         {/* 상단 — 섹션 브레드크럼 */}
         <nav
           aria-label="문서 위치"
@@ -87,8 +89,11 @@ export default function DocsContent({ data }: { data: DocsPageDetail }) {
             display:    "flex",
             alignItems: "center",
             gap:        6,
-            marginBottom: 12,
-            fontSize:   "var(--text-sm)",
+            marginBottom: 16,
+            // 브레드크럼은 보조 정보 — 작고 옅게, 본문 위에서 조용히 위치만 알림
+            fontSize:   "var(--text-xs)",
+            fontWeight: 600,
+            letterSpacing: "0.02em",
             color:      "var(--color-text-tertiary)",
           }}
         >
@@ -103,14 +108,16 @@ export default function DocsContent({ data }: { data: DocsPageDetail }) {
         </nav>
 
         {/* 페이지 제목 + 배지 */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
           <h1
             style={{
               margin:   0,
-              fontSize: "var(--text-2xl, 28px)",
+              // 큰 제목 — 표준 docs 헤더 느낌. 작고 빽빽한 인상 제거.
+              fontSize: "var(--text-3xl, 30px)",
               fontWeight: 700,
               color:    "var(--color-text-heading)",
-              lineHeight: 1.3,
+              lineHeight: 1.25,
+              letterSpacing: "-0.01em",
             }}
           >
             {page.pageSj}
@@ -118,23 +125,23 @@ export default function DocsContent({ data }: { data: DocsPageDetail }) {
           {page.badgeCode && <PageBadge code={page.badgeCode} />}
         </div>
 
-        {/* 한 줄 요약 (있으면) */}
+        {/* 한 줄 요약 (있으면) — 제목 아래 리드 문장 */}
         {page.pageExcerpt && (
           <p style={{
-            margin:    "0 0 24px",
-            fontSize:  "var(--text-md)",
+            margin:    "0 0 32px",
+            fontSize:  "var(--text-lg)",
             color:     "var(--color-text-secondary)",
-            lineHeight: 1.6,
+            lineHeight: 1.65,
           }}>
             {page.pageExcerpt}
           </p>
         )}
 
-        {/* 구분선 */}
+        {/* 구분선 — 본문 시작을 가르는 옅은 선 (요약 없을 때만 살짝 띄움) */}
         <hr style={{
           border:     "none",
           borderTop:  "1px solid var(--color-border-subtle)",
-          margin:     "16px 0 24px",
+          margin:     page.pageExcerpt ? "0 0 32px" : "20px 0 32px",
         }} />
 
         {/* 본문 — Markdown */}
@@ -350,11 +357,11 @@ function PagerLink({
         display:        "flex",
         flexDirection:  "column",
         gap:            4,
-        padding:        "12px 16px",
+        padding:        "14px 18px",
         textAlign:      isPrev ? "left" : "right",
         textDecoration: "none",
-        background:     "var(--color-bg-card)",
-        border:         "1px solid var(--color-border)",
+        background:     "var(--color-bg-surface)",
+        border:         "1px solid var(--color-border-subtle)",
         borderRadius:   "var(--radius-card)",
         transition:     "border-color 0.15s, background 0.15s",
       }}
@@ -490,99 +497,105 @@ function formatDate(iso: string): string {
 
 // ── Markdown 요소 스타일 (모두 토큰 기반) ───────────────────────────────
 // 인라인 객체로 정의 — components.css 오염 방지 + 스타일 추적 쉬움
+// 본문 타이포는 표준 docs 스케일로 — 제목은 크게, 본문은 14px + 넉넉한 행간.
+// 헤딩 위 여백을 크게 둬서 섹션이 시각적으로 분리되도록(빽빽함 제거).
 const H1: React.CSSProperties = {
-  margin:    "32px 0 12px",
-  fontSize:  "var(--text-xl, 22px)",
+  margin:    "48px 0 16px",
+  fontSize:  "var(--text-2xl, 24px)",
   fontWeight:700,
   color:     "var(--color-text-heading)",
   lineHeight:1.3,
+  letterSpacing: "-0.01em",
 };
 const H2: React.CSSProperties = {
-  margin:     "28px 0 10px",
-  paddingBottom: 6,
-  borderBottom: "1px solid var(--color-border-subtle)",
-  fontSize:   "var(--text-lg, 18px)",
+  margin:     "44px 0 14px",
+  fontSize:   "var(--text-xl, 20px)",
   fontWeight: 700,
   color:      "var(--color-text-heading)",
+  lineHeight: 1.35,
+  letterSpacing: "-0.01em",
 };
 const H3: React.CSSProperties = {
-  margin:    "20px 0 8px",
-  fontSize:  "var(--text-md, 16px)",
+  margin:    "32px 0 10px",
+  fontSize:  "var(--text-lg, 16px)",
+  fontWeight:700,
+  color:     "var(--color-text-heading)",
+  lineHeight:1.4,
+};
+const H4: React.CSSProperties = {
+  margin:    "24px 0 8px",
+  fontSize:  "var(--text-md, 14px)",
   fontWeight:700,
   color:     "var(--color-text-heading)",
 };
-const H4: React.CSSProperties = {
-  margin:    "16px 0 6px",
-  fontSize:  "var(--text-md, 15px)",
-  fontWeight:600,
-  color:     "var(--color-text-heading)",
-};
 const P: React.CSSProperties = {
-  margin:    "10px 0",
-  fontSize:  "var(--text-md)",
+  margin:    "14px 0",
+  fontSize:  "var(--text-lg)",
   color:     "var(--color-text-primary)",
-  lineHeight:1.75,
+  lineHeight:1.8,
 };
 const STRONG: React.CSSProperties = { fontWeight: 700, color: "var(--color-text-heading)" };
 const EM:     React.CSSProperties = { fontStyle: "italic" };
 
-const UL: React.CSSProperties = { margin: "10px 0", paddingLeft: 24, color: "var(--color-text-primary)" };
-const OL: React.CSSProperties = { margin: "10px 0", paddingLeft: 24, color: "var(--color-text-primary)" };
-const LI: React.CSSProperties = { margin: "4px 0", lineHeight: 1.7, fontSize: "var(--text-md)" };
+const UL: React.CSSProperties = { margin: "14px 0", paddingLeft: 26, color: "var(--color-text-primary)" };
+const OL: React.CSSProperties = { margin: "14px 0", paddingLeft: 26, color: "var(--color-text-primary)" };
+const LI: React.CSSProperties = { margin: "6px 0", lineHeight: 1.8, fontSize: "var(--text-lg)" };
 
+// 콜아웃 — 옅은 카드 배경 + 좌측 브랜드 스트립. 강한 색면 대신 차분하게.
 const QUOTE: React.CSSProperties = {
-  margin:       "16px 0",
-  padding:      "10px 14px",
+  margin:       "20px 0",
+  padding:      "12px 18px",
   borderLeft:   "3px solid var(--color-brand)",
-  background:   "var(--color-brand-subtle)",
+  background:   "var(--color-bg-card)",
   color:        "var(--color-text-secondary)",
   borderRadius: "var(--radius-sm)",
 };
 
+// 인라인 코드 — 흰 본문 위에서 옅은 칩으로. 테두리 없이 배경만(깔끔).
 const INLINE_CODE: React.CSSProperties = {
-  padding:      "1px 5px",
-  fontSize:     "0.92em",
+  padding:      "2px 6px",
+  fontSize:     "0.88em",
   fontFamily:   "var(--font-mono)",
-  background:   "var(--color-bg-elevated)",
+  background:   "var(--color-bg-card)",
   color:        "var(--color-text-primary)",
   borderRadius: "var(--radius-sm)",
-  border:       "1px solid var(--color-border-subtle)",
 };
 
+// 코드블록 — 한 단계 옅은 면 + 옅은 테두리. radius 키워 부드럽게.
 const PRE: React.CSSProperties = {
-  margin:       "16px 0",
-  padding:      "14px 16px",
+  margin:       "20px 0",
+  padding:      "16px 18px",
   fontFamily:   "var(--font-mono)",
   fontSize:     "var(--text-sm)",
-  lineHeight:   1.6,
-  background:   "var(--color-bg-elevated)",
+  lineHeight:   1.7,
+  background:   "var(--color-bg-card)",
   color:        "var(--color-text-primary)",
-  border:       "1px solid var(--color-border)",
+  border:       "1px solid var(--color-border-subtle)",
   borderRadius: "var(--radius-card)",
   overflowX:    "auto",
 };
 
 const TABLE_WRAP: React.CSSProperties = {
-  margin:       "16px 0",
+  margin:       "20px 0",
   overflowX:    "auto",
-  border:       "1px solid var(--color-border)",
+  border:       "1px solid var(--color-border-subtle)",
   borderRadius: "var(--radius-card)",
 };
 const TABLE: React.CSSProperties = {
   width:          "100%",
   borderCollapse: "collapse",
-  fontSize:       "var(--text-sm)",
+  fontSize:       "var(--text-md)",
 };
-const THEAD: React.CSSProperties = { background: "var(--color-bg-elevated)" };
+const THEAD: React.CSSProperties = { background: "var(--color-bg-card)" };
 const TR:    React.CSSProperties = { borderBottom: "1px solid var(--color-border-subtle)" };
 const TH:    React.CSSProperties = {
-  padding:    "8px 12px",
+  padding:    "10px 14px",
   textAlign:  "left",
   fontWeight: 600,
   color:      "var(--color-text-heading)",
 };
 const TD:    React.CSSProperties = {
-  padding:  "8px 12px",
+  padding:  "10px 14px",
   color:    "var(--color-text-primary)",
 };
 
@@ -595,7 +608,7 @@ const LINK: React.CSSProperties = {
 const HR: React.CSSProperties = {
   border:    "none",
   borderTop: "1px solid var(--color-border-subtle)",
-  margin:    "24px 0",
+  margin:    "32px 0",
 };
 
 const IMG: React.CSSProperties = {

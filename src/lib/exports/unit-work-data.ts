@@ -26,6 +26,8 @@ import {
 } from "@/lib/exports/docx/unit-work";
 import { bumpMinorVersion } from "@/lib/exports/version";
 import { buildDocxFilename } from "@/lib/exports/filename";
+import { resolveDocMeta, type DocMetaSettings } from "@/lib/exports/doc-meta";
+import { findDocMeta } from "@/lib/exports/doc-meta-catalog";
 
 // ─── 코드 → 라벨 매핑 ────────────────────────────────────────
 // 화면(unit-works/[unitWorkId]/page.tsx 등) 과 동일한 라벨.
@@ -245,6 +247,10 @@ export async function buildUnitWorkExportInput(
         copyright_holder:    true,
         doc_version_default: true,
         approver_nm:         true,
+        system_nm:           true,
+        system_code:         true,
+        doc_no_template:     true,
+        artifact_meta_json:  true,
       },
     }),
   ]);
@@ -505,7 +511,22 @@ export async function buildUnitWorkExportInput(
     ? assigneeName
     : UNIT_WORK_EXPORT_FALLBACK.authorName;
 
-  const writtenAt = new Date().toISOString().slice(0, 10);
+  const now       = new Date();
+  const writtenAt = now.toISOString().slice(0, 10);
+
+  // 문서 메타/번호 — 카탈로그(프로그램 사양서 기본값) ← 설정 오버라이드 머지 후 문서번호 생성
+  const docMeta = resolveDocMeta({
+    catalogMeta: findDocMeta("UNIT_WORK"),
+    artifactKey: "UNIT_WORK",
+    settings: {
+      systemNm:      settings?.system_nm,
+      systemCode:    settings?.system_code,
+      docNoTemplate: settings?.doc_no_template,
+      artifactMeta:  (settings?.artifact_meta_json ?? null) as DocMetaSettings["artifactMeta"],
+    },
+    project: { projectName: project.prjct_nm, projectAbbr: project.prjct_abrv },
+    year:    now.getFullYear(),
+  });
 
   // 부모 요구사항 표시 — "REQ-XXXXX 요구사항명"
   const parentRequirement = unitWork.requirement
@@ -536,6 +557,7 @@ export async function buildUnitWorkExportInput(
     writtenAt,
     authorName,
     approverName,
+    docMeta,
     history: [{
       version:  documentVersion,
       date:     writtenAt,

@@ -16,7 +16,7 @@
 
 import {
   Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType,
-  BorderStyle, WidthType, ShadingType, VerticalAlign, LevelFormat,
+  BorderStyle, WidthType, ShadingType, VerticalAlign, VerticalMergeType, LevelFormat,
 } from "docx";
 import {
   FONT,
@@ -157,6 +157,12 @@ export function labelCell(text: string, width: number, opts: LabelCellOptions = 
 type ValueCellOptions = {
   columnSpan?: number;
   align?:      (typeof AlignmentType)[keyof typeof AlignmentType];
+  /**
+   * 세로 병합 — 여러 행에 걸친 셀을 만들 때 사용.
+   *   - RESTART  : 병합 시작 행 (내용 표시)
+   *   - CONTINUE : 위 셀에 흡수되는 행 (내용 무시 — 빈 값 전달)
+   */
+  verticalMerge?: (typeof VerticalMergeType)[keyof typeof VerticalMergeType];
 };
 
 /**
@@ -173,7 +179,8 @@ export function valueCell(
     width:   { size: width, type: WidthType.DXA },
     margins: { top: 60, bottom: 60, left: 120, right: 120 },
     verticalAlign: VerticalAlign.CENTER,
-    columnSpan: opts.columnSpan,
+    columnSpan:    opts.columnSpan,
+    verticalMerge: opts.verticalMerge,
     children: lines.map((line) => p(line, {
       size: SIZE_TABLE_CELL, align: opts.align,
       before: 0, after: 0, line: 240,
@@ -201,6 +208,24 @@ export function headerCell(text: string, width: number): TableCell {
         before: 0, after: 0, line: 240,
       }),
     ],
+  });
+}
+
+// ─── 표지 메타표 ────────────────────────────────────────
+/**
+ * 라벨/값 2열 표지 메타표를 만든다 (가운데 정렬).
+ * @param pairs   [라벨, 값] 쌍 배열 (standardDocMetaPairs 결과 등)
+ * @param labelW  라벨 컬럼 폭 (DXA)
+ * @param valueW  값 컬럼 폭 (DXA)
+ */
+export function buildCoverMetaTable(pairs: [string, string][], labelW: number, valueW: number): Table {
+  return new Table({
+    width:        { size: labelW + valueW, type: WidthType.DXA },
+    columnWidths: [labelW, valueW],
+    alignment:    AlignmentType.CENTER,
+    rows: pairs.map(([label, value]) =>
+      new TableRow({ children: [labelCell(label, labelW), valueCell(value, valueW)] })
+    ),
   });
 }
 

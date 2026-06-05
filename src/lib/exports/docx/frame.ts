@@ -39,8 +39,15 @@ import { p, noBorders, numberingConfig } from "./helpers";
  * 자몽컴퍼니 공공 SI 양식 참고: 표 1행 2열 + 회색 하단선 paragraph border.
  * 별도 표는 셀 보더를 다 끄고(noBorders) 좌우 정렬만 활용.
  */
-function buildHeader(ordererName: string, docKind: string): Header {
+function buildHeader(ordererName: string, docKind: string, docNo?: string): Header {
   const halfWidth = CONTENT_WIDTH / 2;
+  // 우측 셀 — 문서종류(상단) + 문서번호(있으면 하단, 작고 옅게)
+  const rightChildren = [
+    p(docKind, { size: SIZE_HEADER_FOOT, align: AlignmentType.RIGHT }),
+    ...(docNo
+      ? [p(`문서번호 : ${docNo}`, { size: SIZE_FOOTER_NOTE, color: COLOR_MUTED, align: AlignmentType.RIGHT })]
+      : []),
+  ];
   return new Header({
     children: [
       new Table({
@@ -57,7 +64,7 @@ function buildHeader(ordererName: string, docKind: string): Header {
               new TableCell({
                 borders: noBorders,
                 width:   { size: halfWidth, type: WidthType.DXA },
-                children: [p(docKind, { size: SIZE_HEADER_FOOT, align: AlignmentType.RIGHT })],
+                children: rightChildren,
               }),
             ],
           }),
@@ -140,6 +147,8 @@ type BuildDocumentOptions = {
   description: string;
   /** 섹션 본문 — 표지/변경이력/목차/본문 등 모든 children 을 순서대로 */
   children: ISectionOptions["children"];
+  /** 머리글 우측에 표시할 문서번호 (예: "GDBS_A301_001"). 없으면 미표시. */
+  docNo?: string;
 };
 
 /**
@@ -184,7 +193,7 @@ export function buildDocument(opts: BuildDocumentOptions): Document {
           margin: { top: PAGE_MARGIN, right: PAGE_MARGIN, bottom: PAGE_MARGIN, left: PAGE_MARGIN },
         },
       },
-      headers: { default: buildHeader(opts.ordererName, opts.docKind) },
+      headers: { default: buildHeader(opts.ordererName, opts.docKind, opts.docNo) },
       footers: { default: buildFooter(opts.copyright) },
       children: opts.children,
     }],

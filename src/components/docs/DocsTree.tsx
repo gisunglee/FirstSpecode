@@ -136,17 +136,19 @@ export default function DocsTree({ sections }: { sections: DocsSection[] }) {
   return (
     <aside
       style={{
-        width:        240,
+        width:        260,
         flexShrink:   0,
-        background:   "var(--color-bg-card)",
-        borderRight:  "1px solid var(--color-border)",
+        // 본문과 같은 흰 서피스 — 트리·본문이 하나의 깨끗한 면처럼 이어지고
+        // 둘 사이는 옅은 세로선으로만 구분 (OpenAI/Claude docs 패턴).
+        background:   "var(--color-bg-surface)",
+        borderRight:  "1px solid var(--color-border-subtle)",
         display:      "flex",
         flexDirection: "column",
         overflow:     "hidden",
       }}
     >
       {/* 검색박스 */}
-      <div style={{ padding: "12px", borderBottom: "1px solid var(--color-border-subtle)" }}>
+      <div style={{ padding: "14px 14px 10px" }}>
         <div style={{ position: "relative" }}>
           <svg
             width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -169,11 +171,11 @@ export default function DocsTree({ sections }: { sections: DocsSection[] }) {
             placeholder="문서 검색"
             style={{
               width:        "100%",
-              padding:      "7px 10px 7px 30px",
+              padding:      "8px 10px 8px 32px",
               fontSize:     "var(--text-sm)",
-              border:       "1px solid var(--color-border)",
-              borderRadius: "var(--radius-input, 6px)",
-              background:   "var(--color-bg-input)",
+              border:       "1px solid var(--color-border-subtle)",
+              borderRadius: "var(--radius-md, 6px)",
+              background:   "var(--color-bg-card)",
               color:        "var(--color-text-primary)",
               outline:      "none",
               boxSizing:    "border-box",
@@ -185,7 +187,7 @@ export default function DocsTree({ sections }: { sections: DocsSection[] }) {
       {/* 트리 본체 */}
       <nav
         aria-label="문서 트리"
-        style={{ flex: 1, overflowY: "auto", padding: "6px 0" }}
+        style={{ flex: 1, overflowY: "auto", padding: "8px 8px 16px" }}
       >
         {filteredSections.length === 0 ? (
           <div style={{
@@ -200,7 +202,7 @@ export default function DocsTree({ sections }: { sections: DocsSection[] }) {
           filteredSections.map((s) => {
             const isOpen = isSearching || expanded.has(s.sectSlug);
             return (
-              <div key={s.sectId}>
+              <div key={s.sectId} style={{ marginBottom: 4 }}>
                 {/* 섹션 헤더 (펼침/접힘 토글) */}
                 <button
                   onClick={() => !isSearching && toggleSection(s.sectSlug)}
@@ -209,11 +211,12 @@ export default function DocsTree({ sections }: { sections: DocsSection[] }) {
                     alignItems:     "center",
                     gap:            6,
                     width:          "100%",
-                    padding:        "7px 14px",
+                    padding:        "8px 10px",
                     background:     "transparent",
                     border:         "none",
+                    borderRadius:   "var(--radius-sm)",
                     color:          "var(--color-text-heading)",
-                    fontSize:       "var(--text-sm)",
+                    fontSize:       "var(--text-md)",
                     fontWeight:     600,
                     cursor:         isSearching ? "default" : "pointer",
                     textAlign:      "left",
@@ -223,7 +226,7 @@ export default function DocsTree({ sections }: { sections: DocsSection[] }) {
                     style={{
                       display:    "inline-block",
                       width:      10,
-                      fontSize:   10,
+                      fontSize:   9,
                       color:      "var(--color-text-tertiary)",
                       transform:  isOpen ? "rotate(90deg)" : "none",
                       transition: "transform 0.15s",
@@ -249,8 +252,11 @@ export default function DocsTree({ sections }: { sections: DocsSection[] }) {
                             alignItems:     "center",
                             justifyContent: "space-between",
                             gap:            6,
-                            padding:        "5px 14px 5px 32px",
-                            fontSize:       "var(--text-sm)",
+                            // 활성 항목은 좌측 스트립 대신 둥근 알약 배경으로 — 더 표준적이고 부드럽다.
+                            margin:         "1px 0",
+                            padding:        "6px 10px 6px 26px",
+                            borderRadius:   "var(--radius-sm)",
+                            fontSize:       "var(--text-md)",
                             textDecoration: "none",
                             color:          isActive
                               ? "var(--color-brand)"
@@ -258,9 +264,6 @@ export default function DocsTree({ sections }: { sections: DocsSection[] }) {
                             background:     isActive
                               ? "var(--color-brand-subtle)"
                               : "transparent",
-                            borderLeft:     isActive
-                              ? "2px solid var(--color-brand)"
-                              : "2px solid transparent",
                             fontWeight:     isActive ? 600 : 400,
                           }}
                         >

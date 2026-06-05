@@ -35,9 +35,14 @@ import {
   SIZE_HEADING_1,
   CONTENT_WIDTH,
 } from "./tokens";
-import { p, labelCell, valueCell, headerCell, projectTitleRuns } from "./helpers";
+import {
+  p, labelCell, valueCell, headerCell, projectTitleRuns,
+  buildCoverMetaTable,
+} from "./helpers";
 import { buildDocument, heading1, heading2 } from "./frame";
 import { renderMarkdown } from "./markdown";
+import { shrinkDocxFonts } from "./shrink-fonts";
+import { docMetaCoverRows, type ResolvedDocMeta } from "@/lib/exports/doc-meta";
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  입력 타입
@@ -91,11 +96,18 @@ export type RequirementsDefExportInput = {
   /** 변경이력 옵션 켜졌는지 — 표지/안내문에 명시 */
   includeHistory:  boolean;
 
-  // ── 표지 작성정보 ──────────────────────────────
+  // ── 작성일/문서버전/작성자/승인자 ───────────────
+  // writtenAt: 본문 "1. 프로젝트 정보" 작성일 행에 사용.
+  // documentVersion/authorName/approverName: 표지엔 미표시(변경이력 표에만)지만,
+  //   발행/이력 시스템(documents/release)이 발행 시 이 값을 fallback·스냅샷에 사용하므로
+  //   입력 계약상 필수다. (REQUIREMENTS_DEF 는 발행 대상 산출물)
   documentVersion: string;
   writtenAt:       string;
   authorName:      string;
   approverName:    string;
+
+  // ── 문서 메타/번호 (시스템명·단계·활동·작업·문서번호) ──
+  docMeta: ResolvedDocMeta;
 
   // ── 변경 이력 (문서 자체 — 산출물 발행 이력) ───
   history: Array<{
@@ -117,17 +129,13 @@ function buildCover(input: RequirementsDefExportInput, docKind: string): (Paragr
 
   const COVER_LABEL_W = 1800;
   const COVER_VALUE_W = 3600;
-  const coverInfoTable = new Table({
-    width:        { size: COVER_LABEL_W + COVER_VALUE_W, type: WidthType.DXA },
-    columnWidths: [COVER_LABEL_W, COVER_VALUE_W],
-    alignment:    AlignmentType.CENTER,
-    rows: [
-      new TableRow({ children: [labelCell("작성일",   COVER_LABEL_W), valueCell(input.writtenAt,       COVER_VALUE_W)] }),
-      new TableRow({ children: [labelCell("문서 버전", COVER_LABEL_W), valueCell(input.documentVersion, COVER_VALUE_W)] }),
-      new TableRow({ children: [labelCell("작성자",   COVER_LABEL_W), valueCell(input.authorName,      COVER_VALUE_W)] }),
-      new TableRow({ children: [labelCell("승인자",   COVER_LABEL_W), valueCell(input.approverName,    COVER_VALUE_W)] }),
-    ],
-  });
+  // 표지 메타표 — 시스템명/단계/활동/작업 + 문서번호.
+  // 작성일/문서버전/작성자/승인자는 변경이력 페이지에 있어 표지에선 생략 (중복 제거).
+  const coverInfoTable = buildCoverMetaTable(
+    docMetaCoverRows(input.docMeta, { includeDocNo: true }),
+    COVER_LABEL_W,
+    COVER_VALUE_W,
+  );
 
   // 표지 부제 — 요구사항 N건 + 옵션 안내
   const optionTags = [
@@ -488,6 +496,7 @@ export async function buildRequirementsDefDocx(
     copyright:   input.copyright,
     title:       `${input.projectName} ${DOC_KIND}`,
     description: `${input.projectName} ${DOC_KIND} - ${input.ordererName}`,
+    docNo:       input.docMeta.docNo, // 머리글 우측 문서번호
     children: [
       ...buildCover(input, DOC_KIND),
       ...buildHistory(input),
@@ -498,5 +507,7 @@ export async function buildRequirementsDefDocx(
     ],
   });
 
-  return Packer.toBuffer(doc);
+  // 10pt 초과 글꼴을 1pt 축소 (10pt 이하 유지) — 다른 Word 산출물과 동일 정책.
+  const buffer = await Packer.toBuffer(doc);
+  return shrinkDocxFonts(buffer);
 }

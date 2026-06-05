@@ -24,6 +24,8 @@ import { prisma } from "@/lib/prisma";
 import { buildRequirementDocx, type RequirementExportInput } from "@/lib/exports/docx/requirement";
 import { bumpMinorVersion } from "@/lib/exports/version";
 import { buildDocxFilename } from "@/lib/exports/filename";
+import { resolveDocMeta, type DocMetaSettings } from "@/lib/exports/doc-meta";
+import { findDocMeta } from "@/lib/exports/doc-meta-catalog";
 
 // ─── 코드 → 라벨 매핑 ────────────────────────────────────────
 // 화면(requirements/page.tsx) 와 동일한 라벨. 향후 공통 코드 테이블로 옮기면 한 곳에서 관리.
@@ -141,6 +143,10 @@ export async function buildRequirementExportInput(
         copyright_holder:    true,
         doc_version_default: true,
         approver_nm:         true,
+        system_nm:           true,
+        system_code:         true,
+        doc_no_template:     true,
+        artifact_meta_json:  true,
       },
     }),
     memberIds.length
@@ -188,7 +194,22 @@ export async function buildRequirementExportInput(
   // (발행 이력의 approver_nm 가 따로 있으면 호출부에서 history 항목에 그 값을 사용)
   const approverName    = settings?.approver_nm?.trim()         || REQUIREMENT_EXPORT_FALLBACK.approverName;
 
-  const writtenAt = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const now       = new Date();
+  const writtenAt = now.toISOString().slice(0, 10); // YYYY-MM-DD
+
+  // 문서 메타/번호 — 카탈로그(요구사항 명세서 기본값) ← 설정 오버라이드 머지 후 문서번호 생성
+  const docMeta = resolveDocMeta({
+    catalogMeta: findDocMeta("REQUIREMENT"),
+    artifactKey: "REQUIREMENT",
+    settings: {
+      systemNm:      settings?.system_nm,
+      systemCode:    settings?.system_code,
+      docNoTemplate: settings?.doc_no_template,
+      artifactMeta:  (settings?.artifact_meta_json ?? null) as DocMetaSettings["artifactMeta"],
+    },
+    project: { projectName: project.prjct_nm, projectAbbr: project.prjct_abrv },
+    year:    now.getFullYear(),
+  });
 
   const input: RequirementExportInput = {
     ordererName,
@@ -210,6 +231,7 @@ export async function buildRequirementExportInput(
     writtenAt,
     authorName,
     approverName,
+    docMeta,
     // 변경이력 fallback 1행 — 발행이력이 있는 경우 호출부에서 덮어씀
     history: [{
       version:  documentVersion,

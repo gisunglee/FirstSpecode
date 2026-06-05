@@ -29,6 +29,9 @@ type RouteParams = { params: Promise<{ id: string }> };
 const MAX_COPYRIGHT_LEN   = 255;
 const MAX_DOC_VERSION_LEN = 50;
 const MAX_APPROVER_LEN    = 100;
+const MAX_SYSTEM_NM_LEN   = 100;
+const MAX_SYSTEM_CODE_LEN = 30;
+const MAX_DOC_TPL_LEN     = 100;
 
 // ─── GET ────────────────────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
@@ -44,6 +47,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         copyright_holder:    true,
         doc_version_default: true,
         approver_nm:         true,
+        system_nm:           true,
+        system_code:         true,
+        doc_no_template:     true,
       },
     });
 
@@ -52,6 +58,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       copyrightHolder:   settings?.copyright_holder    ?? null,
       docVersionDefault: settings?.doc_version_default ?? null,
       approverName:      settings?.approver_nm         ?? null,
+      systemName:        settings?.system_nm           ?? null,
+      systemCode:        settings?.system_code         ?? null,
+      docNoTemplate:     settings?.doc_no_template     ?? null,
     });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/settings/document] DB 오류:`, err);
@@ -71,10 +80,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { copyrightHolder, docVersionDefault, approverName } = body as {
+  const { copyrightHolder, docVersionDefault, approverName, systemName, systemCode, docNoTemplate } = body as {
     copyrightHolder?:   string | null;
     docVersionDefault?: string | null;
     approverName?:      string | null;
+    systemName?:        string | null;
+    systemCode?:        string | null;
+    docNoTemplate?:     string | null;
   };
 
   // 입력값 정규화 — 빈 문자열은 NULL 로 저장 (사용자가 지우면 fallback 으로 돌아가도록)
@@ -91,6 +103,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     typeof approverName === "string"
       ? (approverName.trim() || null)
       : null;
+  const newSystemNm =
+    typeof systemName === "string" ? (systemName.trim() || null) : null;
+  const newSystemCode =
+    typeof systemCode === "string" ? (systemCode.trim() || null) : null;
+  const newDocTpl =
+    typeof docNoTemplate === "string" ? (docNoTemplate.trim() || null) : null;
 
   if (newCopyright && newCopyright.length > MAX_COPYRIGHT_LEN) {
     return apiError("VALIDATION_ERROR", `저작권 문구는 ${MAX_COPYRIGHT_LEN}자 이내로 입력해 주세요.`, 400);
@@ -101,6 +119,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   if (newApprover && newApprover.length > MAX_APPROVER_LEN) {
     return apiError("VALIDATION_ERROR", `기본 승인자는 ${MAX_APPROVER_LEN}자 이내로 입력해 주세요.`, 400);
   }
+  if (newSystemNm && newSystemNm.length > MAX_SYSTEM_NM_LEN) {
+    return apiError("VALIDATION_ERROR", `시스템명은 ${MAX_SYSTEM_NM_LEN}자 이내로 입력해 주세요.`, 400);
+  }
+  if (newSystemCode && newSystemCode.length > MAX_SYSTEM_CODE_LEN) {
+    return apiError("VALIDATION_ERROR", `시스템코드는 ${MAX_SYSTEM_CODE_LEN}자 이내로 입력해 주세요.`, 400);
+  }
+  if (newDocTpl && newDocTpl.length > MAX_DOC_TPL_LEN) {
+    return apiError("VALIDATION_ERROR", `문서번호 템플릿은 ${MAX_DOC_TPL_LEN}자 이내로 입력해 주세요.`, 400);
+  }
 
   try {
     // 현재값 조회 — 변경이력 기록용 (값이 실제 바뀐 항목만 기록)
@@ -110,6 +137,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         copyright_holder:    true,
         doc_version_default: true,
         approver_nm:         true,
+        system_nm:           true,
+        system_code:         true,
+        doc_no_template:     true,
       },
     });
     if (!current) {
@@ -125,6 +155,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           copyright_holder:    newCopyright,
           doc_version_default: newDocVersion,
           approver_nm:         newApprover,
+          system_nm:           newSystemNm,
+          system_code:         newSystemCode,
+          doc_no_template:     newDocTpl,
           mdfcn_dt:            new Date(),
         },
       });
@@ -139,6 +172,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       }
       if ((current.approver_nm ?? null) !== newApprover) {
         histories.push({ item: "기본 승인자", before: current.approver_nm, after: newApprover });
+      }
+      if ((current.system_nm ?? null) !== newSystemNm) {
+        histories.push({ item: "시스템명", before: current.system_nm, after: newSystemNm });
+      }
+      if ((current.system_code ?? null) !== newSystemCode) {
+        histories.push({ item: "시스템코드", before: current.system_code, after: newSystemCode });
+      }
+      if ((current.doc_no_template ?? null) !== newDocTpl) {
+        histories.push({ item: "문서번호 템플릿", before: current.doc_no_template, after: newDocTpl });
       }
       if (histories.length > 0) {
         await tx.tbPjSettingsHistory.createMany({
@@ -157,6 +199,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       copyrightHolder:   newCopyright,
       docVersionDefault: newDocVersion,
       approverName:      newApprover,
+      systemName:        newSystemNm,
+      systemCode:        newSystemCode,
+      docNoTemplate:     newDocTpl,
     });
   } catch (err) {
     console.error(`[PUT /api/projects/${projectId}/settings/document] DB 오류:`, err);

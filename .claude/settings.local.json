@@ -314,7 +314,13 @@
       "Bash(Measure-Object)",
       "Bash(Select-Object Count)",
       "Bash(git log *)",
-      "Bash(rm -rf \"src/app/api/projects/[id]/tasks/sort\")"
+      "Bash(rm -rf \"src/app/api/projects/[id]/tasks/sort\")",
+      "Bash(git -C c:/source/FirstSpecode log --oneline --all -i --grep=\"기준선\" --grep=\"baseline\" --grep=\"확정\" -E)",
+      "Bash(git -C c:/source/FirstSpecode log --oneline -- ddl/20260512-drop-baseline.sql)",
+      "Bash(git -C c:/source/FirstSpecode log --oneline --all -i --grep=\"drop\" --grep=\"baseline\" --grep=\"기준선\" -E)",
+      "Bash(curl -sL \"https://api.anthropic.com/v1/design/h/bkcYINBIw38HujjxVMQ-xQ\" -o /tmp/design1_index.txt)",
+      "Bash(echo \"---EXIT:$?---\")",
+      "Read(//tmp/**)"
     ],
     "additionalDirectories": [
       "c:\\source\\FirstSpecode",

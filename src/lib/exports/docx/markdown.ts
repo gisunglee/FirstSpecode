@@ -56,7 +56,7 @@ export type MarkdownBlock =
   | { kind: "code";    text: string }
   | { kind: "quote";   text: string }
   | { kind: "hr" }
-  | { kind: "image";   data: Buffer; type: ImageType; alt: string };
+  | { kind: "image";   data: Buffer; type: ImageType; alt: string; displayWidth?: number };
 
 /** docx ImageRun 이 받는 type 파라미터와 호환. */
 export type ImageType = "png" | "jpg" | "gif" | "bmp";
@@ -212,26 +212,38 @@ export type RenderMarkdownOptions = {
 /**
  * 이미지 블록 → docx Paragraph (ImageRun 단일 자식).
  *
- * 페이지 본문 폭(CONTENT_WIDTH ≈ 9026 DXA ≈ 약 600px)에 맞춰 자동 축소.
- * 비율 보존을 위해 image-size 로 원본 크기 추출.
- * 헤더/푸터 제외 본문 폭이 약 480px 정도 — 그것을 max로.
+ * 크기 결정 정책:
+ *   1) 에디터에서 지정한 표시 너비(displayWidth, px)가 있으면 그 값을 우선 — 사용자가
+ *      웹에디터에서 줄여 둔 스크린샷이 출력 시 다시 커지지 않도록.
+ *   2) 없으면 원본 픽셀 너비 사용.
+ *   3) 어느 경우든 본문 폭(IMAGE_MAX_PX)을 넘으면 축소 (페이지 밖으로 안 나가게).
+ *   - 높이는 항상 원본 비율로 산출 — 가로세로 왜곡 방지.
+ *
+ * 본문 폭(CONTENT_WIDTH ≈ 9026 DXA) 안에서 헤더/푸터 제외 약 480px 를 max 로 둔다.
  */
 const IMAGE_MAX_PX = 480;
 
-function buildImageParagraph(block: { data: Buffer; type: ImageType; alt: string }): Paragraph {
-  // 원본 크기 추출 — 실패 시 4:3 기본 가정
-  let width  = IMAGE_MAX_PX;
-  let height = Math.round(IMAGE_MAX_PX * 0.75);
+function buildImageParagraph(
+  block: { data: Buffer; type: ImageType; alt: string; displayWidth?: number },
+): Paragraph {
+  // 원본 픽셀 크기 — 비율 산출 + fallback. 실패 시 4:3 기본 가정.
+  let intrinsicW = IMAGE_MAX_PX;
+  let intrinsicH = Math.round(IMAGE_MAX_PX * 0.75);
   try {
     const dim = sizeOf(block.data);
     if (dim.width && dim.height) {
-      const ratio = dim.height / dim.width;
-      width  = Math.min(dim.width, IMAGE_MAX_PX);
-      height = Math.round(width * ratio);
+      intrinsicW = dim.width;
+      intrinsicH = dim.height;
     }
   } catch {
     // sizeOf 실패 — 기본값 그대로 유지
   }
+
+  const ratio = intrinsicH / intrinsicW;
+  // 목표 너비 = 에디터 지정 너비(있으면) 또는 원본 너비. 단 본문 폭 초과 시 축소.
+  const desiredW = block.displayWidth && block.displayWidth > 0 ? block.displayWidth : intrinsicW;
+  const width  = Math.min(desiredW, IMAGE_MAX_PX);
+  const height = Math.round(width * ratio);
 
   return new Paragraph({
     alignment: AlignmentType.CENTER,

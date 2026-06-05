@@ -265,6 +265,17 @@ model TbPjProjectSettings {
   copyright_holder    String?
   doc_version_default String?
   approver_nm         String?
+  // ── 문서 메타/번호 체계 (2026-06 추가) ────────────────────────────────────
+  // system_nm        : 표지 "시스템명" (미설정 시 프로젝트명 fallback)
+  // system_code      : 문서번호 {SYS} 치환값 (미설정 시 약어 prjct_abrv fallback. 예: GDBS)
+  // doc_no_template  : 문서번호 생성 템플릿 (미설정 시 코드 기본값 "{SYS}_{DOC}_{SEQ:3}")
+  //                    치환 변수 {SYS}=시스템코드 {DOC}=산출물 문서코드 {SEQ:n}=일련번호(n자리) {YYYY}=연도
+  // artifact_meta_json: 산출물별 단계/활동/작업/문서코드 오버라이드 (Phase 2 UI 용. 없으면 카탈로그 기본값)
+  //                    형태: { "TASK_MATRIX": { "phase":"분석","activity":"...","work":"...","docCode":"A301" }, ... }
+  system_nm           String?
+  system_code         String?
+  doc_no_template     String?
+  artifact_meta_json  Json?
   creat_dt            DateTime    @default(now())
   mdfcn_dt            DateTime    @default(now())
   project             TbPjProject @relation(fields: [prjct_id], references: [prjct_id])

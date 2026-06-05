@@ -25,6 +25,7 @@ import {
   PROJECT_ABBR_MAX_LEN,
   PROJECT_ABBR_PLACEHOLDER,
 } from "@/lib/constants/projectAbbr";
+import { DOC_META_CATALOG } from "@/lib/exports/doc-meta-catalog";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────
 type ProjectDetail = {
@@ -52,6 +53,9 @@ type DocumentSettings = {
   copyrightHolder:   string | null;
   docVersionDefault: string | null;
   approverName:      string | null;
+  systemName:        string | null;
+  systemCode:        string | null;
+  docNoTemplate:     string | null;
 };
 
 // ── 복사 확인 POPUP ──────────────────────────────────────────────────────
@@ -224,7 +228,8 @@ function ProjectSettingsInner() {
         </div>
       </div>
 
-      <div style={{ padding: "0 24px 24px", maxWidth: 680 }}>
+      {/* 문서설정 탭은 2단(양식 기본값 + 산출물별 메타)이라 더 넓게. 그 외 탭은 680. */}
+      <div style={{ padding: "0 24px 24px", maxWidth: activeTab === "document" ? 1160 : 680 }}>
       {/* AR-00032 탭 네비게이션 (FID-00074) */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--color-border)", marginBottom: 12 }}>
         <button style={tabStyle("basic")}    onClick={() => setActiveTab("basic")}>기본정보</button>
@@ -691,6 +696,9 @@ function DocumentSettingsTab({ projectId }: { projectId: string }) {
   const [approverName,      setApproverName]      = useState("");
   const [copyrightHolder,   setCopyrightHolder]   = useState("");
   const [docVersionDefault, setDocVersionDefault] = useState("");
+  const [systemName,        setSystemName]        = useState("");
+  const [systemCode,        setSystemCode]        = useState("");
+  const [docNoTemplate,     setDocNoTemplate]     = useState("");
   const [loaded, setLoaded] = useState(false);
 
   // 처음 로드된 데이터를 폼 상태에 한 번만 반영 — 사용자 편집 중에 덮어쓰지 않도록
@@ -698,6 +706,9 @@ function DocumentSettingsTab({ projectId }: { projectId: string }) {
     setApproverName(data.approverName ?? "");
     setCopyrightHolder(data.copyrightHolder ?? "");
     setDocVersionDefault(data.docVersionDefault ?? "");
+    setSystemName(data.systemName ?? "");
+    setSystemCode(data.systemCode ?? "");
+    setDocNoTemplate(data.docNoTemplate ?? "");
     setLoaded(true);
   }
 
@@ -710,6 +721,9 @@ function DocumentSettingsTab({ projectId }: { projectId: string }) {
           approverName:      approverName      || null,
           copyrightHolder:   copyrightHolder   || null,
           docVersionDefault: docVersionDefault || null,
+          systemName:        systemName        || null,
+          systemCode:        systemCode        || null,
+          docNoTemplate:     docNoTemplate     || null,
         }),
       }),
     onSuccess: () => {
@@ -721,8 +735,10 @@ function DocumentSettingsTab({ projectId }: { projectId: string }) {
 
   if (isLoading) return <div style={{ color: "var(--color-text-tertiary)", fontSize: "var(--text-sm)" }}>로딩 중...</div>;
 
+  // 2단 그리드 — 왼쪽: 양식 기본값 / 오른쪽: 산출물별 메타.
+  // auto-fit + minmax 로, 폭이 좁아지면 자동으로 세로 스택된다.
   return (
-    <div>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(440px, 1fr))", gap: 16, alignItems: "start" }}>
       <div style={{ background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-card)", padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
         <h3 style={{ margin: "0 0 4px", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--color-text-heading)" }}>출력 문서 양식 기본값</h3>
         <p style={{ margin: 0, fontSize: "var(--text-xs)", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
@@ -731,6 +747,52 @@ function DocumentSettingsTab({ projectId }: { projectId: string }) {
           요구사항 명세서뿐 아니라 향후 추가될 단위업무·화면 등 모든 산출물에 동일하게 적용됩니다.
           비워두면 시스템 기본값으로 출력됩니다.
         </p>
+
+        <div>
+          <label className="sp-label">시스템명</label>
+          <input
+            className="sp-input"
+            placeholder="(미설정 시 프로젝트명 사용)"
+            value={systemName}
+            onChange={(e) => setSystemName(e.target.value)}
+            maxLength={100}
+          />
+          <p style={fieldHintStyle}>
+            <strong>적용 위치:</strong> 표지 메타표의 &ldquo;시스템명&rdquo; 행.<br />
+            비워두면 프로젝트명이 자동으로 들어갑니다. 예) <code style={hintCodeStyle}>온실가스감축인지 운영시스템</code>
+          </p>
+        </div>
+
+        <div>
+          <label className="sp-label">시스템코드 (문서번호용)</label>
+          <input
+            className="sp-input"
+            placeholder="(미설정 시 약어 사용)"
+            value={systemCode}
+            onChange={(e) => setSystemCode(e.target.value)}
+            maxLength={30}
+          />
+          <p style={fieldHintStyle}>
+            <strong>적용 위치:</strong> 문서번호 템플릿의 <code style={hintCodeStyle}>{"{SYS}"}</code> 치환값.<br />
+            비워두면 프로젝트 약어가 들어갑니다. 예) <code style={hintCodeStyle}>GDBS</code>
+          </p>
+        </div>
+
+        <div>
+          <label className="sp-label">문서번호 템플릿</label>
+          <input
+            className="sp-input"
+            placeholder="{SYS}_{DOC}_{SEQ:3}"
+            value={docNoTemplate}
+            onChange={(e) => setDocNoTemplate(e.target.value)}
+            maxLength={100}
+          />
+          <p style={fieldHintStyle}>
+            <strong>적용 위치:</strong> 모든 산출물 문서의 <strong>머리글 우측 문서번호</strong>.<br />
+            변수: <code style={hintCodeStyle}>{"{SYS}"}</code> 시스템코드 · <code style={hintCodeStyle}>{"{DOC}"}</code> 산출물코드(예 A301) · <code style={hintCodeStyle}>{"{SEQ:3}"}</code> 일련번호(3자리) · <code style={hintCodeStyle}>{"{YYYY}"}</code> 연도.<br />
+            예) <code style={hintCodeStyle}>{"{SYS}_{DOC}_{SEQ:3}"}</code> → <code style={hintCodeStyle}>GDBS_A301_001</code>. 비워두면 기본 템플릿을 사용합니다.
+          </p>
+        </div>
 
         <div>
           <label className="sp-label">기본 승인자 (PM)</label>
@@ -790,9 +852,159 @@ function DocumentSettingsTab({ projectId }: { projectId: string }) {
           </button>
         </div>
       </div>
+
+      {/* 산출물별 문서 메타 오버라이드 (고급) */}
+      <ArtifactMetaCard projectId={projectId} />
     </div>
   );
 }
+
+// ── 산출물별 문서 메타 오버라이드 ────────────────────────────────────────────
+type ArtifactMetaRow = { phase: string; activity: string; work: string; docCode: string };
+const META_FIELDS: { key: keyof ArtifactMetaRow; label: string }[] = [
+  { key: "phase",    label: "단계" },
+  { key: "activity", label: "활동" },
+  { key: "work",     label: "작업" },
+  { key: "docCode",  label: "문서코드" },
+];
+
+/**
+ * ArtifactMetaCard — 산출물 종류별 단계/활동/작업/문서코드 오버라이드 표.
+ *
+ * 기본값은 카탈로그(doc-meta-catalog.ts). 비워두면 그 기본값으로 출력되고,
+ * 방법론이 다른 프로젝트만 여기서 덮어쓴다. placeholder 에 기본값을 노출해 무엇이
+ * 적용되는지 보이게 한다.
+ */
+function ArtifactMetaCard({ projectId }: { projectId: string }) {
+  const queryClient = useQueryClient();
+  // 메타/번호를 갖는 모든 문서 종류 (요구사항정의서·요구사항명세서·과업대비표·프로그램사양서)
+  const artifacts = DOC_META_CATALOG;
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["artifact-meta", projectId],
+    queryFn: () =>
+      authFetch<{ data: { overrides: Record<string, Partial<ArtifactMetaRow>> } }>(
+        `/api/projects/${projectId}/settings/artifact-meta`,
+      ).then((r) => r.data.overrides),
+  });
+
+  // 산출물 key → 입력 상태 (빈 문자열 = 기본값 사용)
+  const [rows, setRows] = useState<Record<string, ArtifactMetaRow>>({});
+  const [loaded, setLoaded] = useState(false);
+  if (data && !loaded) {
+    const init: Record<string, ArtifactMetaRow> = {};
+    for (const a of artifacts) {
+      const o = data[a.key] ?? {};
+      init[a.key] = {
+        phase:    o.phase    ?? "",
+        activity: o.activity ?? "",
+        work:     o.work     ?? "",
+        docCode:  o.docCode  ?? "",
+      };
+    }
+    setRows(init);
+    setLoaded(true);
+  }
+
+  function setField(key: string, field: keyof ArtifactMetaRow, value: string) {
+    setRows((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      // 비어있지 않은 필드만 추려 전송 (빈 값은 카탈로그 기본값으로 fallback)
+      const overrides: Record<string, Partial<ArtifactMetaRow>> = {};
+      for (const a of artifacts) {
+        const r = rows[a.key];
+        if (!r) continue;
+        const entry: Partial<ArtifactMetaRow> = {};
+        for (const { key } of META_FIELDS) {
+          if (r[key].trim()) entry[key] = r[key].trim();
+        }
+        if (Object.keys(entry).length > 0) overrides[a.key] = entry;
+      }
+      return authFetch(`/api/projects/${projectId}/settings/artifact-meta`, {
+        method: "PUT",
+        body:   JSON.stringify({ overrides }),
+      });
+    },
+    onSuccess: () => {
+      toast.success("저장되었습니다.");
+      queryClient.invalidateQueries({ queryKey: ["artifact-meta", projectId] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  if (isLoading) return null;
+
+  return (
+    <div style={{ background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-card)", padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
+      <h3 style={{ margin: "0 0 4px", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--color-text-heading)" }}>
+        산출물별 문서 메타 <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", fontWeight: 500 }}>(고급)</span>
+      </h3>
+      <p style={{ margin: 0, fontSize: "var(--text-xs)", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+        산출물 종류별 <strong>단계·활동·작업·문서코드</strong>입니다. 표지·문서번호에 사용됩니다.
+        <strong> 비워두면 회색 기본값</strong>으로 출력되니, 방법론이 다른 프로젝트만 덮어쓰세요.
+      </p>
+
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--text-sm)" }}>
+          <thead>
+            <tr>
+              <th style={metaThStyle}>산출물</th>
+              {META_FIELDS.map((f) => (
+                <th key={f.key} style={metaThStyle}>{f.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {artifacts.map((a) => {
+              const row = rows[a.key] ?? { phase: "", activity: "", work: "", docCode: "" };
+              return (
+                <tr key={a.key}>
+                  <td style={metaTdStyle}>
+                    <span style={{ fontWeight: 600 }}>{a.label}</span>
+                  </td>
+                  {META_FIELDS.map((f) => (
+                    <td key={f.key} style={metaTdStyle}>
+                      <input
+                        className="sp-input"
+                        style={{ width: "100%" }}
+                        placeholder={a[f.key] ?? ""}
+                        value={row[f.key]}
+                        onChange={(e) => setField(a.key, f.key, e.target.value)}
+                        maxLength={50}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button
+          className="sp-btn sp-btn-primary"
+          onClick={() => saveMutation.mutate()}
+          disabled={saveMutation.isPending}
+        >
+          {saveMutation.isPending ? "저장 중..." : "저장"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const metaThStyle: React.CSSProperties = {
+  textAlign: "left", padding: "8px 8px", borderBottom: "1px solid var(--color-border)",
+  fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--color-text-secondary)", whiteSpace: "nowrap",
+};
+const metaTdStyle: React.CSSProperties = {
+  padding: "6px 8px", borderBottom: "1px solid var(--color-border-subtle, var(--color-border))",
+  verticalAlign: "middle",
+};
 
 /**
  * NavCard — 프로젝트 설정 내 이동용 카드 컴포넌트
