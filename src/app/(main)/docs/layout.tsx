@@ -61,8 +61,9 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
       <DocsTree sections={data?.sections ?? []} />
 
       {/* 본문 영역 — 로딩/에러는 컴팩트하게, 정상 시 outlet 그대로 */}
-      {/* 배경을 흰 서피스로 — 본문과 동일 톤이라 트리 클릭 시 회색 깜빡임 없음 */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", background: "var(--color-bg-surface)" }}>
+      {/* 배경을 본문과 같은 card 면으로 — 트리 클릭 시 회색 깜빡임 없음.
+          (light=흰색 / dark=root 동일 톤이라 패널이 떠 보이지 않음) */}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", background: "var(--color-bg-card)" }}>
         {isLoading ? (
           <div style={{
             flex:        1,

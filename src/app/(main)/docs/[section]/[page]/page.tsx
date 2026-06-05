@@ -76,8 +76,8 @@ export default function DocsViewerPage({ params }: Props) {
         display:        "flex",
         alignItems:     "center",
         justifyContent: "center",
-        // 본문과 같은 흰 서피스 — 없으면 로딩 동안 부모의 회색 root 가 잠깐 비쳐 깜빡임
-        background:      "var(--color-bg-surface)",
+        // 본문과 같은 card 면 — 없으면 로딩 동안 부모의 회색 root 가 잠깐 비쳐 깜빡임
+        background:      "var(--color-bg-card)",
         color:          "var(--color-text-tertiary)",
         fontSize:       "var(--text-sm)",
       }}>
@@ -99,7 +99,7 @@ export default function DocsViewerPage({ params }: Props) {
         gap:            12,
         padding:        32,
         textAlign:      "center",
-        background:     "var(--color-bg-surface)",
+        background:     "var(--color-bg-card)",
       }}>
         <span style={{
           fontSize:   "var(--text-lg)",

@@ -72,9 +72,9 @@ export default function DocsContent({ data }: { data: DocsPageDetail }) {
         flex:         1,
         overflowY:    "auto",
         padding:      "48px 64px 96px",
-        // 본문은 흰 서피스 레이어 사용 — light 테마의 회청색 root(#e8eaf2) 대신
-        // 순백(#ffffff)으로 깔끔하게. OpenAI/Claude docs 처럼 종이 같은 읽기 면.
-        background:   "var(--color-bg-surface)",
+        // 본문 면은 card 레이어 — light=흰색(#fff)으로 깔끔하게, dark/dark-purple 에서는
+        // root 와 같은 톤이라 패널이 떠 보이지 않음. (surface 는 dark 에서 root 보다 밝아 부적합)
+        background:   "var(--color-bg-card)",
         // 본문은 가독성 위해 폭 제한 — 너무 넓으면 한 줄이 길어 읽기 피로
         // 단, 표/이미지가 있을 수 있어 max-width 만, width 는 자유
         maxWidth:     "100%",
@@ -360,7 +360,7 @@ function PagerLink({
         padding:        "14px 18px",
         textAlign:      isPrev ? "left" : "right",
         textDecoration: "none",
-        background:     "var(--color-bg-surface)",
+        background:     "var(--color-bg-card)",
         border:         "1px solid var(--color-border-subtle)",
         borderRadius:   "var(--radius-card)",
         transition:     "border-color 0.15s, background 0.15s",
@@ -541,34 +541,34 @@ const UL: React.CSSProperties = { margin: "14px 0", paddingLeft: 26, color: "var
 const OL: React.CSSProperties = { margin: "14px 0", paddingLeft: 26, color: "var(--color-text-primary)" };
 const LI: React.CSSProperties = { margin: "6px 0", lineHeight: 1.8, fontSize: "var(--text-lg)" };
 
-// 콜아웃 — 옅은 카드 배경 + 좌측 브랜드 스트립. 강한 색면 대신 차분하게.
+// 콜아웃 — 본문 면(card)과 대비되는 한 단계 raised 면 + 좌측 브랜드 스트립.
 const QUOTE: React.CSSProperties = {
   margin:       "20px 0",
   padding:      "12px 18px",
   borderLeft:   "3px solid var(--color-brand)",
-  background:   "var(--color-bg-card)",
+  background:   "var(--color-bg-elevated)",
   color:        "var(--color-text-secondary)",
   borderRadius: "var(--radius-sm)",
 };
 
-// 인라인 코드 — 흰 본문 위에서 옅은 칩으로. 테두리 없이 배경만(깔끔).
+// 인라인 코드 — 본문 면 위에서 옅은 칩으로(elevated). 테두리 없이 배경만(깔끔).
 const INLINE_CODE: React.CSSProperties = {
   padding:      "2px 6px",
   fontSize:     "0.88em",
   fontFamily:   "var(--font-mono)",
-  background:   "var(--color-bg-card)",
+  background:   "var(--color-bg-elevated)",
   color:        "var(--color-text-primary)",
   borderRadius: "var(--radius-sm)",
 };
 
-// 코드블록 — 한 단계 옅은 면 + 옅은 테두리. radius 키워 부드럽게.
+// 코드블록 — 본문 면보다 한 단계 raised(elevated) + 옅은 테두리. radius 키워 부드럽게.
 const PRE: React.CSSProperties = {
   margin:       "20px 0",
   padding:      "16px 18px",
   fontFamily:   "var(--font-mono)",
   fontSize:     "var(--text-sm)",
   lineHeight:   1.7,
-  background:   "var(--color-bg-card)",
+  background:   "var(--color-bg-elevated)",
   color:        "var(--color-text-primary)",
   border:       "1px solid var(--color-border-subtle)",
   borderRadius: "var(--radius-card)",
@@ -586,7 +586,7 @@ const TABLE: React.CSSProperties = {
   borderCollapse: "collapse",
   fontSize:       "var(--text-md)",
 };
-const THEAD: React.CSSProperties = { background: "var(--color-bg-card)" };
+const THEAD: React.CSSProperties = { background: "var(--color-bg-elevated)" };
 const TR:    React.CSSProperties = { borderBottom: "1px solid var(--color-border-subtle)" };
 const TH:    React.CSSProperties = {
   padding:    "10px 14px",

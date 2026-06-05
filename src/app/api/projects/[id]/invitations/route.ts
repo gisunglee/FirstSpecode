@@ -3,9 +3,9 @@
  * POST /api/projects/[id]/invitations — 초대 발송      (FID-00065)
  *
  * 역할·직무:
- *   - 초대 시 역할(ADMIN/MEMBER)과 직무(PM/PL/DBA/DEV/DESIGNER/QA/ETC) 함께 지정
+ *   - 초대 시 역할(MEMBER/VIEWER)과 직무(PM/PL/DBA/DEV/DESIGNER/QA/ETC) 함께 지정
  *   - 직무 미지정 시 ETC 로 기본값 저장
- *   - OWNER 초대는 불가 (OWNER 는 양도로만 변경)
+ *   - OWNER·ADMIN 초대는 불가 (OWNER 는 양도로만, ADMIN 은 합류 후 승격으로만 부여)
  */
 
 import { NextRequest } from "next/server";
@@ -18,8 +18,11 @@ import { isJobCode, JOB_CODES } from "@/lib/permissions";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
-// 초대 가능한 역할 — OWNER 는 양도로만 변경되므로 초대 불가
-const INVITABLE_ROLES = ["ADMIN", "MEMBER", "VIEWER"] as const;
+// 초대 가능한 역할
+//   - OWNER 는 양도로만 변경되므로 초대 불가
+//   - ADMIN 도 초대 단계에서는 부여하지 않는다. 멤버 합류 후 멤버 관리 화면에서
+//     역할 변경(승격)으로만 부여 → 초대 링크를 통한 관리자 권한 오남용 방지
+const INVITABLE_ROLES = ["MEMBER", "VIEWER"] as const;
 
 // ─── GET: 초대 현황 조회 ──────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {

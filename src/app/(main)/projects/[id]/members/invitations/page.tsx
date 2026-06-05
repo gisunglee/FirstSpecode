@@ -166,8 +166,9 @@ function InviteDialog({
                       value={row.role}
                       onChange={(e) => updateRow(i, "role", e.target.value)}
                     >
+                      {/* 초대 단계에서는 ADMIN을 부여하지 않는다.
+                          ADMIN은 멤버 합류 후 멤버 관리 화면에서 승격해 부여 (권한 오남용 방지) */}
                       <option value="MEMBER">MEMBER</option>
-                      <option value="ADMIN">ADMIN</option>
                       <option value="VIEWER">VIEWER</option>
                     </select>
                     <span className="sp-select-arrow"><SelectChevron /></span>

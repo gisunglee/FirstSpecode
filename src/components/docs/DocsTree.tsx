@@ -138,9 +138,10 @@ export default function DocsTree({ sections }: { sections: DocsSection[] }) {
       style={{
         width:        260,
         flexShrink:   0,
-        // 본문과 같은 흰 서피스 — 트리·본문이 하나의 깨끗한 면처럼 이어지고
+        // 본문과 같은 card 면 — 트리·본문이 하나의 깨끗한 면처럼 이어지고
         // 둘 사이는 옅은 세로선으로만 구분 (OpenAI/Claude docs 패턴).
-        background:   "var(--color-bg-surface)",
+        // light=흰색, dark/dark-purple=root 동일 톤이라 어디서도 패널이 뜨지 않음.
+        background:   "var(--color-bg-card)",
         borderRight:  "1px solid var(--color-border-subtle)",
         display:      "flex",
         flexDirection: "column",
@@ -175,7 +176,7 @@ export default function DocsTree({ sections }: { sections: DocsSection[] }) {
               fontSize:     "var(--text-sm)",
               border:       "1px solid var(--color-border-subtle)",
               borderRadius: "var(--radius-md, 6px)",
-              background:   "var(--color-bg-card)",
+              background:   "var(--color-bg-elevated)",
               color:        "var(--color-text-primary)",
               outline:      "none",
               boxSizing:    "border-box",
