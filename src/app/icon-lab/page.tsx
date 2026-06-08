@@ -629,6 +629,133 @@ const ROWS: GroupRow[] = [
   },
 ];
 
+type AppIconCandidate = {
+  id: string;
+  name: string;
+  note: string;
+  node: ReactNode;
+  tone?: "accent" | "brand" | "mixed";
+};
+
+const APP_ICON_CANDIDATES: AppIconCandidate[] = [
+  {
+    id: "A",
+    name: "Bolt",
+    note: "현재 로그인 화면 계열",
+    tone: "accent",
+    node: (
+      <path d="M36 6 18 36h13l-3 22 18-32H33z" />
+    ),
+  },
+  {
+    id: "B",
+    name: "Spec Mark",
+    note: "S + 코드 브래킷",
+    tone: "mixed",
+    node: (
+      <>
+        <path d="M24 20c2.4-4.2 13.5-4.3 16.4.2" />
+        <path d="M39 20c-1.5 5.2-15.4 3.8-15.4 11.5 0 7.2 13.2 7.4 17.2 2.7" />
+        <path d="M21 17 12 32l9 15" />
+        <path d="m43 17 9 15-9 15" />
+      </>
+    ),
+  },
+  {
+    id: "C",
+    name: "Spec Cube",
+    note: "설계 산출물 블록",
+    tone: "brand",
+    node: (
+      <>
+        <path d="M32 8 52 19.5v24L32 56 12 43.5v-24z" />
+        <path d="M12 19.5 32 31l20-11.5" />
+        <path d="M32 31v25" />
+        <path d="m22 14 20 11.5" />
+      </>
+    ),
+  },
+  {
+    id: "D",
+    name: "PRD Check",
+    note: "문서 + 검증",
+    tone: "mixed",
+    node: (
+      <>
+        <path d="M20 8h18l9 9v39H20z" />
+        <path d="M38 8v10h9" />
+        <path d="M25 29h14" />
+        <path d="M25 38h10" />
+        <path d="m36 47 5 5 12-14" />
+      </>
+    ),
+  },
+  {
+    id: "E",
+    name: "Flow Core",
+    note: "요구-설계-구현 연결",
+    tone: "brand",
+    node: (
+      <>
+        <circle cx="32" cy="32" r="7" />
+        <circle cx="15" cy="18" r="5" />
+        <circle cx="49" cy="18" r="5" />
+        <circle cx="15" cy="47" r="5" />
+        <circle cx="49" cy="47" r="5" />
+        <path d="M20 21.5 27 28" />
+        <path d="m44 21.5-7 6.5" />
+        <path d="m20 44 7-7" />
+        <path d="m44 44-7-7" />
+      </>
+    ),
+  },
+  {
+    id: "F",
+    name: "Blueprint",
+    note: "화면 설계/명세",
+    tone: "accent",
+    node: (
+      <>
+        <rect x="13" y="14" width="38" height="36" rx="4" />
+        <path d="M13 25h38" />
+        <path d="M25 25v25" />
+        <path d="M32 34h11" />
+        <path d="M32 42h8" />
+        <path d="M18 18h.1" />
+        <path d="M24 18h.1" />
+      </>
+    ),
+  },
+  {
+    id: "G",
+    name: "Spark Code",
+    note: "AI와 코드 생성",
+    tone: "mixed",
+    node: (
+      <>
+        <path d="M32 7 36.5 24 54 32l-17.5 8L32 57l-4.5-17L10 32l17.5-8z" />
+        <path d="m24 25-7 7 7 7" />
+        <path d="m40 25 7 7-7 7" />
+      </>
+    ),
+  },
+  {
+    id: "H",
+    name: "Spec Lens",
+    note: "분석 후 명확화",
+    tone: "brand",
+    node: (
+      <>
+        <circle cx="28" cy="28" r="15" />
+        <path d="m39 39 12 12" />
+        <path d="M21 28h14" />
+        <path d="M28 21v14" />
+        <path d="m24 42 5-5" />
+      </>
+    ),
+  },
+];
+
 export default function IconLabPage() {
   return (
     <div
@@ -670,6 +797,60 @@ export default function IconLabPage() {
         </p>
 
         {/* 그룹별 행 */}
+        <section
+          style={{
+            marginBottom: 32,
+            padding: "20px",
+            background: "var(--color-bg-card)",
+            border: "1px solid var(--color-border-subtle)",
+            borderRadius: "var(--radius-card)",
+          }}
+        >
+          <div style={{
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            gap: "var(--space-4)",
+            marginBottom: "var(--space-4)",
+          }}>
+            <div>
+              <h2 style={{
+                margin: 0,
+                fontSize: "var(--text-2xl)",
+                fontWeight: 700,
+                color: "var(--color-text-heading)",
+              }}>
+                SPECODE 앱 아이콘 후보
+              </h2>
+              <p style={{
+                margin: "var(--space-1) 0 0",
+                fontSize: "var(--text-sm)",
+                color: "var(--color-text-secondary)",
+                lineHeight: 1.6,
+              }}>
+                로그인 카드 상단과 파비콘에 쓸 수 있는 둥근 사각형 마크 후보입니다.
+              </p>
+            </div>
+            <div style={{
+              fontSize: "var(--text-xs)",
+              color: "var(--color-text-tertiary)",
+              fontFamily: "var(--font-mono)",
+            }}>
+              64px preview
+            </div>
+          </div>
+
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))",
+            gap: "var(--space-3)",
+          }}>
+            {APP_ICON_CANDIDATES.map((icon) => (
+              <AppIconTile key={icon.id} icon={icon} />
+            ))}
+          </div>
+        </section>
+
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {ROWS.map((row) => (
             <section
@@ -723,6 +904,82 @@ export default function IconLabPage() {
 }
 
 // ── 아이콘 1칸 (현재/후보 공용) ───────────────────────────────────────────────
+function AppIconTile({ icon }: { icon: AppIconCandidate }) {
+  const background =
+    icon.tone === "brand"
+      ? "linear-gradient(135deg, var(--color-brand), var(--color-info))"
+      : icon.tone === "mixed"
+        ? "linear-gradient(135deg, var(--color-accent), var(--color-brand))"
+        : "linear-gradient(135deg, var(--color-accent), var(--color-warning))";
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "var(--space-2)",
+        padding: "var(--space-4) var(--space-2)",
+        background: "var(--color-bg-elevated)",
+        border: "1px solid var(--color-border-subtle)",
+        borderRadius: "var(--radius-card)",
+      }}
+    >
+      <div
+        style={{
+          width: "calc(var(--space-12) + var(--space-4))",
+          height: "calc(var(--space-12) + var(--space-4))",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "var(--color-text-inverse)",
+          background,
+          borderRadius: "var(--radius-lg)",
+          boxShadow: "var(--shadow-lg)",
+        }}
+      >
+        <svg
+          width="44"
+          height="44"
+          viewBox="0 0 64 64"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          {icon.node}
+        </svg>
+      </div>
+      <div style={{
+        fontSize: "var(--text-xs)",
+        fontWeight: 700,
+        color: "var(--color-brand)",
+        fontFamily: "var(--font-mono)",
+      }}>
+        {icon.id}
+      </div>
+      <div style={{
+        fontSize: "var(--text-sm)",
+        fontWeight: 700,
+        color: "var(--color-text-primary)",
+        textAlign: "center",
+      }}>
+        {icon.name}
+      </div>
+      <div style={{
+        fontSize: "var(--text-xs)",
+        color: "var(--color-text-tertiary)",
+        lineHeight: 1.35,
+        textAlign: "center",
+      }}>
+        {icon.note}
+      </div>
+    </div>
+  );
+}
+
 function IconTile({
   children, label, note, highlight = false,
 }: {

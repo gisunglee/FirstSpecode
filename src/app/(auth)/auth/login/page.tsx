@@ -240,6 +240,7 @@ function LoginInner() {
           {socialLoading === "google" ? "연결 중..." : "Google로 계속"}
         </button>
 
+        {/*
         <button
           type="button"
           onClick={() => handleSocialLogin("github")}
@@ -266,6 +267,7 @@ function LoginInner() {
           <GitHubIcon />
           {socialLoading === "github" ? "연결 중..." : "GitHub로 계속"}
         </button>
+        */}
       </div>
 
       {/* 구분선 */}
