@@ -986,6 +986,8 @@ function UnitWorkDetailPageInner() {
               요구사항 상세 페이지와 동일 패턴 (공통 ExportMenu 컴포넌트). */}
           {canExport && (
             <ExportMenu
+              docName="프로그램 사양서"
+              releaseHelp="단위업무를 발행하면 그 시점의 내용이 스냅샷으로 기록됩니다. 발행 이력에서 언제든 다시 볼 수 있어요. 기록을 남겨둬야 할 때 사용하세요."
               isExporting={isExporting}
               canRelease={canRelease}
               onExportDocx={handleExportDocx}

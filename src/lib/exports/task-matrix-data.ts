@@ -30,7 +30,7 @@ import {
   type MatrixRequirement,
 } from "@/lib/exports/docx/task-matrix";
 import { buildTaskMatrixXlsx } from "@/lib/exports/xlsx/task-matrix";
-import { filenameSafe } from "@/lib/exports/filename";
+import { filenameSafe, docNoFilenamePrefix } from "@/lib/exports/filename";
 import { resolveDocMeta, type DocMetaSettings } from "@/lib/exports/doc-meta";
 import { findDocMeta } from "@/lib/exports/doc-meta-catalog";
 
@@ -251,8 +251,13 @@ export async function buildTaskMatrixDocxWithData(
   const input = result.input;
 
   const buffer = await buildTaskMatrixDocx(input);
-  // 파일명 prefix 우선순위: 약어 → 프로젝트명 → "프로젝트"
-  const prefix = filenameSafe(input.projectAbbr) || filenameSafe(input.projectName) || "프로젝트";
+  // 파일명 prefix 우선순위: 문서번호(끝 일련번호 제외) → 약어 → 프로젝트명 → "프로젝트"
+  //   문서번호 "GBMS_D406_001" → "GBMS_D406" 까지를 파일명에 사용 (요청: 두번째 코드까지 포함)
+  const prefix =
+    docNoFilenamePrefix(input.docMeta.docNo) ||
+    filenameSafe(input.projectAbbr) ||
+    filenameSafe(input.projectName) ||
+    "프로젝트";
   const filename = `${prefix}_과업대비표${buildOptionSuffix(opts)}.docx`;
 
   return { ok: true, buffer, filename, projectName: input.projectName };
@@ -271,7 +276,12 @@ export async function buildTaskMatrixXlsxWithData(
   const input = result.input;
 
   const buffer = await buildTaskMatrixXlsx(input);
-  const prefix = filenameSafe(input.projectAbbr) || filenameSafe(input.projectName) || "프로젝트";
+  // docx 와 동일 정책 — 문서번호(끝 일련번호 제외) 우선
+  const prefix =
+    docNoFilenamePrefix(input.docMeta.docNo) ||
+    filenameSafe(input.projectAbbr) ||
+    filenameSafe(input.projectName) ||
+    "프로젝트";
   const filename = `${prefix}_과업대비표${buildOptionSuffix(opts)}.xlsx`;
 
   return { ok: true, buffer, filename, projectName: input.projectName };

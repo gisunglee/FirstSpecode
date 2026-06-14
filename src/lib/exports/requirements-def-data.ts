@@ -27,7 +27,7 @@ import {
   type RequirementHistoryEntry,
 } from "@/lib/exports/docx/requirements-def";
 import { buildRequirementsDefXlsx } from "@/lib/exports/xlsx/requirements-def";
-import { filenameSafe } from "@/lib/exports/filename";
+import { filenameSafe, docNoFilenamePrefix } from "@/lib/exports/filename";
 import { resolveDocMeta, type DocMetaSettings } from "@/lib/exports/doc-meta";
 import { findDocMeta } from "@/lib/exports/doc-meta-catalog";
 
@@ -270,9 +270,13 @@ export async function buildRequirementsDefDocxWithHistory(
   const input = result.input;
 
   const buffer = await buildRequirementsDefDocx(input);
-  // 파일명 prefix 우선순위: 약어 → 프로젝트명 → "프로젝트"
-  //   약어가 있으면 짧고 안전한 ASCII 라서 우선 사용 (Content-Disposition 인코딩 단순화)
-  const prefix = filenameSafe(input.projectAbbr) || filenameSafe(input.projectName) || "프로젝트";
+  // 파일명 prefix 우선순위: 문서번호(끝 일련번호 제외) → 약어 → 프로젝트명 → "프로젝트"
+  //   문서번호 "GBMS_A301_001" → "GBMS_A301" 까지를 파일명에 사용 (요청: 두번째 코드까지 포함)
+  const prefix =
+    docNoFilenamePrefix(input.docMeta.docNo) ||
+    filenameSafe(input.projectAbbr) ||
+    filenameSafe(input.projectName) ||
+    "프로젝트";
   const filename = `${prefix}_요구사항정의서${buildOptionSuffix(opts)}.docx`;
 
   return {
@@ -300,8 +304,12 @@ export async function buildRequirementsDefXlsxWithHistory(
   const input = result.input;
 
   const buffer = await buildRequirementsDefXlsx(input);
-  // docx 와 동일 정책 — 약어 우선
-  const prefix = filenameSafe(input.projectAbbr) || filenameSafe(input.projectName) || "프로젝트";
+  // docx 와 동일 정책 — 문서번호(끝 일련번호 제외) 우선
+  const prefix =
+    docNoFilenamePrefix(input.docMeta.docNo) ||
+    filenameSafe(input.projectAbbr) ||
+    filenameSafe(input.projectName) ||
+    "프로젝트";
   const filename = `${prefix}_요구사항정의서${buildOptionSuffix(opts)}.xlsx`;
 
   return {

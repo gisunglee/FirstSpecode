@@ -644,6 +644,8 @@ function RequirementDetailPageInner() {
               항목 1줄 추가로 확장 가능. 출력 권한자(MEMBER+) 만 메뉴 표시. */}
           {canExport && (
             <ExportMenu
+              docName="요구사항 명세서"
+              releaseHelp="요구사항을 발행하면 그 시점의 요구사항이 스냅샷으로 기록됩니다. 발행 이력에서 언제든 다시 볼 수 있어요. 기록을 남겨둬야 할 때 사용하세요."
               isExporting={isExporting}
               canRelease={canRelease}
               onExportDocx={handleExportDocx}

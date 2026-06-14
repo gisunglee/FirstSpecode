@@ -633,7 +633,7 @@ export async function buildUnitWorkDocx(input: UnitWorkExportInput): Promise<Buf
     copyright:   input.copyright,
     title:       `${input.unitWorkDisplayId} ${DOC_KIND}`,
     description: `${input.unitWorkDisplayId} ${input.unitWorkName} - ${input.ordererName}`,
-    docNo:       input.docMeta.docNo, // 머리글 우측 문서번호
+    // 머리글 우측 문서번호는 표지(buildCover)에 이미 표기되므로 헤더에는 미표시
     children: [
       ...buildCover(input, DOC_KIND),
       ...buildHistory(input),

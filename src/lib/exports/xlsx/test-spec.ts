@@ -68,6 +68,8 @@ export type TestSpecXlsxInput = {
   displayId:      string;            // TS-00003
   testSpecNm:     string;
   testKindLabel:  string;            // "단위 테스트" | "통합 테스트" — 종류 (UNIT/INTEGRATION)
+  /** 표지 문서번호 (예: "GBMS_I501_003"). 없으면(문서코드 미설정) 표지에 문서번호 행 생략. */
+  docNo?:         string;
 
   // 운영 템플릿 상단 박스
   programIds:     string;            // 연결 단위업무 displayId 들을 ", " join
@@ -172,12 +174,14 @@ function buildCoverSheet(wb: ExcelJS.Workbook, input: TestSpecXlsxInput): void {
 
   for (let i = 0; i < 6; i++) ws.addRow([]);
 
-  // 메타 표 — 사용자 운영 양식에 맞춰 3행만.
+  // 메타 표 — 사용자 운영 양식에 맞춰 시스템명/단계/테스트ID + (있으면)문서번호.
   // 단계는 docKind 에서 자동 매핑 — 명세서=설계, 결과서=구현.
   const metaRows: [string, string][] = [
     ["시스템 명",  input.projectName],
     ["단계",      stageLabel(input.docKind)],
     ["테스트 ID", input.displayId],
+    // 문서번호는 프로젝트 설정(문서코드)이 있어야 생성됨 — 없으면 행 자체를 빼서 빈 칸 노출 방지
+    ...(input.docNo ? [["문서번호", input.docNo] as [string, string]] : []),
   ];
   for (const [label, value] of metaRows) {
     const r = ws.addRow([label, value]);

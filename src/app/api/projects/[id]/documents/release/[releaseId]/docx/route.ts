@@ -39,6 +39,7 @@ import {
   buildRequirementsDefDocx,
   type RequirementsDefExportInput,
 } from "@/lib/exports/docx/requirements-def";
+import { buildDocxFilename, docNoFilenamePrefix, filenameSafe } from "@/lib/exports/filename";
 
 type RouteParams = { params: Promise<{ id: string; releaseId: string }> };
 
@@ -46,6 +47,17 @@ const MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingm
 const DOC_KIND_REQUIREMENT      = "REQUIREMENT";
 const DOC_KIND_UNIT_WORK        = "UNIT_WORK";
 const DOC_KIND_REQUIREMENTS_DEF = "REQUIREMENTS_DEF";
+
+/**
+ * 단일 다운로드와 같은 파일명 체계("...docx")에 발행 버전 접미사를 끼운다.
+ *   "GBMS_D406_프로그램사양서_UW-00001_테스트.docx" + "v1.0"
+ *     → "GBMS_D406_프로그램사양서_UW-00001_테스트_v1.0.docx"
+ * 버전이 비면 접미사 없이 그대로.
+ */
+function appendVersion(name: string, vrsnNo: string | null | undefined): string {
+  const v = filenameSafe(vrsnNo);
+  return v ? name.replace(/\.docx$/i, `_${v}.docx`) : name;
+}
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, releaseId } = await params;
@@ -80,16 +92,33 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (release.doc_kind === DOC_KIND_REQUIREMENT) {
       const input = release.snapshot_data as unknown as RequirementExportInput;
       buffer = await buildRequirementDocx(input);
-      filename = `${input.reqDisplayId}_요구사항명세서_${release.vrsn_no}.docx`;
+      // 단일 다운로드와 동일 체계: [<PREFIX>_]<문서종류>_<표시ID>_<이름>_<버전>.docx
+      //   PREFIX = 문서번호 중간코드까지(예 "GBMS_A302"), 없으면 약어. 구버전 스냅샷이면 docMeta 가
+      //   없을 수 있어 옵셔널 체이닝으로 방어(없으면 prefix 생략).
+      const prefix = docNoFilenamePrefix(input.docMeta?.docNo) || input.projectAbbr;
+      filename = appendVersion(
+        buildDocxFilename(input.reqDisplayId, input.reqName, "요구사항명세서", { projectAbbr: prefix }),
+        release.vrsn_no,
+      );
     } else if (release.doc_kind === DOC_KIND_UNIT_WORK) {
       const input = release.snapshot_data as unknown as UnitWorkExportInput;
       buffer = await buildUnitWorkDocx(input);
-      filename = `${input.unitWorkDisplayId}_프로그램사양서_${release.vrsn_no}.docx`;
+      // 단일 다운로드와 동일 체계 (요구사항 명세서와 같은 규칙)
+      const prefix = docNoFilenamePrefix(input.docMeta?.docNo) || input.projectAbbr;
+      filename = appendVersion(
+        buildDocxFilename(input.unitWorkDisplayId, input.unitWorkName, "프로그램사양서", { projectAbbr: prefix }),
+        release.vrsn_no,
+      );
     } else if (release.doc_kind === DOC_KIND_REQUIREMENTS_DEF) {
       const input = release.snapshot_data as unknown as RequirementsDefExportInput;
       buffer = await buildRequirementsDefDocx(input);
-      // 정의서는 프로젝트 단위 — 파일명에 프로젝트명 + 버전
-      filename = `${input.projectName}_요구사항정의서_${release.vrsn_no}.docx`;
+      // 정의서는 프로젝트 단위 — 단일 다운로드와 동일하게 PREFIX_요구사항정의서_버전.docx
+      const prefix =
+        docNoFilenamePrefix(input.docMeta?.docNo) ||
+        filenameSafe(input.projectAbbr) ||
+        filenameSafe(input.projectName) ||
+        "프로젝트";
+      filename = appendVersion(`${prefix}_요구사항정의서.docx`, release.vrsn_no);
     } else {
       return apiError("UNSUPPORTED_DOC_KIND", "이 산출물 종류는 아직 다운로드할 수 없습니다.", 400);
     }

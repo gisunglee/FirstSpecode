@@ -4,7 +4,7 @@
  *
  * 입력 (body):
  *   {
- *     reqIds:      string[],   // 요건정의서로 만들 요구사항 ID 목록
+ *     reqIds:      string[],   // 요구사항 명세서로 만들 요구사항 ID 목록
  *     unitWorkIds: string[],   // 프로그램 사양서로 만들 단위업무 ID 목록
  *   }
  *
@@ -13,7 +13,7 @@
  *   2) 입력 검증 — 둘 다 비어있으면 400
  *   3) 각 항목을 buildXxxDocxWithHistory() 로 빌드 (단일 export 라우트와 동일 헬퍼)
  *   4) JSZip 인스턴스에
- *        요건정의서/<RQ-...>.docx
+ *        요구사항명세서/<RQ-...>.docx
  *        프로그램사양서/<UW-...>.docx
  *      구조로 추가
  *   5) zip Buffer 생성 → application/zip 응답
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   try {
     const zip = new JSZip();
-    const reqFolder = zip.folder("요건정의서");
+    const reqFolder = zip.folder("요구사항명세서");
     const uwFolder  = zip.folder("프로그램사양서");
     if (!reqFolder || !uwFolder) {
       // JSZip.folder() 가 null 을 반환할 일은 사실상 없지만 (이름 충돌 시) 방어 처리

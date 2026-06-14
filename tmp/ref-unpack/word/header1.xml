@@ -56,7 +56,7 @@
               <w:rFonts w:asciiTheme="minorEastAsia" w:eastAsiaTheme="minorEastAsia" w:hAnsiTheme="minorEastAsia" w:hint="eastAsia"/>
               <w:lang w:eastAsia="ko-KR"/>
             </w:rPr>
-            <w:t>요건정의서</w:t>
+            <w:t>요구사항정의서</w:t>
           </w:r>
         </w:p>
       </w:tc>

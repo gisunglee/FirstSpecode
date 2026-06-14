@@ -735,11 +735,12 @@ function DocumentSettingsTab({ projectId }: { projectId: string }) {
 
   if (isLoading) return <div style={{ color: "var(--color-text-tertiary)", fontSize: "var(--text-sm)" }}>로딩 중...</div>;
 
-  // 2단 그리드 — 왼쪽: 양식 기본값 / 오른쪽: 산출물별 메타.
-  // auto-fit + minmax 로, 폭이 좁아지면 자동으로 세로 스택된다.
+  // 2단 레이아웃 — 왼쪽: 양식 기본값 / 오른쪽: 산출물별 메타.
+  // flex-wrap + flex-basis 로, 폭이 좁아지면 자동으로 세로 스택된다.
+  // 메타 표는 컬럼이 5개(산출물+4)라 폼보다 조금 넓게(grow 1.35) 잡아 줄바꿈을 줄인다.
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(440px, 1fr))", gap: 16, alignItems: "start" }}>
-      <div style={{ background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-card)", padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
+      <div style={{ flex: "1 1 420px", minWidth: 0, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-card)", padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
         <h3 style={{ margin: "0 0 4px", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--color-text-heading)" }}>출력 문서 양식 기본값</h3>
         <p style={{ margin: 0, fontSize: "var(--text-xs)", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
           프로젝트의 모든 산출물 문서(.docx) 출력 시 표지·바닥글·변경이력 표에
@@ -853,8 +854,10 @@ function DocumentSettingsTab({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      {/* 산출물별 문서 메타 오버라이드 (고급) */}
-      <ArtifactMetaCard projectId={projectId} />
+      {/* 산출물별 문서 메타 오버라이드 (고급) — 표가 넓어 폼보다 조금 더 큰 폭(grow 1.35) */}
+      <div style={{ flex: "1.35 1 520px", minWidth: 0, display: "flex" }}>
+        <ArtifactMetaCard projectId={projectId} />
+      </div>
     </div>
   );
 }
@@ -938,7 +941,7 @@ function ArtifactMetaCard({ projectId }: { projectId: string }) {
   if (isLoading) return null;
 
   return (
-    <div style={{ background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-card)", padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
+    <div style={{ flex: 1, minWidth: 0, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-card)", padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
       <h3 style={{ margin: "0 0 4px", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--color-text-heading)" }}>
         산출물별 문서 메타 <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", fontWeight: 500 }}>(고급)</span>
       </h3>
@@ -962,7 +965,7 @@ function ArtifactMetaCard({ projectId }: { projectId: string }) {
               const row = rows[a.key] ?? { phase: "", activity: "", work: "", docCode: "" };
               return (
                 <tr key={a.key}>
-                  <td style={metaTdStyle}>
+                  <td style={{ ...metaTdStyle, whiteSpace: "nowrap" }}>
                     <span style={{ fontWeight: 600 }}>{a.label}</span>
                   </td>
                   {META_FIELDS.map((f) => (

@@ -90,7 +90,8 @@ export function resolveDocMeta(opts: {
   settings:     DocMetaSettings;
   project:      DocMetaProject;
   year:         number;
-  seq?:         number;
+  // 일련번호 — 숫자(기본 1) 또는 이미 포맷된 문자열("007","ㅁㅁㅁ"). 미지정 시 1(→"001").
+  seq?:         number | string;
 }): ResolvedDocMeta {
   const { catalogMeta, artifactKey, settings, project, year } = opts;
   const seq = opts.seq ?? 1;

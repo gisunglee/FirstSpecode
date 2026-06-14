@@ -20,10 +20,12 @@
 export const DEFAULT_DOC_NO_TEMPLATE = "{SYS}_{DOC}_{SEQ:3}";
 
 export type DocNumberVars = {
-  sys:   string;  // {SYS}
-  doc:   string;  // {DOC}
-  seq:   number;  // {SEQ} / {SEQ:n}
-  year:  number;  // {YYYY}
+  sys:   string;          // {SYS}
+  doc:   string;          // {DOC}
+  // {SEQ} / {SEQ:n} — 숫자(예 1) 또는 이미 만들어진 문자열(예 "007","ㅁㅁㅁ") 둘 다 허용.
+  // 문자열이면 {SEQ:n} 의 0패딩은 사실상 그대로 통과(이미 n자리), 숫자면 n자리로 패딩.
+  seq:   number | string;
+  year:  number;          // {YYYY}
 };
 
 /**
@@ -43,4 +45,26 @@ export function buildDocNo(template: string | null | undefined, vars: DocNumberV
     .replace(/\{SYS\}/g,  vars.sys)
     .replace(/\{DOC\}/g,  vars.doc)
     .replace(/\{YYYY\}/g, String(vars.year));
+}
+
+/**
+ * 표시ID 의 "끝 세 자리" 를 문서번호 일련번호({SEQ}) 문자열로 변환.
+ *
+ * 규칙 (하나로 단순):
+ *   - 숫자로 끝나면 → 끝 3자리 숫자를 3자리로 0패딩
+ *       "UW-00007" → "007",  "RQ-00026" → "026",  "UW-7" → "007",  "UW-01234" → "234"
+ *   - 문자로 끝나면 → 표시ID 끝 3글자를 그대로
+ *       "UW-00ㅁㅁㅁ" → "ㅁㅁㅁ"
+ *   - 빈 값이면 "001"
+ *
+ * 표시ID 는 자동 채번이지만 수동 편집이 가능해서 문자도 들어올 수 있다.
+ * 숫자든 문자든 "끝 세 글자" 규칙 하나로 처리해 단순하게 유지한다.
+ */
+export function displayIdToSeq(displayId: string | null | undefined): string {
+  const id = (displayId ?? "").trim();
+  // 숫자로 끝나면: 끝 3자리 숫자만 떼어 3자리 0패딩
+  const trailing = id.match(/\d+$/);
+  if (trailing) return trailing[0].slice(-3).padStart(3, "0");
+  // 문자로 끝나면: 끝 3글자 그대로 (없으면 001)
+  return id.slice(-3) || "001";
 }

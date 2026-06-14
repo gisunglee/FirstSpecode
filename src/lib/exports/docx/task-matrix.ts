@@ -495,7 +495,7 @@ export async function buildTaskMatrixDocx(
     copyright:   input.copyright,
     title:       `${input.projectName} ${DOC_KIND}`,
     description: `${input.projectName} ${DOC_KIND} - ${input.ordererName}`,
-    docNo:       input.docMeta.docNo, // 머리글 우측 문서번호
+    // 머리글 우측 문서번호는 표지(buildCover)에 이미 표기되므로 헤더에는 미표시
     children: [
       ...buildCover(input),
       ...buildHistory(input),

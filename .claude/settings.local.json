@@ -320,7 +320,10 @@
       "Bash(git -C c:/source/FirstSpecode log --oneline --all -i --grep=\"drop\" --grep=\"baseline\" --grep=\"기준선\" -E)",
       "Bash(curl -sL \"https://api.anthropic.com/v1/design/h/bkcYINBIw38HujjxVMQ-xQ\" -o /tmp/design1_index.txt)",
       "Bash(echo \"---EXIT:$?---\")",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(curl -s \"http://localhost:3000/api/worker/tasks?limit=10&excludeTaskType=IMPLEMENT\" -H \"X-Mcp-Key: spk_39a1e0f6e09436172145e8ab19aba90901ddc38ca60b4319e08c7f8ff40b0e02\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\source\\\\FirstSpecode\" -Recurse -Directory -Filter \"exports\")",
+      "Bash(Select-Object -ExpandProperty FullName)"
     ],
     "additionalDirectories": [
       "c:\\source\\FirstSpecode",

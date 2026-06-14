@@ -23,6 +23,9 @@ import {
   type TestSpecDocKind,
 } from "@/lib/exports/xlsx/test-spec";
 import { filenameSafe } from "@/lib/exports/filename";
+import { resolveDocMeta, type DocMetaSettings } from "@/lib/exports/doc-meta";
+import { findDocMeta, type DocMetaKey } from "@/lib/exports/doc-meta-catalog";
+import { displayIdToSeq } from "@/lib/exports/doc-number";
 
 type RouteParams = { params: Promise<{ id: string; specId: string }> };
 
@@ -67,30 +70,42 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
   try {
     // ② 명세서 + 케이스 + (최신 회차 1개 + 결과 + 결함) 조회
-    const spec = await prisma.tbQaTestSpec.findUnique({
-      where:   { test_spec_id: specId },
-      include: {
-        project:  { select: { prjct_nm: true, prjct_abrv: true } },
-        uwLinks: {
-          include: { unitWork: { select: { unit_work_display_id: true, unit_work_nm: true } } },
-          orderBy: { sort_ordr: "asc" },
-        },
-        screenLinks: {
-          include: { screen: { select: { scrn_display_id: true, scrn_nm: true } } },
-          orderBy: { sort_ordr: "asc" },
-        },
-        cases:   { orderBy: [{ ctgry_code: "asc" }, { case_no: "asc" }] },
-        rounds: {
-          orderBy: { round_no: "desc" },
-          take:    1,
-          include: {
-            results: {
-              include: { defects: { orderBy: { creat_dt: "asc" } } },
+    //   문서번호 생성에 필요한 프로젝트 설정도 병렬로 함께 조회 (의존 없음)
+    const [spec, settings] = await Promise.all([
+      prisma.tbQaTestSpec.findUnique({
+        where:   { test_spec_id: specId },
+        include: {
+          project:  { select: { prjct_nm: true, prjct_abrv: true } },
+          uwLinks: {
+            include: { unitWork: { select: { unit_work_display_id: true, unit_work_nm: true } } },
+            orderBy: { sort_ordr: "asc" },
+          },
+          screenLinks: {
+            include: { screen: { select: { scrn_display_id: true, scrn_nm: true } } },
+            orderBy: { sort_ordr: "asc" },
+          },
+          cases:   { orderBy: [{ ctgry_code: "asc" }, { case_no: "asc" }] },
+          rounds: {
+            orderBy: { round_no: "desc" },
+            take:    1,
+            include: {
+              results: {
+                include: { defects: { orderBy: { creat_dt: "asc" } } },
+              },
             },
           },
         },
-      },
-    });
+      }),
+      prisma.tbPjProjectSettings.findUnique({
+        where:  { prjct_id: projectId },
+        select: {
+          system_nm:          true,
+          system_code:        true,
+          doc_no_template:    true,
+          artifact_meta_json: true,
+        },
+      }),
+    ]);
     if (!spec || spec.prjct_id !== projectId) {
       return apiError("NOT_FOUND", "테스트 명세서를 찾을 수 없습니다.", 404);
     }
@@ -159,7 +174,29 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const programIds = (screenIds.length > 0 ? screenIds : uwIds).join(", ");
     const subtitle   = (screenNms.length > 0 ? screenNms : uwNms).join(", ");
 
-    // ⑥ 빌더 호출 — testKindLabel 은 종류만("단위 테스트"/"통합 테스트"),
+    // ⑥ 문서번호 — 테스트 종류(UNIT/INTEGRATION)에 따라 문서코드(기본 I501/T601)가 갈림.
+    //    명세서·결과서는 같은 테스트 명세서라 동일 문서번호를 공유한다(종류별 1코드).
+    //    끝자리 순번은 표시ID(TS-00003)의 끝 세 자리.
+    const artifactKey: DocMetaKey =
+      spec.test_kind_code === "UNIT" ? "UNIT_TEST" : "INTEGRATION_TEST";
+    const docMeta = resolveDocMeta({
+      catalogMeta: findDocMeta(artifactKey),
+      artifactKey,
+      settings: {
+        systemNm:      settings?.system_nm,
+        systemCode:    settings?.system_code,
+        docNoTemplate: settings?.doc_no_template,
+        artifactMeta:  (settings?.artifact_meta_json ?? null) as DocMetaSettings["artifactMeta"],
+      },
+      project: {
+        projectName: spec.project?.prjct_nm ?? "프로젝트",
+        projectAbbr: spec.project?.prjct_abrv ?? null,
+      },
+      year: new Date().getFullYear(),
+      seq:  displayIdToSeq(spec.test_spec_display_id),
+    });
+
+    // ⑦ 빌더 호출 — testKindLabel 은 종류만("단위 테스트"/"통합 테스트"),
     //    "명세서"/"결과서" 어미는 빌더가 docKind 로 자동 부착.
     const testKindBase = spec.test_kind_code === "UNIT" ? "단위 테스트" : "통합 테스트";
     const projectAbbr = spec.project?.prjct_abrv ?? null;
@@ -170,6 +207,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       displayId:      spec.test_spec_display_id,
       testSpecNm:     spec.test_spec_nm,
       testKindLabel:  testKindBase,
+      docNo:          docMeta.docNo,
       programIds,
       testTaskNm:     spec.test_spec_nm,
       subtitle,
@@ -177,7 +215,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       functional,
     });
 
-    // ⑦ 파일명 — "[<ABBR>_]<문서종류>_<표시ID>_<테스트명>.xlsx"
+    // ⑧ 파일명 — "[<ABBR>_]<문서종류>_<표시ID>_<테스트명>.xlsx"
     //   예) "GBMS_단위 테스트 명세서_TS-00003_게시판 관리.xlsx"
     //   문서종류를 앞에 두는 이유: 폴더 정렬 시 "명세서끼리, 결과서끼리" 그룹지어 보이도록.
     //   (이름·약어가 비면 해당 토큰 생략)

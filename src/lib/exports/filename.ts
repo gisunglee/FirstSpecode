@@ -28,6 +28,19 @@ export function filenameSafe(s: string | null | undefined): string {
 }
 
 /**
+ * 문서번호에서 끝 일련번호 토막을 떼어 파일명 prefix 로 만든다.
+ *   "GBMS_A301_001" → "GBMS_A301"   (시스템코드_문서코드까지)
+ *
+ * 정책:
+ *   - 끝 "_<숫자>" 한 토막만 제거 — 일련번호는 파일명에 불필요(프로젝트당 단일 산출물은 항상 001).
+ *   - 문서번호가 비었으면(문서코드 미설정) "" 반환 → 호출부에서 약어/프로젝트명 fallback.
+ */
+export function docNoFilenamePrefix(docNo: string | null | undefined): string {
+  const base = (docNo ?? "").replace(/_\d+$/, "");
+  return filenameSafe(base);
+}
+
+/**
  * "[<ABBR>_]<문서유형>_<displayId>_<이름>.docx" 형식 파일명 생성.
  *
  * 토큰 순서 정책 (2026-05-30):

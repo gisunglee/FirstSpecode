@@ -4,7 +4,7 @@
  * DocumentLibraryPage — 문서실 (도움창고 > 문서실)
  *
  * 역할:
- *   - 프로젝트의 요건정의서(요구사항 단위) / 프로그램 사양서(단위업무 단위) 를 한 화면에서 일람
+ *   - 프로젝트의 요구사항 명세서(요구사항 단위) / 프로그램 사양서(단위업무 단위) 를 한 화면에서 일람
  *   - 행별 [Word ↓] 버튼으로 개별 .docx 다운로드 (현재 작업본)
  *   - 체크박스 + [선택 zip 다운로드] 로 일괄 zip 다운로드
  *
@@ -16,7 +16,7 @@
  * 데이터 흐름:
  *   - GET /api/projects/[id]/requirements      — 요구사항 평면 목록
  *   - GET /api/projects/[id]/unit-works        — 단위업무 평면 목록
- *   - GET /api/projects/[id]/requirements/[reqId]/export/docx       — 개별 요건정의서
+ *   - GET /api/projects/[id]/requirements/[reqId]/export/docx       — 개별 요구사항 명세서
  *   - GET /api/projects/[id]/unit-works/[uwId]/export/docx          — 개별 프로그램사양서
  *   - POST /api/projects/[id]/document-library/zip                  — 일괄 zip
  */
@@ -403,7 +403,7 @@ function DocumentLibraryInner() {
             문서실
           </div>
           <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
-            요건정의서·프로그램사양서를 일람하고 한꺼번에 내려받습니다.
+            요구사항 명세서·프로그램사양서를 일람하고 한꺼번에 내려받습니다.
           </div>
         </div>
         {canExport && (
@@ -510,10 +510,10 @@ function DocumentLibraryInner() {
           </div>
         </section>
 
-        {/* ═══ 요건정의서 (요구사항) ═══════════════════════════════════ */}
+        {/* ═══ 요구사항 명세서 (요구사항) ═══════════════════════════════════ */}
         <section>
           <SectionHeader
-            title="요건정의서"
+            title="요구사항 명세서"
             count={requirements.length}
             filteredCount={filteredRequirements.length}
             search={reqSearch}

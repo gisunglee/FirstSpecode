@@ -279,7 +279,7 @@ export async function buildRequirementDocx(input: RequirementExportInput): Promi
     copyright:   input.copyright,
     title:       `${input.reqDisplayId} ${DOC_KIND}`,
     description: `${input.reqDisplayId} ${input.reqName} - ${input.ordererName}`,
-    docNo:       input.docMeta.docNo, // 머리글 우측 문서번호
+    // 머리글 우측 문서번호는 표지(buildCover)에 이미 표기되므로 헤더에는 미표시
     children: [
       ...buildCover(input, DOC_KIND),
       ...buildHistory(input),

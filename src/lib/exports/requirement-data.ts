@@ -23,8 +23,9 @@
 import { prisma } from "@/lib/prisma";
 import { buildRequirementDocx, type RequirementExportInput } from "@/lib/exports/docx/requirement";
 import { bumpMinorVersion } from "@/lib/exports/version";
-import { buildDocxFilename } from "@/lib/exports/filename";
+import { buildDocxFilename, docNoFilenamePrefix } from "@/lib/exports/filename";
 import { resolveDocMeta, type DocMetaSettings } from "@/lib/exports/doc-meta";
+import { displayIdToSeq } from "@/lib/exports/doc-number";
 import { findDocMeta } from "@/lib/exports/doc-meta-catalog";
 
 // ─── 코드 → 라벨 매핑 ────────────────────────────────────────
@@ -209,6 +210,8 @@ export async function buildRequirementExportInput(
     },
     project: { projectName: project.prjct_nm, projectAbbr: project.prjct_abrv },
     year:    now.getFullYear(),
+    // 문서번호 끝자리 — 표시ID(RQ-00012)의 숫자를 그대로 써서 요구사항 순서대로 번호 부여
+    seq:     displayIdToSeq(req.req_display_id),
   });
 
   const input: RequirementExportInput = {
@@ -247,7 +250,7 @@ export async function buildRequirementExportInput(
 
 // ─── 헬퍼: input → 변경이력 표 구성 → docx Buffer ──────────
 /**
- * 요건정의서 1건의 docx Buffer 와 다운로드 파일명을 한 번에 만든다.
+ * 요구사항 명세서 1건의 docx Buffer 와 다운로드 파일명을 한 번에 만든다.
  *
  * 동일 흐름이 단일 export route 와 zip 일괄 다운로드 route 양쪽에서 필요하므로
  * 여기에서 한 번 정의해서 양쪽이 재사용한다.
@@ -324,12 +327,14 @@ export async function buildRequirementDocxWithHistory(
   }
 
   const buffer = await buildRequirementDocx(input);
-  // 파일명: [<ABBR>_]<RQ-ID>_<요구사항명>_요구사항명세서.docx
-  //   - ABBR 가 있으면 prefix 로 붙고, 없으면 기존 형식 그대로
+  // 파일명: [<PREFIX>_]<RQ-ID>_<요구사항명>_요구사항명세서.docx
+  //   - PREFIX 는 문서번호에서 끝 일련번호를 뺀 값(예 "GBMS_A302") — 중간 문서코드까지 포함
+  //   - 문서번호가 없으면(문서코드 미설정) 약어로 fallback, 그것도 없으면 prefix 생략
   //   - 이름 비면 두 번째 부분 생략
+  const abbrPrefix = docNoFilenamePrefix(input.docMeta.docNo) || input.projectAbbr;
   const filename = buildDocxFilename(
     input.reqDisplayId, input.reqName, "요구사항명세서",
-    { projectAbbr: input.projectAbbr },
+    { projectAbbr: abbrPrefix },
   );
 
   return {
