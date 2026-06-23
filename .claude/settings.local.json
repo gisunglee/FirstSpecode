@@ -323,7 +323,13 @@
       "Read(//tmp/**)",
       "Bash(curl -s \"http://localhost:3000/api/worker/tasks?limit=10&excludeTaskType=IMPLEMENT\" -H \"X-Mcp-Key: spk_39a1e0f6e09436172145e8ab19aba90901ddc38ca60b4319e08c7f8ff40b0e02\")",
       "Bash(Get-ChildItem -Path \"c:\\\\source\\\\FirstSpecode\" -Recurse -Directory -Filter \"exports\")",
-      "Bash(Select-Object -ExpandProperty FullName)"
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(curl -s \"http://localhost:3000/api/worker/tasks?limit=10&excludeTaskType=IMPLEMENT\" -H \"X-Mcp-Key: spk_6d66f0f7b5a3457930e5f22db2416b65f4beeb876e021c0b0284ff0dd15f7bdd\")",
+      "mcp__specode__list_unit_works",
+      "mcp__specode__update_unit_work",
+      "mcp__specode__get_unit_work",
+      "mcp__specode__list_screens",
+      "mcp__specode__list_areas"
     ],
     "additionalDirectories": [
       "c:\\source\\FirstSpecode",
