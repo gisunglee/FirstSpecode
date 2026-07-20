@@ -90,6 +90,8 @@ export default function WbsSchedulePage() {
   // entity(탭)·assigneeId(담당자)·page는 "탐색 중인 대상"이라 일부러 여기서 제외했다.
   const view         = useWbsSettingsStore((s) => s.view);
   const setView      = useWbsSettingsStore((s) => s.setView);
+  const phase        = useWbsSettingsStore((s) => s.phase);
+  const setPhase     = useWbsSettingsStore((s) => s.setPhase);
   const zoomLevel     = useWbsSettingsStore((s) => s.zoomLevel);
   const setZoomLevel  = useWbsSettingsStore((s) => s.setZoomLevel);
   const barFieldsArr  = useWbsSettingsStore((s) => s.barFields);
@@ -110,10 +112,10 @@ export default function WbsSchedulePage() {
   const barFields   = useMemo(() => new Set(barFieldsArr), [barFieldsArr]);
   const gridColumns = useMemo(() => new Set(gridColumnsArr), [gridColumnsArr]);
 
-  // 탭·담당자·상태·기간 필터가 바뀌면 결과 집합 자체가 달라지므로 1페이지로 되돌린다
+  // 탭·설계구현·담당자·상태·기간 필터가 바뀌면 결과 집합 자체가 달라지므로 1페이지로 되돌린다
   useEffect(() => {
     setPage(1);
-  }, [entity, assigneeId, statusFilter, periodFilter]);
+  }, [entity, phase, assigneeId, statusFilter, periodFilter]);
 
   // 키보드 단축키 — select/input/textarea에 포커스가 있을 땐(드롭다운 옵션 넘기기 등)
   // 그 기본 동작을 건드리면 안 되니 전부 건너뛴다.
@@ -160,10 +162,10 @@ export default function WbsSchedulePage() {
   const { startFrom, startTo } = periodPresetToRange(periodFilter);
 
   const { data, isLoading, error } = useQuery<WbsResponse>({
-    queryKey: ["wbs", currentProjectId, entity, assigneeId, statusFilter, periodFilter, page, pageSize],
+    queryKey: ["wbs", currentProjectId, entity, phase, assigneeId, statusFilter, periodFilter, page, pageSize],
     queryFn: () =>
       authFetch<{ data: WbsResponse }>(
-        `/api/projects/${currentProjectId}/wbs?entity=${entity}&page=${page}&pageSize=${pageSize}` +
+        `/api/projects/${currentProjectId}/wbs?entity=${entity}&phase=${phase}&page=${page}&pageSize=${pageSize}` +
           (assigneeId ? `&assignedTo=${assigneeId}` : "") +
           (statusFilter !== "ALL" ? `&status=${statusFilter}` : "") +
           (startFrom ? `&startFrom=${startFrom}` : "") +
@@ -195,6 +197,8 @@ export default function WbsSchedulePage() {
             <WbsFilterBar
               entity={entity}
               onEntityChange={setEntity}
+              phase={phase}
+              onPhaseChange={setPhase}
               view={view}
               onViewChange={setView}
               zoomLevel={zoomLevel}

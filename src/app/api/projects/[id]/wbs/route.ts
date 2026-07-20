@@ -3,6 +3,9 @@
  *
  * Query:
  *   entity     = UNIT_WORK | SCREEN | FUNCTION (기본 UNIT_WORK)
+ *   phase      = DESIGN | IMPL (기본 IMPL) — 진척률·기간을 기능의 design_rt/impl_rt 중
+ *                무엇으로 롤업할지 선택. 단위업무는 자체 progrs_rt/bgng_de/end_de를 전혀
+ *                쓰지 않고 항상 기능(function) 실측값을 롤업한다 — unitWorkPhaseRollup.ts 참고.
  *   assignedTo = 멤버 ID ("me" → 로그인 사용자로 치환, 없으면 전체)
  *   status     = wbs-done | wbs-delayed | wbs-in-progress | wbs-not-started (없으면 전체)
  *   startFrom  = YYYY-MM-DD (시작일 이 값 이상만)
@@ -14,8 +17,11 @@
  * 그 파일만 확장하면 되고 이 핸들러는 안 건드려도 된다.
  *
  * 영역(Area)은 날짜 컬럼이 없어 이번 범위에서 제외.
- * 화면은 설계 일정(design_bgng_de/end_de) + 설계 진척률 롤업, 기능은 구현 일정
- * (impl_bgng_de/end_de) + 구현 진척률을 그대로 간트 바에 사용한다.
+ *
+ * phase별 기간(날짜) 축 — 엔티티마다 해당 phase의 날짜 컬럼이 없으면 롤업/상속한다:
+ *   - UNIT_WORK: DESIGN=하위 화면 design 일정 MIN~MAX, IMPL=하위 기능 impl 일정 MIN~MAX
+ *   - SCREEN   : DESIGN=화면 자신의 design_bgng_de/end_de, IMPL=하위 기능 impl 일정 MIN~MAX
+ *   - FUNCTION : DESIGN=부모 화면의 design_bgng_de/end_de 상속, IMPL=기능 자신의 impl 일정
  *
  * 시작일·종료일이 없는 항목도 목록에서는 빼지 않는다 — 간트 막대는 못 그려도
  * (WbsGanttChart.tsx 에서 start/end 없이 렌더링) 존재 자체는 조회할 수 있어야 한다는
@@ -28,7 +34,8 @@ import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { fetchProjectUnitWorks } from "@/lib/exports/unit-works-data";
 import { fetchProjectScreens } from "@/lib/exports/screens-data";
 import { fetchProjectFunctions } from "@/lib/exports/functions-data";
-import type { DeadlineEntityKind } from "@/types/pm";
+import { fetchUnitWorkPhaseRollup } from "./unitWorkPhaseRollup";
+import type { DeadlineEntityKind, ProgressKind } from "@/types/pm";
 import { matchesWbsFilters, parseWbsFilterParams } from "./filters";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -52,6 +59,10 @@ function isEntity(v: string | null): v is DeadlineEntityKind {
   return v === "UNIT_WORK" || v === "SCREEN" || v === "FUNCTION";
 }
 
+function isPhase(v: string | null): v is ProgressKind {
+  return v === "DESIGN" || v === "IMPL";
+}
+
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id: projectId } = await params;
 
@@ -61,6 +72,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const url = new URL(request.url);
   const entityParam = url.searchParams.get("entity");
   const entity: DeadlineEntityKind = isEntity(entityParam) ? entityParam : "UNIT_WORK";
+
+  const phaseParam = url.searchParams.get("phase");
+  const phase: ProgressKind = isPhase(phaseParam) ? phaseParam : "IMPL";
 
   const assignedToParam = url.searchParams.get("assignedTo");
   const assigneeFilter = assignedToParam === "me" ? gate.mberId : (assignedToParam || undefined);
@@ -76,32 +90,43 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     let items: WbsTaskItem[];
 
     if (entity === "UNIT_WORK") {
+      // 단위업무 자신의 progrs_rt(수동 입력값)/bgng_de/end_de는 하위 화면·기능의 실제
+      // 진행 상황과 무관하게 따로 관리되는 값이라 WBS에서는 아예 안 쓴다 — identity(이름·
+      // 담당자·요구사항명)만 fetchProjectUnitWorks에서 가져오고, 기간·진척률은 항상
+      // 기능(function) 실측값을 롤업한 unitWorkPhaseRollup으로 대체한다.
       const rows = await fetchProjectUnitWorks({ projectId, assigneeFilter });
-      items = rows.map((r) => ({
-        id:         r.unitWorkId,
-        displayId:  r.displayId,
-        name:       r.name,
-        start:      r.startDate ?? null,
-        end:        r.endDate ?? null,
-        progress:   r.progress,
-        groupLabel: r.reqName,
-        href:       `/projects/${projectId}/unit-works/${r.unitWorkId}`,
-        assignee:   r.assignMemberName,
-        effort:     null, // 단위업무는 공수 컬럼 자체가 없음(스키마상 화면/기능에만 있음)
-      }));
+      const rollup = await fetchUnitWorkPhaseRollup(rows.map((r) => r.unitWorkId), phase);
+      items = rows.map((r) => {
+        const roll = rollup.get(r.unitWorkId);
+        return {
+          id:         r.unitWorkId,
+          displayId:  r.displayId,
+          name:       r.name,
+          start:      roll?.start ?? null,
+          end:        roll?.end ?? null,
+          progress:   roll?.progress ?? 0,
+          groupLabel: r.reqName,
+          href:       `/projects/${projectId}/unit-works/${r.unitWorkId}`,
+          assignee:   r.assignMemberName,
+          effort:     null, // 단위업무는 공수 컬럼 자체가 없음(스키마상 화면/기능에만 있음)
+        };
+      });
     } else if (entity === "SCREEN") {
       const rows = await fetchProjectScreens({ projectId, assigneeFilter });
       items = rows.map((r) => ({
         id:         r.screenId,
         displayId:  r.displayId,
         name:       r.name,
-        start:      r.startDate ?? null,
-        end:        r.endDate ?? null,
-        progress:   r.avgDesignRt,
+        // 설계phase: 화면 자신의 설계 일정. 구현phase: 화면엔 구현 일정이 없어 하위
+        // 기능들의 impl_bgng_de/impl_end_de를 최소~최대로 롤업한 값(screens-data.ts).
+        start:      phase === "DESIGN" ? (r.startDate ?? null) : (r.implStartDate ?? null),
+        end:        phase === "DESIGN" ? (r.endDate ?? null)   : (r.implEndDate ?? null),
+        progress:   phase === "DESIGN" ? r.avgDesignRt : r.avgImplRt,
         groupLabel: r.unitWorkName,
         href:       `/projects/${projectId}/screens/${r.screenId}`,
         assignee:   r.assignMemberName,
-        effort:     r.designEffort,
+        // 구현phase엔 화면 자체 구현 공수 컬럼이 없어 빈칸 처리(하위 기능 공수 억지 합산 안 함)
+        effort:     phase === "DESIGN" ? r.designEffort : null,
       }));
     } else {
       const rows = await fetchProjectFunctions({ projectId, assigneeFilter });
@@ -109,9 +134,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         id:         r.funcId,
         displayId:  r.displayId,
         name:       r.name,
-        start:      r.startDate ?? null,
-        end:        r.endDate ?? null,
-        progress:   r.implRt,
+        // 설계phase: 기능 자신은 설계 일정 컬럼이 없어 부모 화면의 설계 일정을 그대로
+        // 상속해서 보여준다(진척률만 기능 자신의 design_rt). 구현phase: 기존과 동일.
+        start:      phase === "DESIGN" ? (r.screenDesignStartDate ?? null) : (r.startDate ?? null),
+        end:        phase === "DESIGN" ? (r.screenDesignEndDate ?? null)   : (r.endDate ?? null),
+        progress:   phase === "DESIGN" ? r.designRt : r.implRt,
         groupLabel: `${r.unitWorkName} / ${r.screenName}`,
         href:       `/projects/${projectId}/functions/${r.funcId}`,
         assignee:   r.assignMemberName,

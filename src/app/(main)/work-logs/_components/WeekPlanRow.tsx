@@ -17,7 +17,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
-import { addDaysStr, getWeekMondayStr } from "@/lib/weekUtil";
+import { addDaysStr, getWeekMondayStr, invalidateWorkLogQueries } from "@/lib/weekUtil";
 import type { WorkLogResponse, WorkLogItemRefType } from "@/types/workLog";
 import RefPicker from "./RefPicker";
 
@@ -52,7 +52,8 @@ function WeekCard({ projectId, monday, offset }: { projectId: string; monday: st
     setResultCn(weekLog?.resultCn ?? "");
   }, [weekLog?.noteCn, weekLog?.resultCn, monday]);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey });
+  // work-log 계열 캐시(업무 리포트 등 다른 화면 포함) 전체 무효화 — 상세 이유는 weekUtil.ts 참고
+  const invalidate = () => invalidateWorkLogQueries(queryClient);
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -132,7 +133,7 @@ function WeekCard({ projectId, monday, offset }: { projectId: string; monday: st
           <div style={{ fontSize: "var(--text-sm)", color: "var(--color-text-tertiary)" }}>불러오는 중...</div>
         ) : (
           <>
-            <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--color-text-tertiary)", letterSpacing: "0.04em" }}>
+            <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.04em" }}>
               계획
             </div>
             <textarea
@@ -148,7 +149,7 @@ function WeekCard({ projectId, monday, offset }: { projectId: string; monday: st
             {/* 관련 일감 — 체크박스 없는 참고 태그. 주 단위로 한 번만 붙이면 됨. */}
             <div style={{ borderTop: "1px solid var(--color-border-subtle)", paddingTop: 8 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                <span style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--color-text-tertiary)", letterSpacing: "0.04em" }}>
+                <span style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.04em" }}>
                   관련 일감
                 </span>
                 {!isPast && (
@@ -193,7 +194,7 @@ function WeekCard({ projectId, monday, offset }: { projectId: string; monday: st
             </div>
 
             <div style={{ borderTop: "1px solid var(--color-border-subtle)", paddingTop: 8 }}>
-              <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--color-text-tertiary)", letterSpacing: "0.04em", marginBottom: 4 }}>
+              <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.04em", marginBottom: 4 }}>
                 결과
               </div>
               <textarea

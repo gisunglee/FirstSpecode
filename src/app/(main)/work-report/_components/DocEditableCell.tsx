@@ -7,6 +7,9 @@
  * textarea로 바뀌어 타이핑할 수 있고, blur 되면 바뀐 내용만 저장한다. 별도의
  * "편집 모드"/"저장" 버튼이 없는 이유 — 셀마다 버튼이 붙으면 문서 전체가 다시
  * 업무일지 카드처럼 번잡해 보인다는 게 지난 피드백의 핵심이었다.
+ *
+ * textarea는 rows 고정이 아니라 내용에 맞춰 자동으로 높이가 늘어난다(auto-grow) —
+ * 고정 rows로는 몇 줄만 넘어가도 내부 스크롤이 생겨 "문서" 느낌이 깨진다.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -25,26 +28,46 @@ export default function DocEditableCell({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft]     = useState(value);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // commit() 직후 서버 재조회가 끝나기 전까지 부모가 넘겨주는 value는 여전히 "저장 전" 값이다.
+  // 그 stale 값으로 draft를 덮어써버리면 방금 입력한 내용이 잠깐(재조회가 끝날 때까지)
+  // 사라졌다가 돌아오는 것처럼 보인다 — 저장 직후 한 번은 외부 value 동기화를 건너뛴다.
+  const suppressNextSyncRef = useRef(false);
 
-  // 저장이 끝나 부모의 value가 갱신되면 편집 중이 아닐 때만 반영 — 타이핑 중에 덮어쓰지 않도록.
   useEffect(() => {
-    if (!editing) setDraft(value);
+    if (editing) return;
+    if (suppressNextSyncRef.current) {
+      suppressNextSyncRef.current = false;
+      return;
+    }
+    setDraft(value);
   }, [value, editing]);
 
   useEffect(() => {
     if (editing) textareaRef.current?.focus();
   }, [editing]);
 
+  // auto-grow — 내용 길이에 맞춰 textarea 높이를 매번 다시 계산
+  useEffect(() => {
+    if (!editing || !textareaRef.current) return;
+    const el = textareaRef.current;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [draft, editing]);
+
   function commit() {
-    setEditing(false);
     const trimmed = draft.trim();
-    if (trimmed !== value.trim()) onSave(trimmed);
+    setEditing(false);
+    if (trimmed !== value.trim()) {
+      suppressNextSyncRef.current = true;
+      onSave(trimmed);
+    }
   }
 
   if (editing) {
     return (
       <textarea
         ref={textareaRef}
+        className="sp-doc-textarea"
         rows={minRows}
         value={draft}
         placeholder={placeholder}
@@ -56,14 +79,15 @@ export default function DocEditableCell({
             setEditing(false);
           }
         }}
+        style={{ minHeight: minRows * 20 }}
       />
     );
   }
 
   return (
     <div className="sp-doc-cell-editable" onClick={() => setEditing(true)} style={{ minHeight: minRows * 20 }}>
-      {value.trim() ? (
-        <span style={{ whiteSpace: "pre-wrap" }}>{value}</span>
+      {draft.trim() ? (
+        <span style={{ whiteSpace: "pre-wrap" }}>{draft}</span>
       ) : (
         <span style={{ color: "var(--color-text-disabled)" }}>{placeholder}</span>
       )}

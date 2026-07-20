@@ -748,6 +748,11 @@ body {
 ================================================================ */
 .sp-doc-table-wrap {
   border: 2px solid var(--color-border-strong); background: var(--color-bg-card);
+  /* A4 용지처럼 세로로 긴 문서 느낌 — 실제 A4(약 794px)보다 조금 넉넉하게, 화면 전체 폭으로
+     늘어나지 않게 상한을 둔다. 가운데 정렬은 하지 않음(왼쪽 여백이 너무 커 보인다는 피드백) —
+     그냥 왼쪽 정렬. 카드 보기(WeekCardMini)는 width를 인라인으로 직접 지정하므로
+     이 max-width보다 항상 작아 영향 없음. */
+  max-width: 900px;
 }
 .sp-doc-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); table-layout: fixed; }
 .sp-doc-table td, .sp-doc-table th {
@@ -755,14 +760,22 @@ body {
   color: var(--color-text-primary); text-align: left;
 }
 .sp-doc-table .sp-doc-label {
-  background: var(--color-bg-label); font-weight: 600; text-align: center;
-  color: var(--color-text-secondary); white-space: nowrap;
+  /* 옅은 --color-bg-label 만으로는 카드 안쪽 흰 배경과 거의 구분이 안 된다는 피드백 →
+     --color-border-strong(반투명 검정/흰 오버레이 토큰)을 배경으로 얹어 확실히 회색으로 보이게 함 */
+  background: var(--color-border-strong); font-weight: 600; text-align: center;
+  color: var(--color-text-primary); white-space: nowrap;
 }
+/* 세부 업무계획 요일 행 — 기본보다 살짝 더 여유 있게(피드백: 기존 대비 약 20%) */
+.sp-doc-table tr.sp-doc-row-tall td { padding-top: 10px; padding-bottom: 10px; }
 /* DocEditableCell — 평소엔 일반 셀처럼 보이다가 hover 시에만 "클릭하면 써진다"는 걸 암시 */
 .sp-doc-cell-editable { cursor: text; transition: background var(--transition-fast); }
 .sp-doc-cell-editable:hover { background: var(--color-bg-table-hover); }
-.sp-doc-cell-editable textarea {
-  width: 100%; border: none; background: transparent; outline: none; resize: none;
+/* 편집 상태의 textarea 자체에 직접 붙는 클래스 — 감싸는 wrapper가 없어(.sp-doc-cell-editable은
+   "평소 보기" 상태에만 붙음) 반드시 textarea 요소 자신에 적용해야 폭 100%가 먹는다.
+   이전엔 `.sp-doc-cell-editable textarea` 자손 선택자로만 정의해 둬서 매치되는 textarea가
+   없었고, 그 결과 브라우저 기본 크기(cols=20)로 작게 렌더링되던 버그가 있었다. */
+.sp-doc-textarea {
+  display: block; width: 100%; border: none; background: transparent; outline: none; resize: none;
   font: inherit; color: inherit; padding: 0; line-height: 1.5;
 }
 

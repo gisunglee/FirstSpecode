@@ -16,8 +16,9 @@
  * 보이게 함 — 담당자 필터는 자주 쓰는 조건이라 설정 드롭다운 밖으로 뺌.
  */
 
-import { DEADLINE_ENTITY_LABELS } from "@/types/pm";
-import type { DeadlineEntityKind } from "@/types/pm";
+import { useEffect, useRef, useState } from "react";
+import { DEADLINE_ENTITY_LABELS, PROGRESS_KIND_LABELS } from "@/types/pm";
+import type { DeadlineEntityKind, ProgressKind } from "@/types/pm";
 import type { BarField } from "./WbsGanttChart";
 import { WBS_ZOOM_LEVELS, type WbsZoomLevelKey } from "./wbsZoom";
 import type { WbsStatus } from "@/lib/wbs/status";
@@ -36,9 +37,24 @@ const VIEW_LABELS: Record<WbsViewMode, string> = { flat: "목록", group: "그�
 // page.tsx의 키보드 단축키(1/2/3)가 이 순서와 항상 같은 걸 가리키도록 export.
 export const ENTITY_ORDER: DeadlineEntityKind[] = ["UNIT_WORK", "SCREEN", "FUNCTION"];
 
+// 구현을 먼저 두는 이유 — 기본값(wbsSettingsStore의 phase: "IMPL")과 같은 순서로 보이게.
+const PROGRESS_KIND_ORDER: ProgressKind[] = ["IMPL", "DESIGN"];
+
+// "?" 도움말에 보여줄 표 — 실제 계산 로직(wbs/route.ts, unitWorkPhaseRollup.ts)과 반드시
+// 같은 내용이어야 함. 로직이 바뀌면 이 표도 같이 고칠 것.
+const PHASE_HELP_ROWS: { label: string; impl: string; design: string }[] = [
+  { label: "단위업무", impl: "하위 기능 구현 일정 최소~최대 · 구현 진척률 평균", design: "하위 화면 설계 일정 최소~최대 · 설계 진척률 평균" },
+  { label: "화면",     impl: "하위 기능 구현 일정 최소~최대 · 구현 진척률 평균", design: "화면 자신의 설계 일정 · 설계 진척률 평균" },
+  { label: "기능",     impl: "기능 자신의 구현 일정 · 구현 진척률",             design: "부모 화면의 설계 일정(상속) · 기능 자신의 설계 진척률" },
+];
+
 type Props = {
   entity: DeadlineEntityKind;
   onEntityChange: (entity: DeadlineEntityKind) => void;
+
+  // 설계/구현 — 진척률·기간을 기능(function)의 design_rt/impl_rt 중 무엇으로 롤업할지.
+  phase: ProgressKind;
+  onPhaseChange: (phase: ProgressKind) => void;
 
   // 목록(현재 평면 리스트) / 그룹(탭별 상위 관계로 묶어 요약 행 아래 자식으로 표시)
   view: WbsViewMode;
@@ -81,6 +97,7 @@ type Props = {
 
 export default function WbsFilterBar({
   entity, onEntityChange,
+  phase, onPhaseChange,
   view, onViewChange,
   zoomLevel, onZoomLevelChange,
   members, assigneeId, onAssigneeChange,
@@ -92,6 +109,18 @@ export default function WbsFilterBar({
   page, pageSize, totalCount, totalPages, onPageChange, onPageSizeChange,
   onScroll, onScrollToEdge,
 }: Props) {
+  const [showPhaseHelp, setShowPhaseHelp] = useState(false);
+  const phaseHelpRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showPhaseHelp) return;
+    function onDocClick(e: MouseEvent) {
+      if (phaseHelpRef.current && !phaseHelpRef.current.contains(e.target as Node)) setShowPhaseHelp(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [showPhaseHelp]);
+
   return (
     <div
       className="sp-group-header"
@@ -111,6 +140,72 @@ export default function WbsFilterBar({
             {DEADLINE_ENTITY_LABELS[k]}
           </div>
         ))}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <div style={{ display: "flex", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", overflow: "hidden" }} title="진척률·기간을 기능(function)의 설계/구현 진행률 중 무엇으로 롤업할지">
+          {PROGRESS_KIND_ORDER.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => onPhaseChange(p)}
+              style={{
+                padding: "4px 10px", fontSize: "var(--text-base)", fontWeight: 600,
+                border: "none", cursor: "pointer",
+                background: phase === p ? "var(--color-brand)" : "var(--color-bg-card)",
+                color: phase === p ? "var(--color-text-inverse)" : "var(--color-text-secondary)",
+              }}
+            >
+              {PROGRESS_KIND_LABELS[p]}
+            </button>
+          ))}
+        </div>
+
+        <div ref={phaseHelpRef} style={{ position: "relative" }}>
+          <button
+            type="button"
+            onClick={() => setShowPhaseHelp((v) => !v)}
+            aria-expanded={showPhaseHelp}
+            title="설명 보기"
+            style={helpBtnStyle}
+          >
+            ?
+          </button>
+
+          {showPhaseHelp && (
+            <div
+              style={{
+                position: "absolute", top: "100%", left: 0, marginTop: 6, zIndex: 20,
+                width: 520, padding: 12,
+                background: "var(--color-bg-card)", border: "1px solid var(--color-border)",
+                borderRadius: "var(--radius-md)", boxShadow: "0 4px 16px rgba(0,0,0,0.16)",
+              }}
+            >
+              <div style={{ fontSize: "var(--text-base)", color: "var(--color-text-secondary)", lineHeight: 1.5, marginBottom: 8 }}>
+                시작일·종료일·진척률을 구현/설계 중 무엇을 기준으로 계산하는지입니다.
+                단위업무·화면은 하위 기능들을 롤업하고, 기능은 자기 자신(설계 일정만 화면에서 상속)입니다.
+              </div>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--text-xs)" }}>
+                <thead>
+                  <tr>
+                    <th style={helpThStyle}>대상</th>
+                    <th style={helpThStyle}>구현</th>
+                    <th style={helpThStyle}>설계</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {PHASE_HELP_ROWS.map((row) => (
+                    <tr key={row.label}>
+                      <td style={{ ...helpTdStyle, fontWeight: 600, color: "var(--color-text-primary)" }}>{row.label}</td>
+                      <td style={helpTdStyle}>{row.impl}</td>
+                      <td style={helpTdStyle}>{row.design}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginLeft: "auto" }}>
@@ -231,4 +326,24 @@ const navBtnStyle: React.CSSProperties = {
   padding: 0, border: "none", borderRadius: "var(--radius-sm)",
   background: "transparent", color: "var(--color-text-secondary)",
   cursor: "pointer",
+};
+
+// WbsSettingsPanel.tsx의 "상태별 색상 ?" 버튼과 동일한 스타일 — 페이지 안에서 "?" 도움말
+// 버튼이 항상 같은 모양이도록 통일.
+const helpBtnStyle: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", justifyContent: "center",
+  width: 16, height: 16, borderRadius: "50%", flexShrink: 0,
+  border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
+  color: "var(--color-text-secondary)", fontSize: 11, fontWeight: 700,
+  cursor: "help", lineHeight: 1, padding: 0,
+};
+
+const helpThStyle: React.CSSProperties = {
+  textAlign: "left", padding: "4px 6px", borderBottom: "1px solid var(--color-border)",
+  color: "var(--color-text-tertiary)", fontWeight: 600, whiteSpace: "nowrap",
+};
+
+const helpTdStyle: React.CSSProperties = {
+  textAlign: "left", padding: "6px", borderBottom: "1px solid var(--color-border)",
+  color: "var(--color-text-secondary)", lineHeight: 1.4, verticalAlign: "top",
 };

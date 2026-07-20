@@ -18,6 +18,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
+import { invalidateWorkLogQueries } from "@/lib/weekUtil";
 import type { WorkLogResponse } from "@/types/workLog";
 
 const WEEKDAY_LABEL = ["일", "월", "화", "수", "목", "금", "토"];
@@ -48,7 +49,8 @@ export default function DayCard({ projectId, date, isToday }: { projectId: strin
     setNoteCn(dailyLog?.noteCn ?? "");
   }, [dailyLog?.noteCn, date]);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey });
+  // work-log 계열 캐시(업무 리포트 등 다른 화면 포함) 전체 무효화 — 상세 이유는 weekUtil.ts 참고
+  const invalidate = () => invalidateWorkLogQueries(queryClient);
 
   // 로그가 아직 없으면 먼저 upsert 해서 work_log_id 를 확보 — 항목 추가는 work_log_id 가 필요하다.
   async function ensureWorkLogId(): Promise<string> {
@@ -143,7 +145,7 @@ export default function DayCard({ projectId, date, isToday }: { projectId: strin
       ) : (
         <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
           {/* 계획 */}
-          <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--color-text-tertiary)", letterSpacing: "0.04em" }}>
+          <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.04em" }}>
             계획
           </div>
 
@@ -206,7 +208,7 @@ export default function DayCard({ projectId, date, isToday }: { projectId: strin
 
           <div style={{ borderTop: "1px solid var(--color-border-subtle)", marginTop: 2, paddingTop: 8 }}>
             {/* 결과 — "결과"만으로는 뭘 적는 칸인지 애매하다는 피드백으로 "오늘 작업 결과"로 구체화 */}
-            <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--color-text-tertiary)", letterSpacing: "0.04em", marginBottom: 4 }}>
+            <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.04em", marginBottom: 4 }}>
               오늘 작업 결과
             </div>
             <textarea

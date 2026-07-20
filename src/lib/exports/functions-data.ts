@@ -32,6 +32,10 @@ export type FunctionListItem = {
   // 구현 일정 — WBS 간트에서 사용 (설계 일정인 화면의 design_bgng_de 와는 별개 축)
   startDate:       string | null;
   endDate:         string | null;
+  // 부모 화면의 설계 일정 — 기능 자신은 설계 일정 컬럼이 없어서(구현 일정만 있음),
+  // WBS "설계" phase에서 기능 바를 그릴 때 이 값을 그대로 상속해서 쓴다.
+  screenDesignStartDate: string | null;
+  screenDesignEndDate:   string | null;
   aiDesign:        FunctionAiTaskInfo | null;
   aiInspect:       FunctionAiTaskInfo | null;
   designRt:        number;
@@ -71,6 +75,8 @@ export async function fetchProjectFunctions(opts: {
               ctgry_l_nm:      true,
               ctgry_m_nm:      true,
               ctgry_s_nm:      true,
+              design_bgng_de:  true,
+              design_end_de:   true,
               unitWork: {
                 select: { unit_work_id: true, unit_work_nm: true, sort_ordr: true },
               },
@@ -176,6 +182,8 @@ export async function fetchProjectFunctions(opts: {
     unitWorkName:    f.area?.screen?.unitWork?.unit_work_nm ?? "미분류",
     startDate:       f.impl_bgng_de ?? null,
     endDate:         f.impl_end_de ?? null,
+    screenDesignStartDate: f.area?.screen?.design_bgng_de ?? null,
+    screenDesignEndDate:   f.area?.screen?.design_end_de ?? null,
     aiDesign:        aiMap[f.func_id]?.["DESIGN"]  ?? null,
     aiInspect:       aiMap[f.func_id]?.["INSPECT"] ?? null,
     designRt:        progressMap.get(f.func_id)?.design_rt ?? 0,

@@ -1,9 +1,11 @@
 /**
- * weekUtil — 업무일지/주간보고 공통 "주(week) 월요일 계산" 유틸
+ * weekUtil — 업무일지/주간보고 공통 "주(week) 월요일 계산" 유틸 + 쿼리 무효화 헬퍼
  *
  * work-logs(WEEK 타입 log_dt) / weekly-reports(week_start_dt) 양쪽 API 라우트와
  * 페이지 컴포넌트(기본 선택 주) 에서 동일 기준으로 써야 어긋나지 않는다.
  */
+
+import type { QueryClient } from "@tanstack/react-query";
 
 // dateStr(YYYY-MM-DD) 이 속한 주의 월요일을 YYYY-MM-DD 로 반환. 생략 시 오늘 기준.
 // UTC 기준 계산 — 서버/클라이언트 타임존 차이로 요일이 밀리는 것을 방지.
@@ -64,4 +66,21 @@ export function groupByWeek(days: string[]): string[][] {
   }
   if (current.length > 0) weeks.push(current);
   return weeks;
+}
+
+// ── 쿼리 무효화 — 업무일지/업무 리포트가 공유하는 모든 work-log 계열 캐시 ──────────
+//
+// 저장 후 화면에서 방금 쓴 내용이 사라졌다가 새로고침해야 돌아오는 버그가 있었다:
+// 컴포넌트마다 쓰는 queryKey 접두어가 "work-log"(DayCard/WeekPlanRow), "work-log-range"
+// (업무 리포트의 5일치 범위 조회), "work-log-history"(기록 보기)로 제각각이라, exact 매치인
+// invalidateQueries({queryKey:["work-log"]}) 로는 "work-log-range" 등을 무효화하지 못했다
+// — 저장은 서버에 반영됐지만 화면이 구 캐시(저장 전 값)를 계속 보여준 것.
+// predicate 로 첫 번째 키 요소가 "work-log" 로 시작하는 쿼리를 전부 잡아 한 번에 해결한다.
+export function invalidateWorkLogQueries(queryClient: QueryClient): Promise<void> {
+  return queryClient.invalidateQueries({
+    predicate: (query) => {
+      const first = query.queryKey[0];
+      return typeof first === "string" && first.startsWith("work-log");
+    },
+  });
 }

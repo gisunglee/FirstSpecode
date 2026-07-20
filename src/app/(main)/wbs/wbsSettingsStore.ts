@@ -21,11 +21,15 @@ import type { WbsViewMode, WbsPeriodPreset, PageSize } from "./WbsFilterBar";
 import { WBS_GRID_COLUMNS_DEFAULT, type WbsGridColumn } from "./wbsFilterOptions";
 import { WBS_ZOOM_DEFAULT, type WbsZoomLevelKey } from "./wbsZoom";
 import type { WbsStatus } from "@/lib/wbs/status";
+import type { ProgressKind } from "@/types/pm";
 
 // Set은 JSON 직렬화가 안 되므로(persist 미들웨어 기본 storage가 JSON.stringify 사용)
 // 저장 형태는 배열로 두고, 컴포넌트에 넘길 때만 Set으로 변환한다(page.tsx에서 useMemo).
 type WbsSettingsState = {
   view: WbsViewMode;
+  // 설계/구현 — 단위업무·화면·기능 진척률·기간을 기능(function)의 design_rt/impl_rt 중
+  // 무엇으로 롤업할지. 기본 IMPL(구현) — 기존 기능탭·PM 히트맵 기본값과 동일.
+  phase: ProgressKind;
   zoomLevel: WbsZoomLevelKey;
   barFields: BarField[];
   gridColumns: WbsGridColumn[];
@@ -37,6 +41,7 @@ type WbsSettingsState = {
 
 type WbsSettingsActions = {
   setView: (view: WbsViewMode) => void;
+  setPhase: (phase: ProgressKind) => void;
   setZoomLevel: (level: WbsZoomLevelKey) => void;
   toggleBarField: (field: BarField) => void;
   toggleGridColumn: (column: WbsGridColumn) => void;
@@ -50,6 +55,7 @@ export const useWbsSettingsStore = create<WbsSettingsState & WbsSettingsActions>
   persist(
     (set) => ({
       view: "flat",
+      phase: "IMPL",
       zoomLevel: WBS_ZOOM_DEFAULT,
       barFields: ["name"],
       gridColumns: [...WBS_GRID_COLUMNS_DEFAULT],
@@ -59,6 +65,7 @@ export const useWbsSettingsStore = create<WbsSettingsState & WbsSettingsActions>
       pageSize: 20,
 
       setView: (view) => set({ view }),
+      setPhase: (phase) => set({ phase }),
       setZoomLevel: (zoomLevel) => set({ zoomLevel }),
 
       toggleBarField: (field) =>
