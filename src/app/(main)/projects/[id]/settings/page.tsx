@@ -37,6 +37,15 @@ type ProjectDetail = {
   startDate:    string | null;
   endDate:      string | null;
   clientName:   string | null;
+  // 단계별 일정 (분석/설계/구현/테스트) — 프로젝트 전체 기간과 별개
+  analysisStart: string | null;
+  analysisEnd:   string | null;
+  designStart:   string | null;
+  designEnd:     string | null;
+  devStart:      string | null;
+  devEnd:        string | null;
+  testStart:     string | null;
+  testEnd:       string | null;
   myRole:       string;
 };
 
@@ -47,7 +56,7 @@ type AiSettings = {
   callMethod: "DIRECT" | "QUEUE";
 };
 
-type Tab = "basic" | "ai" | "document";
+type Tab = "basic" | "schedule" | "ai" | "document";
 
 type DocumentSettings = {
   copyrightHolder:   string | null;
@@ -233,6 +242,7 @@ function ProjectSettingsInner() {
       {/* AR-00032 탭 네비게이션 (FID-00074) */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--color-border)", marginBottom: 12 }}>
         <button style={tabStyle("basic")}    onClick={() => setActiveTab("basic")}>기본정보</button>
+        <button style={tabStyle("schedule")} onClick={() => setActiveTab("schedule")}>일정</button>
         <button style={tabStyle("ai")}       onClick={() => setActiveTab("ai")}>AI설정</button>
         <button style={tabStyle("document")} onClick={() => setActiveTab("document")}>문서설정</button>
       </div>
@@ -272,6 +282,7 @@ function ProjectSettingsInner() {
           </div>
         </>
       )}
+      {activeTab === "schedule" && <ScheduleTab projectId={projectId} project={project} isOwner={isOwner} queryClient={queryClient} />}
       {activeTab === "ai"       && <AiSettingsTab projectId={projectId} />}
       {activeTab === "document" && <DocumentSettingsTab projectId={projectId} />}
 
@@ -405,6 +416,97 @@ function BasicInfoTab({
           <label className="sp-label">발주처</label>
           <input className="sp-input" value={clientName} onChange={(e) => setClientName(e.target.value)} readOnly={ro} />
         </div>
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button type="submit" className="sp-btn sp-btn-primary" disabled={ro || saveMutation.isPending}>
+            {saveMutation.isPending ? "저장 중..." : "저장"}
+          </button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+// ── 일정 탭 — 단계별(분석/설계/구현/테스트) 시작일·종료일 ────────────────────
+// 별도 테이블 없이 프로젝트 테이블 컬럼으로 관리 (tb_pj_project.anls_bgng_de 등).
+type PhaseKey = "analysis" | "design" | "dev" | "test";
+const PHASE_LABELS: { key: PhaseKey; label: string }[] = [
+  { key: "analysis", label: "분석" },
+  { key: "design",   label: "설계" },
+  { key: "dev",      label: "구현" },
+  { key: "test",     label: "테스트" },
+];
+
+function ScheduleTab({
+  projectId, project, isOwner, queryClient,
+}: {
+  projectId: string;
+  project: ProjectDetail;
+  isOwner: boolean;
+  queryClient: ReturnType<typeof useQueryClient>;
+}) {
+  const [dates, setDates] = useState<Record<PhaseKey, { start: string; end: string }>>({
+    analysis: { start: project.analysisStart?.slice(0, 10) ?? "", end: project.analysisEnd?.slice(0, 10) ?? "" },
+    design:   { start: project.designStart?.slice(0, 10)   ?? "", end: project.designEnd?.slice(0, 10)   ?? "" },
+    dev:      { start: project.devStart?.slice(0, 10)      ?? "", end: project.devEnd?.slice(0, 10)      ?? "" },
+    test:     { start: project.testStart?.slice(0, 10)     ?? "", end: project.testEnd?.slice(0, 10)     ?? "" },
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: (body: object) =>
+      authFetch(`/api/projects/${projectId}`, { method: "PUT", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      toast.success("저장되었습니다.");
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  function setPhaseDate(key: PhaseKey, field: "start" | "end", value: string) {
+    setDates((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
+  }
+
+  function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    for (const { key, label } of PHASE_LABELS) {
+      const { start, end } = dates[key];
+      if (start && end && end < start) { toast.error(`${label} 종료일은 시작일 이후여야 합니다.`); return; }
+    }
+    saveMutation.mutate({
+      // 프로젝트명은 PUT 필수값이라 함께 전송 (기본정보 탭과 동일한 API 사용)
+      name: project.name,
+      analysisStart: dates.analysis.start || undefined,
+      analysisEnd:   dates.analysis.end   || undefined,
+      designStart:   dates.design.start   || undefined,
+      designEnd:     dates.design.end     || undefined,
+      devStart:      dates.dev.start      || undefined,
+      devEnd:        dates.dev.end        || undefined,
+      testStart:     dates.test.start     || undefined,
+      testEnd:       dates.test.end       || undefined,
+    });
+  }
+
+  const ro = !isOwner;
+  return (
+    <form onSubmit={handleSave}>
+      <div style={{ background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-card)", padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <p style={{ margin: 0, fontSize: "var(--text-xs)", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+          단계별 진행 일정입니다. 프로젝트 전체 기간(기본정보 탭)과 별개로 관리됩니다.
+        </p>
+        {PHASE_LABELS.map(({ key, label }) => (
+          <div key={key} style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+            <div style={{ width: 72, flexShrink: 0, paddingBottom: 8, fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--color-text-primary)" }}>
+              {label}
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="sp-label">시작일</label>
+              <input className="sp-input" type="date" value={dates[key].start} onChange={(e) => setPhaseDate(key, "start", e.target.value)} readOnly={ro} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="sp-label">종료일</label>
+              <input className="sp-input" type="date" value={dates[key].end} onChange={(e) => setPhaseDate(key, "end", e.target.value)} readOnly={ro} />
+            </div>
+          </div>
+        ))}
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <button type="submit" className="sp-btn sp-btn-primary" disabled={ro || saveMutation.isPending}>
             {saveMutation.isPending ? "저장 중..." : "저장"}

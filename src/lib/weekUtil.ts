@@ -1,0 +1,67 @@
+/**
+ * weekUtil — 업무일지/주간보고 공통 "주(week) 월요일 계산" 유틸
+ *
+ * work-logs(WEEK 타입 log_dt) / weekly-reports(week_start_dt) 양쪽 API 라우트와
+ * 페이지 컴포넌트(기본 선택 주) 에서 동일 기준으로 써야 어긋나지 않는다.
+ */
+
+// dateStr(YYYY-MM-DD) 이 속한 주의 월요일을 YYYY-MM-DD 로 반환. 생략 시 오늘 기준.
+// UTC 기준 계산 — 서버/클라이언트 타임존 차이로 요일이 밀리는 것을 방지.
+export function getWeekMondayStr(dateStr?: string): string {
+  const base = dateStr ? new Date(dateStr + "T00:00:00Z") : new Date();
+  const d = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate()));
+  const day = d.getUTCDay(); // 0=일 ~ 6=토
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  d.setUTCDate(d.getUTCDate() + diffToMonday);
+  return d.toISOString().slice(0, 10);
+}
+
+export function addDaysStr(dateStr: string, deltaDays: number): string {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + deltaDays);
+  return d.toISOString().slice(0, 10);
+}
+
+// 0=일 ~ 6=토 — HistoryTab(주말 강조)과 groupByWeek(월요일 경계) 공통 기준
+export function dayOfWeek(dateStr: string): number {
+  return new Date(dateStr + "T00:00:00Z").getUTCDay();
+}
+
+// ── 월(month) 단위 유틸 — HistoryTab(기록 보기)와 work-report(업무 리포트) 공통 ──────
+
+export function getMonthStart(dateStr: string): string {
+  return dateStr.slice(0, 7) + "-01";
+}
+
+export function getMonthLabel(monthStart: string): string {
+  const [y, m] = monthStart.split("-");
+  return `${y}년 ${m}월`;
+}
+
+export function addMonths(monthStart: string, delta: number): string {
+  const [y, m] = monthStart.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1 + delta, 1)).toISOString().slice(0, 10);
+}
+
+// monthStart(YYYY-MM-01)가 속한 달의 모든 날짜를 YYYY-MM-DD 배열로 반환
+export function getMonthDays(monthStart: string): string[] {
+  const [y, m] = monthStart.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate(); // 다음달 0일 = 이번달 마지막 날
+  const prefix = monthStart.slice(0, 8); // "YYYY-MM-"
+  return Array.from({ length: lastDay }, (_, i) => `${prefix}${String(i + 1).padStart(2, "0")}`);
+}
+
+// 월요일마다 새 주 그룹 시작 — 달 첫/마지막 주는 7일이 안 채워질 수 있음(정상)
+export function groupByWeek(days: string[]): string[][] {
+  const weeks: string[][] = [];
+  let current: string[] = [];
+  for (const d of days) {
+    if (dayOfWeek(d) === 1 && current.length > 0) {
+      weeks.push(current);
+      current = [];
+    }
+    current.push(d);
+  }
+  if (current.length > 0) weeks.push(current);
+  return weeks;
+}

@@ -187,6 +187,19 @@ model TbPjProject {
   client_nm     String?
   bgng_de       DateTime?
   end_de        DateTime?
+
+  // ── 단계별 일정 (2026-07-16 도입) ────────────────────────────────────
+  // 별도 테이블 없이 프로젝트 테이블에 4단계 × 시작/종료 8컬럼으로 관리.
+  // bgng_de/end_de(프로젝트 전체 기간)와 별개로, 단계별 진행 현황 표시에 사용.
+  anls_bgng_de  DateTime?
+  anls_end_de   DateTime?
+  dsgn_bgng_de  DateTime?
+  dsgn_end_de   DateTime?
+  dev_bgng_de   DateTime?
+  dev_end_de    DateTime?
+  test_bgng_de  DateTime?
+  test_end_de   DateTime?
+
   creat_mber_id String?
   creat_dt      DateTime  @default(now())
   mdfcn_dt      DateTime?
@@ -242,6 +255,9 @@ model TbPjProject {
   evidences         TbQaEvidence[]
   // 2026-05-11 — 공통 점검 마스터 (프로젝트 전용 항목)
   checkMasters      TbQaCheckMaster[]
+  // 2026-07-20 — 업무일지 / 주간보고
+  workLogs          TbWrWorkLog[]
+  weeklyReports     TbWrWeeklyReport[]
 
   // 배치(project-hard-delete) 가 매일 스캔하는 인덱스
   // (del_yn='Y' AND hard_del_dt <= now()) 조건을 빠르게 추리기 위함
@@ -529,6 +545,11 @@ model TbDsScreen {
   dsply_code      String?
   layer_data_dc   String?
   coment_cn       String?
+  // 설계 일정/공수 — 구현(TbDsFunction.impl_bgng_de 등)과 완전히 분리된 축.
+  // 화면이 "설계" 작업의 단위(화면/영역을 만드는 일)이고, 기능은 구현 준비 단위라 별도 관리.
+  design_bgng_de  String?
+  design_end_de   String?
+  design_efrt_val String?
   areas           TbDsArea[]
   unitWork        TbDsUnitWork? @relation(fields: [unit_work_id], references: [unit_work_id])
   // 테스트 명세서 매핑 — 단위 테스트가 이 화면을 대상으로 작성되었음을 의미
@@ -759,6 +780,11 @@ model TbRqRequirement {
   analy_cn       String?
   spec_cn        String?
   asign_mber_id  String? // 담당자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
+  // 분석 일정/진척률 (2026-07-17) — TbDsUnitWork.bgng_de/end_de/progrs_rt 와 동일 패턴.
+  // 설계는 화면, 구현은 기능 레벨에서 일정을 갖는 것처럼, 분석은 요구사항 레벨에서 갖는다.
+  anls_bgng_de   String? // yyyy-MM-dd — 다른 일정 컬럼(design_end_de 등)과 동일하게 문자열 저장
+  anls_end_de    String?
+  progrs_rt      Int             @default(0)
   sort_ordr      Int             @default(0)
   creat_dt       DateTime        @default(now())
   mdfcn_dt       DateTime?
@@ -892,6 +918,72 @@ model TbAiDesignTemplate {
   @@index([ref_ty_code, use_yn, prjct_id, default_yn, sort_ordr], map: "idx_ai_dsgn_tmpl_scope")
   @@index([prjct_id, ref_ty_code, sort_ordr], map: "idx_ai_dsgn_tmpl_prjct")
   @@map("tb_ai_design_template")
+}
+
+// ── 업무일지 / 주간보고 (2026-07-20 도입) ──────────────────────────────────
+// 목적 1: 팀원의 일일/주간 업무일지를 모아 PM 주간보고 초안을 AI 로 생성
+// 목적 2: 개발자가 하루 시작 전 오늘 할 일을 계획하고, 마무리에 한 일을 기록하는 습관 형성
+model TbWrWorkLog {
+  work_log_id   String    @id @default(uuid())
+  prjct_id      String
+  creat_mber_id String // 작성자 — FK 미설정(퇴장 멤버 기록 보존)
+  // DAILY = log_dt 당일 일지, WEEK = log_dt(그 주 월요일) 기준 "이번주 계획"
+  log_ty_code   String    @default("DAILY") @db.VarChar(10)
+  log_dt        DateTime  @db.Date
+  // DAILY: 오늘 작업 결과(특이사항), WEEK: 이번주 계획 개요
+  note_cn       String?
+  // WEEK 전용 — "이번주 결과"(주간 회고). DAILY는 결과를 note_cn 하나로 충분히 표현하지만
+  // WEEK는 계획(note_cn)과 결과를 별도 텍스트로 구분해 달라는 요청으로 추가 (2026-07-20).
+  // DAILY 로그에서는 사용하지 않음(항상 null).
+  result_cn     String?
+  creat_dt      DateTime  @default(now())
+  mdfr_mber_id  String?
+  mdfcn_dt      DateTime?
+  items         TbWrWorkLogItem[]
+  project       TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_wr_work_log_prjct_fk")
+
+  // 회원 1명당 하루/한 주에 로그 1건만 존재 — upsert 키
+  @@unique([prjct_id, creat_mber_id, log_ty_code, log_dt], map: "uk_wr_work_log_mber_day")
+  // 팀 전체 조회(주간보고 집계) / 날짜 범위 조회 공통 인덱스
+  @@index([prjct_id, log_ty_code, log_dt], map: "idx_wr_work_log_prjct_dt")
+  @@map("tb_wr_work_log")
+}
+
+model TbWrWorkLogItem {
+  item_id     String   @id @default(uuid())
+  work_log_id String
+  item_cn     String // 할일 내용 — 자유 텍스트 또는 연결된 일감명 스냅샷
+  // 일감 연결 시: UNIT_WORK | SCREEN | FUNCTION | TASK — 미연결이면 둘 다 null
+  ref_ty_code String?  @db.VarChar(20)
+  ref_id      String? // FK 미설정 — ref_ty_code 로 분기 조회 (TbAiTask.ref_* 와 동일 관례)
+  done_yn     String   @default("N") @db.Char(1)
+  sort_ordr   Int      @default(0)
+  creat_dt    DateTime @default(now())
+  workLog     TbWrWorkLog @relation(fields: [work_log_id], references: [work_log_id], onDelete: Cascade, map: "tb_wr_work_log_item_log_fk")
+
+  @@index([work_log_id], map: "idx_wr_work_log_item_log")
+  @@map("tb_wr_work_log_item")
+}
+
+model TbWrWeeklyReport {
+  weekly_report_id String    @id @default(uuid())
+  prjct_id         String
+  week_start_dt    DateTime  @db.Date // 그 주 월요일
+  // AI 생성 + PM 편집 마크다운. "## 금주실적"/"## 차주계획" 섹션을 한 필드에 통째로 보관
+  // — 별도 컬럼으로 쪼개면 AI 출력 파싱이 필요해져 깨지기 쉬움 (PLAN_STUDIO_ARTF 전파 방식과 동일)
+  draft_cn         String?
+  ai_task_id       String? // 마지막 생성에 쓰인 TbAiTask.ai_task_id (추적용, FK 없음)
+  creat_mber_id    String // 최초 생성 요청 PM — FK 미설정(퇴장 멤버 기록 보존)
+  creat_dt         DateTime  @default(now())
+  mdfr_mber_id     String?
+  mdfcn_dt         DateTime?
+  project          TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_wr_weekly_report_prjct_fk")
+
+  // 프로젝트당 주 1건 — 재생성은 이 행을 업데이트
+  @@unique([prjct_id, week_start_dt], map: "uk_wr_weekly_report_week")
+  // "이력" 탭 — 최신 주부터 목록 조회
+  @@index([prjct_id, week_start_dt(sort: Desc)], map: "idx_wr_weekly_report_prjct_dt")
+  @@map("tb_wr_weekly_report")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments

@@ -80,6 +80,10 @@ type RequirementDetail = {
   assignMemberId: string | null;
   assignMemberName: string | null;
   sortOrder: number;
+  // 분석 일정/진척률 — TbDsUnitWork 와 동일 패턴
+  analysisStart: string | null;
+  analysisEnd: string | null;
+  progress: number;
 };
 
 // 프로젝트 멤버 — 담당자 콤보박스 옵션용
@@ -112,6 +116,10 @@ type SaveBody = {
   detailSpec: string;
   // 담당자 — "" = 미지정 (서버에서 null 처리)
   assignMemberId: string;
+  // 분석 일정/진척률
+  analysisStart: string;
+  analysisEnd: string;
+  progress: number;
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -150,6 +158,9 @@ function RequirementDetailPageInner() {
     analysisMemo: "",
     detailSpec: "",
     assignMemberId: "",
+    analysisStart: "",
+    analysisEnd: "",
+    progress: 0,
   });
 
   // 담당자 변경 이력 팝업 상태
@@ -311,6 +322,9 @@ function RequirementDetailPageInner() {
       analysisMemo: detail.analysisMemo,
       detailSpec: detail.detailSpec,
       assignMemberId: detail.assignMemberId ?? "",
+      analysisStart: detail.analysisStart ?? "",
+      analysisEnd: detail.analysisEnd ?? "",
+      progress: detail.progress ?? 0,
     });
   }, [detail]);
 
@@ -405,7 +419,7 @@ function RequirementDetailPageInner() {
   });
 
   // ── 입력 핸들러 ────────────────────────────────────────────────────────────
-  function handleChange(field: keyof SaveBody, value: string) {
+  function handleChange(field: keyof SaveBody, value: string | number) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
@@ -788,6 +802,39 @@ function RequirementDetailPageInner() {
                     value={form.reqDisplayId}
                     placeholder={`${getPrefix("REQUIREMENT")}-XXXXX (미 입력 시 자동 생성)`}
                     onChange={(e) => handleChange("reqDisplayId", e.target.value)}
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </FormField>
+              </div>
+
+              {/* 분석 일정 + 진척률 — 3컬럼 (unit-works 상세 페이지와 동일 패턴) */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                <FormField label="분석 시작일">
+                  <input
+                    type="date"
+                    value={form.analysisStart}
+                    onChange={(e) => handleChange("analysisStart", e.target.value)}
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </FormField>
+                <FormField label="분석 종료일">
+                  <input
+                    type="date"
+                    value={form.analysisEnd}
+                    onChange={(e) => handleChange("analysisEnd", e.target.value)}
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </FormField>
+                <FormField label="분석 진척률 (%)">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={form.progress}
+                    onChange={(e) => handleChange("progress", Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
                     readOnly={!canEdit}
                     className="sp-input"
                   />

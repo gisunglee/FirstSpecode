@@ -17,9 +17,14 @@
  *   - 컬럼 행의 160px 슬롯 안에 들어가도록 compact 모드 기본
  *   - 외부 클릭 감지로 닫기 (useEffect 수동 리스너)
  *   - 페이지 파일에서 분리 — 기존 page.tsx 가 1150줄 넘어 책임 분리 목적
+ *   - 드롭다운은 document.body 에 포탈로 렌더링 (position: fixed).
+ *     컬럼 목록 컨테이너가 모서리를 둥글리려고 overflow:hidden 을 쓰고 있어서,
+ *     같은 컨테이너 안에 absolute 로 띄우면 아래쪽 행에서 목록이 잘림 —
+ *     화면 하단 공간이 부족하면 트리거 위쪽으로 뒤집어서 띄운다.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export type CodeGroupOption = {
   grpCode:   string;
@@ -32,10 +37,15 @@ type Props = {
   onChange: (grpCode: string) => void;
 };
 
+const DROPDOWN_WIDTH = 280;
+const DROPDOWN_MAX_HEIGHT = 240;
+
 export default function CodeGroupSelect({ value, options, onChange }: Props) {
   const [open, setOpen]     = useState(false);
   const [search, setSearch] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; openUp: boolean } | null>(null);
+  const triggerRef   = useRef<HTMLDivElement>(null);
+  const dropdownRef  = useRef<HTMLDivElement>(null);
 
   // 선택된 그룹 (표시 영역에 이름 노출용)
   const selected = options.find((o) => o.grpCode === value);
@@ -47,18 +57,47 @@ export default function CodeGroupSelect({ value, options, onChange }: Props) {
     o.grpCodeNm.toLowerCase().includes(search.toLowerCase())
   );
 
-  // 외부 클릭 감지 — 드롭다운 자동 닫기
+  // 열릴 때 트리거 위치 기준으로 좌표 계산 — 아래쪽 공간이 부족하면 위로 뒤집음
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUp = spaceBelow < DROPDOWN_MAX_HEIGHT && rect.top > spaceBelow;
+    setPos({
+      // 오른쪽 정렬 기준(right:0)이던 기존 배치를 유지 — 트리거 오른쪽 끝에 드롭다운 오른쪽 끝을 맞춤
+      left: rect.right - DROPDOWN_WIDTH,
+      top:  openUp ? rect.top : rect.bottom,
+      openUp,
+    });
+  }, [open]);
+
+  // 외부 클릭 감지 — 트리거/드롭다운(포탈) 둘 다 바깥이면 닫기
   useEffect(() => {
     if (!open) return;
     function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (triggerRef.current?.contains(target)) return;
+      if (dropdownRef.current?.contains(target)) return;
+      setOpen(false);
     }
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
+  // 스크롤/리사이즈되면 좌표가 어긋나므로 닫기 (whole-page 스크롤 방식이라 window 기준)
+  useEffect(() => {
+    if (!open) return;
+    function close() { setOpen(false); }
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
+
   return (
-    <div ref={ref} style={{ position: "relative" }}>
+    <div ref={triggerRef} style={{ position: "relative" }}>
       {/* 표시 영역 — 클릭하면 드롭다운 토글 */}
       <div
         onClick={() => { setOpen(!open); setSearch(""); }}
@@ -92,9 +131,17 @@ export default function CodeGroupSelect({ value, options, onChange }: Props) {
         )}
       </div>
 
-      {/* 드롭다운 */}
-      {open && (
-        <div style={dropdownStyle}>
+      {/* 드롭다운 — document.body 에 포탈, 트리거 위치 기준 fixed 좌표 */}
+      {open && pos && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{
+            ...dropdownStyle,
+            top:  pos.openUp ? undefined : pos.top,
+            bottom: pos.openUp ? window.innerHeight - pos.top : undefined,
+            left: pos.left,
+          }}
+        >
           {/* 검색 입력 */}
           <input
             autoFocus
@@ -137,7 +184,8 @@ export default function CodeGroupSelect({ value, options, onChange }: Props) {
               ))
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -160,9 +208,10 @@ const triggerStyle: React.CSSProperties = {
   boxSizing: "border-box",
 };
 
+// position/top/bottom/left 는 렌더 시점에 좌표를 덮어씀 (fixed 포탈이라 뷰포트 기준)
 const dropdownStyle: React.CSSProperties = {
-  position: "absolute", top: "100%", right: 0, zIndex: 100,
-  width: 280, maxHeight: 240,
+  position: "fixed", zIndex: 1000,
+  width: DROPDOWN_WIDTH, maxHeight: DROPDOWN_MAX_HEIGHT,
   background: "var(--color-bg-card)",
   border: "1px solid var(--color-border)",
   borderRadius: 6,

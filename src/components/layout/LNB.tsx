@@ -58,7 +58,7 @@ export default function LNB() {
   // — 같은 path 두 메뉴를 정확히 구분하기 위함. 다른 메뉴는 href 에 쿼리가 없어 영향 없음.
   const searchParams = useSearchParams();
   const { sidebarCollapsed, toggleSidebar, setSidebarCollapsed, currentProjectId } = useAppStore();
-  const { myRole, canManageMembers, canAccessSettings, isLoading: isRoleLoading } = useMyRole(currentProjectId);
+  const { myRole, canManageMembers, canAccessSettings, canManageWeeklyReport, isLoading: isRoleLoading } = useMyRole(currentProjectId);
   // SUPER_ADMIN 여부 — "시스템 관리" 그룹 노출 판정에 사용
   const { isSystemAdmin } = useIsSystemAdmin();
 
@@ -86,10 +86,36 @@ export default function LNB() {
         // URL 은 프로젝트 prefix 없이 단일 경로로 유지 — 기존 /dashboard 와 동일한 패턴.
         items: [
           { label: "대시보드", href: "/dashboard", icon: "i_dashboard" },
-          { label: "PM",       href: "/pm",        icon: "i_pm" },
+          { label: "PM 진단",  href: "/pm",        icon: "i_pm" },
+          { label: "PM 현황",  href: "/pm-board",  icon: "i_graph" },
           { label: "활동",     href: "/activity",  icon: "i_activity" },
           { label: "포커스",   href: "/focus",     icon: "i_focus" },
+          { label: "MY 보드",  href: "/my-work",   icon: "i_mywork" },
+          { label: "My Task",  href: "/my-task",   icon: "i_myTask" },
           { label: "캘린더",   href: "/calendar",  icon: "i_calendar" },
+        ],
+      },
+      {
+        key: "wbs",
+        // 2026-07-20: "WBS" → "일정" — 업무일지/주간보고 추가로 그룹 성격이
+        // "프로젝트 전체 간트" 에서 "일정 전반"(팀 일정 + 개인 계획/기록)으로 넓어짐.
+        // key는 그대로 유지 — sessionStorage 활성 그룹 판별에 영향 없음.
+        label: "일정",
+        icon: "g_wbs",
+        items: [
+          // 단위업무/화면/기능 3종 간트 조회 — 영역(Area)은 날짜 컬럼이 없어 이번 범위 제외.
+          { label: "WBS 일정", href: "/wbs", icon: "i_wbs" },
+          // 업무일지 — 개인 오늘의 할일/기록. WBS와 동일하게 프로젝트 prefix 없는 flat 경로
+          // (currentProjectId 는 페이지 내부에서 store 로 읽음 — pm/my-work/focus와 동일 패턴).
+          { label: "업무일지", href: "/work-logs", icon: "i_myTask" },
+          // 업무 리포트 — 업무일지와 완전히 같은 데이터를 "정돈된 문서" 형태로 보여주는 대안 뷰
+          // (2026-07-20). 별도 권한 없음 — work-logs와 동일하게 전 직무 노출.
+          { label: "업무 리포트", href: "/work-report", icon: "i_docs" },
+          // 주간보고 — PM 전용 AI 초안 생성. weeklyReport.manage 없으면 메뉴 자체를 숨김
+          // (직접 URL 접근은 페이지 자체의 권한 게이트가 별도로 막는다).
+          ...(canManageWeeklyReport
+            ? [{ label: "주간보고", href: "/weekly-reports", icon: "i_aiTask" as MenuIconKey }]
+            : []),
         ],
       },
       {

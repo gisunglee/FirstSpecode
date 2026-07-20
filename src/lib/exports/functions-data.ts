@@ -17,6 +17,7 @@ export type FunctionListItem = {
   sortOrder:       number;
   areaId:          string | null;
   assignMemberId:  string | null;
+  assignMemberName: string | null;
   areaName:        string;
   areaDisplayId:   string | null;
   areaSortOrder:   number;
@@ -28,6 +29,9 @@ export type FunctionListItem = {
   screenDisplayId: string | null;
   unitWorkId:      string | null;
   unitWorkName:    string;
+  // 구현 일정 — WBS 간트에서 사용 (설계 일정인 화면의 design_bgng_de 와는 별개 축)
+  startDate:       string | null;
+  endDate:         string | null;
   aiDesign:        FunctionAiTaskInfo | null;
   aiInspect:       FunctionAiTaskInfo | null;
   designRt:        number;
@@ -39,15 +43,17 @@ export type FunctionListItem = {
  * fetchProjectFunctions — 기능 목록 + 영역/화면/단위업무 join + 진척률 + AI 태스크 최신
  */
 export async function fetchProjectFunctions(opts: {
-  projectId: string;
-  areaId?:   string;
+  projectId:       string;
+  areaId?:         string;
+  assigneeFilter?: string;
 }): Promise<FunctionListItem[]> {
-  const { projectId, areaId } = opts;
+  const { projectId, areaId, assigneeFilter } = opts;
 
   const functions = await prisma.tbDsFunction.findMany({
     where: {
       prjct_id: projectId,
       ...(areaId ? { area_id: areaId } : {}),
+      ...(assigneeFilter ? { asign_mber_id: assigneeFilter } : {}),
     },
     include: {
       area: {
@@ -90,6 +96,20 @@ export async function fetchProjectFunctions(opts: {
   });
 
   const funcIds = functions.map((f) => f.func_id);
+
+  // 담당자 이름 일괄 조회 (unit-works-data.ts/screens-data.ts와 동일 패턴)
+  const assigneeIds = [
+    ...new Set(functions.map((f) => f.asign_mber_id).filter((v): v is string => !!v)),
+  ];
+  const assigneeMembers = assigneeIds.length > 0
+    ? await prisma.tbCmMember.findMany({
+        where:  { mber_id: { in: assigneeIds } },
+        select: { mber_id: true, mber_nm: true, email_addr: true },
+      })
+    : [];
+  const assigneeMap = new Map(
+    assigneeMembers.map((m) => [m.mber_id, m.mber_nm || m.email_addr || null]),
+  );
 
   // 진척률
   const progressRecords = funcIds.length > 0
@@ -142,6 +162,7 @@ export async function fetchProjectFunctions(opts: {
     sortOrder:       f.sort_ordr,
     areaId:          f.area_id ?? null,
     assignMemberId:  f.asign_mber_id ?? null,
+    assignMemberName: f.asign_mber_id ? (assigneeMap.get(f.asign_mber_id) ?? null) : null,
     areaName:        f.area?.area_nm ?? "미분류",
     areaDisplayId:   f.area?.area_display_id ?? null,
     areaSortOrder:   f.area?.sort_ordr ?? 0,
@@ -153,6 +174,8 @@ export async function fetchProjectFunctions(opts: {
     screenDisplayId: f.area?.screen?.scrn_display_id ?? null,
     unitWorkId:      f.area?.screen?.unitWork?.unit_work_id ?? null,
     unitWorkName:    f.area?.screen?.unitWork?.unit_work_nm ?? "미분류",
+    startDate:       f.impl_bgng_de ?? null,
+    endDate:         f.impl_end_de ?? null,
     aiDesign:        aiMap[f.func_id]?.["DESIGN"]  ?? null,
     aiInspect:       aiMap[f.func_id]?.["INSPECT"] ?? null,
     designRt:        progressMap.get(f.func_id)?.design_rt ?? 0,

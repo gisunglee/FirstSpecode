@@ -20,8 +20,9 @@ import Link from "next/link";
 import { useRef } from "react";
 import { useIntroEffects } from "./_components/useIntroEffects";
 
-// 회원가입(이용 시작) 경로 — 한 곳에서 관리
-const SIGNUP_PATH = "/auth/register";
+// 이용 시작 경로 — 한 곳에서 관리
+// 로그인 페이지로 보냄: 기존 회원은 바로 로그인, 신규 회원은 로그인 화면의 회원가입 링크로 이동
+const LOGIN_PATH = "/auth/login";
 // 전체 소개 페이지 경로
 const ABOUT_PATH = "/intro/about";
 
@@ -43,9 +44,9 @@ export default function IntroPage() {
             <Link href={ABOUT_PATH} className="nav-tag" style={{ textDecoration: "none" }}>
               자세히 보기
             </Link>
-            <a href="#use" className="btn btn-primary btn-sm">
+            <Link href={LOGIN_PATH} className="btn btn-primary btn-sm">
               이용하기 <span className="arr">→</span>
-            </a>
+            </Link>
           </div>
         </div>
       </nav>
@@ -76,9 +77,9 @@ export default function IntroPage() {
             <b>흔들림 없는 고품질 구현</b>이 되도록 돕습니다.
           </p>
           <div className="hero-cta reveal d3">
-            <a href="#use" className="btn btn-primary">
+            <Link href={LOGIN_PATH} className="btn btn-primary">
               스펙코드 이용하기 <span className="arr">→</span>
-            </a>
+            </Link>
             <span className="hero-note">분석 → 설계 → PRD → 구현</span>
           </div>
 
@@ -334,7 +335,7 @@ export default function IntroPage() {
             </span>
           </p>
           <div className="final-cta reveal d3">
-            <Link href={SIGNUP_PATH} className="btn btn-primary">
+            <Link href={LOGIN_PATH} className="btn btn-primary">
               스펙코드 이용하기 <span className="arr">→</span>
             </Link>
             <Link href={ABOUT_PATH} className="btn btn-ghost">
@@ -371,9 +372,9 @@ export default function IntroPage() {
         <div className="d-txt">
           AI와 구현하기 전에, AI와 설계하세요<small>2~7억 공공 SI 최적화 · 기존 개발팀을 위한</small>
         </div>
-        <a href="#use" className="btn btn-primary btn-sm">
+        <Link href={LOGIN_PATH} className="btn btn-primary btn-sm">
           이용하기 <span className="arr">→</span>
-        </a>
+        </Link>
       </div>
     </div>
   );

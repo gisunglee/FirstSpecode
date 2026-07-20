@@ -11,6 +11,7 @@
 
 import Link from "next/link";
 import DashboardCard from "../DashboardCard";
+import HelpButton from "@/components/common/HelpButton";
 import { formatRelativeKo } from "@/lib/utils";
 
 type ReviewItem = {
@@ -57,6 +58,13 @@ export default function MyReviewsCard({ data, isLoading, error, projectId }: Pro
             {data.pendingCount}건
           </span>
         ) : null
+      }
+      help={
+        <HelpButton title="검토 요청 기준">
+          <p><b>뭐다</b> — 다른 사람이 나에게 검토를 요청한 것 중 아직 응답하지 않은 항목입니다.</p>
+          <p><b>기준</b> — 상태가 "요청됨" 또는 "검토 중"인 것만, 오래된 요청이 먼저 보이도록 정렬합니다.</p>
+          <p><b>진척률</b> — 없습니다. 응답 여부(완료 여부)만 추적합니다.</p>
+        </HelpButton>
       }
       // 검토 통합 페이지가 아직 없으므로 reviews 라우트로 보냄(있다면 자동 매칭)
       linkHref={`/projects/${projectId}/reviews`}

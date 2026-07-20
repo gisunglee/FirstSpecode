@@ -1,0 +1,165 @@
+/*
+ * wbs-gantt-theme.css — @svar-ui/react-gantt 를 SPECODE sp- 토큰에 맞춰 재스킨
+ *
+ * 라이브러리 색상은 전부 --wx-* CSS 변수로 노출되어 있어(SVG/DOM 렌더링이라
+ * canvas와 달리 CSS로 재정의 가능) 값을 직접 하드코딩하지 않고 var(--color-*) 로만
+ * 연결한다 — dark/light/dark-purple 테마 전환 시 자동으로 따라간다.
+ *
+ * .sp-wbs-gantt .wx-willow-theme 로 감싸서(0,2,0) 라이브러리 기본값(0,1,0)보다
+ * 항상 우선하도록 함 — import 순서에 의존하지 않음.
+ */
+
+.sp-wbs-gantt .wx-willow-theme {
+  /* ── 기반 색상 (react-core) ── */
+  --wx-background:        var(--color-bg-card);
+  --wx-background-alt:    var(--color-bg-elevated);
+  --wx-background-hover:  var(--color-bg-elevated);
+  --wx-border-color:      var(--color-border);
+  --wx-border:            1px solid var(--color-border);
+  --wx-color-font:        var(--color-text-primary);
+  --wx-color-font-alt:    var(--color-text-tertiary);
+  --wx-color-font-disabled: var(--color-text-disabled);
+  --wx-color-secondary-font: var(--color-text-secondary);
+  --wx-color-primary:     var(--color-brand);
+  --wx-color-primary-font: var(--color-text-inverse);
+  --wx-color-link:        var(--color-brand);
+  --wx-color-danger:      var(--color-error);
+  --wx-color-success:     var(--color-success);
+  --wx-color-warning:     var(--color-warning);
+  --wx-color-info:        var(--color-info);
+  --wx-icon-color:        var(--color-text-tertiary);
+  /* --font-base(Geist)는 한글 글리프가 없어 "[FN-00010] 테스트 기능"처럼 영문/기호와
+     한글이 한 줄에 섞이면 한글만 OS 폴백 폰트로 렌더링되면서 두 폰트의 기준선(baseline)이
+     달라 세로로 어긋나 보인다 — 이 위젯 안에서만 한글까지 포함하는 폰트를 먼저 두어
+     한 줄 전체가 같은 폰트로 그려지게 함(전역 --font-base는 그대로 둠, 이 컴포넌트 스코프만). */
+  --wx-font-family:       'Malgun Gothic', 'Apple SD Gothic Neo', var(--font-base);
+  /* 라이브러리 기본(14px/12px)보다 한 단계씩 작게 — 그리드·타임스케일·막대 라벨 전부
+     이 두 변수의 shorthand(--wx-*-font)로 조립되므로 여기만 바꾸면 전체에 반영됨 */
+  --wx-font-size:         var(--text-sm);
+  --wx-font-size-sm:      var(--text-xs);
+
+  /* 컨테이너 높이 체인이 끊기면(부모에 명시적 height 없음) 내부 레이아웃 계산이
+     깨져 마지막 행이 잘려 보이는 라이브러리 특성 — .sp-wbs-gantt 의 고정 height 를
+     그대로 100% 물려받아야 정상 렌더링됨 */
+  height: 100%;
+
+  /* ── 간트 전용 (react-gantt) ── */
+  --wx-gantt-border:            1px solid var(--color-border);
+  --wx-gantt-border-color:      var(--color-border);
+  --wx-gantt-icon-color:        var(--color-text-tertiary);
+
+  /* 막대(트랙)는 항상 중립 회색 — 진척률은 막대를 채우는 대신 아래쪽에 얇은 선
+     (.wx-progress-percent, 아래 별도 규칙에서 높이를 줄임)으로만 표시한다.
+     막대 배경이 채도 있는 색이 아니라 은은한 회색이라, 막대 밖(페이지 배경)으로 글자가
+     넘쳐도 같은 --color-text-primary 로 대비가 계속 유지된다.
+     task-fill-color는 "상태별 색상" 토글이 꺼져 있을 때 진척률 선의 기본(단일) 색 —
+     회색 계열(text-tertiary)로 뒀더니 회색 트랙 위에서 잘 안 보인다는 피드백 반영,
+     채도 있는 브랜드 색으로 대비를 확실히 줌. */
+  --wx-gantt-task-color:        var(--color-border-strong);
+  --wx-gantt-task-fill-color:   var(--color-brand);
+  --wx-gantt-task-border-color: var(--color-border-strong);
+  --wx-gantt-task-font-color:   var(--color-text-primary);
+
+  --wx-gantt-summary-color:        var(--color-info);
+  --wx-gantt-summary-fill-color:   var(--color-info);
+  --wx-gantt-summary-border-color: var(--color-info-border);
+  --wx-gantt-summary-font-color:   var(--color-text-inverse);
+  --wx-gantt-summary-critical-color:      var(--color-error);
+  --wx-gantt-summary-critical-fill-color: var(--color-error);
+
+  --wx-gantt-critical-color:         var(--color-error);
+  --wx-gantt-task-critical-color:    var(--color-error);
+  --wx-gantt-task-critical-fill-color: var(--color-error);
+
+  --wx-gantt-milestone-color:   var(--color-accent);
+  --wx-gantt-select-color:      var(--color-brand-subtle);
+  --wx-gantt-link-color:        var(--color-text-tertiary);
+  --wx-gantt-link-color-hovered: var(--color-text-secondary);
+  --wx-gantt-holiday-background: var(--color-bg-elevated);
+  --wx-gantt-holiday-color:     var(--color-text-tertiary);
+  /* "오늘" 마커 선 — 원래 라이브러리 기본값(진한 하늘색)을 이 파일에서 한 번도
+     재정의한 적이 없어서 테마와 무관하게 그 파란색 그대로 나오고 있었음. 브랜드
+     토큰으로 맞춤. */
+  --wx-gantt-marker-color:      var(--color-brand);
+
+  --wx-grid-header-font-color: var(--color-text-secondary);
+  --wx-grid-body-font-color:   var(--color-text-primary);
+  --wx-timescale-font-color:   var(--color-text-secondary);
+}
+
+.sp-wbs-gantt {
+  /* 명시적 height 필수 — 없으면 라이브러리 내부의 100% 기준 레이아웃 체인이 깨져서
+     맨 아래 행이 잘려 보임(공식 가이드에 나오는 알려진 특이사항). 행이 많으면
+     라이브러리 자체 내부 스크롤이 이 안에서 동작함. */
+  height: 640px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* ── 막대 라벨 텍스트 오버플로우 ────────────────────────────────────────────
+ * 라이브러리 기본은 막대 폭 안에서 말줄임(...) 처리 — 1~2일짜리 짧은 막대는
+ * 글자가 대부분 안 보이게 됨. 막대 배경이 이제 채도 없는 회색이라 막대 밖으로
+ * 글자가 넘어가도 폰트색(--wx-gantt-task-font-color)이 계속 잘 읽히므로,
+ * 그냥 한 줄로 넘치게 풀어준다. .wx-willow-theme 까지 셀렉터에 포함시켜
+ * 라이브러리 기본 규칙(.wx-bar.wx-GKbcLEGA .wx-content)보다 확실히 우선하도록 함.
+ */
+.sp-wbs-gantt .wx-willow-theme .wx-bar .wx-content {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+  text-align: left;
+}
+
+/* ── 좌측 그리드 "작업명" 앞 빈 들여쓰기 제거 ────────────────────────────────
+ * 자식 행 접기/펼치기 토글 아이콘 자리 — WBS 데이터는 항상 평면 목록(자식 없음)
+ * 이라 이 자리가 항상 빈 채로 폭만 차지해 "작업명" 앞에 낭비 공간이 생김.
+ */
+.sp-wbs-gantt .wx-toggle-placeholder,
+.sp-wbs-gantt .wx-toggle-icon {
+  width: 0;
+  min-width: 0;
+  margin: 0;
+  flex: 0 0 0;
+}
+
+/* ── 주말(토/일) 배경 강조 ────────────────────────────────────────────────
+ * WbsGanttChart.tsx의 highlightTime 이 토/일 날짜 컬럼에 이 클래스를 붙여준다.
+ * 옅은 빨강 토큰(--color-error-subtle)을 그대로 재사용 — 새 색 안 만듦.
+ */
+.sp-wbs-gantt .wbs-weekend {
+  background-color: var(--color-error-subtle);
+}
+
+/* ── 진척률 = 얇은 선 ────────────────────────────────────────────────────
+ * 라이브러리 기본은 진척률 채움이 막대 전체 높이(100%)를 차지해 "블록"처럼 보임 —
+ * 막대 하단에 붙는 얇은 선 하나로 바꾼다. .wx-progress-wrapper 가 이미
+ * position:absolute 라 이 안에서 bottom 기준 배치가 그대로 먹는다.
+ */
+.sp-wbs-gantt .wx-willow-theme .wx-progress-percent {
+  position: absolute;
+  left: 0;
+  /* 텍스트와의 간격이 좁아 보인다는 피드백 반영 — bottom을 3px→1px로 낮춰
+     선을 막대 아래쪽으로 2px 더 내림(텍스트와의 거리가 그만큼 벌어짐) */
+  bottom: 1px;
+  height: 4px;
+  border-radius: var(--radius-full);
+}
+
+/* ── 진척률 선 상태별 색상(토글) ─────────────────────────────────────────
+ * WbsGanttChart.tsx 에서 "상태별 색상" 체크 시에만 task.type 을 wbs-* 로 채워
+ * 넣는다 — 꺼져 있으면 항상 type="task" 라 위 --wx-gantt-task-fill-color 단일
+ * 색만 쓰인다. 막대(트랙) 자체 색은 여기서 건드리지 않음 — 선 색만 바뀐다.
+ */
+.sp-wbs-gantt .wx-bar.wx-task.wbs-done .wx-progress-percent {
+  background-color: var(--color-success);
+}
+.sp-wbs-gantt .wx-bar.wx-task.wbs-in-progress .wx-progress-percent {
+  background-color: var(--color-info);
+}
+.sp-wbs-gantt .wx-bar.wx-task.wbs-not-started .wx-progress-percent {
+  background-color: var(--color-text-tertiary);
+}
+.sp-wbs-gantt .wx-bar.wx-task.wbs-delayed .wx-progress-percent {
+  background-color: var(--color-error);
+}

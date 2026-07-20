@@ -329,7 +329,9 @@
       "mcp__specode__update_unit_work",
       "mcp__specode__get_unit_work",
       "mcp__specode__list_screens",
-      "mcp__specode__list_areas"
+      "mcp__specode__list_areas",
+      "Bash(grep -n '```json' \"src/app/\\(main\\)/projects/[id]/planning/ai-import/page.tsx\")",
+      "Bash(node \"C:\\\\Users\\\\bareun.io\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--source-FirstSpecode\\\\85fdfaa7-4093-4d7d-9934-3eb53e1b4de0\\\\scratchpad\\\\check_json2.js\")"
     ],
     "additionalDirectories": [
       "c:\\source\\FirstSpecode",

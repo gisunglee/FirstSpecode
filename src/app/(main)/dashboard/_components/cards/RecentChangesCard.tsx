@@ -5,7 +5,9 @@
  *
  * 역할:
  *   - tb_ds_design_change 최신 5건 미리보기
- *   - 변경 유형(CREATE/UPDATE/DELETE) 배지 + 변경자 + 시간
+ *   - 변경 유형(CREATE/UPDATE/DELETE) 배지 + 변경 대상 실제 이름 + 변경자 + 시간
+ *     (2026-07-20(2차): 유형 라벨만 반복 노출돼 "화면, 화면, 화면"처럼 구분이 안 되던
+ *     문제 반영 — refName 이 있으면 유형 옆에 실제 이름을 붙인다)
  *   - 클릭 → 변경 이력 페이지(추후 구현 예정 시 링크 활성)
  */
 
@@ -20,6 +22,8 @@ type ChangeItem = {
   chgRsnCn:     string | null;
   chgMberEmail: string | null;
   chgDt:        string;
+  /** 변경된 엔티티의 현재 이름 — 삭제됐거나 지원 안 하는 유형이면 null */
+  refName:      string | null;
 };
 
 type Props = {
@@ -91,9 +95,15 @@ export default function RecentChangesCard({ data, isLoading, error, projectId }:
                     fontSize: "var(--text-sm)",
                     color: "var(--color-text-primary)",
                     fontWeight: 500,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    maxWidth: 220,
                   }}
+                  title={c.refName ?? undefined}
                 >
                   {REF_LABEL[c.refTblNm] ?? c.refTblNm}
+                  {c.refName && <span style={{ color: "var(--color-text-secondary)" }}> · {c.refName}</span>}
                 </span>
                 <span
                   style={{

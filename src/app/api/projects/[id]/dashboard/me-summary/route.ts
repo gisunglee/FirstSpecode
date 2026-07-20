@@ -1,12 +1,22 @@
 /**
  * GET /api/projects/[id]/dashboard/me-summary
- *   — 개발자 대시보드 요약 (1차 카드 3종 통합 조회)
+ *   — 개발자 대시보드 요약 (카드 4종 통합 조회)
  *
  * 역할:
  *   - 로그인 사용자의 "오늘 내가 뭘 해야 하지?" 데이터를 한 번에 모아 반환
- *     1) myTasks      — 내가 담당한 과업 (전체 + 카테고리 분포 + 미리보기 3건)
- *     2) myDeadlines  — 내 단위업무 중 마감 D-7 이내 + 지연 (Top 5)
- *     3) myAiResults  — 내가 요청한 AI 태스크 중 완료(DONE)·미적용 (Top 5)
+ *     1) myTasks      — 내가 담당한 과업 (전체 + 카테고리 분포 + 미리보기 5건)
+ *     2) myDeadlines  — 내 단위업무 중 마감 D-7 이내 + 지연 (Top 5) + 화면/기능 마감 카운트
+ *     3) myAiResults  — 내가 요청한 AI 태스크 최근 5건(상태 무관) + 액션 필요(완료·미적용) 건수
+ *     4) myReviews    — 나에게 온 검토 요청 (미응답)
+ *
+ * 2026-07-20: myDeadlines 가 단위업무만 다뤄 "내가 담당한 화면/기능"의 마감이 전혀 안 보이던
+ *   갭을 보완 — MY 보드(/my-work)를 만들며 확인된 니즈. 목록은 여전히 단위업무만(기존 UX 유지),
+ *   화면/기능은 카운트만 추가하고 전체는 MY 보드로 링크.
+ *
+ * 2026-07-20(2차): myTasks 미리보기 3→5건 + 최근 수정일 노출, myAiResults 를
+ *   "완료·미적용"만 보여주던 좁은 필터에서 "최근 요청 전체"로 확장(결과만 받고 안 쓴
+ *   경우가 아니어도 볼 가치가 있다는 피드백) — 배지 숫자(actionableCount)는 기존처럼
+ *   액션 필요 건수를 유지, 목록만 넓힘.
  *
  * 왜 통합 엔드포인트인가:
  *   - manage-summary 와 동일 사유 (라운드트립 1회로 단축).
@@ -17,6 +27,7 @@
  */
 
 import { NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
@@ -25,7 +36,7 @@ import type { MeSummaryResponse } from "@/types/dashboard";
 type RouteParams = { params: Promise<{ id: string }> };
 
 // 개발자뷰는 "한눈에" 가 핵심 — 본문 미리보기를 작게 유지.
-const TASKS_PREVIEW_LIMIT      = 3;
+const TASKS_PREVIEW_LIMIT      = 5;
 const DEADLINES_PREVIEW_LIMIT  = 5;
 const AI_RESULTS_PREVIEW_LIMIT = 5;
 const REVIEWS_PREVIEW_LIMIT    = 5;
@@ -66,11 +77,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       overdueCnt,
       deadlineItems,
 
+      // ── 내 마감 — 화면/기능 (카운트만, MY 보드로 상세 유도) ──────
+      myScreenRows,
+      myFunctionRows,
+
       // ── 내 AI 결과 ─────────────────────────────────────────────
       aiResultsCnt,
       aiResultsItems,
 
-      // ── Phase 2: 나에게 온 검토 요청 (미응답) ──────────────────
+      // ── 나에게 온 검토 요청 (미응답) ─────────────────────────────
       myReviewsCnt,
       myReviewsItems,
     ] = await Promise.all([
@@ -82,10 +97,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         _count: { _all: true },
       }),
 
-      // 과업 미리보기 3건 — 표시용
+      // 과업 미리보기 5건 — 표시용(수정일도 함께 — 행마다 "언제 손댔는지" 보여주기 위함)
       prisma.tbRqTask.findMany({
         where:   { prjct_id: projectId, asign_mber_id: meId },
-        select:  { task_id: true, task_display_id: true, task_nm: true, ctgry_code: true },
+        select:  { task_id: true, task_display_id: true, task_nm: true, ctgry_code: true, mdfcn_dt: true },
         orderBy: { task_display_id: "asc" },
         take:    TASKS_PREVIEW_LIMIT,
       }),
@@ -130,8 +145,29 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         take:    DEADLINES_PREVIEW_LIMIT,
       }),
 
-      // AI 결과 카운트 — 내가 요청 + DONE + 미적용
+      // 내가 담당한 화면 중 설계 마감이 +7일 이내(지연 포함)인 것 — 완료 여부는 함수 뒤에서 판정
+      prisma.tbDsScreen.findMany({
+        where: {
+          prjct_id:       projectId,
+          asign_mber_id:  meId,
+          design_end_de:  { lte: horizonStr, not: null },
+        },
+        select: { scrn_id: true },
+      }),
+
+      // 내가 담당한 기능 중 구현 마감이 +7일 이내(지연 포함)인 것
+      prisma.tbDsFunction.findMany({
+        where: {
+          prjct_id:      projectId,
+          asign_mber_id: meId,
+          impl_end_de:   { lte: horizonStr, not: null },
+        },
+        select: { func_id: true },
+      }),
+
+      // 액션 필요 건수 — 내가 요청 + DONE + 미적용
       // DONE: AI 처리 완료, apply_dt NULL: 사용자가 아직 채택/적용하지 않음
+      // (배지 강조용 숫자 — 아래 목록 쿼리와 필터가 다름에 주의)
       prisma.tbAiTask.count({
         where: {
           prjct_id:        projectId,
@@ -141,21 +177,23 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         },
       }),
 
-      // AI 결과 미리보기 5건
+      // 최근 AI 결과 5건 — 상태 무관(진행중/완료/적용됨/실패 다 포함), 요청일 내림차순.
+      // "미적용"만 보여주면 이미 적용했거나 실패한 것도 유용한 히스토리인데 안 보이는
+      // 문제가 있어 목록은 넓히고, 배지(actionableCount)만 액션 필요 신호로 남긴다.
       prisma.tbAiTask.findMany({
         where: {
-          prjct_id:        projectId,
-          req_mber_id:     meId,
-          task_sttus_code: "DONE",
-          apply_dt:        null,
+          prjct_id:    projectId,
+          req_mber_id: meId,
         },
         select: {
-          ai_task_id:   true,
-          task_ty_code: true,
-          ref_ty_code:  true,
-          compl_dt:     true,
+          ai_task_id:      true,
+          task_ty_code:    true,
+          ref_ty_code:     true,
+          task_sttus_code: true,
+          req_dt:          true,
+          compl_dt:        true,
         },
-        orderBy: { compl_dt: "desc" },
+        orderBy: { req_dt: "desc" },
         take:    AI_RESULTS_PREVIEW_LIMIT,
       }),
 
@@ -204,6 +242,36 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       reviewers.map((m) => [m.mber_id, m.mber_nm || m.email_addr || null])
     );
 
+    // ── 내 화면 마감 완료 여부 판정 — 하위 기능 design_rt 평균(화면 단위 롤업).
+    // pm-summary 의 screenAvgDesignRtMap 과 동일 정의. 화면이 없으면 쿼리 자체를 건너뜀.
+    const myScreenIds = myScreenRows.map((s) => s.scrn_id);
+    const myScreenAvgRows = myScreenIds.length > 0
+      ? await prisma.$queryRaw<{ scrn_id: string; avg_design_rt: number }[]>`
+          SELECT a.scrn_id,
+                 COALESCE(AVG(p.design_rt), 0) AS avg_design_rt
+            FROM tb_ds_function f
+            JOIN tb_ds_area a ON a.area_id = f.area_id
+            LEFT JOIN tb_cm_progress p
+              ON p.ref_tbl_nm = 'tb_ds_function' AND p.ref_id = f.func_id
+           WHERE a.scrn_id IN (${Prisma.join(myScreenIds)})
+           GROUP BY a.scrn_id
+        `
+      : [];
+    const myScreenAvgMap = new Map(myScreenAvgRows.map((r) => [r.scrn_id, Number(r.avg_design_rt)]));
+    // 하위 기능이 아예 없는 화면은 위 쿼리 결과에 안 잡힘 → 진척 0(미완료)으로 간주
+    const screenCount = myScreenIds.filter((id) => (myScreenAvgMap.get(id) ?? 0) < 100).length;
+
+    // ── 내 기능 구현 완료 여부 — TbCmProgress.impl_rt, 없으면 0(미완료)으로 간주 ──
+    const myFuncIds = myFunctionRows.map((f) => f.func_id);
+    const myFuncProgressRows = myFuncIds.length > 0
+      ? await prisma.tbCmProgress.findMany({
+          where:  { ref_tbl_nm: "tb_ds_function", ref_id: { in: myFuncIds } },
+          select: { ref_id: true, impl_rt: true },
+        })
+      : [];
+    const myFuncImplRtMap = new Map(myFuncProgressRows.map((p) => [p.ref_id, p.impl_rt]));
+    const functionCount = myFuncIds.filter((id) => (myFuncImplRtMap.get(id) ?? 0) < 100).length;
+
     // 과업 byCategory + count — groupBy 결과를 객체로 변환
     let myTasksCount = 0;
     const byCategory: Record<string, number> = {};
@@ -227,6 +295,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           displayId: t.task_display_id,
           name:      t.task_nm,
           category:  t.ctgry_code,
+          mdfcnDt:   t.mdfcn_dt?.toISOString() ?? null,
         })),
       },
       myDeadlines: {
@@ -248,13 +317,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             dDay,
           };
         }),
+        screenCount,
+        functionCount,
       },
       myAiResults: {
-        count: aiResultsCnt,
+        actionableCount: aiResultsCnt,
         items: aiResultsItems.map((a) => ({
           aiTaskId:   a.ai_task_id,
           taskTyCode: a.task_ty_code,
           refTyCode:  a.ref_ty_code,
+          sttusCode:  a.task_sttus_code,
+          reqDt:      a.req_dt.toISOString(),
           complDt:    a.compl_dt?.toISOString() ?? null,
         })),
       },

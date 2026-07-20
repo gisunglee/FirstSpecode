@@ -169,5 +169,15 @@ async function applyResultToRef(
       });
       return;
     }
+    case "WEEKLY_REPORT": {
+      await tx.tbWrWeeklyReport.update({
+        where: { weekly_report_id: refId },
+        data:  {
+          draft_cn: result,
+          mdfcn_dt: new Date(),
+        },
+      });
+      return;
+    }
   }
 }

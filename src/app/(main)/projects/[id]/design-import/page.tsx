@@ -21,6 +21,14 @@
  *   - 2026-04-25 D8: 4계층 description 표준 양식(tb_ai_design_template seed)을 시스템 프롬프트에 추가.
  *                    Claude 출력이 단일 UI "예시 삽입" 과 동일 형태가 되도록 통일.
  *                    출처: prisma/sql/2026-04-24_seed_tb_ai_design_template.sql
+ *   - 2026-07-16: 4계층 description 예시가 D8 이후 어긋나 있었던 것을 발견 — SCREEN 예시는
+ *                 DB가 areaType "SEARCH_FORM/DATA_GRID", 프롬프트는 "SEARCH/GRID"였고,
+ *                 AREA 예시는 DB가 "DETAIL_VIEW", 프롬프트는 "INFO_CARD"였음(하드코딩 시 오기입 추정).
+ *                 4계층 모두 하드코딩 대신 useDesignTemplate(UNIT_WORK/SCREEN/AREA/FUNCTION)로
+ *                 실시간 조회하도록 변경 — 어드민이 /admin/design-templates 에서 양식을 바꾸면
+ *                 이 프롬프트도 자동으로 따라가도록 근본적으로 해결.
+ *   - 2026-07-16: JSON 출력 포맷 안내에 "삭제 미지원" 문구 추가 — bulk-import는 create/update만
+ *                 처리하므로, JSON에서 항목을 빼도 SPECODE에서는 삭제되지 않는다는 점을 명시.
  */
 
 import { Suspense, useState, useMemo } from "react";
@@ -28,6 +36,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { useDesignTemplate } from "@/lib/designTemplate";
 
 // ── JSON 전처리 ───────────────────────────────────────────────────────────────
 // Claude가 출력하는 JSON은 아래 이유로 파싱 실패할 수 있음:
@@ -72,7 +81,177 @@ type ImportResult = {
 
 // ── 시스템 프롬프트 ───────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `당신은 SI(System Integration) 프로젝트 화면 설계 전문가이자 SPECODE 설계 어시스턴트입니다.
+// tb_ai_design_template(UNIT_WORK/SCREEN/AREA/FUNCTION) 조회 실패 시에만 쓰는 폴백.
+// 평소엔 useDesignTemplate(projectId, refType)이 반환하는 실시간 값으로 대체됨 —
+// 관리자가 /admin/design-templates 에서 양식을 수정해도 프롬프트가 자동으로 따라가도록 함.
+const FALLBACK_UNIT_WORK_EXAMPLE = `## 1. 개요
+| 항목 | 내용 |
+|:-----|:-----|
+| **단위업무ID** | UW-00001 |
+| **단위업무명** | 이메일 회원가입 |
+| **비즈니스 목적** | 이메일·비밀번호 입력 및 인증 메일 발송을 통해 신규 회원을 등록한다. |
+| **관련 요구사항** | - |
+| **기술 스택** | - |
+
+## 2. 화면 목록
+| 화면ID | 화면명 | URL | 유형 | 설명 |
+|:-------|:-------|:----|:-----|:-----|
+| PID-00003 | 회원가입 | /auth/register | DETAIL | 이메일·비밀번호 입력 및 유효성 검증 후 인증 메일 발송 요청 |
+| PID-00004 | 인증 메일 발송 안내 | /auth/register/verify | DETAIL | 인증 메일 발송 완료 안내 및 재발송 요청 처리 |
+| PID-00005 | 이메일 인증 완료 | /auth/register/complete | DETAIL | 인증 링크 클릭 후 가입 완료 처리 및 온보딩 페이지 이동 |
+
+## 3. 화면 흐름
+\`\`\`
+[PID-00003 회원가입] ──(가입 요청 성공)──▶ [PID-00004 인증 메일 발송 안내]
+[PID-00004 인증 메일 발송 안내] ──(인증 링크 클릭)──▶ [PID-00005 이메일 인증 완료]
+[PID-00005 이메일 인증 완료] ──(3초 후 자동/즉시 이동)──▶ [온보딩 페이지]
+[PID-00005 토큰 만료·무효] ──(재발송 안내 버튼)──▶ [PID-00004 인증 메일 발송 안내]
+\`\`\`
+
+| 이동 | 전달 파라미터 | 동작 |
+|:-----|:-------------|:-----|
+| PID-00003 → PID-00004 | email | 가입 요청 성공 후 자동 이동 |
+| PID-00004 → PID-00005 | token (URL 파라미터) | 인증 메일 내 링크 클릭 |
+| PID-00005 → 온보딩 | - | 3초 카운트다운 후 자동 이동 또는 즉시 이동 |
+| PID-00005 → PID-00004 | - | 토큰 만료·무효 시 재발송 안내 버튼 클릭 |
+
+## 4. 권한 정의
+| 기능 | 비로그인 | 일반 사용자 | 관리자 |
+|:-----|:---------|:-----------|:-------|
+| 회원가입 폼 접근 | ✅ | ❌ | ❌ |
+| 인증 메일 재발송 | ✅ | ❌ | ❌ |
+| 이메일 인증 완료 처리 | ✅ | ❌ | ❌ |
+
+## 5. 상태 정의
+| 상태 | 설명 |
+|:-----|:-----|
+| 미인증 | 가입 요청 후 인증 메일 발송 완료, 아직 인증 링크 미클릭 |
+| 인증완료 | 인증 링크 클릭 후 가입 완료 처리된 상태 |
+| 인증만료 | 인증 링크 발송 후 1시간 초과로 만료된 상태 |
+
+## 6. 참조 테이블
+- <TABLE_SCRIPT:tb_cm_member>
+- <TABLE_SCRIPT:tb_cm_email_verification>
+- <TABLE_SCRIPT:tb_cm_refresh_token>`;
+
+const FALLBACK_SCREEN_EXAMPLE = `## [PID-00001] 게시판 목록
+
+### 화면 개요
+
+| 항목 | 내용 |
+|:-----|:-----|
+| **비즈니스 목적** | 프로젝트 내 공지사항을 한눈에 확인하고, 제목·유형·기간 조건으로 필요한 글을 빠르게 찾는다. |
+| **진입 경로** | 메뉴 클릭, 등록/수정 완료 후 리다이렉트 |
+
+### 영역 목록
+
+| 영역ID | 영역명 | 유형 | 설명 |
+|:-------|:-------|:-----|:-----|
+| AR-00001 | 검색 영역 | SEARCH_FORM | 유형·기간·제목 조건 검색 |
+| AR-00002 | 목록 영역 | DATA_GRID | 게시글 목록 표시, 페이징, 글쓰기 버튼 |
+
+### 영역 간 흐름
+
+- 화면 진입 시 → 검색 조건 초기화 → 자동 조회 → 목록 표시
+- 검색 버튼 클릭 → 검색 조건으로 재조회 → 목록 갱신 (1페이지 초기화)
+- 행 클릭 → PID-00002 상세 화면 이동`;
+
+const FALLBACK_AREA_EXAMPLE = `### 영역: [AR-00003] 상세 영역
+
+**유형:** DETAIL_VIEW
+
+**UI 구조**
+
+\`\`\`text
++───────────────────────────────────────────────────+
+│ [공지] 시스템 점검 안내                              │
+│ 작성자: 관리자 │ 등록일: 2026-03-15 14:30 │ 조회: 121 │
+│───────────────────────────────────────────────────│
+│                                                   │
+│ (마크다운 렌더링된 본문 내용)                         │
+│                                                   │
+│───────────────────────────────────────────────────│
+│ 📎 첨부파일                                        │
+│   점검안내서.pdf (2.1MB)  [다운로드]                 │
+│   일정표.xlsx (340KB)     [다운로드]                │
+│───────────────────────────────────────────────────│
+│                              [목록]  [수정]  [삭제] │
++───────────────────────────────────────────────────+
+\`\`\`
+
+**구성 항목**
+
+| 항목명 | UI 타입 | 비고 |
+|:-------|:--------|:-----|
+| 유형 배지 | badge | NOTICE(빨강) / NORMAL(회색) |
+| 제목 | heading (h2) | |
+| 작성자 | text | |
+| 등록일 | datetime | yyyy-MM-dd HH:mm |
+| 조회수 | number | |
+| 본문 | markdown render | 마크다운 → HTML 렌더링 |
+| 첨부파일 목록 | file list | 파일명(크기) + 다운로드 버튼 |
+| 목록 버튼 | button (default) | → PID-00001 (검색조건 유지) |
+| 수정 버튼 | button (primary) | → PID-00003, 작성자/관리자만 표시 |
+| 삭제 버튼 | button (danger) | 확인 후 논리삭제, 작성자/관리자만 표시 |`;
+
+const FALLBACK_FUNCTION_EXAMPLE = `#### 기능: [FN-00001] 게시판 목록 조회
+
+| 항목 | 내용 |
+|:-----|:-----|
+| 기능ID | FN-00001 |
+| 기능명 | 게시판 목록 조회 |
+| 기능유형 | SELECT |
+| API | \`GET /api/board\` |
+| 트리거 | 화면 진입(자동), 검색 버튼 클릭 |
+
+**Input**
+
+| 파라미터 | 타입 | 필수 | DB 매핑 | 설명 |
+|:---------|:-----|:-----|:--------|:-----|
+| projectId | number | Y (세션) | project_id | |
+| boardTypeCd | string | N | board_type_cd | null이면 전체 |
+| keyword | string | N | board_title_nm | LIKE 검색 |
+| startDt | string | N | reg_dt | >= 조건 (yyyy-MM-dd) |
+| endDt | string | N | reg_dt | <= 조건 (yyyy-MM-dd) |
+| page | number | Y | - | 1부터 시작 |
+| size | number | Y | - | 기본 20 |
+
+**Output**
+
+| 필드 | 타입 | DB 매핑 | 설명 |
+|:-----|:-----|:--------|:-----|
+| boardId | number | board_id | |
+| boardTypeCd | string | board_type_cd | |
+| boardTitleNm | string | board_title_nm | |
+| regUserNm | string | (JOIN) | 작성자명 |
+| regDt | string | reg_dt | |
+| viewCnt | number | view_cnt | |
+| fixYn | string | fix_yn | |
+| attachYn | string | (서브쿼리) | 첨부파일 존재 Y/N |
+| totalCount | number | COUNT(*) OVER() | 총 건수 |
+
+**참조 테이블 관계**
+\`\`\`
+tb_cm_board b
+  LEFT JOIN tb_cm_user u ON u.user_id = b.reg_user_id
+\`\`\`
+- 첨부파일 존재 여부: \`EXISTS (SELECT 1 FROM tb_cm_attach_file WHERE ref_type_cd = 'BOARD' AND ref_id = b.board_id AND del_yn = 'N')\`
+
+**처리 로직**
+\`\`\`
+1. project_id 세션에서 획득
+2. del_yn = 'N' 필터
+3. 검색 조건 적용 (boardTypeCd, keyword LIKE, startDt >=, endDt <= +1일)
+4. 정렬: fix_yn DESC, reg_dt DESC (상단고정 우선, 최신순)
+5. 페이징: LIMIT :size OFFSET (:page - 1) * :size
+\`\`\`
+
+**업무 규칙**
+- 검색 결과 0건 → "등록된 게시글이 없습니다" 안내
+- 상단고정 게시글은 페이지와 무관하게 항상 최상단
+- 기간 종료일은 해당일 23:59:59까지 포함`;
+
+const SYSTEM_PROMPT_TEMPLATE = `당신은 SI(System Integration) 프로젝트 화면 설계 전문가이자 SPECODE 설계 어시스턴트입니다.
 설계자와 함께 단위업무·화면·영역·기능을 설계하고, 최종적으로 SPECODE에 등록할 수 있는 JSON을 출력합니다.
 
 ---
@@ -129,55 +308,7 @@ SPECODE는 **단위업무(UnitWork) → 화면(Screen) → 영역(Area) → 기�
 
 **단위업무 description 표준 양식 (단일 UI "예시 삽입" 과 동일 — 이 형식 그대로 마크다운으로 작성):**
 
-## 1. 개요
-| 항목 | 내용 |
-|:-----|:-----|
-| **단위업무ID** | UW-00001 |
-| **단위업무명** | 이메일 회원가입 |
-| **비즈니스 목적** | 이메일·비밀번호 입력 및 인증 메일 발송을 통해 신규 회원을 등록한다. |
-| **관련 요구사항** | - |
-| **기술 스택** | - |
-
-## 2. 화면 목록
-| 화면ID | 화면명 | URL | 유형 | 설명 |
-|:-------|:-------|:----|:-----|:-----|
-| PID-00003 | 회원가입 | /auth/register | DETAIL | 이메일·비밀번호 입력 및 유효성 검증 후 인증 메일 발송 요청 |
-| PID-00004 | 인증 메일 발송 안내 | /auth/register/verify | DETAIL | 인증 메일 발송 완료 안내 및 재발송 요청 처리 |
-| PID-00005 | 이메일 인증 완료 | /auth/register/complete | DETAIL | 인증 링크 클릭 후 가입 완료 처리 및 온보딩 페이지 이동 |
-
-## 3. 화면 흐름
-\`\`\`
-[PID-00003 회원가입] ──(가입 요청 성공)──▶ [PID-00004 인증 메일 발송 안내]
-[PID-00004 인증 메일 발송 안내] ──(인증 링크 클릭)──▶ [PID-00005 이메일 인증 완료]
-[PID-00005 이메일 인증 완료] ──(3초 후 자동/즉시 이동)──▶ [온보딩 페이지]
-[PID-00005 토큰 만료·무효] ──(재발송 안내 버튼)──▶ [PID-00004 인증 메일 발송 안내]
-\`\`\`
-
-| 이동 | 전달 파라미터 | 동작 |
-|:-----|:-------------|:-----|
-| PID-00003 → PID-00004 | email | 가입 요청 성공 후 자동 이동 |
-| PID-00004 → PID-00005 | token (URL 파라미터) | 인증 메일 내 링크 클릭 |
-| PID-00005 → 온보딩 | - | 3초 카운트다운 후 자동 이동 또는 즉시 이동 |
-| PID-00005 → PID-00004 | - | 토큰 만료·무효 시 재발송 안내 버튼 클릭 |
-
-## 4. 권한 정의
-| 기능 | 비로그인 | 일반 사용자 | 관리자 |
-|:-----|:---------|:-----------|:-------|
-| 회원가입 폼 접근 | ✅ | ❌ | ❌ |
-| 인증 메일 재발송 | ✅ | ❌ | ❌ |
-| 이메일 인증 완료 처리 | ✅ | ❌ | ❌ |
-
-## 5. 상태 정의
-| 상태 | 설명 |
-|:-----|:-----|
-| 미인증 | 가입 요청 후 인증 메일 발송 완료, 아직 인증 링크 미클릭 |
-| 인증완료 | 인증 링크 클릭 후 가입 완료 처리된 상태 |
-| 인증만료 | 인증 링크 발송 후 1시간 초과로 만료된 상태 |
-
-## 6. 참조 테이블
-- <TABLE_SCRIPT:tb_cm_member>
-- <TABLE_SCRIPT:tb_cm_email_verification>
-- <TABLE_SCRIPT:tb_cm_refresh_token>
+{{UNIT_WORK_EXAMPLE}}
 
 ※ \`<TABLE_SCRIPT:tb_xxx>\` 토큰은 SPECODE 가 저장 시 자동으로 DDL 로 치환합니다. 이 형태 그대로 출력하세요.
 
@@ -199,27 +330,7 @@ SPECODE는 **단위업무(UnitWork) → 화면(Screen) → 영역(Area) → 기�
 
 **화면 description 표준 양식 (단일 UI "예시 삽입" 과 동일 — 이 형식 그대로 마크다운으로 작성):**
 
-## [PID-00001] 게시판 목록
-
-### 화면 개요
-
-| 항목 | 내용 |
-|:-----|:-----|
-| **비즈니스 목적** | 프로젝트 내 공지사항을 한눈에 확인하고, 제목·유형·기간 조건으로 필요한 글을 빠르게 찾는다. |
-| **진입 경로** | 메뉴 클릭, 등록/수정 완료 후 리다이렉트 |
-
-### 영역 목록
-
-| 영역ID | 영역명 | 유형 | 설명 |
-|:-------|:-------|:-----|:-----|
-| AR-00001 | 검색 영역 | SEARCH | 유형·기간·제목 조건 검색 |
-| AR-00002 | 목록 영역 | GRID | 게시글 목록 표시, 페이징, 글쓰기 버튼 |
-
-### 영역 간 흐름
-
-- 화면 진입 시 → 검색 조건 초기화 → 자동 조회 → 목록 표시
-- 검색 버튼 클릭 → 검색 조건으로 재조회 → 목록 갱신 (1페이지 초기화)
-- 행 클릭 → PID-00002 상세 화면 이동
+{{SCREEN_EXAMPLE}}
 
 ---
 
@@ -237,43 +348,7 @@ SPECODE는 **단위업무(UnitWork) → 화면(Screen) → 영역(Area) → 기�
 
 **영역 description 표준 양식 (단일 UI "예시 삽입" 과 동일 — 이 형식 그대로 마크다운으로 작성):**
 
-### 영역: [AR-00003] 상세 영역
-
-**유형:** INFO_CARD
-
-**UI 구조**
-
-\`\`\`text
-+───────────────────────────────────────────────────+
-│ [공지] 시스템 점검 안내                              │
-│ 작성자: 관리자 │ 등록일: 2026-03-15 14:30 │ 조회: 121 │
-│───────────────────────────────────────────────────│
-│                                                   │
-│ (마크다운 렌더링된 본문 내용)                         │
-│                                                   │
-│───────────────────────────────────────────────────│
-│ 📎 첨부파일                                        │
-│   점검안내서.pdf (2.1MB)  [다운로드]                 │
-│   일정표.xlsx (340KB)     [다운로드]                │
-│───────────────────────────────────────────────────│
-│                              [목록]  [수정]  [삭제] │
-+───────────────────────────────────────────────────+
-\`\`\`
-
-**구성 항목**
-
-| 항목명 | UI 타입 | 비고 |
-|:-------|:--------|:-----|
-| 유형 배지 | badge | NOTICE(빨강) / NORMAL(회색) |
-| 제목 | heading (h2) | |
-| 작성자 | text | |
-| 등록일 | datetime | yyyy-MM-dd HH:mm |
-| 조회수 | number | |
-| 본문 | markdown render | 마크다운 → HTML 렌더링 |
-| 첨부파일 목록 | file list | 파일명(크기) + 다운로드 버튼 |
-| 목록 버튼 | button (default) | → PID-00001 (검색조건 유지) |
-| 수정 버튼 | button (primary) | → PID-00003, 작성자/관리자만 표시 |
-| 삭제 버튼 | button (danger) | 확인 후 논리삭제, 작성자/관리자만 표시 |
+{{AREA_EXAMPLE}}
 
 ---
 
@@ -293,62 +368,7 @@ SPECODE는 **단위업무(UnitWork) → 화면(Screen) → 영역(Area) → 기�
 
 **기능 description 표준 양식 (단일 UI "예시 삽입" 과 동일 — 이 형식 그대로 마크다운으로 작성):**
 
-#### 기능: [FN-00001] 게시판 목록 조회
-
-| 항목 | 내용 |
-|:-----|:-----|
-| 기능ID | FN-00001 |
-| 기능명 | 게시판 목록 조회 |
-| 기능유형 | SELECT |
-| API | \`GET /api/board\` |
-| 트리거 | 화면 진입(자동), 검색 버튼 클릭 |
-
-**Input**
-
-| 파라미터 | 타입 | 필수 | DB 매핑 | 설명 |
-|:---------|:-----|:-----|:--------|:-----|
-| projectId | number | Y (세션) | project_id | |
-| boardTypeCd | string | N | board_type_cd | null이면 전체 |
-| keyword | string | N | board_title_nm | LIKE 검색 |
-| startDt | string | N | reg_dt | >= 조건 (yyyy-MM-dd) |
-| endDt | string | N | reg_dt | <= 조건 (yyyy-MM-dd) |
-| page | number | Y | - | 1부터 시작 |
-| size | number | Y | - | 기본 20 |
-
-**Output**
-
-| 필드 | 타입 | DB 매핑 | 설명 |
-|:-----|:-----|:--------|:-----|
-| boardId | number | board_id | |
-| boardTypeCd | string | board_type_cd | |
-| boardTitleNm | string | board_title_nm | |
-| regUserNm | string | (JOIN) | 작성자명 |
-| regDt | string | reg_dt | |
-| viewCnt | number | view_cnt | |
-| fixYn | string | fix_yn | |
-| attachYn | string | (서브쿼리) | 첨부파일 존재 Y/N |
-| totalCount | number | COUNT(*) OVER() | 총 건수 |
-
-**참조 테이블 관계**
-\`\`\`
-tb_cm_board b
-  LEFT JOIN tb_cm_user u ON u.user_id = b.reg_user_id
-\`\`\`
-- 첨부파일 존재 여부: \`EXISTS (SELECT 1 FROM tb_cm_attach_file WHERE ref_type_cd = 'BOARD' AND ref_id = b.board_id AND del_yn = 'N')\`
-
-**처리 로직**
-\`\`\`
-1. project_id 세션에서 획득
-2. del_yn = 'N' 필터
-3. 검색 조건 적용 (boardTypeCd, keyword LIKE, startDt >=, endDt <= +1일)
-4. 정렬: fix_yn DESC, reg_dt DESC (상단고정 우선, 최신순)
-5. 페이징: LIMIT :size OFFSET (:page - 1) * :size
-\`\`\`
-
-**업무 규칙**
-- 검색 결과 0건 → "등록된 게시글이 없습니다" 안내
-- 상단고정 게시글은 페이지와 무관하게 항상 최상단
-- 기간 종료일은 해당일 23:59:59까지 포함
+{{FUNCTION_EXAMPLE}}
 
 ---
 
@@ -477,6 +497,7 @@ SPECODE 설계 가져오기 > 내보내기에서 복사한 JSON을 붙여넣으�
   ]
 }
 \`\`\`
+※ 항목 삭제는 지원하지 않습니다 — JSON에서 항목을 빼도 SPECODE에서 삭제되지 않습니다. 삭제는 SPECODE 화면에서 직접 처리하세요.
 
 ---
 
@@ -521,6 +542,22 @@ JSON 출력이나 다음 작업을 진행하기 **전에** 먼저 알립니다:
 > "⚠️ 대화가 많이 길어졌습니다. 새 세션(새 채팅)을 열어서 이어가시는 것을 권장합니다. 지금까지 작업한 JSON을 먼저 SPECODE에 저장하고 새로 시작하시면 더 정확하게 도움드릴 수 있습니다."
 
 이 알림은 설계자가 먼저 요청하기 전에 선제적으로 합니다.`;
+
+// DB에서 조회한(또는 폴백) 4계층 description 예시를 프롬프트 템플릿에 삽입
+type DesignPromptExamples = {
+  unitWork: string;
+  screen:   string;
+  area:     string;
+  function: string;
+};
+
+function buildSystemPrompt(examples: DesignPromptExamples): string {
+  return SYSTEM_PROMPT_TEMPLATE
+    .replace("{{UNIT_WORK_EXAMPLE}}", examples.unitWork)
+    .replace("{{SCREEN_EXAMPLE}}",    examples.screen)
+    .replace("{{AREA_EXAMPLE}}",      examples.area)
+    .replace("{{FUNCTION_EXAMPLE}}",  examples.function);
+}
 
 const JSON_TEMPLATE = `{
   "unitWorks": [
@@ -636,6 +673,23 @@ function DesignImportPageInner() {
         .then((r) => r.data),
   });
   const unitWorkList: UnitWorkSummary[] = uwData?.items ?? [];
+
+  // ── 시스템 프롬프트에 삽입할 4계층 description 예시 조회 ────────────────────
+  // 어드민이 /admin/design-templates(UNIT_WORK/SCREEN/AREA/FUNCTION)에서 양식을 바꾸면 자동 반영됨
+  const { data: uwTemplate }  = useDesignTemplate(projectId, "UNIT_WORK");
+  const { data: scTemplate }  = useDesignTemplate(projectId, "SCREEN");
+  const { data: arTemplate }  = useDesignTemplate(projectId, "AREA");
+  const { data: fnTemplate }  = useDesignTemplate(projectId, "FUNCTION");
+  const systemPrompt = useMemo(
+    () =>
+      buildSystemPrompt({
+        unitWork: uwTemplate?.exampleCn?.trim() || FALLBACK_UNIT_WORK_EXAMPLE,
+        screen:   scTemplate?.exampleCn?.trim() || FALLBACK_SCREEN_EXAMPLE,
+        area:     arTemplate?.exampleCn?.trim() || FALLBACK_AREA_EXAMPLE,
+        function: fnTemplate?.exampleCn?.trim() || FALLBACK_FUNCTION_EXAMPLE,
+      }),
+    [uwTemplate, scTemplate, arTemplate, fnTemplate]
+  );
 
   // ── 전체 선택 토글 ──────────────────────────────────────────────────────────
   const allSelected = unitWorkList.length > 0 && selectedIds.size === unitWorkList.length;
@@ -823,11 +877,11 @@ function DesignImportPageInner() {
                 <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>
                   Claude 프로젝트 지침에 전체 내용을 붙여넣으세요
                 </span>
-                <CopyButton text={SYSTEM_PROMPT} label="복사" />
+                <CopyButton text={systemPrompt} label="복사" />
               </div>
               <div className="sp-group-body" style={{ padding: 0 }}>
                 <pre style={{ padding: "var(--space-4)", fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--color-text-secondary)", lineHeight: 1.75, whiteSpace: "pre-wrap", wordBreak: "break-word", maxHeight: 360, overflow: "auto" }}>
-                  {SYSTEM_PROMPT}
+                  {systemPrompt}
                 </pre>
               </div>
             </div>

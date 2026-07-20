@@ -42,6 +42,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       orderBy: { grp_code: "asc" },
     });
 
+    // DB 테이블 설계에서 이 그룹을 참조(ref_grp_code)하는 컬럼 수 — 그룹코드별 집계
+    // "몇 군데서 실제로 쓰이고 있는지" 표시용. TbDsDbTableColumn 은 prjct_id가 없어
+    // table 관계로 프로젝트 범위를 좁힘.
+    const mappingCounts = await prisma.tbDsDbTableColumn.groupBy({
+      by: ["ref_grp_code"],
+      where: { ref_grp_code: { not: null }, table: { prjct_id: projectId } },
+      _count: { ref_grp_code: true },
+    });
+    const mappingCountMap = new Map(
+      mappingCounts.map((m) => [m.ref_grp_code as string, m._count.ref_grp_code])
+    );
+
     return apiSuccess({
       items: groups.map((g) => ({
         grpCode: g.grp_code,
@@ -49,6 +61,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         grpCodeDc: g.grp_code_dc ?? "",
         useYn: g.use_yn,
         codeCount: g.codes.length,
+        mappingCount: mappingCountMap.get(g.grp_code) ?? 0,
       })),
     });
   } catch (err) {

@@ -5,14 +5,15 @@
  *   - Claude에서 설계한 단위업무·화면·영역·기능을 JSON으로 한 번에 등록
  *   - systemId 있음 → UUID로 조회 후 UPDATE
  *   - systemId 없음 → 신규 CREATE (displayId 자동 채번)
- *   - requirementId는 선택 (req_id nullable) — 있으면 연결, 없으면 null
+ *   - req_id 는 TbDsUnitWork에서 NOT NULL 컬럼 → 신규 단위업무는 requirementId 필수.
+ *     없거나 이 프로젝트 소속이 아니면 단위업무 자체를 skip (수정 시엔 기존 연결 유지하므로 생략 가능)
  *
  * Request Body:
  *   {
  *     unitWorks: [
  *       {
  *         systemId?: string,        // 수정 시 단위업무 UUID. 없으면 신규
- *         requirementId?: string,   // 연결할 요구사항 UUID. 없으면 null (선택)
+ *         requirementId?: string,   // 신규 등록 시 필수(연결할 요구사항 UUID). 수정 시 생략 가능
  *         name: string,
  *         description?: string,
  *         screens: [
@@ -20,7 +21,7 @@
  *             systemId?: string,
  *             name: string,
  *             displayCode?: string,
- *             screenType?: string,  // LIST | DETAIL | GRID | TAB | FULL_SCREEN
+ *             screenType?: string,  // LIST | DETAIL | INPUT | POPUP | TAB | REPORT
  *             categoryL?: string,
  *             categoryM?: string,
  *             categoryS?: string,

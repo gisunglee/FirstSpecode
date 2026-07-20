@@ -1,12 +1,14 @@
 "use client";
 
 /**
- * ProgressCard — 관리뷰: 단위업무 진행률
+ * ProgressCard — 관리뷰: 진행률 (단위업무 중심 + 요구사항/화면/기능 보조 지표)
  *
  * 역할:
- *   - 평균 진행률(%) 강조 표기 + 미니 도넛
- *   - 완료 / 전체 건수
- *   - 클릭 → 단위업무 목록으로
+ *   - 단위업무 평균 진행률(%) 강조 표기 + 미니 도넛 + 완료/전체 건수
+ *   - 하단에 요구사항 분석·화면 설계·기능 구현 평균 진행률을 한 줄씩 보조 표기
+ *     (단위업무만 보여주면 다른 3개 엔티티 진행 상황이 대시보드에서 아예 안 보이는 사각지대가
+ *     있었음 — 전체 7카테고리 상세는 PM 현황(/pm-board)으로 유도)
+ *   - 클릭 → PM 현황
  */
 
 import DashboardCard from "../DashboardCard";
@@ -16,6 +18,9 @@ type Props = {
     total:      number;
     completed:  number;
     averagePct: number;
+    requirementAvgPct:   number;
+    screenDesignAvgPct:  number;
+    functionImplAvgPct:  number;
   } | undefined;
   isLoading: boolean;
   error:     Error | null;
@@ -28,7 +33,7 @@ const DONUT_R     = 36;
 const DONUT_C     = 2 * Math.PI * DONUT_R; // 둘레
 const DONUT_SIZE  = 88;
 
-export default function ProgressCard({ data, isLoading, error, projectId }: Props) {
+export default function ProgressCard({ data, isLoading, error }: Props) {
   const isEmpty = !!data && data.total === 0;
   const pct     = data?.averagePct ?? 0;
   const dashOff = DONUT_C * (1 - pct / 100);
@@ -37,8 +42,8 @@ export default function ProgressCard({ data, isLoading, error, projectId }: Prop
     <DashboardCard
       icon={<DonutIcon />}
       title="진행률"
-      linkHref={`/projects/${projectId}/unit-works`}
-      linkLabel="단위업무 보기"
+      linkHref="/pm-board"
+      linkLabel="PM 현황에서 전체 보기"
       isLoading={isLoading}
       error={error}
       isEmpty={isEmpty}
@@ -100,7 +105,36 @@ export default function ProgressCard({ data, isLoading, error, projectId }: Prop
           </div>
         </div>
       )}
+
+      {/* 보조 지표 — 단위업무 외 3개 엔티티 평균 진행률. 목록·상세는 PM 현황에서. */}
+      {data && data.total > 0 && (
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            marginTop: 12,
+            paddingTop: 10,
+            borderTop: "1px dashed var(--color-border-subtle)",
+            fontSize: "var(--text-xs)",
+          }}
+        >
+          <MiniStat label="요구사항 분석" value={data.requirementAvgPct} />
+          <MiniStat label="화면 설계" value={data.screenDesignAvgPct} />
+          <MiniStat label="기능 구현" value={data.functionImplAvgPct} />
+        </div>
+      )}
     </DashboardCard>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+      <span style={{ color: "var(--color-text-tertiary)" }}>{label}</span>
+      <span style={{ fontWeight: 600, color: "var(--color-text-primary)", fontFamily: "var(--font-mono)" }}>
+        {value}%
+      </span>
+    </div>
   );
 }
 

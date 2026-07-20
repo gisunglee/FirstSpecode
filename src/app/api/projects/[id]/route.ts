@@ -52,6 +52,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       startDate:    project.bgng_de        ?? null,
       endDate:      project.end_de         ?? null,
       clientName:   project.client_nm      ?? null,
+      analysisStart: project.anls_bgng_de  ?? null,
+      analysisEnd:   project.anls_end_de   ?? null,
+      designStart:   project.dsgn_bgng_de  ?? null,
+      designEnd:     project.dsgn_end_de   ?? null,
+      devStart:      project.dev_bgng_de   ?? null,
+      devEnd:        project.dev_end_de    ?? null,
+      testStart:     project.test_bgng_de  ?? null,
+      testEnd:       project.test_end_de   ?? null,
       myRole:       membership.role_code,
     });
   } catch (err) {
@@ -85,7 +93,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { name, abbreviation, fullName, description, startDate, endDate, clientName } = body as {
+  const {
+    name, abbreviation, fullName, description, startDate, endDate, clientName,
+    analysisStart, analysisEnd, designStart, designEnd, devStart, devEnd, testStart, testEnd,
+  } = body as {
     name?: string;
     abbreviation?: string;
     fullName?: string;        // 정식 명칭 — 단순 텍스트 필드, 검증·역할 없음
@@ -93,6 +104,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     startDate?: string;
     endDate?: string;
     clientName?: string;
+    // 단계별 일정 (분석/설계/구현/테스트) — 프로젝트 전체 기간과 별개
+    analysisStart?: string;
+    analysisEnd?: string;
+    designStart?: string;
+    designEnd?: string;
+    devStart?: string;
+    devEnd?: string;
+    testStart?: string;
+    testEnd?: string;
   };
 
   if (!name || !name.trim()) {
@@ -107,6 +127,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   const abbrToSave = abbrParsed.value;
   if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
     return apiError("VALIDATION_ERROR", "종료일은 시작일 이후여야 합니다.", 400);
+  }
+  // 단계별 일정도 각각 종료일 >= 시작일 검증
+  const phasePairs: [string, string | undefined, string | undefined][] = [
+    ["분석", analysisStart, analysisEnd],
+    ["설계", designStart, designEnd],
+    ["구현", devStart, devEnd],
+    ["테스트", testStart, testEnd],
+  ];
+  for (const [label, s, e] of phasePairs) {
+    if (s && e && new Date(e) < new Date(s)) {
+      return apiError("VALIDATION_ERROR", `${label} 종료일은 시작일 이후여야 합니다.`, 400);
+    }
   }
 
   try {
@@ -133,6 +165,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           ...(startDate !== undefined ? { bgng_de: startDate ? new Date(startDate) : null } : {}),
           ...(endDate !== undefined ? { end_de: endDate ? new Date(endDate) : null } : {}),
           ...(clientName !== undefined ? { client_nm: clientName?.trim() || null } : {}),
+          // 단계별 일정 — 프로젝트 전체 기간과 동일하게 빈 값이면 null 로 초기화
+          ...(analysisStart !== undefined ? { anls_bgng_de: analysisStart ? new Date(analysisStart) : null } : {}),
+          ...(analysisEnd   !== undefined ? { anls_end_de:  analysisEnd   ? new Date(analysisEnd)   : null } : {}),
+          ...(designStart   !== undefined ? { dsgn_bgng_de: designStart   ? new Date(designStart)   : null } : {}),
+          ...(designEnd     !== undefined ? { dsgn_end_de:  designEnd     ? new Date(designEnd)     : null } : {}),
+          ...(devStart      !== undefined ? { dev_bgng_de:  devStart      ? new Date(devStart)      : null } : {}),
+          ...(devEnd        !== undefined ? { dev_end_de:   devEnd        ? new Date(devEnd)        : null } : {}),
+          ...(testStart     !== undefined ? { test_bgng_de: testStart     ? new Date(testStart)     : null } : {}),
+          ...(testEnd       !== undefined ? { test_end_de:  testEnd       ? new Date(testEnd)       : null } : {}),
           mdfcn_dt:  new Date(),
         },
       });

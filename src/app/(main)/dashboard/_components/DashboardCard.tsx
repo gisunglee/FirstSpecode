@@ -30,6 +30,8 @@ type Props = {
   title:      string;
   /** 헤더 우측 배지 (예: "5건") */
   badge?:     ReactNode;
+  /** 헤더 우측 "?" 도움말 버튼 — <HelpButton title="..">설명</HelpButton> 형태로 전달 */
+  help?:      ReactNode;
   /** 본문 — 카드별 데이터 시각화 */
   children:   ReactNode;
   /** 푸터 링크 — 상세 페이지로 이동 */
@@ -48,6 +50,7 @@ export default function DashboardCard({
   icon,
   title,
   badge,
+  help,
   children,
   linkHref,
   linkLabel,
@@ -63,7 +66,10 @@ export default function DashboardCard({
           {icon}
           {title}
         </div>
-        {badge && <span>{badge}</span>}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {badge && <span>{badge}</span>}
+          {help}
+        </div>
       </div>
 
       <div

@@ -110,6 +110,8 @@ export function usePermissions(projectId: string | null) {
     canManageMembers:  has("member.invite"),
     canAccessSettings: has("project.settings"),
     canDeleteProject:  has("project.delete"),
+    // 주간보고 — PM/PL 직무 또는 OWNER/ADMIN 역할만 (LNB 메뉴 노출·페이지 게이트에 사용)
+    canManageWeeklyReport: has("weeklyReport.manage"),
   };
 }
 

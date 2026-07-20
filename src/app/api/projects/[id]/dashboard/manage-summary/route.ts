@@ -1,16 +1,26 @@
 /**
  * GET /api/projects/[id]/dashboard/manage-summary
- *   — 관리자 대시보드 요약 (1차 카드 3종 통합 조회)
+ *   — 관리자 대시보드 요약 (카드 5종 + 배너 1종 통합 조회)
  *
  * 역할:
- *   - 카드 3개에 필요한 데이터를 한 번의 라운드트립으로 모아서 반환
- *     1) progress      — 단위업무 진행률 집계 (전체/완료/평균%)
- *     2) stalled       — 마감 지났는데 미완료(progrs_rt < 100) 단위업무 + Top 5
+ *   - 카드에 필요한 데이터를 한 번의 라운드트립으로 모아서 반환
+ *     1) progress      — 단위업무 진행률 + 요구사항/화면/기능 평균 진행률(보조 지표)
+ *     2) stalled       — 마감 지났는데 미완료(progrs_rt < 100) 단위업무 + Top 5 + 화면/기능 지연 카운트
  *     3) recentChanges — 설계 변경 이력 최신 5건
+ *     4) teamActivity  — 최근 7일 활동 + 부하(활성 작업량) 1위 멤버
+ *     5) aiUsage       — 이번 달 AI 사용 통계
+ *     6) unassignedTotal — 담당자 미입력(4개 엔티티 합산) 총 건수, 배너용
+ *
+ * 2026-07-20: 대시보드가 "단위업무·과업" 2개 엔티티만 다뤄 요구사항 분석/화면 설계/기능 구현
+ *   진행률, 팀 부하, 미지정 항목이 전혀 안 보이던 갭을 보완 — PM 진단(/pm)·PM 현황(/pm-board)을
+ *   만들며 확인된 실제 니즈를 요약 신호로 반영(전체 매트릭스는 그쪽 화면으로 링크).
+ *
+ * 2026-07-20(2차): recentChanges 에 refName(변경된 엔티티의 현재 이름) 추가 — 유형 라벨만으론
+ *   "화면이 바뀜"만 반복 노출돼 어떤 화면인지 알 수 없다는 피드백 반영.
  *
  * 왜 통합 엔드포인트인가:
- *   - 첫 페이지 진입 시 카드별 3개 HTTP 호출 → 1회로 줄여 LCP 단축.
- *   - 동일 권한 가드를 3번 평가하지 않으므로 DB 부하·코드 중복도 감소.
+ *   - 첫 페이지 진입 시 카드별 HTTP 호출 → 1회로 줄여 LCP 단축.
+ *   - 동일 권한 가드를 여러 번 평가하지 않으므로 DB 부하·코드 중복도 감소.
  *
  * 권한:
  *   - content.read — VIEWER 이상 통과 (관리뷰는 OWNER/ADMIN/PM/PL 자동 분기,
@@ -21,6 +31,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { buildMissingStat } from "@/lib/pm/missingStatus";
 import type { ManageSummaryResponse } from "@/types/dashboard";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -28,6 +39,12 @@ type RouteParams = { params: Promise<{ id: string }> };
 // 정체된 일 / 최근 변경 카드는 본문에 미리보기를 보여주므로 5건만 노출.
 // 카운트는 별도 집계 쿼리로 정확히 가져온다.
 const PREVIEW_LIMIT = 5;
+
+// 매우 큰 프로젝트 안전망 — pm-summary/route.ts 와 동일 기준(메모리 집계용 캡).
+const HARD_LIMIT = 2000;
+
+// 마감 임박 기준 — 팀 부하 계산의 "dueSoon" 판정용. pm-summary 의 7일 기준과 동일.
+const LOAD_HORIZON_DAYS = 7;
 
 // 응답 타입은 src/types/dashboard.ts 의 ManageSummaryResponse 를 그대로 사용.
 // (클라이언트 카드 컴포넌트가 같은 타입을 import 해서 단일 진실원 유지)
@@ -42,6 +59,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // 오늘 날짜 (YYYY-MM-DD) — end_de 가 text 컬럼이므로 문자열 비교
     // 시간 부분은 비교에 의미 없으므로 자정 기준 ISO 날짜만 사용.
     const todayStr = new Date().toISOString().slice(0, 10);
+
+    // 팀 부하의 "임박(dueSoon)" 판정 기준 — 오늘부터 +7일
+    const horizon = new Date();
+    horizon.setDate(horizon.getDate() + LOAD_HORIZON_DAYS);
+    const horizonStr = horizon.toISOString().slice(0, 10);
 
     // 최근 7일 시점 (팀 활동 카드용)
     // ⚠️ "팀 활동" 의 정의는 현재 tb_ds_design_change 이벤트만 카운트.
@@ -70,11 +92,22 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       // ── 최근 변경 5건 ──────────────────────────────────────────
       recentChanges,
 
-      // ── Phase 2: 팀 활동 — 최근 7일 변경자 그룹화 ──────────────
+      // ── 팀 활동 — 최근 7일 변경자 그룹화 ────────────────────────
       activityGroups,
 
-      // ── Phase 2: AI 사용 — 이번 달 상태별 그룹화 ───────────────
+      // ── AI 사용 — 이번 달 상태별 그룹화 ─────────────────────────
       aiStatusGroups,
+
+      // ── 요구사항 분석 평균 진행률 (progress 카드 보조 지표) ─────
+      requirementAvgAgg,
+
+      // ── 미지정 배너 + 팀 부하용 원본 행 (4개 엔티티) ─────────────
+      // 담당자/일정/공수가 필요해 aggregate 대신 findMany 로 전체 로드.
+      requirementRows,
+      unitWorkRows,
+      screenRows,
+      areaRows,
+      functionRows,
     ] = await Promise.all([
       // 단위업무 전체수 + 평균 진행률
       // _avg 가 row 0 일 때 null 을 돌려주므로 응답 가공에서 0 으로 폴백.
@@ -149,16 +182,206 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         where:  { prjct_id: projectId, req_dt: { gte: monthStart } },
         _count: { _all: true },
       }),
+
+      // 요구사항 평균 진행률 — 단위업무 외 엔티티도 보여주기 위한 보조 지표
+      prisma.tbRqRequirement.aggregate({
+        where: { prjct_id: projectId },
+        _avg:  { progrs_rt: true },
+      }),
+
+      prisma.tbRqRequirement.findMany({
+        where:  { prjct_id: projectId },
+        select: { asign_mber_id: true, anls_bgng_de: true, anls_end_de: true },
+        take:   HARD_LIMIT,
+      }),
+      prisma.tbDsUnitWork.findMany({
+        where:  { prjct_id: projectId },
+        select: { asign_mber_id: true, bgng_de: true, end_de: true, progrs_rt: true },
+        take:   HARD_LIMIT,
+      }),
+      prisma.tbDsScreen.findMany({
+        where:  { prjct_id: projectId },
+        select: {
+          scrn_id: true, asign_mber_id: true,
+          design_bgng_de: true, design_end_de: true, design_efrt_val: true,
+        },
+        take:   HARD_LIMIT,
+      }),
+      prisma.tbDsArea.findMany({
+        where:  { prjct_id: projectId },
+        select: { area_id: true, scrn_id: true },
+        take:   HARD_LIMIT,
+      }),
+      prisma.tbDsFunction.findMany({
+        where:  { prjct_id: projectId },
+        select: {
+          func_id: true, area_id: true, asign_mber_id: true,
+          impl_bgng_de: true, impl_end_de: true, efrt_val: true,
+        },
+        take:   HARD_LIMIT,
+      }),
     ]);
 
-    // 담당자/변경자/기여자 이름 일괄 조회 (N+1 방지)
-    // 정체 미리보기·최근 변경·팀 활동 Top 기여자에 등장하는 mberId 를 한 번에 모아 join.
+    // 기능 진척률(design_rt/impl_rt) — functionRows 가 확정된 뒤에만 조회 가능해 순차 실행.
+    // TbCmProgress 다형 참조(ref_tbl_nm='tb_ds_function'), 없으면 0으로 간주(누락을 완료로
+    // 오인하지 않도록 — pm-summary 의 funcImplRtMap.get(...) ?? 0 관례와 동일).
+    const funcIds = functionRows.map((f) => f.func_id);
+    const funcProgressRows = funcIds.length > 0
+      ? await prisma.tbCmProgress.findMany({
+          where:  { ref_tbl_nm: "tb_ds_function", ref_id: { in: funcIds } },
+          select: { ref_id: true, design_rt: true, impl_rt: true },
+        })
+      : [];
+    const funcProgressMap = new Map(funcProgressRows.map((p) => [p.ref_id, p]));
+
+    // ── 화면 설계 평균(하위 기능 design_rt 평균의 화면별 롤업 → 전체 평균) ──
+    // pm-summary 의 screenAvgDesignRtMap 과 동일 정의(화면→영역→기능 단순평균).
+    const areaToScrn = new Map(areaRows.map((a) => [a.area_id, a.scrn_id]));
+    const scrnDesignRtAcc = new Map<string, { sum: number; count: number }>();
+    for (const f of functionRows) {
+      const scrnId = f.area_id ? areaToScrn.get(f.area_id) : null;
+      if (!scrnId) continue;
+      const rt  = funcProgressMap.get(f.func_id)?.design_rt ?? 0;
+      const acc = scrnDesignRtAcc.get(scrnId) ?? { sum: 0, count: 0 };
+      acc.sum += rt;
+      acc.count += 1;
+      scrnDesignRtAcc.set(scrnId, acc);
+    }
+    const scrnAvgDesignRt = new Map(
+      [...scrnDesignRtAcc.entries()].map(([scrnId, { sum, count }]) => [scrnId, count > 0 ? sum / count : 0])
+    );
+
+    const functionImplAvgPct = functionRows.length > 0
+      ? Math.round(
+          functionRows.reduce((sum, f) => sum + (funcProgressMap.get(f.func_id)?.impl_rt ?? 0), 0)
+            / functionRows.length
+        )
+      : 0;
+    const screenDesignAvgPct = screenRows.length > 0
+      ? Math.round(
+          screenRows.reduce((sum, s) => sum + (scrnAvgDesignRt.get(s.scrn_id) ?? 0), 0) / screenRows.length
+        )
+      : 0;
+
+    // ── 정체된 일 — 화면(설계)/기능(구현) 지연 카운트만(목록은 단위업무만 유지) ──
+    const screenDelayedCount = screenRows.filter((s) => {
+      if (!s.design_end_de || s.design_end_de >= todayStr) return false;
+      return (scrnAvgDesignRt.get(s.scrn_id) ?? 0) < 100;
+    }).length;
+    const functionDelayedCount = functionRows.filter((f) => {
+      if (!f.impl_end_de || f.impl_end_de >= todayStr) return false;
+      return (funcProgressMap.get(f.func_id)?.impl_rt ?? 0) < 100;
+    }).length;
+
+    // ── 팀 부하 1위 — inProgress + dueSoon + overdue 합이 가장 큰 멤버 하나만.
+    // 전체 매트릭스는 PM 진단(/pm)에서 — 여기선 "누가 제일 급한가" 한 줄만 필요.
+    const loadMap = new Map<string, number>();
+    for (const u of unitWorkRows) {
+      if (!u.asign_mber_id || u.progrs_rt >= 100) continue;
+      let load = 1; // inProgress 또는 미시작이어도 담당 중인 미완료 건은 부하로 카운트
+      if (u.end_de) {
+        if (u.end_de < todayStr) load += 1;       // overdue
+        else if (u.end_de <= horizonStr) load += 1; // dueSoon
+      }
+      loadMap.set(u.asign_mber_id, (loadMap.get(u.asign_mber_id) ?? 0) + load);
+    }
+    let topLoadMemberId: string | null = null;
+    let topLoadValue = 0;
+    for (const [mberId, load] of loadMap) {
+      if (load > topLoadValue) {
+        topLoadMemberId = mberId;
+        topLoadValue = load;
+      }
+    }
+
+    // ── 미지정 배너 — 4개 엔티티 담당자 미입력 합산 (lib/pm/missingStatus.ts 순수 함수 재사용) ──
+    const missingStats = [
+      buildMissingStat(
+        "REQUIREMENT", "요구사항",
+        requirementRows.map((r) => ({ asignMberId: r.asign_mber_id, startDate: r.anls_bgng_de, endDate: r.anls_end_de })),
+        false
+      ),
+      buildMissingStat(
+        "UNIT_WORK", "단위업무",
+        unitWorkRows.map((u) => ({ asignMberId: u.asign_mber_id, startDate: u.bgng_de, endDate: u.end_de })),
+        false
+      ),
+      buildMissingStat(
+        "SCREEN", "화면",
+        screenRows.map((s) => ({ asignMberId: s.asign_mber_id, startDate: s.design_bgng_de, endDate: s.design_end_de, effortRaw: s.design_efrt_val })),
+        true
+      ),
+      buildMissingStat(
+        "FUNCTION", "기능",
+        functionRows.map((f) => ({ asignMberId: f.asign_mber_id, startDate: f.impl_bgng_de, endDate: f.impl_end_de, effortRaw: f.efrt_val })),
+        true
+      ),
+    ];
+    const unassignedTotal = missingStats.reduce((sum, s) => sum + s.assigneeMissing, 0);
+
+    // ── 최근 변경 카드 — 실제 엔티티 이름 배치 조회 ──────────────────────────
+    // snapshot_data 는 변경 종류마다 모양이 달라(예: 인라인 편집은 {field,value}, 담당자 변경은
+    // {beforeName,afterName}) 이름을 안정적으로 뽑아낼 소스가 아니다 — 현재 이름을 직접 조회.
+    // 최대 5건(recentChanges)뿐이라 테이블당 조회도 그만큼 작다.
+    const refIdsByTable = new Map<string, Set<string>>();
+    for (const c of recentChanges) {
+      if (!refIdsByTable.has(c.ref_tbl_nm)) refIdsByTable.set(c.ref_tbl_nm, new Set());
+      refIdsByTable.get(c.ref_tbl_nm)!.add(c.ref_id);
+    }
+    const entityNameMap = new Map<string, string>(); // key: `${ref_tbl_nm}:${ref_id}`
+
+    const chgUnitWorkIds = [...(refIdsByTable.get("tb_ds_unit_work") ?? [])];
+    if (chgUnitWorkIds.length > 0) {
+      const rows = await prisma.tbDsUnitWork.findMany({
+        where: { unit_work_id: { in: chgUnitWorkIds } }, select: { unit_work_id: true, unit_work_nm: true },
+      });
+      for (const r of rows) entityNameMap.set(`tb_ds_unit_work:${r.unit_work_id}`, r.unit_work_nm);
+    }
+    const chgScreenIds = [...(refIdsByTable.get("tb_ds_screen") ?? [])];
+    if (chgScreenIds.length > 0) {
+      const rows = await prisma.tbDsScreen.findMany({
+        where: { scrn_id: { in: chgScreenIds } }, select: { scrn_id: true, scrn_nm: true },
+      });
+      for (const r of rows) entityNameMap.set(`tb_ds_screen:${r.scrn_id}`, r.scrn_nm);
+    }
+    const chgAreaIds = [...(refIdsByTable.get("tb_ds_area") ?? [])];
+    if (chgAreaIds.length > 0) {
+      const rows = await prisma.tbDsArea.findMany({
+        where: { area_id: { in: chgAreaIds } }, select: { area_id: true, area_nm: true },
+      });
+      for (const r of rows) entityNameMap.set(`tb_ds_area:${r.area_id}`, r.area_nm);
+    }
+    const chgFunctionIds = [...(refIdsByTable.get("tb_ds_function") ?? [])];
+    if (chgFunctionIds.length > 0) {
+      const rows = await prisma.tbDsFunction.findMany({
+        where: { func_id: { in: chgFunctionIds } }, select: { func_id: true, func_nm: true },
+      });
+      for (const r of rows) entityNameMap.set(`tb_ds_function:${r.func_id}`, r.func_nm);
+    }
+    const chgRequirementIds = [...(refIdsByTable.get("tb_rq_requirement") ?? [])];
+    if (chgRequirementIds.length > 0) {
+      const rows = await prisma.tbRqRequirement.findMany({
+        where: { req_id: { in: chgRequirementIds } }, select: { req_id: true, req_nm: true },
+      });
+      for (const r of rows) entityNameMap.set(`tb_rq_requirement:${r.req_id}`, r.req_nm);
+    }
+    const chgUserStoryIds = [...(refIdsByTable.get("tb_rq_user_story") ?? [])];
+    if (chgUserStoryIds.length > 0) {
+      const rows = await prisma.tbRqUserStory.findMany({
+        where: { story_id: { in: chgUserStoryIds } }, select: { story_id: true, story_nm: true },
+      });
+      for (const r of rows) entityNameMap.set(`tb_rq_user_story:${r.story_id}`, r.story_nm);
+    }
+
+    // 담당자/변경자/기여자/부하 1위 이름 일괄 조회 (N+1 방지)
+    // 정체 미리보기·최근 변경·팀 활동 Top 기여자·팀 부하 1위에 등장하는 mberId 를 한 번에 모아 join.
     const memberIds = [
       ...new Set(
         [
           ...stalledItems.map((s) => s.asign_mber_id),
           ...recentChanges.map((c) => c.chg_mber_id),
           ...activityGroups.map((g) => g.chg_mber_id),
+          topLoadMemberId,
         ].filter((v): v is string => !!v)
       ),
     ];
@@ -180,6 +403,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       ? 0
       // _avg 는 row 0 일 때 null. 소수 1자리 반올림.
       : Math.round((progressAgg._avg.progrs_rt ?? 0) * 10) / 10;
+    const requirementAvgPct = Math.round(requirementAvgAgg._avg.progrs_rt ?? 0);
 
     // ── 팀 활동 가공 ──────────────────────────────────────────
     // groupBy 결과에서 chg_mber_id null 행은 시스템/배치 변경 → 사용자 카운트에서 제외
@@ -224,6 +448,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         total,
         completed:  completedCnt,
         averagePct,
+        requirementAvgPct,
+        screenDesignAvgPct,
+        functionImplAvgPct,
       },
       stalled: {
         count: stalledCnt,
@@ -238,6 +465,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             ? (memberDisplayMap.get(s.asign_mber_id) ?? null)
             : null,
         })),
+        screenDelayedCount,
+        functionDelayedCount,
       },
       recentChanges: recentChanges.map((c) => ({
         chgId:        c.chg_id,
@@ -247,10 +476,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         chgRsnCn:     c.chg_rsn_cn ?? null,
         chgMberEmail: c.chg_mber_id ? (memberDisplayMap.get(c.chg_mber_id) ?? null) : null,
         chgDt:        c.chg_dt.toISOString(),
+        refName:      entityNameMap.get(`${c.ref_tbl_nm}:${c.ref_id}`) ?? null,
       })),
       teamActivity: {
         activeMemberCount: namedActivity.length,
         topContributors,
+        topLoadMember: topLoadMemberId
+          ? {
+              displayName: memberDisplayMap.get(topLoadMemberId) ?? topLoadMemberId,
+              activeLoad:  topLoadValue,
+            }
+          : null,
       },
       aiUsage: {
         monthCount,
@@ -258,6 +494,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         inProgressCount,
         failedCount,
       },
+      unassignedTotal,
     };
 
     return apiSuccess(response);

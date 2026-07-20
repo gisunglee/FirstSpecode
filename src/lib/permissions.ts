@@ -143,6 +143,13 @@ export const PERMISSIONS = {
   // ── 공통코드 / 기준 정보 ─────────────────────────────────────────
   "code.read":          { roles: ["OWNER", "ADMIN", "MEMBER", "VIEWER"] },
   "code.write":         { roles: ["OWNER", "ADMIN"] },
+
+  // ── 업무일지 / 주간보고 ──────────────────────────────────────────
+  // 업무일지(work-logs) 본인 작성/조회는 content.create·content.read 로 충분
+  // (역할 매트릭스가 동일) — 별도 권한 없이 재사용.
+  // 주간보고 AI 초안 생성·조회·편집은 PM 전용 화면 — requirement.update 와
+  // 동일 관례(OWNER/ADMIN 역할 또는 PM/PL 직무)로 별도 권한 분리.
+  "weeklyReport.manage": { roles: ["OWNER", "ADMIN"], jobs: ["PM", "PL"] },
 } as const satisfies Record<string, PermissionRule>;
 
 export type Permission = keyof typeof PERMISSIONS;

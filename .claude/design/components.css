@@ -553,6 +553,31 @@ body {
 
 
 /* ================================================================
+   DOC TABLE — 인쇄물/보고서 느낌의 정형 문서 표 (업무 리포트 전용)
+   .sp-table(줄무늬 데이터 그리드)과 달리 모든 셀에 테두리가 있고 각져 있다.
+================================================================ */
+.sp-doc-table-wrap {
+  border: 2px solid var(--color-border-strong); background: var(--color-bg-card);
+}
+.sp-doc-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); table-layout: fixed; }
+.sp-doc-table td, .sp-doc-table th {
+  border: 1px solid var(--color-border); padding: 8px 10px; vertical-align: top;
+  color: var(--color-text-primary); text-align: left;
+}
+.sp-doc-table .sp-doc-label {
+  background: var(--color-bg-label); font-weight: 600; text-align: center;
+  color: var(--color-text-secondary); white-space: nowrap;
+}
+/* DocEditableCell — 평소엔 일반 셀처럼 보이다가 hover 시에만 "클릭하면 써진다"는 걸 암시 */
+.sp-doc-cell-editable { cursor: text; transition: background var(--transition-fast); }
+.sp-doc-cell-editable:hover { background: var(--color-bg-table-hover); }
+.sp-doc-cell-editable textarea {
+  width: 100%; border: none; background: transparent; outline: none; resize: none;
+  font: inherit; color: inherit; padding: 0; line-height: 1.5;
+}
+
+
+/* ================================================================
    TABS
 ================================================================ */
 .sp-tab-bar {

@@ -6,6 +6,8 @@
  * 역할:
  *   - 마감일이 지났는데 진행률 < 100 인 단위업무
  *   - Top 5 미리보기 + 전체 건수
+ *   - 상단에 화면(설계)/기능(구현) 지연 카운트도 함께 표기 — 단위업무만 보면 놓치는
+ *     설계·구현 단계 지연을 놓치지 않도록. 목록은 그대로 단위업무만(전체 상세는 PM 진단에서).
  *   - 각 행 클릭 → 단위업무 상세로 이동
  */
 
@@ -25,6 +27,8 @@ type Props = {
   data: {
     count: number;
     items: StalledItem[];
+    screenDelayedCount:   number;
+    functionDelayedCount: number;
   } | undefined;
   isLoading: boolean;
   error:     Error | null;
@@ -49,8 +53,8 @@ export default function StalledCard({ data, isLoading, error, projectId }: Props
           </span>
         ) : null
       }
-      linkHref={`/projects/${projectId}/unit-works`}
-      linkLabel="모든 정체 항목 보기"
+      linkHref="/pm?focus=delay"
+      linkLabel="PM 진단에서 설계·구현 지연 보기"
       isLoading={isLoading}
       error={error}
       isEmpty={isEmpty}
@@ -58,6 +62,16 @@ export default function StalledCard({ data, isLoading, error, projectId }: Props
     >
       {data && data.count > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {/* 엔티티별 지연 카운트 — 단위업무 외에도 지연이 있으면 바로 눈에 띄도록 */}
+          <div
+            style={{
+              fontSize: "var(--text-xs)",
+              color: "var(--color-text-tertiary)",
+              paddingBottom: 4,
+            }}
+          >
+            단위업무 {data.count} · 화면 {data.screenDelayedCount} · 기능 {data.functionDelayedCount}
+          </div>
           {data.items.map((it) => (
             <Link
               key={it.unitWorkId}

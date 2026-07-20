@@ -27,6 +27,10 @@ export type ScreenListItem = {
   requirementName:  string;
   areaCount:        number;
   sortOrder:        number;
+  // 설계 일정 — WBS 간트에서 사용 (구현 일정인 impl_bgng_de 와는 별개 축)
+  startDate:        string | null;
+  endDate:          string | null;
+  designEffort:     string | null;
   avgDesignRt:      number;
   avgImplRt:        number;
   avgTestRt:        number;
@@ -160,6 +164,9 @@ export async function fetchProjectScreens(opts: {
       requirementName:  s.unitWork?.requirement ? s.unitWork.requirement.req_nm : "미분류",
       areaCount:        s._count.areas,
       sortOrder:        s.sort_ordr,
+      startDate:        s.design_bgng_de ?? null,
+      endDate:          s.design_end_de ?? null,
+      designEffort:     s.design_efrt_val ?? null,
       avgDesignRt:      prog?.designRt ?? 0,
       avgImplRt:        prog?.implRt ?? 0,
       avgTestRt:        prog?.testRt ?? 0,

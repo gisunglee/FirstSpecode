@@ -59,10 +59,12 @@ export type MenuIconKey =
   | "i_designTemplate"
   | "i_review" | "i_memo" | "i_docs" | "i_library"
   | "i_graph" | "i_changeLog" | "i_diffTest" | "i_cleanup"
-  // 신규 대시보드 메뉴 (활동/포커스/캘린더/PM)
-  | "i_activity" | "i_focus" | "i_calendar" | "i_pm"
+  // 신규 대시보드 메뉴 (활동/포커스/캘린더/PM/내 업무/My Task)
+  | "i_activity" | "i_focus" | "i_calendar" | "i_pm" | "i_mywork" | "i_myTask"
   // 테스트 항목 — 단위(단일 박스)·통합(연결된 박스들)
-  | "i_testSpecUnit" | "i_testSpecIntegration";
+  | "i_testSpecUnit" | "i_testSpecIntegration"
+  // WBS — 간트 막대
+  | "g_wbs" | "i_wbs";
 
 const ICONS: Record<MenuIconKey, ReactNode> = {
   // ── 그룹 아이콘 (레일) ──────────────────────────────────────────────────────
@@ -463,6 +465,26 @@ const ICONS: Record<MenuIconKey, ReactNode> = {
       <path d="M20 17v-4" />
     </>
   ),
+  // 내 업무 — 사람 + 체크마크 ("PM 진단"의 개인용 버전이라 i_pm의 사람 실루엣을 재사용하고
+  // 막대그래프 대신 체크마크로 차별화 — "내가 할 일을 처리한다"는 의미)
+  i_mywork: (
+    <>
+      <circle cx="9" cy="6" r="3" />
+      <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+      <path d="M16 12l2 2 4-4" />
+    </>
+  ),
+  // My Task — 체크리스트(항목별 완료 표시)
+  i_myTask: (
+    <>
+      <path d="M9 6h11" />
+      <path d="M9 12h11" />
+      <path d="M9 18h11" />
+      <path d="M3.5 6l1.5 1.5L7 5" />
+      <path d="M3.5 12l1.5 1.5L7 11" />
+      <path d="M3.5 18l1.5 1.5L7 17" />
+    </>
+  ),
   // 단위 테스트 명세서 — 플라스크 1개(실험). "하나의 단위를 검증" 의미.
   i_testSpecUnit: (
     <>
@@ -480,6 +502,21 @@ const ICONS: Record<MenuIconKey, ReactNode> = {
       <path d="M14 2h7" />
       <path d="M9 16H4" />
       <path d="M20 16h-5" />
+    </>
+  ),
+  // WBS — 간트 막대(길이가 다른 가로 막대 3개). 그룹/항목 동일 도형 재사용.
+  g_wbs: (
+    <>
+      <rect x="3" y="4" width="12" height="4" rx="1" />
+      <rect x="3" y="10" width="18" height="4" rx="1" />
+      <rect x="3" y="16" width="8" height="4" rx="1" />
+    </>
+  ),
+  i_wbs: (
+    <>
+      <rect x="3" y="4" width="12" height="4" rx="1" />
+      <rect x="3" y="10" width="18" height="4" rx="1" />
+      <rect x="3" y="16" width="8" height="4" rx="1" />
     </>
   ),
 };

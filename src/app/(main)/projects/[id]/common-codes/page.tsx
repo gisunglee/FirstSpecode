@@ -23,6 +23,7 @@ type CodeGroup = {
   grpCodeDc: string;
   useYn: string;
   codeCount: number;
+  mappingCount: number; // DB 테이블 설계에서 이 그룹을 참조(ref_grp_code)하는 컬럼 수
 };
 
 type Code = {
@@ -62,6 +63,7 @@ function CommonCodesPageInner() {
   const [showAllCodes, setShowAllCodes] = useState(false); // 모든 그룹의 코드 조회 모드
   const [globalUnique, setGlobalUnique] = useState(false); // 전체 공통코드 유니크 옵션 (저장 시 검증)
   const [uniqueHelpOpen, setUniqueHelpOpen] = useState(false); // "공통코드 유니크 사용" 도움말 팝업
+  const [mappingHelpOpen, setMappingHelpOpen] = useState(false); // "매핑" 컬럼 도움말 팝업
 
   // 그룹 추가 모드
   const [addingGroup, setAddingGroup] = useState(false);
@@ -492,6 +494,22 @@ function CommonCodesPageInner() {
             <div style={{ ...groupColHeaderStyle }}>
               <div>그룹 코드</div>
               <div>그룹명</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
+                매핑
+                <button
+                  onClick={(e) => { e.stopPropagation(); setMappingHelpOpen(true); }}
+                  title="도움말"
+                  style={{
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    width: 14, height: 14, borderRadius: "50%",
+                    border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
+                    color: "var(--color-text-secondary)", fontSize: 9, fontWeight: 700,
+                    cursor: "pointer", lineHeight: 1, padding: 0, flexShrink: 0,
+                  }}
+                >
+                  ?
+                </button>
+              </div>
               <div style={{ textAlign: "center" }}>코드수</div>
               <div style={{ textAlign: "center" }}>사용</div>
               <div />
@@ -522,7 +540,7 @@ function CommonCodesPageInner() {
                     }}
                     style={{ ...inlineInputStyle, fontSize: 12 }}
                   />
-                  <button onClick={commitAddGroup} style={{ ...miniSaveBtnStyle, gridColumn: "span 2", padding: "4px 8px", fontSize: 11 }}>저장</button>
+                  <button onClick={commitAddGroup} style={{ ...miniSaveBtnStyle, gridColumn: "span 3", padding: "4px 8px", fontSize: 11 }}>저장</button>
                   <button onClick={() => setAddingGroup(false)} style={deleteBtnStyle} title="취소">×</button>
                 </div>
               )}
@@ -593,6 +611,26 @@ function CommonCodesPageInner() {
                         {g.grpCodeNm}
                       </div>
                     )}
+
+                    {/* 매핑 수 뱃지 — DB 테이블 설계에서 이 그룹을 참조하는 컬럼 수 (실사용 여부 확인용) */}
+                    <div style={{ display: "flex", justifyContent: "center" }}>
+                      <span
+                        className="sp-badge"
+                        title={
+                          g.mappingCount > 0
+                            ? `DB 컬럼 ${g.mappingCount}곳에서 이 그룹을 참조하고 있습니다.`
+                            : "이 그룹을 참조하는 DB 컬럼이 아직 없습니다."
+                        }
+                        style={{
+                          fontSize: 11, fontWeight: 600, minWidth: 22, textAlign: "center",
+                          color: g.mappingCount > 0 ? "var(--color-success, #2e7d32)" : "#bbb",
+                          background: g.mappingCount > 0 ? "rgba(46,125,50,0.08)" : "var(--color-bg-muted)",
+                          borderRadius: 10, padding: "2px 8px",
+                        }}
+                      >
+                        {g.mappingCount}
+                      </span>
+                    </div>
 
                     {/* 코드 수 뱃지 */}
                     <div style={{ display: "flex", justifyContent: "center" }}>
@@ -1123,6 +1161,58 @@ function CommonCodesPageInner() {
         </div>
       )}
 
+      {/* ── "매핑" 컬럼 도움말 팝업 ── */}
+      {mappingHelpOpen && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }}
+          onClick={() => setMappingHelpOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "min(560px, 90vw)", background: "var(--color-bg-card)", borderRadius: 12, boxShadow: "0 12px 40px rgba(0,0,0,0.2)", overflow: "hidden" }}
+          >
+            {/* 헤더 */}
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "14px 20px", borderBottom: "1px solid var(--color-border)", background: "var(--color-bg-muted)",
+            }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>매핑 수란?</span>
+              <button
+                onClick={() => setMappingHelpOpen(false)}
+                style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "var(--color-text-secondary)", padding: "0 4px", lineHeight: 1 }}
+              >×</button>
+            </div>
+
+            {/* 내용 */}
+            <div style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: 12, fontSize: 13, lineHeight: 1.7, color: "var(--color-text-primary)" }}>
+              <div style={{ color: "var(--color-text-secondary)" }}>
+                이 코드 그룹이 <b>실제로 DB 컬럼에 연결되어 쓰이고 있는지</b> 한눈에 보여주는 숫자예요.
+                단순히 코드만 등록해두고 아무 데도 안 쓰이는 그룹인지, 진짜 화면·기능에서 참조하는 중인 그룹인지 여기서 바로 구분할 수 있습니다.
+              </div>
+
+              <div style={{ padding: "10px 14px", borderRadius: 8, background: "var(--color-bg-muted)", border: "1px solid var(--color-border)" }}>
+                <div style={{ fontWeight: 700, marginBottom: 2 }}>매핑은 어디서 하나요?</div>
+                <div style={{ color: "var(--color-text-secondary)" }}>
+                  <b>DB 테이블 설계</b> 화면에서 합니다. 테이블을 열고 컬럼 목록의 "코드" 항목에서 이 공통코드 그룹을 선택해 지정하면,
+                  그 컬럼이 이 그룹을 참조하는 것으로 연결되고 여기 숫자에 자동으로 반영됩니다.
+                </div>
+              </div>
+
+              <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(46,125,50,0.08)", border: "1px solid rgba(46,125,50,0.25)" }}>
+                <div style={{ fontWeight: 700, marginBottom: 2, color: "var(--color-success, #2e7d32)" }}>숫자 읽는 법</div>
+                <div style={{ color: "var(--color-text-secondary)" }}>
+                  0보다 크면 그만큼의 DB 컬럼이 이 그룹을 참조 중이라는 뜻이고, 0이면 아직 어떤 컬럼에도 연결되지 않은 그룹이라는 뜻입니다.
+                </div>
+              </div>
+
+              <div style={{ fontSize: 12, color: "var(--color-text-secondary)", fontStyle: "italic" }}>
+                ※ 이 화면(공통코드 관리)에서는 매핑을 걸 수 없고, 조회만 됩니다.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -1149,8 +1239,8 @@ const addBtnStyle: React.CSSProperties = {
   alignSelf: "center", height: "fit-content",
 };
 
-// 그룹 컬럼 그리드: 그룹코드 | 그룹명 | 코드수 | 사용 | 삭제
-const GROUP_GRID = "1.2fr 1.5fr 48px 40px 28px";
+// 그룹 컬럼 그리드: 그룹코드 | 그룹명 | 매핑 | 코드수 | 사용 | 삭제
+const GROUP_GRID = "1.1fr 1.3fr 46px 46px 40px 28px";
 
 const groupColHeaderStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GROUP_GRID, gap: 8,

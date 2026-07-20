@@ -1,9 +1,9 @@
 /**
  * GET /api/projects/[id]/pm-summary
- *   — PM 대시보드 통합 요약 (3 위젯 데이터 한 번에)
+ *   — PM 진단 통합 요약 (위젯 데이터 한 번에)
  *
  * 역할:
- *   - 팀 부하 매트릭스 / 위험 워치리스트 / 우선순위 히트맵 데이터를 한 라운드트립으로
+ *   - 팀 부하 매트릭스 / 설계 지연 / 구현 지연 데이터를 한 라운드트립으로
  *   - 모든 단위업무를 한 번 로드해 메모리 집계 — 프로젝트 단위업무는 통상 수백 이내라 안전
  *
  * 권한:
@@ -11,27 +11,19 @@
  *
  * 격리:
  *   - dashboard summary / activity / focus / calendar 와 별도 라우트
- *   - 위험 점수 산정은 lib/pm/riskScore.ts 순수 함수에 위임
  */
 
 import { NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
-import { buildRiskItem, rankRiskItems } from "@/lib/pm/riskScore";
-import type {
-  PmSummaryResponse,
-  PriorityLevel,
-  PriorityMatrix,
-  PriorityStage,
-  TeamLoadRow,
-} from "@/types/pm";
+import { buildDesignDelayRows, buildImplDelayRows, buildAnalysisDelayRows } from "@/lib/pm/delayStatus";
+import { buildMissingStat } from "@/lib/pm/missingStatus";
+import { parseEffortHours } from "@/lib/effort";
+import type { PmSummaryResponse, TeamLoadRow } from "@/types/pm";
 
 type RouteParams = { params: Promise<{ id: string }> };
-
-// 위험 워치리스트 노출 상한 — PM 이 한눈에 처리 가능한 수준.
-// 더 보고 싶으면 단위업무 페이지에서 정렬·필터로.
-const RISK_LIMIT = 10;
 
 // 매우 큰 프로젝트 안전망 — 메모리 폭주 방지. 운영에서 도달하면 페이지네이션 도입 검토.
 const HARD_LIMIT = 2000;
@@ -42,36 +34,103 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const gate = await requirePermission(request, projectId, "content.read");
   if (gate instanceof Response) return gate;
 
+  // 지연 기준일(asOf) — "오늘"이 아니라 특정 날짜 기준으로 지연/마감 상태를 보고 싶을 때
+  // (지연 현황 위젯의 "기준일" 필터). 형식이 아니면 무시하고 실제 오늘로 폴백.
+  const asOfParam = new URL(request.url).searchParams.get("asOf");
+  const isValidDateStr = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+
   try {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = isValidDateStr(asOfParam) ? asOfParam : new Date().toISOString().slice(0, 10);
     const todayMs  = new Date(todayStr + "T00:00:00Z").getTime();
     const horizonStr = (() => {
       const d = new Date(todayMs);
       d.setUTCDate(d.getUTCDate() + 7);
       return d.toISOString().slice(0, 10);
     })();
-    const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
-    // 단위업무 + 요구사항 join + 담당자ID 한 번에. 진척률 등 무거운 필드는 제외.
+    // 단위업무 + 담당자ID 한 번에. 진척률 등 무거운 필드는 제외.
     const unitWorks = await prisma.tbDsUnitWork.findMany({
       where:  { prjct_id: projectId },
       select: {
         unit_work_id:         true,
         unit_work_display_id: true,
         unit_work_nm:         true,
+        bgng_de:              true,
         end_de:               true,
         progrs_rt:            true,
         asign_mber_id:        true,
-        requirement: {
-          select: { priort_code: true },
-        },
       },
       take: HARD_LIMIT,
     });
 
-    // 담당자 이름 일괄 조회 (N+1 방지)
+    // ── 분석 지연 현황용 원본 조회 — 요구사항 (설계/구현과 마찬가지로 무거운 필드 제외) ──
+    const requirements = await prisma.tbRqRequirement.findMany({
+      where:  { prjct_id: projectId },
+      select: { req_id: true, asign_mber_id: true, anls_bgng_de: true, anls_end_de: true, progrs_rt: true },
+      take:   HARD_LIMIT,
+    });
+
+    // ── D. 지연 현황용 원본 조회 — 기능/영역/화면 (단위업무는 위에서 이미 조회) ──
+    // 진척률 등 무거운 필드는 제외. 담당자 집계에 필요한 최소 컬럼만.
+    const functions = await prisma.tbDsFunction.findMany({
+      where:  { prjct_id: projectId },
+      select: { func_id: true, area_id: true, asign_mber_id: true, efrt_val: true, impl_bgng_de: true, impl_end_de: true },
+      take:   HARD_LIMIT,
+    });
+    // 영역(TbDsArea)에는 담당자 컬럼이 없음 — scrn_id 로 화면 담당자를 역참조해서 사용 (아래 buildDesignDelayRows/buildImplDelayRows)
+    const areas = await prisma.tbDsArea.findMany({
+      where:  { prjct_id: projectId },
+      select: { area_id: true, scrn_id: true },
+      take:   HARD_LIMIT,
+    });
+    const screens = await prisma.tbDsScreen.findMany({
+      where:  { prjct_id: projectId },
+      select: {
+        scrn_id: true, unit_work_id: true, asign_mber_id: true,
+        design_bgng_de: true, design_end_de: true, design_efrt_val: true,
+      },
+      take:   HARD_LIMIT,
+    });
+    // 기능 진척률 — TbCmProgress 다형 참조(ref_tbl_nm='tb_ds_function'), 없으면 0
+    const funcIds = functions.map((f) => f.func_id);
+    const funcProgress = funcIds.length > 0
+      ? await prisma.tbCmProgress.findMany({
+          where:  { ref_tbl_nm: "tb_ds_function", ref_id: { in: funcIds } },
+          select: { ref_id: true, impl_rt: true },
+        })
+      : [];
+    const funcImplRtMap = new Map(funcProgress.map((p) => [p.ref_id, p.impl_rt]));
+
+    // 화면별 설계 진척률 — 그 화면 하위 모든 기능(화면→영역→기능)의 design_rt 단순평균.
+    // screens/[screenId]/route.ts GET 핸들러가 영역 단위로 이미 쓰는 AVG(design_rt) 패턴을
+    // 화면 단위로 그대로 확장 — 진척률은 기능에만 있다는 원칙을 지키면서 새 컬럼을 안 만듦.
+    const screenIds = screens.map((s) => s.scrn_id);
+    const screenDesignRtRows = screenIds.length > 0
+      ? await prisma.$queryRaw<{ scrn_id: string; avg_design_rt: number }[]>`
+          SELECT a.scrn_id,
+                 COALESCE(AVG(p.design_rt), 0) AS avg_design_rt
+            FROM tb_ds_function f
+            JOIN tb_ds_area a ON a.area_id = f.area_id
+            LEFT JOIN tb_cm_progress p
+              ON p.ref_tbl_nm = 'tb_ds_function' AND p.ref_id = f.func_id
+           WHERE a.scrn_id IN (${Prisma.join(screenIds)})
+           GROUP BY a.scrn_id
+        `
+      : [];
+    const screenAvgDesignRtMap = new Map(
+      screenDesignRtRows.map((r) => [r.scrn_id, Math.round(Number(r.avg_design_rt))])
+    );
+
+    // 담당자 이름 일괄 조회 (N+1 방지) — 단위업무·기능·화면·요구사항 담당자 (영역은 담당자 컬럼이 없어 제외)
     const assigneeIds = [
-      ...new Set(unitWorks.map((u) => u.asign_mber_id).filter((v): v is string => !!v)),
+      ...new Set(
+        [
+          ...unitWorks.map((u) => u.asign_mber_id),
+          ...functions.map((f) => f.asign_mber_id),
+          ...screens.map((s) => s.asign_mber_id),
+          ...requirements.map((r) => r.asign_mber_id),
+        ].filter((v): v is string => !!v)
+      ),
     ];
     const members = assigneeIds.length > 0
       ? await prisma.tbCmMember.findMany({
@@ -99,39 +158,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       });
     }
 
-    // ── B. 위험 항목 후보 (모든 단위업무 점수화) ──────────────────────────
-    const riskCandidates = [];
-
-    // ── C. 우선순위 매트릭스 (HIGH/MEDIUM/LOW × notStarted/inProgress/completed) ──
-    const cells: PriorityMatrix["cells"] = {
-      HIGH:   { notStarted: 0, inProgress: 0, completed: 0 },
-      MEDIUM: { notStarted: 0, inProgress: 0, completed: 0 },
-      LOW:    { notStarted: 0, inProgress: 0, completed: 0 },
-    };
-
-    // 한 번의 순회로 A·B·C 모두 누적
+    // 한 번의 순회로 팀 부하(A)만 누적
     for (const uw of unitWorks) {
       const progress = uw.progrs_rt;
       const endDate  = uw.end_de ?? null;
-      const dDay: number | null = endDate
-        ? Math.round((new Date(endDate + "T00:00:00Z").getTime() - todayMs) / MS_PER_DAY)
-        : null;
-
-      const reqPriorityRaw = uw.requirement.priort_code;
-      // 허용 외 값 방어 — DB 에 잘못된 코드가 있어도 UI 깨지지 않도록 MEDIUM 폴백.
-      const reqPriority: PriorityLevel =
-        reqPriorityRaw === "HIGH"   ? "HIGH"   :
-        reqPriorityRaw === "LOW"    ? "LOW"    :
-        "MEDIUM";
 
       // 진행 단계 분류
-      const stage: PriorityStage =
+      const stage: "notStarted" | "inProgress" | "completed" =
         progress >= 100 ? "completed" :
         progress > 0    ? "inProgress" :
                           "notStarted";
-
-      // (C) 매트릭스 누적
-      cells[reqPriority][stage]++;
 
       // (A) 팀 부하 누적 — 담당자가 있을 때만
       if (uw.asign_mber_id) {
@@ -166,20 +202,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         }
         // activeLoad 는 마지막에 일괄 계산 (위 분기에서 직접 더하면 중복 가능)
       }
-
-      // (B) 위험 점수 — 모든 단위업무 평가, 점수 0 이하는 정렬 단계에서 제외
-      riskCandidates.push(
-        buildRiskItem({
-          unitWorkId:   uw.unit_work_id,
-          displayId:    uw.unit_work_display_id,
-          name:         uw.unit_work_nm,
-          endDate,
-          dDay,
-          progress,
-          assigneeName: uw.asign_mber_id ? (nameMap.get(uw.asign_mber_id) ?? null) : null,
-          reqPriority,
-        })
-      );
     }
 
     // activeLoad 일괄 계산 — inProgress + dueSoon + overdue. 단, 셋이 겹칠 수 있는데
@@ -197,27 +219,111 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         return b.total - a.total;
       });
 
-    // 행 합계
-    const rowTotals: PriorityMatrix["rowTotals"] = {
-      HIGH:   cells.HIGH.notStarted   + cells.HIGH.inProgress   + cells.HIGH.completed,
-      MEDIUM: cells.MEDIUM.notStarted + cells.MEDIUM.inProgress + cells.MEDIUM.completed,
-      LOW:    cells.LOW.notStarted    + cells.LOW.inProgress    + cells.LOW.completed,
+    // ── D. 설계 지연 — 화면 기준 (lib/pm/delayStatus.ts 순수 함수에 위임) ──
+    const designDelay = buildDesignDelayRows({
+      screens: screens.map((s) => ({
+        scrnId:      s.scrn_id,
+        asignMberId: s.asign_mber_id,
+        designEndDe: s.design_end_de,
+        designEffortHours: parseEffortHours(s.design_efrt_val),
+        avgDesignRt: screenAvgDesignRtMap.get(s.scrn_id) ?? 0,
+      })),
+      areas: areas.map((a) => ({
+        areaId: a.area_id,
+        scrnId: a.scrn_id,
+      })),
+      todayStr,
+      nameMap,
+    });
+
+    // ── E. 구현 지연 — 기능 기준 지연 판정 + 4계층 롤업 (lib/pm/delayStatus.ts 순수 함수에 위임) ──
+    const implDelay = buildImplDelayRows({
+      functions: functions.map((f) => ({
+        funcId:      f.func_id,
+        areaId:      f.area_id,
+        asignMberId: f.asign_mber_id,
+        effortHours: parseEffortHours(f.efrt_val),
+        implEndDe:   f.impl_end_de,
+        implRt:      funcImplRtMap.get(f.func_id) ?? 0,
+      })),
+      areas: areas.map((a) => ({
+        areaId: a.area_id,
+        scrnId: a.scrn_id,
+      })),
+      screens: screens.map((s) => ({
+        scrnId:      s.scrn_id,
+        unitWorkId:  s.unit_work_id,
+        asignMberId: s.asign_mber_id,
+      })),
+      unitWorks: unitWorks.map((u) => ({
+        unitWorkId:  u.unit_work_id,
+        asignMberId: u.asign_mber_id,
+      })),
+      todayStr,
+      nameMap,
+    });
+
+    // ── F. 분석 지연 — 요구사항 기준 (lib/pm/delayStatus.ts 순수 함수에 위임) ──
+    const analysisDelay = buildAnalysisDelayRows({
+      requirements: requirements.map((r) => ({
+        reqId:         r.req_id,
+        asignMberId:   r.asign_mber_id,
+        analysisEndDe: r.anls_end_de,
+        progress:      r.progrs_rt,
+      })),
+      todayStr,
+      nameMap,
+    });
+
+    // 프로젝트 전체 분석 현황 요약 — 담당자 유무와 무관하게 전체 요구사항 기준
+    const analysisSummary = {
+      totalCount:   requirements.length,
+      avgProgress:  requirements.length > 0
+        ? Math.round(requirements.reduce((sum, r) => sum + r.progrs_rt, 0) / requirements.length)
+        : 0,
+      delayedCount: requirements.filter(
+        (r) => !!r.anls_end_de && r.anls_end_de < todayStr && r.progrs_rt < 100
+      ).length,
     };
+
+    // ── G. 미지정 현황 — 담당자/일정/공수 입력 누락 (lib/pm/missingStatus.ts 순수 함수에 위임) ──
+    // 이미 위에서 조회한 4개 배열을 그대로 재사용 — 추가 쿼리 없음.
+    const missingSummary = [
+      buildMissingStat(
+        "REQUIREMENT", "요구사항",
+        requirements.map((r) => ({ asignMberId: r.asign_mber_id, startDate: r.anls_bgng_de, endDate: r.anls_end_de })),
+        false
+      ),
+      buildMissingStat(
+        "UNIT_WORK", "단위업무",
+        unitWorks.map((u) => ({ asignMberId: u.asign_mber_id, startDate: u.bgng_de, endDate: u.end_de })),
+        false
+      ),
+      buildMissingStat(
+        "SCREEN", "화면",
+        screens.map((s) => ({ asignMberId: s.asign_mber_id, startDate: s.design_bgng_de, endDate: s.design_end_de, effortRaw: s.design_efrt_val })),
+        true
+      ),
+      buildMissingStat(
+        "FUNCTION", "기능",
+        functions.map((f) => ({ asignMberId: f.asign_mber_id, startDate: f.impl_bgng_de, endDate: f.impl_end_de, effortRaw: f.efrt_val })),
+        true
+      ),
+    ];
 
     const response: PmSummaryResponse = {
       teamLoad,
-      riskItems:      rankRiskItems(riskCandidates, RISK_LIMIT),
-      priorityMatrix: {
-        cells,
-        rowTotals,
-        grandTotal: rowTotals.HIGH + rowTotals.MEDIUM + rowTotals.LOW,
-      },
+      designDelay,
+      implDelay,
+      analysisDelay,
+      analysisSummary,
+      missingSummary,
       generatedAt: new Date().toISOString(),
     };
 
     return apiSuccess(response);
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/pm-summary] DB 오류:`, err);
-    return apiError("DB_ERROR", "PM 대시보드 데이터 조회에 실패했습니다.", 500);
+    return apiError("DB_ERROR", "PM 진단 데이터 조회에 실패했습니다.", 500);
   }
 }

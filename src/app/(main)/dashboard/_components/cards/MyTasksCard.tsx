@@ -4,7 +4,9 @@
  * MyTasksCard — 개발자뷰: 내 과업
  *
  * 역할:
- *   - 내가 담당한 과업 총 건수 + 카테고리별 분포 + 미리보기 3건
+ *   - 내가 담당한 과업 총 건수 + 카테고리별 분포 + 미리보기 5건(행마다 카테고리·최근 수정일)
+ *   - "과업"은 화면/기능이 아니라 RFP 기반 기획 단계 업무 단위(요구사항의 상위 개념) —
+ *     헷갈리기 쉬워 "?" 도움말로 명시.
  *   - 과업 테이블에는 진행 상태(status) 컬럼이 없으므로
  *     "진행중/완료" 분류 없이 담당 전체로 노출.
  *   - 클릭 → 과업 목록(내 담당 필터)으로 이동
@@ -12,12 +14,15 @@
 
 import Link from "next/link";
 import DashboardCard from "../DashboardCard";
+import HelpButton from "@/components/common/HelpButton";
+import { formatRelativeKo } from "@/lib/utils";
 
 type TaskItem = {
   taskId:    string;
   displayId: string;
   name:      string;
   category:  string;
+  mdfcnDt:   string | null;
 };
 
 type Props = {
@@ -56,6 +61,15 @@ export default function MyTasksCard({ data, isLoading, error, projectId }: Props
           </span>
         ) : null
       }
+      help={
+        <HelpButton title="내 과업 기준">
+          <p><b>뭐다</b> — 내가 담당자로 지정된 "과업"입니다. RFP 기반 기획 단계에서 정의한 업무 단위로,
+            <b> 화면·기능이 아니라 요구사항의 상위 개념</b>입니다.</p>
+          <p><b>기준</b> — 담당자로 나만 걸러서 전체를 그대로 표시합니다.</p>
+          <p><b>진척률</b> — 없습니다. 과업 자체엔 진행 상태 컬럼이 없어 완료/진행 구분이 안 되고,
+            진척률은 이 과업에서 세분화된 요구사항 단계부터 생깁니다.</p>
+        </HelpButton>
+      }
       // assignedTo=me 필터 URL — 과업 목록 페이지가 querystring 받으면 자동 적용
       linkHref={`/projects/${projectId}/tasks?assignedTo=me`}
       linkLabel="내 담당 과업 모두 보기"
@@ -80,7 +94,7 @@ export default function MyTasksCard({ data, isLoading, error, projectId }: Props
             ))}
           </div>
 
-          {/* 미리보기 — 3건 */}
+          {/* 미리보기 — 5건, 행마다 카테고리 배지 + 최근 수정일 */}
           <div
             style={{
               display: "flex",
@@ -106,6 +120,13 @@ export default function MyTasksCard({ data, isLoading, error, projectId }: Props
                 }}
               >
                 <span
+                  className="sp-badge sp-badge-neutral"
+                  style={{ fontSize: "var(--text-xs)", flexShrink: 0 }}
+                  title={t.category}
+                >
+                  {CATEGORY_LABEL[t.category] ?? t.category}
+                </span>
+                <span
                   style={{
                     fontFamily: "var(--font-mono)",
                     fontSize: "var(--text-xs)",
@@ -125,6 +146,18 @@ export default function MyTasksCard({ data, isLoading, error, projectId }: Props
                 >
                   {t.name}
                 </span>
+                {t.mdfcnDt && (
+                  <span
+                    style={{
+                      fontSize: "var(--text-xs)",
+                      color: "var(--color-text-tertiary)",
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {formatRelativeKo(t.mdfcnDt)}
+                  </span>
+                )}
               </Link>
             ))}
           </div>

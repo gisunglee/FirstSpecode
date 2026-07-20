@@ -743,6 +743,31 @@ body {
 
 
 /* ================================================================
+   DOC TABLE — 인쇄물/보고서 느낌의 정형 문서 표 (업무 리포트 전용)
+   .sp-table(줄무늬 데이터 그리드)과 달리 모든 셀에 테두리가 있고 각져 있다.
+================================================================ */
+.sp-doc-table-wrap {
+  border: 2px solid var(--color-border-strong); background: var(--color-bg-card);
+}
+.sp-doc-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); table-layout: fixed; }
+.sp-doc-table td, .sp-doc-table th {
+  border: 1px solid var(--color-border); padding: 8px 10px; vertical-align: top;
+  color: var(--color-text-primary); text-align: left;
+}
+.sp-doc-table .sp-doc-label {
+  background: var(--color-bg-label); font-weight: 600; text-align: center;
+  color: var(--color-text-secondary); white-space: nowrap;
+}
+/* DocEditableCell — 평소엔 일반 셀처럼 보이다가 hover 시에만 "클릭하면 써진다"는 걸 암시 */
+.sp-doc-cell-editable { cursor: text; transition: background var(--transition-fast); }
+.sp-doc-cell-editable:hover { background: var(--color-bg-table-hover); }
+.sp-doc-cell-editable textarea {
+  width: 100%; border: none; background: transparent; outline: none; resize: none;
+  font: inherit; color: inherit; padding: 0; line-height: 1.5;
+}
+
+
+/* ================================================================
    TABS
 ================================================================ */
 .sp-tab-bar {
@@ -854,6 +879,17 @@ body {
 /* ================================================================
    MISC UTILITIES
 ================================================================ */
+
+/* 다른 화면에서 "?focus=X" 링크로 들어왔을 때 스크롤 도착 지점을 잠깐 강조하는 효과.
+   대시보드 → PM 진단 섹션 이동 등, 스크롤만으론 "어디에 도착했는지" 티가 안 나는 경우용.
+   box-shadow 링이 확 커졌다가 사라지는 방식 — 레이아웃에 영향 없이(공간 차지 안 함) 시선만 끈다. */
+.is-focus-flash { animation: sp-focus-pulse 1.6s ease-out; }
+@keyframes sp-focus-pulse {
+  0%   { box-shadow: 0 0 0 0 var(--color-brand-subtle); }
+  12%  { box-shadow: 0 0 0 6px var(--color-brand-subtle); }
+  100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); }
+}
+
 .sp-divider { height: 1px; background: var(--color-border-subtle); margin: var(--space-3) 0; }
 .sp-divider-strong { height: 1px; background: var(--color-border); }
 

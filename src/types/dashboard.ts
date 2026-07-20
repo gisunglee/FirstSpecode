@@ -18,6 +18,12 @@ export type ManageSummaryResponse = {
     completed: number;
     /** 평균 진행률 (0~100, 소수 1자리 반올림) */
     averagePct: number;
+    /** 요구사항 분석 평균 진행률(progrs_rt) — 단위업무만 보여주던 갭을 보완하는 보조 지표 */
+    requirementAvgPct: number;
+    /** 화면 설계 평균 진행률(design_rt) */
+    screenDesignAvgPct: number;
+    /** 기능 구현 평균 진행률(impl_rt) */
+    functionImplAvgPct: number;
   };
   stalled: {
     /** 마감일이 지났는데 미완료(progrs_rt < 100) 인 단위업무 총 건수 */
@@ -31,6 +37,10 @@ export type ManageSummaryResponse = {
       progress:         number;
       assignMemberName: string | null;
     }>;
+    /** 설계 지연 화면 건수 — 단위업무 외 엔티티의 지연도 놓치지 않도록 별도 카운트만 제공(목록 없음) */
+    screenDelayedCount: number;
+    /** 구현 지연 기능 건수 */
+    functionDelayedCount: number;
   };
   recentChanges: Array<{
     chgId:        string;
@@ -40,6 +50,9 @@ export type ManageSummaryResponse = {
     chgRsnCn:     string | null;
     chgMberEmail: string | null;
     chgDt:        string;
+    /** 변경된 엔티티의 현재 이름(단위업무/화면/영역/기능/요구사항/스토리) — 삭제됐거나
+     *  지원 안 하는 ref_tbl_nm 이면 null(그 경우 UI는 유형 라벨만 표시) */
+    refName:      string | null;
   }>;
   teamActivity: {
     /** 최근 7일간 한 번 이상 변경 활동을 한 멤버 수 */
@@ -50,6 +63,12 @@ export type ManageSummaryResponse = {
       displayName: string;
       count:       number;
     }>;
+    /** 활성 작업량(진행중+임박+지연) 1위 멤버 — "활동량"과 다른 "부하" 신호.
+     *  아무도 담당 단위업무가 없으면 null. */
+    topLoadMember: {
+      displayName: string;
+      activeLoad:  number;
+    } | null;
   };
   aiUsage: {
     /** 이번 달(달력 기준) 생성된 AI 태스크 총 건수 */
@@ -61,6 +80,8 @@ export type ManageSummaryResponse = {
     /** 실패/타임아웃 건수 — 운영자가 신경 써야 하는 시그널 */
     failedCount: number;
   };
+  /** 담당자·일정 미입력(요구사항/단위업무/화면/기능 합산) 총 건수 — 지연 판정조차 안 되는 사각지대 */
+  unassignedTotal: number;
 };
 
 // ── 개발자뷰 요약 응답 ──────────────────────────────────────────────────────
@@ -76,6 +97,8 @@ export type MeSummaryResponse = {
       displayId: string;
       name:      string;
       category:  string;
+      /** 최근 수정일 — 없으면(한 번도 수정 안 됨) null */
+      mdfcnDt:   string | null;
     }>;
   };
   myDeadlines: {
@@ -93,14 +116,22 @@ export type MeSummaryResponse = {
       /** 음수 = 지연(일), 0 = 오늘, 양수 = 남은 일수 */
       dDay:       number;
     }>;
+    /** 내가 담당한 화면 중 마감 임박/지연(설계) 건수 — 목록은 MY 보드에서, 여기선 카운트만 */
+    screenCount: number;
+    /** 내가 담당한 기능 중 마감 임박/지연(구현) 건수 */
+    functionCount: number;
   };
   myAiResults: {
-    /** 완료(DONE)·미적용 AI 태스크 총 건수 */
-    count: number;
+    /** 완료(DONE)·미적용 — 액션 필요 건수(배지 강조용). 목록(items)의 필터와는 별개. */
+    actionableCount: number;
+    /** 최근 5건 — 상태 무관, 요청일(req_dt) 내림차순 */
     items: Array<{
       aiTaskId:   string;
       taskTyCode: string;
       refTyCode:  string;
+      /** PENDING/IN_PROGRESS/DONE/APPLIED/REJECTED/FAILED/TIMEOUT */
+      sttusCode:  string;
+      reqDt:      string;
       complDt:    string | null;
     }>;
   };

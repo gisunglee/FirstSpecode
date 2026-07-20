@@ -144,6 +144,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       comment:          screen.coment_cn ?? "",
       urlPath:          screen.url_path ?? "",
       sortOrder:        screen.sort_ordr,
+      // 설계 일정/공수 — 구현(기능)과 분리된 축
+      designBgngDe:     screen.design_bgng_de  ?? "",
+      designEndDe:      screen.design_end_de   ?? "",
+      designEfrtVal:    screen.design_efrt_val ?? "",
       // 담당자 — mber_nm 우선, 없으면 email, 둘 다 없으면 null (퇴장 멤버 포함)
       assignMemberId:   screen.asign_mber_id ?? null,
       assignMemberName: assignee ? (assignee.mber_nm || assignee.email_addr || null) : null,
@@ -183,7 +187,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { unitWorkId, displayId, name, description, comment, type, sortOrder, categoryL, categoryM, categoryS, layoutData, saveHistory, assignMemberId } = body as {
+  const { unitWorkId, displayId, name, description, comment, type, sortOrder, categoryL, categoryM, categoryS, layoutData, saveHistory, assignMemberId, designBgngDe, designEndDe, designEfrtVal } = body as {
     unitWorkId?:     string;
     displayId?:      string;
     name?:           string;
@@ -197,6 +201,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     layoutData?:     string;
     saveHistory?:    boolean;
     assignMemberId?: string;
+    designBgngDe?:   string;
+    designEndDe?:    string;
+    designEfrtVal?:  string;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "화면명을 입력해 주세요.", 400);
@@ -260,6 +267,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           ctgry_m_nm:    categoryM !== undefined ? (categoryM?.trim() || null) : existing.ctgry_m_nm,
           ctgry_s_nm:    categoryS !== undefined ? (categoryS?.trim() || null) : existing.ctgry_s_nm,
           asign_mber_id: nextAssignee,
+          // 설계 일정/공수 — 구현(기능)과 분리된 축
+          design_bgng_de:  designBgngDe  !== undefined ? (designBgngDe?.trim()  || null) : existing.design_bgng_de,
+          design_end_de:   designEndDe   !== undefined ? (designEndDe?.trim()   || null) : existing.design_end_de,
+          design_efrt_val: designEfrtVal !== undefined ? (designEfrtVal?.trim() || null) : existing.design_efrt_val,
           mdfcn_dt:      new Date(),
         },
       }),

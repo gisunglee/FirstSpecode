@@ -38,6 +38,7 @@ import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
 import ProgressTracker from "@/components/ui/ProgressTracker";
 import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
 import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
+import { formatEffortDays } from "@/lib/effort";
 import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
@@ -70,6 +71,9 @@ type FuncDetail = {
 };
 
 type AreaOption = { areaId: string; displayId: string; name: string };
+
+// 담당자 콤보박스용 — 프로젝트 멤버 목록 (screens/[screenId]/page.tsx 와 동일 타입)
+type ProjectMember = { memberId: string; name: string | null; email: string };
 
 type ColMappingItem = {
   mappingId: string;
@@ -191,14 +195,17 @@ function FunctionDetailPageInner() {
     enabled: !isNew,
   });
 
-  // ── 본인 회원 ID + 편집 권한 계산 ─────────────────────────────────────────
+  // ── 본인 회원 ID + 담당자 콤보박스 목록 + 편집 권한 계산 ───────────────────
   const { data: memberData } = useQuery({
     queryKey: ["project-members", projectId],
     queryFn: () =>
-      authFetch<{ data: { myMemberId: string } }>(`/api/projects/${projectId}/members`).then((r) => r.data),
+      authFetch<{ data: { members: ProjectMember[]; myMemberId: string } }>(
+        `/api/projects/${projectId}/members`
+      ).then((r) => r.data),
     staleTime: 60 * 1000,
   });
   const myMemberId = memberData?.myMemberId ?? "";
+  const members    = memberData?.members ?? [];
 
   const { has: hasPerm } = usePermissions(projectId);
   const matrixUpdateOK = hasPerm("requirement.update");
@@ -837,8 +844,10 @@ function FunctionDetailPageInner() {
                 </div>
               </div>
 
-              {/* 행3: 우선순위 | 복잡도 | 예상 공수 */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 16px" }}>
+              {/* 행3: 우선순위 | 복잡도 | 담당자 | 정렬 */}
+              {/* 담당자가 없으면 PM 대시보드 "지연 현황"의 구현 지연 집계에서 이 기능이
+                  전부 "미할당"으로 잡혀 개인별 지연율에 반영되지 않는다 — 반드시 지정 필요 */}
+              <div style={{ display: "grid", gridTemplateColumns: "0.9fr 0.9fr 1.3fr 0.6fr", gap: "0 16px" }}>
                 <div style={formGroupStyle}>
                   <label style={labelStyle}>우선순위</label>
                   <div className="sp-select-wrap">
@@ -864,25 +873,42 @@ function FunctionDetailPageInner() {
                 </div>
 
                 <div style={formGroupStyle}>
-                  <label style={labelStyle}>
-                    예상 공수
-                    <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: "var(--color-text-secondary)" }}>(단위: 시간)</span>
-                  </label>
+                  <label style={labelStyle}>담당자</label>
+                  <div className="sp-select-wrap">
+                    <select
+                      value={assignMemberId}
+                      onChange={(e) => setAssignMemberId(e.target.value)}
+                      disabled={!canEdit}
+                      className="sp-input"
+                    >
+                      <option value="">담당자 없음</option>
+                      {members.map((m) => (
+                        <option key={m.memberId} value={m.memberId}>
+                          {m.name ?? m.email}
+                          {m.memberId === myMemberId ? " (나)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
+                </div>
+
+                <div style={formGroupStyle}>
+                  <label style={labelStyle}>정렬</label>
                   <input
                     type="number"
-                    min="0"
-                    step="0.5"
-                    value={effort}
-                    onChange={(e) => setEffort(e.target.value)}
-                    placeholder="시간 (예: 2, 0.5)"
+                    min={0}
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
                     readOnly={!canEdit}
                     className="sp-input"
+                    style={{ padding: "8px 6px" }}
                   />
                 </div>
               </div>
 
-              {/* 행4: 구현 시작일 | 구현 종료일 | 정렬 순서 */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 80px", gap: "0 16px" }}>
+              {/* 행4: 구현 시작일 | 구현 종료일 | 구현 공수 — 일정/공수 묶음, 넉넉한 폭 확보 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 16px" }}>
                 <div style={formGroupStyle}>
                   <label style={labelStyle}>구현 시작일</label>
                   <input
@@ -906,15 +932,25 @@ function FunctionDetailPageInner() {
                 </div>
 
                 <div style={formGroupStyle}>
-                  <label style={labelStyle}>정렬</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={sortOrder}
-                    onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
-                    readOnly={!canEdit}
-                    className="sp-input"
-                  />
+                  <label style={labelStyle}>구현 공수(시간)</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={effort}
+                      onChange={(e) => setEffort(e.target.value)}
+                      readOnly={!canEdit}
+                      className="sp-input"
+                      style={{ width: 72, flex: "none" }}
+                    />
+                    {/* 하루 8시간 기준 환산 — 입력값 옆에 참고용으로만 표시, 저장 안 함 */}
+                    {formatEffortDays(effort) && (
+                      <span style={{ fontSize: 12, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
+                        {formatEffortDays(effort)}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 

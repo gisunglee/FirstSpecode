@@ -24,8 +24,9 @@ import { useIntroEffects } from "../_components/useIntroEffects";
 import DesignTree from "../_components/DesignTree";
 import PhaseAccordion, { type PhaseStep } from "../_components/PhaseAccordion";
 
-// 회원가입(이용 시작) 경로 — 한 곳에서 관리
-const SIGNUP_PATH = "/auth/register";
+// 이용 시작 경로 — 한 곳에서 관리
+// 로그인 페이지로 보냄: 기존 회원은 바로 로그인, 신규 회원은 로그인 화면의 회원가입 링크로 이동
+const LOGIN_PATH = "/auth/login";
 
 // ── 분석 단계 스텝 (PHASE 01) ──────────────────────────────────
 const ANALYZE_STEPS: PhaseStep[] = [
@@ -106,9 +107,9 @@ export default function IntroAboutPage() {
           </Link>
           <div className="nav-right">
             <span className="nav-tag">B2B · 공공 SI 설계 플랫폼</span>
-            <a href="#use" className="btn btn-primary btn-sm">
+            <Link href={LOGIN_PATH} className="btn btn-primary btn-sm">
               이용하기 <span className="arr">→</span>
-            </a>
+            </Link>
           </div>
         </div>
       </nav>
@@ -137,9 +138,9 @@ export default function IntroAboutPage() {
             <b>일괄적으로 고품질 구현</b>이 되도록 돕는 — 공공 SI 사업을 위한 AI 설계 플랫폼입니다.
           </p>
           <div className="hero-cta reveal d3">
-            <a href="#use" className="btn btn-primary">
+            <Link href={LOGIN_PATH} className="btn btn-primary">
               스펙코드 이용하기 <span className="arr">→</span>
-            </a>
+            </Link>
             <span className="hero-note">분석 → 설계 → PRD → 구현</span>
           </div>
 
@@ -1219,7 +1220,7 @@ export default function IntroAboutPage() {
           </h2>
           <p className="reveal d2">규모 있는 공공 SI를, AI와 함께 안심하고 올리는 방법.</p>
           <div className="final-cta reveal d3">
-            <Link href={SIGNUP_PATH} className="btn btn-primary">
+            <Link href={LOGIN_PATH} className="btn btn-primary">
               스펙코드 이용하기 <span className="arr">→</span>
             </Link>
             <a href="#design-tree" className="btn btn-ghost">
@@ -1256,9 +1257,9 @@ export default function IntroAboutPage() {
         <div className="d-txt">
           AI와 구현하기 전에, AI와 설계하세요<small>2~7억 공공 SI 최적화 · 기존 개발팀을 위한</small>
         </div>
-        <a href="#use" className="btn btn-primary btn-sm">
+        <Link href={LOGIN_PATH} className="btn btn-primary btn-sm">
           이용하기 <span className="arr">→</span>
-        </a>
+        </Link>
       </div>
     </div>
   );

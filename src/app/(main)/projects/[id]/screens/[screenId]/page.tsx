@@ -29,6 +29,7 @@ import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
 import { SelectChevron } from "@/components/ui/SelectChevron";
 import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
+import { formatEffortDays } from "@/lib/effort";
 import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
@@ -68,6 +69,10 @@ type ScreenDetail = {
   unitWorkId: string | null;
   unitWorkName: string;
   areas: AreaRow[];
+  // 설계 일정/공수 — 구현(기능)과 분리된 축
+  designBgngDe: string;
+  designEndDe: string;
+  designEfrtVal: string;
 };
 
 type SaveBody = {
@@ -85,6 +90,10 @@ type SaveBody = {
   saveHistory?: boolean;
   // 담당자 — "" = 미지정, 서버에서 null 처리
   assignMemberId: string;
+  // 설계 일정/공수 — "" = 미지정
+  designBgngDe: string;
+  designEndDe: string;
+  designEfrtVal: string;
 };
 
 // 프로젝트 멤버 — 담당자 콤보박스 옵션용
@@ -135,6 +144,9 @@ function ScreenDetailPageInner() {
     categoryM: "",
     categoryS: "",
     assignMemberId: "",
+    designBgngDe: "",
+    designEndDe: "",
+    designEfrtVal: "",
   });
 
   // 담당자 변경 이력 팝업 상태 — 설명 이력(historyViewOpen)과 별개 다이얼로그
@@ -226,6 +238,9 @@ function ScreenDetailPageInner() {
       categoryM: detail.categoryM,
       categoryS: detail.categoryS,
       assignMemberId: detail.assignMemberId ?? "",
+      designBgngDe: detail.designBgngDe ?? "",
+      designEndDe: detail.designEndDe ?? "",
+      designEfrtVal: detail.designEfrtVal ?? "",
     });
     setOriginalDescription(detail.description ?? "");
     if (detail.layoutData) {
@@ -547,6 +562,48 @@ function ScreenDetailPageInner() {
                     readOnly={!canEdit}
                     className="sp-input"
                   />
+                </FormField>
+              </div>
+
+              {/* 설계 시작일 | 설계 종료일 | 설계 공수 — 구현(기능)과 분리된 축 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                <FormField label="설계 시작일">
+                  <input
+                    type="date"
+                    value={form.designBgngDe}
+                    onChange={(e) => handleChange("designBgngDe", e.target.value)}
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </FormField>
+                <FormField label="설계 종료일">
+                  <input
+                    type="date"
+                    value={form.designEndDe}
+                    onChange={(e) => handleChange("designEndDe", e.target.value)}
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </FormField>
+                <FormField label={<span>설계 공수<span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: "var(--color-text-secondary)" }}>(단위: 시간)</span></span>}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={form.designEfrtVal}
+                      onChange={(e) => handleChange("designEfrtVal", e.target.value)}
+                      placeholder="시간 (예: 2, 0.5)"
+                      readOnly={!canEdit}
+                      className="sp-input"
+                      style={{ width: 100, flex: "none" }}
+                    />
+                    {formatEffortDays(form.designEfrtVal) && (
+                      <span style={{ fontSize: 13, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
+                        {formatEffortDays(form.designEfrtVal)}
+                      </span>
+                    )}
+                  </div>
                 </FormField>
               </div>
 

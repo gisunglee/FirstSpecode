@@ -14,6 +14,11 @@
  *   - 2026-04-25: P2 rfpPage(과업·요구사항)를 export/import/프롬프트/템플릿에 추가.
  *   - 2026-04-25 P4: detailSpec 안내를 단일 UI 표준 양식(tb_ai_design_template REQUIREMENT seed)과 일치.
  *                    출처: prisma/sql/2026-04-24_seed_tb_ai_design_template.sql
+ *   - 2026-07-16: detailSpec 예시를 하드코딩 문자열 대신 useDesignTemplate(REQUIREMENT)로 실시간 조회.
+ *                 2026-05-06부터 관리자가 /admin/design-templates 에서 이 양식을 직접 수정할 수 있게 되어,
+ *                 하드코딩 텍스트가 조용히 어긋날 수 있었던 문제를 근본적으로 제거.
+ *   - 2026-07-16: JSON 출력 포맷 안내에 "삭제 미지원" 문구 추가 — bulk-import는 create/update만
+ *                 처리하므로, JSON에서 항목을 빼도 SPECODE에서는 삭제되지 않는다는 점을 명시.
  */
 
 import { Suspense, useState, useMemo } from "react";
@@ -21,6 +26,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { useDesignTemplate } from "@/lib/designTemplate";
 
 // ── JSON 전처리 ───────────────────────────────────────────────────────────────
 // Claude가 출력하는 JSON은 아래 이유로 파싱 실패할 수 있음:
@@ -81,7 +87,59 @@ type ImportResult = {
 
 // ── 시스템 프롬프트 (탭 1) ───────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `당신은 SI(System Integration) 프로젝트 요구사항 분석 전문가이자 SPECODE 설계 파트너입니다.
+// tb_ai_design_template(REQUIREMENT) 조회 실패 시에만 쓰는 폴백.
+// 평소엔 useDesignTemplate(projectId, "REQUIREMENT")가 반환하는 실시간 값으로 대체됨 —
+// 관리자가 /admin/design-templates 에서 이 양식을 수정해도 프롬프트가 자동으로 따라가도록 함.
+const FALLBACK_DETAIL_SPEC_EXAMPLE = `## 기능 개요
+다양한 유형의 게시판(공지, 자료실, 묻고답하기 등)을 단일 구조로 통합 관리하며,
+관리자가 게시판 유형과 속성을 직접 설정할 수 있는 기능을 제공한다.
+
+## 메뉴 위치
+- 사용자: 정보마당 > 게시판
+- 관리자: 시스템관리 > 게시판관리
+
+## 사용 대상 / 권한
+| 구분 | 대상 | 접근 범위 |
+|------|------|-----------|
+| 일반사용자 | 로그인 사용자 전체 | 조회, 글쓰기, 댓글 |
+| 비로그인 | 일반 방문자 | 조회만 가능 (게시판별 설정) |
+| 게시판 관리자 | 지정된 담당자 | 글 관리, 공지 지정, 첨부 삭제 |
+| 시스템 관리자 | 관리자 | 게시판 생성/수정/삭제, 권한 설정 |
+
+## 제공 화면 목록
+| 화면명 | 설명 |
+|--------|------|
+| 게시판 목록 | 게시글 목록 조회, 검색, 페이징 |
+| 게시글 상세 | 본문, 첨부파일, 댓글 표시 |
+| 게시글 등록/수정 | 에디터 포함, 첨부파일 업로드 |
+| 게시판 관리 | 관리자용 게시판 유형/속성 설정 |
+| 게시글 관리 | 관리자용 전체 글 목록, 일괄 처리 |
+
+## 기능 상세
+| 기능명 | 설명 | 비고 |
+|--------|------|------|
+| 게시판 유형 설정 | 공지/자료실/QnA 등 유형별 속성 ON/OFF | 관리자 전용 |
+| 게시글 CRUD | 등록, 수정, 삭제, 조회 | 권한별 차등 |
+| 공지 고정 | 상단 고정 공지 지정 | 게시판관리자 이상 |
+| 첨부파일 | 다중 파일 업로드, 확장자/용량 제한 설정 | 게시판별 설정 |
+| 댓글 | 댓글 등록/삭제, 대댓글 1단계 지원 | 게시판별 ON/OFF |
+| 검색 | 제목, 내용, 작성자 검색 | |
+| 조회수 | 게시글 조회 시 자동 카운트 | 관리자 조회 제외 |
+| 답글 (QnA) | 원글에 대한 답변 글 연결 표시 | QnA 유형만 해당 |
+
+## 업무 처리 순서
+1. 관리자가 게시판 유형/속성 생성 (댓글 허용 여부, 첨부 허용 여부 등 설정)
+2. 사용자가 게시글 등록 (에디터 작성 + 첨부파일 업로드)
+3. 게시판 관리자가 필요 시 공지 지정 또는 글 숨김 처리
+4. 일반 사용자 목록 조회 → 상세 조회 → 댓글 작성
+5. QnA 유형의 경우 담당자가 답글 등록 → 작성자에게 알림 (알림 연계 시)
+
+## 제외 범위 / 제약 사항 / 협의 사항
+- (제외) 이메일 알림 연계는 본 범위 제외
+- (제약) 첨부파일 확장자는 보안지침상 exe, sh 등 실행파일 불가
+- (협의) 익명 게시 기능은 추후 결정`;
+
+const SYSTEM_PROMPT_TEMPLATE = `당신은 SI(System Integration) 프로젝트 요구사항 분석 전문가이자 SPECODE 설계 파트너입니다.
 설계자와 함께 과업·요구사항·사용자스토리를 완성하고, 최종적으로 SPECODE에 등록할 수 있는 JSON을 출력합니다.
 
 ---
@@ -183,54 +241,7 @@ const SYSTEM_PROMPT = `당신은 SI(System Integration) 프로젝트 요구사�
 
 **detailSpec 표준 양식 (단일 UI "예시 삽입" 과 동일 — 이 형식 그대로 마크다운으로 작성):**
 
-## 기능 개요
-다양한 유형의 게시판(공지, 자료실, 묻고답하기 등)을 단일 구조로 통합 관리하며,
-관리자가 게시판 유형과 속성을 직접 설정할 수 있는 기능을 제공한다.
-
-## 메뉴 위치
-- 사용자: 정보마당 > 게시판
-- 관리자: 시스템관리 > 게시판관리
-
-## 사용 대상 / 권한
-| 구분 | 대상 | 접근 범위 |
-|------|------|-----------|
-| 일반사용자 | 로그인 사용자 전체 | 조회, 글쓰기, 댓글 |
-| 비로그인 | 일반 방문자 | 조회만 가능 (게시판별 설정) |
-| 게시판 관리자 | 지정된 담당자 | 글 관리, 공지 지정, 첨부 삭제 |
-| 시스템 관리자 | 관리자 | 게시판 생성/수정/삭제, 권한 설정 |
-
-## 제공 화면 목록
-| 화면명 | 설명 |
-|--------|------|
-| 게시판 목록 | 게시글 목록 조회, 검색, 페이징 |
-| 게시글 상세 | 본문, 첨부파일, 댓글 표시 |
-| 게시글 등록/수정 | 에디터 포함, 첨부파일 업로드 |
-| 게시판 관리 | 관리자용 게시판 유형/속성 설정 |
-| 게시글 관리 | 관리자용 전체 글 목록, 일괄 처리 |
-
-## 기능 상세
-| 기능명 | 설명 | 비고 |
-|--------|------|------|
-| 게시판 유형 설정 | 공지/자료실/QnA 등 유형별 속성 ON/OFF | 관리자 전용 |
-| 게시글 CRUD | 등록, 수정, 삭제, 조회 | 권한별 차등 |
-| 공지 고정 | 상단 고정 공지 지정 | 게시판관리자 이상 |
-| 첨부파일 | 다중 파일 업로드, 확장자/용량 제한 설정 | 게시판별 설정 |
-| 댓글 | 댓글 등록/삭제, 대댓글 1단계 지원 | 게시판별 ON/OFF |
-| 검색 | 제목, 내용, 작성자 검색 | |
-| 조회수 | 게시글 조회 시 자동 카운트 | 관리자 조회 제외 |
-| 답글 (QnA) | 원글에 대한 답변 글 연결 표시 | QnA 유형만 해당 |
-
-## 업무 처리 순서
-1. 관리자가 게시판 유형/속성 생성 (댓글 허용 여부, 첨부 허용 여부 등 설정)
-2. 사용자가 게시글 등록 (에디터 작성 + 첨부파일 업로드)
-3. 게시판 관리자가 필요 시 공지 지정 또는 글 숨김 처리
-4. 일반 사용자 목록 조회 → 상세 조회 → 댓글 작성
-5. QnA 유형의 경우 담당자가 답글 등록 → 작성자에게 알림 (알림 연계 시)
-
-## 제외 범위 / 제약 사항 / 협의 사항
-- (제외) 이메일 알림 연계는 본 범위 제외
-- (제약) 첨부파일 확장자는 보안지침상 exe, sh 등 실행파일 불가
-- (협의) 익명 게시 기능은 추후 결정
+{{DETAIL_SPEC_EXAMPLE}}
 
 ---
 
@@ -411,6 +422,7 @@ SPECODE 기획 가져오기 > 내보내기에서 복사한 JSON을 붙여넣으�
 
 ※ tasks 배열로 여러 과업을 한 번에 등록할 수 있습니다.
 ※ systemId 있는 항목은 수정, 없는 항목은 신규 등록됩니다.
+※ 항목 삭제는 지원하지 않습니다 — JSON에서 항목을 빼도 SPECODE에서 삭제되지 않습니다. 삭제는 SPECODE 화면에서 직접 처리하세요.
 
 ---
 
@@ -452,6 +464,11 @@ JSON 출력이나 다음 작업을 진행하기 **전에** 먼저 알립니다:
 > "⚠️ 대화가 많이 길어졌습니다. 새 세션(새 채팅)을 열어서 이어가시는 것을 권장합니다. 지금까지 작업한 JSON을 먼저 SPECODE에 저장하고 새로 시작하시면 더 정확하게 도움드릴 수 있습니다."
 
 이 알림은 설계자가 먼저 요청하기 전에 선제적으로 합니다.`;
+
+// DB에서 조회한(또는 폴백) detailSpec 예시를 프롬프트 템플릿에 삽입
+function buildSystemPrompt(detailSpecExample: string): string {
+  return SYSTEM_PROMPT_TEMPLATE.replace("{{DETAIL_SPEC_EXAMPLE}}", detailSpecExample);
+}
 
 const JSON_TEMPLATE = `{
   "tasks": [
@@ -574,6 +591,15 @@ function AiImportPageInner() {
         .then((r) => r.data),
   });
   const taskList: TaskSummary[] = tasksData?.tasks ?? [];
+
+  // ── 시스템 프롬프트에 삽입할 detailSpec 예시 조회 ───────────────────────────
+  // 어드민이 /admin/design-templates(REQUIREMENT)에서 양식을 바꾸면 여기도 자동 반영됨
+  const { data: reqTemplate } = useDesignTemplate(projectId, "REQUIREMENT");
+  const detailSpecExample = reqTemplate?.exampleCn?.trim() || FALLBACK_DETAIL_SPEC_EXAMPLE;
+  const systemPrompt = useMemo(
+    () => buildSystemPrompt(detailSpecExample),
+    [detailSpecExample]
+  );
 
   // ── JSON 파싱 ───────────────────────────────────────────────────────────────
   const parseResult = useMemo(() => {
@@ -740,7 +766,7 @@ function AiImportPageInner() {
                 <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>
                   Claude 프로젝트 지침에 전체 내용을 붙여넣으세요
                 </span>
-                <CopyButton text={SYSTEM_PROMPT} label="복사" />
+                <CopyButton text={systemPrompt} label="복사" />
               </div>
               <div className="sp-group-body" style={{ padding: 0 }}>
                 <pre style={{
@@ -750,7 +776,7 @@ function AiImportPageInner() {
                   whiteSpace: "pre-wrap", wordBreak: "break-word",
                   maxHeight: 360, overflow: "auto",
                 }}>
-                  {SYSTEM_PROMPT}
+                  {systemPrompt}
                 </pre>
               </div>
             </div>
