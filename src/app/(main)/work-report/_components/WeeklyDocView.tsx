@@ -17,26 +17,21 @@
  * 나머지 행은 "구분 | 업무 내용" 2열 문서로 본다.
  *
  * "주간"/"월간" 두 모드 모두 이 컴포넌트를 그대로 반복 사용한다.
+ *
+ * 순수 "나만 보는 개인 문서" — 팀 전체를 모은 AI 요약(금주실적/차주계획/총평)은 여기 없다.
+ * 한 번 이 문서 안에 얹어봤는데, "내 문서"와 "팀 전체 집계"가 한 화면에 섞여서 오히려
+ * 혼란스럽다는 피드백으로 분리했다 → PM 전용 "리더 리포트"(/leader-report)로 이동(2026-07-21).
  */
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
-import { addDaysStr, invalidateWorkLogQueries } from "@/lib/weekUtil";
+import { addDaysStr, invalidateWorkLogQueries, mmdd, mmddRange } from "@/lib/weekUtil";
 import type { WorkLogResponse, WorkLogItemRefType } from "@/types/workLog";
 import DocEditableCell from "./DocEditableCell";
 import RefPicker from "../../work-logs/_components/RefPicker";
 
 const WEEKDAY_LABEL = ["월", "화", "수", "목", "금"];
-
-// 구분 열이 좁아서 "2026-07-20 ~ 2026-07-26" 같은 전체 날짜가 옆 칸과 겹쳐 보이던 문제로,
-// 연도 없이 월/일만 짧게 표기한다.
-function mmdd(dateStr: string): string {
-  return `${dateStr.slice(5, 7)}/${dateStr.slice(8, 10)}`;
-}
-function mmddRange(from: string, to: string): string {
-  return `${mmdd(from)} ~ ${mmdd(to)}`;
-}
 
 export default function WeeklyDocView({ projectId, monday }: { projectId: string; monday: string }) {
   const queryClient = useQueryClient();
@@ -173,9 +168,13 @@ export default function WeeklyDocView({ projectId, monday }: { projectId: string
         <tbody>
           <tr>
             <td className="sp-doc-label">
-              금주 결과보고
-              <div style={{ fontWeight: 400, fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
+              {/* 날짜가 잘 안 보인다는 피드백 — 날짜를 위쪽 큰 타이틀로, 항목명을 아래 작은
+                  설명으로 뒤집었다. "언제"가 이 행에서 가장 먼저 눈에 들어와야 할 정보다. */}
+              <div style={{ fontSize: "var(--text-base)", fontWeight: 700, color: "var(--color-text-primary)" }}>
                 {mmddRange(monday, addDaysStr(monday, 6))}
+              </div>
+              <div style={{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--color-text-primary)", marginTop: 2 }}>
+                금주 결과보고
               </div>
             </td>
             <td colSpan={2}>
@@ -190,9 +189,11 @@ export default function WeeklyDocView({ projectId, monday }: { projectId: string
 
           <tr>
             <td className="sp-doc-label">
-              다음주 업무계획
-              <div style={{ fontWeight: 400, fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
+              <div style={{ fontSize: "var(--text-base)", fontWeight: 700, color: "var(--color-text-primary)" }}>
                 {mmddRange(nextMonday, addDaysStr(nextMonday, 6))}
+              </div>
+              <div style={{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--color-text-primary)", marginTop: 2 }}>
+                다음주 업무계획
               </div>
             </td>
             <td colSpan={2}>
@@ -250,10 +251,10 @@ export default function WeeklyDocView({ projectId, monday }: { projectId: string
               // 요일 행 높이를 기존 대비 20% 정도 더 여유 있게 — 기본 td 세로 padding(8px)보다 10px로.
               <tr key={d} className="sp-doc-row-tall">
                 <td>
-                  <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                    {WEEKDAY_LABEL[i]}{" "}
-                    <span style={{ fontWeight: 400, color: "var(--color-text-secondary)", fontSize: "var(--text-xs)" }}>
-                      ({mmdd(d)})
+                  <div style={{ fontWeight: 700, fontSize: "var(--text-base)", color: "var(--color-text-primary)", marginBottom: 4 }}>
+                    {mmdd(d)}{" "}
+                    <span style={{ fontWeight: 500, color: "var(--color-text-secondary)", fontSize: "var(--text-sm)" }}>
+                      ({WEEKDAY_LABEL[i]})
                     </span>
                   </div>
                   {items.length === 0 ? (

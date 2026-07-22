@@ -63,6 +63,7 @@ const REF_TYPE_LABELS: Record<string, string> = {
   AREA:             "영역 설계",
   FUNCTION:         "기능 설계",
   PLAN_STUDIO_ARTF: "기획실",
+  WEEKLY_REPORT:    "주간보고",
 };
 
 // 작업 유형 배지 색상 — semantic 토큰으로 3테마 자동 대응.
@@ -77,6 +78,7 @@ const taskTypeBadgeColors: Record<PromptTemplateTaskType, { bg: string; color: s
   IMPLEMENT:                 { bg: "var(--color-error-subtle)",   color: "var(--color-error)"   },
   TEST:                      { bg: "var(--color-success-subtle)", color: "var(--color-success)" },
   PLAN_STUDIO_ARTF_GENERATE: { bg: "var(--color-info-subtle)",    color: "var(--color-info)"    },
+  WEEKLY_REPORT_DRAFT:       { bg: "var(--color-brand-subtle)",   color: "var(--color-brand)"   },
   // 폐기 유형 — 흐린 회색
   MOCKUP:    { bg: "var(--color-bg-muted)", color: "var(--color-text-tertiary)" },
   CUSTOM:    { bg: "var(--color-bg-muted)", color: "var(--color-text-tertiary)" },
@@ -254,6 +256,7 @@ function PromptTemplatesPageInner() {
               <option value="SCREEN">화면 (SCREEN)</option>
               <option value="AREA">영역 설계 (AREA)</option>
               <option value="FUNCTION">기능 설계 (FUNCTION)</option>
+              <option value="WEEKLY_REPORT">주간보고 (WEEKLY_REPORT)</option>
             </select>
           ) : (
             <select
@@ -412,10 +415,12 @@ function PromptTemplatesPageInner() {
                       background: row.refTyCode === "FUNCTION"         ? "var(--color-success-subtle)"
                                 : row.refTyCode === "AREA"             ? "var(--color-info-subtle)"
                                 : row.refTyCode === "PLAN_STUDIO_ARTF" ? "var(--color-brand-subtle)"
+                                : row.refTyCode === "WEEKLY_REPORT"    ? "var(--color-warning-subtle)"
                                 : "var(--color-bg-muted)",
                       color:      row.refTyCode === "FUNCTION"         ? "var(--color-success)"
                                 : row.refTyCode === "AREA"             ? "var(--color-info)"
                                 : row.refTyCode === "PLAN_STUDIO_ARTF" ? "var(--color-brand)"
+                                : row.refTyCode === "WEEKLY_REPORT"    ? "var(--color-warning)"
                                 : "var(--color-text-secondary)",
                       whiteSpace: "nowrap",
                     }}>

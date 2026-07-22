@@ -50,7 +50,8 @@ function SocialCallbackInner() {
         }
 
         const { resultType, accessToken, refreshToken, socialToken, email, provider, redirectTo } = body.data;
-        const finalUrl = redirectTo || "/dashboard";
+        // entry=1 — 대시보드의 "로그인 직후 1회" 착지 분기 마커(login/page.tsx와 동일 이유)
+        const finalUrl = redirectTo || "/dashboard?entry=1";
 
         if (resultType === "NEW" || resultType === "EXISTING") {
           // 토큰 저장 후 리다렉트

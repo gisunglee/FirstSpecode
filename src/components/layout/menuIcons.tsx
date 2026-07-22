@@ -59,8 +59,8 @@ export type MenuIconKey =
   | "i_designTemplate"
   | "i_review" | "i_memo" | "i_docs" | "i_library"
   | "i_graph" | "i_changeLog" | "i_diffTest" | "i_cleanup"
-  // 신규 대시보드 메뉴 (활동/포커스/캘린더/PM/내 업무/My Task)
-  | "i_activity" | "i_focus" | "i_calendar" | "i_pm" | "i_mywork" | "i_myTask"
+  // 신규 대시보드 메뉴 (캘린더/PM/내 업무/My Task)
+  | "i_calendar" | "i_pm" | "i_mywork" | "i_myTask"
   // 테스트 항목 — 단위(단일 박스)·통합(연결된 박스들)
   | "i_testSpecUnit" | "i_testSpecIntegration"
   // WBS — 간트 막대
@@ -429,22 +429,6 @@ const ICONS: Record<MenuIconKey, ReactNode> = {
     <>
       <path d="M16 18l6-6-6-6" />
       <path d="M8 6l-6 6 6 6" />
-    </>
-  ),
-  // 활동 피드 — 가로 라인 세 줄(스트림)
-  i_activity: (
-    <>
-      <path d="M4 7h16" />
-      <path d="M4 12h10" />
-      <path d="M4 17h13" />
-    </>
-  ),
-  // 포커스 — 과녁(타깃)
-  i_focus: (
-    <>
-      <circle cx="12" cy="12" r="9" />
-      <circle cx="12" cy="12" r="5" />
-      <circle cx="12" cy="12" r="1.5" />
     </>
   ),
   // 캘린더 — 달력

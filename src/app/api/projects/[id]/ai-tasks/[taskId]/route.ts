@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { checkRole } from "@/lib/checkRole";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { addDaysStr } from "@/lib/weekUtil";
 
 type RouteParams = { params: Promise<{ id: string; taskId: string }> };
 
@@ -52,6 +53,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       });
       refName    = fn?.func_nm        ?? refName;
       refDisplayId = fn?.func_display_id ?? "";
+    } else if (task.ref_ty_code === "WEEKLY_REPORT") {
+      const report = await prisma.tbWrWeeklyReport.findUnique({
+        where:  { weekly_report_id: task.ref_id },
+        select: { week_start_dt: true },
+      });
+      if (report) {
+        const weekStart = report.week_start_dt.toISOString().slice(0, 10);
+        const weekEnd   = addDaysStr(weekStart, 6);
+        refName = `${weekStart} ~ ${weekEnd} 주간보고`;
+      }
     }
 
     // 요청자 이름 조회

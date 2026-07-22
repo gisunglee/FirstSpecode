@@ -119,11 +119,12 @@ function WeekCard({ projectId, monday, offset }: { projectId: string; monday: st
           borderBottom: "1px solid var(--color-border-subtle)",
         }}
       >
-        <span style={{ fontSize: "var(--text-sm)", fontWeight: 700, color: isCurrentWeek ? "var(--color-brand)" : "var(--color-text-primary)" }}>
-          📅 {weekLabel(offset)}
+        {/* 날짜가 잘 안 보인다는 피드백 — 날짜(monday)를 더 크고 진하게, "이번주/다음주" 라벨은 보조로 */}
+        <span style={{ fontSize: "var(--text-base)", fontWeight: 700, color: isCurrentWeek ? "var(--color-brand)" : "var(--color-text-primary)", fontFamily: "var(--font-mono)" }}>
+          📅 {monday}
         </span>
-        <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", fontFamily: "var(--font-mono)" }}>
-          {monday}
+        <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
+          {weekLabel(offset)}
         </span>
         {isPast && <span className="sp-badge sp-badge-neutral" style={{ marginLeft: "auto" }}>읽기 전용</span>}
       </div>

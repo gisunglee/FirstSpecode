@@ -16,6 +16,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getWeekMondayStr, addDaysStr } from "@/lib/weekUtil";
+import { buildWeeklyReportPrompt } from "@/lib/weeklyReportPrompt";
 import type { WeeklyReport, AiTaskStatus } from "@/types/weeklyReport";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -61,6 +62,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       weeklyReportId: r.weekly_report_id,
       weekStartDt:    r.week_start_dt.toISOString().slice(0, 10),
       draftCn:        r.draft_cn,
+      perfCn:         r.perf_cn,
+      planCn:         r.plan_cn,
+      commentCn:      r.comment_cn,
+      noteCn:         r.note_cn,
       aiTaskId:       r.ai_task_id,
       aiTaskStatus:   r.ai_task_id ? statusMap.get(r.ai_task_id) ?? null : null,
       creatMberId:    r.creat_mber_id,
@@ -96,80 +101,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const weekEnd   = addDaysStr(weekStart, 6);
 
   try {
-    // ── 그 주 전체 팀원 업무일지 수집 ──────────────────────────────────────
-    const logs = await prisma.tbWrWorkLog.findMany({
-      where: {
-        prjct_id:    projectId,
-        log_ty_code: "DAILY",
-        log_dt:      { gte: new Date(weekStart + "T00:00:00Z"), lte: new Date(weekEnd + "T00:00:00Z") },
-      },
-      include: { items: { orderBy: { sort_ordr: "asc" } } },
-      orderBy: [{ creat_mber_id: "asc" }, { log_dt: "asc" }],
-    });
+    // 데이터 수집 + 프롬프트 조립은 lib로 분리 — GET .../export-md(개인 Claude 요청용 MD 내보내기)와
+    // 완전히 같은 로직을 공유해야 "AI에게 실제로 전달되는 내용"이라는 게 거짓말이 안 된다.
+    const { finalReqCn, promptTmplId } = await buildWeeklyReportPrompt(projectId, weekStart);
 
-    const mberIds = [...new Set(logs.map((l) => l.creat_mber_id))];
-    const members = mberIds.length > 0
-      ? await prisma.tbCmMember.findMany({
-          where:  { mber_id: { in: mberIds } },
-          select: { mber_id: true, mber_nm: true, email_addr: true },
-        })
-      : [];
-    const nameMap = new Map(members.map((m) => [m.mber_id, m.mber_nm || m.email_addr || m.mber_id]));
-
-    // 멤버별로 묶어 "이름 → 날짜별 완료/미완료/메모" 텍스트로 정리
-    const byMember = new Map<string, typeof logs>();
-    for (const log of logs) {
-      const list = byMember.get(log.creat_mber_id) ?? [];
-      list.push(log);
-      byMember.set(log.creat_mber_id, list);
-    }
-
-    const logLines: string[] = [];
-    for (const [mberId, memberLogs] of byMember) {
-      logLines.push(`### ${nameMap.get(mberId)}`);
-      for (const log of memberLogs) {
-        const dateStr = log.log_dt.toISOString().slice(0, 10);
-        // ref_ty_code 있는 항목은 "참고 일감 태그"(체크박스 없음, 완료 개념이 없음) — 계획 체크리스트와
-        // 별개다. 완료/미완료 집계에 섞으면 AI가 "게시판 일감 미완료"처럼 잘못 요약할 수 있어 제외하고,
-        // 대신 "관련 일감"으로 따로 알려준다.
-        const todoLogItems = log.items.filter((i) => !i.ref_ty_code);
-        const tagLogItems  = log.items.filter((i) => i.ref_ty_code);
-        const done    = todoLogItems.filter((i) => i.done_yn === "Y").map((i) => i.item_cn);
-        const undone  = todoLogItems.filter((i) => i.done_yn !== "Y").map((i) => i.item_cn);
-        const linePart: string[] = [];
-        if (done.length)          linePart.push(`완료: ${done.join(", ")}`);
-        if (undone.length)        linePart.push(`미완료: ${undone.join(", ")}`);
-        if (tagLogItems.length)   linePart.push(`관련 일감: ${tagLogItems.map((i) => i.item_cn).join(", ")}`);
-        if (log.note_cn?.trim())  linePart.push(`메모: ${log.note_cn.trim()}`);
-        logLines.push(`- ${dateStr}: ${linePart.length ? linePart.join(" / ") : "(기록 없음)"}`);
-      }
-    }
-    const logDataBlock = logLines.length > 0 ? logLines.join("\n") : "(이번 주 작성된 업무일지가 없습니다)";
-
-    // ── 프롬프트 템플릿 조회 (default_yn='Y' 우선, 프로젝트 전용 > 시스템 공통) ─────
-    const promptTmpl = await prisma.tbAiPromptTemplate.findFirst({
-      where: {
-        OR:           [{ prjct_id: projectId }, { prjct_id: null }],
-        task_ty_code: "WEEKLY_REPORT_DRAFT",
-        use_yn:       "Y",
-      },
-      orderBy: [
-        { default_yn: "desc" },
-        { prjct_id:    { sort: "desc", nulls: "last" } },
-        { creat_dt:    "desc" },
-      ],
-    });
-    const sysPrompt = promptTmpl?.sys_prompt_cn?.trim() ?? "";
-
-    const parts: string[] = [];
-    if (sysPrompt) parts.push(`<시스템프롬프트>\n${sysPrompt}\n</시스템프롬프트>`);
-    parts.push(`<대상 주간>\n${weekStart} ~ ${weekEnd}\n</대상 주간>`);
-    parts.push(`<업무일지 데이터>\n${logDataBlock}\n</업무일지 데이터>`);
-    const finalReqCn = parts.join("\n\n");
-
-    if (promptTmpl) {
+    if (promptTmplId) {
       await prisma.tbAiPromptTemplate.update({
-        where: { tmpl_id: promptTmpl.tmpl_id },
+        where: { tmpl_id: promptTmplId },
         data:  { use_cnt: { increment: 1 } },
       });
     }
@@ -191,7 +129,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           ref_id:            report.weekly_report_id,
           task_ty_code:      "WEEKLY_REPORT_DRAFT",
           req_cn:            finalReqCn,
-          req_snapshot_data: { weekStart, weekEnd, promptTmplId: promptTmpl?.tmpl_id ?? null },
+          req_snapshot_data: { weekStart, weekEnd, promptTmplId },
           req_mber_id:       gate.mberId,
           task_sttus_code:   "PENDING",
           retry_cnt:         0,

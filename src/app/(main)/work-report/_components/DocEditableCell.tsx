@@ -13,17 +13,45 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
+// AI 피드백(금주실적/차주계획/총평)은 "## 제목" + 불릿으로 온 마크다운이라, 보기 상태에서는
+// 원문 그대로("## 금주실적") 보이는 것보다 실제 제목/리스트로 렌더링하는 쪽이 훨씬 읽기 편하다.
+// 편집 중(textarea)에는 당연히 원문 마크다운을 그대로 고친다.
+const MD_H2: React.CSSProperties = { fontSize: "var(--text-base)", fontWeight: 700, color: "var(--color-text-primary)", margin: "10px 0 4px" };
+const MD_P:  React.CSSProperties = { margin: "4px 0", lineHeight: 1.6 };
+const MD_UL: React.CSSProperties = { margin: "4px 0", paddingLeft: 20, lineHeight: 1.6 };
+
+// PM이 아닌 뷰어의 읽기 전용 표시(WeeklyDocView)에서도 재사용 — export.
+export function AiFeedbackMarkdown({ value }: { value: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        h2: ({ children }) => <h2 style={MD_H2}>{children}</h2>,
+        p:  ({ children }) => <p style={MD_P}>{children}</p>,
+        ul: ({ children }) => <ul style={MD_UL}>{children}</ul>,
+      }}
+    >
+      {value}
+    </ReactMarkdown>
+  );
+}
 
 export default function DocEditableCell({
   value,
   placeholder,
   onSave,
   minRows = 2,
+  markdown = false,
 }: {
   value:       string;
   placeholder: string;
   onSave:      (next: string) => void;
   minRows?:    number;
+  /** true면 편집 중이 아닐 때 값을 마크다운으로 렌더링 (AI 피드백 전용) */
+  markdown?:   boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft]     = useState(value);
@@ -87,7 +115,7 @@ export default function DocEditableCell({
   return (
     <div className="sp-doc-cell-editable" onClick={() => setEditing(true)} style={{ minHeight: minRows * 20 }}>
       {draft.trim() ? (
-        <span style={{ whiteSpace: "pre-wrap" }}>{draft}</span>
+        markdown ? <AiFeedbackMarkdown value={draft} /> : <span style={{ whiteSpace: "pre-wrap" }}>{draft}</span>
       ) : (
         <span style={{ color: "var(--color-text-disabled)" }}>{placeholder}</span>
       )}

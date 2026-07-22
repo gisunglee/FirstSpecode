@@ -38,6 +38,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       weeklyReportId: row.weekly_report_id,
       weekStartDt:    row.week_start_dt.toISOString().slice(0, 10),
       draftCn:        row.draft_cn,
+      perfCn:         row.perf_cn,
+      planCn:         row.plan_cn,
+      commentCn:      row.comment_cn,
+      noteCn:         row.note_cn,
       aiTaskId:       row.ai_task_id,
       aiTaskStatus:   (task?.task_sttus_code as AiTaskStatus) ?? null,
       creatMberId:    row.creat_mber_id,
@@ -62,12 +66,20 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try { body = await request.json(); } catch {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
-  const { draftCn } = body as { draftCn?: string };
-  if (draftCn === undefined) {
-    return apiError("VALIDATION_ERROR", "draftCn이 필요합니다.", 400);
+  const { draftCn, perfCn, planCn, commentCn, noteCn } = body as {
+    draftCn?: string; perfCn?: string; planCn?: string; commentCn?: string; noteCn?: string;
+  };
+  if (draftCn === undefined && perfCn === undefined && planCn === undefined && commentCn === undefined && noteCn === undefined) {
+    return apiError("VALIDATION_ERROR", "수정할 필드가 없습니다.", 400);
   }
 
-  const limitErr = apiTextLimitGuard([["description", draftCn]]);
+  const limitErr = apiTextLimitGuard([
+    ["description", draftCn],
+    ["description", perfCn],
+    ["description", planCn],
+    ["description", commentCn],
+    ["description", noteCn],
+  ]);
   if (limitErr) return limitErr;
 
   try {
@@ -79,7 +91,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     await prisma.tbWrWeeklyReport.update({
       where: { weekly_report_id: weeklyReportId },
-      data:  { draft_cn: draftCn, mdfr_mber_id: gate.mberId, mdfcn_dt: new Date() },
+      data: {
+        ...(draftCn  !== undefined ? { draft_cn:  draftCn }  : {}),
+        ...(perfCn   !== undefined ? { perf_cn:   perfCn }   : {}),
+        ...(planCn    !== undefined ? { plan_cn:    planCn }    : {}),
+        ...(commentCn !== undefined ? { comment_cn: commentCn } : {}),
+        ...(noteCn    !== undefined ? { note_cn:    noteCn }    : {}),
+        mdfr_mber_id: gate.mberId,
+        mdfcn_dt: new Date(),
+      },
     });
 
     return apiSuccess({ weeklyReportId });

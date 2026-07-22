@@ -2,13 +2,10 @@
  * 내 업무 타입 — 클라이언트/서버 공유
  *
  * 격리 원칙:
- *   - dashboard.ts, activity.ts, focus.ts, calendar.ts, pm.ts 와 완전 독립
+ *   - dashboard.ts, calendar.ts, pm.ts 와 완전 독립
  *   - "PM 진단"(전체 시야)의 반대 — 로그인한 나 한 사람 기준으로 요구사항(분석)/단위업무/화면/
  *     기능을 통틀어 "내가 해야 할 것"을 한 스냅샷으로 본다.
- *
- * /focus 와의 차이:
- *   - /focus 는 "오늘 가장 먼저 할 일 1건 + 다음 후보 2건"만 보여주는 의사결정 보조 도구(단위업무만 대상).
- *   - 이건 내가 담당한 4개 엔티티 전체 + 그 하위에 담당자 없는 것까지 한꺼번에 보여주는 종합 스냅샷.
+ *   - 내가 담당한 4개 엔티티 전체 + 그 하위에 담당자 없는 것까지 한꺼번에 보여주는 종합 스냅샷.
  */
 
 export type MyWorkItemKind = "REQUIREMENT" | "UNIT_WORK" | "SCREEN" | "FUNCTION";

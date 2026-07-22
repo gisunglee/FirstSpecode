@@ -17,12 +17,23 @@
  * 주요 기술:
  *   - TanStack Query: 통합 summary 엔드포인트 호출 (staleTime 5분)
  *   - useSearchParams (Suspense 내부에서만)
+ *
+ * 2026-07-22: 로그인 직후 착지 페이지 스마트 분기 추가.
+ *   - 루트("/")·로그인·소셜 콜백이 전부 "/dashboard?entry=1"로 보낸다(entry 마커).
+ *   - entry=1일 때만: ① 쿠키(내 홈페이지 지정, LNB 별 아이콘)가 있으면 그 경로로,
+ *     ② 없으면 현재 프로젝트의 내 직무가 PM이면 PM 현황(/pm-board)으로, 아니면 그대로 대시보드.
+ *   - entry 파라미터가 없는 보통의 LNB 클릭 진입에는 절대 관여하지 않는다(회귀 방지 핵심).
+ *   - 직무는 프로젝트별 값이라 currentProjectId가 정해질 때까지(GNB 자동 선택 포함) 기다려야
+ *     한다 — usePermissions 훅이 이미 그 로딩 상태를 제공한다.
  */
 
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
+import { usePermissions } from "@/hooks/useMyRole";
+import { getHomePageCookie } from "@/lib/homePage";
 
 import { useDashboardView } from "./_components/useDashboardView";
 import ViewToggle    from "./_components/ViewToggle";
@@ -54,6 +65,25 @@ export default function DashboardPage() {
 function DashboardInner() {
   const currentProjectId = useAppStore((s) => s.currentProjectId);
   const { view, setView } = useDashboardView(currentProjectId);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const isEntry = searchParams.get("entry") === "1";
+  const { myJob, isLoading: isJobLoading } = usePermissions(currentProjectId);
+
+  // 로그인 직후("?entry=1") 1회만 착지 페이지 분기 — 평소 LNB 클릭 진입에는 관여하지 않는다.
+  useEffect(() => {
+    if (!isEntry) return;
+
+    const homePage = getHomePageCookie();
+    if (homePage) {
+      router.replace(homePage === "/dashboard" ? "/dashboard" : homePage);
+      return;
+    }
+
+    // 쿠키 미지정 — 역할 기반 기본값. 직무는 프로젝트별이라 선택·로딩이 끝날 때까지 대기.
+    if (!currentProjectId || isJobLoading) return;
+    router.replace(myJob === "PM" ? "/pm-board" : "/dashboard");
+  }, [isEntry, currentProjectId, myJob, isJobLoading, router]);
 
   // 프로필 — GNB 와 동일 queryKey 라 캐시 공유 (재호출 없음)
   const { data: myProfile } = useQuery<MyProfile>({

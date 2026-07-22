@@ -258,6 +258,12 @@ model TbPjProject {
   // 2026-07-20 — 업무일지 / 주간보고
   workLogs          TbWrWorkLog[]
   weeklyReports     TbWrWeeklyReport[]
+  // 2026-07-22 — 협조 및 이슈사항 (리더 리포트 인쇄용)
+  issues            TbWrIssue[]
+  // 2026-07-21 — 마일스톤 (설정 > 일정 탭)
+  milestones        TbPjMilestone[]
+  // 2026-07-22 — 공휴일 (설정 > 일정 탭) — WBS/업무일지 근무일 계산의 참조 데이터
+  holidays          TbPjHoliday[]
 
   // 배치(project-hard-delete) 가 매일 스캔하는 인덱스
   // (del_yn='Y' AND hard_del_dt <= now()) 조건을 빠르게 추리기 위함
@@ -428,6 +434,51 @@ model TbPjMemberRemovalNotice {
   project   TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_pj_member_removal_notice_prjct_fk")
 
   @@map("tb_pj_member_removal_notice")
+}
+
+// ── 프로젝트 마일스톤 — 오픈일/이행일 등 핵심 일정 (2026-07-21 도입) ──────────
+// 단계 범위(TbPjProject.anls_bgng_de 등)는 "기간"을 관리하지만, 마일스톤은
+// "단일 시점" 이벤트를 이름 붙여 자유롭게 추가/삭제하는 용도 — 개수 제한 없음.
+// 설정 > 일정 탭에서 관리. 완료 여부는 별도 컬럼 없이 오늘 날짜와 비교해 화면에서 판단.
+model TbPjMilestone {
+  milestone_id  String    @id @default(uuid())
+  prjct_id      String
+  milestone_nm  String
+  milestone_de  DateTime  @db.Date
+  // HTML(RichEditor/TipTap) — 착수보고회 장소/공지 등 팀원 공지용 본문. 이미지 붙여넣기 지원.
+  cn            String?
+  creat_mber_id String
+  creat_dt      DateTime  @default(now())
+  mdfr_mber_id  String?
+  mdfcn_dt      DateTime?
+
+  // 프로젝트 삭제 시 자동 정리
+  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_pj_milestone_prjct_fk")
+
+  // 설정 화면 목록 — 날짜 오름차순 정렬 조회
+  @@index([prjct_id, milestone_de], map: "tb_pj_milestone_prjct_de_idx")
+  @@map("tb_pj_milestone")
+}
+
+// ── 프로젝트 공휴일 — WBS/업무일지 근무일 계산의 참조 데이터 (2026-07-22 도입) ──
+// 설날·추석처럼 음력 공휴일은 매년 날짜가 달라 코드에 고정 저장이 불가능하므로,
+// 표준 목록(krHolidays.ts)을 프로젝트별로 "일괄 등록"해 실제 데이터로 굳혀 둔다.
+// 수정 기능은 없음 — 잘못 등록한 날짜는 삭제 후 다시 등록(또는 수동 추가)한다.
+model TbPjHoliday {
+  holiday_id    String    @id @default(uuid())
+  prjct_id      String
+  holiday_nm    String
+  holiday_de    DateTime  @db.Date
+  // LEGAL(표준 공휴일 일괄 등록) / CUSTOM(사용자가 직접 추가) — 목록 화면 배지 구분용
+  holiday_se_cd String    @default("CUSTOM")
+  creat_mber_id String
+  creat_dt      DateTime  @default(now())
+
+  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_pj_holiday_prjct_fk")
+
+  // 같은 날짜 중복 등록 방지 — 일괄 등록을 여러 번 눌러도 중복 생성되지 않음
+  @@unique([prjct_id, holiday_de], map: "tb_pj_holiday_prjct_de_uq")
+  @@map("tb_pj_holiday")
 }
 
 model TbDsDesignChange {
@@ -969,9 +1020,21 @@ model TbWrWeeklyReport {
   weekly_report_id String    @id @default(uuid())
   prjct_id         String
   week_start_dt    DateTime  @db.Date // 그 주 월요일
-  // AI 생성 + PM 편집 마크다운. "## 금주실적"/"## 차주계획" 섹션을 한 필드에 통째로 보관
-  // — 별도 컬럼으로 쪼개면 AI 출력 파싱이 필요해져 깨지기 쉬움 (PLAN_STUDIO_ARTF 전파 방식과 동일)
+  // AI가 생성한 원본 그대로 — 참고용이며 더 이상 편집 대상이 아님(읽기 전용 표시 + 복사).
+  // "## 금주실적" 헤더에 오타가 나면 구분이 안 되는 문제가 있어(2026-07-22), 실제 보고서로
+  // 쓰는 내용은 아래 perf_cn/plan_cn/comment_cn/note_cn 컬럼으로 분리했다 — PM이 이 원본을
+  // 참고해서 직접 채워 넣는다(자동 파싱 없음).
   draft_cn         String?
+  // 금주실적 — PM이 직접 작성/편집. AI 원본과 구분되는, 실제 보고서에 나가는 내용.
+  perf_cn          String?
+  // 차주계획 — PM이 직접 작성/편집.
+  plan_cn          String?
+  // 금주 코멘트 — "실적/계획 자세히 볼 시간 없으면 이것만 보세요" 식의 짧은 요약(선택).
+  // "총평"이라는 이름이 자기평가처럼 느껴진다는 피드백으로 이름을 바꿨다(2026-07-22,
+  // 이전 컬럼명 review_cn).
+  comment_cn       String?
+  // 특이사항 — 평가가 아니라 이번 주에 있었던 특기할 사항을 짧게 남기는 자리(선택).
+  note_cn          String?
   ai_task_id       String? // 마지막 생성에 쓰인 TbAiTask.ai_task_id (추적용, FK 없음)
   creat_mber_id    String // 최초 생성 요청 PM — FK 미설정(퇴장 멤버 기록 보존)
   creat_dt         DateTime  @default(now())
@@ -984,6 +1047,39 @@ model TbWrWeeklyReport {
   // "이력" 탭 — 최신 주부터 목록 조회
   @@index([prjct_id, week_start_dt(sort: Desc)], map: "idx_wr_weekly_report_prjct_dt")
   @@map("tb_wr_weekly_report")
+}
+
+model TbWrIssue {
+  issue_id      String    @id @default(uuid())
+  prjct_id      String
+  // CUSTOMER_REQ(고객요청) | OUR_REQ(당사요청) | ISSUE(이슈)
+  // "요청자" 하나로는 누가 누구에게 요청한 건지 방향이 안 보인다는 피드백으로 분리 —
+  // 방향이 있는 협조요청 2종 + 방향이 없는 일반 이슈로 구분한다 (2026-07-22 확장).
+  category_code String   @default("ISSUE") @db.VarChar(20)
+  cn            String // 내용
+  action_cn     String? // 조치 계획 / 결과
+  // 요청자(발견자) — 고객사 담당자 등 시스템 밖 인물도 많아 자유 텍스트(FK 없음)
+  requester_nm  String?
+  // 담당자 — 외부 협력사 인력 등 프로젝트 멤버가 아닌 사람도 지정할 수 있어 자유 텍스트
+  assignee_nm   String?
+  req_dt        DateTime? @db.Date
+  // 목표(예정)일 — "언제까지 처리할지"가 없으면 방치되기 쉬워 추가
+  due_dt        DateTime? @db.Date
+  // OPEN(대기) | IN_PROGRESS(진행중) | PARTIAL(부분완료) | DONE(완료)
+  status_code   String    @default("OPEN") @db.VarChar(10)
+  // 보고 여부(Y/N) — 내부적으로는 계속 관리하지만, 고객에게 보이는 인쇄 미리보기에는
+  // Y인 것만 노출한다. 오래돼서 더는 언급할 필요 없는 항목을 지우지 않고 N으로 빼둘 수 있음.
+  rpt_yn        String    @default("Y") @db.Char(1)
+  sort_ordr     Int       @default(0)
+  creat_mber_id String
+  creat_dt      DateTime  @default(now())
+  mdfr_mber_id  String?
+  mdfcn_dt      DateTime?
+  project       TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_wr_issue_prjct_fk")
+
+  // 주차 스냅샷이 아니라 프로젝트가 계속 관리하는 살아있는 목록 — 정렬 순서 인덱스만 필요
+  @@index([prjct_id, sort_ordr], map: "idx_wr_issue_prjct_sort")
+  @@map("tb_wr_issue")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments

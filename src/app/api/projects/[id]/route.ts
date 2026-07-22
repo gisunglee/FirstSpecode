@@ -61,6 +61,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       testStart:     project.test_bgng_de  ?? null,
       testEnd:       project.test_end_de   ?? null,
       myRole:       membership.role_code,
+      // 설정 > 일정 탭 접근 판정(schedule.manage)에 역할과 함께 필요 — PM/PL 직무는
+      // role=MEMBER 이어도 마일스톤/공휴일을 관리할 수 있어야 하기 때문.
+      myJob:        membership.job_title_code,
     });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}] DB 오류:`, err);

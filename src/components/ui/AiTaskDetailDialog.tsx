@@ -98,6 +98,7 @@ function taskTypeBadgeStyle(type: ExtendedTaskType): React.CSSProperties {
     IMPACT:    { bg: "#fff3e0",  color: "#ef6c00" },
     CUSTOM:    { bg: "#f5f5f5",  color: "#757575" },
     PRE_IMPL:  { bg: "#e0f7fa",  color: "#00838f" },
+    WEEKLY_REPORT_DRAFT: { bg: "#e8f5e9", color: "#2e7d32" },
     IA:        { bg: "#ede7f6",  color: "#5e35b1" },
     JOURNEY:   { bg: "#ede7f6",  color: "#5e35b1" },
     FLOW:      { bg: "#ede7f6",  color: "#5e35b1" },
@@ -166,6 +167,8 @@ export default function AiTaskDetailDialog({
         queryClient.invalidateQueries({ queryKey: ["area", projectId, data.refId] });
       } else if (data?.refType === "FUNCTION") {
         queryClient.invalidateQueries({ queryKey: ["function", projectId, data.refId] });
+      } else if (data?.refType === "WEEKLY_REPORT") {
+        queryClient.invalidateQueries({ queryKey: ["weekly-report", projectId, data.refId] });
       }
     },
     onError: (err: Error) => toast.error(err.message),
@@ -184,6 +187,9 @@ export default function AiTaskDetailDialog({
         queryClient.invalidateQueries({ queryKey: ["area", projectId, data.refId] });
       } else if (data?.refType === "FUNCTION") {
         queryClient.invalidateQueries({ queryKey: ["function", projectId, data.refId] });
+      } else if (data?.refType === "WEEKLY_REPORT") {
+        queryClient.invalidateQueries({ queryKey: ["weekly-reports", projectId] });
+        queryClient.invalidateQueries({ queryKey: ["weekly-report", projectId, data.refId] });
       }
       onClose();
     },

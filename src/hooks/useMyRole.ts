@@ -112,6 +112,8 @@ export function usePermissions(projectId: string | null) {
     canDeleteProject:  has("project.delete"),
     // 주간보고 — PM/PL 직무 또는 OWNER/ADMIN 역할만 (LNB 메뉴 노출·페이지 게이트에 사용)
     canManageWeeklyReport: has("weeklyReport.manage"),
+    // 설정 > 일정 탭(단계별 일정/마일스톤/공휴일) — PM/PL 직무 또는 OWNER/ADMIN 역할
+    canManageSchedule: has("schedule.manage"),
   };
 }
 

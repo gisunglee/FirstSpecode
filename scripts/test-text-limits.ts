@@ -89,14 +89,16 @@ console.log("2) TEXT_LIMITS — 한도 값 스냅샷 회귀 방지");
 console.log("=".repeat(80));
 
 assertEq("TEXT_LIMITS 전체", TEXT_LIMITS, {
-  name:           200,
-  displayId:      50,
-  comment:        2_000,
-  description:    50_000,
-  detailSpec:     50_000,
-  analysisMemo:   50_000,
-  taskDefinition: 50_000,
-  htmlContent:   100_000,
+  name:             200,
+  displayId:        50,
+  milestoneName:    400,
+  comment:          2_000,
+  description:      50_000,
+  detailSpec:       50_000,
+  analysisMemo:     50_000,
+  taskDefinition:   50_000,
+  htmlContent:      100_000,
+  milestoneContent: 300_000,
 });
 
 // ── 3. TEXT_LIMIT_LABEL 스냅샷 ───────────────────────────────────────────────
@@ -106,14 +108,16 @@ console.log("3) TEXT_LIMIT_LABEL — 사용자 노출 라벨 스냅샷");
 console.log("=".repeat(80));
 
 assertEq("TEXT_LIMIT_LABEL 전체", TEXT_LIMIT_LABEL, {
-  name:           "이름",
-  displayId:      "표시 ID",
-  comment:        "코멘트",
-  description:    "설명",
-  detailSpec:     "상세 명세",
-  analysisMemo:   "분석 메모",
-  taskDefinition: "과업 본문",
-  htmlContent:    "본문",
+  name:             "이름",
+  displayId:        "표시 ID",
+  milestoneName:    "마일스톤 이름",
+  comment:          "코멘트",
+  description:      "설명",
+  detailSpec:       "상세 명세",
+  analysisMemo:     "분석 메모",
+  taskDefinition:   "과업 본문",
+  htmlContent:      "본문",
+  milestoneContent: "마일스톤 내용",
 });
 
 // ── 4. validateTextLimit — 통과 케이스 ───────────────────────────────────────

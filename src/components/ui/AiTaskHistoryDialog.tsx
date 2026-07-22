@@ -52,6 +52,7 @@ const TASK_TYPE_BADGE: Record<AiTaskType, { bg: string; color: string }> = {
   MOCKUP:    { bg: "#f1f8e9", color: "#558b2f" },
   IMPACT:    { bg: "#fff3e0", color: "#ef6c00" },
   CUSTOM:    { bg: "#f5f5f5", color: "#757575" },
+  WEEKLY_REPORT_DRAFT: { bg: "#e3f2fd", color: "#1565c0" },
 };
 
 // ── 배지 스타일 ───────────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { addDaysStr } from "@/lib/weekUtil";
 
 export type AiTaskImplFn = { displayId: string; name: string };
 
@@ -142,10 +143,11 @@ export async function fetchProjectAiTasks(opts: {
   ]);
 
   // 대상 이름 조인 — ref_ty_code 별로 일괄 조회
-  const unitWorkIds = tasks.filter((t) => t.ref_ty_code === "UNIT_WORK").map((t) => t.ref_id);
-  const areaIds     = tasks.filter((t) => t.ref_ty_code === "AREA")     .map((t) => t.ref_id);
-  const functionIds = tasks.filter((t) => t.ref_ty_code === "FUNCTION") .map((t) => t.ref_id);
-  const artfIds     = tasks.filter((t) => t.ref_ty_code === "PLAN_STUDIO_ARTF").map((t) => t.ref_id);
+  const unitWorkIds     = tasks.filter((t) => t.ref_ty_code === "UNIT_WORK")     .map((t) => t.ref_id);
+  const areaIds         = tasks.filter((t) => t.ref_ty_code === "AREA")         .map((t) => t.ref_id);
+  const functionIds     = tasks.filter((t) => t.ref_ty_code === "FUNCTION")     .map((t) => t.ref_id);
+  const artfIds         = tasks.filter((t) => t.ref_ty_code === "PLAN_STUDIO_ARTF").map((t) => t.ref_id);
+  const weeklyReportIds = tasks.filter((t) => t.ref_ty_code === "WEEKLY_REPORT")  .map((t) => t.ref_id);
 
   const [unitWorks, areas, functions] = await Promise.all([
     unitWorkIds.length
@@ -200,6 +202,14 @@ export async function fetchProjectAiTasks(opts: {
       })
     : [];
 
+  // 주간보고 — 이름/코드 대신 "그 주 월~일" 범위를 표시 대상으로 사용
+  const weeklyReports = weeklyReportIds.length
+    ? await prisma.tbWrWeeklyReport.findMany({
+        where:  { weekly_report_id: { in: weeklyReportIds } },
+        select: { weekly_report_id: true, week_start_dt: true },
+      })
+    : [];
+
   type RefInfo = {
     name:         string;
     displayId:    string;
@@ -243,6 +253,19 @@ export async function fetchProjectAiTasks(opts: {
       screenName:   f.area?.screen?.scrn_nm ?? null,
       areaName:     f.area?.area_nm ?? null,
     }])
+  );
+  const weeklyReportMap = new Map<string, RefInfo>(
+    weeklyReports.map((r) => {
+      const weekStart = r.week_start_dt.toISOString().slice(0, 10);
+      const weekEnd   = addDaysStr(weekStart, 6);
+      return [r.weekly_report_id, {
+        name:         `${weekStart} ~ ${weekEnd} 주간보고`,
+        displayId:    "",
+        unitWorkName: null,
+        screenName:   null,
+        areaName:     null,
+      }];
+    })
   );
 
   const now         = Date.now();
@@ -294,6 +317,8 @@ export async function fetchProjectAiTasks(opts: {
       ? areaMap.get(t.ref_id)
       : t.ref_ty_code === "PLAN_STUDIO_ARTF"
       ? planArtfMap.get(t.ref_id)
+      : t.ref_ty_code === "WEEKLY_REPORT"
+      ? weeklyReportMap.get(t.ref_id)
       : functionMap.get(t.ref_id);
 
     const isZombie =

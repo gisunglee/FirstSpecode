@@ -26,6 +26,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "@/store/appStore";
 import { useMyRole, useIsSystemAdmin } from "@/hooks/useMyRole";
+import { getHomePageCookie, setHomePageCookie, clearHomePageCookie } from "@/lib/homePage";
 import { MenuIcon, type MenuIconKey } from "./menuIcons";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
@@ -37,6 +38,9 @@ type MenuItem = {
   // 상위 항목의 하위로 보이도록 살짝 들여쓰는 표시 (ex: 영역은 화면의 세부 구성)
   // 혼동 쌍(화면↔영역)에만 제한적으로 사용. 전체 계층 트리화는 과하므로 의도적 최소 개입
   indent?: boolean;
+  // true면 행 우측에 별 아이콘(홈페이지 지정 토글) 노출 — "대시보드" 그룹 6개 항목 전용.
+  // 2026-07-22: 로그인 직후 착지 페이지를 사용자가 고를 수 있게 추가.
+  canPinHome?: boolean;
 };
 
 type MenuGroup = {
@@ -84,15 +88,15 @@ export default function LNB() {
         icon: "g_dashboard",
         // 신규 3종 대시보드는 모두 현재 프로젝트(currentProjectId) 컨텍스트에서 동작.
         // URL 은 프로젝트 prefix 없이 단일 경로로 유지 — 기존 /dashboard 와 동일한 패턴.
+        // 순서(2026-07-22): 개인 업무 중심(대시보드/My Task/MY 보드/캘린더) → PM 도구(PM 현황/PM 진단).
+        // canPinHome: true — 이 6개만 별 아이콘으로 "내 홈페이지" 지정 가능(LNB 컴포넌트 본문 참조).
         items: [
-          { label: "대시보드", href: "/dashboard", icon: "i_dashboard" },
-          { label: "PM 진단",  href: "/pm",        icon: "i_pm" },
-          { label: "PM 현황",  href: "/pm-board",  icon: "i_graph" },
-          { label: "활동",     href: "/activity",  icon: "i_activity" },
-          { label: "포커스",   href: "/focus",     icon: "i_focus" },
-          { label: "MY 보드",  href: "/my-work",   icon: "i_mywork" },
-          { label: "My Task",  href: "/my-task",   icon: "i_myTask" },
-          { label: "캘린더",   href: "/calendar",  icon: "i_calendar" },
+          { label: "대시보드", href: "/dashboard", icon: "i_dashboard", canPinHome: true },
+          { label: "My Task",  href: "/my-task",   icon: "i_myTask",   canPinHome: true },
+          { label: "MY 보드",  href: "/my-work",   icon: "i_mywork",   canPinHome: true },
+          { label: "캘린더",   href: "/calendar",  icon: "i_calendar", canPinHome: true },
+          { label: "PM 현황",  href: "/pm-board",  icon: "i_graph",    canPinHome: true },
+          { label: "PM 진단",  href: "/pm",        icon: "i_pm",       canPinHome: true },
         ],
       },
       {
@@ -108,13 +112,15 @@ export default function LNB() {
           // 업무일지 — 개인 오늘의 할일/기록. WBS와 동일하게 프로젝트 prefix 없는 flat 경로
           // (currentProjectId 는 페이지 내부에서 store 로 읽음 — pm/my-work/focus와 동일 패턴).
           { label: "업무일지", href: "/work-logs", icon: "i_myTask" },
-          // 업무 리포트 — 업무일지와 완전히 같은 데이터를 "정돈된 문서" 형태로 보여주는 대안 뷰
-          // (2026-07-20). 별도 권한 없음 — work-logs와 동일하게 전 직무 노출.
+          // 업무 리포트 — 업무일지와 완전히 같은 데이터를 "정돈된 문서" 형태로 보여주는
+          // 개인용 대안 뷰(2026-07-20). 별도 권한 없음 — work-logs와 동일하게 전 직무 노출.
+          // AI로 팀 전체를 모으는 기능은 여기 없음 — "내 문서"와 "팀 집계"가 한 화면에
+          // 섞이면 헷갈린다는 피드백으로 "리더 리포트"로 분리했다(2026-07-21).
           { label: "업무 리포트", href: "/work-report", icon: "i_docs" },
-          // 주간보고 — PM 전용 AI 초안 생성. weeklyReport.manage 없으면 메뉴 자체를 숨김
-          // (직접 URL 접근은 페이지 자체의 권한 게이트가 별도로 막는다).
+          // 리더 리포트 — PM 전용. 팀원 전체 업무일지를 모은 AI 초안(금주실적/차주계획/총평)
+          // + 참여 현황. weeklyReport.manage 없으면 메뉴 자체를 숨김(예전 "주간보고"와 동일 가드).
           ...(canManageWeeklyReport
-            ? [{ label: "주간보고", href: "/weekly-reports", icon: "i_aiTask" as MenuIconKey }]
+            ? [{ label: "리더 리포트", href: "/leader-report", icon: "i_aiTask" as MenuIconKey }]
             : []),
         ],
       },
@@ -348,6 +354,24 @@ export default function LNB() {
   // 현재 활성 그룹 객체 — activeKey가 사라진 그룹을 가리키면 첫 그룹 사용
   const activeGroup = groups.find((g) => g.key === activeKey) ?? groups[0];
 
+  // ── 내 홈페이지(로그인 직후 착지 페이지) ────────────────────────────────────
+  // 쿠키 원천 — mount 시 1회 읽고, 별 아이콘 클릭 시에만 갱신(쿠키 자체는 반응형이
+  // 아니라서 6개 행이 즉시 갱신되려면 이 state가 필요).
+  const [homePage, setHomePageState] = useState<string | null>(null);
+  useEffect(() => {
+    setHomePageState(getHomePageCookie());
+  }, []);
+
+  function toggleHomePage(href: string) {
+    if (homePage === href) {
+      clearHomePageCookie();
+      setHomePageState(null);
+    } else {
+      setHomePageCookie(href);
+      setHomePageState(href);
+    }
+  }
+
   return (
     <div className={`sp-sidebar-wrapper${sidebarCollapsed ? " is-collapsed" : ""}`}>
       {/* 접힘/펼침 토글 — 서브 패널의 우측 가장자리에 위치
@@ -424,6 +448,8 @@ export default function LNB() {
                 // /projects/:id/members) 시 더 긴 쪽만 활성으로 인정하여
                 // "목록+멤버" 동시 active 문제를 방지.
                 isActive={it.href !== "#" && it.href === activeItemHref}
+                isHome={!!it.canPinHome && homePage === it.href}
+                onToggleHome={it.canPinHome ? () => toggleHomePage(it.href) : undefined}
               />
             ))}
           </div>
@@ -433,17 +459,66 @@ export default function LNB() {
   );
 }
 
-// ── 서브 패널 항목 (Link) ─────────────────────────────────────────────────────
-function SubItem({ item, isActive }: { item: MenuItem; isActive: boolean }) {
+// ── 서브 패널 항목 (Link + 홈페이지 지정 별) ─────────────────────────────────
+// 별 버튼을 Link 안에 중첩시키지 않고 형제로 둔다(버튼-안-링크는 잘못된 중첩이라
+// Link는 flex:1로 라벨 영역만 차지하고, 별은 그 옆에 별도 버튼으로 존재).
+function SubItem({
+  item, isActive, isHome, onToggleHome,
+}: {
+  item: MenuItem;
+  isActive: boolean;
+  isHome: boolean;
+  onToggleHome?: () => void;
+}) {
   const isDisabled = item.href === "#";
   return (
-    <Link
-      href={item.href}
+    // 기존 .sp-subpane-item 클래스(배경/패딩/hover/active/disabled)를 그대로 outer div로 옮겨서
+    // 하이라이트가 행 전체(별 버튼 자리까지)에 걸리도록 함 — Link는 아이콘+라벨만 담당.
+    <div
       className={`sp-subpane-item${isActive ? " is-active" : ""}${isDisabled ? " is-disabled" : ""}${item.indent ? " is-indented" : ""}`}
-      onClick={isDisabled ? (e) => e.preventDefault() : undefined}
+      style={{ padding: 0 }}
     >
-      <MenuIcon name={item.icon} size={15} />
-      <span>{item.label}</span>
-    </Link>
+      <Link
+        href={item.href}
+        style={{
+          display: "flex", alignItems: "center", gap: 10,
+          flex: 1, minWidth: 0, padding: "8px 14px",
+          color: "inherit", textDecoration: "none",
+        }}
+        onClick={isDisabled ? (e) => e.preventDefault() : undefined}
+      >
+        <MenuIcon name={item.icon} size={15} />
+        <span>{item.label}</span>
+      </Link>
+      {onToggleHome && (
+        <button
+          type="button"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleHome(); }}
+          title={isHome ? "내 홈페이지 해제" : "내 홈페이지로 지정 — 로그인 직후 이 화면으로 시작"}
+          aria-pressed={isHome}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            width: 22, height: 22, flexShrink: 0, marginRight: 6,
+            border: "none", background: "none", cursor: "pointer", padding: 0,
+            opacity: isHome ? 1 : 0.5,
+          }}
+        >
+          {/* .sp-subpane-item svg { color: ... } 전역 규칙이 이 svg도 덮어써서
+              색을 svg 엘리먼트에 직접 인라인으로 줌(상속 아닌 명시적 지정만 이길 수 있음) */}
+          <StarIcon filled={isHome} color={isHome ? "var(--color-warning)" : "var(--color-text-tertiary)"} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// 홈페이지 지정 여부 표시 — 채워진 별 = 현재 홈페이지
+// color를 svg에 직접 인라인으로 준다 — .sp-subpane-item svg 전역 규칙(색 강제 지정)을
+// 이겨야 하는데, 상속(currentColor)으로는 그 규칙이 이겨버려서 명시적 지정이 필요함.
+function StarIcon({ filled, color }: { filled: boolean; color: string }) {
+  return (
+    <svg width={13} height={13} viewBox="0 0 24 24" fill={filled ? color : "none"} stroke={color} strokeWidth={1.8} style={{ color }}>
+      <path d="M12 2.5l3.09 6.26 6.91.99-5 4.87 1.18 6.88L12 17.9l-6.18 3.5L7 14.62l-5-4.87 6.91-.99L12 2.5z" strokeLinejoin="round" />
+    </svg>
   );
 }

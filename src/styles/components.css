@@ -733,6 +733,9 @@ body {
 .sp-table tbody tr:nth-child(even) { background: var(--color-bg-table-even); }
 .sp-table tbody tr:hover           { background: var(--color-bg-table-hover); }
 .sp-table tbody tr.is-selected     { background: var(--color-bg-table-sel); }
+/* 줄무늬 없이 흰 배경 그대로 두는 변형 — 협조/이슈 표처럼 줄무늬보다 셀 편집 UI가 두드러져야 할 때 */
+.sp-table-flat tbody tr:nth-child(odd),
+.sp-table-flat tbody tr:nth-child(even) { background: var(--color-bg-card); }
 .sp-table td {
   padding: 7px 11px; color: var(--color-text-primary);
   border-right: 1px solid var(--color-border-subtle);
@@ -754,7 +757,7 @@ body {
      이 max-width보다 항상 작아 영향 없음. */
   max-width: 900px;
 }
-.sp-doc-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); table-layout: fixed; }
+.sp-doc-table { width: 100%; border-collapse: collapse; font-size: var(--text-base); table-layout: fixed; }
 .sp-doc-table td, .sp-doc-table th {
   border: 1px solid var(--color-border); padding: 8px 10px; vertical-align: top;
   color: var(--color-text-primary); text-align: left;
@@ -777,6 +780,22 @@ body {
 .sp-doc-textarea {
   display: block; width: 100%; border: none; background: transparent; outline: none; resize: none;
   font: inherit; color: inherit; padding: 0; line-height: 1.5;
+}
+
+/* ================================================================
+   PRINT — 화면 요소를 숨기고 .sp-print-area 만 인쇄 (리더 리포트 인쇄 미리보기 전용)
+   "숨기고 대상만 다시 보이기" 트릭 — 어떤 페이지의 DOM 구조든 새로 알아낼 필요 없이 항상 동작.
+   .sp-print-area 를 감싸는 모달 박스처럼 overflow/max-height 로 잘리는 조상이 있으면
+   .sp-print-reset 을 그 조상에 붙여 인쇄 시에만 그 제약을 풀어준다.
+================================================================ */
+@media print {
+  body * { visibility: hidden; }
+  .sp-print-area, .sp-print-area * { visibility: visible; }
+  .sp-print-area { position: absolute; left: 0; top: 0; width: 100%; }
+  .sp-no-print { display: none !important; }
+  .sp-print-reset {
+    position: static !important; overflow: visible !important; max-height: none !important;
+  }
 }
 
 

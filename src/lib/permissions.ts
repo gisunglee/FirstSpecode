@@ -150,6 +150,12 @@ export const PERMISSIONS = {
   // 주간보고 AI 초안 생성·조회·편집은 PM 전용 화면 — requirement.update 와
   // 동일 관례(OWNER/ADMIN 역할 또는 PM/PL 직무)로 별도 권한 분리.
   "weeklyReport.manage": { roles: ["OWNER", "ADMIN"], jobs: ["PM", "PL"] },
+
+  // ── 설정 > 일정 탭 (단계별 일정/마일스톤/공휴일) ─────────────────
+  // requirement.update·weeklyReport.manage 와 동일 관례 — OWNER/ADMIN 역할 또는 PM/PL 직무.
+  // 마일스톤·공휴일의 수정/삭제는 이 매트릭스로 통과 못 해도 "본인이 등록한 항목"이면
+  // 라우트 레벨에서 별도 분기로 허용(requirement.update의 담당자 예외와 동일 패턴).
+  "schedule.manage":     { roles: ["OWNER", "ADMIN"], jobs: ["PM", "PL"] },
 } as const satisfies Record<string, PermissionRule>;
 
 export type Permission = keyof typeof PERMISSIONS;

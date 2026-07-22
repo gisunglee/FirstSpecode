@@ -29,6 +29,15 @@ export function dayOfWeek(dateStr: string): number {
   return new Date(dateStr + "T00:00:00Z").getUTCDay();
 }
 
+// 연도 없이 월/일만 — 업무 리포트(WeeklyDocView·월간 구분선)에서 좁은 칸에 전체 날짜를
+// 쓰면 옆 칸과 겹쳐 보이던 문제로 짧게 표기한다.
+export function mmdd(dateStr: string): string {
+  return `${dateStr.slice(5, 7)}/${dateStr.slice(8, 10)}`;
+}
+export function mmddRange(from: string, to: string): string {
+  return `${mmdd(from)} ~ ${mmdd(to)}`;
+}
+
 // ── 월(month) 단위 유틸 — HistoryTab(기록 보기)와 work-report(업무 리포트) 공통 ──────
 
 export function getMonthStart(dateStr: string): string {

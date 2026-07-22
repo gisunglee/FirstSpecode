@@ -91,7 +91,8 @@ export type AiTaskType =
   | "MOCKUP"
   | "IMPACT"
   | "CUSTOM"
-  | "PRE_IMPL";
+  | "PRE_IMPL"
+  | "WEEKLY_REPORT_DRAFT";
 
 export const AI_TASK_TYPE_LABEL: Record<AiTaskType, string> = {
   INSPECT: "명세 검토",
@@ -101,6 +102,7 @@ export const AI_TASK_TYPE_LABEL: Record<AiTaskType, string> = {
   IMPACT: "영향도 분석",
   CUSTOM: "자유 요청",
   PRE_IMPL: "선 구현",
+  WEEKLY_REPORT_DRAFT: "주간보고 초안 생성",
 };
 
 // ── 참조 엔티티 타입 (ref_ty_code) ───────────────────────────────────────────
@@ -110,7 +112,8 @@ export type AiRefType =
   | "SCREEN"
   | "AREA"
   | "FUNCTION"
-  | "PLAN_STUDIO_ARTF";
+  | "PLAN_STUDIO_ARTF"
+  | "WEEKLY_REPORT";
 
 export const AI_REF_TYPE_LABEL: Record<AiRefType, string> = {
   UNIT_WORK: "단위업무",
@@ -118,6 +121,7 @@ export const AI_REF_TYPE_LABEL: Record<AiRefType, string> = {
   AREA: "영역",
   FUNCTION: "기능",
   PLAN_STUDIO_ARTF: "기획실 산출물",
+  WEEKLY_REPORT: "주간보고",
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -156,6 +160,7 @@ export const PROMPT_TEMPLATE_REF_TYPE_LABEL: Record<PromptTemplateRefType, strin
   AREA: "영역",
   FUNCTION: "기능",
   PLAN_STUDIO_ARTF: "기획실 산출물",
+  WEEKLY_REPORT: "주간보고",
 };
 
 // ══════════════════════════════════════════════════════════════════════════════

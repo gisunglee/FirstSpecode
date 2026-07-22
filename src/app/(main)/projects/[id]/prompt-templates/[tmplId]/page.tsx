@@ -60,6 +60,7 @@ const TASK_TYPE_OPTIONS: { value: TaskType; label: string }[] = [
   { value: "IMPACT", label: "영향도 분석" },
   { value: "IMPLEMENT", label: "구현" },
   { value: "TEST", label: "테스트" },
+  { value: "WEEKLY_REPORT_DRAFT", label: "주간보고 초안 생성" },
 ];
 
 // 더 이상 사용하지 않는 유형 (기존 데이터 표시용)
@@ -507,6 +508,7 @@ function PromptTemplateDetailPageInner() {
                   <option value="AREA">영역 설계 (AREA)</option>
                   <option value="FUNCTION">기능 설계 (FUNCTION)</option>
                   <option value="PLAN_STUDIO_ARTF">기획실 산출물 (PLAN_STUDIO_ARTF)</option>
+                  <option value="WEEKLY_REPORT">주간보고 (WEEKLY_REPORT)</option>
                 </select>
                 <span className="sp-select-arrow"><SelectChevron /></span>
               </div>

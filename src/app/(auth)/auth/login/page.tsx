@@ -48,7 +48,9 @@ export default function LoginPage() {
 function LoginInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect") || "/dashboard";
+  // entry=1 — 대시보드가 "로그인 직후 1회" 착지 분기(내 홈페이지 쿠키 → 없으면 PM 직무 기본값)를
+  // 수행하는 마커. redirect 파라미터로 특정 목적지가 이미 지정된 경우(초대 수락 등)는 그대로 존중.
+  const redirectTo = searchParams.get("redirect") || "/dashboard?entry=1";
 
   const [email,         setEmail]         = useState("");
   const [password,      setPassword]      = useState("");

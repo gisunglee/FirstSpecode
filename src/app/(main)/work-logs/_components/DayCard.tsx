@@ -130,7 +130,8 @@ export default function DayCard({ projectId, date, isToday }: { projectId: strin
           borderBottom: "1px solid var(--color-border-subtle)",
         }}
       >
-        <span style={{ fontSize: "var(--text-sm)", fontWeight: 700, color: isToday ? "var(--color-brand)" : "var(--color-text-primary)" }}>
+        {/* 날짜가 잘 안 보인다는 피드백으로 카드 헤더 폰트 한 단계 키움 */}
+        <span style={{ fontSize: "var(--text-base)", fontWeight: 700, color: isToday ? "var(--color-brand)" : "var(--color-text-primary)" }}>
           {formatDayHeading(date)}{isToday && " · 오늘"}
         </span>
         {todoItems.length > 0 && (

@@ -75,6 +75,11 @@ function ResizableImageView({
         width={(node.attrs.width as number) ?? undefined}
         style={{
           display:      "block",
+          // width를 인라인 스타일로도 명시 — HTML width 속성만 두면 이 이미지가 표시되는
+          // 화면(문서 상세·내보내기 등)의 다른 CSS가 img 태그에 width 규칙을 걸어둔 경우
+          // 그 규칙이 우선해 편집기에서 줄인 크기가 무시되고 커 보일 수 있다.
+          // 인라인 style은 외부 스타일시트보다 항상 우선하므로 항상 설정한 크기대로 보인다.
+          width:        (node.attrs.width as number | null) ? `${node.attrs.width}px` : undefined,
           maxWidth:     "100%",
           cursor:       resizing ? "ew-resize" : "default",
           outline:      selected ? "2px solid var(--color-brand, #1976d2)" : "none",
@@ -120,7 +125,16 @@ export const ResizableImage = Node.create({
       src:   { default: null },
       alt:   { default: null },
       title: { default: null },
-      width: { default: null },
+      width: {
+        default: null,
+        // width를 HTML 속성뿐 아니라 style="width:Npx"로도 함께 저장 — 저장된 HTML을
+        // (에디터 NodeView가 아니라) docx 변환기 등 다른 렌더러가 그대로 사용할 때도
+        // 그쪽 CSS가 img에 다른 width를 걸어두면 속성만으로는 밀릴 수 있어서다.
+        renderHTML: (attributes: Record<string, unknown>) => {
+          if (!attributes.width) return {};
+          return { width: attributes.width, style: `width: ${attributes.width}px` };
+        },
+      },
     };
   },
 

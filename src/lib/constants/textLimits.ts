@@ -27,6 +27,9 @@ export const TEXT_LIMITS = {
   // ── 단문 ──
   name:           200,        // 항목명 (단위업무·화면·영역·기능·요구사항·과업)
   displayId:      50,         // 표시 ID (UW-XXXXX 형식)
+  // 마일스톤 이름은 "오픈일" 같은 단어형 외에 긴 이벤트명(예: "OO은행 계좌이관 및 대고객 서비스 오픈")도
+  // 쓰이는 걸 감안해 일반 name(200)보다 넉넉하게 별도 키로 관리.
+  milestoneName:  400,
 
   // ── 중문 ──
   comment:        2_000,      // 코멘트·짧은 메모
@@ -39,6 +42,10 @@ export const TEXT_LIMITS = {
 
   // ── 장문 본문 (HTML — RichEditor) ──
   htmlContent:   100_000,     // 요구사항 원문/현행화 (HTML 태그 오버헤드 고려)
+  // 마일스톤 내용 — 착수보고회 장소·공지 등에 이미지 붙여넣기가 잦은 용도라 htmlContent 보다 넉넉하게.
+  // RichEditor는 붙여넣은 이미지를 800px/JPEG 82%로 리사이즈 후 base64로 인라인 저장하는데,
+  // 이미지 1장이 base64로 약 5~15만자(원본 40~200KB 상당)를 차지함 — 300,000자면 여유 있게 2~4장 + 텍스트 수용.
+  milestoneContent: 300_000,
 } as const;
 
 export type TextLimitField = keyof typeof TEXT_LIMITS;
@@ -49,12 +56,14 @@ export type TextLimitField = keyof typeof TEXT_LIMITS;
 export const TEXT_LIMIT_LABEL: Record<TextLimitField, string> = {
   name:           "이름",
   displayId:      "표시 ID",
+  milestoneName:  "마일스톤 이름",
   comment:        "코멘트",
   description:    "설명",
   detailSpec:     "상세 명세",
   analysisMemo:   "분석 메모",
   taskDefinition: "과업 본문",
   htmlContent:    "본문",
+  milestoneContent: "마일스톤 내용",
 };
 
 // ── 검증 헬퍼 ────────────────────────────────────────────────────────────────

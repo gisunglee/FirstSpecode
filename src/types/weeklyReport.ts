@@ -16,7 +16,16 @@ export type WeeklyReport = {
   weeklyReportId: string;
   /** YYYY-MM-DD — 그 주 월요일 */
   weekStartDt:    string;
+  /** AI가 생성한 원본 그대로 — 참고용, 편집 대상 아님 */
   draftCn:        string | null;
+  /** 금주실적 — PM이 직접 작성/편집 */
+  perfCn:         string | null;
+  /** 차주계획 — PM이 직접 작성/편집 */
+  planCn:         string | null;
+  /** 금주 코멘트 — "실적/계획 볼 시간 없으면 이것만" 식의 짧은 요약(선택) */
+  commentCn:      string | null;
+  /** 특이사항 — 이번 주에 있었던 특기할 사항(선택) */
+  noteCn:         string | null;
   aiTaskId:       string | null;
   /** 마지막으로 연결된 AI 태스크의 처리 상태 — null 이면 아직 생성 요청 안 함 */
   aiTaskStatus:   AiTaskStatus;

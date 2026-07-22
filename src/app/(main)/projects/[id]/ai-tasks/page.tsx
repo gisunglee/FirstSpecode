@@ -33,8 +33,8 @@ import {
 // Plan Studio 산출물 구분(IA/JOURNEY/FLOW/ERD/PROCESS) 까지 필터에 나오므로 로컬 확장 유지.
 
 type TaskStatus = AiTaskStatus;
-type TaskType   = "INSPECT" | "DESIGN" | "IMPLEMENT" | "PRE_IMPL" | "MOCKUP" | "IMPACT" | "CUSTOM" | "IA" | "JOURNEY" | "FLOW" | "ERD" | "PROCESS";
-type RefType    = "AREA" | "FUNCTION" | "UNIT_WORK" | "PLAN_STUDIO_ARTF";
+type TaskType   = "INSPECT" | "DESIGN" | "IMPLEMENT" | "PRE_IMPL" | "MOCKUP" | "IMPACT" | "CUSTOM" | "WEEKLY_REPORT_DRAFT" | "IA" | "JOURNEY" | "FLOW" | "ERD" | "PROCESS";
+type RefType    = "AREA" | "FUNCTION" | "UNIT_WORK" | "PLAN_STUDIO_ARTF" | "WEEKLY_REPORT";
 
 type TaskRow = {
   taskId:       string;
@@ -284,6 +284,9 @@ function AiTasksPageInner() {
       router.push(`/projects/${projectId}/areas/${row.refId}`);
     } else if (row.refType === "UNIT_WORK") {
       router.push(`/projects/${projectId}/unit-works/${row.refId}`);
+    } else if (row.refType === "WEEKLY_REPORT") {
+      // 주간보고는 프로젝트 하위 경로가 아니라 전역 페이지 — 특정 주차 딥링크는 미지원, 화면 진입만 보장
+      router.push(`/work-report`);
     } else {
       router.push(`/projects/${projectId}/functions/${row.refId}`);
     }
@@ -338,6 +341,7 @@ function AiTasksPageInner() {
             <option value="MOCKUP">목업</option>
             <option value="IMPACT">영향도 분석</option>
             <option value="CUSTOM">자유 요청</option>
+            <option value="WEEKLY_REPORT_DRAFT">주간보고 초안 생성</option>
           </select>
 
           <select value={filterRefType} onChange={(e) => handleFilterChange(setFilterRefType, e.target.value)} style={{ ...filterSelectStyle, width: 140 }}>
@@ -346,6 +350,7 @@ function AiTasksPageInner() {
             <option value="AREA">영역</option>
             <option value="FUNCTION">기능</option>
             <option value="PLAN_STUDIO_ARTF">기획실</option>
+            <option value="WEEKLY_REPORT">주간보고</option>
           </select>
 
           <select value={filterMember} onChange={(e) => handleFilterChange(setFilterMember, e.target.value)} style={{ ...filterSelectStyle, width: 140 }}>
@@ -423,7 +428,7 @@ function AiTasksPageInner() {
                 >
                   <div style={{ textAlign: "center" }}>
                     <span style={plainCellTextStyle}>
-                      {row.refType === "AREA" ? "영역" : row.refType === "UNIT_WORK" ? "단위업무" : row.refType === "PLAN_STUDIO_ARTF" ? "기획실" : "기능"}
+                      {row.refType === "AREA" ? "영역" : row.refType === "UNIT_WORK" ? "단위업무" : row.refType === "PLAN_STUDIO_ARTF" ? "기획실" : row.refType === "WEEKLY_REPORT" ? "주간보고" : "기능"}
                     </span>
                   </div>
                   <div style={{ textAlign: "center" }}>
