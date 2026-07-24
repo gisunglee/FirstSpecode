@@ -49,6 +49,9 @@ export default function GNB() {
   const setHasLoadedProfile = useAppStore((s) => s.setHasLoadedProfile);
   // 전역 검색 — 돋보기 버튼 클릭 시 GlobalSearchDialog 오픈
   const setGlobalSearchOpen = useAppStore((s) => s.setGlobalSearchOpen);
+  // 사이드바 "<" 버튼 3연타 접기 모드 — 기본 꺼짐(클릭 1번으로 즉시 토글)
+  const tripleClickToggleEnabled  = useAppStore((s) => s.tripleClickToggleEnabled);
+  const toggleTripleClickToggle   = useAppStore((s) => s.toggleTripleClickToggle);
 
   // 프로젝트 드롭다운 열림 상태
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -451,6 +454,31 @@ export default function GNB() {
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />
           </svg>
+        </button>
+
+        {/* 사이드바 "<" 버튼 3연타 접기 모드 on/off — LNB.tsx의 useTripleClickSidebarToggle이
+            이 값을 읽어 리스너를 켜고 끈다. 텍스트 배지로 표시 — 아이콘보다 기능이 바로 읽혀서. */}
+        <button
+          className="sp-menu-item"
+          title={
+            tripleClickToggleEnabled
+              ? "켜짐: 사이드바 접기 버튼을 3번 빠르게 눌러야 접힘/펼침이 전환돼요 (실수 방지)"
+              : "꺼짐: 사이드바 접기 버튼은 클릭 1번으로 바로 접힘/펼침이 전환돼요. 클릭하면 3연타 모드로 전환합니다."
+          }
+          onClick={toggleTripleClickToggle}
+          style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            padding: "2px 8px",
+            borderRadius: "var(--radius-sm)",
+            background: tripleClickToggleEnabled ? "var(--color-brand-subtle)" : "transparent",
+            color:      tripleClickToggleEnabled ? "var(--color-brand)" : "var(--color-text-secondary)",
+            border:     tripleClickToggleEnabled ? "1px solid var(--color-brand-border)" : "1px solid transparent",
+            fontSize:   "var(--text-xs)",
+            fontWeight: 700,
+            whiteSpace: "nowrap",
+          }}
+        >
+          3연타
         </button>
 
         {/* 전역 검색 — 돋보기 아이콘, Ctrl+K 단축키로도 열림 (GlobalSearchDialog 참고) */}

@@ -1,13 +1,16 @@
 /**
- * GET   /api/projects/[id]/weekly-reports/[weeklyReportId] — 단건 조회 (AI 태스크 상태 폴링 포함)
- * PATCH /api/projects/[id]/weekly-reports/[weeklyReportId] — 초안 수동 편집 저장
+ * GET /api/projects/[id]/weekly-reports/[weeklyReportId] — 단건 조회 (AI 태스크 상태 폴링 포함)
+ *
+ * 수정은 여기가 아니라 PATCH /api/projects/[id]/weekly-reports (weekStartDt 기준, 행이
+ * 없으면 자동 생성)로 옮겼다 — PM이 AI를 한 번도 요청하지 않은 주에도 금주 실적 등을 바로
+ * 적을 수 있어야 하는데, 이 라우트는 weeklyReportId가 있어야만 호출 가능해서 그 경우를
+ * 처리할 수 없었다(2026-07-23).
  */
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
-import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 import type { WeeklyReport, AiTaskStatus } from "@/types/weeklyReport";
 
 type RouteParams = { params: Promise<{ id: string; weeklyReportId: string }> };
@@ -54,57 +57,5 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/weekly-reports/${weeklyReportId}] DB 오류:`, err);
     return apiError("DB_ERROR", "주간보고 조회에 실패했습니다.", 500);
-  }
-}
-
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  const { id: projectId, weeklyReportId } = await params;
-  const gate = await requirePermission(request, projectId, "weeklyReport.manage");
-  if (gate instanceof Response) return gate;
-
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
-  }
-  const { draftCn, perfCn, planCn, commentCn, noteCn } = body as {
-    draftCn?: string; perfCn?: string; planCn?: string; commentCn?: string; noteCn?: string;
-  };
-  if (draftCn === undefined && perfCn === undefined && planCn === undefined && commentCn === undefined && noteCn === undefined) {
-    return apiError("VALIDATION_ERROR", "수정할 필드가 없습니다.", 400);
-  }
-
-  const limitErr = apiTextLimitGuard([
-    ["description", draftCn],
-    ["description", perfCn],
-    ["description", planCn],
-    ["description", commentCn],
-    ["description", noteCn],
-  ]);
-  if (limitErr) return limitErr;
-
-  try {
-    const existing = await prisma.tbWrWeeklyReport.findFirst({
-      where:  { weekly_report_id: weeklyReportId, prjct_id: projectId },
-      select: { weekly_report_id: true },
-    });
-    if (!existing) return apiError("NOT_FOUND", "주간보고를 찾을 수 없습니다.", 404);
-
-    await prisma.tbWrWeeklyReport.update({
-      where: { weekly_report_id: weeklyReportId },
-      data: {
-        ...(draftCn  !== undefined ? { draft_cn:  draftCn }  : {}),
-        ...(perfCn   !== undefined ? { perf_cn:   perfCn }   : {}),
-        ...(planCn    !== undefined ? { plan_cn:    planCn }    : {}),
-        ...(commentCn !== undefined ? { comment_cn: commentCn } : {}),
-        ...(noteCn    !== undefined ? { note_cn:    noteCn }    : {}),
-        mdfr_mber_id: gate.mberId,
-        mdfcn_dt: new Date(),
-      },
-    });
-
-    return apiSuccess({ weeklyReportId });
-  } catch (err) {
-    console.error(`[PATCH /api/projects/${projectId}/weekly-reports/${weeklyReportId}] DB 오류:`, err);
-    return apiError("DB_ERROR", "주간보고 저장에 실패했습니다.", 500);
   }
 }

@@ -17,7 +17,13 @@ export type WeeklyReportPromptResult = {
   promptTmplId: string | null;
 };
 
-export async function buildWeeklyReportPrompt(projectId: string, weekStart: string): Promise<WeeklyReportPromptResult> {
+export async function buildWeeklyReportPrompt(
+  projectId: string,
+  weekStart: string,
+  // PM이 "AI 요청" 팝업에서 남긴 추가 코멘트 — 선택. export-md(개인 MD 내보내기)는 이 개념이
+  // 없어 인자를 안 넘기므로 undefined로 자연스럽게 생략된다.
+  pmComment?: string
+): Promise<WeeklyReportPromptResult> {
   const weekEnd     = addDaysStr(weekStart, 6);
   const nextMonday  = addDaysStr(weekStart, 7);
   const nextSunday  = addDaysStr(weekStart, 13);
@@ -156,6 +162,12 @@ export async function buildWeeklyReportPrompt(projectId: string, weekStart: stri
   // (금주=대상 주간, 차주=이 기간이라는 걸 프롬프트에서 헷갈리지 않도록 분리)
   parts.push(`<대상 주간>\n${weekStart} ~ ${weekEnd}\n</대상 주간>`);
   parts.push(`<차주 기간>\n${nextMonday} ~ ${nextSunday}\n</차주 기간>`);
+
+  // PM이 요청 시점에 남긴 코멘트 — 다른 참고 데이터보다 앞쪽, 눈에 잘 띄는 위치에 둔다.
+  // "반드시 반영"이라고 못박아야 아래 업무일지 데이터 더미에 묻히지 않는다.
+  if (pmComment?.trim()) {
+    parts.push(`<PM 추가 요청사항 (이번 주 초안 작성 시 반드시 반영)>\n${pmComment.trim()}\n</PM 추가 요청사항>`);
+  }
 
   // 과거 보고 — "참고용" 태그명과 날짜를 명시해서 이번 주 데이터와 절대 안 섞이게 한다.
   // 실제 "섞지 마라" 지시는 시스템프롬프트(DB) 쪽에서 한 번 더 못박음.

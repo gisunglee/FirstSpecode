@@ -14,7 +14,7 @@
     "test:codes": "npx tsx scripts/test-codes.ts",
     "test:text-limits": "npx tsx scripts/test-text-limits.ts",
     "scan:text-lengths": "dotenv -e .env.local -- npx tsx scripts/scan-text-lengths.ts",
-    "postinstall": "node -e \"const fs=require('fs'),f='node_modules/@excalidraw/excalidraw/dist/dev/index.css';if(fs.existsSync(f)){const c=fs.readFileSync(f,'utf8');fs.writeFileSync(f,c.replace(/\\/\\*#\\s*sourceMappingURL=[^*]*\\*\\//g,''));}\""
+    "postinstall": "node -e \"const fs=require('fs'),f='node_modules/@excalidraw/excalidraw/dist/dev/index.css';if(fs.existsSync(f)){const c=fs.readFileSync(f,'utf8');fs.writeFileSync(f,c.replace(/\\/\\*#\\s*sourceMappingURL=[^*]*\\*\\//g,''));}\" && prisma generate"
   },
   "keywords": [],
   "author": "",

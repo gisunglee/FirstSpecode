@@ -4,11 +4,13 @@
  * 역할:
  *   - window 전체에 click 리스너를 붙여 지정 시간(threshold) 내에
  *     3번 연속 클릭이 발생하면 callback을 실행한다.
+ *   - enabled=false면 리스너를 아예 등록하지 않는다(기능 꺼짐).
  *   - 컴포넌트 언마운트 시 리스너 자동 정리.
  *
  * 사용 예시:
- *   useTripleClick(() => toggleSidebar());         // 기본 400ms
+ *   useTripleClick(() => toggleSidebar());                       // 기본 400ms
  *   useTripleClick(() => doSomething(), { threshold: 500 });
+ *   useTripleClick(callback, { enabled: settingOn });             // 설정으로 on/off
  */
 
 import { useEffect, useRef } from "react";
@@ -16,10 +18,12 @@ import { useEffect, useRef } from "react";
 type Options = {
   /** 연속 클릭으로 인정하는 최대 간격 (ms). 기본값 400 */
   threshold?: number;
+  /** false면 리스너를 등록하지 않음. 기본값 true */
+  enabled?: boolean;
 };
 
 export function useTripleClick(callback: () => void, options: Options = {}) {
-  const { threshold = 400 } = options;
+  const { threshold = 400, enabled = true } = options;
 
   // 마지막 클릭 시각과 연속 카운트를 ref로 관리
   // (state로 관리하면 불필요한 리렌더 발생)
@@ -27,6 +31,8 @@ export function useTripleClick(callback: () => void, options: Options = {}) {
   const lastClickTime = useRef(0);
 
   useEffect(() => {
+    if (!enabled) return;
+
     function handleClick() {
       const now = Date.now();
       const elapsed = now - lastClickTime.current;
@@ -50,7 +56,7 @@ export function useTripleClick(callback: () => void, options: Options = {}) {
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
   // callback이 바뀌어도 리스너 재등록을 막기 위해 ref로 래핑하지 않고
-  // threshold 변경 시에만 재등록 — callback은 안정적인 함수(store action)여야 함
+  // threshold/enabled 변경 시에만 재등록 — callback은 안정적인 함수(store action)여야 함
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threshold]);
+  }, [threshold, enabled]);
 }

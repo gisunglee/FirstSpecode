@@ -53,7 +53,7 @@ export default function MainLayout({
   const queryClient = useQueryClient();
   const router = useRouter();
 
-  // 어디서든 빠르게 3연타 클릭하면 사이드바 접기/펼치기
+  // 어디서든 빠르게 3연타 클릭하면 사이드바 접기/펼치기 (GNB 우측 상단 "3연타" 토글로 on/off)
   useTripleClickSidebarToggle();
 
   // 어디서든 Ctrl+K (Mac: Cmd+K) 로 전역 검색 토글

@@ -1,11 +1,15 @@
 "use client";
 
 /**
- * LeaderWeekListItem — 좌측 주차 목록의 카드 한 장 (리더 리포트 전용)
+ * LeaderWeekListItem — 주차 카드 한 장 (리더 리포트 전용)
  *
  * 업무 리포트의 WeekCardMini와 자리는 같지만 보여주는 정보가 다르다 — "내 계획 완료율"이 아니라
  * "이 주에 팀원이 몇 명 업무일지를 썼는지"(참여 현황)와 AI 생성 상태. 참여 기준은 일별(DAILY)
  * 기록 하나라도 남겼는지로 잡았다 — "매일 적는 습관"이라는 업무일지 취지에 가장 가깝다는 결정.
+ *
+ * 원래 좌측 세로 목록용이었는데, 카드 하나가 보여주는 정보량에 비해 세로 컬럼 전체를 차지하는
+ * 게 낭비라는 피드백으로 상단 가로 줄로 옮겼다(2026-07-23) — width를 고정폭으로 바꾼 것 외
+ * 내용·데이터 흐름은 그대로.
  */
 
 import { useQuery } from "@tanstack/react-query";
@@ -73,7 +77,7 @@ export default function LeaderWeekListItem({
     <div
       onClick={onClick}
       style={{
-        width: "100%", cursor: "pointer", borderRadius: "var(--radius-sm)",
+        width: 160, flexShrink: 0, cursor: "pointer", borderRadius: "var(--radius-sm)",
         border: `1px solid ${active ? "var(--color-brand)" : "var(--color-border)"}`,
         background: active ? "var(--color-brand-subtle)" : "var(--color-bg-card)",
         transition: "border-color var(--transition-fast), background var(--transition-fast)",

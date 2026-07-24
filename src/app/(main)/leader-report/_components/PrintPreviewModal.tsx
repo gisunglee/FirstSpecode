@@ -61,7 +61,9 @@ export default function PrintPreviewModal({
   noteCn: string | null;
   onClose: () => void;
 }) {
-  const sunday = addDaysStr(monday, 6);
+  const sunday     = addDaysStr(monday, 6);
+  const nextMonday = addDaysStr(monday, 7);
+  const nextSunday = addDaysStr(monday, 13);
   const [downloading, setDownloading] = useState(false);
 
   // Bearer 인증 헤더가 필요해서 fetch + blob 패턴 사용 (test-specs 엑셀 다운로드와 동일 흐름)
@@ -202,8 +204,8 @@ export default function PrintPreviewModal({
                 <thead>
                   <tr>
                     <th className="sp-doc-label" style={{ width: 90 }}>구분</th>
-                    <th className="sp-doc-label" style={{ width: "45%" }}>금주 실적</th>
-                    <th className="sp-doc-label">차주 계획</th>
+                    <th className="sp-doc-label" style={{ width: "45%" }}>금주 실적 ({mmddRange(monday, sunday)})</th>
+                    <th className="sp-doc-label">차주 계획 ({mmddRange(nextMonday, nextSunday)})</th>
                   </tr>
                 </thead>
                 <tbody>

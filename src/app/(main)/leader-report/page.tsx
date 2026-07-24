@@ -4,12 +4,14 @@
  * LeaderReportPage — 리더 리포트 (URL: /leader-report)
  *
  * 역할:
- *   - PM 전용. 팀원 전체 업무일지를 모은 AI 초안(금주실적/차주계획/총평)이 메인 콘텐츠,
- *     그 아래 참여 현황(그 주 일별 기록을 남긴 팀원 수)과 팀원별 원본을 참고용으로 둔다.
+ *   - PM 전용. 팀원 전체 업무일지를 모은 AI 초안이 참고 콘텐츠, 금주 실적/차주 계획/금주
+ *     코멘트/특이사항을 PM이 직접 쓰는 게 메인이다. 그 아래 참여 현황(그 주 일별 기록을 남긴
+ *     팀원 수)과 팀원별 원본을 참고용으로 둔다.
  *   - "업무 리포트"(/work-report, 개인 문서)와 헷갈리지 않도록 완전히 분리된 화면 —
  *     업무 리포트에 있던 AI 관련 기능을 전부 여기로 옮겨왔다(2026-07-21).
- *   - 좌측 주차 목록 + 우측 상세, 마스터-디테일 레이아웃은 업무 리포트와 동일한 골격.
- *     다만 여러 주의 AI 결과를 한 번에 펼쳐보는 "월간" 모드는 없음 — 한 주씩 본다.
+ *   - 주차 목록은 상단에 월 네비게이션 + 가로 카드 줄로 둔다(2026-07-23) — 원래 좌측 컬럼이었는데,
+ *     주차 카드 하나가 보여주는 정보("N주 날짜범위" + "N/M 작성" + AI 상태 점)가 세로 한 칸을
+ *     통째로 쓸 만큼 많지 않아 옆 여백만 차지했다. 카드 자체(LeaderWeekListItem)는 그대로 재사용.
  *
  * 권한:
  *   - weeklyReport.manage (OWNER/ADMIN 역할 또는 PM/PL 직무). 백엔드 API 게이트는 그대로.
@@ -86,42 +88,41 @@ export default function LeaderReportPage() {
           // 협조·이슈 탭 — 주 선택과 무관한 상시 목록이라 좌측 주 목록·주 네비게이션 없이 전체 폭
           <IssueList projectId={currentProjectId} />
         ) : (
-          <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
-            {/* 좌측 — 주차 목록(항상 노출) */}
-            <div style={{ width: 260, flex: "0 0 260px", display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-                <button type="button" className="sp-btn sp-btn-ghost sp-btn-xs" onClick={() => setMonthStart(addMonths(monthStart, -1))}>
-                  ←
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* 월 네비게이션 */}
+            <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+              <button type="button" className="sp-btn sp-btn-ghost sp-btn-xs" onClick={() => setMonthStart(addMonths(monthStart, -1))}>
+                ←
+              </button>
+              <span style={{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--color-text-primary)" }}>
+                {getMonthLabel(monthStart)}
+              </span>
+              <button type="button" className="sp-btn sp-btn-ghost sp-btn-xs" onClick={() => setMonthStart(addMonths(monthStart, 1))}>
+                →
+              </button>
+              {!isCurrentMonth && (
+                <button type="button" className="sp-btn sp-btn-ghost sp-btn-xs" onClick={() => setMonthStart(getMonthStart(todayStr()))}>
+                  이번달
                 </button>
-                <span style={{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--color-text-primary)" }}>
-                  {getMonthLabel(monthStart)}
-                </span>
-                <button type="button" className="sp-btn sp-btn-ghost sp-btn-xs" onClick={() => setMonthStart(addMonths(monthStart, 1))}>
-                  →
-                </button>
-                {!isCurrentMonth && (
-                  <button type="button" className="sp-btn sp-btn-ghost sp-btn-xs" onClick={() => setMonthStart(getMonthStart(todayStr()))}>
-                    이번달
-                  </button>
-                )}
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {weeksInMonth.map((monday, idx) => (
-                  <LeaderWeekListItem
-                    key={monday}
-                    projectId={currentProjectId}
-                    monday={monday}
-                    weekIndex={idx + 1}
-                    active={monday === selectedWeek}
-                    onClick={() => setSelectedWeek(monday)}
-                  />
-                ))}
-              </div>
+              )}
             </div>
 
-            {/* 우측 — 선택한 주의 AI 결과 + 참여 현황 */}
-            <div style={{ flex: 1, minWidth: 0 }}>
+            {/* 주차 카드 — 가로 스크롤 (많아야 5장이라 보통 한 줄에 다 들어옴) */}
+            <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
+              {weeksInMonth.map((monday, idx) => (
+                <LeaderWeekListItem
+                  key={monday}
+                  projectId={currentProjectId}
+                  monday={monday}
+                  weekIndex={idx + 1}
+                  active={monday === selectedWeek}
+                  onClick={() => setSelectedWeek(monday)}
+                />
+              ))}
+            </div>
+
+            {/* 선택한 주 네비게이션 + AI 결과·참여 현황 */}
+            <div>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 16 }}>
                 <button type="button" className="sp-btn sp-btn-ghost sp-btn-xs" onClick={() => setSelectedWeek(addDaysStr(selectedWeek, -7))}>
                   ← 이전주

@@ -23,9 +23,11 @@ export type LeaderReportXlsxIssue = {
 };
 
 export type LeaderReportXlsxInput = {
-  projectName:     string;
-  weekLabel:       string; // 예: "19주차 (07/20 ~ 07/26)"
-  reportDateLabel: string; // 예: "2026년 7월 22일 수요일"
+  projectName:      string;
+  weekLabel:        string; // 예: "19주차 (07/20 ~ 07/26)"
+  reportDateLabel:  string; // 예: "2026년 7월 22일 수요일"
+  thisWeekRangeLabel: string; // 예: "07/20 ~ 07/26" — "금주 실적" 헤더에 붙일 날짜
+  nextWeekRangeLabel: string; // 예: "07/27 ~ 08/02" — "차주 계획" 헤더에 붙일 날짜
   issues:          LeaderReportXlsxIssue[];
   perfCn:          string;
   planCn:          string;
@@ -205,9 +207,9 @@ export async function buildLeaderReportXlsx(input: LeaderReportXlsxInput): Promi
 
   const bizHeader = ws.addRow([]);
   bizHeader.getCell(COL.category).value = "구분";
-  bizHeader.getCell(COL.content).value  = "금주 실적";
+  bizHeader.getCell(COL.content).value  = `금주 실적 (${input.thisWeekRangeLabel})`;
   ws.mergeCells(bizHeader.number, COL.content, bizHeader.number, HALF_END);
-  bizHeader.getCell(PLAN_START).value = "차주 계획";
+  bizHeader.getCell(PLAN_START).value = `차주 계획 (${input.nextWeekRangeLabel})`;
   ws.mergeCells(bizHeader.number, PLAN_START, bizHeader.number, LAST_COL);
   applyHeaderRow(bizHeader, COL.category, LAST_COL);
 

@@ -1,20 +1,27 @@
 /**
- * GET  /api/projects/[id]/weekly-reports — 주간보고 이력 목록 (최신 주부터)
- * POST /api/projects/[id]/weekly-reports — 초안 생성/재생성 요청
+ * GET   /api/projects/[id]/weekly-reports — 주간보고 이력 목록 (최신 주부터)
+ * POST  /api/projects/[id]/weekly-reports — 초안 생성/재생성 요청 (AI 태스크 생성)
+ * PATCH /api/projects/[id]/weekly-reports — 금주 실적/차주 계획/금주 코멘트/특이사항 저장
  *
  * 권한: weeklyReport.manage (OWNER/ADMIN 역할 또는 PM/PL 직무) — PM 전용 기능이라
  * work-logs 와 달리 조회도 이 권한으로 게이트.
  *
- * 생성 흐름: 그 주(월~일) 전체 팀원의 TbWrWorkLog(DAILY)+항목을 모아 프롬프트를 조립하고
+ * 생성 흐름(POST): 그 주(월~일) 전체 팀원의 TbWrWorkLog(DAILY)+항목을 모아 프롬프트를 조립하고
  * TbAiTask(PENDING)를 생성한다. 실제 처리는 기존 AI 태스크 큐와 동일하게
  * `/run-ai-tasks` 가 담당 — worker complete 라우트의 applyResultToRef(WEEKLY_REPORT)가
  * 결과를 TbWrWeeklyReport.draft_cn 에 자동 반영한다.
+ *
+ * PATCH는 AI와 완전히 무관하다 — PM이 AI를 한 번도 요청하지 않은 주에도 금주 실적 등을 바로
+ * 적을 수 있어야 한다는 요구로 추가했다(2026-07-23, "AI는 옵셔널이지 필수가 아니다"). 그래서
+ * weeklyReportId가 아니라 weekStartDt로 찾고, 행이 없으면 이 라우트가 직접 만든다(POST처럼
+ * AI 태스크는 절대 만들지 않음) — PM 입장에선 "그냥 저장" 이상도 이하도 아니어야 한다.
  */
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 import { getWeekMondayStr, addDaysStr } from "@/lib/weekUtil";
 import { buildWeeklyReportPrompt } from "@/lib/weeklyReportPrompt";
 import type { WeeklyReport, AiTaskStatus } from "@/types/weeklyReport";
@@ -91,10 +98,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try { body = await request.json(); } catch {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
-  const { weekStartDt } = body as { weekStartDt?: string };
+  const { weekStartDt, pmComment } = body as { weekStartDt?: string; pmComment?: string };
   if (!isValidDateStr(weekStartDt)) {
     return apiError("VALIDATION_ERROR", "weekStartDt 형식이 올바르지 않습니다 (YYYY-MM-DD).", 400);
   }
+
+  const limitErr = apiTextLimitGuard([["comment", pmComment]]);
+  if (limitErr) return limitErr;
 
   // 월요일이 아닌 날짜가 와도 그 주의 월요일로 정규화 — 페이지에서 실수로 다른 요일을 보내도 안전
   const weekStart = getWeekMondayStr(weekStartDt);
@@ -103,7 +113,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     // 데이터 수집 + 프롬프트 조립은 lib로 분리 — GET .../export-md(개인 Claude 요청용 MD 내보내기)와
     // 완전히 같은 로직을 공유해야 "AI에게 실제로 전달되는 내용"이라는 게 거짓말이 안 된다.
-    const { finalReqCn, promptTmplId } = await buildWeeklyReportPrompt(projectId, weekStart);
+    // pmComment는 export-md엔 없는 개념이라 이 라우트에서만 세 번째 인자로 넘긴다.
+    const { finalReqCn, promptTmplId } = await buildWeeklyReportPrompt(projectId, weekStart, pmComment);
 
     if (promptTmplId) {
       await prisma.tbAiPromptTemplate.update({
@@ -129,7 +140,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           ref_id:            report.weekly_report_id,
           task_ty_code:      "WEEKLY_REPORT_DRAFT",
           req_cn:            finalReqCn,
-          req_snapshot_data: { weekStart, weekEnd, promptTmplId },
+          req_snapshot_data: { weekStart, weekEnd, promptTmplId, pmComment: pmComment?.trim() || null },
           req_mber_id:       gate.mberId,
           task_sttus_code:   "PENDING",
           retry_cnt:         0,
@@ -148,5 +159,66 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   } catch (err) {
     console.error(`[POST /api/projects/${projectId}/weekly-reports] DB 오류:`, err);
     return apiError("DB_ERROR", "주간보고 초안 생성 요청에 실패했습니다.", 500);
+  }
+}
+
+// ─── PATCH: 금주 실적/차주 계획/금주 코멘트/특이사항 저장 (AI 태스크 없이 행만 upsert) ───────
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  const { id: projectId } = await params;
+  const gate = await requirePermission(request, projectId, "weeklyReport.manage");
+  if (gate instanceof Response) return gate;
+
+  let body: unknown;
+  try { body = await request.json(); } catch {
+    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
+  }
+  const { weekStartDt, perfCn, planCn, commentCn, noteCn } = body as {
+    weekStartDt?: string; perfCn?: string; planCn?: string; commentCn?: string; noteCn?: string;
+  };
+  if (!isValidDateStr(weekStartDt)) {
+    return apiError("VALIDATION_ERROR", "weekStartDt 형식이 올바르지 않습니다 (YYYY-MM-DD).", 400);
+  }
+  if (perfCn === undefined && planCn === undefined && commentCn === undefined && noteCn === undefined) {
+    return apiError("VALIDATION_ERROR", "수정할 필드가 없습니다.", 400);
+  }
+
+  const limitErr = apiTextLimitGuard([
+    ["description", perfCn],
+    ["description", planCn],
+    ["description", commentCn],
+    ["description", noteCn],
+  ]);
+  if (limitErr) return limitErr;
+
+  const weekStart = getWeekMondayStr(weekStartDt);
+
+  try {
+    const report = await prisma.tbWrWeeklyReport.upsert({
+      where: {
+        prjct_id_week_start_dt: { prjct_id: projectId, week_start_dt: new Date(weekStart + "T00:00:00Z") },
+      },
+      update: {
+        ...(perfCn    !== undefined ? { perf_cn:    perfCn }    : {}),
+        ...(planCn    !== undefined ? { plan_cn:    planCn }    : {}),
+        ...(commentCn !== undefined ? { comment_cn: commentCn } : {}),
+        ...(noteCn    !== undefined ? { note_cn:    noteCn }    : {}),
+        mdfr_mber_id: gate.mberId,
+        mdfcn_dt: new Date(),
+      },
+      create: {
+        prjct_id:      projectId,
+        week_start_dt: new Date(weekStart + "T00:00:00Z"),
+        creat_mber_id: gate.mberId,
+        perf_cn:       perfCn ?? null,
+        plan_cn:       planCn ?? null,
+        comment_cn:    commentCn ?? null,
+        note_cn:       noteCn ?? null,
+      },
+    });
+
+    return apiSuccess({ weeklyReportId: report.weekly_report_id });
+  } catch (err) {
+    console.error(`[PATCH /api/projects/${projectId}/weekly-reports] DB 오류:`, err);
+    return apiError("DB_ERROR", "주간보고 저장에 실패했습니다.", 500);
   }
 }
