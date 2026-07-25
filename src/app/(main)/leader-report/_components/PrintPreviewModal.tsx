@@ -19,7 +19,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
-import { addDaysStr, getWeekMondayStr, mmddRange } from "@/lib/weekUtil";
+import { addDaysStr, mmddRange, computeProjectWeekIndex } from "@/lib/weekUtil";
 import type { IssueListResponse } from "@/types/issue";
 import { ISSUE_CATEGORY_LABEL, ISSUE_STATUS_LABEL } from "@/types/issue";
 
@@ -28,18 +28,6 @@ const WEEKDAY_LABEL = ["일", "월", "화", "수", "목", "금", "토"];
 function formatKoreanDate(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00Z");
   return `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 ${WEEKDAY_LABEL[d.getUTCDay()]}요일`;
-}
-
-// bgngDt(프로젝트 시작일) 기준 monday가 몇 번째 주인지 — PDF의 "26주차"가 캘린더 기준이 아니라
-// 프로젝트 진행 기준 번호였던 것을 재현. 시작일이 없으면 계산 불가(null) — 화면에서 주차 숫자를 생략.
-function computeWeekIndex(bgngDt: string | null, monday: string): number | null {
-  if (!bgngDt) return null;
-  const projectStartMonday = getWeekMondayStr(bgngDt.slice(0, 10));
-  const diffDays = Math.round(
-    (new Date(monday + "T00:00:00Z").getTime() - new Date(projectStartMonday + "T00:00:00Z").getTime()) /
-      (1000 * 60 * 60 * 24)
-  );
-  return Math.floor(diffDays / 7) + 1;
 }
 
 export default function PrintPreviewModal({
@@ -101,7 +89,7 @@ export default function PrintPreviewModal({
     queryFn: () => authFetch<{ data: IssueListResponse }>(`/api/projects/${projectId}/issues`).then((r) => r.data),
   });
 
-  const weekIndex = computeWeekIndex(projectQuery.data?.startDate ?? null, monday);
+  const weekIndex = computeProjectWeekIndex(projectQuery.data?.startDate ?? null, monday);
   const projectName = projectQuery.data?.name ?? "";
   // 인쇄본은 고객 보고용 — "보고" 체크를 끈 항목(오래돼서 더 언급 안 해도 되는 이슈 등)은 뺀다
   const issues = (issuesQuery.data?.items ?? []).filter((i) => i.rptYn === "Y");

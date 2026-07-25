@@ -39,8 +39,12 @@ type MappingRow = {
   colDc:       string;   // 설명
 };
 
+type GroupItem = { grpId: string; grpNm: string; sortOrder: number };
+
 type ApiMappingItem = {
   mappingId:      string;
+  grpId:          string;
+  grpNm:          string;
   colId:          string;
   colName:        string;
   colLogicalNm:   string;
@@ -100,14 +104,118 @@ export default function ColMappingDialog({
   const [rows, setRows] = useState<MappingRow[]>([]);
   const [selectedTableId, setSelectedTableId] = useState("");
 
-  // ── 기존 매핑 조회 ──────────────────────────────────────────────────────────
-  const { data: mappingData } = useQuery({
-    queryKey: ["col-mappings", projectId, refType, refId],
+  // ── 그룹 상태 ────────────────────────────────────────────────────────────
+  // 기능 하나가 여러 조회/저장 그룹(예: "검색 결과 그리드", "요약 카드")을 가질 수 있다.
+  // 매핑 그리드 자체는 activeGroupId 하나의 매핑만 보여주고 저장한다.
+  const [activeGroupId, setActiveGroupId]     = useState("");
+  const [addingGroup, setAddingGroup]         = useState(false);
+  const [newGroupName, setNewGroupName]       = useState("");
+  const [editingGroupId, setEditingGroupId]   = useState<string | null>(null);
+  const [editingGroupName, setEditingGroupName] = useState("");
+  const [deleteGroupTarget, setDeleteGroupTarget] = useState<GroupItem | null>(null);
+  const [switchWarnOpen, setSwitchWarnOpen]   = useState(false);
+  const [pendingGroupId, setPendingGroupId]   = useState<string | null>(null);
+  // 그룹 전환 시 미저장 변경 감지용 — 마지막으로 불러오거나 저장한 시점의 rows 스냅샷
+  const savedSnapshotRef = useRef<string>("[]");
+
+  // ── 그룹 목록 조회 ──────────────────────────────────────────────────────────
+  const { data: groupsData } = useQuery({
+    queryKey: ["col-mapping-groups", projectId, refType, refId],
     queryFn:  () =>
-      authFetch<{ data: { items: ApiMappingItem[] } }>(
-        `/api/projects/${projectId}/col-mappings?refType=${refType}&refId=${refId}`
+      authFetch<{ data: { items: GroupItem[] } }>(
+        `/api/projects/${projectId}/col-mapping-groups?refType=${refType}&refId=${refId}`
       ).then((r) => r.data),
     enabled: open && !!refId,
+  });
+  const groups = groupsData?.items ?? [];
+
+  // ── 그룹 생성/이름변경/삭제 ──────────────────────────────────────────────────
+  const createGroupMutation = useMutation({
+    mutationFn: (grpNm: string) =>
+      authFetch<{ data: GroupItem }>(`/api/projects/${projectId}/col-mapping-groups`, {
+        method: "POST",
+        body:   JSON.stringify({ refType, refId, grpNm }),
+      }).then((r) => r.data),
+    onSuccess: (group) => {
+      queryClient.invalidateQueries({ queryKey: ["col-mapping-groups", projectId, refType, refId] });
+      setActiveGroupId(group.grpId);
+      setAddingGroup(false);
+      setNewGroupName("");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const renameGroupMutation = useMutation({
+    mutationFn: ({ grpId, grpNm }: { grpId: string; grpNm: string }) =>
+      authFetch(`/api/projects/${projectId}/col-mapping-groups/${grpId}`, {
+        method: "PUT",
+        body:   JSON.stringify({ grpNm }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["col-mapping-groups", projectId, refType, refId] });
+      setEditingGroupId(null);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const deleteGroupMutation = useMutation({
+    mutationFn: (grpId: string) =>
+      authFetch(`/api/projects/${projectId}/col-mapping-groups/${grpId}`, { method: "DELETE" }),
+    onSuccess: (_data, grpId) => {
+      queryClient.invalidateQueries({ queryKey: ["col-mapping-groups", projectId, refType, refId] });
+      setDeleteGroupTarget(null);
+      setActiveGroupId((cur) => (cur === grpId ? (groups.find((g) => g.grpId !== grpId)?.grpId ?? "") : cur));
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // 그룹이 하나도 없으면 자동으로 "그룹 1"을 만들어버리지 않고 이름 입력 UI를 바로 띄운다.
+  // (말없이 만들어두면 나중에 어떻게 이름을 고치는지 못 찾는 문제가 있었음 — 처음부터 이름을 받는다)
+  // activeGroupId가 비었거나 사라졌으면 첫 그룹으로 보정.
+  useEffect(() => {
+    if (!open || groupsData === undefined) return;
+    if (groups.length === 0) {
+      if (!addingGroup) {
+        setAddingGroup(true);
+        setNewGroupName("그룹 1");
+      }
+      return;
+    }
+    if (!activeGroupId || !groups.some((g) => g.grpId === activeGroupId)) {
+      setActiveGroupId(groups[0].grpId);
+    }
+  // groups/addingGroup은 매 렌더 재생성·갱신되어 무한 루프를 유발하므로 의존성에서 제외
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, groupsData]);
+
+  // 다이얼로그가 닫히면 그룹 관련 로컬 상태 초기화 (다음에 열 때 깨끗하게 시작)
+  useEffect(() => {
+    if (open) return;
+    setActiveGroupId("");
+    setAddingGroup(false);
+    setNewGroupName("");
+    setEditingGroupId(null);
+    setDeleteGroupTarget(null);
+  }, [open]);
+
+  function requestSwitchGroup(grpId: string) {
+    if (grpId === activeGroupId) return;
+    if (isDirty) {
+      setPendingGroupId(grpId);
+      setSwitchWarnOpen(true);
+    } else {
+      setActiveGroupId(grpId);
+    }
+  }
+
+  // ── 기존 매핑 조회 (활성 그룹 범위) ───────────────────────────────────────────
+  const { data: mappingData } = useQuery({
+    queryKey: ["col-mappings", projectId, refType, refId, activeGroupId],
+    queryFn:  () =>
+      authFetch<{ data: { items: ApiMappingItem[] } }>(
+        `/api/projects/${projectId}/col-mappings?refType=${refType}&refId=${refId}&grpId=${activeGroupId}`
+      ).then((r) => r.data),
+    enabled: open && !!refId && !!activeGroupId,
   });
 
   // ── DB 테이블 목록 (effect보다 앞에 선언해야 effect에서 참조 가능) ──────────
@@ -120,7 +228,7 @@ export default function ColMappingDialog({
   });
   const tables = tablesData?.tables ?? [];
 
-  // open 될 때 rows 초기화 + TABLE_SCRIPT 기반 테이블 자동 선택
+  // open 될 때(+ 그룹 전환 시) rows 초기화 + TABLE_SCRIPT 기반 테이블 자동 선택
   useEffect(() => {
     if (!open) return;
     const items = mappingData?.items ?? [];
@@ -134,6 +242,10 @@ export default function ColMappingDialog({
       uiTyCode:   m.uiTyCode,
       usePurpsCn: m.usePurpsCn,
       colDc:      m.colDc,
+    })));
+    // 이 시점의 rows를 "저장된 상태"로 기록 — 이후 rows 변경분과 비교해 그룹 전환 시 미저장 경고 여부 판단
+    savedSnapshotRef.current = JSON.stringify(items.map((m) => ({
+      colId: m.colId, ioSeCode: m.ioSeCode, uiTyCode: m.uiTyCode, usePurpsCn: m.usePurpsCn, colDc: m.colDc,
     })));
 
     // 단위업무 설명에서 TABLE_SCRIPT:xxx> 패턴 파싱 후 자동 선택
@@ -156,7 +268,12 @@ export default function ColMappingDialog({
     setFilterTableIds([]);
   // tables.length를 의존성으로 사용 — tables 배열 참조가 매번 바뀌어 무한 루프 방지
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, mappingData, tables.length, unitWorkDc]);
+  }, [open, mappingData, activeGroupId, tables.length, unitWorkDc]);
+
+  // 현재 rows가 마지막 저장/로드 시점과 달라졌는지 — 그룹 탭 전환 시 경고 여부 판단에 사용
+  const isDirty = savedSnapshotRef.current !== JSON.stringify(
+    rows.map((r) => ({ colId: r.colId, ioSeCode: r.ioSeCode, uiTyCode: r.uiTyCode, usePurpsCn: r.usePurpsCn, colDc: r.colDc }))
+  );
 
   // ── 선택 테이블의 컬럼 목록 ────────────────────────────────────────────────
   const { data: colsData } = useQuery({
@@ -315,6 +432,7 @@ export default function ColMappingDialog({
         body:   JSON.stringify({
           refType,
           refId,
+          grpId: activeGroupId,
           items: validRows.map((r) => ({
             colId:      r.colId,
             ioSeCode:   r.ioSeCode || null,
@@ -327,6 +445,10 @@ export default function ColMappingDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["col-mappings", projectId, refType, refId] });
+      // 저장 직후 현재 rows를 "저장된 상태"로 갱신 — isDirty 재계산 시 그룹 전환 경고가 다시 뜨지 않게 함
+      savedSnapshotRef.current = JSON.stringify(
+        rows.filter((r) => r.colId).map((r) => ({ colId: r.colId, ioSeCode: r.ioSeCode, uiTyCode: r.uiTyCode, usePurpsCn: r.usePurpsCn, colDc: r.colDc }))
+      );
       toast.success("컬럼 매핑이 저장되었습니다.");
       onSaved();
     },
@@ -365,6 +487,115 @@ export default function ColMappingDialog({
               </div>
               <button onClick={onClose} style={closeBtnStyle}>닫기</button>
             </div>
+          </div>
+
+          {/* 그룹 탭 — 더블클릭으로 이름 수정, ×로 삭제(그룹이 2개 이상일 때만) */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+            {groups.map((g) => {
+              const active  = g.grpId === activeGroupId;
+              const editing = editingGroupId === g.grpId;
+              return (
+                <div
+                  key={g.grpId}
+                  onClick={() => { if (!editing) requestSwitchGroup(g.grpId); }}
+                  onDoubleClick={() => { setEditingGroupId(g.grpId); setEditingGroupName(g.grpNm); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    padding: "6px 12px", borderRadius: 6,
+                    background: editing ? "transparent" : (active ? "var(--color-primary, #1976d2)" : "var(--color-bg-muted)"),
+                    border: editing ? "1px solid var(--color-border)" : "1px solid transparent",
+                    color: active ? "#fff" : "var(--color-text-primary)",
+                    fontSize: 12, fontWeight: 600, cursor: "pointer", userSelect: "none",
+                  }}
+                >
+                  {editing ? (
+                    <input
+                      autoFocus
+                      value={editingGroupName}
+                      onChange={(e) => setEditingGroupName(e.target.value)}
+                      onFocus={(e) => e.currentTarget.select()}
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                        if (e.key === "Escape") setEditingGroupId(null);
+                      }}
+                      onBlur={() => {
+                        const trimmed = editingGroupName.trim();
+                        if (trimmed && trimmed !== g.grpNm) {
+                          renameGroupMutation.mutate({ grpId: g.grpId, grpNm: trimmed });
+                        } else {
+                          setEditingGroupId(null);
+                        }
+                      }}
+                      style={{
+                        fontSize: 12, padding: "4px 6px", minWidth: 140,
+                        border: "1px solid var(--color-primary, #1976d2)", borderRadius: 4,
+                        background: "var(--color-bg-card)", color: "var(--color-text-primary)",
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <span>{g.grpNm}</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEditingGroupId(g.grpId); setEditingGroupName(g.grpNm); }}
+                        title="이름 변경"
+                        style={{
+                          background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: 0,
+                          color: active ? "rgba(255,255,255,0.85)" : "var(--color-text-secondary)", fontSize: 12,
+                        }}
+                      >
+                        ✎
+                      </button>
+                    </>
+                  )}
+                  {!editing && groups.length > 1 && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeleteGroupTarget(g); }}
+                      title="그룹 삭제"
+                      style={{
+                        background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: 0,
+                        color: active ? "rgba(255,255,255,0.85)" : "#e53935", fontSize: 13,
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+
+            {addingGroup ? (
+              <input
+                autoFocus
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                onFocus={(e) => e.currentTarget.select()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newGroupName.trim()) createGroupMutation.mutate(newGroupName.trim());
+                  if (e.key === "Escape" && groups.length > 0) { setAddingGroup(false); setNewGroupName(""); }
+                }}
+                onBlur={() => {
+                  if (newGroupName.trim()) createGroupMutation.mutate(newGroupName.trim());
+                  else if (groups.length > 0) { setAddingGroup(false); setNewGroupName(""); }
+                }}
+                placeholder="그룹 이름"
+                style={{
+                  fontSize: 12, padding: "5px 8px", minWidth: 140,
+                  border: "1px solid var(--color-primary, #1976d2)", borderRadius: 6,
+                  background: "var(--color-bg-card)", color: "var(--color-text-primary)",
+                }}
+              />
+            ) : (
+              <button
+                onClick={() => setAddingGroup(true)}
+                style={{
+                  padding: "6px 10px", borderRadius: 6, border: "1px dashed var(--color-border)",
+                  background: "transparent", color: "var(--color-text-secondary)", fontSize: 12, cursor: "pointer",
+                }}
+              >
+                + 그룹
+              </button>
+            )}
           </div>
 
           {/* 빠른 추가 영역 (테이블 선택 + 행 추가) */}
@@ -680,6 +911,76 @@ export default function ColMappingDialog({
                   onClick={() => { setSaveWarnOpen(false); saveMutation.mutate(); }}
                 >
                   저장
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── 그룹 전환 시 미저장 변경 경고 ── */}
+        {switchWarnOpen && (
+          <div
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1300 }}
+            onClick={() => { setSwitchWarnOpen(false); setPendingGroupId(null); }}
+          >
+            <div
+              style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "28px 32px", minWidth: 340, maxWidth: 440, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>저장하지 않은 변경사항이 있습니다</p>
+              <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--color-text-secondary)" }}>
+                지금 다른 그룹으로 이동하면 이 그룹에서 편집한 내용이 사라집니다. 이동하시겠습니까?
+              </p>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button
+                  style={{ padding: "6px 16px", borderRadius: 6, border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: 13, cursor: "pointer" }}
+                  onClick={() => { setSwitchWarnOpen(false); setPendingGroupId(null); }}
+                >
+                  취소
+                </button>
+                <button
+                  style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "rgba(103,80,164,1)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                  onClick={() => {
+                    setSwitchWarnOpen(false);
+                    if (pendingGroupId) setActiveGroupId(pendingGroupId);
+                    setPendingGroupId(null);
+                  }}
+                >
+                  이동
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── 그룹 삭제 확인 ── */}
+        {deleteGroupTarget && (
+          <div
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1300 }}
+            onClick={() => setDeleteGroupTarget(null)}
+          >
+            <div
+              style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "28px 32px", minWidth: 340, maxWidth: 440, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>그룹 삭제</p>
+              <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--color-text-secondary)" }}>
+                {`"${deleteGroupTarget.grpNm}" 그룹과 그 안의 컬럼 매핑이 모두 삭제됩니다. 계속할까요?`}
+              </p>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button
+                  style={{ padding: "6px 16px", borderRadius: 6, border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-text-secondary)", fontSize: 13, cursor: "pointer" }}
+                  onClick={() => setDeleteGroupTarget(null)}
+                  disabled={deleteGroupMutation.isPending}
+                >
+                  취소
+                </button>
+                <button
+                  style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "#e53935", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                  onClick={() => deleteGroupMutation.mutate(deleteGroupTarget.grpId)}
+                  disabled={deleteGroupMutation.isPending}
+                >
+                  {deleteGroupMutation.isPending ? "삭제 중..." : "삭제"}
                 </button>
               </div>
             </div>

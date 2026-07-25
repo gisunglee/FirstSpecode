@@ -219,7 +219,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     saveHistory?:      boolean;
   };
 
-  if (!name?.trim()) return apiError("VALIDATION_ERROR", "기능명을 입력해 주세요.", 400);
+  // name은 부분 수정 시 생략 가능(기존값 유지) — 단, 전달됐다면 공백은 거부
+  if (name !== undefined && !name.trim()) {
+    return apiError("VALIDATION_ERROR", "기능명을 입력해 주세요.", 400);
+  }
 
   // 장문 텍스트 한도 검증 — 정책은 src/lib/constants/textLimits.ts
   const limitErr = apiTextLimitGuard([
@@ -276,8 +279,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           snapshot_data: {
             funcId:    functionId,
             displayId: existing.func_display_id,
-            name:      name.trim(),
-            type:      type || "OTHER",
+            name:      name?.trim() || existing.func_nm,
+            type:      type || existing.func_ty_code,
           },
           chg_mber_id: gate.mberId,
         },

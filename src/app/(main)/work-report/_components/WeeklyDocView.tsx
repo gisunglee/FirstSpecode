@@ -186,7 +186,7 @@ export default function WeeklyDocView({ projectId, monday }: { projectId: string
               <DocEditableCell
                 value={thisWeekLog?.resultCn ?? ""}
                 placeholder="이번 주 실적을 정리해 보세요."
-                minRows={3}
+                minRows={5}
                 onSave={(v) => saveThisWeekResult.mutate(v)}
               />
             </td>
@@ -205,7 +205,7 @@ export default function WeeklyDocView({ projectId, monday }: { projectId: string
               <DocEditableCell
                 value={nextWeekLog?.noteCn ?? ""}
                 placeholder="다음 주 계획을 적어 보세요."
-                minRows={3}
+                minRows={5}
                 onSave={(v) => saveNextWeekPlan.mutate(v)}
               />
             </td>
@@ -217,7 +217,7 @@ export default function WeeklyDocView({ projectId, monday }: { projectId: string
             <td colSpan={2}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
                 {tagItems.map((item) => (
-                  <span key={item.itemId} className="sp-badge sp-badge-neutral sp-badge-pill" style={{ gap: 5 }}>
+                  <span key={item.itemId} className="sp-badge sp-badge-neutral sp-badge-pill sp-badge-tag" style={{ gap: 5 }}>
                     🔖 {item.itemCn}
                     <button
                       type="button"
@@ -268,6 +268,7 @@ export default function WeeklyDocView({ projectId, monday }: { projectId: string
                     value={log?.noteCn ?? ""}
                     placeholder="결과 입력"
                     minRows={2}
+                    fill
                     onSave={(v) => saveDailyResult.mutate({ date: d, noteCn: v })}
                   />
                 </td>

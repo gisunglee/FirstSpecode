@@ -49,6 +49,10 @@ export default function LeaderReportPage() {
   // 이슈사항 현황이 자체 CRUD·정렬·인쇄·엑셀까지 갖추며 사실상 독립 기능이 됐는데, 주 단위
   // 콘텐츠 맨 아래 있어 매번 스크롤해야 닿던 문제를 탭 분리로 해결(2026-07-22).
   const [activeTab, setActiveTab] = useState<"ai" | "issues">("ai");
+  // "최근 주간 활동 MD"/"인쇄 미리보기" 열림 상태 — 트리거 버튼을 페이지 우상단에 두기 위해
+  // LeaderReportDetail이 아니라 여기서 갖고 있다(2026-07-24, 버튼 위치 피드백으로 이동).
+  const [mdModalOpen, setMdModalOpen]       = useState(false);
+  const [printModalOpen, setPrintModalOpen] = useState(false);
 
   const weeksInMonth   = getWeeksOverlappingMonth(monthStart);
   const isCurrentMonth = monthStart === getMonthStart(todayStr());
@@ -68,12 +72,25 @@ export default function LeaderReportPage() {
           🧭 리더 리포트
         </div>
         {showContent && (
-          <div className="sp-tab-seg">
-            <div className={`sp-tab-seg-item${activeTab === "ai" ? " is-active" : ""}`} onClick={() => setActiveTab("ai")}>
-              주간보고
-            </div>
-            <div className={`sp-tab-seg-item${activeTab === "issues" ? " is-active" : ""}`} onClick={() => setActiveTab("issues")}>
-              협조·이슈
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            {/* 주간보고 탭에서만 의미 있는 액션이라 그 탭일 때만 노출 */}
+            {activeTab === "ai" && (
+              <div style={{ display: "flex", gap: 6 }}>
+                <button type="button" className="sp-btn sp-btn-secondary sp-btn-sm" onClick={() => setMdModalOpen(true)}>
+                  최근 주간 활동 MD
+                </button>
+                <button type="button" className="sp-btn sp-btn-secondary sp-btn-sm" onClick={() => setPrintModalOpen(true)}>
+                  인쇄 미리보기
+                </button>
+              </div>
+            )}
+            <div className="sp-tab-seg">
+              <div className={`sp-tab-seg-item${activeTab === "ai" ? " is-active" : ""}`} onClick={() => setActiveTab("ai")}>
+                주간보고
+              </div>
+              <div className={`sp-tab-seg-item${activeTab === "issues" ? " is-active" : ""}`} onClick={() => setActiveTab("issues")}>
+                협조·이슈
+              </div>
             </div>
           </div>
         )}
@@ -109,12 +126,11 @@ export default function LeaderReportPage() {
 
             {/* 주차 카드 — 가로 스크롤 (많아야 5장이라 보통 한 줄에 다 들어옴) */}
             <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
-              {weeksInMonth.map((monday, idx) => (
+              {weeksInMonth.map((monday) => (
                 <LeaderWeekListItem
                   key={monday}
                   projectId={currentProjectId}
                   monday={monday}
-                  weekIndex={idx + 1}
                   active={monday === selectedWeek}
                   onClick={() => setSelectedWeek(monday)}
                 />
@@ -139,7 +155,14 @@ export default function LeaderReportPage() {
                   </button>
                 )}
               </div>
-              <LeaderReportDetail projectId={currentProjectId} monday={selectedWeek} />
+              <LeaderReportDetail
+                projectId={currentProjectId}
+                monday={selectedWeek}
+                mdModalOpen={mdModalOpen}
+                onCloseMdModal={() => setMdModalOpen(false)}
+                printModalOpen={printModalOpen}
+                onClosePrintModal={() => setPrintModalOpen(false)}
+              />
             </div>
           </div>
         )}

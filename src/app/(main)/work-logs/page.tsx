@@ -20,7 +20,7 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAppStore } from "@/store/appStore";
-import { getWeekMondayStr } from "@/lib/weekUtil";
+import { getWeekMondayStr, addDaysStr } from "@/lib/weekUtil";
 import TodayTab from "./_components/TodayTab";
 import HistoryTab from "./_components/HistoryTab";
 
@@ -53,8 +53,17 @@ function WorkLogsPageInner() {
           marginBottom: 16, gap: 12, flexWrap: "wrap",
         }}
       >
-        <div style={{ fontSize: 19, fontWeight: 700, color: "var(--color-text-primary)" }}>
-          📓 업무일지
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ fontSize: 19, fontWeight: 700, color: "var(--color-text-primary)" }}>
+            📓 업무일지
+          </div>
+          {/* 지금 보는 주 기간이 스크롤해도 계속 안 보인다는 피드백으로 상단 고정 타이틀
+              옆에도 노출(2026-07-24d) — "오늘의 할일" 탭에서만 의미가 있다. */}
+          {currentProjectId && tab === "today" && (
+            <span style={{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--color-text-secondary)", fontFamily: "var(--font-mono)" }}>
+              {weekMonday} ~ {addDaysStr(weekMonday, 6)}
+            </span>
+          )}
         </div>
         {currentProjectId && (
           <div className="sp-tab-seg">

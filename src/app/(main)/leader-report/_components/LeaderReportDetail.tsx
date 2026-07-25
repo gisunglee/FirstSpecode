@@ -24,13 +24,14 @@
  * 맨 아래 붙어 있었는데, 주 단위 콘텐츠를 다 스크롤해야 닿는 위치라 탭으로 분리했다).
  */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { addDaysStr } from "@/lib/weekUtil";
 import type { WorkLogResponse, WorkLog } from "@/types/workLog";
 import type { WeeklyReport, WeeklyReportListResponse } from "@/types/weeklyReport";
-import DocEditableCell, { AiFeedbackMarkdown } from "../../work-report/_components/DocEditableCell";
+import DocEditableCell, { AiFeedbackMarkdown, type DocEditableCellHandle } from "../../work-report/_components/DocEditableCell";
 import ActivityMdModal from "./ActivityMdModal";
 import PrintPreviewModal from "./PrintPreviewModal";
 import AiRequestCommentModal from "./AiRequestCommentModal";
@@ -57,13 +58,40 @@ function memberSummaryLines(log: WorkLog): string[] {
   return lines;
 }
 
-export default function LeaderReportDetail({ projectId, monday }: { projectId: string; monday: string }) {
+// "최근 주간 활동 MD"/"인쇄 미리보기"는 페이지 상단 우측 버튼(page.tsx)에서 열고 닫는다
+// (2026-07-24) — 이 컴포넌트가 열고 닫음을 스스로 들고 있으면 트리거 버튼도 이 컴포넌트
+// 안에 있어야 해서, 버튼을 페이지 상단으로 옮기려면 열림 상태를 부모가 갖고 있어야 한다.
+type LeaderReportDetailProps = {
+  projectId:          string;
+  monday:             string;
+  mdModalOpen:        boolean;
+  onCloseMdModal:     () => void;
+  printModalOpen:     boolean;
+  onClosePrintModal:  () => void;
+};
+
+export default function LeaderReportDetail({
+  projectId, monday, mdModalOpen, onCloseMdModal, printModalOpen, onClosePrintModal,
+}: LeaderReportDetailProps) {
   const queryClient = useQueryClient();
   const [rawOpen, setRawOpen] = useState(false);
-  const [mdModalOpen, setMdModalOpen] = useState(false);
-  const [printOpen, setPrintOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [aiCommentModalOpen, setAiCommentModalOpen] = useState(false);
+
+  // 네 필드를 한 번에 저장하는 "저장" 버튼용 — blur에 의존한 자동저장만으론 "진짜 저장됐는지"
+  // 확신이 안 든다는 피드백(2026-07-24)으로, 각 셀에 commit()을 직접 걸 수 있는 ref를 둔다.
+  const perfRef    = useRef<DocEditableCellHandle>(null);
+  const planRef    = useRef<DocEditableCellHandle>(null);
+  const commentRef = useRef<DocEditableCellHandle>(null);
+  const noteRef    = useRef<DocEditableCellHandle>(null);
+
+  function handleSaveAll() {
+    perfRef.current?.commit();
+    planRef.current?.commit();
+    commentRef.current?.commit();
+    noteRef.current?.commit();
+    toast.success("저장되었습니다.");
+  }
 
   const sunday     = addDaysStr(monday, 6);
   const nextMonday = addDaysStr(monday, 7);
@@ -182,112 +210,115 @@ export default function LeaderReportDetail({ projectId, monday }: { projectId: s
         {/* 직접 작성 — AI 요청 여부와 완전히 무관하게 항상 바로 쓸 수 있다("AI는 옵셔널이지
             필수가 아니다", 2026-07-23). perf_cn/plan_cn/comment_cn/note_cn 별도 컬럼이라
             헤더 문구 파싱에 의존하지 않아 AI 원본의 오타나 형식 변화와도 무관하게 항상 안정적으로
-            구분된다. 네 항목을 한눈에 비교하기 좋게 가로로 배치(좁은 화면에서는 자동으로 줄바꿈). */}
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
+            구분된다. 네 항목을 한눈에 비교하기 좋게 가로로 배치(좁은 화면에서는 자동으로 줄바꿈).
+            "직접 작성" 배지는 제거함(2026-07-24) — 카드 안 4항목 전부가 원래 직접 쓰는 항목이라
+            매번 반복해서 붙여봐야 정보가 없고 시각적으로만 번잡했다.
+            "저장" 버튼(2026-07-24) — blur시 자동저장만으론 "진짜 저장됐는지" 확신이 안 든다는
+            피드백으로 추가. 클릭하면 편집 중인 셀 전부를 즉시 commit()시키고 토스트로 확인해준다. */}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+          <button type="button" className="sp-btn sp-btn-primary sp-btn-sm" onClick={handleSaveAll}>
+            저장
+          </button>
+        </div>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
           <div style={{ flex: "1 1 260px", minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-              <span style={{ fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--color-text-primary)" }}>금주 실적</span>
-              <span className="sp-badge sp-badge-success"><span className="dot" />직접 작성</span>
-            </div>
+            <div style={{ fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 6 }}>금주 실적</div>
             <DocEditableCell
+              ref={perfRef}
               value={reportDetailQuery.data?.perfCn ?? ""}
               placeholder="이번 주 실적을 정리해 보세요."
               minRows={6}
+              rowHeightPx={40}
               onSave={(v) => saveMutation.mutate({ perfCn: v })}
             />
           </div>
 
           <div style={{ flex: "1 1 260px", minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-              <span style={{ fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--color-text-primary)" }}>차주 계획</span>
-              <span className="sp-badge sp-badge-success"><span className="dot" />직접 작성</span>
-            </div>
+            <div style={{ fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 6 }}>차주 계획</div>
             <DocEditableCell
+              ref={planRef}
               value={reportDetailQuery.data?.planCn ?? ""}
               placeholder="다음 주 계획을 정리해 보세요."
               minRows={6}
+              rowHeightPx={40}
               onSave={(v) => saveMutation.mutate({ planCn: v })}
             />
           </div>
 
           <div style={{ flex: "1 1 260px", minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-              <span style={{ fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--color-text-primary)" }}>금주 코멘트 (선택)</span>
-              <span className="sp-badge sp-badge-success"><span className="dot" />직접 작성</span>
-            </div>
+            <div style={{ fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 6 }}>금주 코멘트 (선택)</div>
             <DocEditableCell
+              ref={commentRef}
               value={reportDetailQuery.data?.commentCn ?? ""}
               placeholder="실적/계획을 자세히 볼 시간 없는 분들을 위한 한 줄 요약."
               minRows={6}
+              rowHeightPx={40}
               onSave={(v) => saveMutation.mutate({ commentCn: v })}
             />
           </div>
 
           <div style={{ flex: "1 1 260px", minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-              <span style={{ fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--color-text-primary)" }}>특이사항 (선택)</span>
-              <span className="sp-badge sp-badge-success"><span className="dot" />직접 작성</span>
-            </div>
+            <div style={{ fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 6 }}>특이사항 (선택)</div>
             <DocEditableCell
+              ref={noteRef}
               value={reportDetailQuery.data?.noteCn ?? ""}
               placeholder="이번 주에 있었던 특기할 사항을 남겨 보세요."
               minRows={6}
+              rowHeightPx={40}
               onSave={(v) => saveMutation.mutate({ noteCn: v })}
             />
           </div>
         </div>
+      </div>
 
-        {/* AI 영역 — 직접 작성 항목 아래로(2026-07-23, 순서 변경). 참고용일 뿐이라 AI 요청을
-            한 번도 안 했으면 원본 박스 자체를 안 보여준다("아직 초안 없음" 같은 빈 상자보다,
-            버튼만 있고 조용한 편이 "AI는 선택"이라는 톤에 더 맞는다). */}
-        <div style={{ borderTop: "1px solid var(--color-border-subtle)", paddingTop: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-            {reportDetailQuery.data?.aiTaskStatus && (
-              <span
-                className={`sp-badge ${
-                  reportDetailQuery.data.aiTaskStatus === "DONE" ? "sp-badge-success"
-                  : reportDetailQuery.data.aiTaskStatus === "FAILED" ? "sp-badge-error"
-                  : "sp-badge-warning"
-                }`}
-              >
-                <span className="dot" />{AI_STATUS_LABEL[reportDetailQuery.data.aiTaskStatus] ?? reportDetailQuery.data.aiTaskStatus}
-              </span>
-            )}
-            <button
-              type="button"
-              className="sp-btn sp-btn-primary sp-btn-sm"
-              disabled={generateMutation.isPending || isGenerating}
-              onClick={() => setAiCommentModalOpen(true)}
+      {/* AI 요약 — "직접 작성" 카드 안에 중첩돼 있을 땐 배경을 달리 줘도 구분이 잘 안 된다는
+          피드백(2026-07-24)으로, 참여 현황/팀원별 원본처럼 완전히 독립된 카드로 뺐다. 상태 배지·
+          재생성 버튼·"AI 원본" 표시를 모두 한 줄에 모았다 — 예전엔 재생성 버튼 줄과 원본 배지
+          줄이 따로 있어 같은 성격의 배지 두 줄이 겹쳐 보였다. 재생성 버튼은 항상 보이고("최근
+          주간 활동 MD"/"인쇄 미리보기"는 페이지 상단 우측으로 옮겨감, 결과가 이 자리에 안
+          나오는 모달이라 위치가 자유로움), 그 결과(생성 중 안내 또는 원본 내용)만 조건부. */}
+      <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius-card)", background: "var(--color-bg-muted)", padding: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+          <span style={{ fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--color-text-primary)" }}>AI 요약</span>
+          {reportDetailQuery.data?.aiTaskStatus && (
+            <span
+              className={`sp-badge ${
+                reportDetailQuery.data.aiTaskStatus === "DONE" ? "sp-badge-success"
+                : reportDetailQuery.data.aiTaskStatus === "FAILED" ? "sp-badge-error"
+                : "sp-badge-warning"
+              }`}
             >
-              {existingReport?.draftCn ? "AI 재생성" : "AI 요청"}
-            </button>
-            <button type="button" className="sp-btn sp-btn-secondary sp-btn-sm" onClick={() => setMdModalOpen(true)}>
-              최근 주간 활동 MD
-            </button>
-            <button type="button" className="sp-btn sp-btn-secondary sp-btn-sm" onClick={() => setPrintOpen(true)} style={{ marginLeft: "auto" }}>
-              인쇄 미리보기
-            </button>
-          </div>
-
-          {isGenerating && (
-            <div style={{ fontSize: "var(--text-sm)", color: "var(--color-text-tertiary)" }}>
-              생성 요청이 접수되었습니다. 팀에서 AI 태스크가 처리되면 자동으로 반영됩니다.
-            </div>
+              <span className="dot" />{AI_STATUS_LABEL[reportDetailQuery.data.aiTaskStatus] ?? reportDetailQuery.data.aiTaskStatus}
+            </span>
           )}
-
+          <button
+            type="button"
+            className="sp-btn sp-btn-primary sp-btn-sm"
+            disabled={generateMutation.isPending || isGenerating}
+            onClick={() => setAiCommentModalOpen(true)}
+          >
+            {existingReport?.draftCn ? "AI 재생성" : "AI 요청"}
+          </button>
           {!isGenerating && reportDetailQuery.data?.draftCn && (
-            <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", background: "var(--color-bg-muted)", padding: 14 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                <span className="sp-badge sp-badge-info"><span className="dot" />AI 원본</span>
-                <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>참고용 — 위 항목에 직접 옮겨 적어 주세요</span>
-                <button type="button" className="sp-btn sp-btn-ghost sp-btn-xs" style={{ marginLeft: "auto" }} onClick={handleCopyAiDraft}>
-                  {copied ? "복사됨" : "복사"}
-                </button>
-              </div>
-              <AiFeedbackMarkdown value={reportDetailQuery.data.draftCn} />
-            </div>
+            <>
+              <span className="sp-badge sp-badge-info"><span className="dot" />AI 원본</span>
+              <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>참고용 — 위 항목에 직접 옮겨 적어 주세요</span>
+              <button type="button" className="sp-btn sp-btn-ghost sp-btn-xs" style={{ marginLeft: "auto" }} onClick={handleCopyAiDraft}>
+                {copied ? "복사됨" : "복사"}
+              </button>
+            </>
           )}
         </div>
+
+        {isGenerating && (
+          <div style={{ fontSize: "var(--text-sm)", color: "var(--color-text-tertiary)" }}>
+            생성 요청이 접수되었습니다. 팀에서 AI 태스크가 처리되면 자동으로 반영됩니다.
+          </div>
+        )}
+
+        {!isGenerating && reportDetailQuery.data?.draftCn && (
+          <AiFeedbackMarkdown value={reportDetailQuery.data.draftCn} />
+        )}
       </div>
 
       {/* 참여 현황 */}
@@ -368,9 +399,9 @@ export default function LeaderReportDetail({ projectId, monday }: { projectId: s
         />
       )}
       {mdModalOpen && (
-        <ActivityMdModal projectId={projectId} weekMonday={monday} onClose={() => setMdModalOpen(false)} />
+        <ActivityMdModal projectId={projectId} weekMonday={monday} onClose={onCloseMdModal} />
       )}
-      {printOpen && (
+      {printModalOpen && (
         <PrintPreviewModal
           projectId={projectId}
           monday={monday}
@@ -379,7 +410,7 @@ export default function LeaderReportDetail({ projectId, monday }: { projectId: s
           planCn={reportDetailQuery.data?.planCn ?? null}
           commentCn={reportDetailQuery.data?.commentCn ?? null}
           noteCn={reportDetailQuery.data?.noteCn ?? null}
-          onClose={() => setPrintOpen(false)}
+          onClose={onClosePrintModal}
         />
       )}
     </div>

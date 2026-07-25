@@ -13,13 +13,18 @@
  * "일감 태그"(화면/기능/과업 참고용 연결)는 여기 없다 — WeekPlanRow로 옮겼다. 일이 보통
  * 한 주~한 달 단위로 굴러가는데 매일 같은 일감을 반복해서 태그하는 게 의미가 없다는
  * 피드백으로, 일감 태그는 주 단위로 한 번만 붙이도록 통합했다.
+ *
+ * 조회·뮤테이션 로직은 useDayLog 훅으로 분리(2026-07-24) — 한때 있던 "리스트형" 보기와
+ * 공유하려던 것인데, 리스트형 자체가 삭제되어 지금은 DayCard 단독 사용.
+ *
+ * 계획 체크리스트는 maxHeight가 아니라 고정 height로 스크롤한다(2026-07-24e) — 할일이
+ * 적은 날은 목록이 짧아져서 "오늘 작업 결과" 라벨이 카드마다 다른 높이에서 시작하는 문제가
+ * 있었다. 항목 수와 무관하게 항상 같은 높이(5개 분량)를 차지해야 한 주 7장의 "오늘 작업
+ * 결과"가 수평으로 나란히 맞는다.
  */
 
-import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { authFetch } from "@/lib/authFetch";
-import { invalidateWorkLogQueries } from "@/lib/weekUtil";
-import type { WorkLogResponse } from "@/types/workLog";
+import { useDayLog } from "./useDayLog";
+import EmptyHighlightTextarea from "./EmptyHighlightTextarea";
 
 const WEEKDAY_LABEL = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -29,87 +34,11 @@ function formatDayHeading(dateStr: string): string {
 }
 
 export default function DayCard({ projectId, date, isToday }: { projectId: string; date: string; isToday: boolean }) {
-  const queryClient = useQueryClient();
-  const [noteCn, setNoteCn] = useState("");
-  const [newItemText, setNewItemText] = useState("");
-
-  const queryKey = ["work-log", "DAILY", projectId, date];
-  const { data, isLoading } = useQuery({
-    queryKey,
-    queryFn: () =>
-      authFetch<{ data: WorkLogResponse }>(
-        `/api/projects/${projectId}/work-logs?date=${date}&logTyCode=DAILY&mberId=me`
-      ).then((r) => r.data),
-    enabled: !!projectId,
-  });
-
-  const dailyLog = data?.items?.[0] ?? null;
-
-  useEffect(() => {
-    setNoteCn(dailyLog?.noteCn ?? "");
-  }, [dailyLog?.noteCn, date]);
-
-  // work-log 계열 캐시(업무 리포트 등 다른 화면 포함) 전체 무효화 — 상세 이유는 weekUtil.ts 참고
-  const invalidate = () => invalidateWorkLogQueries(queryClient);
-
-  // 로그가 아직 없으면 먼저 upsert 해서 work_log_id 를 확보 — 항목 추가는 work_log_id 가 필요하다.
-  async function ensureWorkLogId(): Promise<string> {
-    if (dailyLog) return dailyLog.workLogId;
-    const res = await authFetch<{ data: { workLogId: string } }>(`/api/projects/${projectId}/work-logs`, {
-      method: "PUT",
-      body: JSON.stringify({ logTyCode: "DAILY", logDt: date, noteCn }),
-    });
-    return res.data.workLogId;
-  }
-
-  const saveNoteMutation = useMutation({
-    mutationFn: async () => {
-      await authFetch(`/api/projects/${projectId}/work-logs`, {
-        method: "PUT",
-        body: JSON.stringify({ logTyCode: "DAILY", logDt: date, noteCn }),
-      });
-    },
-    onSuccess: invalidate,
-  });
-
-  const addItemMutation = useMutation({
-    mutationFn: async (itemCn: string) => {
-      const workLogId = await ensureWorkLogId();
-      await authFetch(`/api/projects/${projectId}/work-logs/${workLogId}/items`, {
-        method: "POST",
-        body: JSON.stringify({ itemCn }),
-      });
-    },
-    onSuccess: () => {
-      setNewItemText("");
-      invalidate();
-    },
-  });
-
-  const toggleItemMutation = useMutation({
-    mutationFn: async (args: { itemId: string; doneYn: "Y" | "N" }) => {
-      if (!dailyLog) return;
-      await authFetch(`/api/projects/${projectId}/work-logs/${dailyLog.workLogId}/items/${args.itemId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ doneYn: args.doneYn }),
-      });
-    },
-    onSuccess: invalidate,
-  });
-
-  const deleteItemMutation = useMutation({
-    mutationFn: async (itemId: string) => {
-      if (!dailyLog) return;
-      await authFetch(`/api/projects/${projectId}/work-logs/${dailyLog.workLogId}/items/${itemId}`, {
-        method: "DELETE",
-      });
-    },
-    onSuccess: invalidate,
-  });
-
-  // ref_ty_code 있는 항목(일감 태그)은 이제 WeekPlanRow에서만 만든다 — 혹시 남아있는
-  // 과거 데이터가 있어도 체크리스트에 섞여 다시 혼란을 주지 않도록 방어적으로 제외.
-  const todoItems = (dailyLog?.items ?? []).filter((i) => !i.refTyCode);
+  const {
+    isLoading, todoItems, noteCn, setNoteCn, newItemText, setNewItemText,
+    saveNoteMutation, addItemMutation, toggleItemMutation, deleteItemMutation, dailyLog,
+    copyPreviousIncompleteMutation,
+  } = useDayLog(projectId, date);
 
   return (
     <div
@@ -139,6 +68,16 @@ export default function DayCard({ projectId, date, isToday }: { projectId: strin
             {todoItems.filter((i) => i.doneYn === "Y").length}/{todoItems.length}
           </span>
         )}
+        <button
+          type="button"
+          className="sp-btn sp-btn-ghost sp-btn-xs"
+          title="전일 미완료 항목 복사"
+          disabled={copyPreviousIncompleteMutation.isPending}
+          onClick={() => copyPreviousIncompleteMutation.mutate()}
+          style={{ marginLeft: todoItems.length > 0 ? 0 : "auto" }}
+        >
+          전일 복사
+        </button>
       </div>
 
       {isLoading ? (
@@ -150,7 +89,7 @@ export default function DayCard({ projectId, date, isToday }: { projectId: strin
             계획
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 3, maxHeight: 140, overflowY: "auto" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 3, height: 140, overflowY: "auto" }}>
             {todoItems.length === 0 && (
               <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-disabled)" }}>등록한 할일이 없습니다.</div>
             )}
@@ -212,13 +151,11 @@ export default function DayCard({ projectId, date, isToday }: { projectId: strin
             <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.04em", marginBottom: 4 }}>
               오늘 작업 결과
             </div>
-            <textarea
-              className="sp-input sp-textarea"
+            <EmptyHighlightTextarea
               rows={5}
-              style={{ width: "100%", fontSize: "var(--text-sm)" }}
-              placeholder="오늘 실제로 한 일이나 특이사항을 짧게 남겨 보세요."
+              message="오늘 작업 결과를 입력해 주세요."
               value={noteCn}
-              onChange={(e) => setNoteCn(e.target.value)}
+              onChange={setNoteCn}
             />
             {noteCn !== (dailyLog?.noteCn ?? "") && (
               <div style={{ marginTop: 4, textAlign: "right" }}>

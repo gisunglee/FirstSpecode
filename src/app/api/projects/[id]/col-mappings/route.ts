@@ -1,9 +1,12 @@
 /**
  * GET  /api/projects/[id]/col-mappings — 컬럼 매핑 목록 조회
- * POST /api/projects/[id]/col-mappings — 컬럼 매핑 전체 교체 저장
+ * POST /api/projects/[id]/col-mappings — 컬럼 매핑 그룹 단위 교체 저장
  *
- * GET Query: refType (필수), refId (필수)
- * POST Body: { refType, refId, items: [{ colId, ioSeCode?, uiTyCode?, usePurpsCn?, colDc? }] }
+ * GET Query: refType (필수), refId (필수), grpId (선택)
+ *   - grpId 있음: 해당 그룹의 매핑만 반환 (매핑 관리 팝업의 그룹별 그리드용)
+ *   - grpId 없음: ref 전체 매핑 반환, 각 항목에 grpId/grpNm 포함 (상세 화면 요약용)
+ * POST Body: { refType, refId, grpId, items: [{ colId, ioSeCode?, uiTyCode?, usePurpsCn?, colDc? }] }
+ *   - grpId로 지정된 그룹의 매핑만 교체 — 다른 그룹은 건드리지 않음
  *
  * refType: 'FUNCTION' | 'AREA' | 'SCREEN' | ...  (이후 확장 가능)
  */
@@ -25,6 +28,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const url     = new URL(request.url);
   const refType = url.searchParams.get("refType");
   const refId   = url.searchParams.get("refId");
+  const grpId   = url.searchParams.get("grpId"); // 선택 — 없으면 ref 전체(모든 그룹) 반환
 
   if (!refType || !refId) {
     return apiError("VALIDATION_ERROR", "refType, refId 파라미터가 필요합니다.", 400);
@@ -39,8 +43,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
   try {
     const mappings = await prisma.tbDsColMapping.findMany({
-      where:   { ref_ty_code: refType, ref_id: refId },
+      where:   { ref_ty_code: refType, ref_id: refId, ...(grpId ? { grp_id: grpId } : {}) },
       orderBy: { sort_ordr: "asc" },
+      include: { group: { select: { grp_nm: true } } },
     });
 
     // col_id 목록으로 컬럼+테이블 정보 별도 조회 (TbDsColMapping에 relation 없음)
@@ -58,6 +63,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         const col = m.col_id ? colMap.get(m.col_id) : undefined;
         return {
           mappingId:      m.mapping_id,
+          grpId:          m.grp_id,
+          grpNm:          m.group.grp_nm,
           colId:          m.col_id ?? "",
           colName:        col?.col_physcl_nm ?? "",
           colLogicalNm:   col?.col_lgcl_nm ?? "",
@@ -100,9 +107,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { refType, refId, items } = body as {
+  const { refType, refId, grpId, items } = body as {
     refType?: string;
     refId?:   string;
+    grpId?:   string;
     items?:   {
       colId:       string;
       ioSeCode?:   string;
@@ -115,19 +123,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (!refType || !refId) {
     return apiError("VALIDATION_ERROR", "refType, refId 가 필요합니다.", 400);
   }
+  if (!grpId) {
+    return apiError("VALIDATION_ERROR", "grpId 가 필요합니다.", 400);
+  }
   if (!Array.isArray(items)) {
     return apiError("VALIDATION_ERROR", "items 배열이 필요합니다.", 400);
   }
 
   try {
-    // 기존 매핑 전체 삭제 후 새 목록 INSERT (교체 방식)
+    // 같은 그룹(grpId)의 매핑만 삭제 후 재삽입 — 다른 그룹은 건드리지 않음
     await prisma.$transaction([
-      prisma.tbDsColMapping.deleteMany({ where: { ref_ty_code: refType, ref_id: refId } }),
+      prisma.tbDsColMapping.deleteMany({ where: { ref_ty_code: refType, ref_id: refId, grp_id: grpId } }),
       ...items.map((item, idx) =>
         prisma.tbDsColMapping.create({
           data: {
             ref_ty_code:  refType,
             ref_id:       refId,
+            grp_id:       grpId,
             col_id:       item.colId,
             io_se_code:   item.ioSeCode?.trim()   || null,
             ui_ty_code:   item.uiTyCode?.trim()   || null,
@@ -147,6 +159,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           snapshot_data: {
             refType,
             refId,
+            grpId,
             mappingCount: items.length,
             savedAt:      new Date().toISOString(),
           },
@@ -155,7 +168,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }),
     ]);
 
-    return apiSuccess({ refType, refId, saved: items.length });
+    return apiSuccess({ refType, refId, grpId, saved: items.length });
   } catch (err) {
     console.error(`[POST /api/projects/${projectId}/col-mappings] DB 오류:`, err);
     return apiError("DB_ERROR", "컬럼 매핑 저장에 실패했습니다.", 500);

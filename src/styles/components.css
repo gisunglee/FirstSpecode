@@ -629,6 +629,10 @@ body {
 
 .sp-badge-lg { padding: 3px 9px; font-size: var(--text-xs); border-radius: var(--radius-md); }
 .sp-badge-pill { border-radius: var(--radius-full); }
+/* 상태 배지(PENDING 등 짧은 코드어)가 아니라 항목명을 그대로 보여주는 태그 용도 —
+   기본 sp-badge의 모노스페이스+bold+자간 조합이 자연어 문장에는 지저분해 보인다는
+   피드백으로 타이포만 되돌린다(관련 일감/중요업무 태그, 2026-07-24). */
+.sp-badge-tag { font-family: inherit; font-weight: 500; letter-spacing: normal; }
 
 
 /* ================================================================
@@ -770,16 +774,28 @@ body {
 }
 /* 세부 업무계획 요일 행 — 기본보다 살짝 더 여유 있게(피드백: 기존 대비 약 20%) */
 .sp-doc-table tr.sp-doc-row-tall td { padding-top: 10px; padding-bottom: 10px; }
-/* DocEditableCell — 평소엔 일반 셀처럼 보이다가 hover 시에만 "클릭하면 써진다"는 걸 암시 */
-.sp-doc-cell-editable { cursor: text; transition: background var(--transition-fast); }
-.sp-doc-cell-editable:hover { background: var(--color-bg-table-hover); }
+/* DocEditableCell — 원래는 hover 전까지 테두리·배경이 전혀 없는 "문서처럼 보이는" 셀이었는데,
+   그러다 보니 어디를 클릭해야 입력이 되는지 알아보기 어렵다는 피드백(2026-07-24)이 있었다.
+   --color-bg-input은 라이트/다크 테마 모두에서 --color-bg-card와 값이 같아(둘 다 같은 primitive
+   참조) 카드 위에 얹어도 대비가 전혀 안 생긴다 — 그래서 카드 배경과 실제로 다른 값을 갖는
+   --color-bg-muted를 대신 쓴다. 완전한 폼 인풋처럼 만들면 "문서" 느낌이 깨지므로 옅은 테두리
+   (--color-border-subtle) 정도로만 "여기 쓸 수 있다"는 걸 항상 보이게 하는 선에서 그친다. */
+.sp-doc-cell-editable {
+  cursor: text; padding: 8px 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-subtle); background: var(--color-bg-muted);
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.sp-doc-cell-editable:hover { background: var(--color-bg-table-hover); border-color: var(--color-border); }
 /* 편집 상태의 textarea 자체에 직접 붙는 클래스 — 감싸는 wrapper가 없어(.sp-doc-cell-editable은
    "평소 보기" 상태에만 붙음) 반드시 textarea 요소 자신에 적용해야 폭 100%가 먹는다.
    이전엔 `.sp-doc-cell-editable textarea` 자손 선택자로만 정의해 둬서 매치되는 textarea가
-   없었고, 그 결과 브라우저 기본 크기(cols=20)로 작게 렌더링되던 버그가 있었다. */
+   없었고, 그 결과 브라우저 기본 크기(cols=20)로 작게 렌더링되던 버그가 있었다.
+   보기 상태와 크기가 튀지 않도록 padding/radius는 동일하게 맞추고, 테두리만 focus 색으로 강조. */
 .sp-doc-textarea {
-  display: block; width: 100%; border: none; background: transparent; outline: none; resize: none;
-  font: inherit; color: inherit; padding: 0; line-height: 1.5;
+  display: block; width: 100%; outline: none; resize: none;
+  font: inherit; color: inherit; line-height: 1.5;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-focus); background: var(--color-bg-muted);
 }
 
 /* ================================================================

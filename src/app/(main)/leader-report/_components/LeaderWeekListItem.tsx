@@ -10,11 +10,15 @@
  * 원래 좌측 세로 목록용이었는데, 카드 하나가 보여주는 정보량에 비해 세로 컬럼 전체를 차지하는
  * 게 낭비라는 피드백으로 상단 가로 줄로 옮겼다(2026-07-23) — width를 고정폭으로 바꾼 것 외
  * 내용·데이터 흐름은 그대로.
+ *
+ * "MM월 N주" 라벨은 monday 하나로 getWeekOfMonthLabel(weekUtil.ts)이 스스로 계산한다 —
+ * 예전엔 부모가 넘겨주는 weekIndex(화면에 지금 펼쳐 놓은 배열 안에서의 위치)를 그대로 썼는데,
+ * 달 경계 주에서 "7월 1주"처럼 앞뒤가 안 맞는 라벨이 나오는 버그가 있었다(2026-07-24).
  */
 
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
-import { addDaysStr, mmddRange } from "@/lib/weekUtil";
+import { addDaysStr, mmddRange, getWeekOfMonthLabel } from "@/lib/weekUtil";
 import type { WorkLogResponse } from "@/types/workLog";
 import type { WeeklyReportListResponse } from "@/types/weeklyReport";
 
@@ -28,17 +32,16 @@ const AI_STATUS_BADGE: Record<string, string> = {
 export default function LeaderWeekListItem({
   projectId,
   monday,
-  weekIndex,
   active,
   onClick,
 }: {
   projectId: string;
   monday: string;
-  weekIndex: number;
   active: boolean;
   onClick: () => void;
 }) {
   const sunday = addDaysStr(monday, 6);
+  const { monthStart, weekIndex } = getWeekOfMonthLabel(monday);
 
   const dailyQuery = useQuery({
     queryKey: ["work-log-range", projectId, monday, "DAILY", "all"],
@@ -91,7 +94,7 @@ export default function LeaderWeekListItem({
         }}
       >
         <span style={{ fontWeight: 600, fontSize: "var(--text-sm)", color: active ? "var(--color-brand)" : "var(--color-text-primary)" }}>
-          {monday.slice(5, 7)}월 {weekIndex}주
+          {monthStart.slice(5, 7)}월 {weekIndex}주
         </span>
         {aiStatus && (
           <span className={`sp-badge ${AI_STATUS_BADGE[aiStatus] ?? "sp-badge-neutral"}`} style={{ marginLeft: "auto" }}>

@@ -62,6 +62,52 @@ export function getMonthDays(monthStart: string): string[] {
   return Array.from({ length: lastDay }, (_, i) => `${prefix}${String(i + 1).padStart(2, "0")}`);
 }
 
+// ── "그 달의 N주" 계산 — 수요일 기준으로 그 주가 속한 달을 정한다 ────────────────
+//
+// 예: 월요일이 07/27(7월)이어도 수요일(07/29)이 7월이면 그 주는 7월 소속. 월요일이 08/03
+// (8월)이고 수요일도 08/05(8월)면 8월 소속. 이렇게 하면 매 달 걸치는 경계 주가 어느 한쪽에
+// 확실히 귀속된다.
+//
+// 이전엔 monday 자신의 달(monday.slice(5,7))로 라벨을 붙이고, 화면에 지금 펼쳐 놓은 배열
+// 안에서의 위치(idx+1)로 번호를 매겼다 — 그래서 8월을 보는 중에 7월 말 경계 주가 그 배열의
+// 첫 항목이 되면 "7월 1주"처럼 앞뒤가 안 맞는 라벨이 나오는 버그가 있었다(2026-07-24).
+// 이제 각 주가 화면에 어떤 달이 펼쳐져 있는지와 무관하게, monday 하나만으로 스스로 "내가
+// 속한 달"과 "그 달의 몇 번째 주인지"를 계산한다.
+// monthStart(YYYY-MM-01)가 속한 달에 "귀속"되는 주(월요일 배열) — 수요일이 그 달에 속하는
+// 주만 순서대로 골라낸다(위 getWeekOfMonthLabel 설명 참고). 업무일지 "이번 달 주" 선택
+// 버튼 줄(1주/2주/3주...)이 이 배열의 인덱스를 그대로 번호로 쓴다(2026-07-24d).
+export function getOwnedWeeksOfMonth(monthStart: string): string[] {
+  const monthEnd = getMonthDays(monthStart).at(-1)!;
+  const targetYM = monthStart.slice(0, 7);
+  const weeks: string[] = [];
+  let cursor = getWeekMondayStr(monthStart);
+  const lastCursor = getWeekMondayStr(monthEnd);
+  while (cursor <= lastCursor) {
+    if (addDaysStr(cursor, 2).slice(0, 7) === targetYM) weeks.push(cursor);
+    cursor = addDaysStr(cursor, 7);
+  }
+  return weeks;
+}
+
+export function getWeekOfMonthLabel(monday: string): { monthStart: string; weekIndex: number } {
+  const wednesday  = addDaysStr(monday, 2);
+  const monthStart = getMonthStart(wednesday);
+  const ownedWeeks = getOwnedWeeksOfMonth(monthStart);
+  return { monthStart, weekIndex: ownedWeeks.indexOf(monday) + 1 };
+}
+
+// 실제 "오늘 기준" 이번/다음/지난 주면 그 이름으로, 그 외엔 "OO월 N주"로 — 업무일지에서
+// 임의의 주를 탐색해도 "이번 주"라고 잘못 부르지 않도록 한다(2026-07-24, WeekPlanRow가
+// 탐색 중인 주도 항상 "이번 주"라고 표시하던 버그 수정 겸용).
+export function getRelativeWeekLabel(monday: string): string {
+  const thisMonday = getWeekMondayStr();
+  if (monday === thisMonday) return "이번 주";
+  if (monday === addDaysStr(thisMonday, 7)) return "다음 주";
+  if (monday === addDaysStr(thisMonday, -7)) return "지난 주";
+  const { monthStart, weekIndex } = getWeekOfMonthLabel(monday);
+  return `${monthStart.slice(5, 7)}월 ${weekIndex}주`;
+}
+
 // 월요일마다 새 주 그룹 시작 — 달 첫/마지막 주는 7일이 안 채워질 수 있음(정상)
 export function groupByWeek(days: string[]): string[][] {
   const weeks: string[][] = [];
@@ -76,6 +122,35 @@ export function groupByWeek(days: string[]): string[][] {
   if (current.length > 0) weeks.push(current);
   return weeks;
 }
+
+// ── 프로젝트 "N주차" 계산 — 리더 리포트 인쇄본/엑셀 공용 ───────────────────────
+//
+// 캘린더 기준(ISO 주차)이 아니라 프로젝트 시작일 기준으로 센다. 시작일이 월~목요일이면 그
+// 주에 근무일이 2~5일 남아 있어 그 주를 그대로 1주차로 치지만, 금~일요일 시작이면 그 주에
+// 남은 근무일이 0~1일뿐이라 다음 주 월요일부터를 1주차로 민다 — ISO 8601이 "그 주에 목요일이
+// 포함되는지"로 주차를 가르는 것과 같은 컷오프(2026-07-25). 화면(PrintPreviewModal)과 엑셀
+// (xlsx/route.ts)이 각자 같은 로직을 복붙해 두던 것을 여기 하나로 합쳤다 — 둘이 어긋나면
+// 안 되는 값이라 공용 유틸이 맞다.
+export function computeProjectWeekIndex(bgngDt: string | null, monday: string): number | null {
+  if (!bgngDt) return null;
+  const startDate = bgngDt.slice(0, 10);
+  const startWeekMonday = getWeekMondayStr(startDate);
+  const startWeekday = dayOfWeek(startDate); // 0=일 ~ 6=토
+  const hasEnoughDaysThisWeek = startWeekday >= 1 && startWeekday <= 4; // 월~목만 그 주를 그대로 사용
+  const anchorMonday = hasEnoughDaysThisWeek ? startWeekMonday : addDaysStr(startWeekMonday, 7);
+
+  const diffDays = Math.round(
+    (new Date(monday + "T00:00:00Z").getTime() - new Date(anchorMonday + "T00:00:00Z").getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+  return Math.floor(diffDays / 7) + 1;
+}
+
+// WeekPlanRow 상단 4칸(계획×2 + 결과 요약×2) 공통 카드 높이 — "계획" 카드가 체크리스트/관련
+// 일감 항목 수에 따라 제각각 늘어나면서 옆 "결과 요약" 카드와 높이가 안 맞던 문제가 있었다.
+// 계획 카드 내부(체크리스트 5개·관련일감 2줄)를 스크롤로 캡핑한 뒤, 이 고정 높이를 4칸 전부에
+// 강제해서 맞춘다(2026-07-24e).
+export const WEEK_SUMMARY_CARD_HEIGHT = 360;
 
 // ── 쿼리 무효화 — 업무일지/업무 리포트가 공유하는 모든 work-log 계열 캐시 ──────────
 //

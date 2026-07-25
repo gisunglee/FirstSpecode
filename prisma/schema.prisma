@@ -727,10 +727,27 @@ model TbDsDbTableRevision {
   @@map("tb_ds_db_table_revision")
 }
 
+/// 컬럼 매핑 그룹 — 기능(FUNCTION) 하나가 여러 조회/저장 그룹을 가질 수 있도록
+///   이름을 별도 테이블에 둔다 (그룹명 변경이 매핑 행 여러 개에 중복되지 않게 하기 위함)
+model TbDsColMappingGroup {
+  grp_id      String    @id @default(uuid())
+  ref_ty_code String
+  ref_id      String
+  grp_nm      String
+  sort_ordr   Int       @default(0)
+  creat_dt    DateTime  @default(now())
+
+  mappings TbDsColMapping[]
+
+  @@index([ref_ty_code, ref_id, sort_ordr], map: "tb_ds_col_mapping_group_ref_idx")
+  @@map("tb_ds_col_mapping_group")
+}
+
 model TbDsColMapping {
   mapping_id   String    @id @default(uuid()) @db.VarChar(36)
   ref_ty_code  String    @db.VarChar(20)
   ref_id       String    @db.VarChar(36)
+  grp_id       String
   col_id       String?   @db.VarChar(36)
   io_se_code   String?   @db.VarChar(10)
   ui_ty_code   String?   @db.VarChar(20)
@@ -739,6 +756,10 @@ model TbDsColMapping {
   sort_ordr    Int?      @default(0)
   creat_dt     DateTime? @default(now()) @db.Timestamp(6)
 
+  // 그룹 삭제 시 그 안의 매핑도 함께 정리
+  group TbDsColMappingGroup @relation(fields: [grp_id], references: [grp_id], onDelete: Cascade)
+
+  @@index([grp_id], map: "tb_ds_col_mapping_grp_idx")
   @@map("tb_ds_col_mapping")
 }
 

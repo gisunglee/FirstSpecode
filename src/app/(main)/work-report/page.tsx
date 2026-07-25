@@ -21,7 +21,7 @@
 
 import { useState } from "react";
 import { useAppStore } from "@/store/appStore";
-import { getMonthStart, getMonthLabel, addMonths, getMonthDays, getWeekMondayStr, addDaysStr, mmddRange } from "@/lib/weekUtil";
+import { getMonthStart, getMonthLabel, addMonths, getMonthDays, getWeekMondayStr, addDaysStr, mmddRange, getWeekOfMonthLabel } from "@/lib/weekUtil";
 import WeeklyDocView from "./_components/WeeklyDocView";
 import WeekCardMini from "./_components/WeekCardMini";
 
@@ -104,12 +104,11 @@ export default function WorkReportPage() {
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {weeksInMonth.map((monday, idx) => (
+                {weeksInMonth.map((monday) => (
                   <WeekCardMini
                     key={monday}
                     projectId={currentProjectId}
                     monday={monday}
-                    weekIndex={idx + 1}
                     active={detailMode === "week" && monday === selectedWeek}
                     onClick={() => {
                       setSelectedWeek(monday);
@@ -146,13 +145,17 @@ export default function WorkReportPage() {
 
               {detailMode === "month" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {weeksInMonth.map((monday, idx) => (
+                  {weeksInMonth.map((monday, idx) => {
+                    const { monthStart: weekMonthStart, weekIndex } = getWeekOfMonthLabel(monday);
+                    return (
                     <div key={monday} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {/* 문서와 문서 사이를 확실히 갈라 보여달라는 피드백 — "N월 N주 · 날짜범위" +
-                          가로선으로 구분선을 만든다(HistoryTab의 주 구분 행과 같은 개념, 카드용). */}
+                          가로선으로 구분선을 만든다(HistoryTab의 주 구분 행과 같은 개념, 카드용).
+                          라벨은 monday 하나로 getWeekOfMonthLabel이 스스로 계산 — 달 경계 주에서
+                          "7월 1주"처럼 앞뒤 안 맞는 라벨이 나오던 버그 수정(2026-07-24). */}
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: idx === 0 ? 0 : 8 }}>
                         <span style={{ fontSize: "var(--text-base)", fontWeight: 700, color: "var(--color-text-primary)", whiteSpace: "nowrap" }}>
-                          {monday.slice(5, 7)}월 {idx + 1}주
+                          {weekMonthStart.slice(5, 7)}월 {weekIndex}주
                         </span>
                         <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}>
                           {mmddRange(monday, addDaysStr(monday, 6))}
@@ -161,7 +164,8 @@ export default function WorkReportPage() {
                       </div>
                       <WeeklyDocView projectId={currentProjectId} monday={monday} />
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

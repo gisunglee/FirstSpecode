@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiError } from "@/lib/apiResponse";
-import { addDaysStr, getWeekMondayStr, mmddRange } from "@/lib/weekUtil";
+import { addDaysStr, mmddRange, computeProjectWeekIndex } from "@/lib/weekUtil";
 import { filenameSafe } from "@/lib/exports/filename";
 import { buildLeaderReportXlsx, type LeaderReportXlsxIssue } from "@/lib/exports/xlsx/leader-report";
 import { ISSUE_CATEGORY_LABEL, ISSUE_STATUS_LABEL, type IssueCategoryCode, type IssueStatusCode } from "@/types/issue";
@@ -26,17 +26,6 @@ const WEEKDAY_LABEL = ["일", "월", "화", "수", "목", "금", "토"];
 function formatKoreanDate(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00Z");
   return `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 ${WEEKDAY_LABEL[d.getUTCDay()]}요일`;
-}
-
-// PrintPreviewModal.computeWeekIndex 와 동일 로직 — 화면과 다른 주차 숫자가 나오면 안 됨
-function computeWeekIndex(bgngDt: string | null, monday: string): number | null {
-  if (!bgngDt) return null;
-  const projectStartMonday = getWeekMondayStr(bgngDt.slice(0, 10));
-  const diffDays = Math.round(
-    (new Date(monday + "T00:00:00Z").getTime() - new Date(projectStartMonday + "T00:00:00Z").getTime()) /
-      (1000 * 60 * 60 * 24)
-  );
-  return Math.floor(diffDays / 7) + 1;
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
@@ -65,7 +54,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const sunday     = addDaysStr(monday, 6);
     const nextMonday = addDaysStr(monday, 7);
     const nextSunday = addDaysStr(monday, 13);
-    const weekIndex = computeWeekIndex(project?.bgng_de ? project.bgng_de.toISOString().slice(0, 10) : null, monday);
+    const weekIndex = computeProjectWeekIndex(project?.bgng_de ? project.bgng_de.toISOString().slice(0, 10) : null, monday);
     const weekLabel = weekIndex !== null ? `${weekIndex}주차 (${mmddRange(monday, sunday)})` : mmddRange(monday, sunday);
 
     const issues: LeaderReportXlsxIssue[] = issueRows.map((r) => ({

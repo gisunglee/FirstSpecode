@@ -159,6 +159,9 @@
   --color-brand-subtle: rgba(91,104,232,0.14);
   --color-brand-border: rgba(91,104,232,0.32);
   --color-brand-glow:   rgba(91,104,232,0.20);
+  /* 미입력 강조용 — badge-subtle보다 짙게, 텍스트 입력칸을 "아직 안 썼다"고 눈에 띄게
+     칠하는 용도(업무일지 "결과" 칸 등). 파스텔이되 subtle보다 더 튀어야 해서 별도 토큰. */
+  --color-highlight-bg: rgba(91,104,232,0.22);
 
   --color-accent:        var(--p-amber-400);
   --color-accent-hover:  var(--p-amber-300);
@@ -236,6 +239,7 @@
   --color-brand-subtle: rgba(74,86,212,0.09);
   --color-brand-border: rgba(74,86,212,0.28);
   --color-brand-glow:   rgba(74,86,212,0.16);
+  --color-highlight-bg: rgba(74,86,212,0.16);
 
   --color-accent:        var(--p-amber-400);
   --color-accent-hover:  var(--p-amber-300);
@@ -314,6 +318,7 @@
   --color-brand-subtle: rgba(139,92,246,0.14);
   --color-brand-border: rgba(139,92,246,0.32);
   --color-brand-glow:   rgba(139,92,246,0.22);
+  --color-highlight-bg: rgba(139,92,246,0.22);
 
   --color-accent:        var(--p-amber-400);
   --color-accent-hover:  var(--p-amber-300);

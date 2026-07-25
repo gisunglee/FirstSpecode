@@ -7,28 +7,30 @@
  * 목록을 볼 수 있는 구조가 불편하다는 피드백으로 — 항상 왼쪽에 세로로 떠 있는 목록으로
  * 바꿨다(이메일 클라이언트의 받은편지함 목록과 같은 자리). 클릭하면 오른쪽 상세(WeeklyDocView)만
  * 바뀌고 목록 자체는 그대로 남아있어 "뒤로 가기" 버튼이 필요 없어졌다.
+ *
+ * "MM월 N주" 라벨은 monday 하나로 getWeekOfMonthLabel(weekUtil.ts)이 스스로 계산한다 —
+ * 예전엔 부모가 넘겨주는 weekIndex(화면에 지금 펼쳐 놓은 배열 안에서의 위치)를 그대로 썼는데,
+ * 달 경계 주에서 "7월 1주"처럼 앞뒤가 안 맞는 라벨이 나오는 버그가 있었다(2026-07-24).
  */
 
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
-import { addDaysStr } from "@/lib/weekUtil";
+import { addDaysStr, getWeekOfMonthLabel } from "@/lib/weekUtil";
 import type { WorkLogResponse } from "@/types/workLog";
 
 export default function WeekCardMini({
   projectId,
   monday,
-  weekIndex,
   active,
   onClick,
 }: {
   projectId: string;
   monday: string;
-  /** "N월 N주" 표기용 — 그 달 안에서 몇 번째 주인지 */
-  weekIndex: number;
   active: boolean;
   onClick: () => void;
 }) {
   const sunday = addDaysStr(monday, 6);
+  const { monthStart, weekIndex } = getWeekOfMonthLabel(monday);
 
   const dailyQuery = useQuery({
     queryKey: ["work-log-range", projectId, monday, "DAILY"],
@@ -73,7 +75,7 @@ export default function WeekCardMini({
           borderBottom: "1px solid var(--color-border-subtle)",
         }}
       >
-        {monday.slice(5, 7)}월 {weekIndex}주
+        {monthStart.slice(5, 7)}월 {weekIndex}주
         <span style={{ fontWeight: 400, fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", marginLeft: 6 }}>
           {monday} ~ {sunday}
         </span>

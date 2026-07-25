@@ -268,8 +268,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           scrn_id:      screenId !== undefined ? (screenId || null) : existing.scrn_id,
           area_display_id: displayId?.trim() || existing.area_display_id,
           area_nm:      name.trim(),
-          // 유형 — 미전송 시 LIST 기본 (PUT은 사실상 항상 type 전송)
-          area_ty_code: type || "LIST",
+          // 유형 — 미전송 시 기존값 유지 (부분 수정 안전, displayFormCode와 동일 패턴)
+          area_ty_code: type || existing.area_ty_code,
           // 표시 형태 — 클라이언트가 안 보내면 기존값 유지 (부분 수정 안전)
           display_form_code: displayFormCode ?? existing.display_form_code,
           area_dc:      newDescription,

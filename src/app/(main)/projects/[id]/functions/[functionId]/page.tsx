@@ -77,6 +77,8 @@ type ProjectMember = { memberId: string; name: string | null; email: string };
 
 type ColMappingItem = {
   mappingId: string;
+  grpId: string;
+  grpNm: string;
   usePurpsCn: string;
   ioSeCode: string;
   uiTyCode: string;
@@ -176,6 +178,9 @@ function FunctionDetailPageInner() {
     enabled: !isNew,
   });
   const colMappings = colMappingsData?.items ?? [];
+
+  // 그룹별 소제목 + 표로 보여주기 위해 grpId 기준으로 묶는다 (첫 등장 순서 유지)
+  const colMappingGroups = groupMappingsByGroup(colMappings);
 
   // ── 영역 목록 (areaId 선택용) ──────────────────────────────────────────────
   const { data: areasData } = useQuery({
@@ -1107,51 +1112,60 @@ function FunctionDetailPageInner() {
                 </div>
               </div>
 
-              {/* 저장된 매핑 목록 테이블 */}
+              {/* 저장된 매핑 목록 — 그룹별 소제목 + 표 */}
               {colMappings.length > 0 ? (
-                <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
-                  {/* 헤더 */}
-                  <div style={colMappingHeaderStyle}>
-                    <div style={{ flex: "0 0 120px" }}>항목명</div>
-                    <div style={{ flex: "0 0 72px", textAlign: "center" }}>IO구분</div>
-                    <div style={{ flex: "0 0 90px" }}>UI유형</div>
-                    <div style={{ flex: "1 1 0" }}>테이블</div>
-                    <div style={{ flex: "1 1 0" }}>컬럼</div>
-                    <div style={{ flex: "0 0 120px" }}>공통코드</div>
-                  </div>
-                  {/* 행 */}
-                  {colMappings.map((m, idx) => (
-                    <div
-                      key={m.mappingId}
-                      style={{
-                        ...colMappingRowStyle,
-                        borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-                        background: idx % 2 === 0 ? "var(--color-bg-card)" : "var(--color-bg-muted)",
-                      }}
-                    >
-                      <div style={{ flex: "0 0 120px", fontSize: 12 }}>{m.usePurpsCn || <span style={{ color: "var(--color-text-disabled)" }}>—</span>}</div>
-                      <div style={{ flex: "0 0 72px", textAlign: "center" }}>
-                        {m.ioSeCode ? (
-                          <span className="sp-badge" style={{
-                            display: "inline-block", padding: "1px 7px", borderRadius: 4, fontSize: 11, fontWeight: 700,
-                            background: "var(--color-primary, #1976d2)", color: "#fff",
-                          }}>
-                            {m.ioSeCode === "INPUT" ? "IN" : m.ioSeCode === "OUTPUT" ? "OUT" : "IO"}
-                          </span>
-                        ) : <span style={{ color: "var(--color-text-disabled)", fontSize: 12 }}>—</span>}
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {colMappingGroups.map((group) => (
+                    <div key={group.grpId}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: 6 }}>
+                        {group.grpNm}
                       </div>
-                      <div style={{ flex: "0 0 90px", fontSize: 12, color: "var(--color-text-secondary)" }}>{m.uiTyCode || "—"}</div>
-                      <div style={{ flex: "1 1 0", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.tableName || "—"}</div>
-                      <div style={{ flex: "1 1 0", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.colName || "—"}</div>
-                      <div style={{ flex: "0 0 120px", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {m.refGrpCode ? (
-                          <span className="sp-badge" style={{
-                            padding: "1px 6px", borderRadius: 3, fontSize: 10, fontWeight: 600,
-                            background: "rgba(46,125,50,0.1)", color: "#2e7d32",
-                          }}>
-                            {m.refGrpCode}
-                          </span>
-                        ) : <span style={{ color: "var(--color-text-disabled)" }}>—</span>}
+                      <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
+                        {/* 헤더 */}
+                        <div style={colMappingHeaderStyle}>
+                          <div style={{ flex: "0 0 120px" }}>항목명</div>
+                          <div style={{ flex: "0 0 72px", textAlign: "center" }}>IO구분</div>
+                          <div style={{ flex: "0 0 90px" }}>UI유형</div>
+                          <div style={{ flex: "1 1 0" }}>테이블</div>
+                          <div style={{ flex: "1 1 0" }}>컬럼</div>
+                          <div style={{ flex: "0 0 120px" }}>공통코드</div>
+                        </div>
+                        {/* 행 */}
+                        {group.items.map((m, idx) => (
+                          <div
+                            key={m.mappingId}
+                            style={{
+                              ...colMappingRowStyle,
+                              borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
+                              background: idx % 2 === 0 ? "var(--color-bg-card)" : "var(--color-bg-muted)",
+                            }}
+                          >
+                            <div style={{ flex: "0 0 120px", fontSize: 12 }}>{m.usePurpsCn || <span style={{ color: "var(--color-text-disabled)" }}>—</span>}</div>
+                            <div style={{ flex: "0 0 72px", textAlign: "center" }}>
+                              {m.ioSeCode ? (
+                                <span className="sp-badge" style={{
+                                  display: "inline-block", padding: "1px 7px", borderRadius: 4, fontSize: 11, fontWeight: 700,
+                                  background: "var(--color-primary, #1976d2)", color: "#fff",
+                                }}>
+                                  {m.ioSeCode === "INPUT" ? "IN" : m.ioSeCode === "OUTPUT" ? "OUT" : "IO"}
+                                </span>
+                              ) : <span style={{ color: "var(--color-text-disabled)", fontSize: 12 }}>—</span>}
+                            </div>
+                            <div style={{ flex: "0 0 90px", fontSize: 12, color: "var(--color-text-secondary)" }}>{m.uiTyCode || "—"}</div>
+                            <div style={{ flex: "1 1 0", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.tableName || "—"}</div>
+                            <div style={{ flex: "1 1 0", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.colName || "—"}</div>
+                            <div style={{ flex: "0 0 120px", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {m.refGrpCode ? (
+                                <span className="sp-badge" style={{
+                                  padding: "1px 6px", borderRadius: 3, fontSize: 10, fontWeight: 600,
+                                  background: "rgba(46,125,50,0.1)", color: "#2e7d32",
+                                }}>
+                                  {m.refGrpCode}
+                                </span>
+                              ) : <span style={{ color: "var(--color-text-disabled)" }}>—</span>}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   ))}
@@ -1363,7 +1377,7 @@ function FunctionDetailPageInner() {
       <ColMappingDialog
         open={mappingPopupOpen}
         onClose={() => setMappingPopupOpen(false)}
-        onSaved={() => { setMappingPopupOpen(false); refetchMappings(); }}
+        onSaved={() => refetchMappings()}
         projectId={projectId}
         refType="FUNCTION"
         refId={functionId}
@@ -1698,6 +1712,29 @@ const aiMiniBtn: React.CSSProperties = {
 
 
 
+// ── 컬럼 매핑 그룹화 ──────────────────────────────────────────────────────────
+
+/**
+ * grpId 기준으로 매핑을 묶는다. 그룹 자체의 sort_ordr 정보는 이 응답에 없으므로
+ * flat 목록에서 그룹이 처음 등장한 순서를 그대로 그룹 순서로 사용한다.
+ */
+function groupMappingsByGroup(mappings: ColMappingItem[]): { grpId: string; grpNm: string; items: ColMappingItem[] }[] {
+  const order: string[] = [];
+  const byGroup = new Map<string, { grpNm: string; items: ColMappingItem[] }>();
+
+  for (const m of mappings) {
+    let g = byGroup.get(m.grpId);
+    if (!g) {
+      g = { grpNm: m.grpNm, items: [] };
+      byGroup.set(m.grpId, g);
+      order.push(m.grpId);
+    }
+    g.items.push(m);
+  }
+
+  return order.map((grpId) => ({ grpId, grpNm: byGroup.get(grpId)!.grpNm, items: byGroup.get(grpId)!.items }));
+}
+
 // ── 컬럼 매핑 → 마크다운 변환 ────────────────────────────────────────────────
 
 function buildMappingMarkdown(mappings: ColMappingItem[]): string {
@@ -1710,16 +1747,21 @@ function buildMappingMarkdown(mappings: ColMappingItem[]): string {
 
   const header = "| NO | 항목명 | IO구분 | UI유형 | 테이블.컬럼 | 설명 |";
   const sep = "|:---|:-------|:-------|:-------|:-----------|:-----|";
-  const rows = mappings.map((m, i) => {
-    const no = i + 1;
-    const name = m.usePurpsCn || "-";
-    const io = IO_LABEL[m.ioSeCode] || m.ioSeCode || "-";
-    const ui = UI_LABEL[m.uiTyCode] || m.uiTyCode || "-";
-    const col = m.tableName && m.colName ? `${m.tableName}.${m.colName}` : "-";
-    return `| ${no} | ${name} | ${io} | ${ui} | ${col} | - |`;
+
+  const groups = groupMappingsByGroup(mappings);
+  const sections = groups.map((group) => {
+    const rows = group.items.map((m, i) => {
+      const no = i + 1;
+      const name = m.usePurpsCn || "-";
+      const io = IO_LABEL[m.ioSeCode] || m.ioSeCode || "-";
+      const ui = UI_LABEL[m.uiTyCode] || m.uiTyCode || "-";
+      const col = m.tableName && m.colName ? `${m.tableName}.${m.colName}` : "-";
+      return `| ${no} | ${name} | ${io} | ${ui} | ${col} | - |`;
+    });
+    return [`### ${group.grpNm}`, "", header, sep, ...rows].join("\n");
   });
 
-  return ["**컬럼 매핑**", "", header, sep, ...rows].join("\n");
+  return ["**컬럼 매핑**", "", ...sections].join("\n\n");
 }
 
 // ── 컬럼 매핑 MD 팝업 ────────────────────────────────────────────────────────

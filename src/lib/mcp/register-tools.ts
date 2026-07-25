@@ -4,8 +4,8 @@
  * 역할:
  *   - McpServer 인스턴스에 SPECODE 도구들을 등록
  *
- * 도구 카테고리 (35개):
- *   [프로젝트]     list_projects, get_project
+ * 도구 카테고리 (36개):
+ *   [프로젝트]     list_projects, get_project, list_members
  *   [기획-과업]    list_tasks, get_task, create_task, update_task
  *   [기획-요구사항] list_requirements, get_requirement, create_requirement, update_requirement
  *   [기획-스토리]  list_user_stories, get_user_story, create_user_story, update_user_story
@@ -125,6 +125,22 @@ export function registerTools(
     }
   );
 
+  server.tool(
+    "list_members",
+    "프로젝트 멤버 목록 조회 — 이름/이메일/역할/직무를 가진 멤버 목록을 반환합니다. " +
+      "create_*/update_* 도구의 assignMemberId(담당자 지정)에 쓸 멤버 ID를 찾을 때 사용하세요. " +
+      "응답의 myMemberId가 요청자 본인의 멤버 ID입니다",
+    { projectId: z.string().describe("프로젝트 ID") },
+    async ({ projectId }) => {
+      try {
+        const data = await specodeFetch(`/api/projects/${projectId}/members`);
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
   // ═══════════════════════════════════════════════════════════════
   // 2. 기획 — 과업 (Task)
   //    displayId 자동채번: SFR-NNNNN
@@ -201,6 +217,7 @@ export function registerTools(
       content: z.string().optional().describe("상세 내용"),
       outputInfo: z.string().optional().describe("산출물 정보"),
       rfpPage: z.string().optional().describe("RFP 페이지 번호"),
+      assignMemberId: z.string().optional().describe("담당자 회원 ID (list_members로 조회 가능)"),
     },
     async ({ projectId, taskId, ...body }) => {
       try {
@@ -306,6 +323,9 @@ export function registerTools(
       currentContent: z.string().optional().describe("현행화 내용"),
       analysisMemo: z.string().optional().describe("분석 메모"),
       detailSpec: z.string().optional().describe("상세 명세"),
+      analysisStart: z.string().optional().describe("분석 시작일 (YYYY-MM-DD)"),
+      analysisEnd: z.string().optional().describe("분석 종료일 (YYYY-MM-DD)"),
+      progress: z.number().optional().describe("분석 진행률 (0~100)"),
     },
     async ({ projectId, requirementId, ...body }) => {
       try {
@@ -377,6 +397,11 @@ export function registerTools(
       name: z.string().describe("스토리명 (필수)"),
       persona: z.string().optional().describe("페르소나 (예: '신규 가입자', '관리자')"),
       scenario: z.string().optional().describe("시나리오 설명"),
+      acceptanceCriteria: z.array(z.object({
+        given: z.string().optional().describe("Given (조건)"),
+        when: z.string().optional().describe("When (행동)"),
+        then: z.string().optional().describe("Then (결과)"),
+      })).optional().describe("인수기준 목록 (Given/When/Then)"),
     },
     async ({ projectId, ...body }) => {
       try {
@@ -401,6 +426,14 @@ export function registerTools(
       name: z.string().describe("스토리명 (필수)"),
       persona: z.string().describe("페르소나 (필수)"),
       scenario: z.string().describe("시나리오 설명 (필수)"),
+      acceptanceCriteria: z.array(z.object({
+        given: z.string().optional().describe("Given (조건)"),
+        when: z.string().optional().describe("When (행동)"),
+        then: z.string().optional().describe("Then (결과)"),
+      })).optional().describe(
+        "인수기준 목록 (Given/When/Then). 주의: 이 파라미터를 생략하면 기존 인수기준이 전부 삭제됩니다 " +
+        "— 유지하려면 get_user_story로 현재 값을 먼저 읽어서 그대로 다시 전달하세요"
+      ),
     },
     async ({ projectId, storyId, ...body }) => {
       try {
@@ -621,6 +654,10 @@ export function registerTools(
       categoryL: z.string().optional().describe("대분류"),
       categoryM: z.string().optional().describe("중분류"),
       categoryS: z.string().optional().describe("소분류"),
+      assignMemberId: z.string().optional().describe("담당자 회원 ID (list_members로 조회 가능)"),
+      designBgngDe: z.string().optional().describe("설계 시작일 (YYYY-MM-DD)"),
+      designEndDe: z.string().optional().describe("설계 종료일 (YYYY-MM-DD)"),
+      designEfrtVal: z.string().optional().describe("설계 공수"),
     },
     async ({ projectId, screenId, ...body }) => {
       try {
@@ -687,7 +724,7 @@ export function registerTools(
       projectId: z.string().describe("프로젝트 ID"),
       name: z.string().describe("영역명 (필수)"),
       screenId: z.string().optional().describe("소속 화면 ID"),
-      type: z.string().optional().describe("영역 유형. 허용값: SEARCH | GRID | FORM | DETAIL | BUTTON | TAB | CHART | OTHER. 기본: GRID"),
+      type: z.string().optional().describe("영역 유형. 허용값: SEARCH | GRID | FORM | DETAIL | BUTTON | TAB | CHART | OTHER. 기본: LIST"),
       description: z.string().optional().describe("영역 설명"),
       sortOrder: z.number().optional().describe("정렬 순서"),
     },
@@ -710,9 +747,9 @@ export function registerTools(
     {
       projectId: z.string().describe("프로젝트 ID"),
       areaId: z.string().describe("영역 ID"),
-      name: z.string().optional().describe("영역명"),
+      name: z.string().describe("영역명 (필수)"),
       screenId: z.string().optional().describe("소속 화면 ID"),
-      type: z.string().optional().describe("영역 유형. 허용값: SEARCH | GRID | FORM | DETAIL | BUTTON | TAB | CHART | OTHER. 기본: GRID"),
+      type: z.string().optional().describe("영역 유형. 허용값: SEARCH | GRID | FORM | DETAIL | BUTTON | TAB | CHART | OTHER. 생략 시 기존 값 유지"),
       description: z.string().optional().describe("영역 설명"),
       commentCn: z.string().optional().describe("코멘트"),
       sortOrder: z.number().optional().describe("정렬 순서"),
