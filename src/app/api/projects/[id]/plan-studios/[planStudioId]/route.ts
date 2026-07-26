@@ -1,9 +1,11 @@
 /**
  * GET    /api/projects/[id]/plan-studios/[planStudioId] — 기획실 상세 (FID-PS-04)
+ * PUT    /api/projects/[id]/plan-studios/[planStudioId] — 기획실명 수정
  * DELETE /api/projects/[id]/plan-studios/[planStudioId] — 기획실 삭제 (FID-PS-02)
  *
  * 역할:
  *   - GET: 기획실 메타 + 산출물 목록 (artf별 최신 AI 상태 포함) 통합 조회
+ *   - PUT: 기획실명(plan_studio_nm)만 수정 — 산출물 구조는 건드리지 않음
  *   - DELETE: CASCADE (artf → ctxt 자동 삭제)
  */
 
@@ -67,6 +69,41 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   } catch (err) {
     console.error(`[GET /api/plan-studios/${planStudioId}]`, err);
     return apiError("DB_ERROR", "기획실 조회에 실패했습니다.", 500);
+  }
+}
+
+export async function PUT(request: NextRequest, { params }: RouteParams) {
+  const { id: projectId, planStudioId } = await params;
+
+  const gate = await requirePermission(request, projectId, "content.update");
+  if (gate instanceof Response) return gate;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
+  }
+  const planStudioNm = (body as { planStudioNm?: unknown })?.planStudioNm;
+  if (typeof planStudioNm !== "string" || !planStudioNm.trim()) {
+    return apiError("VALIDATION_ERROR", "기획실명을 입력해 주세요.", 400);
+  }
+
+  try {
+    const existing = await prisma.tbDsPlanStudio.findUnique({ where: { plan_studio_id: planStudioId } });
+    if (!existing || existing.prjct_id !== projectId) {
+      return apiError("NOT_FOUND", "기획실을 찾을 수 없습니다.", 404);
+    }
+
+    await prisma.tbDsPlanStudio.update({
+      where: { plan_studio_id: planStudioId },
+      data: { plan_studio_nm: planStudioNm.trim(), mdfcn_dt: new Date() },
+    });
+
+    return apiSuccess({ updated: true });
+  } catch (err) {
+    console.error(`[PUT /api/plan-studios/${planStudioId}]`, err);
+    return apiError("DB_ERROR", "기획실명 수정에 실패했습니다.", 500);
   }
 }
 

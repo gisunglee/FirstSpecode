@@ -32,9 +32,11 @@ export default function WeekPlanRow({ projectId, monday }: { projectId: string; 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
       <WeekChecklistSummary projectId={projectId} monday={monday} label={thisLabel} />
-      <WeekResultSummary projectId={projectId} monday={monday} label={thisLabel} />
+      {/* mode: 이번 주는 실적(이미 지난/진행 중인 주 서술), 다음 주는 계획(아직 안 온 주 서술)
+          — "다음 주 결과 요약"이라는 말이 안 되는 제목이 나오던 문제 수정(2026-07-24h) */}
+      <WeekResultSummary projectId={projectId} monday={monday} label={thisLabel} mode="result" />
       <WeekChecklistSummary projectId={projectId} monday={nextMonday} label={nextLabel} />
-      <WeekResultSummary projectId={projectId} monday={nextMonday} label={nextLabel} />
+      <WeekResultSummary projectId={projectId} monday={nextMonday} label={nextLabel} mode="plan" />
     </div>
   );
 }

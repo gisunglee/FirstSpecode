@@ -546,15 +546,26 @@ function UnitWorksPageInner() {
       </div>
 
       {/* 목록 — 빈 상태에서도 헤더 표시 (과업 페이지 패턴과 통일) */}
-      <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+      {/* 컬럼 트랙은 이 컨테이너가 한 번만 정의 — 헤더/각 행은 subgrid 로 여기 트랙을 그대로
+          물려받는다. 행마다 따로 grid-template-columns 를 계산하면(과거 방식) 행별 콘텐츠
+          길이에 따라 컬럼 경계가 어긋나던 문제가 있었음(2026-07-26). subgrid 는 전체 행이
+          공유하는 하나의 트랙 집합을 컨테이너 레벨에서 계산하므로 항상 정렬이 보장된다.
+          컬럼 합계가 뷰포트보다 넓어질 수 있어 overflowX:auto — 컬럼이 잘리는 대신 가로 스크롤 */}
+      <div style={{
+        display:             "grid",
+        gridTemplateColumns: GRID_TEMPLATE,
+        border:              "1px solid var(--color-border)",
+        borderRadius:        8,
+        overflowX:           "auto",
+      }}>
         {/* 헤더 행 */}
         <div style={gridHeaderStyle}>
           <div />
           <div style={{ textAlign: "center" }}>순서</div>
           <div>요구사항</div>
           <div>단위업무명</div>
-          <div>담당자</div>
-          <div>기간</div>
+          <div style={{ textAlign: "center" }}>담당자</div>
+          <div style={{ textAlign: "center" }}>기간</div>
           <div style={{ textAlign: "center" }}>진행률</div>
           <div style={{ textAlign: "center" }}>화면수</div>
           <div style={{ textAlign: "center" }}>AI 구현</div>
@@ -660,6 +671,7 @@ function UnitWorksPageInner() {
               <div
                 style={{
                   fontSize: 13,
+                  textAlign: "center",
                   color: uw.assignMemberName
                     ? "var(--color-text-primary)"
                     : "var(--color-text-tertiary)",
@@ -673,7 +685,7 @@ function UnitWorksPageInner() {
               </div>
 
               {/* 기간 — "YYYY-MM-DD ~ YYYY-MM-DD"(23자) 한 줄 유지 */}
-              <div style={{ fontSize: 13, color: "var(--color-text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <div style={{ fontSize: 13, textAlign: "center", color: "var(--color-text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {uw.startDate && uw.endDate
                   ? `${uw.startDate} ~ ${uw.endDate}`
                   : uw.startDate
@@ -1062,18 +1074,20 @@ function DeleteConfirmDialog({
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
 // 드래그핸들 / 순서 / 요구사항 / 단위업무명(flex) / 담당자 / 기간 / 진행률 / 화면수 / AI구현 / 분설구테
-// 기간 16%→14% 로 축소해 담당자 110px 확보
-// AI 구현 컬럼은 "배지 + 시간(MM-DD HH:mm)"을 한 줄에 담도록 150px 확보
-// % 기반 컬럼은 사이드바 펼침/접힘으로 가용 폭이 줄면 텍스트 셀이 과도하게 좁아져 깨졌음.
-// fr 기반으로 전환하고 기간/AI구현 등 콘텐츠 길이가 정해진 컬럼은 고정폭으로 안정화.
-//   요구사항(1.5fr) < 단위업무명(2fr) — 단위업무명에 더 큰 비중
-//   기간 145px("2026-04-02 ~ 2028-06-08" 23자 nowrap)
-//   AI 구현 130px(배지+MM-DD HH:mm)
-const GRID_TEMPLATE = "28px 44px 1.5fr 2fr 110px 180px 80px 56px 130px 110px";
+// 컬럼 트랙은 바깥 컨테이너(위 JSX의 border 있는 div)에서 한 번만 정의하고,
+// 헤더 행·각 데이터 행은 subgrid 로 이 트랙을 그대로 물려받는다(아래 gridHeaderStyle/gridRowStyle).
+// 예전엔 행마다 grid-template-columns 를 각자 계산했는데(중첩 grid), 그러면 minWidth:max-content 가
+// 행별 콘텐츠 길이(단위업무명 글자 수)에 따라 달라져서 행끼리 전체 너비가 어긋나는 문제가 있었다
+// (2026-07-26 실사용 리포트). subgrid 는 모든 행이 공유하는 트랙을 컨테이너 레벨에서 한 번만
+// 계산하므로 정렬이 항상 보장되고, 단위업무명(1fr)도 매 행이 아니라 컬럼 전체 기준으로 넓어진다.
+//   요구사항 160px / 단위업무명 minmax(240px, 1fr) — 남는 공간을 여기로 흡수
+//   기간 150px("2026-04-02 ~ 2028-06-08" 23자, ellipsis) / AI 구현 120px(배지+MM-DD HH:mm)
+const GRID_TEMPLATE = "28px 36px 160px minmax(240px, 1fr) 70px 150px 60px 44px 120px 100px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",
-  gridTemplateColumns: GRID_TEMPLATE,
+  gridColumn:          "1 / -1",
+  gridTemplateColumns: "subgrid",
   gap:                 12,
   padding:             "10px 16px",
   background:          "var(--color-bg-muted)",
@@ -1082,11 +1096,13 @@ const gridHeaderStyle: React.CSSProperties = {
   color:               "var(--color-text-secondary)",
   borderBottom:        "1px solid var(--color-border)",
   alignItems:          "center",
+  whiteSpace:          "nowrap",
 };
 
 const gridRowStyle: React.CSSProperties = {
   display:             "grid",
-  gridTemplateColumns: GRID_TEMPLATE,
+  gridColumn:          "1 / -1",
+  gridTemplateColumns: "subgrid",
   gap:                 12,
   padding:             "12px 16px",
   alignItems:          "center",

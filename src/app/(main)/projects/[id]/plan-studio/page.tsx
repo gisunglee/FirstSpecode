@@ -21,6 +21,7 @@ type StudioItem = {
   planStudioDisplayId: string;
   planStudioNm: string;
   artfCount: number;
+  creatorNm: string;
   mdfcnDt: string | null;
   creatDt: string;
 };
@@ -87,8 +88,9 @@ function Inner() {
             <div>기획실ID</div>
             <div>기획실명</div>
             <div style={{ textAlign: "center" }}>산출물수</div>
-            <div>수정일시</div>
-            <div />
+            <div style={{ textAlign: "center" }}>담당자</div>
+            <div style={{ textAlign: "center" }}>수정일시</div>
+            <div style={{ textAlign: "center" }} />
           </div>
 
           {isLoading ? (
@@ -100,7 +102,8 @@ function Inner() {
               <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{s.planStudioDisplayId}</div>
               <div style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.planStudioNm}</div>
               <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>{s.artfCount}</div>
-              <div style={{ fontSize: 13, color: "var(--color-text-primary)" }}>{formatPlanStudioDt(s.mdfcnDt ?? s.creatDt)}</div>
+              <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.creatorNm}</div>
+              <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>{formatPlanStudioDt(s.mdfcnDt ?? s.creatDt)}</div>
               <div style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                 <button onClick={() => setDeleteTarget({ id: s.planStudioId, name: s.planStudioNm })} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--color-text-tertiary)" }} title="삭제">×</button>
               </div>
@@ -142,7 +145,7 @@ function Inner() {
   );
 }
 
-const GRID = "100px 1fr 80px 160px 40px";
+const GRID = "100px 1fr 80px 100px 160px 40px";
 
 // 수정일시 포맷 — "YYYY-MM-DD HH:mm" 으로 짧게.
 // toLocaleString() 기본값(예: "2026. 4. 11. 오전 11:33:32")은 한글 포맷이라

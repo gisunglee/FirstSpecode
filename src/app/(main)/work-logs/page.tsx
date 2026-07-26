@@ -20,7 +20,7 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAppStore } from "@/store/appStore";
-import { getWeekMondayStr, addDaysStr } from "@/lib/weekUtil";
+import { getWeekMondayStr, addDaysStr, getMonthStart, getOwnedWeeksOfMonth } from "@/lib/weekUtil";
 import TodayTab from "./_components/TodayTab";
 import HistoryTab from "./_components/HistoryTab";
 
@@ -42,6 +42,12 @@ function WorkLogsPageInner() {
 
   const [tab, setTab] = useState<Tab>("today");
   const [weekMonday, setWeekMonday] = useState(initialWeek);
+
+  // "이번 달 주" 선택 — weekMonday가 속한 달(수요일 기준 귀속) 전체 주를 번호 버튼으로.
+  // 원래 TodayTab.tsx 안에서 별도 줄로 렌더했는데, 상단 타이틀 줄과 따로 놀아 "한 줄로,
+  // 가운데 정렬로 붙여달라"는 피드백으로 이 sticky 헤더 줄로 옮겼다(2026-07-24i).
+  const monthStart = getMonthStart(addDaysStr(weekMonday, 2));
+  const monthWeeks = getOwnedWeeksOfMonth(monthStart);
 
   return (
     <div style={{ padding: 0 }}>
@@ -65,6 +71,28 @@ function WorkLogsPageInner() {
             </span>
           )}
         </div>
+
+        {/* 이번 달 주 선택 — 좌측 타이틀·우측 탭 사이에서 가운데 정렬(flex:1 + justifyContent:center) */}
+        {currentProjectId && tab === "today" && (
+          <div style={{ flex: 1, display: "flex", justifyContent: "center", minWidth: 200 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-tertiary)", marginRight: 2 }}>
+                {monthStart.slice(0, 4)}년 {monthStart.slice(5, 7)}월
+              </span>
+              {monthWeeks.map((w, i) => (
+                <button
+                  key={w}
+                  type="button"
+                  className={`sp-btn sp-btn-sm ${w === weekMonday ? "sp-btn-primary" : "sp-btn-secondary"}`}
+                  onClick={() => setWeekMonday(w)}
+                >
+                  {i + 1}주
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {currentProjectId && (
           <div className="sp-tab-seg">
             <div className={`sp-tab-seg-item${tab === "today" ? " is-active" : ""}`} onClick={() => setTab("today")}>

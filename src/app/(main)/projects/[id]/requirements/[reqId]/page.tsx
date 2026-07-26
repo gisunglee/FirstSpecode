@@ -34,7 +34,9 @@ import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
 import ReleaseDialog from "@/components/common/ReleaseDialog";
 import ReleaseHistoryDialog from "@/components/documents/ReleaseHistoryDialog";
 import ExportMenu from "@/components/common/ExportMenu";
+import { ReqSaveOptionDialog } from "@/components/common/ReqSaveOptionDialog";
 import { SelectChevron } from "@/components/ui/SelectChevron";
+import { PhaseItem } from "@/components/ui/ProgressTracker";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -631,8 +633,8 @@ function RequirementDetailPageInner() {
   return (
     <div style={{ padding: 0 }}>
       {/* 헤더 타이틀 바 */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", position: "sticky", top: 0, zIndex: 10, background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "10px 24px", position: "sticky", top: 0, zIndex: 10, background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <button
             onClick={() => router.push(`/projects/${projectId}/requirements`)}
             style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#666", lineHeight: 1, padding: "2px 4px" }}
@@ -643,7 +645,29 @@ function RequirementDetailPageInner() {
             {isNew ? "요구사항 추가" : "요구사항 편집"}
           </span>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+
+        {/* 분석 진척률 — 기능 편집 페이지(ProgressTracker)와 동일한 게이지 스타일을
+            타이틀 옆으로 이동. 요구사항은 진척률이 자체 컬럼(progrs_rt) 하나뿐이라
+            페이지 저장 시 다른 필드와 함께 저장되도록 로컬 폼 state에만 반영한다
+            (기능 페이지처럼 클릭 즉시 API 저장하면, 화면에서 아직 저장 안 한 다른
+            입력값까지 함께 커밋돼버리는 문제가 생기기 때문). */}
+        {!isNew && (
+          <div style={{ display: "flex", alignItems: "stretch", borderRadius: 10, background: "rgba(0,0,0,0.04)", padding: "2px 10px" }}>
+            <PhaseItem
+              phase="analy"
+              label="분석"
+              value={form.progress}
+              isLoading={isDetailLoading}
+              readOnly={!canEdit}
+              isSaving={false}
+              onSave={(v) => handleChange("progress", v)}
+            />
+          </div>
+        )}
+
+        <div style={{ flex: 1 }} />
+
+        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
           {/* 삭제 — 신규 모드 아니고 편집 권한 있을 때만 노출 */}
           {!isNew && canEdit && (
             <button
@@ -808,8 +832,8 @@ function RequirementDetailPageInner() {
                 </FormField>
               </div>
 
-              {/* 분석 일정 + 진척률 — 3컬럼 (unit-works 상세 페이지와 동일 패턴) */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+              {/* 분석 일정 — 진척률은 타이틀 옆 게이지로 이동 (2컬럼) */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 <FormField label="분석 시작일">
                   <input
                     type="date"
@@ -824,17 +848,6 @@ function RequirementDetailPageInner() {
                     type="date"
                     value={form.analysisEnd}
                     onChange={(e) => handleChange("analysisEnd", e.target.value)}
-                    readOnly={!canEdit}
-                    className="sp-input"
-                  />
-                </FormField>
-                <FormField label="분석 진척률 (%)">
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={form.progress}
-                    onChange={(e) => handleChange("progress", Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
                     readOnly={!canEdit}
                     className="sp-input"
                   />
@@ -1214,7 +1227,7 @@ function RequirementDetailPageInner() {
 
       {/* 저장 옵션 다이얼로그 */}
       {saveDialogOpen && (
-        <SaveOptionDialog
+        <ReqSaveOptionDialog
           lastVersion={historyItems[0]?.versionNo ?? null}
           changedFlags={getChangedFlags()}
           onClose={() => setSaveDialogOpen(false)}
@@ -1694,134 +1707,6 @@ function ReqDiffSection({ label, leftText, rightText, leftVersion, rightVersion 
     </div>
   );
 }
-
-// ── 저장 옵션 다이얼로그 (통합) ────────────────────────────────────────────────
-
-function SaveOptionDialog({ lastVersion, changedFlags, onClose, onSave, isPending }: {
-  lastVersion: string | null;
-  changedFlags: { contentChanged: boolean; specChanged: boolean; analyChanged: boolean };
-  onClose: () => void;
-  onSave: (opts: {
-    saveHistory?: boolean; versionMode?: string; versionComment?: string;
-    saveSpecHistory?: boolean; saveAnalyHistory?: boolean;
-  }) => void;
-  isPending: boolean;
-}) {
-  // 요구사항 내용 이력 모드
-  type VersionMode = "none" | "minor" | "major";
-  const [versionMode, setVersionMode] = useState<VersionMode>("none");
-  const [comment, setComment] = useState("");
-
-  // 상세명세·분석메모 이력 저장 여부
-  const [saveSpec, setSaveSpec] = useState(false);
-  const [saveAnaly, setSaveAnaly] = useState(false);
-
-  // 버전 미리보기
-  const parts = (lastVersion ?? "V1.0").replace("V", "").split(".");
-  const major = parseInt(parts[0] ?? "1", 10);
-  const minor = parseInt(parts[1] ?? "0", 10);
-
-  function handleSave() {
-    onSave({
-      // 요구사항 내용 이력
-      ...(changedFlags.contentChanged && versionMode !== "none"
-        ? { saveHistory: true, versionMode, versionComment: comment }
-        : {}),
-      // 상세명세 이력
-      saveSpecHistory: changedFlags.specChanged && saveSpec,
-      // 분석메모 이력
-      saveAnalyHistory: changedFlags.analyChanged && saveAnaly,
-    });
-  }
-
-  const checkboxStyle: React.CSSProperties = {
-    display: "flex", alignItems: "center", gap: 8, padding: "8px 12px",
-    borderRadius: 6, fontSize: 13, cursor: "pointer",
-    border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
-  };
-
-  const radioStyle = (active: boolean): React.CSSProperties => ({
-    display: "flex", alignItems: "center", gap: 8, padding: "6px 12px",
-    borderRadius: 6, cursor: "pointer", fontSize: 13,
-    border: active ? "1px solid var(--color-primary, #1976d2)" : "1px solid var(--color-border)",
-    background: active ? "var(--color-brand-subtle, rgba(25,118,210,0.06))" : "var(--color-bg-card)",
-  });
-
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()}
-        style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "24px 28px", minWidth: 400, maxWidth: 500, width: "100%", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
-        <h3 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 700 }}>변경 이력 저장</h3>
-        <p style={{ margin: "0 0 18px", fontSize: 13, color: "var(--color-text-secondary)" }}>
-          변경된 항목의 이력 저장 여부를 선택하세요.
-        </p>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-
-          {/* ── 요구사항 내용 (원문/현행화) ── */}
-          {changedFlags.contentChanged && (
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#1976d2", display: "inline-block" }} />
-                요구사항 내용 변경됨
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 12 }}>
-                <label style={radioStyle(versionMode === "none")} onClick={() => setVersionMode("none")}>
-                  <input type="radio" name="vMode" checked={versionMode === "none"} onChange={() => setVersionMode("none")} />
-                  이력 없이 저장
-                </label>
-                <label style={radioStyle(versionMode === "minor")} onClick={() => setVersionMode("minor")}>
-                  <input type="radio" name="vMode" checked={versionMode === "minor"} onChange={() => setVersionMode("minor")} />
-                  마이너 버전 <span style={{ color: "#1976d2", fontSize: 12, fontWeight: 600 }}>V{major}.{minor + 1}</span>
-                </label>
-                <label style={radioStyle(versionMode === "major")} onClick={() => setVersionMode("major")}>
-                  <input type="radio" name="vMode" checked={versionMode === "major"} onChange={() => setVersionMode("major")} />
-                  메이저 버전 <span style={{ color: "#e65100", fontSize: 12, fontWeight: 600 }}>V{major + 1}.0</span>
-                </label>
-                {versionMode !== "none" && (
-                  <textarea
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    placeholder="사유 (선택)"
-                    rows={2}
-                    style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-primary)", fontSize: 12, resize: "vertical", boxSizing: "border-box", marginTop: 4 }}
-                  />
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── 상세 명세 ── */}
-          {changedFlags.specChanged && (
-            <label style={checkboxStyle}>
-              <input type="checkbox" checked={saveSpec} onChange={(e) => setSaveSpec(e.target.checked)} />
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2e7d32", display: "inline-block" }} />
-              <span style={{ flex: 1 }}>상세 명세 변경이력 저장</span>
-            </label>
-          )}
-
-          {/* ── 분석 메모 ── */}
-          {changedFlags.analyChanged && (
-            <label style={checkboxStyle}>
-              <input type="checkbox" checked={saveAnaly} onChange={(e) => setSaveAnaly(e.target.checked)} />
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#6a1b9a", display: "inline-block" }} />
-              <span style={{ flex: 1 }}>분석 메모 변경이력 저장</span>
-            </label>
-          )}
-        </div>
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>
-          <button onClick={onClose} disabled={isPending} style={{ ...secondaryBtnStyle, fontSize: 13 }}>취소</button>
-          <button onClick={handleSave} disabled={isPending} style={{ ...secondaryBtnStyle, fontSize: 13, background: "var(--color-primary, #1976d2)", color: "#fff", border: "none" }}>
-            {isPending ? "저장 중..." : "저장"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 
 // ── 스타일 ───────────────────────────────────────────────────────────────────
 

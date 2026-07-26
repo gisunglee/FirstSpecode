@@ -264,7 +264,7 @@ function TaskListPageInner() {
         {/* 헤더 — 드래그 핸들 컬럼 제거 (2026-05-30) */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "1fr 110px 10% 80px 1.2fr 8% 12%",
+          gridTemplateColumns: TASK_GRID_TEMPLATE,
           padding: "10px 16px",
           background: "var(--color-bg-muted)",
           borderBottom: "1px solid var(--color-border)",
@@ -274,12 +274,12 @@ function TaskListPageInner() {
           alignItems: "center",
         }}>
           <span>과업명</span>
-          <span>담당자</span>
           <span style={{ textAlign: "center" }}>카테고리</span>
           <span style={{ textAlign: "center" }}>RFP 페이지</span>
-          <span>산출물</span>
-          <span>요구사항</span>
-          <span>H/M/L</span>
+          <span style={{ textAlign: "center" }}>산출물</span>
+          <span style={{ textAlign: "center" }}>담당자</span>
+          <span style={{ textAlign: "center" }}>요구사항</span>
+          <span style={{ textAlign: "center" }}>H/M/L</span>
         </div>
 
         {/* 바디 */}
@@ -296,7 +296,7 @@ function TaskListPageInner() {
                 onClick={() => router.push(`/projects/${projectId}/tasks/${task.taskId}`)}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 110px 10% 80px 1.2fr 8% 12%",
+                  gridTemplateColumns: TASK_GRID_TEMPLATE,
                   padding: "12px 16px",
                   borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
                   alignItems: "center",
@@ -306,28 +306,14 @@ function TaskListPageInner() {
                   transition: "background 0.1s",
                 }}
               >
-                {/* 과업명 */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {/* 과업명 — 유일하게 폭이 늘고 줄어드는 컬럼 */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                   <span style={{ fontSize: 13, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
                     {task.displayId}
                   </span>
                   <span style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
                     {task.name}
                   </span>
-                </div>
-
-                {/* 담당자 — 미지정/퇴장 멤버는 흐린 "-" */}
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: task.assignMemberName
-                      ? "var(--color-text-primary)"
-                      : "var(--color-text-tertiary)",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  }}
-                  title={task.assignMemberName ?? undefined}
-                >
-                  {task.assignMemberName ?? "-"}
                 </div>
 
                 {/* 카테고리 뱃지 */}
@@ -349,7 +335,7 @@ function TaskListPageInner() {
                 {/* 산출물 */}
                 <span
                   style={{
-                    fontSize: 13, color: "var(--color-text-primary)",
+                    fontSize: 13, color: "var(--color-text-primary)", textAlign: "center",
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}
                   title={task.outputInfo || ""}
@@ -357,13 +343,27 @@ function TaskListPageInner() {
                   {task.outputInfo || <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}
                 </span>
 
+                {/* 담당자 — 미지정/퇴장 멤버는 흐린 "-" */}
+                <div
+                  style={{
+                    fontSize: 13, textAlign: "center",
+                    color: task.assignMemberName
+                      ? "var(--color-text-primary)"
+                      : "var(--color-text-tertiary)",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}
+                  title={task.assignMemberName ?? undefined}
+                >
+                  {task.assignMemberName ?? "-"}
+                </div>
+
                 {/* 요구사항 건수 */}
-                <span style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
+                <span style={{ fontSize: 13, color: "var(--color-text-primary)", textAlign: "center" }}>
                   {task.requirementCount}건
                 </span>
 
                 {/* HIGH/MED/LOW — 우선순위 색은 의미가 있어 유지 */}
-                <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+                <span style={{ fontSize: 13, color: "var(--color-text-secondary)", textAlign: "center" }}>
                   <span style={{ color: "#e53935" }}>{task.prioritySummary.high}</span>
                   {" / "}
                   <span style={{ color: "#fb8c00" }}>{task.prioritySummary.medium}</span>
@@ -479,6 +479,11 @@ function DeleteTaskDialog({
     </div>
   );
 }
+
+// 과업명 / 카테고리 / RFP 페이지 / 산출물 / 담당자 / 요구사항 / H·M·L
+// 과업명만 남는 공간을 흡수하며 줄어들 수 있어야 하므로 minmax(0, 1fr) —
+// 나머지는 실제 표시되는 배지·짧은 텍스트 길이에 맞춘 고정폭 + 중앙 정렬.
+const TASK_GRID_TEMPLATE = "minmax(0, 1fr) 80px 76px 140px 60px 52px 84px";
 
 // ── 버튼 스타일 ──────────────────────────────────────────────────────────────
 

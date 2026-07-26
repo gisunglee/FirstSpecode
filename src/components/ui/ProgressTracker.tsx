@@ -143,10 +143,13 @@ export default function ProgressTracker({
 }
 
 // ─── 단계 아이템 ───────────────────────────────────────────────────────────────
+// 다른 페이지(예: 요구사항 상세)에서 tb_cm_progress 테이블 없이 자체 컬럼(progrs_rt 등)에
+// 값을 직접 저장할 때도 동일한 게이지 스타일을 쓸 수 있도록 export — onSave는 저장 방식을
+// 강제하지 않는 콜백이라 로컬 state 갱신에도, 즉시 API 호출에도 그대로 쓸 수 있다.
 
-interface PhaseItemProps {
+export interface PhaseItemProps {
   phase:     PhaseKey;
-  label:     string;
+  label?:    string;
   value:     number;
   isLoading: boolean;
   readOnly:  boolean;
@@ -154,7 +157,8 @@ interface PhaseItemProps {
   onSave:    (value: number) => void;
 }
 
-function PhaseItem({ phase, label, value, isLoading, readOnly, isSaving, onSave }: PhaseItemProps) {
+export function PhaseItem({ phase, label, value, isLoading, readOnly, isSaving, onSave }: PhaseItemProps) {
+  const displayLabel = label ?? DEFAULT_LABELS[phase];
   const colors   = PHASE_COLORS[phase];
   const disabled = readOnly || isLoading || isSaving;
 
@@ -187,7 +191,7 @@ function PhaseItem({ phase, label, value, isLoading, readOnly, isSaving, onSave 
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
       {/* 레이블 */}
       <span style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
-        {label}
+        {displayLabel}
       </span>
 
       {/* 클릭 가능한 그라디언트 바 */}

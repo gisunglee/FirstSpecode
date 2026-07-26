@@ -22,6 +22,9 @@ const RichEditor = dynamic(() => import("@/components/ui/RichEditor"), { ssr: fa
 import MarkdownEditor from "@/components/ui/MarkdownEditor";
 import { SelectChevron } from "@/components/ui/SelectChevron";
 import { useIdPrefixes } from "@/hooks/useIdPrefixes";
+import { ReqSaveOptionDialog } from "@/components/common/ReqSaveOptionDialog";
+import { usePermissions } from "@/hooks/useMyRole";
+import { useCanEditTask } from "@/hooks/useCanEditTask";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -897,7 +900,7 @@ function TaskDetailPanel({ projectId, taskId, displayId, onSaved }: { projectId:
   const [assignMemberId, setAssignMemberId] = useState("");
   const [loaded,         setLoaded]         = useState(false);
 
-  const { isLoading } = useQuery({
+  const { data: detail, isLoading } = useQuery({
     queryKey: ["task-detail", projectId, taskId],
     queryFn:  () =>
       authFetch<{ data: { name: string; displayId: string | null; category: string; definition: string | null; content: string | null; outputInfo: string | null; rfpPage: string | null; assignMemberId: string | null } }>(
@@ -928,6 +931,12 @@ function TaskDetailPanel({ projectId, taskId, displayId, onSaved }: { projectId:
   const members = memberData?.members ?? [];
   const myMemberId = memberData?.myMemberId ?? "";
 
+  // 편집 권한 — 과업 개별 편집 화면(tasks/[taskId]/page.tsx)과 동일한 게이트.
+  // 담당자 비교는 원본(API 응답) assignMemberId 로 — 폼에서 담당자를 바꾸는 도중에도
+  // 권한 판정이 흔들리지 않도록 detail(로드값)을 기준으로 한다.
+  const isAssignee = !!myMemberId && detail?.assignMemberId === myMemberId;
+  const { canEditTask } = useCanEditTask(projectId, { isAssignee });
+
   const saveMutation = useMutation({
     mutationFn: () =>
       authFetch(`/api/projects/${projectId}/tasks/${taskId}`, {
@@ -943,22 +952,27 @@ function TaskDetailPanel({ projectId, taskId, displayId, onSaved }: { projectId:
 
   return (
     <div style={panelStyle}>
-      <PanelHeader icon="📁" displayType="과업" displayId={displayId} name={name} onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
+      <PanelHeader icon="📁" displayType="과업" displayId={displayId} name={name} onSave={canEditTask ? () => saveMutation.mutate() : undefined} isPending={saveMutation.isPending} />
+      {!canEditTask && (
+        <div style={readOnlyNoticeStyle}>
+          🔒 <strong>읽기 전용</strong> — 이 과업은 OWNER/ADMIN 또는 PM/PL 직무, 혹은 담당자만 수정할 수 있습니다.
+        </div>
+      )}
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {/* 과업명 + 표시 ID — 2:1 그리드 (과업 상세 페이지와 동일 패턴) */}
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
           <PanelField label="과업명 *">
-            <input value={name} onChange={(e) => setName(e.target.value)} className="sp-input" />
+            <input value={name} onChange={(e) => setName(e.target.value)} readOnly={!canEditTask} className="sp-input" />
           </PanelField>
           <PanelField label="표시 ID">
-            <input value={displayIdInput} onChange={(e) => setDisplayIdInput(e.target.value)} placeholder="미입력 시 자동 생성" className="sp-input" />
+            <input value={displayIdInput} onChange={(e) => setDisplayIdInput(e.target.value)} placeholder="미입력 시 자동 생성" readOnly={!canEditTask} className="sp-input" />
           </PanelField>
         </div>
         {/* 담당자 + 카테고리 + RFP 페이지 — 3컬럼 */}
         <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr", gap: 16 }}>
           <PanelField label="담당자">
             <div className="sp-select-wrap">
-              <select value={assignMemberId} onChange={(e) => setAssignMemberId(e.target.value)} className="sp-input">
+              <select value={assignMemberId} onChange={(e) => setAssignMemberId(e.target.value)} disabled={!canEditTask} className="sp-input">
                 <option value="">담당자 없음</option>
                 {members.map((m) => (
                   <option key={m.memberId} value={m.memberId}>
@@ -972,7 +986,7 @@ function TaskDetailPanel({ projectId, taskId, displayId, onSaved }: { projectId:
           </PanelField>
           <PanelField label="카테고리 *">
             <div className="sp-select-wrap">
-              <select value={category} onChange={(e) => setCategory(e.target.value)} className="sp-input">
+              <select value={category} onChange={(e) => setCategory(e.target.value)} disabled={!canEditTask} className="sp-input">
                 <option value="NEW_DEV">신규개발</option>
                 <option value="IMPROVE">기능 개선</option>
                 <option value="MAINTAIN">유지 보수</option>
@@ -981,17 +995,17 @@ function TaskDetailPanel({ projectId, taskId, displayId, onSaved }: { projectId:
             </div>
           </PanelField>
           <PanelField label="RFP 페이지 번호">
-            <input value={rfpPage} onChange={(e) => setRfpPage(e.target.value)} placeholder="예: p.23" className="sp-input" />
+            <input value={rfpPage} onChange={(e) => setRfpPage(e.target.value)} placeholder="예: p.23" readOnly={!canEditTask} className="sp-input" />
           </PanelField>
         </div>
         <PanelField label="정의">
-          <textarea value={definition} onChange={(e) => setDefinition(e.target.value)} rows={4} className="sp-input" style={{ resize: "vertical" }} />
+          <textarea value={definition} onChange={(e) => setDefinition(e.target.value)} rows={4} readOnly={!canEditTask} className="sp-input" style={{ resize: "vertical" }} />
         </PanelField>
         <PanelField label="세부내용">
-          <RichEditor key={`task-content-${taskId}`} value={content} onChange={setContent} placeholder="세부 내용을 입력하세요." minHeight={260} />
+          <RichEditor key={`task-content-${taskId}`} value={content} onChange={setContent} placeholder="세부 내용을 입력하세요." minHeight={260} readOnly={!canEditTask} />
         </PanelField>
         <PanelField label="산출물">
-          <textarea value={outputInfo} onChange={(e) => setOutputInfo(e.target.value)} rows={4} className="sp-input" style={{ resize: "vertical" }} />
+          <textarea value={outputInfo} onChange={(e) => setOutputInfo(e.target.value)} rows={4} readOnly={!canEditTask} className="sp-input" style={{ resize: "vertical" }} />
         </PanelField>
       </div>
     </div>
@@ -1025,8 +1039,10 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
   const [specTab,     setSpecTab]     = useState<"edit" | "preview">("edit");
   // 기본 정보 섹션 접힘 — 기본적으로 접혀 있음
   const [basicOpen,   setBasicOpen]   = useState(false);
+  // 저장 옵션(이력 저장 여부) 다이얼로그 — 개별 편집 화면과 동일한 흐름
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
 
-  const { isLoading } = useQuery({
+  const { data: detail, isLoading } = useQuery({
     queryKey: ["req-detail-tree", projectId, reqId],
     queryFn:  () =>
       authFetch<{ data: { name: string; displayId: string | null; sortOrder: number | null; priority: string; source: string; rfpPage: string | null; assignMemberId: string | null; originalContent: string; currentContent: string; analysisMemo: string; detailSpec: string; requirementId: string; taskId: string | null } }>(
@@ -1061,8 +1077,29 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
   const members = memberData?.members ?? [];
   const myMemberId = memberData?.myMemberId ?? "";
 
+  // 편집 권한 — 요구사항 개별 편집 화면([reqId]/page.tsx)과 동일한 게이트.
+  // 담당자 비교는 원본(API 응답) assignMemberId 로 — 폼에서 담당자를 바꾸는 도중에도
+  // 권한 판정이 흔들리지 않도록 detail(로드값)을 기준으로 한다.
+  const { has: hasPerm } = usePermissions(projectId);
+  const matrixUpdateOK = hasPerm("requirement.update");
+  const isAssignee = !!myMemberId && detail?.assignMemberId === myMemberId;
+  const canEdit = matrixUpdateOK || isAssignee;
+
+  // 변경 이력 목록 — 개별 편집 화면과 동일하게 저장 다이얼로그의 "다음 버전" 미리보기용
+  const { data: historyData } = useQuery({
+    queryKey: ["req-history", projectId, reqId],
+    queryFn:  () =>
+      authFetch<{ data: { items: { versionNo: string }[] } }>(
+        `/api/projects/${projectId}/requirements/${reqId}/history`
+      ).then((r) => r.data),
+  });
+  const historyItems = historyData?.items ?? [];
+
   const saveMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (opts: {
+      saveHistory?: boolean; versionMode?: string; versionComment?: string;
+      saveSpecHistory?: boolean; saveAnalyHistory?: boolean;
+    } = {}) =>
       authFetch(`/api/projects/${projectId}/requirements/${reqId}`, {
         method:  "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1079,17 +1116,44 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
           currentContent:  curncyCn,
           analysisMemo:    analysisCn,
           detailSpec:      specCn,
+          ...opts,
         }),
       }),
-    onSuccess: () => { toast.success("저장되었습니다."); onSaved(); },
+    onSuccess: () => { toast.success("저장되었습니다."); setSaveDialogOpen(false); onSaved(); },
     onError:   (err: Error) => toast.error(err.message),
   });
+
+  // 어떤 항목이 바뀌었는지 — 개별 편집 화면과 동일한 감지 로직 (원본은 detail, 현재값은 각 state)
+  function getChangedFlags() {
+    return {
+      contentChanged:
+        orgnlCn  !== (detail?.originalContent ?? "") ||
+        curncyCn !== (detail?.currentContent  ?? ""),
+      specChanged:  specCn     !== (detail?.detailSpec  ?? ""),
+      analyChanged: analysisCn !== (detail?.analysisMemo ?? ""),
+    };
+  }
+
+  // 저장 버튼 클릭 — 이력 대상 변경이 있으면 옵션 다이얼로그로, 없으면 바로 저장
+  function handleSaveClick() {
+    const flags = getChangedFlags();
+    if (flags.contentChanged || flags.specChanged || flags.analyChanged) {
+      setSaveDialogOpen(true);
+    } else {
+      saveMutation.mutate({});
+    }
+  }
 
   if (isLoading || !loaded) return <PanelLoading />;
 
   return (
     <div style={panelStyle}>
-      <PanelHeader icon="📝" displayType="요구사항" displayId={displayId} name={name} onSave={() => saveMutation.mutate()} isPending={saveMutation.isPending} />
+      <PanelHeader icon="📝" displayType="요구사항" displayId={displayId} name={name} onSave={canEdit ? handleSaveClick : undefined} isPending={saveMutation.isPending} />
+      {!canEdit && (
+        <div style={readOnlyNoticeStyle}>
+          🔒 <strong>읽기 전용</strong> — 이 요구사항은 OWNER/ADMIN 또는 PM/PL 직무, 혹은 담당자만 수정할 수 있습니다.
+        </div>
+      )}
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
         {/* 기본 정보 — 기본 접힘 */}
@@ -1132,17 +1196,17 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
               {/* 자리 이동: 표시 ID → 정렬 순서 자리, RFP 페이지 → 표시 ID 자리, 정렬 순서 → RFP 페이지 자리 */}
               <div style={{ display: "grid", gridTemplateColumns: "7fr 3fr", gap: 16 }}>
                 <PanelField label="요구사항명 *">
-                  <input value={name} onChange={(e) => setName(e.target.value)} className="sp-input" />
+                  <input value={name} onChange={(e) => setName(e.target.value)} readOnly={!canEdit} className="sp-input" />
                 </PanelField>
                 <PanelField label="RFP 페이지">
-                  <input value={rfpPage} onChange={(e) => setRfpPage(e.target.value)} placeholder="예: p.23" className="sp-input" />
+                  <input value={rfpPage} onChange={(e) => setRfpPage(e.target.value)} placeholder="예: p.23" readOnly={!canEdit} className="sp-input" />
                 </PanelField>
               </div>
               {/* 담당자 + 표시 ID — 50:50 */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 <PanelField label="담당자">
                   <div className="sp-select-wrap">
-                    <select value={assignMemberId} onChange={(e) => setAssignMemberId(e.target.value)} className="sp-input">
+                    <select value={assignMemberId} onChange={(e) => setAssignMemberId(e.target.value)} disabled={!canEdit} className="sp-input">
                       <option value="">담당자 없음</option>
                       {members.map((m) => (
                         <option key={m.memberId} value={m.memberId}>
@@ -1159,6 +1223,7 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
                     value={reqDisplayId}
                     onChange={(e) => setReqDisplayId(e.target.value)}
                     placeholder={`${getPrefix("REQUIREMENT")}-XXXXX (미 입력 시 자동 생성)`}
+                    readOnly={!canEdit}
                     className="sp-input"
                   />
                 </PanelField>
@@ -1167,7 +1232,7 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
                 <PanelField label="우선순위">
                   <div className="sp-select-wrap">
-                    <select value={priority} onChange={(e) => setPriority(e.target.value)} className="sp-input">
+                    <select value={priority} onChange={(e) => setPriority(e.target.value)} disabled={!canEdit} className="sp-input">
                       <option value="HIGH">높음 (HIGH)</option>
                       <option value="MEDIUM">중간 (MEDIUM)</option>
                       <option value="LOW">낮음 (LOW)</option>
@@ -1177,7 +1242,7 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
                 </PanelField>
                 <PanelField label="출처">
                   <div className="sp-select-wrap">
-                    <select value={source} onChange={(e) => setSource(e.target.value)} className="sp-input">
+                    <select value={source} onChange={(e) => setSource(e.target.value)} disabled={!canEdit} className="sp-input">
                       <option value="RFP">RFP</option>
                       <option value="ADD">추가</option>
                       <option value="CHANGE">변경</option>
@@ -1192,6 +1257,7 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
                     value={sortOrder || ""}
                     onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
                     placeholder="0"
+                    readOnly={!canEdit}
                     className="sp-input"
                   />
                 </PanelField>
@@ -1222,9 +1288,9 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
                   })}
                 </div>
                 {contentTab === "current" ? (
-                  <RichEditor key={`current-${reqId}`} value={curncyCn} onChange={setCurncyCn} placeholder="현행화 내용을 입력하세요." minHeight={160} />
+                  <RichEditor key={`current-${reqId}`} value={curncyCn} onChange={setCurncyCn} placeholder="현행화 내용을 입력하세요." minHeight={160} readOnly={!canEdit} />
                 ) : (
-                  <RichEditor key={`original-${reqId}`} value={orgnlCn} onChange={setOrgnlCn} placeholder="원문 내용을 입력하세요." minHeight={160} />
+                  <RichEditor key={`original-${reqId}`} value={orgnlCn} onChange={setOrgnlCn} placeholder="원문 내용을 입력하세요." minHeight={160} readOnly={!canEdit} />
                 )}
               </div>
             </div>
@@ -1278,12 +1344,23 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
           </div>
           {/* 탭 콘텐츠 */}
           {reqContentTab === "analysis" ? (
-            <MarkdownEditor value={analysisCn} onChange={setAnalysisCn} rows={32} placeholder="분석 메모를 입력하세요." tab={analysisTab} onTabChange={setAnalysisTab} />
+            <MarkdownEditor value={analysisCn} onChange={setAnalysisCn} rows={32} placeholder="분석 메모를 입력하세요." tab={analysisTab} onTabChange={setAnalysisTab} readOnly={!canEdit} />
           ) : (
-            <MarkdownEditor value={specCn} onChange={setSpecCn} rows={32} placeholder="상세 명세를 입력하세요." tab={specTab} onTabChange={setSpecTab} />
+            <MarkdownEditor value={specCn} onChange={setSpecCn} rows={32} placeholder="상세 명세를 입력하세요." tab={specTab} onTabChange={setSpecTab} readOnly={!canEdit} />
           )}
         </div>
       </div>
+
+      {/* 저장 옵션 다이얼로그 — 개별 편집 화면과 동일 (이력 저장 여부 선택) */}
+      {saveDialogOpen && (
+        <ReqSaveOptionDialog
+          lastVersion={historyItems[0]?.versionNo ?? null}
+          changedFlags={getChangedFlags()}
+          onClose={() => setSaveDialogOpen(false)}
+          onSave={(opts) => saveMutation.mutate(opts)}
+          isPending={saveMutation.isPending}
+        />
+      )}
     </div>
   );
 }
@@ -1300,10 +1377,10 @@ function StoryDetailPanel({ projectId, storyId, displayId, onSaved }: { projectI
   const [acRows,   setAcRows]   = useState<AcRow[]>([]);
   const [loaded,   setLoaded]   = useState(false);
 
-  const { isLoading } = useQuery({
+  const { data: detail, isLoading } = useQuery({
     queryKey: ["story-detail-tree", projectId, storyId],
     queryFn:  () =>
-      authFetch<{ data: { requirementId: string; name: string; persona: string; scenario: string; acceptanceCriteria: AcRow[] } }>(
+      authFetch<{ data: { requirementId: string; name: string; persona: string; scenario: string; requirementAssigneeId: string | null; acceptanceCriteria: AcRow[] } }>(
         `/api/projects/${projectId}/user-stories/${storyId}`
       ).then((r) => {
         setReqId(r.data.requirementId);
@@ -1315,6 +1392,23 @@ function StoryDetailPanel({ projectId, storyId, displayId, onSaved }: { projectI
         return r.data;
       }),
   });
+
+  // 담당자 판정용 — 요구사항/과업 패널과 동일하게 프로젝트 멤버 조회
+  const { data: memberData } = useQuery({
+    queryKey: ["project-members", projectId],
+    queryFn: () =>
+      authFetch<{ data: { myMemberId: string } }>(
+        `/api/projects/${projectId}/members`
+      ).then((r) => r.data),
+    staleTime: 60 * 1000,
+  });
+  const myMemberId = memberData?.myMemberId ?? "";
+
+  // 편집 권한 — 사용자스토리 개별 편집 화면과 동일한 게이트(매트릭스 OR 연결 요구사항의 담당자)
+  const { has: hasPerm } = usePermissions(projectId);
+  const matrixUpdateOK = hasPerm("requirement.update");
+  const isAssigneeOfReq = !!myMemberId && detail?.requirementAssigneeId === myMemberId;
+  const canEdit = matrixUpdateOK || isAssigneeOfReq;
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -1348,36 +1442,46 @@ function StoryDetailPanel({ projectId, storyId, displayId, onSaved }: { projectI
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <StoryGuide />
-          <button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} style={{ ...primaryBtnStyle, flexShrink: 0 }}>
-            {saveMutation.isPending ? "저장 중..." : "저장"}
-          </button>
+          {canEdit && (
+            <button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} style={{ ...primaryBtnStyle, flexShrink: 0 }}>
+              {saveMutation.isPending ? "저장 중..." : "저장"}
+            </button>
+          )}
         </div>
       </div>
+
+      {!canEdit && (
+        <div style={readOnlyNoticeStyle}>
+          🔒 <strong>읽기 전용</strong> — 이 사용자스토리는 OWNER/ADMIN 또는 PM/PL 직무, 혹은 연결된 요구사항의 담당자만 수정할 수 있습니다.
+        </div>
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {/* 스토리명 */}
         <PanelField label="스토리명 *">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="스토리명을 입력하세요" className="sp-input" />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="스토리명을 입력하세요" readOnly={!canEdit} className="sp-input" />
         </PanelField>
 
         {/* 페르소나 / 시나리오 — 2행 */}
         <PanelField label="페르소나">
-          <input value={persona} onChange={(e) => setPersona(e.target.value)} placeholder="예: 일반 회원 (신규 및 기존)" className="sp-input" />
+          <input value={persona} onChange={(e) => setPersona(e.target.value)} placeholder="예: 일반 회원 (신규 및 기존)" readOnly={!canEdit} className="sp-input" />
         </PanelField>
         <PanelField label="시나리오">
-          <textarea value={scenario} onChange={(e) => setScenario(e.target.value)} placeholder="사용자의 행동 흐름을 자연어로 서술하세요." rows={5} className="sp-input" style={{ resize: "vertical", lineHeight: 1.7 }} />
+          <textarea value={scenario} onChange={(e) => setScenario(e.target.value)} placeholder="사용자의 행동 흐름을 자연어로 서술하세요." rows={5} readOnly={!canEdit} className="sp-input" style={{ resize: "vertical", lineHeight: 1.7 }} />
         </PanelField>
 
         {/* 인수기준 (Given / When / Then) */}
         <div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <label style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)" }}>인수기준 (Given / When / Then)</label>
-            <button
-              onClick={() => setAcRows([...acRows, { given: "", when: "", then: "" }])}
-              style={addBtnStyle}
-            >
-              + 추가
-            </button>
+            {canEdit && (
+              <button
+                onClick={() => setAcRows([...acRows, { given: "", when: "", then: "" }])}
+                style={addBtnStyle}
+              >
+                + 추가
+              </button>
+            )}
           </div>
 
           {acRows.length === 0 && (
@@ -1418,6 +1522,7 @@ function StoryDetailPanel({ projectId, storyId, displayId, onSaved }: { projectI
                   row={row}
                   idx={idx}
                   total={acRows.length}
+                  readOnly={!canEdit}
                   onUpdate={(field, value) => updateAc(idx, field, value)}
                   onDelete={() => setAcRows(acRows.filter((_, i) => i !== idx))}
                 />
@@ -1432,10 +1537,11 @@ function StoryDetailPanel({ projectId, storyId, displayId, onSaved }: { projectI
 
 // ── 인수기준 행 컴포넌트 ──────────────────────────────────────────────────────
 
-function AcRowItem({ row, idx, total, onUpdate, onDelete }: {
+function AcRowItem({ row, idx, total, readOnly, onUpdate, onDelete }: {
   row:      AcRow;
   idx:      number;
   total:    number;
+  readOnly: boolean;
   onUpdate: (field: "given" | "when" | "then", value: string) => void;
   onDelete: () => void;
 }) {
@@ -1470,21 +1576,23 @@ function AcRowItem({ row, idx, total, onUpdate, onDelete }: {
         }}>
           {idx + 1}
         </span>
-        {/* 삭제 — 호버 시에만 표시 */}
-        <button
-          onClick={onDelete}
-          style={{
-            background:  "none",
-            border:      "none",
-            cursor:      "pointer",
-            color:       hovered ? "#e53935" : "transparent",
-            fontSize:    13,
-            lineHeight:  1,
-            padding:     "2px",
-            transition:  "color 0.12s",
-          }}
-          title="삭제"
-        >×</button>
+        {/* 삭제 — 호버 시에만 표시 (편집 권한자만) */}
+        {!readOnly && (
+          <button
+            onClick={onDelete}
+            style={{
+              background:  "none",
+              border:      "none",
+              cursor:      "pointer",
+              color:       hovered ? "#e53935" : "transparent",
+              fontSize:    13,
+              lineHeight:  1,
+              padding:     "2px",
+              transition:  "color 0.12s",
+            }}
+            title="삭제"
+          >×</button>
+        )}
       </div>
 
       {/* Given / When / Then 입력 */}
@@ -1497,6 +1605,7 @@ function AcRowItem({ row, idx, total, onUpdate, onDelete }: {
               onChange={(e) => onUpdate(field, e.target.value)}
               placeholder={placeholders[field]}
               rows={4}
+              readOnly={readOnly}
               className="sp-input"
               style={{ resize: "vertical", lineHeight: 1.6 }}
             />
@@ -1800,6 +1909,17 @@ function StoryGuide() {
 const panelStyle: React.CSSProperties = {
   padding:   "16px 24px",
   maxWidth:  828,
+};
+
+// 읽기 전용 안내 — 개별 편집 화면(요구사항 상세)과 동일한 문구/스타일
+const readOnlyNoticeStyle: React.CSSProperties = {
+  margin:       "0 0 14px",
+  padding:      "10px 14px",
+  background:   "var(--color-info-subtle, #f0f4ff)",
+  border:       "1px solid var(--color-info, #3b82f6)",
+  borderRadius: 6,
+  fontSize:     12,
+  color:        "var(--color-text-secondary)",
 };
 
 

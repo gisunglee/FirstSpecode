@@ -380,9 +380,9 @@ function RequirementsPageInner() {
           <div />
           <div>과업명</div>
           <div>요구사항명</div>
-          <div>담당자</div>
-          <div>우선순위</div>
-          <div>출처</div>
+          <div style={{ textAlign: "center" }}>담당자</div>
+          <div style={{ textAlign: "center" }}>우선순위</div>
+          <div style={{ textAlign: "center" }}>출처</div>
           <div style={{ textAlign: "center" }}>단위업무</div>
           <div style={{ textAlign: "center" }}>정렬</div>
         </div>
@@ -445,6 +445,7 @@ function RequirementsPageInner() {
                 <div
                   style={{
                     fontSize: 13,
+                    textAlign: "center",
                     color: req.assignMemberName
                       ? "var(--color-text-primary)"
                       : "var(--color-text-tertiary)",
@@ -456,14 +457,14 @@ function RequirementsPageInner() {
                 </div>
 
                 {/* 우선순위 배지 */}
-                <div>
+                <div style={{ textAlign: "center" }}>
                   <span className="sp-badge" style={priorityBadgeStyle(req.priority)}>
                     {PRIORITY_LABELS[req.priority] ?? req.priority}
                   </span>
                 </div>
 
                 {/* 출처 배지 */}
-                <div>
+                <div style={{ textAlign: "center" }}>
                   <span className="sp-badge" style={sourceBadgeStyle(req.source)}>
                     {SOURCE_LABELS[req.source] ?? req.source}
                   </span>
@@ -669,7 +670,11 @@ function sourceBadgeStyle(source: string): React.CSSProperties {
 // ── 스타일 상수 ──────────────────────────────────────────────────────────────
 
 // 드래그핸들 / 과업명 / 요구사항명 / 담당자 / 우선순위 / 출처 / 단위업무 / 정렬
-const GRID_TEMPLATE = "32px 18% 1fr 110px 8% 7% 8% 5%";
+// 요구사항명만 남는 공간을 흡수하며 줄어들 수 있어야 하므로 minmax(0, 1fr) —
+// 그냥 1fr 이면 트랙 최소폭이 auto(=내용 최소폭)라서 좁아지지 않음.
+// 나머지 컬럼은 실제 표시되는 배지·숫자 길이에 맞춘 고정폭 (% 기반이라 화면 폭에 따라
+// 불필요하게 늘어나던 문제를 없앰).
+const GRID_TEMPLATE = "32px 180px minmax(0, 1fr) 96px 64px 60px 74px 56px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",

@@ -33,12 +33,23 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       orderBy: { creat_dt: "desc" },
     });
 
+    // 생성자 이름 — creat_mber_id는 FK 관계가 아닌 단순 컬럼이라 별도 조회 후 맵으로 조인
+    const creatorIds = [...new Set(studios.map((s) => s.creat_mber_id).filter((v): v is string => !!v))];
+    const creators = creatorIds.length
+      ? await prisma.tbCmMember.findMany({
+          where: { mber_id: { in: creatorIds } },
+          select: { mber_id: true, mber_nm: true, email_addr: true },
+        })
+      : [];
+    const creatorMap = new Map(creators.map((m) => [m.mber_id, m.mber_nm || m.email_addr || "-"]));
+
     return apiSuccess({
       items: studios.map((s) => ({
         planStudioId: s.plan_studio_id,
         planStudioDisplayId: s.plan_studio_display_id,
         planStudioNm: s.plan_studio_nm,
         artfCount: s.artifacts.length,
+        creatorNm: s.creat_mber_id ? (creatorMap.get(s.creat_mber_id) ?? "-") : "-",
         mdfcnDt: s.mdfcn_dt,
         creatDt: s.creat_dt,
       })),

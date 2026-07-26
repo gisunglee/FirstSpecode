@@ -20,9 +20,11 @@
  * 항목)만 그대로 복사해온다 — 중복 방지는 하지 않는다(전일 미완료 복사와 같은 원칙: 사용자가
  * 원할 때만 누르는 명시적 동작이라 이미 있어도 다시 누르면 또 추가됨).
  *
- * 카드 전체 높이를 WEEK_SUMMARY_CARD_HEIGHT로 고정(2026-07-24e) — 체크리스트(5개 분량)와
- * 관련 일감(2줄 분량) 모두 내부 스크롤로 캡핑해서, 항목이 몇 개든 옆 "결과 요약" 카드와
- * 높이가 항상 맞도록 한다.
+ * 카드 전체 높이를 WEEK_SUMMARY_CARD_HEIGHT로 고정(2026-07-24e) — 체크리스트와 관련 일감
+ * 모두 내부 스크롤로 캡핑해서, 항목이 몇 개든 옆 "결과 요약" 카드와 높이가 항상 맞도록 한다.
+ * 두 영역의 배분은 체크리스트 114px(4개 분량) / 관련일감 90px(3줄 분량) — 관련 일감이 스크롤이
+ * 너무 일찍 생긴다는 피드백으로 체크리스트 쪽 여유를 좀 덜어 관련일감 쪽에 옮겼다(2026-07-24f).
+ * 카드 전체 높이(360)는 그대로 유지 — "결과 요약" 카드와의 정렬을 깨지 않기 위함.
  */
 
 import { useState } from "react";
@@ -163,6 +165,11 @@ export default function WeekChecklistSummary({
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ fontSize: "var(--text-base)", fontWeight: 700, color: "var(--color-text-primary)" }}>{label} 계획</span>
+        {/* 이/다음 "주"만으로는 정확히 어느 날짜 범위인지 안 보인다는 피드백(2026-07-24h) —
+            제목 옆에 월/일 범위를 바로 붙여준다. */}
+        <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", fontFamily: "var(--font-mono)" }}>
+          {monday.slice(5, 7)}/{monday.slice(8, 10)} ~ {sunday.slice(5, 7)}/{sunday.slice(8, 10)}
+        </span>
         {total > 0 && (
           <span style={{ marginLeft: "auto", fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", fontFamily: "var(--font-mono)" }}>
             {done}/{total} 완료 {percent}%
@@ -207,8 +214,9 @@ export default function WeekChecklistSummary({
             </div>
           )}
 
-          {/* 관련 일감 */}
-          <div style={{ borderTop: "1px solid var(--color-border-subtle)", paddingTop: 8 }}>
+          {/* 관련 일감 — flex:1로 카드 하단 남는 공간을 그대로 흡수한다(고정 maxHeight를 쓰면
+              그 공간이 빈 여백으로 남아 낭비된다는 피드백, 2026-07-24g) */}
+          <div style={{ borderTop: "1px solid var(--color-border-subtle)", paddingTop: 8, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
               <span style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--color-text-secondary)", letterSpacing: "0.04em" }}>
                 관련 일감
@@ -228,7 +236,7 @@ export default function WeekChecklistSummary({
               </button>
             </div>
             {tagItems.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: pickerOpen ? 6 : 0, maxHeight: 64, overflowY: "auto" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", alignContent: "flex-start", gap: 5, marginBottom: pickerOpen ? 6 : 0, flex: 1, minHeight: 0, overflowY: "auto" }}>
                 {tagItems.map((item) => (
                   <span key={item.itemId} className="sp-badge sp-badge-neutral sp-badge-pill sp-badge-tag" style={{ gap: 5 }}>
                     🔖 {item.itemCn}

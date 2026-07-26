@@ -4,7 +4,7 @@
  * 역할:
  *   - McpServer 인스턴스에 SPECODE 도구들을 등록
  *
- * 도구 카테고리 (36개):
+ * 도구 카테고리 (37개):
  *   [프로젝트]     list_projects, get_project, list_members
  *   [기획-과업]    list_tasks, get_task, create_task, update_task
  *   [기획-요구사항] list_requirements, get_requirement, create_requirement, update_requirement
@@ -14,6 +14,7 @@
  *   [설계-화면]    list_screens, get_screen, create_screen, update_screen
  *   [설계-영역]    list_areas, get_area, create_area, update_area
  *   [설계-기능]    list_functions, get_function, create_function, update_function
+ *   [설계-트리]    get_design_tree (배치 조회 — 단위업무 ID 1~20개 필수, "전체 조회" 미지원)
  *   [DB]           list_db_tables, get_db_table, get_db_table_usage, get_db_column_usage
  *
  * 정책 — DELETE 미지원:
@@ -866,6 +867,38 @@ export function registerTools(
         const data = await specodeFetch(
           `/api/projects/${projectId}/functions/${functionId}`,
           { method: "PUT", body: JSON.stringify(body) }
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  // ═══════════════════════════════════════════════════════════════
+  // 9-1. 설계 — 트리 (Design Tree, 배치 조회 전용)
+  // ═══════════════════════════════════════════════════════════════
+
+  server.tool(
+    "get_design_tree",
+    "설계 트리 배치 조회 — 지정한 단위업무들의 화면>영역>기능 계층을 한 번에 반환합니다. " +
+      "여러 단위업무 사이의 설계 일관성을 점검할 때 사용하세요 (예: B와 C 단위업무가 서로 모순되지 않는지 확인). " +
+      "unitWorkIds는 최대 20개까지만 허용됩니다 — 그 이상이거나 '프로젝트 전체'를 한 번에 조회하는 것은 " +
+      "지원하지 않습니다(응답 payload와 컨텍스트 소진 방지). 20개보다 많은 단위업무를 점검하려면 " +
+      "list_unit_works로 전체 ID 목록을 먼저 받은 뒤 20개씩 나눠서 여러 번 호출하세요.",
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+      unitWorkIds: z
+        .array(z.string())
+        .min(1, "unitWorkIds는 최소 1개 이상이어야 합니다")
+        .max(20, "unitWorkIds는 최대 20개까지만 지정할 수 있습니다. 여러 배치로 나눠서 호출하세요")
+        .describe("점검할 단위업무 ID 배열 (1~20개, 필수). list_unit_works로 조회한 unitWorkId를 사용하세요"),
+    },
+    async ({ projectId, unitWorkIds }) => {
+      try {
+        const qs = buildQs({ unitWorkIds: unitWorkIds.join(",") });
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/design/tree${qs}`
         );
         return textResult(data);
       } catch (err) {

@@ -147,9 +147,11 @@ function UserStoryDetailPageInner() {
     enabled: !isNew,
   });
 
-  // 삭제 권한: 매트릭스 통과 OR 본인이 연결 요구사항의 담당자.
-  // 신규 등록 모드(isNew)에는 삭제 대상이 없으므로 항상 false.
+  // 편집/삭제 권한: 매트릭스 통과 OR 본인이 연결 요구사항의 담당자
+  // (user-stories/[storyId]/route.ts requireUserStoryWrite 와 동일 게이트).
+  // 신규 등록 모드(isNew)는 아직 연결 요구사항의 담당자 개념이 무의미하므로 항상 허용.
   const isAssigneeOfReq = !!myMemberId && detail?.requirementAssigneeId === myMemberId;
+  const canEdit = isNew || matrixUpdateOK || isAssigneeOfReq;
   const canDelete = !isNew && (matrixUpdateOK || isAssigneeOfReq);
 
   // ── 삭제 뮤테이션 ──────────────────────────────────────────────────────────
@@ -287,17 +289,34 @@ function UserStoryDetailPageInner() {
           >
             취소
           </button>
-          <button
-            onClick={handleSave}
-            disabled={saveMutation.isPending}
-            style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
-          >
-            {saveMutation.isPending ? "저장 중..." : "저장"}
-          </button>
+          {/* 저장 — 편집 권한자만 노출 (요구사항/과업 상세 화면과 동일 관례) */}
+          {canEdit && (
+            <button
+              onClick={handleSave}
+              disabled={saveMutation.isPending}
+              style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
+            >
+              {saveMutation.isPending ? "저장 중..." : "저장"}
+            </button>
+          )}
         </div>
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
+        {/* 읽기 전용 안내 — 권한 없는 사용자가 진입한 경우 (요구사항 상세 화면과 동일 문구) */}
+        {!isNew && !canEdit && (
+          <div style={{
+            margin: "0 0 16px",
+            padding: "10px 14px",
+            background: "var(--color-info-subtle, #f0f4ff)",
+            border: "1px solid var(--color-info, #3b82f6)",
+            borderRadius: 6,
+            fontSize: 12,
+            color: "var(--color-text-secondary)",
+          }}>
+            🔒 <strong>읽기 전용</strong> — 이 사용자스토리는 OWNER/ADMIN 또는 PM/PL 직무, 혹은 연결된 요구사항의 담당자만 수정할 수 있습니다.
+          </div>
+        )}
       {/* 2-컬럼 레이아웃: 기본 정보 | 인수기준 */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 28, alignItems: "start" }}>
 
@@ -319,6 +338,7 @@ function UserStoryDetailPageInner() {
               <select
                 value={form.requirementId}
                 onChange={(e) => setForm((p) => ({ ...p, requirementId: e.target.value }))}
+                disabled={!canEdit}
                 className="sp-input"
               >
                 <option value="">요구사항을 선택하세요</option>
@@ -338,6 +358,7 @@ function UserStoryDetailPageInner() {
               value={form.name}
               placeholder="예: 회원으로서 로그인 후 대시보드를 볼 수 있다"
               onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+              readOnly={!canEdit}
               className="sp-input"
             />
           </FormField>
@@ -348,6 +369,7 @@ function UserStoryDetailPageInner() {
               value={form.persona}
               placeholder="예: 서비스에 가입한 일반 사용자로서"
               onChange={(e) => setForm((p) => ({ ...p, persona: e.target.value }))}
+              readOnly={!canEdit}
               className="sp-input"
             />
           </FormField>
@@ -358,6 +380,7 @@ function UserStoryDetailPageInner() {
               placeholder="예: 나는 이메일과 비밀번호로 로그인하여 프로젝트 목록을 확인하고 싶다."
               rows={5}
               onChange={(e) => setForm((p) => ({ ...p, scenario: e.target.value }))}
+              readOnly={!canEdit}
               className="sp-input"
               style={{ resize: "vertical" }}
             />
@@ -366,9 +389,11 @@ function UserStoryDetailPageInner() {
 
         {/* 오른쪽: 인수기준 */}
         <Card title="인수기준 (Given / When / Then)" titleSize={13} action={
-          <button onClick={addAcRow} style={{ ...secondaryBtnStyle, fontSize: 12, padding: "4px 12px" }}>
-            + 추가
-          </button>
+          canEdit && (
+            <button onClick={addAcRow} style={{ ...secondaryBtnStyle, fontSize: 12, padding: "4px 12px" }}>
+              + 추가
+            </button>
+          )
         }>
           {acRows.length === 0 ? (
             <p style={{ fontSize: 13, color: "#aaa", margin: 0 }}>인수기준이 없습니다.</p>
@@ -395,10 +420,11 @@ function UserStoryDetailPageInner() {
                           value={row[field]}
                           placeholder={FIELD_PLACEHOLDERS[field]}
                           onChange={(e) => updateAcRow(idx, field, e.target.value)}
+                          readOnly={!canEdit}
                           className="sp-input"
                         />
                         {/* X 버튼 — Given 행 오른쪽에만 표시 */}
-                        {field === "given" && (
+                        {field === "given" && canEdit && (
                           <button
                             onClick={() => removeAcRow(idx)}
                             style={{ background: "none", border: "none", cursor: "pointer", fontSize: 32, color: "#aaa", lineHeight: 1, flexShrink: 0, padding: "0 2px" }}

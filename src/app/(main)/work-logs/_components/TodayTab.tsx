@@ -19,9 +19,11 @@
  * "이번 달 주" 선택 줄 추가(2026-07-24d) — 지금 보는 주가 이 달의 몇 번째 주인지 한눈에 안
  * 보이고, 다른 주로 옮기려면 화살표를 여러 번 눌러야 한다는 피드백. weekMonday가 속한 달의
  * 주 전체(getOwnedWeeksOfMonth)를 "1주/2주/..." 버튼으로 늘어놓고 클릭하면 바로 그 주로 이동.
+ * 2026-07-24i: 이 선택 줄은 page.tsx의 상단 sticky 헤더(타이틀·탭 사이 가운데)로 옮겼다 —
+ * 여기 있던 게 헤더와 따로 놀아 "한 줄로 붙여달라"는 피드백.
  */
 
-import { getMonthStart, addDaysStr, getWeekMondayStr, getRelativeWeekLabel, getOwnedWeeksOfMonth } from "@/lib/weekUtil";
+import { addDaysStr, getWeekMondayStr, getRelativeWeekLabel } from "@/lib/weekUtil";
 import WeekPlanRow from "./WeekPlanRow";
 import DayCard from "./DayCard";
 
@@ -45,29 +47,8 @@ export default function TodayTab({
   const days = Array.from({ length: 7 }, (_, i) => addDaysStr(weekMonday, i));
   const weekTitle = getRelativeWeekLabel(weekMonday);
 
-  // "이번 달 주" 선택 줄 — weekMonday가 속한 달(수요일 기준 귀속) 전체 주를 번호로 나열.
-  const monthStart = getMonthStart(addDaysStr(weekMonday, 2));
-  const monthWeeks = getOwnedWeeksOfMonth(monthStart);
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* 이번 달 주 선택 — 클릭하면 그 주로 바로 이동(2026-07-24d) */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-        <span style={{ fontSize: "var(--text-sm)", color: "var(--color-text-tertiary)", marginRight: 2 }}>
-          {monthStart.slice(0, 4)}년 {monthStart.slice(5, 7)}월
-        </span>
-        {monthWeeks.map((w, i) => (
-          <button
-            key={w}
-            type="button"
-            className={`sp-btn sp-btn-sm ${w === weekMonday ? "sp-btn-primary" : "sp-btn-secondary"}`}
-            onClick={() => onWeekChange(w)}
-          >
-            {i + 1}주
-          </button>
-        ))}
-      </div>
-
       {/* 주간 영역 — "일별 보고"와 확실히 구분되도록 아이콘·라벨을 붙였다(2026-07-24,
           "주간/일별이 더 잘 구분되게" 피드백). 날짜 배지는 이 줄 오른쪽에 — 별도 큰 제목
           블록을 얹었더니 라벨이 겹쳐 지저분해진다는 피드백으로 뺐다(2026-07-24b). */}
