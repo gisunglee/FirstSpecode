@@ -52,8 +52,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const monday     = report.week_start_dt.toISOString().slice(0, 10);
     const sunday     = addDaysStr(monday, 6);
+    const friday     = addDaysStr(monday, 4);
     const nextMonday = addDaysStr(monday, 7);
     const nextSunday = addDaysStr(monday, 13);
+    const nextFriday = addDaysStr(nextMonday, 4);
     const weekIndex = computeProjectWeekIndex(project?.bgng_de ? project.bgng_de.toISOString().slice(0, 10) : null, monday);
     const weekLabel = weekIndex !== null ? `${weekIndex}주차 (${mmddRange(monday, sunday)})` : mmddRange(monday, sunday);
 
@@ -73,8 +75,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       projectName,
       weekLabel,
       reportDateLabel: formatKoreanDate(new Date().toISOString().slice(0, 10)),
-      thisWeekRangeLabel: mmddRange(monday, sunday),
-      nextWeekRangeLabel: mmddRange(nextMonday, nextSunday),
+      thisWeekRangeLabel: mmddRange(monday, friday),
+      nextWeekRangeLabel: mmddRange(nextMonday, nextFriday),
       issues,
       perfCn:    report.perf_cn ?? "",
       planCn:    report.plan_cn ?? "",

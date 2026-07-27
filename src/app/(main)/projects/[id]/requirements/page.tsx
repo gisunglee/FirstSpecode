@@ -37,6 +37,7 @@ type RequirementRow = {
   assignMemberName: string | null;
   unitWorkCount:    number;
   sortOrder:        number;
+  progress:         number;
 };
 
 // 과업 필터 드롭다운 옵션
@@ -381,6 +382,7 @@ function RequirementsPageInner() {
           <div>과업명</div>
           <div>요구사항명</div>
           <div style={{ textAlign: "center" }}>담당자</div>
+          <div style={{ textAlign: "center" }}>분석</div>
           <div style={{ textAlign: "center" }}>우선순위</div>
           <div style={{ textAlign: "center" }}>출처</div>
           <div style={{ textAlign: "center" }}>단위업무</div>
@@ -454,6 +456,11 @@ function RequirementsPageInner() {
                   title={req.assignMemberName ?? undefined}
                 >
                   {req.assignMemberName ?? "-"}
+                </div>
+
+                {/* 분석 진척률 */}
+                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
+                  {req.progress}%
                 </div>
 
                 {/* 우선순위 배지 */}
@@ -669,12 +676,13 @@ function sourceBadgeStyle(source: string): React.CSSProperties {
 
 // ── 스타일 상수 ──────────────────────────────────────────────────────────────
 
-// 드래그핸들 / 과업명 / 요구사항명 / 담당자 / 우선순위 / 출처 / 단위업무 / 정렬
-// 요구사항명만 남는 공간을 흡수하며 줄어들 수 있어야 하므로 minmax(0, 1fr) —
-// 그냥 1fr 이면 트랙 최소폭이 auto(=내용 최소폭)라서 좁아지지 않음.
-// 나머지 컬럼은 실제 표시되는 배지·숫자 길이에 맞춘 고정폭 (% 기반이라 화면 폭에 따라
-// 불필요하게 늘어나던 문제를 없앰).
-const GRID_TEMPLATE = "32px 180px minmax(0, 1fr) 96px 64px 60px 74px 56px";
+// 드래그핸들 / 과업명 / 요구사항명 / 담당자 / 분석 / 우선순위 / 출처 / 단위업무 / 정렬
+// 과업명:요구사항명 = 45:55 — 남는 공간을 이 비율로 나눠 갖고 화면이 넓어지면
+// 같은 비율로 함께 늘어난다. 그냥 45fr/55fr 이면 트랙 최소폭이 auto(=내용 최소폭)라서
+// 좁아지지 않으므로 minmax(0, ...) 로 바닥을 0으로 깔아준다.
+// 나머지 컬럼은 실제 표시되는 배지·숫자 길이에 맞춘 고정폭.
+// 분석은 "100%" 4글자가 최대치라 44px로 타이트하게.
+const GRID_TEMPLATE = "32px minmax(0, 45fr) minmax(0, 55fr) 96px 44px 64px 60px 74px 56px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",

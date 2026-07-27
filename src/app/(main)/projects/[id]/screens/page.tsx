@@ -169,22 +169,39 @@ function ScreensPageInner() {
     : allItems;
 
   // 뷰 모드별 정렬
-  //   default  — 서버 응답 순서 유지 (요구사항/단위업무 그룹핑 + sortOrder)
+  //   default  — 서버 응답 순서 그대로 (요구사항 → 단위업무 → sortOrder)
   //   category — 대 → 중 → 소 → 화면명 순 텍스트 정렬 (localeCompare "ko")
-  //             빈 값은 ""로 취급되어 앞쪽에 모임.
+  //             단, 요구사항/단위업무 그룹 순서(서버가 이미 정렬해 준 순서)는 그대로 두고
+  //             그 "그룹 안에서만" 카테고리 순으로 재배열한다.
+  //             카테고리만으로 전체를 정렬하면 같은 단위업무의 화면들이 뿔뿔이 흩어져
+  //             요구사항·단위업무 열의 그룹핑(병합 표시)이 깨지는 문제가 있었다.
   const items = viewMode === "category"
-    ? [...filtered].sort((a, b) => {
-        const lA = a.categoryL ?? "", lB = b.categoryL ?? "";
-        if (lA !== lB) return lA.localeCompare(lB, "ko");
-        const mA = a.categoryM ?? "", mB = b.categoryM ?? "";
-        if (mA !== mB) return mA.localeCompare(mB, "ko");
-        const sA = a.categoryS ?? "", sB = b.categoryS ?? "";
-        if (sA !== sB) return sA.localeCompare(sB, "ko");
-        return a.name.localeCompare(b.name, "ko");
-      })
+    ? (() => {
+        const groupKey = (s: ScreenRow) => `${s.requirementId ?? ""} ${s.unitWorkId ?? ""}`;
+        // filtered는 서버가 내려준 요구사항/단위업무 그룹 순서를 유지하고 있으므로,
+        // 그룹이 처음 등장하는 위치를 그대로 그룹 순서로 사용한다.
+        const groupOrder = new Map<string, number>();
+        for (const s of filtered) {
+          const key = groupKey(s);
+          if (!groupOrder.has(key)) groupOrder.set(key, groupOrder.size);
+        }
+        return [...filtered].sort((a, b) => {
+          const gA = groupOrder.get(groupKey(a))!;
+          const gB = groupOrder.get(groupKey(b))!;
+          if (gA !== gB) return gA - gB;
+          const lA = a.categoryL ?? "", lB = b.categoryL ?? "";
+          if (lA !== lB) return lA.localeCompare(lB, "ko");
+          const mA = a.categoryM ?? "", mB = b.categoryM ?? "";
+          if (mA !== mB) return mA.localeCompare(mB, "ko");
+          const sA = a.categoryS ?? "", sB = b.categoryS ?? "";
+          if (sA !== sB) return sA.localeCompare(sB, "ko");
+          return a.name.localeCompare(b.name, "ko");
+        });
+      })()
     : filtered;
 
-  // 분류순 모드에서는 드래그/그룹핑 의미가 사라지므로 비활성
+  // 분류순 모드에서는 순서가 텍스트 정렬로 자동 결정되므로 드래그(수동 순서 변경)만 비활성.
+  // 요구사항/단위업무 그룹 경계는 두 모드 모두 유지된다 (아래 isFirstReq/isLastOfReq 참조).
   const isCategoryView = viewMode === "category";
 
   // ── 순서 변경 뮤테이션 ──────────────────────────────────────────────────────
@@ -371,14 +388,10 @@ function ScreensPageInner() {
             </div>
           ) : (
             items.map((screen, idx) => {
-              // 분류순 모드에선 정렬 기준이 대/중/소라 요구사항·단위업무 그룹 경계가 의미 없음
-              //   → 매 행에 요구사항·단위업무명을 반복 표시하고, 행 구분선도 모두 그어준다.
-              const isFirstReq = isCategoryView
-                ? true
-                : (idx === 0 || items[idx - 1].requirementId !== screen.requirementId);
-              const isLastOfReq = isCategoryView
-                ? true
-                : (idx === items.length - 1 || items[idx + 1].requirementId !== screen.requirementId);
+              // 요구사항 그룹 경계 — 분류순 모드에서도 위 정렬에서 그룹 순서를 유지하므로
+              // 동일하게 적용 가능 (같은 요구사항의 화면은 항상 연속으로 붙어 있음).
+              const isFirstReq = idx === 0 || items[idx - 1].requirementId !== screen.requirementId;
+              const isLastOfReq = idx === items.length - 1 || items[idx + 1].requirementId !== screen.requirementId;
 
               return (
                 <div
@@ -436,14 +449,13 @@ function ScreensPageInner() {
                     ) : null}
                   </div>
 
-                  {/* 단위업무명 — default 모드에선 같은 unitWorkId 연속 행은 첫 행에만,
-                      category 모드에선 정렬이 섞이므로 항상 표시 */}
+                  {/* 단위업무명 — 같은 unitWorkId가 연속되는 첫 행에만 표시 (두 모드 공통) */}
                   <div
                     onClick={(e) => e.stopPropagation()}
                     style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                     title={screen.unitWorkName}
                   >
-                    {!isCategoryView && items[idx - 1]?.unitWorkId === screen.unitWorkId && screen.unitWorkId
+                    {items[idx - 1]?.unitWorkId === screen.unitWorkId && screen.unitWorkId
                       ? null
                       : screen.unitWorkId ? (
                         <button
@@ -730,8 +742,10 @@ function typeBadgeStyle(type: string): React.CSSProperties {
 
 // 요구사항·단위업무·화면명·담당자·분류는 fr 비율, 소형 컬럼은 고정 / AI 구현 + 설구테
 // 담당자 컬럼(100px)을 화면명 뒤, 화면유형 앞에 삽입
-// AI 구현 컬럼은 "배지 + 시간(MM-DD HH:mm)"을 한 줄에 담도록 150px로 여유 확보
-const GRID_TEMPLATE = "32px 1.5fr 1.5fr 3fr 100px 70px 48px 40px 1fr 1fr 1fr 150px 7%";
+// AI 구현 컬럼은 "배지 + 시간(MM-DD HH:mm)"을 한 줄에 담도록 130px로 여유 확보
+// 담당자·화면유형·영역수·정렬·AI구현·설구테는 내용 길이에 맞춰 타이트하게 —
+// 남는 공간은 fr 컬럼(요구사항/단위업무/화면명/분류)이 자동으로 가져간다.
+const GRID_TEMPLATE = "32px 1.5fr 1.5fr 3fr 84px 58px 36px 32px 1fr 1fr 1fr 130px 6%";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid",

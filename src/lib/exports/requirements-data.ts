@@ -26,6 +26,7 @@ export type RequirementListItem = {
   assignMemberName: string | null;
   unitWorkCount:    number;
   sortOrder:        number;
+  progress:         number;
 };
 
 // ─── 조회 함수 ───────────────────────────────────────────────────────────────
@@ -84,5 +85,6 @@ export async function fetchProjectRequirements(opts: {
     assignMemberName: r.asign_mber_id ? (assigneeMap.get(r.asign_mber_id) ?? null) : null,
     unitWorkCount:    r._count.unitWorks,
     sortOrder:        r.sort_ordr,
+    progress:         r.progrs_rt,
   }));
 }
