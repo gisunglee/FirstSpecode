@@ -18,6 +18,7 @@ import {
 } from "@/lib/permissions";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
+import { fetchOneUnitWorkProgress, combinePhaseProgress } from "@/lib/pm/progressRollup";
 
 type RouteParams = { params: Promise<{ id: string; unitWorkId: string }> };
 
@@ -97,8 +98,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "단위업무를 찾을 수 없습니다.", 404);
     }
 
-    // AI 태스크 최신 상태 + IMPLEMENT 스냅샷 + 담당자 이름 병렬 조회
-    const [aiTasks, implSnapshotRows, assignee] = await Promise.all([
+    // AI 태스크 최신 상태 + IMPLEMENT 스냅샷 + 담당자 이름 + 실적 진행률(롤업) 병렬 조회
+    const [aiTasks, implSnapshotRows, assignee, phaseProgress] = await Promise.all([
       prisma.tbAiTask.findMany({
         where:   { ref_ty_code: "UNIT_WORK", ref_id: unitWorkId },
         orderBy: { req_dt: "desc" },
@@ -117,6 +118,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             select: { mber_nm: true, email_addr: true },
           })
         : Promise.resolve(null),
+      // 실적 진행률 — 사람이 직접 입력하지 않고 하위 화면·기능에서 항상 재계산(단일 소스)
+      fetchOneUnitWorkProgress(unitWorkId),
     ]);
     // taskType별 최신 1건만 유지
     const aiTaskMap: Record<string, { aiTaskId: string; status: string }> = {};
@@ -149,9 +152,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       assignMemberId:   uw.asign_mber_id ?? null,
       // 담당자 이름 — mber_nm 우선, 없으면 email, 없으면 null (퇴장 멤버 포함)
       assignMemberName: assignee ? (assignee.mber_nm || assignee.email_addr || null) : null,
-      startDate:        uw.bgng_de ?? null,
-      endDate:        uw.end_de ?? null,
-      progress:       uw.progrs_rt,
+      // 계획설계 일정/공수 — PM이 잡는 상위 마일스톤(목표치)
+      planStartDate:  uw.plan_dsgn_bgng_de ?? null,
+      planEndDate:    uw.plan_dsgn_end_de ?? null,
+      planEffort:     uw.plan_dsgn_efrt_val ?? null,
+      docStatus:      uw.dsgn_doc_sttus_code,
+      // 실적 진행률 — 화면(설계)·기능(구현) 롤업 자동계산, 수정 불가(읽기전용)
+      designProgress: phaseProgress.designRt,
+      implProgress:   phaseProgress.implRt,
+      progress:       combinePhaseProgress(phaseProgress),
       sortOrder:      uw.sort_ordr,
       reqId:          uw.req_id,
       reqDisplayId:   uw.requirement.req_display_id,
@@ -184,23 +193,21 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { name, displayId, description, comment, assignMemberId, startDate, endDate, progress, sortOrder, saveHistory } = body as {
+  const { name, displayId, description, comment, assignMemberId, planStartDate, planEndDate, planEffort, docStatus, sortOrder, saveHistory } = body as {
     name?:           string;
     displayId?:      string;
     description?:    string;
     comment?:        string;
     assignMemberId?: string;
-    startDate?:      string;
-    endDate?:        string;
-    progress?:       number;
+    planStartDate?:  string;
+    planEndDate?:    string;
+    planEffort?:     string;
+    docStatus?:      string;
     sortOrder?:      number;
     saveHistory?:    boolean;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "단위업무명을 입력해 주세요.", 400);
-  if (progress !== undefined && (progress < 0 || progress > 100)) {
-    return apiError("VALIDATION_ERROR", "진행률은 0~100 사이여야 합니다.", 400);
-  }
 
   // 장문 텍스트 한도 검증 — 정책은 src/lib/constants/textLimits.ts
   const limitErr = apiTextLimitGuard([
@@ -233,9 +240,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       unit_work_dc:  description !== undefined ? newDescription : existing.unit_work_dc,
       coment_cn:     comment !== undefined ? (comment?.trim() || null) : existing.coment_cn,
       asign_mber_id: nextAssignee,
-      bgng_de:       startDate !== undefined ? (startDate?.trim() || null) : existing.bgng_de,
-      end_de:        endDate !== undefined ? (endDate?.trim() || null) : existing.end_de,
-      progrs_rt:     progress ?? existing.progrs_rt,
+      plan_dsgn_bgng_de:  planStartDate !== undefined ? (planStartDate?.trim() || null) : existing.plan_dsgn_bgng_de,
+      plan_dsgn_end_de:   planEndDate   !== undefined ? (planEndDate?.trim()   || null) : existing.plan_dsgn_end_de,
+      plan_dsgn_efrt_val: planEffort    !== undefined ? (planEffort?.trim()    || null) : existing.plan_dsgn_efrt_val,
+      dsgn_doc_sttus_code: docStatus || existing.dsgn_doc_sttus_code,
       sort_ordr:     sortOrder ?? existing.sort_ordr,
       mdfcn_dt:      new Date(),
     };

@@ -32,6 +32,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { buildMissingStat } from "@/lib/pm/missingStatus";
+import { fetchUnitWorkProgress, combinePhaseProgress, resolveFunctionScreenDates } from "@/lib/pm/progressRollup";
 import type { ManageSummaryResponse } from "@/types/dashboard";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -81,14 +82,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     monthStart.setUTCHours(0, 0, 0, 0);
 
     const [
-      // ── 진행률 집계 ────────────────────────────────────────────
-      progressAgg,
-      completedCnt,
-
-      // ── 정체된 일 ──────────────────────────────────────────────
-      stalledCnt,
-      stalledItems,
-
       // ── 최근 변경 5건 ──────────────────────────────────────────
       recentChanges,
 
@@ -101,56 +94,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       // ── 요구사항 분석 평균 진행률 (progress 카드 보조 지표) ─────
       requirementAvgAgg,
 
-      // ── 미지정 배너 + 팀 부하용 원본 행 (4개 엔티티) ─────────────
+      // ── 미지정 배너 + 팀 부하 + 진행률/정체 판정용 원본 행 (4개 엔티티) ──
       // 담당자/일정/공수가 필요해 aggregate 대신 findMany 로 전체 로드.
+      // 단위업무 진행률(progrs_rt)은 더 이상 저장값이 아니라 화면·기능 롤업 계산값이라
+      // (2026-07-28) DB aggregate/count로 필터링할 수 없음 — 전체를 읽어 JS에서 계산.
       requirementRows,
       unitWorkRows,
       screenRows,
       areaRows,
       functionRows,
     ] = await Promise.all([
-      // 단위업무 전체수 + 평균 진행률
-      // _avg 가 row 0 일 때 null 을 돌려주므로 응답 가공에서 0 으로 폴백.
-      prisma.tbDsUnitWork.aggregate({
-        where:  { prjct_id: projectId },
-        _count: { _all: true },
-        _avg:   { progrs_rt: true },
-      }),
-
-      // 완료된 단위업무 (progrs_rt = 100)
-      prisma.tbDsUnitWork.count({
-        where: { prjct_id: projectId, progrs_rt: 100 },
-      }),
-
-      // 정체 카운트 — end_de < 오늘 AND progrs_rt < 100
-      // end_de 가 비어있는 행은 정체 판정 불가 → 제외.
-      prisma.tbDsUnitWork.count({
-        where: {
-          prjct_id:  projectId,
-          progrs_rt: { lt: 100 },
-          end_de:    { lt: todayStr, not: null },
-        },
-      }),
-
-      // 정체 미리보기 5건 — 가장 오래 정체된 순(마감 오름차순)
-      prisma.tbDsUnitWork.findMany({
-        where: {
-          prjct_id:  projectId,
-          progrs_rt: { lt: 100 },
-          end_de:    { lt: todayStr, not: null },
-        },
-        select: {
-          unit_work_id:         true,
-          unit_work_display_id: true,
-          unit_work_nm:         true,
-          end_de:               true,
-          progrs_rt:            true,
-          asign_mber_id:        true,
-        },
-        orderBy: { end_de: "asc" },
-        take:    PREVIEW_LIMIT,
-      }),
-
       // 최근 설계 변경 5건
       prisma.tbDsDesignChange.findMany({
         where:   { prjct_id: projectId },
@@ -196,14 +149,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }),
       prisma.tbDsUnitWork.findMany({
         where:  { prjct_id: projectId },
-        select: { asign_mber_id: true, bgng_de: true, end_de: true, progrs_rt: true },
+        select: {
+          unit_work_id: true, unit_work_display_id: true, unit_work_nm: true,
+          asign_mber_id: true, plan_dsgn_bgng_de: true, plan_dsgn_end_de: true,
+        },
         take:   HARD_LIMIT,
       }),
       prisma.tbDsScreen.findMany({
         where:  { prjct_id: projectId },
         select: {
           scrn_id: true, asign_mber_id: true,
-          design_bgng_de: true, design_end_de: true, design_efrt_val: true,
+          actl_dsgn_bgng_de: true, actl_dsgn_end_de: true, actl_dsgn_efrt_val: true,
+          actl_impl_bgng_de: true, actl_impl_end_de: true,
         },
         take:   HARD_LIMIT,
       }),
@@ -215,12 +172,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       prisma.tbDsFunction.findMany({
         where:  { prjct_id: projectId },
         select: {
-          func_id: true, area_id: true, asign_mber_id: true,
-          impl_bgng_de: true, impl_end_de: true, efrt_val: true,
+          func_id: true, area_id: true, asign_mber_id: true, impl_efrt_val: true,
         },
         take:   HARD_LIMIT,
       }),
     ]);
+
+    // 단위업무 실적 진행률(설계+구현 롤업) — 저장값이 아니라 항상 재계산(lib/pm/progressRollup.ts 단일 소스)
+    const unitWorkIds = unitWorkRows.map((u) => u.unit_work_id);
+    const uwProgressMap = await fetchUnitWorkProgress(unitWorkIds);
+    const uwProgress = (unitWorkId: string) => {
+      const p = uwProgressMap.get(unitWorkId);
+      return p ? combinePhaseProgress(p) : 0;
+    };
 
     // 기능 진척률(design_rt/impl_rt) — functionRows 가 확정된 뒤에만 조회 가능해 순차 실행.
     // TbCmProgress 다형 참조(ref_tbl_nm='tb_ds_function'), 없으면 0으로 간주(누락을 완료로
@@ -233,6 +197,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         })
       : [];
     const funcProgressMap = new Map(funcProgressRows.map((p) => [p.ref_id, p]));
+
+    // 기능 → 소속 화면의 실질설계/구현기간 — 중앙 헬퍼(lib/pm/progressRollup.ts)로 통일
+    const funcScreenDates = resolveFunctionScreenDates(functionRows, areaRows, screenRows);
 
     // ── 화면 설계 평균(하위 기능 design_rt 평균의 화면별 롤업 → 전체 평균) ──
     // pm-summary 의 screenAvgDesignRtMap 과 동일 정의(화면→영역→기능 단순평균).
@@ -265,11 +232,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // ── 정체된 일 — 화면(설계)/기능(구현) 지연 카운트만(목록은 단위업무만 유지) ──
     const screenDelayedCount = screenRows.filter((s) => {
-      if (!s.design_end_de || s.design_end_de >= todayStr) return false;
+      if (!s.actl_dsgn_end_de || s.actl_dsgn_end_de >= todayStr) return false;
       return (scrnAvgDesignRt.get(s.scrn_id) ?? 0) < 100;
     }).length;
     const functionDelayedCount = functionRows.filter((f) => {
-      if (!f.impl_end_de || f.impl_end_de >= todayStr) return false;
+      const screenImplEnd = funcScreenDates.get(f.func_id)?.implEndDe ?? null;
+      if (!screenImplEnd || screenImplEnd >= todayStr) return false;
       return (funcProgressMap.get(f.func_id)?.impl_rt ?? 0) < 100;
     }).length;
 
@@ -277,11 +245,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // 전체 매트릭스는 PM 진단(/pm)에서 — 여기선 "누가 제일 급한가" 한 줄만 필요.
     const loadMap = new Map<string, number>();
     for (const u of unitWorkRows) {
-      if (!u.asign_mber_id || u.progrs_rt >= 100) continue;
+      if (!u.asign_mber_id || uwProgress(u.unit_work_id) >= 100) continue;
       let load = 1; // inProgress 또는 미시작이어도 담당 중인 미완료 건은 부하로 카운트
-      if (u.end_de) {
-        if (u.end_de < todayStr) load += 1;       // overdue
-        else if (u.end_de <= horizonStr) load += 1; // dueSoon
+      if (u.plan_dsgn_end_de) {
+        if (u.plan_dsgn_end_de < todayStr) load += 1;       // overdue
+        else if (u.plan_dsgn_end_de <= horizonStr) load += 1; // dueSoon
       }
       loadMap.set(u.asign_mber_id, (loadMap.get(u.asign_mber_id) ?? 0) + load);
     }
@@ -303,21 +271,43 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       ),
       buildMissingStat(
         "UNIT_WORK", "단위업무",
-        unitWorkRows.map((u) => ({ asignMberId: u.asign_mber_id, startDate: u.bgng_de, endDate: u.end_de })),
+        unitWorkRows.map((u) => ({ asignMberId: u.asign_mber_id, startDate: u.plan_dsgn_bgng_de, endDate: u.plan_dsgn_end_de })),
         false
       ),
       buildMissingStat(
         "SCREEN", "화면",
-        screenRows.map((s) => ({ asignMberId: s.asign_mber_id, startDate: s.design_bgng_de, endDate: s.design_end_de, effortRaw: s.design_efrt_val })),
+        screenRows.map((s) => ({ asignMberId: s.asign_mber_id, startDate: s.actl_dsgn_bgng_de, endDate: s.actl_dsgn_end_de, effortRaw: s.actl_dsgn_efrt_val })),
         true
       ),
       buildMissingStat(
         "FUNCTION", "기능",
-        functionRows.map((f) => ({ asignMberId: f.asign_mber_id, startDate: f.impl_bgng_de, endDate: f.impl_end_de, effortRaw: f.efrt_val })),
+        functionRows.map((f) => {
+          const dates = funcScreenDates.get(f.func_id);
+          return {
+            asignMberId: f.asign_mber_id,
+            startDate:   dates?.implBgngDe ?? null,
+            endDate:     dates?.implEndDe ?? null,
+            effortRaw:   f.impl_efrt_val,
+          };
+        }),
         true
       ),
     ];
     const unassignedTotal = missingStats.reduce((sum, s) => sum + s.assigneeMissing, 0);
+
+    // ── 진행률/정체 — 단위업무 실적 진행률(uwProgress)이 저장값이 아니라 계산값이라
+    // DB aggregate/count 대신 JS에서 계산(2026-07-28). plan_dsgn_end_de 가 없는 행은
+    // 정체 판정 불가 → 제외.
+    const total      = unitWorkRows.length;
+    const completedCnt = unitWorkRows.filter((u) => uwProgress(u.unit_work_id) === 100).length;
+    const averagePct = total === 0
+      ? 0
+      : Math.round((unitWorkRows.reduce((sum, u) => sum + uwProgress(u.unit_work_id), 0) / total) * 10) / 10;
+    const stalledRows = unitWorkRows
+      .filter((u) => u.plan_dsgn_end_de && u.plan_dsgn_end_de < todayStr && uwProgress(u.unit_work_id) < 100)
+      .sort((a, b) => (a.plan_dsgn_end_de ?? "").localeCompare(b.plan_dsgn_end_de ?? ""));
+    const stalledCnt = stalledRows.length;
+    const stalledItems = stalledRows.slice(0, PREVIEW_LIMIT);
 
     // ── 최근 변경 카드 — 실제 엔티티 이름 배치 조회 ──────────────────────────
     // snapshot_data 는 변경 종류마다 모양이 달라(예: 인라인 편집은 {field,value}, 담당자 변경은
@@ -398,11 +388,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       members.map((m) => [m.mber_id, m.mber_nm || m.email_addr || null])
     );
 
-    const total       = progressAgg._count._all;
-    const averagePct  = total === 0
-      ? 0
-      // _avg 는 row 0 일 때 null. 소수 1자리 반올림.
-      : Math.round((progressAgg._avg.progrs_rt ?? 0) * 10) / 10;
     const requirementAvgPct = Math.round(requirementAvgAgg._avg.progrs_rt ?? 0);
 
     // ── 팀 활동 가공 ──────────────────────────────────────────
@@ -459,8 +444,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           displayId:        s.unit_work_display_id,
           name:             s.unit_work_nm,
           // 위 where 조건에서 null 제외 했으므로 안전하게 string 단언
-          endDate:          s.end_de ?? "",
-          progress:         s.progrs_rt,
+          endDate:          s.plan_dsgn_end_de ?? "",
+          progress:         uwProgress(s.unit_work_id),
           assignMemberName: s.asign_mber_id
             ? (memberDisplayMap.get(s.asign_mber_id) ?? null)
             : null,

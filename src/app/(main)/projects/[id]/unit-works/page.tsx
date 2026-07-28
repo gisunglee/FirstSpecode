@@ -6,13 +6,12 @@
  * 역할:
  *   - 단위업무 목록 조회 (FID-00129) — 요구사항별 그룹 + 요구사항 필터
  *   - 드래그앤드롭 순서 조정 (FID-00132)
- *   - 진행률 인라인 수정 (FID-00133)
+ *   - 진행률(설계/구현)은 하위 화면·기능 롤업 자동계산 — 읽기전용(2026-07-28)
  *   - 단위업무 삭제 확인 팝업 (PID-00042 / FID-00131)
  *
  * 주요 기술:
  *   - TanStack Query: 목록 조회 및 낙관적 업데이트
  *   - useRef 기반 HTML5 네이티브 드래그앤드롭 (dnd-kit 미사용)
- *   - PATCH progress: 인라인 진행률 수정
  */
 
 import { Suspense, useEffect, useRef, useState } from "react";
@@ -35,18 +34,18 @@ type UnitWorkRow = {
   assignMemberId:   string | null;
   // 담당자 이름 — 서버 join으로 내려옴. 미지정/퇴장 멤버면 null
   assignMemberName: string | null;
-  startDate:        string | null;
-  endDate:          string | null;
+  // 계획설계 기간 — PM이 잡는 상위 마일스톤(목표치)
+  planStartDate:    string | null;
+  planEndDate:      string | null;
+  // 실적 진행률 — 하위 화면(설계)·기능(구현) 롤업 자동계산. 읽기전용.
+  designRt:         number;
+  implRt:           number;
   progress:         number;
   sortOrder:        number;
   reqId:            string;
   reqDisplayId:     string;
   reqName:          string;
   screenCount:      number;
-  analyRt:          number;
-  designRt:         number;
-  implRt:           number;
-  testRt:           number;
   // AI 구현 요청 정보 (스냅샷 → IMPLEMENT 태스크 최신 1건). 없으면 null
   implTask: { aiTaskId: string; status: string; requestedAt: string } | null;
 };
@@ -221,19 +220,6 @@ function UnitWorksPageInner() {
     },
   });
 
-  // ── 진행률 인라인 수정 뮤테이션 ─────────────────────────────────────────────
-  const progressMutation = useMutation({
-    mutationFn: ({ unitWorkId, progress }: { unitWorkId: string; progress: number }) =>
-      authFetch(`/api/projects/${projectId}/unit-works/${unitWorkId}/progress`, {
-        method: "PATCH",
-        body:   JSON.stringify({ progress }),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["unit-works", projectId] });
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
   // ── 드래그 핸들러 ──────────────────────────────────────────────────────────
   function handleDragStart(index: number) {
     dragItem.current = index;
@@ -356,13 +342,6 @@ function UnitWorksPageInner() {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-  }
-
-  // ── 진행률 변경 ────────────────────────────────────────────────────────────
-  function handleProgressChange(unitWorkId: string, value: string) {
-    const num = parseInt(value);
-    if (isNaN(num) || num < 0 || num > 100) return;
-    progressMutation.mutate({ unitWorkId, progress: num });
   }
 
   // ── 로딩 ───────────────────────────────────────────────────────────────────
@@ -569,7 +548,7 @@ function UnitWorksPageInner() {
           <div style={{ textAlign: "center" }}>진행률</div>
           <div style={{ textAlign: "center" }}>화면수</div>
           <div style={{ textAlign: "center" }}>AI 구현</div>
-          <div style={{ textAlign: "center" }}>분/설/구/테</div>
+          <div style={{ textAlign: "center" }}>설/구</div>
         </div>
 
         {items.length === 0 ? (
@@ -578,7 +557,9 @@ function UnitWorksPageInner() {
           </div>
         ) : (
           /* 데이터 행 */
-          items.map((uw, idx) => (
+          items.map((uw, idx) => {
+            const isComplete = uw.designRt === 100 && uw.implRt === 100;
+            return (
             <div
               key={uw.unitWorkId}
               draggable
@@ -593,13 +574,13 @@ function UnitWorksPageInner() {
                 ...gridRowStyle,
                 borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
                 background: hoveredId === uw.unitWorkId
-                  ? (uw.analyRt === 100 && uw.designRt === 100 && uw.implRt === 100 && uw.testRt === 100
+                  ? (isComplete
                       ? "rgba(34,197,94,0.10)"
                       : "var(--color-bg-hover, rgba(99,102,241,0.06))")
-                  : (uw.analyRt === 100 && uw.designRt === 100 && uw.implRt === 100 && uw.testRt === 100
+                  : (isComplete
                       ? "rgba(34,197,94,0.04)"
                       : "var(--color-bg-card)"),
-                borderLeft: uw.analyRt === 100 && uw.designRt === 100 && uw.implRt === 100 && uw.testRt === 100
+                borderLeft: isComplete
                   ? "3px solid #22c55e"
                   : hoveredId === uw.unitWorkId ? "3px solid var(--color-primary, #6366f1)" : "3px solid transparent",
                 paddingLeft: 13,
@@ -648,14 +629,14 @@ function UnitWorksPageInner() {
                 <span
                   style={{
                     overflow: "hidden", textOverflow: "ellipsis", minWidth: 0,
-                    ...(uw.analyRt === 100 && uw.designRt === 100 && uw.implRt === 100 && uw.testRt === 100
+                    ...(isComplete
                       ? { color: "var(--color-text-secondary)", textDecoration: "none" }
                       : {}),
                   }}
                 >
                   {uw.name}
                 </span>
-                {uw.analyRt === 100 && uw.designRt === 100 && uw.implRt === 100 && uw.testRt === 100 && (
+                {isComplete && (
                   <span className="sp-badge" style={{
                     fontSize: 11, fontWeight: 600, color: "#16a34a",
                     background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)",
@@ -686,21 +667,21 @@ function UnitWorksPageInner() {
 
               {/* 기간 — "YYYY-MM-DD ~ YYYY-MM-DD"(23자) 한 줄 유지 */}
               <div style={{ fontSize: 13, textAlign: "center", color: "var(--color-text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {uw.startDate && uw.endDate
-                  ? `${uw.startDate} ~ ${uw.endDate}`
-                  : uw.startDate
-                  ? `${uw.startDate} ~`
+                {uw.planStartDate && uw.planEndDate
+                  ? `${uw.planStartDate} ~ ${uw.planEndDate}`
+                  : uw.planStartDate
+                  ? `${uw.planStartDate} ~`
                   : "미정"}
               </div>
 
-              {/* 진행률 인라인 수정 (FID-00133) */}
+              {/* 실적 진행률 — 화면(설계)·기능(구현) 롤업 자동계산, 읽기전용(2026-07-28) */}
               <div style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                <ProgressCell
-                  unitWorkId={uw.unitWorkId}
-                  progress={uw.progress}
-                  isPending={progressMutation.isPending}
-                  onChange={handleProgressChange}
-                />
+                <span
+                  title="하위 화면·기능 진행 상황에서 자동 계산됨"
+                  style={{ fontSize: 13, color: uw.progress === 100 ? "#2e7d32" : "var(--color-text-primary)" }}
+                >
+                  {uw.progress}%
+                </span>
               </div>
 
               {/* 화면수 */}
@@ -737,7 +718,7 @@ function UnitWorksPageInner() {
               </div>
 
               {/* 분석/설계/구현/테스트 진척률 */}
-              {uw.analyRt === 100 && uw.designRt === 100 && uw.implRt === 100 && uw.testRt === 100 ? (
+              {isComplete ? (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <span className="sp-badge" style={{
                     background: "linear-gradient(90deg, #e65100, #1565c0, #2e7d32, #6a1b9a)",
@@ -749,14 +730,13 @@ function UnitWorksPageInner() {
                 </div>
               ) : (
                 <div style={{ display: "flex", gap: 3, alignItems: "center", justifyContent: "center" }}>
-                  <UwRatioChip label="분" value={uw.analyRt}  color="#e65100" />
                   <UwRatioChip label="설" value={uw.designRt} color="#1565c0" />
                   <UwRatioChip label="구" value={uw.implRt}   color="#2e7d32" />
-                  <UwRatioChip label="테" value={uw.testRt}   color="#6a1b9a" />
                 </div>
               )}
             </div>
-          ))
+            );
+          })
         )}
       </div>
       </div>
@@ -909,71 +889,6 @@ function UwRatioChip({ label, value, color }: { label: string; value: number; co
     >
       {value}%
     </span>
-  );
-}
-
-// ── 진행률 셀 — 클릭하면 인라인 입력으로 전환 ────────────────────────────────
-
-function ProgressCell({
-  unitWorkId, progress, isPending, onChange,
-}: {
-  unitWorkId: string;
-  progress:   number;
-  isPending:  boolean;
-  onChange:   (id: string, value: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft,   setDraft]   = useState(String(progress));
-
-  function commit() {
-    onChange(unitWorkId, draft);
-    setEditing(false);
-  }
-
-  if (editing) {
-    return (
-      <input
-        type="number"
-        min={0}
-        max={100}
-        value={draft}
-        autoFocus
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
-        style={{
-          width:        52,
-          padding:      "2px 6px",
-          border:       "1px solid var(--color-border)",
-          borderRadius: 4,
-          fontSize:     13,
-          textAlign:    "center",
-          background:   "var(--color-bg-card)",
-          color:        "var(--color-text-primary)",
-        }}
-      />
-    );
-  }
-
-  return (
-    <button
-      onClick={() => { setDraft(String(progress)); setEditing(true); }}
-      disabled={isPending}
-      title="클릭하여 수정"
-      style={{
-        background:   "none",
-        border:       "none",
-        cursor:       "pointer",
-        padding:      "2px 6px",
-        borderRadius: 4,
-        fontFamily:   "inherit",
-        fontWeight:   "inherit",
-        fontSize:     13,
-        color:        progress === 100 ? "#2e7d32" : "var(--color-text-primary)",
-      }}
-    >
-      {progress}%
-    </button>
   );
 }
 

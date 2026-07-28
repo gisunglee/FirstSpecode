@@ -32,6 +32,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import type { MeSummaryResponse } from "@/types/dashboard";
+import { fetchUnitWorkProgress, combinePhaseProgress } from "@/lib/pm/progressRollup";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -72,10 +73,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       myTasksItems,
 
       // ── 내 마감 ────────────────────────────────────────────────
-      // count + 지연 count + 미리보기를 분리 쿼리로 (count 는 정확히, 미리보기는 빠르게)
-      deadlineCnt,
-      overdueCnt,
-      deadlineItems,
+      // 단위업무 진행률(progrs_rt)이 저장값이 아니라 화면·기능 롤업 계산값이라(2026-07-28)
+      // DB count/filter 대신 내 담당 단위업무 전체를 읽어 JS에서 계산.
+      myUnitWorkRows,
 
       // ── 내 마감 — 화면/기능 (카운트만, MY 보드로 상세 유도) ──────
       myScreenRows,
@@ -105,44 +105,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         take:    TASKS_PREVIEW_LIMIT,
       }),
 
-      // 마감 카운트 — end_de <= 오늘+7일 AND progrs_rt < 100
-      // (지연된 것 포함, "임박" 안에 지연도 포함시켜야 사용자가 놓치지 않음)
-      prisma.tbDsUnitWork.count({
-        where: {
-          prjct_id:      projectId,
-          asign_mber_id: meId,
-          progrs_rt:     { lt: 100 },
-          end_de:        { lte: horizonStr, not: null },
-        },
-      }),
-
-      // 지연 카운트 — end_de < 오늘
-      prisma.tbDsUnitWork.count({
-        where: {
-          prjct_id:      projectId,
-          asign_mber_id: meId,
-          progrs_rt:     { lt: 100 },
-          end_de:        { lt: todayStr, not: null },
-        },
-      }),
-
-      // 마감 미리보기 — 마감 가까운 순 Top 5
+      // 내 담당 단위업무 전체 — 마감/진행률은 아래에서 JS로 계산
       prisma.tbDsUnitWork.findMany({
-        where: {
-          prjct_id:      projectId,
-          asign_mber_id: meId,
-          progrs_rt:     { lt: 100 },
-          end_de:        { lte: horizonStr, not: null },
-        },
+        where: { prjct_id: projectId, asign_mber_id: meId },
         select: {
-          unit_work_id:         true,
-          unit_work_display_id: true,
-          unit_work_nm:         true,
-          end_de:               true,
-          progrs_rt:            true,
+          unit_work_id: true, unit_work_display_id: true, unit_work_nm: true,
+          plan_dsgn_end_de: true,
         },
-        orderBy: { end_de: "asc" },
-        take:    DEADLINES_PREVIEW_LIMIT,
       }),
 
       // 내가 담당한 화면 중 설계 마감이 +7일 이내(지연 포함)인 것 — 완료 여부는 함수 뒤에서 판정
@@ -150,17 +119,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         where: {
           prjct_id:       projectId,
           asign_mber_id:  meId,
-          design_end_de:  { lte: horizonStr, not: null },
+          actl_dsgn_end_de: { lte: horizonStr, not: null },
         },
         select: { scrn_id: true },
       }),
 
-      // 내가 담당한 기능 중 구현 마감이 +7일 이내(지연 포함)인 것
+      // 내가 담당한 기능 중, 소속 화면의 구현 마감이 +7일 이내(지연 포함)인 것
+      // (기능 자신은 구현 일정이 없음 — 화면에서 상속, 2026-07-28)
       prisma.tbDsFunction.findMany({
         where: {
           prjct_id:      projectId,
           asign_mber_id: meId,
-          impl_end_de:   { lte: horizonStr, not: null },
+          area: { screen: { actl_impl_end_de: { lte: horizonStr, not: null } } },
         },
         select: { func_id: true },
       }),
@@ -272,6 +242,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const myFuncImplRtMap = new Map(myFuncProgressRows.map((p) => [p.ref_id, p.impl_rt]));
     const functionCount = myFuncIds.filter((id) => (myFuncImplRtMap.get(id) ?? 0) < 100).length;
 
+    // ── 내 단위업무 마감/진행률 — 저장값이 아니라 화면·기능 롤업 계산값(2026-07-28) ──
+    const myUwProgressMap = await fetchUnitWorkProgress(myUnitWorkRows.map((u) => u.unit_work_id));
+    const myUwProgress = (unitWorkId: string) => {
+      const p = myUwProgressMap.get(unitWorkId);
+      return p ? combinePhaseProgress(p) : 0;
+    };
+    const myUpcomingUnitWorks = myUnitWorkRows
+      .filter((u) => u.plan_dsgn_end_de && u.plan_dsgn_end_de <= horizonStr && myUwProgress(u.unit_work_id) < 100)
+      .sort((a, b) => (a.plan_dsgn_end_de ?? "").localeCompare(b.plan_dsgn_end_de ?? ""));
+    const deadlineCnt   = myUpcomingUnitWorks.length;
+    const overdueCnt    = myUpcomingUnitWorks.filter((u) => (u.plan_dsgn_end_de ?? "") < todayStr).length;
+    const deadlineItems = myUpcomingUnitWorks.slice(0, DEADLINES_PREVIEW_LIMIT);
+
     // 과업 byCategory + count — groupBy 결과를 객체로 변환
     let myTasksCount = 0;
     const byCategory: Record<string, number> = {};
@@ -302,8 +285,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         count:        deadlineCnt,
         overdueCount: overdueCnt,
         items:        deadlineItems.map((u) => {
-          // end_de 가 위 where 에서 not null 보장 + ISO 포맷 가정
-          const endDate = u.end_de ?? "";
+          // plan_dsgn_end_de 가 위 필터에서 not null 보장 + ISO 포맷 가정
+          const endDate = u.plan_dsgn_end_de ?? "";
           const endMs   = endDate
             ? new Date(endDate + "T00:00:00Z").getTime()
             : todayMidnight;
@@ -313,7 +296,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             displayId:  u.unit_work_display_id,
             name:       u.unit_work_nm,
             endDate,
-            progress:   u.progrs_rt,
+            progress:   myUwProgress(u.unit_work_id),
             dDay,
           };
         }),

@@ -132,10 +132,14 @@ export function AssigneeCell({ node, projectId, onChanged, members }: CellProps 
 export function DateFieldCell({ node, projectId, onChanged, field }: CellProps & { field: "startDate" | "endDate" }) {
   const endpoint = endpointFor(node.kind, node.id, projectId);
   const value = field === "startDate" ? node.startDate : node.endDate;
+  // 기능(FUNCTION)은 2026-07-28부터 구현 일정이 없음 — 소속 화면의 일정을 그대로 보여주는
+  // 읽기전용 상속값이라 여기서 수정할 대상 자체가 없다(화면 행에서 편집해야 함).
+  // disabledText에 실제 값을 넣어야 함 — 그냥 "-"로 두면 상속된 날짜가 안 보임.
+  const supportsDate = node.kind !== "FUNCTION";
   return (
     <InlineEditCell
-      disabled={!endpoint}
-      disabledText="-"
+      disabled={!supportsDate || !endpoint}
+      disabledText={value ?? "-"}
       align="center"
       renderDisplay={() => value ?? "-"}
       renderEditor={(commit, cancel) => (

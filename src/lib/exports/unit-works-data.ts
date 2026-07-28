@@ -3,6 +3,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { fetchUnitWorkProgress, combinePhaseProgress } from "@/lib/pm/progressRollup";
 
 export type UnitWorkImplTask = {
   aiTaskId:    string;
@@ -17,18 +18,18 @@ export type UnitWorkListItem = {
   description:      string;
   assignMemberId:   string | null;
   assignMemberName: string | null;
-  startDate:        string | null;
-  endDate:          string | null;
+  // 계획설계 기간 — PM이 잡는 상위 마일스톤(목표치)
+  planStartDate:    string | null;
+  planEndDate:      string | null;
+  // 실적 진행률 — 사람이 직접 입력하지 않고 하위 화면·기능에서 항상 재계산(단일 소스)
+  designRt:         number;
+  implRt:           number;
   progress:         number;
   sortOrder:        number;
   reqId:            string;
   reqDisplayId:     string;
   reqName:          string;
   screenCount:      number;
-  analyRt:          number;
-  designRt:         number;
-  implRt:           number;
-  testRt:           number;
   implTask:         UnitWorkImplTask | null;
 };
 
@@ -66,14 +67,9 @@ export async function fetchProjectUnitWorks(opts: {
     ...new Set(unitWorks.map((u) => u.asign_mber_id).filter((v): v is string => !!v)),
   ];
 
-  // 진척률 + IMPLEMENT 스냅샷 + 담당자 이름 병렬 조회 (N+1 방지)
-  const [progressRecords, implSnapshots, assigneeMembers] = await Promise.all([
-    unitWorkIds.length > 0
-      ? prisma.tbCmProgress.findMany({
-          where:  { ref_tbl_nm: "tb_ds_unit_work", ref_id: { in: unitWorkIds } },
-          select: { ref_id: true, analy_rt: true, design_rt: true, impl_rt: true, test_rt: true },
-        })
-      : Promise.resolve([]),
+  // 진척률(하위 화면·기능 롤업) + IMPLEMENT 스냅샷 + 담당자 이름 병렬 조회 (N+1 방지)
+  const [progressMap, implSnapshots, assigneeMembers] = await Promise.all([
+    fetchUnitWorkProgress(unitWorkIds),
     unitWorkIds.length > 0
       ? prisma.tbSpImplSnapshot.findMany({
           where:  { ref_tbl_nm: "tb_ds_unit_work", ref_id: { in: unitWorkIds } },
@@ -88,7 +84,6 @@ export async function fetchProjectUnitWorks(opts: {
         })
       : Promise.resolve([]),
   ]);
-  const progressMap = new Map(progressRecords.map((p) => [p.ref_id, p]));
   const assigneeMap = new Map(
     assigneeMembers.map((m) => [m.mber_id, m.mber_nm || m.email_addr || null]),
   );
@@ -126,18 +121,16 @@ export async function fetchProjectUnitWorks(opts: {
       description:      uw.unit_work_dc ?? "",
       assignMemberId:   uw.asign_mber_id ?? null,
       assignMemberName: uw.asign_mber_id ? (assigneeMap.get(uw.asign_mber_id) ?? null) : null,
-      startDate:        uw.bgng_de ?? null,
-      endDate:          uw.end_de ?? null,
-      progress:         uw.progrs_rt,
+      planStartDate:    uw.plan_dsgn_bgng_de ?? null,
+      planEndDate:      uw.plan_dsgn_end_de ?? null,
+      designRt:         prog?.designRt ?? 0,
+      implRt:           prog?.implRt ?? 0,
+      progress:         prog ? combinePhaseProgress(prog) : 0,
       sortOrder:        uw.sort_ordr,
       reqId:            uw.req_id,
       reqDisplayId:     uw.requirement.req_display_id,
       reqName:          uw.requirement.req_nm,
       screenCount:      uw.screens.length,
-      analyRt:          prog?.analy_rt  ?? 0,
-      designRt:         prog?.design_rt ?? 0,
-      implRt:           prog?.impl_rt   ?? 0,
-      testRt:           prog?.test_rt   ?? 0,
       implTask:         impl ?? null,
     };
   });

@@ -34,6 +34,7 @@ import { apiError } from "@/lib/apiResponse";
 import { buildRequirementDocxWithHistory } from "@/lib/exports/requirement-data";
 import { buildUnitWorkDocxWithHistory } from "@/lib/exports/unit-work-data";
 import { filenameSafe } from "@/lib/exports/filename";
+import { fetchUnitWorkProgress, combinePhaseProgress } from "@/lib/pm/progressRollup";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -114,8 +115,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    // 진행률 롤업을 단위업무마다 따로 쿼리하지 않도록 배치로 한 번에 미리 계산
+    // (아래 docx 빌드 루프 자체는 메모리 폭증 방지를 위해 여전히 순차 실행).
+    const uwProgressMap = await fetchUnitWorkProgress(uwIdList);
+
     for (const uwId of uwIdList) {
-      const r = await buildUnitWorkDocxWithHistory(projectId, uwId);
+      const progress = uwProgressMap.get(uwId);
+      const r = await buildUnitWorkDocxWithHistory(
+        projectId, uwId,
+        progress ? combinePhaseProgress(progress) : undefined,
+      );
       if (r.ok) {
         uwFolder.file(r.filename, r.buffer);
       } else {

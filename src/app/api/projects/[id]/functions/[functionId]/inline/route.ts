@@ -1,9 +1,9 @@
 /**
- * PATCH /api/projects/[id]/functions/[functionId]/inline — 복잡도·공수 인라인 편집 (FID-00168, 00169)
- *   + My Task 페이지용 담당자·구현일정 인라인 편집 추가
+ * PATCH /api/projects/[id]/functions/[functionId]/inline — 복잡도·공수·담당자 인라인 편집 (FID-00168, 00169)
  *
- * Body: { field: "complexity" | "effort" | "assignee" | "startDate" | "endDate", value: string | null }
- *   - startDate/endDate는 구현 축(impl_bgng_de/impl_end_de).
+ * Body: { field: "complexity" | "effort" | "assignee", value: string | null }
+ *   - 구현 일정(startDate/endDate)은 2026-07-28부터 기능이 아니라 소속 화면 단위로 관리 —
+ *     화면 인라인 편집(screens/[screenId]/inline/route.ts)에서 처리.
  *
  * 게이트는 sibling route.ts(PUT)의 requireFunctionWrite와 동일 조건 —
  * OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 담당자. (기존엔 requireAuth+checkRole 이었으나,
@@ -55,7 +55,7 @@ async function requireFunctionWrite(
   return { mberId: auth.mberId };
 }
 
-const VALID_FIELDS = ["complexity", "effort", "assignee", "startDate", "endDate"] as const;
+const VALID_FIELDS = ["complexity", "effort", "assignee"] as const;
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, functionId } = await params;
@@ -82,18 +82,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "기능을 찾을 수 없습니다.", 404);
     }
 
-    if (field === "startDate" || field === "endDate") {
-      await prisma.tbDsFunction.update({
-        where: { func_id: functionId },
-        data:  { [field === "startDate" ? "impl_bgng_de" : "impl_end_de"]: value || null, mdfcn_dt: new Date() },
-      });
-      return apiSuccess({ funcId: functionId, field, value: value || null });
-    }
-
     if (field === "complexity" || field === "effort") {
       const updateData = field === "complexity"
         ? { cmplx_code: value as string, mdfcn_dt: new Date() }
-        : { efrt_val: value || null, mdfcn_dt: new Date() };
+        : { impl_efrt_val: value || null, mdfcn_dt: new Date() };
 
       await prisma.$transaction([
         prisma.tbDsFunction.update({ where: { func_id: functionId }, data: updateData }),

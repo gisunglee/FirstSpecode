@@ -77,7 +77,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (field === "startDate" || field === "endDate") {
       await prisma.tbDsUnitWork.update({
         where: { unit_work_id: unitWorkId },
-        data:  { [field === "startDate" ? "bgng_de" : "end_de"]: value || null, mdfcn_dt: new Date() },
+        data:  { [field === "startDate" ? "plan_dsgn_bgng_de" : "plan_dsgn_end_de"]: value || null, mdfcn_dt: new Date() },
       });
       return apiSuccess({ unitWorkId, field, value: value || null });
     }

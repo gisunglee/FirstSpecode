@@ -84,41 +84,45 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     } else if (entity === "UNIT_WORK") {
       const rows = await prisma.tbDsUnitWork.findMany({
         where:  { prjct_id: projectId },
-        select: { unit_work_id: true, unit_work_display_id: true, unit_work_nm: true, asign_mber_id: true, bgng_de: true, end_de: true },
+        select: { unit_work_id: true, unit_work_display_id: true, unit_work_nm: true, asign_mber_id: true, plan_dsgn_bgng_de: true, plan_dsgn_end_de: true },
         take:   HARD_LIMIT,
       });
       raw = rows.map((u) => ({
         id: u.unit_work_id, displayId: u.unit_work_display_id, name: u.unit_work_nm,
         href: `/projects/${projectId}/unit-works/${u.unit_work_id}`,
-        asignMberId: u.asign_mber_id, startDate: u.bgng_de, endDate: u.end_de, effort: null,
+        asignMberId: u.asign_mber_id, startDate: u.plan_dsgn_bgng_de, endDate: u.plan_dsgn_end_de, effort: null,
       }));
     } else if (entity === "SCREEN") {
       const rows = await prisma.tbDsScreen.findMany({
         where:  { prjct_id: projectId },
         select: {
           scrn_id: true, scrn_display_id: true, scrn_nm: true, asign_mber_id: true,
-          design_bgng_de: true, design_end_de: true, design_efrt_val: true,
+          actl_dsgn_bgng_de: true, actl_dsgn_end_de: true, actl_dsgn_efrt_val: true,
         },
         take: HARD_LIMIT,
       });
       raw = rows.map((s) => ({
         id: s.scrn_id, displayId: s.scrn_display_id, name: s.scrn_nm,
         href: `/projects/${projectId}/screens/${s.scrn_id}`,
-        asignMberId: s.asign_mber_id, startDate: s.design_bgng_de, endDate: s.design_end_de, effort: s.design_efrt_val,
+        asignMberId: s.asign_mber_id, startDate: s.actl_dsgn_bgng_de, endDate: s.actl_dsgn_end_de, effort: s.actl_dsgn_efrt_val,
       }));
     } else {
       const rows = await prisma.tbDsFunction.findMany({
         where:  { prjct_id: projectId },
         select: {
-          func_id: true, func_display_id: true, func_nm: true, asign_mber_id: true,
-          impl_bgng_de: true, impl_end_de: true, efrt_val: true,
+          func_id: true, func_display_id: true, func_nm: true, asign_mber_id: true, impl_efrt_val: true,
+          area: { select: { screen: { select: { actl_impl_bgng_de: true, actl_impl_end_de: true } } } },
         },
         take: HARD_LIMIT,
       });
       raw = rows.map((f) => ({
         id: f.func_id, displayId: f.func_display_id, name: f.func_nm,
         href: `/projects/${projectId}/functions/${f.func_id}`,
-        asignMberId: f.asign_mber_id, startDate: f.impl_bgng_de, endDate: f.impl_end_de, effort: f.efrt_val,
+        // 기능 자신은 구현 일정이 없음 — 소속 화면의 실질구현기간을 상속(2026-07-28)
+        asignMberId: f.asign_mber_id,
+        startDate: f.area?.screen?.actl_impl_bgng_de ?? null,
+        endDate:   f.area?.screen?.actl_impl_end_de ?? null,
+        effort:    f.impl_efrt_val,
       }));
     }
 

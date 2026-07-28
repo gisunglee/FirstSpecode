@@ -29,6 +29,7 @@ import { buildDocxFilename, docNoFilenamePrefix } from "@/lib/exports/filename";
 import { resolveDocMeta, type DocMetaSettings } from "@/lib/exports/doc-meta";
 import { displayIdToSeq } from "@/lib/exports/doc-number";
 import { findDocMeta } from "@/lib/exports/doc-meta-catalog";
+import { fetchOneUnitWorkProgress, combinePhaseProgress } from "@/lib/pm/progressRollup";
 
 // ─── 코드 → 라벨 매핑 ────────────────────────────────────────
 // 화면(unit-works/[unitWorkId]/page.tsx 등) 과 동일한 라벨.
@@ -209,6 +210,9 @@ function toMappingRow(
 export async function buildUnitWorkExportInput(
   projectId:  string,
   unitWorkId: string,
+  // 여러 건을 한 번에 export할 때(zip 등) 호출부가 fetchUnitWorkProgress를 배치로 미리
+  // 계산해 넘길 수 있게 함 — 안 넘기면 이 함수가 단건으로 직접 계산(기존 동작 그대로).
+  precomputedProgress?: number,
 ): Promise<UnitWorkExportDataResult> {
   // ── ① 단위업무 + 부모 요구사항 ─────────────────────────────
   const unitWork = await prisma.tbDsUnitWork.findUnique({
@@ -220,9 +224,8 @@ export async function buildUnitWorkExportInput(
       unit_work_nm:         true,
       unit_work_dc:         true,
       asign_mber_id:        true,
-      bgng_de:              true,
-      end_de:               true,
-      progrs_rt:            true,
+      plan_dsgn_bgng_de:    true,
+      plan_dsgn_end_de:     true,
       sort_ordr:            true,
       requirement: {
         select: { req_display_id: true, req_nm: true },
@@ -309,11 +312,14 @@ export async function buildUnitWorkExportInput(
       func_ty_code:    true,
       priort_code:     true,
       cmplx_code:      true,
-      efrt_val:        true,
+      impl_efrt_val:   true,
       asign_mber_id:   true,
     },
   });
   const funcIds = functions.map((f) => f.func_id);
+
+  // 단위업무 실적 진행률(설계+구현 롤업) — 저장값이 아니라 항상 재계산(2026-07-28)
+  const unitWorkProgress = precomputedProgress ?? combinePhaseProgress(await fetchOneUnitWorkProgress(unitWorkId));
 
   // ── ④ 컬럼 매핑 (영역 + 기능) ──────────────────────────────
   const refIdsToCheck: { ref_ty_code: string; ref_id: { in: string[] } }[] = [];
@@ -456,7 +462,7 @@ export async function buildUnitWorkExportInput(
           funcType:     label(FUNC_TYPE_LABELS, f.func_ty_code),
           priority:     label(PRIORITY_LABELS,  f.priort_code),
           complexity:   label(COMPLEXITY_LABELS, f.cmplx_code),
-          effort:       f.efrt_val ?? "",
+          effort:       f.impl_efrt_val ?? "",
           assigneeName: memberName(f.asign_mber_id),
           mappings:     fnMappings,
         };
@@ -548,9 +554,9 @@ export async function buildUnitWorkExportInput(
     unitWorkDescription: unitWork.unit_work_dc ?? "",
     parentRequirement,
     assigneeName,
-    startDate:           dashIfEmpty(unitWork.bgng_de),
-    endDate:             dashIfEmpty(unitWork.end_de),
-    progressRate:        unitWork.progrs_rt ?? 0,
+    startDate:           dashIfEmpty(unitWork.plan_dsgn_bgng_de),
+    endDate:             dashIfEmpty(unitWork.plan_dsgn_end_de),
+    progressRate:        unitWorkProgress,
     sortOrder:           unitWork.sort_ordr ?? 0,
 
     screens:       screenSections,
@@ -583,11 +589,12 @@ export async function buildUnitWorkExportInput(
 export async function buildUnitWorkDocxWithHistory(
   projectId:  string,
   unitWorkId: string,
+  precomputedProgress?: number,
 ): Promise<
   | { ok: true; buffer: Buffer; filename: string; displayId: string }
   | { ok: false; httpStatus: number; code: string; message: string }
 > {
-  const result = await buildUnitWorkExportInput(projectId, unitWorkId);
+  const result = await buildUnitWorkExportInput(projectId, unitWorkId, precomputedProgress);
   if (!result.ok) return result;
   const input = result.input;
 

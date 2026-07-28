@@ -81,18 +81,25 @@ export async function fetchProjectAreas(opts: {
   let aggMap = new Map<string, AreaAgg>();
   if (areas.length > 0) {
     const areaIds = Prisma.join(areas.map((a) => a.area_id));
+    // 구현 일정(impl_start/impl_end)은 2026-07-28부터 기능이 아니라 소속 화면 단위 —
+    // 영역→화면 조인으로 상속(같은 영역의 기능은 모두 같은 화면 소속이라 MIN/MAX해도 값은 하나뿐).
     const aggRows = await prisma.$queryRaw<AreaAgg[]>`
       SELECT
         f.area_id,
         COALESCE(SUM(
-          CAST(REGEXP_REPLACE(f.efrt_val, '[^0-9.]', '', 'g') AS DECIMAL)
-        ) FILTER (WHERE f.efrt_val IS NOT NULL), 0) AS total_hours,
-        MIN(f.impl_bgng_de) AS impl_start,
-        MAX(f.impl_end_de)  AS impl_end,
-        COALESCE(AVG(p.design_rt), 0) AS avg_design_rt,
-        COALESCE(AVG(p.impl_rt),   0) AS avg_impl_rt,
-        COALESCE(AVG(p.test_rt),   0) AS avg_test_rt
+          CAST(REGEXP_REPLACE(f.impl_efrt_val, '[^0-9.]', '', 'g') AS DECIMAL)
+        ) FILTER (WHERE f.impl_efrt_val IS NOT NULL), 0) AS total_hours,
+        MIN(s.actl_impl_bgng_de) AS impl_start,
+        MAX(s.actl_impl_end_de)  AS impl_end,
+        -- tb_cm_progress 행이 없는 기능(LEFT JOIN → NULL)을 평균에서 빼버리지 않고 0점으로
+        -- 채운 뒤 평균낸다 — COALESCE(AVG(x),0)만으로는 개별 NULL 행이 그대로 제외돼 평균이
+        -- 부풀려진다(lib/pm/progressRollup.ts와 동일 원칙).
+        COALESCE(AVG(COALESCE(p.design_rt, 0)), 0) AS avg_design_rt,
+        COALESCE(AVG(COALESCE(p.impl_rt, 0)),   0) AS avg_impl_rt,
+        COALESCE(AVG(COALESCE(p.test_rt, 0)),   0) AS avg_test_rt
       FROM tb_ds_function f
+      JOIN tb_ds_area a ON a.area_id = f.area_id
+      LEFT JOIN tb_ds_screen s ON s.scrn_id = a.scrn_id
       LEFT JOIN tb_cm_progress p
         ON p.ref_tbl_nm = 'tb_ds_function' AND p.ref_id = f.func_id
       WHERE f.area_id IN (${areaIds})

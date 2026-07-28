@@ -138,14 +138,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const scrImpl = toMap(scrImplRows), scrDesign = toMap(scrDesignRows);
     const fnImpl = toMap(fnImplRows), fnDesign = toMap(fnDesignRows);
 
-    function toFunctionNode(fn: (typeof orphanFunctions)[number]): MyTaskNode {
+    // 기능 자신은 일정이 없음 — 소속 화면의 실질구현기간을 그대로 상속(2026-07-28).
+    // 화면이 없는(orphan) 기능은 상속할 데가 없어 null 그대로.
+    function toFunctionNode(
+      fn: (typeof orphanFunctions)[number],
+      screenImplDates?: { start: string | null; end: string | null },
+    ): MyTaskNode {
+      const startDate = screenImplDates?.start ?? null;
+      const endDate   = screenImplDates?.end   ?? null;
       return {
         kind: "FUNCTION", id: fn.func_id, displayId: fn.func_display_id, name: fn.func_nm,
         href: `/projects/${projectId}/functions/${fn.func_id}`,
         assigneeId: fn.asign_mber_id, assigneeName: fn.asign_mber_id ? (nameMap.get(fn.asign_mber_id) ?? null) : null,
-        startDate: fn.impl_bgng_de, endDate: fn.impl_end_de, effort: fn.efrt_val,
+        startDate, endDate, effort: fn.impl_efrt_val,
         designProgress: fnDesign.get(fn.func_id) ?? 0, implProgress: fnImpl.get(fn.func_id) ?? 0,
-        dDay: fn.impl_end_de ? computeDDay(fn.impl_end_de, today) : null,
+        dDay: endDate ? computeDDay(endDate, today) : null,
         sortOrder: fn.sort_ordr,
         children: [],
       };
@@ -155,17 +162,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       kind: "UNIT_WORK", id: uw.unit_work_id, displayId: uw.unit_work_display_id, name: uw.unit_work_nm,
       href: `/projects/${projectId}/unit-works/${uw.unit_work_id}`,
       assigneeId: uw.asign_mber_id, assigneeName: uw.asign_mber_id ? (nameMap.get(uw.asign_mber_id) ?? null) : null,
-      startDate: uw.bgng_de, endDate: uw.end_de, effort: null,
+      // 단위업무의 계획설계기간 — PM이 잡는 상위 마일스톤(목표치), 진척과 무관
+      startDate: uw.plan_dsgn_bgng_de, endDate: uw.plan_dsgn_end_de, effort: null,
       designProgress: uwDesign.get(uw.unit_work_id) ?? 0, implProgress: uwImpl.get(uw.unit_work_id) ?? 0,
-      dDay: uw.end_de ? computeDDay(uw.end_de, today) : null,
+      dDay: uw.plan_dsgn_end_de ? computeDDay(uw.plan_dsgn_end_de, today) : null,
       sortOrder: uw.sort_ordr,
       children: uw.screens.map((scr) => ({
         kind: "SCREEN", id: scr.scrn_id, displayId: scr.scrn_display_id, name: scr.scrn_nm,
         href: `/projects/${projectId}/screens/${scr.scrn_id}`,
         assigneeId: scr.asign_mber_id, assigneeName: scr.asign_mber_id ? (nameMap.get(scr.asign_mber_id) ?? null) : null,
-        startDate: scr.design_bgng_de, endDate: scr.design_end_de, effort: scr.design_efrt_val,
+        // 화면 노드는 실질설계기간 기준으로 표시(구현기간은 하위 기능 노드에서 상속해서 보여줌)
+        startDate: scr.actl_dsgn_bgng_de, endDate: scr.actl_dsgn_end_de, effort: scr.actl_dsgn_efrt_val,
         designProgress: scrDesign.get(scr.scrn_id) ?? 0, implProgress: scrImpl.get(scr.scrn_id) ?? 0,
-        dDay: scr.design_end_de ? computeDDay(scr.design_end_de, today) : null,
+        dDay: scr.actl_dsgn_end_de ? computeDDay(scr.actl_dsgn_end_de, today) : null,
         sortOrder: scr.sort_ordr,
         children: scr.areas.map((ar) => ({
           kind: "AREA", id: ar.area_id, displayId: ar.area_display_id, name: ar.area_nm,
@@ -175,7 +184,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           designProgress: null, implProgress: null,
           dDay: null,
           sortOrder: ar.sort_ordr,
-          children: ar.functions.map(toFunctionNode),
+          children: ar.functions.map((fn) => toFunctionNode(fn, {
+            start: scr.actl_impl_bgng_de, end: scr.actl_impl_end_de,
+          })),
         })),
       })),
     }));
@@ -183,7 +194,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // 영역이 아예 없는(또는 영역이 화면에 안 붙은) 기능 — 트리 최상위에 별도 노드로 얹는다.
     // 어느 단위업무 소속인지 알 방법이 없어(그게 문제 상황 자체) 구조상 위치를 줄 수 없음 —
     // 최상위에 홀로 뜨는 것 자체가 "정리가 필요한 항목"이라는 신호.
-    const fullTree: MyTaskNode[] = [...tree, ...orphanFunctions.map(toFunctionNode)];
+    const fullTree: MyTaskNode[] = [...tree, ...orphanFunctions.map((fn) => toFunctionNode(fn))];
 
     let allNodes: MyTaskNode[];
     if (view === "tree") {

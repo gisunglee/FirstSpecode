@@ -314,9 +314,10 @@ function DbTablesPageInner() {
             <span style={{ textAlign: "center" }} title="매핑된 컬럼 비율 (usedColCount / columnCount)">
               활용률
             </span>
-            {/* 기능 연결수 — 이 테이블을 사용하는 distinct 기능 수 (매핑 인사이트) */}
+            {/* 기능 연결수 — 이 테이블을 사용하는 distinct 기능 수 (매핑 인사이트).
+                컬럼 폭이 타이트해서 라벨은 "기능"으로 줄이고 전체 의미는 title 툴팁으로 */}
             <span style={{ textAlign: "center" }} title="이 테이블의 컬럼을 사용하는 기능의 수">
-              기능 연결
+              기능
             </span>
             {/* Phase 2 — IO 프로필 아이콘 (조회/저장/혼합) */}
             <span style={{ textAlign: "center" }} title="IO 프로필: 조회 위주(🔍) / 저장 위주(✏️) / 혼합(🔄)">
@@ -473,11 +474,11 @@ function DbTablesPageInner() {
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
 // 물리 / 논리 / 설명 / 담당자 / 컬럼수 / 활용률 / 기능연결 / IO / 등록·수정일
-// 담당자: 이름 대부분이 짧고(닉네임/실명) ellipsis 처리되므로 80px 로 축소 — 좁은 화면에서 설명 영역 확보
-// 등록/수정일: YYYY-MM-DD(10자) 고정폭이라 90px 로 줄이고 center 정렬 — 우측 잔여 공백 제거
+// 설명(1fr)이 남는 공간을 모두 흡수하므로, 뒤 6개 고정폭 컬럼을 실제 표시 내용(숫자·짧은
+// 배지·YYYY-MM-DD)에 딱 맞게 타이트하게 줄이면 그만큼이 자동으로 설명 폭에 더해진다(2026-07-28).
 // 물리/논리 테이블명: 긴 식별자(tb_ai_design_template 등)와 한글 논리명에 여유를 주기 위해 +20% 확장
 const GRID =
-  "minmax(192px,264px) minmax(144px,216px) 1fr 80px 72px 100px 80px 48px 90px";
+  "minmax(192px,264px) minmax(144px,216px) 1fr 52px 48px 84px 48px 36px 82px";
 
 const headerRowStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID,

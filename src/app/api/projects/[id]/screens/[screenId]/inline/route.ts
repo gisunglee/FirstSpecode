@@ -2,7 +2,7 @@
  * PATCH /api/projects/[id]/screens/[screenId]/inline — My Task 인라인 편집
  *
  * Body: { field: "assignee" | "startDate" | "endDate" | "effort", value: string | null }
- *   - startDate/endDate는 설계 축(design_bgng_de/design_end_de) — 구현 일정과 분리된 축.
+ *   - startDate/endDate는 실질설계 축(actl_dsgn_bgng_de/actl_dsgn_end_de) — 실질구현 일정과 분리된 축.
  *
  * 게이트는 sibling route.ts(PUT)의 requireScreenWrite와 동일 조건 —
  * OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 담당자.
@@ -78,7 +78,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (field === "startDate" || field === "endDate") {
       await prisma.tbDsScreen.update({
         where: { scrn_id: screenId },
-        data:  { [field === "startDate" ? "design_bgng_de" : "design_end_de"]: value || null, mdfcn_dt: new Date() },
+        data:  { [field === "startDate" ? "actl_dsgn_bgng_de" : "actl_dsgn_end_de"]: value || null, mdfcn_dt: new Date() },
       });
       return apiSuccess({ screenId, field, value: value || null });
     }
@@ -87,7 +87,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       await prisma.$transaction([
         prisma.tbDsScreen.update({
           where: { scrn_id: screenId },
-          data:  { design_efrt_val: value || null, mdfcn_dt: new Date() },
+          data:  { actl_dsgn_efrt_val: value || null, mdfcn_dt: new Date() },
         }),
         prisma.tbDsDesignChange.create({
           data: {

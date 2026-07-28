@@ -556,9 +556,14 @@ model TbDsUnitWork {
   unit_work_nm         String          @default("")
   unit_work_dc         String?
   asign_mber_id        String?
-  bgng_de              String?
-  end_de               String?
-  progrs_rt            Int             @default(0)
+  // 계획 설계 일정/공수 — PM이 잡는 상위 마일스톤. 하위 화면·기능의 실제 진행과는
+  // 무관하게 관리되는 목표치(계획)이고, 실적(진행률)은 화면/기능 롤업으로 별도 계산한다.
+  // (2026-07-28 리네임: bgng_de/end_de → plan_dsgn_*, progrs_rt 컬럼 제거 — 아래 참고)
+  plan_dsgn_bgng_de    String?
+  plan_dsgn_end_de     String?
+  plan_dsgn_efrt_val   String?
+  // 단위업무 설계서 작성 상태 — BEFORE(작성전) / DOING(작성중) / DONE(작성완료)
+  dsgn_doc_sttus_code  String          @default("BEFORE")
   sort_ordr            Int             @default(0)
   creat_dt             DateTime        @default(now())
   mdfcn_dt             DateTime?
@@ -572,7 +577,6 @@ model TbDsUnitWork {
 
   @@index([prjct_id], map: "tb_ds_unit_work_prjct_idx")
   // 대시보드 "내 마감 임박" + "정체된 일" 카드 — (prjct_id, asign_mber_id) 동등 조건이 자주 옴.
-  // end_de 까지 인덱스에 넣지는 않음 — text 컬럼이라 정렬 효과 작고, 보조 정렬은 PostgreSQL 옵티마이저에 위임.
   @@index([prjct_id, asign_mber_id], map: "idx_ds_unit_work_prjct_asignee")
   @@map("tb_ds_unit_work")
 }
@@ -596,11 +600,17 @@ model TbDsScreen {
   dsply_code      String?
   layer_data_dc   String?
   coment_cn       String?
-  // 설계 일정/공수 — 구현(TbDsFunction.impl_bgng_de 등)과 완전히 분리된 축.
-  // 화면이 "설계" 작업의 단위(화면/영역을 만드는 일)이고, 기능은 구현 준비 단위라 별도 관리.
-  design_bgng_de  String?
-  design_end_de   String?
-  design_efrt_val String?
+  // 실질 설계/구현 일정·공수 — 담당자가 직접 커밋하는 실제 배정 일정.
+  // (단위업무의 plan_dsgn_* 는 PM의 상위 계획치, 여기는 실행 단위의 실제 일정)
+  // 구현 일정은 원래 기능(TbDsFunction)에 있었으나, 개발자가 실제로 보고 움직이는 마감
+  // 기준은 화면 단위라 이쪽으로 이동함(2026-07-28).
+  actl_dsgn_bgng_de   String?
+  actl_dsgn_end_de    String?
+  actl_dsgn_efrt_val  String?
+  actl_impl_bgng_de   String?
+  actl_impl_end_de    String?
+  // 화면정의서 작성 상태 — BEFORE(작성전) / DOING(작성중) / DONE(작성완료)
+  dsgn_doc_sttus_code String        @default("BEFORE")
   areas           TbDsArea[]
   unitWork        TbDsUnitWork? @relation(fields: [unit_work_id], references: [unit_work_id])
   // 테스트 명세서 매핑 — 단위 테스트가 이 화면을 대상으로 작성되었음을 의미
@@ -632,6 +642,8 @@ model TbDsArea {
   excaldw_data      Json?
   layer_data_dc     String?
   coment_cn         String?
+  // 영역 설계(와이어프레임) 작성 상태 — BEFORE(작성전) / DOING(작성중) / DONE(작성완료)
+  dsgn_doc_sttus_code String       @default("BEFORE")
   screen            TbDsScreen?    @relation(fields: [scrn_id], references: [scrn_id])
   functions         TbDsFunction[]
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 보강)
@@ -654,10 +666,13 @@ model TbDsFunction {
   mdfcn_dt        DateTime?
   asign_mber_id   String?
   cmplx_code      String      @default("MEDIUM")
-  efrt_val        String?
+  // 구현 공수 (2026-07-28 리네임: efrt_val → impl_efrt_val — 화면의 actl_dsgn_efrt_val과 대칭)
+  impl_efrt_val   String?
   func_ty_code    String      @default("OTHER")
-  impl_bgng_de    String?
-  impl_end_de     String?
+  // 기능정의서 작성 상태 — BEFORE(작성전) / DOING(작성중) / DONE(작성완료)
+  // 구현 일정(시작/종료일)은 화면(TbDsScreen.actl_impl_*)으로 이동함 — 기능 개별 마감일은
+  // 관리하지 않고, 화면 마감일 안에서 개인이 알아서 진행(구현/테스트 진척률=%만 tb_cm_progress에 기록)
+  dsgn_doc_sttus_code String    @default("BEFORE")
   coment_cn       String?
   area            TbDsArea?   @relation(fields: [area_id], references: [area_id])
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 보강)
@@ -763,14 +778,14 @@ model TbDsColMapping {
   @@map("tb_ds_col_mapping")
 }
 
-/// 공통 단계별 진척률 — 분석·설계·구현·테스트
-/// ref_tbl_nm + ref_id 로 다형 참조 (단위업무, 기능, 영역 등 어디서든 사용)
+/// 공통 단계별 진척률 — 설계·구현·테스트 (분석은 요구사항 레벨 progrs_rt로 관리, 여기선 제외)
+/// ref_tbl_nm + ref_id 로 다형 참조 (현재는 tb_ds_function 에서만 사용)
+/// design_rt/impl_rt: 담당자가 슬라이더로 0~100 직접 입력. test_rt: 추후 자동테스트 연동 전까지 보류(미사용).
 model TbCmProgress {
   progrs_id     String   @id(map: "pk_cm_progress") @default(uuid()) @db.VarChar(36)
   prjct_id      String   @db.VarChar(36)
   ref_tbl_nm    String   @db.VarChar(50)
   ref_id        String   @db.VarChar(36)
-  analy_rt      Int      @default(0)
   design_rt     Int      @default(0)
   impl_rt       Int      @default(0)
   test_rt       Int      @default(0)
@@ -852,10 +867,11 @@ model TbRqRequirement {
   analy_cn       String?
   spec_cn        String?
   asign_mber_id  String? // 담당자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
-  // 분석 일정/진척률 (2026-07-17) — TbDsUnitWork.bgng_de/end_de/progrs_rt 와 동일 패턴.
-  // 설계는 화면, 구현은 기능 레벨에서 일정을 갖는 것처럼, 분석은 요구사항 레벨에서 갖는다.
-  anls_bgng_de   String? // yyyy-MM-dd — 다른 일정 컬럼(design_end_de 등)과 동일하게 문자열 저장
+  // 분석 일정/공수/진척률 (2026-07-17, 공수 2026-07-28 추가) — 설계는 화면, 구현은 기능
+  // 레벨에서 관리하는 것처럼, 분석은 요구사항 레벨에서 직접 관리(담당자 슬라이더 입력).
+  anls_bgng_de   String? // yyyy-MM-dd — 다른 일정 컬럼(actl_dsgn_end_de 등)과 동일하게 문자열 저장
   anls_end_de    String?
+  anls_efrt_val  String?
   progrs_rt      Int             @default(0)
   sort_ordr      Int             @default(0)
   creat_dt       DateTime        @default(now())

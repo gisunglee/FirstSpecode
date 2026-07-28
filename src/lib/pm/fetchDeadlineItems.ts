@@ -5,13 +5,19 @@
  * my-work/route.ts 여러 곳이 똑같은 조회 로직(엔티티별 마감일 필드 + 기능 impl_rt/design_rt 롤업)을
  * 쓰길래 한 곳으로 모았다.
  *
- * lib/pm/delayStatus.ts 등과 달리 이 파일은 prisma 를 직접 쓴다 — "순수 함수, prisma 무관" 원칙은
- * lib/pm/deadlineProgress.ts(분류·집계 로직)에 남겨두고, 여긴 DB 조회 전용으로 역할을 분리했다.
+ * 진척률 롤업 SQL은 lib/pm/progressRollup.ts로 다시 한번 통합했다(2026-07-28) — 예전엔 여기랑
+ * wbs/unitWorkPhaseRollup.ts가 거의 같은 조인을 각자 구현하고 있었음.
+ *
+ * 일정(기간)은 2026-07-28 스키마 개편으로 위치가 바뀌었다:
+ *   - 기능(FUNCTION) 자신은 일정 컬럼이 없음 — 소속 화면의 실질설계/구현기간을 그대로 상속.
+ *   - 화면(SCREEN)은 실질설계기간(actl_dsgn_*)과 실질구현기간(actl_impl_*)을 각각 따로 가짐 —
+ *     progressKind(DESIGN/IMPL)에 맞는 쪽을 돌려준다(예전엔 IMPL 요청에도 설계기간을 줬었음).
+ *   - 단위업무(UNIT_WORK)는 계획설계기간(plan_dsgn_*) — PM이 잡는 상위 마일스톤, 진척과 무관.
  */
 
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { DeadlineEntityKind, ProgressKind } from "@/types/pm";
+import { fetchScreenProgress, fetchUnitWorkProgress } from "@/lib/pm/progressRollup";
 
 export type RawDeadlineItem = {
   id:         string;
@@ -24,7 +30,7 @@ export type RawDeadlineItem = {
   endDate:    string | null;
   /** 0~100 — progressKind(IMPL/DESIGN)에 따라 기능의 impl_rt/design_rt 를 롤업한 값 */
   progress:   number;
-  /** 공수(시간). FUNCTION=efrt_val, SCREEN=design_efrt_val. UNIT_WORK는 해당 필드 자체가 없어 항상 null */
+  /** 공수(시간). FUNCTION=impl_efrt_val, SCREEN=actl_dsgn_efrt_val. UNIT_WORK는 해당 필드 자체가 없어 항상 null */
   effort:     string | null;
 };
 
@@ -40,7 +46,19 @@ export async function fetchDeadlineItems(
   if (entity === "FUNCTION") {
     const functions = await prisma.tbDsFunction.findMany({
       where:  { prjct_id: projectId, ...(mberId ? { asign_mber_id: mberId } : {}) },
-      select: { func_id: true, func_display_id: true, func_nm: true, asign_mber_id: true, impl_bgng_de: true, impl_end_de: true, efrt_val: true },
+      select: {
+        func_id: true, func_display_id: true, func_nm: true, asign_mber_id: true, impl_efrt_val: true,
+        area: {
+          select: {
+            screen: {
+              select: {
+                actl_dsgn_bgng_de: true, actl_dsgn_end_de: true,
+                actl_impl_bgng_de: true, actl_impl_end_de: true,
+              },
+            },
+          },
+        },
+      },
       take:   HARD_LIMIT,
     });
     const funcIds = functions.map((f) => f.func_id);
@@ -51,86 +69,66 @@ export async function fetchDeadlineItems(
         })
       : [];
     const rtMap = new Map(progressRows.map((p) => [p.ref_id, progressKind === "DESIGN" ? p.design_rt : p.impl_rt]));
-    return functions.map((f) => ({
-      id: f.func_id, displayId: f.func_display_id, name: f.func_nm,
-      href: `/projects/${projectId}/functions/${f.func_id}`,
-      mberId: f.asign_mber_id, startDate: f.impl_bgng_de, endDate: f.impl_end_de,
-      progress: rtMap.get(f.func_id) ?? 0, effort: f.efrt_val,
-    }));
+    return functions.map((f) => {
+      const screen = f.area?.screen;
+      const [startDate, endDate] = progressKind === "DESIGN"
+        ? [screen?.actl_dsgn_bgng_de ?? null, screen?.actl_dsgn_end_de ?? null]
+        : [screen?.actl_impl_bgng_de ?? null, screen?.actl_impl_end_de ?? null];
+      return {
+        id: f.func_id, displayId: f.func_display_id, name: f.func_nm,
+        href: `/projects/${projectId}/functions/${f.func_id}`,
+        mberId: f.asign_mber_id, startDate, endDate,
+        progress: rtMap.get(f.func_id) ?? 0, effort: f.impl_efrt_val,
+      };
+    });
   }
 
   if (entity === "SCREEN") {
     const screens = await prisma.tbDsScreen.findMany({
       where:  { prjct_id: projectId, ...(mberId ? { asign_mber_id: mberId } : {}) },
-      select: { scrn_id: true, scrn_display_id: true, scrn_nm: true, asign_mber_id: true, design_bgng_de: true, design_end_de: true, design_efrt_val: true },
+      select: {
+        scrn_id: true, scrn_display_id: true, scrn_nm: true, asign_mber_id: true,
+        actl_dsgn_bgng_de: true, actl_dsgn_end_de: true, actl_dsgn_efrt_val: true,
+        actl_impl_bgng_de: true, actl_impl_end_de: true,
+      },
       take:   HARD_LIMIT,
     });
     const scrnIds = screens.map((s) => s.scrn_id);
-    // 화면별 하위 기능들의 진척률 평균. progressKind에 따라 impl_rt/design_rt 컬럼만 바꿔서 집계
-    // (둘 다 고정 SQL — progressKind는 호출자가 이미 IMPL/DESIGN 중 하나로 검증했으므로 안전).
-    const rtRows = scrnIds.length === 0 ? [] : progressKind === "DESIGN"
-      ? await prisma.$queryRaw<{ scrn_id: string; avg_rt: number }[]>`
-          SELECT a.scrn_id, COALESCE(AVG(p.design_rt), 0) AS avg_rt
-            FROM tb_ds_function f
-            JOIN tb_ds_area a ON a.area_id = f.area_id
-            LEFT JOIN tb_cm_progress p
-              ON p.ref_tbl_nm = 'tb_ds_function' AND p.ref_id = f.func_id
-           WHERE a.scrn_id IN (${Prisma.join(scrnIds)})
-           GROUP BY a.scrn_id
-        `
-      : await prisma.$queryRaw<{ scrn_id: string; avg_rt: number }[]>`
-          SELECT a.scrn_id, COALESCE(AVG(p.impl_rt), 0) AS avg_rt
-            FROM tb_ds_function f
-            JOIN tb_ds_area a ON a.area_id = f.area_id
-            LEFT JOIN tb_cm_progress p
-              ON p.ref_tbl_nm = 'tb_ds_function' AND p.ref_id = f.func_id
-           WHERE a.scrn_id IN (${Prisma.join(scrnIds)})
-           GROUP BY a.scrn_id
-        `;
-    const rtMap = new Map(rtRows.map((r) => [r.scrn_id, Math.round(Number(r.avg_rt))]));
-    return screens.map((s) => ({
-      id: s.scrn_id, displayId: s.scrn_display_id, name: s.scrn_nm,
-      href: `/projects/${projectId}/screens/${s.scrn_id}`,
-      mberId: s.asign_mber_id, startDate: s.design_bgng_de, endDate: s.design_end_de,
-      progress: rtMap.get(s.scrn_id) ?? 0, effort: s.design_efrt_val,
-    }));
+    const progressMap = await fetchScreenProgress(scrnIds);
+    return screens.map((s) => {
+      const [startDate, endDate] = progressKind === "DESIGN"
+        ? [s.actl_dsgn_bgng_de, s.actl_dsgn_end_de]
+        : [s.actl_impl_bgng_de, s.actl_impl_end_de];
+      const p = progressMap.get(s.scrn_id);
+      return {
+        id: s.scrn_id, displayId: s.scrn_display_id, name: s.scrn_nm,
+        href: `/projects/${projectId}/screens/${s.scrn_id}`,
+        mberId: s.asign_mber_id, startDate, endDate,
+        progress: progressKind === "DESIGN" ? (p?.designRt ?? 0) : (p?.implRt ?? 0),
+        effort: s.actl_dsgn_efrt_val,
+      };
+    });
   }
 
   // UNIT_WORK
   const unitWorks = await prisma.tbDsUnitWork.findMany({
     where:  { prjct_id: projectId, ...(mberId ? { asign_mber_id: mberId } : {}) },
-    select: { unit_work_id: true, unit_work_display_id: true, unit_work_nm: true, asign_mber_id: true, bgng_de: true, end_de: true },
+    select: {
+      unit_work_id: true, unit_work_display_id: true, unit_work_nm: true, asign_mber_id: true,
+      plan_dsgn_bgng_de: true, plan_dsgn_end_de: true,
+    },
     take:   HARD_LIMIT,
   });
   const uwIds = unitWorks.map((u) => u.unit_work_id);
-  // 단위업무별 하위 전체 기능(unitWork→screen→area→function)의 진척률 평균 —
-  // buildImplDelayRows(lib/pm/delayStatus.ts)의 4계층 롤업과 같은 조인 구조를 SQL로 미리 평균냄.
-  const rtRows = uwIds.length === 0 ? [] : progressKind === "DESIGN"
-    ? await prisma.$queryRaw<{ unit_work_id: string; avg_rt: number }[]>`
-        SELECT s.unit_work_id, COALESCE(AVG(p.design_rt), 0) AS avg_rt
-          FROM tb_ds_function f
-          JOIN tb_ds_area a ON a.area_id = f.area_id
-          JOIN tb_ds_screen s ON s.scrn_id = a.scrn_id
-          LEFT JOIN tb_cm_progress p
-            ON p.ref_tbl_nm = 'tb_ds_function' AND p.ref_id = f.func_id
-         WHERE s.unit_work_id IN (${Prisma.join(uwIds)})
-         GROUP BY s.unit_work_id
-      `
-    : await prisma.$queryRaw<{ unit_work_id: string; avg_rt: number }[]>`
-        SELECT s.unit_work_id, COALESCE(AVG(p.impl_rt), 0) AS avg_rt
-          FROM tb_ds_function f
-          JOIN tb_ds_area a ON a.area_id = f.area_id
-          JOIN tb_ds_screen s ON s.scrn_id = a.scrn_id
-          LEFT JOIN tb_cm_progress p
-            ON p.ref_tbl_nm = 'tb_ds_function' AND p.ref_id = f.func_id
-         WHERE s.unit_work_id IN (${Prisma.join(uwIds)})
-         GROUP BY s.unit_work_id
-      `;
-  const rtMap = new Map(rtRows.map((r) => [r.unit_work_id, Math.round(Number(r.avg_rt))]));
-  return unitWorks.map((u) => ({
-    id: u.unit_work_id, displayId: u.unit_work_display_id, name: u.unit_work_nm,
-    href: `/projects/${projectId}/unit-works/${u.unit_work_id}`,
-    mberId: u.asign_mber_id, startDate: u.bgng_de, endDate: u.end_de,
-    progress: rtMap.get(u.unit_work_id) ?? 0, effort: null,
-  }));
+  const progressMap = await fetchUnitWorkProgress(uwIds);
+  return unitWorks.map((u) => {
+    const p = progressMap.get(u.unit_work_id);
+    return {
+      id: u.unit_work_id, displayId: u.unit_work_display_id, name: u.unit_work_nm,
+      href: `/projects/${projectId}/unit-works/${u.unit_work_id}`,
+      mberId: u.asign_mber_id, startDate: u.plan_dsgn_bgng_de, endDate: u.plan_dsgn_end_de,
+      progress: progressKind === "DESIGN" ? (p?.designRt ?? 0) : (p?.implRt ?? 0),
+      effort: null,
+    };
+  });
 }

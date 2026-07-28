@@ -57,8 +57,7 @@ type FuncDetail = {
   complexity: string;
   effort: string;
   assignMemberId: string | null;
-  implStartDate: string;
-  implEndDate: string;
+  docStatus: string;
   sortOrder: number;
   areaId: string | null;
   areaName: string;
@@ -134,8 +133,7 @@ function FunctionDetailPageInner() {
   const [complexity, setComplexity] = useState("MEDIUM");
   const [effort, setEffort] = useState("");
   const [assignMemberId, setAssignMemberId] = useState("");
-  const [implStartDate, setImplStartDate] = useState("");
-  const [implEndDate, setImplEndDate] = useState("");
+  const [docStatus, setDocStatus] = useState("BEFORE");
   const [areaId, setAreaId] = useState(presetAreaId);
   const [sortOrder, setSortOrder] = useState(0);
 
@@ -156,10 +154,6 @@ function FunctionDetailPageInner() {
   // ── AI 패널 팝업 상태 ────────────────────────────────────────────────────────
   const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
   const [aiHistoryTaskType, setAiHistoryTaskType] = useState<string | null>(null);
-  // 단위업무 기간 범위 경고 모달
-  const [periodAlert, setPeriodAlert] = useState<{
-    messages: string[]; uwId: string; newStart: string | null; newEnd: string | null;
-  } | null>(null);
 
   // ── AI 도움말 팝업 상태 ──────────────────────────────────────────────────────
   const [helpOpen, setHelpOpen] = useState<string | null>(null);
@@ -255,7 +249,7 @@ function FunctionDetailPageInner() {
   // 다른 다이얼로그(구현 대상 선택, 이력 팝업, 상세 팝업, 기간 알림)가 열려있으면 외부 클릭 닫기 무시
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (aiHistoryTaskType || aiDetailTaskId || periodAlert) return;
+      if (aiHistoryTaskType || aiDetailTaskId) return;
       // AiImplementCard 내부 팝업(overlay)이 열려있으면 외부 클릭 감지 무시
       const target = e.target as HTMLElement;
       if (target.closest('[data-impl-overlay]')) return;
@@ -265,7 +259,7 @@ function FunctionDetailPageInner() {
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [aiHistoryTaskType, aiDetailTaskId, periodAlert]);
+  }, [aiHistoryTaskType, aiDetailTaskId]);
 
   useEffect(() => {
     if (data) {
@@ -277,8 +271,7 @@ function FunctionDetailPageInner() {
       setComplexity(data.complexity);
       setEffort(data.effort);
       setAssignMemberId(data.assignMemberId ?? "");
-      setImplStartDate(data.implStartDate);
-      setImplEndDate(data.implEndDate);
+      setDocStatus(data.docStatus);
       setAreaId(data.areaId ?? "");
       setSortOrder(data.sortOrder ?? 0);
       setCommentCn(data.commentCn ?? "");
@@ -297,8 +290,7 @@ function FunctionDetailPageInner() {
         commentCn: commentCn.trim(),
         priority, complexity, effort: effort.trim(),
         assignMemberId: assignMemberId || null,
-        implStartDate: implStartDate || null,
-        implEndDate: implEndDate || null,
+        docStatus,
         sortOrder,
         saveHistory: saveHistory || undefined,
       };
@@ -322,79 +314,10 @@ function FunctionDetailPageInner() {
         if (variables?.saveHistory) {
           queryClient.invalidateQueries({ queryKey: ["settings-history", projectId] });
         }
-        // 단위업무 기간 범위 검증 — 벗어났으면 추가로 컨펌 모달 표시
-        const violation = checkUnitWorkPeriod();
-        if (violation) setPeriodAlert(violation);
       }
     },
     onError: (err: Error) => toast.error(err.message),
   });
-
-  // ── 단위업무 기간 자동 조정 뮤테이션 ────────────────────────────────────────
-  // 기능의 구현 기간이 단위업무 기간을 벗어났을 때, 단위업무 기간을 확장하여 포함시킴
-  const adjustUnitWorkMutation = useMutation({
-    mutationFn: async ({ uwId, startDate, endDate }: { uwId: string; startDate: string | null; endDate: string | null }) => {
-      // 단위업무 PUT은 name이 필수이므로 먼저 detail GET → 전체 필드를 그대로 PUT
-      const uw = await authFetch<{
-        data: {
-          name: string; description: string; comment?: string; assignMemberId: string | null;
-          startDate: string | null; endDate: string | null; progress: number; sortOrder: number;
-        }
-      }>(`/api/projects/${projectId}/unit-works/${uwId}`).then((r) => r.data);
-
-      return authFetch(`/api/projects/${projectId}/unit-works/${uwId}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          name: uw.name,
-          description: uw.description,
-          comment: uw.comment,
-          assignMemberId: uw.assignMemberId,
-          progress: uw.progress,
-          sortOrder: uw.sortOrder,
-          startDate: startDate ?? uw.startDate,
-          endDate: endDate ?? uw.endDate,
-        }),
-      });
-    },
-    onSuccess: () => {
-      toast.success("단위업무 기간이 조정되었습니다.");
-      queryClient.invalidateQueries({ queryKey: ["function", projectId, functionId] });
-      queryClient.invalidateQueries({ queryKey: ["unit-work"] });
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  // ── 단위업무 기간 범위 검증 ─────────────────────────────────────────────────
-  // 기능의 구현 기간이 단위업무 기간을 벗어났는지 확인하고 위반 정보 반환
-  // 위반 없으면 null — onSuccess에서 위반 여부에 따라 모달/토스트 분기
-  function checkUnitWorkPeriod(): {
-    messages: string[]; uwId: string; newStart: string | null; newEnd: string | null;
-  } | null {
-    if (!data) return null;
-    const d = data as unknown as { unitWorkId?: string | null; unitWorkStartDate?: string | null; unitWorkEndDate?: string | null };
-    if (!d.unitWorkId) return null;
-
-    const fnStart = implStartDate || null;
-    const fnEnd = implEndDate || null;
-    const uwStart = d.unitWorkStartDate || null;
-    const uwEnd = d.unitWorkEndDate || null;
-
-    const messages: string[] = [];
-    let newUwStart: string | null = null;
-    let newUwEnd: string | null = null;
-
-    if (fnStart && uwStart && fnStart < uwStart) {
-      messages.push(`구현 시작일(${fnStart})이 단위업무 시작일(${uwStart})보다 빠릅니다.`);
-      newUwStart = fnStart;
-    }
-    if (fnEnd && uwEnd && fnEnd > uwEnd) {
-      messages.push(`구현 종료일(${fnEnd})이 단위업무 종료일(${uwEnd})보다 늦습니다.`);
-      newUwEnd = fnEnd;
-    }
-
-    if (messages.length === 0) return null;
-    return { messages, uwId: d.unitWorkId, newStart: newUwStart, newEnd: newUwEnd };
-  }
 
   // ── 삭제 뮤테이션 ──────────────────────────────────────────────────────────
   const deleteMutation = useMutation({
@@ -511,7 +434,9 @@ function FunctionDetailPageInner() {
               projectId={projectId}
               refTable="tb_ds_function"
               refId={functionId}
-              phases={["analy", "design", "impl", "test"]}
+              // 분석은 요구사항 레벨 소관이라 제외. 설계(design_rt)는 기능이 실제 소유하는 값이고
+              // 화면의 설계진척률은 이 값들의 롤업이므로 기능 페이지에서 계속 입력해야 함(2026-07-28).
+              phases={["design", "impl", "test"]}
             />
           </div>
         )}
@@ -912,30 +837,8 @@ function FunctionDetailPageInner() {
                 </div>
               </div>
 
-              {/* 행4: 구현 시작일 | 구현 종료일 | 구현 공수 — 일정/공수 묶음, 넉넉한 폭 확보 */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 16px" }}>
-                <div style={formGroupStyle}>
-                  <label style={labelStyle}>구현 시작일</label>
-                  <input
-                    type="date"
-                    value={implStartDate}
-                    onChange={(e) => setImplStartDate(e.target.value)}
-                    readOnly={!canEdit}
-                    className="sp-input"
-                  />
-                </div>
-
-                <div style={formGroupStyle}>
-                  <label style={labelStyle}>구현 종료일</label>
-                  <input
-                    type="date"
-                    value={implEndDate}
-                    onChange={(e) => setImplEndDate(e.target.value)}
-                    readOnly={!canEdit}
-                    className="sp-input"
-                  />
-                </div>
-
+              {/* 행4: 구현 공수 | 기능정의서 작성 상태 — 구현 일정은 화면에서 관리(2026-07-28), 기능엔 공수만 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
                 <div style={formGroupStyle}>
                   <label style={labelStyle}>구현 공수(시간)</label>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -955,6 +858,18 @@ function FunctionDetailPageInner() {
                         {formatEffortDays(effort)}
                       </span>
                     )}
+                  </div>
+                </div>
+
+                <div style={formGroupStyle}>
+                  <label style={labelStyle}>기능정의서 작성 상태</label>
+                  <div className="sp-select-wrap">
+                    <select value={docStatus} onChange={(e) => setDocStatus(e.target.value)} disabled={!canEdit} className="sp-input">
+                      <option value="BEFORE">작성전</option>
+                      <option value="DOING">작성중</option>
+                      <option value="DONE">작성완료</option>
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
                   </div>
                 </div>
               </div>
@@ -1451,53 +1366,6 @@ function FunctionDetailPageInner() {
           taskType={aiHistoryTaskType as "DESIGN" | "INSPECT" | "IMPLEMENT"}
           onClose={() => setAiHistoryTaskType(null)}
         />
-      )}
-      {/* ── 단위업무 기간 범위 경고 모달 ─────────────────────────────────── */}
-      {periodAlert && (
-        <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }}
-          onClick={() => setPeriodAlert(null)}
-        >
-          <div
-            style={{ background: "var(--color-bg-card)", borderRadius: 10, padding: "24px 28px", minWidth: 420, maxWidth: 520, boxShadow: "0 8px 32px rgba(0,0,0,0.22)" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-              <span style={{ fontSize: 20 }}>⚠️</span>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>
-                구현 기간이 단위업무 기간을 벗어났습니다
-              </h3>
-            </div>
-            <ul style={{ margin: "0 0 18px", paddingLeft: 20, fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.7 }}>
-              {periodAlert.messages.map((m, i) => <li key={i}>{m}</li>)}
-            </ul>
-            <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--color-text-secondary)" }}>
-              단위업무 기간을 자동으로 조정하시겠습니까?
-            </p>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button
-                onClick={() => setPeriodAlert(null)}
-                style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
-              >
-                닫기
-              </button>
-              <button
-                onClick={() => {
-                  adjustUnitWorkMutation.mutate({
-                    uwId: periodAlert.uwId,
-                    startDate: periodAlert.newStart,
-                    endDate: periodAlert.newEnd,
-                  });
-                  setPeriodAlert(null);
-                }}
-                disabled={adjustUnitWorkMutation.isPending}
-                style={{ ...primaryBtnStyle, fontSize: 13, padding: "7px 16px" }}
-              >
-                단위업무 기간 수정
-              </button>
-            </div>
-          </div>
-        </div>
       )}
       {/* ── 삭제 확인 다이얼로그 ─────────────────────────────────────────── */}
       {deleteConfirmOpen && (

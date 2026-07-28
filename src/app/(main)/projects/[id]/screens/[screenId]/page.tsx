@@ -69,10 +69,15 @@ type ScreenDetail = {
   unitWorkId: string | null;
   unitWorkName: string;
   areas: AreaRow[];
-  // 설계 일정/공수 — 구현(기능)과 분리된 축
+  // 실질 설계 일정/공수 — 실질 구현 일정과 분리된 축
   designBgngDe: string;
   designEndDe: string;
   designEfrtVal: string;
+  // 실질 구현 일정 — 기능은 일정이 없고 화면 단위로 관리(2026-07-28)
+  implBgngDe: string;
+  implEndDe: string;
+  // 화면정의서 작성 상태 — BEFORE/DOING/DONE
+  docStatus: string;
 };
 
 type SaveBody = {
@@ -94,6 +99,9 @@ type SaveBody = {
   designBgngDe: string;
   designEndDe: string;
   designEfrtVal: string;
+  implBgngDe: string;
+  implEndDe: string;
+  docStatus: string;
 };
 
 // 프로젝트 멤버 — 담당자 콤보박스 옵션용
@@ -147,6 +155,9 @@ function ScreenDetailPageInner() {
     designBgngDe: "",
     designEndDe: "",
     designEfrtVal: "",
+    implBgngDe: "",
+    implEndDe: "",
+    docStatus: "BEFORE",
   });
 
   // 담당자 변경 이력 팝업 상태 — 설명 이력(historyViewOpen)과 별개 다이얼로그
@@ -241,6 +252,9 @@ function ScreenDetailPageInner() {
       designBgngDe: detail.designBgngDe ?? "",
       designEndDe: detail.designEndDe ?? "",
       designEfrtVal: detail.designEfrtVal ?? "",
+      implBgngDe: detail.implBgngDe ?? "",
+      implEndDe: detail.implEndDe ?? "",
+      docStatus: detail.docStatus,
     });
     setOriginalDescription(detail.description ?? "");
     if (detail.layoutData) {
@@ -603,6 +617,43 @@ function ScreenDetailPageInner() {
                         {formatEffortDays(form.designEfrtVal)}
                       </span>
                     )}
+                  </div>
+                </FormField>
+              </div>
+
+              {/* 구현 시작일 | 구현 종료일 | 화면정의서 작성 상태 — 기능은 일정이 없고 화면 단위로 관리(2026-07-28) */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                <FormField label="구현 시작일">
+                  <input
+                    type="date"
+                    value={form.implBgngDe}
+                    onChange={(e) => handleChange("implBgngDe", e.target.value)}
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </FormField>
+                <FormField label="구현 종료일">
+                  <input
+                    type="date"
+                    value={form.implEndDe}
+                    onChange={(e) => handleChange("implEndDe", e.target.value)}
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </FormField>
+                <FormField label="화면정의서 작성 상태">
+                  <div className="sp-select-wrap">
+                    <select
+                      value={form.docStatus}
+                      onChange={(e) => handleChange("docStatus", e.target.value)}
+                      disabled={!canEdit}
+                      className="sp-input"
+                    >
+                      <option value="BEFORE">작성전</option>
+                      <option value="DOING">작성중</option>
+                      <option value="DONE">작성완료</option>
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
                   </div>
                 </FormField>
               </div>

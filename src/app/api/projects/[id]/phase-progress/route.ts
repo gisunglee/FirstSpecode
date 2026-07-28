@@ -1,16 +1,17 @@
 /**
  * 공통 단계별 진척률 API (tb_cm_progress)
  *
- * GET  /api/projects/[id]/phase-progress?refTable=tb_ds_unit_work&refId=xxx
- *   → 해당 엔티티의 분석·설계·구현·테스트 진척률 조회
+ * GET  /api/projects/[id]/phase-progress?refTable=tb_ds_function&refId=xxx
+ *   → 해당 기능의 설계·구현·테스트 진척률 조회
  *   → 레코드가 없으면 0으로 초기화된 기본값 반환 (404 아님)
  *
- * PUT  /api/projects/[id]/phase-progress?refTable=tb_ds_unit_work&refId=xxx
+ * PUT  /api/projects/[id]/phase-progress?refTable=tb_ds_function&refId=xxx
  *   → 단계별 진척률 저장 (upsert — 없으면 생성, 있으면 수정)
- *   → Body: { analyRt?, designRt?, implRt?, testRt? }  각 0~100 정수
+ *   → Body: { designRt?, implRt?, testRt? }  각 0~100 정수
  *
  * 다형 참조 구조: refTable(참조 테이블명) + refId(참조 레코드 ID)
- * 동일 구조로 단위업무·기능·영역 등 어디서나 재사용 가능
+ * 분석(analyRt)은 2026-07-28 제거됨 — 분석은 요구사항 레벨(TbRqRequirement.progrs_rt)에서
+ * 별도 관리하고, 이 테이블은 현재 tb_ds_function 에서만 쓴다.
  */
 
 import { NextRequest } from "next/server";
@@ -24,13 +25,11 @@ type RouteParams = { params: Promise<{ id: string }> };
 
 // 응답 형태를 camelCase로 통일
 function toResponse(row: {
-  analy_rt: number;
   design_rt: number;
   impl_rt: number;
   test_rt: number;
 }) {
   return {
-    analyRt:  row.analy_rt,
     designRt: row.design_rt,
     implRt:   row.impl_rt,
     testRt:   row.test_rt,
@@ -74,7 +73,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // 레코드가 없으면 0으로 초기화된 기본값 반환 (첫 접근 시에도 정상 응답)
     if (!row) {
-      return apiSuccess({ analyRt: 0, designRt: 0, implRt: 0, testRt: 0 });
+      return apiSuccess({ designRt: 0, implRt: 0, testRt: 0 });
     }
 
     return apiSuccess(toResponse(row));
@@ -115,15 +114,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { analyRt, designRt, implRt, testRt } = body as {
-    analyRt?: unknown;
+  const { designRt, implRt, testRt } = body as {
     designRt?: unknown;
     implRt?:  unknown;
     testRt?:  unknown;
   };
 
   // 전달된 값만 검증 (undefined는 기존 값 유지 — upsert create 시 0이 기본값)
-  if (analyRt  !== undefined && !isValidRate(analyRt))  return apiError("VALIDATION_ERROR", "analyRt는 0~100 정수여야 합니다.", 400);
   if (designRt !== undefined && !isValidRate(designRt)) return apiError("VALIDATION_ERROR", "designRt는 0~100 정수여야 합니다.", 400);
   if (implRt   !== undefined && !isValidRate(implRt))   return apiError("VALIDATION_ERROR", "implRt는 0~100 정수여야 합니다.", 400);
   if (testRt   !== undefined && !isValidRate(testRt))   return apiError("VALIDATION_ERROR", "testRt는 0~100 정수여야 합니다.", 400);
@@ -138,7 +135,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         ref_tbl_nm:    refTable,
         ref_id:        refId,
         prjct_id:      projectId,
-        analy_rt:      (analyRt  as number) ?? 0,
         design_rt:     (designRt as number) ?? 0,
         impl_rt:       (implRt   as number) ?? 0,
         test_rt:       (testRt   as number) ?? 0,
@@ -147,7 +143,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       },
       update: {
         // 전달된 값만 수정 — 나머지는 DB 기존값 유지
-        ...(analyRt  !== undefined ? { analy_rt:  analyRt  as number } : {}),
         ...(designRt !== undefined ? { design_rt: designRt as number } : {}),
         ...(implRt   !== undefined ? { impl_rt:   implRt   as number } : {}),
         ...(testRt   !== undefined ? { test_rt:   testRt   as number } : {}),

@@ -36,7 +36,7 @@ export type MyTaskNode = {
   assigneeName: string | null;
   startDate: string | null;
   endDate:   string | null;
-  /** 공수 — SCREEN(design_efrt_val)/FUNCTION(efrt_val)만. UNIT_WORK/AREA는 항상 null(필드 없음) */
+  /** 공수 — SCREEN(actl_dsgn_efrt_val)/FUNCTION(impl_efrt_val)만. UNIT_WORK/AREA는 항상 null(필드 없음) */
   effort: string | null;
   /**
    * 설계/구현 진척률(0~100) — "진척률은 기능걸로 통일" 원칙(fetchDeadlineItems.ts와 동일).

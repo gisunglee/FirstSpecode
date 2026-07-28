@@ -48,7 +48,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   const {
     areaId, displayId: inputDisplayId, name, type, description, priority, complexity, effort,
-    assignMemberId, implStartDate, implEndDate, sortOrder,
+    assignMemberId, sortOrder,
   } = body as {
     areaId?:         string;
     displayId?:      string;
@@ -59,8 +59,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     complexity?:     string;
     effort?:         string;
     assignMemberId?: string;
-    implStartDate?:  string;
-    implEndDate?:    string;
     sortOrder?:      number;
   };
 
@@ -73,11 +71,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     ["description", description],
   ]);
   if (limitErr) return limitErr;
-
-  // 시작/종료일 순서 검증
-  if (implStartDate && implEndDate && implStartDate > implEndDate) {
-    return apiError("VALIDATION_ERROR", "구현 종료일은 시작일 이후여야 합니다.", 400);
-  }
 
   try {
     // displayId — 사용자 입력값이 있으면 사용, 없으면 FN-NNNNN 형식 자동 생성
@@ -111,10 +104,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         func_dc:        description?.trim() || null,
         priort_code:    priority || "MEDIUM",
         cmplx_code:     complexity || "MEDIUM",
-        efrt_val:       effort?.trim() || null,
+        impl_efrt_val:  effort?.trim() || null,
         asign_mber_id:  assignMemberId || null,
-        impl_bgng_de:   implStartDate || null,
-        impl_end_de:    implEndDate || null,
         sort_ordr:      nextSort,
       },
     });

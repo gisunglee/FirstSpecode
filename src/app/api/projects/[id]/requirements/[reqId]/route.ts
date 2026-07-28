@@ -113,9 +113,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       assignMemberId:   req.asign_mber_id ?? null,
       assignMemberName: assignee ? (assignee.mber_nm || assignee.email_addr || null) : null,
       sortOrder:        req.sort_ordr ?? 0,
-      // 분석 일정/진척률 — TbDsUnitWork 와 동일 패턴 (문자열 yyyy-MM-dd, 0~100 정수)
+      // 분석 일정/공수/진척률 — 화면 실질설계, 기능 구현과 같은 레벨의 직접 입력값
       analysisStart:    req.anls_bgng_de ?? null,
       analysisEnd:      req.anls_end_de  ?? null,
+      analysisEffort:   req.anls_efrt_val ?? null,
       progress:         req.progrs_rt,
     });
   } catch (err) {
@@ -141,7 +142,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     taskId, name, priority, source, rfpPage,
     originalContent, currentContent, analysisMemo, detailSpec,
     reqDisplayId, sortOrder, assignMemberId,
-    analysisStart, analysisEnd, progress,
+    analysisStart, analysisEnd, analysisEffort, progress,
     saveHistory, versionMode, versionComment,
     saveSpecHistory, saveAnalyHistory,
   } = body as {
@@ -150,10 +151,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     analysisMemo?: string; detailSpec?: string; reqDisplayId?: string;
     sortOrder?: number;
     assignMemberId?: string;
-    // 분석 일정/진척률 — TbDsUnitWork PUT 과 동일 패턴
-    analysisStart?: string;
-    analysisEnd?:   string;
-    progress?:      number;
+    // 분석 일정/공수/진척률 — 담당자가 직접 입력하는 값
+    analysisStart?:  string;
+    analysisEnd?:    string;
+    analysisEffort?: string;
+    progress?:       number;
     saveHistory?: boolean;
     versionMode?: "major" | "minor";
     versionComment?: string;
@@ -248,6 +250,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           sort_ordr:      typeof sortOrder === "number" ? sortOrder : existing.sort_ordr,
           anls_bgng_de:   analysisStart !== undefined ? (analysisStart?.trim() || null) : existing.anls_bgng_de,
           anls_end_de:    analysisEnd   !== undefined ? (analysisEnd?.trim()   || null) : existing.anls_end_de,
+          anls_efrt_val:  analysisEffort !== undefined ? (analysisEffort?.trim() || null) : existing.anls_efrt_val,
           progrs_rt:      progress ?? existing.progrs_rt,
           mdfcn_dt:       new Date(),
         },

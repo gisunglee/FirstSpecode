@@ -84,17 +84,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
               area_display_id: true,
               screen: {
                 select: {
-                  scrn_id:         true,
-                  scrn_nm:         true,
-                  scrn_display_id: true,
+                  scrn_id:            true,
+                  scrn_nm:            true,
+                  scrn_display_id:    true,
                   unitWork: {
                     select: {
                       unit_work_id:         true,
                       unit_work_display_id: true,
                       unit_work_nm:         true,
                       unit_work_dc:         true,
-                      bgng_de:              true,
-                      end_de:               true,
+                      plan_dsgn_bgng_de:    true,
+                      plan_dsgn_end_de:     true,
                     },
                   },
                 },
@@ -158,10 +158,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       type:           fn.func_ty_code,
       priority:       fn.priort_code,
       complexity:     fn.cmplx_code,
-      effort:         fn.efrt_val ?? "",
+      effort:         fn.impl_efrt_val ?? "",
+      docStatus:      fn.dsgn_doc_sttus_code,
       assignMemberId: fn.asign_mber_id ?? null,
-      implStartDate:  fn.impl_bgng_de ?? "",
-      implEndDate:    fn.impl_end_de ?? "",
       sortOrder:      fn.sort_ordr,
       areaId:            fn.area_id ?? null,
       areaName:          fn.area?.area_nm ?? "미분류",
@@ -172,9 +171,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       unitWorkId:        fn.area?.screen?.unitWork?.unit_work_id ?? null,
       unitWorkDisplayId: fn.area?.screen?.unitWork?.unit_work_display_id ?? null,
       unitWorkName:      fn.area?.screen?.unitWork?.unit_work_nm ?? "미분류",
-      // 단위업무 기간 — 기능 구현 기간 검증용
-      unitWorkStartDate: fn.area?.screen?.unitWork?.bgng_de ?? null,
-      unitWorkEndDate:   fn.area?.screen?.unitWork?.end_de ?? null,
+      // 단위업무 계획 설계 기간 — 참고용 표시
+      unitWorkStartDate: fn.area?.screen?.unitWork?.plan_dsgn_bgng_de ?? null,
+      unitWorkEndDate:   fn.area?.screen?.unitWork?.plan_dsgn_end_de ?? null,
       // 단위업무 설명 — 컬럼 매핑 팝업 TABLE_SCRIPT 자동 선택에 사용
       unitWorkDc:        fn.area?.screen?.unitWork?.unit_work_dc ?? "",
       aiTasks,
@@ -200,8 +199,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
   const {
     areaId, displayId, name, type, description, commentCn,
-    priority, complexity, effort,
-    assignMemberId, implStartDate, implEndDate, sortOrder, saveHistory,
+    priority, complexity, effort, docStatus,
+    assignMemberId, sortOrder, saveHistory,
   } = body as {
     areaId?:           string;
     displayId?:        string;
@@ -212,9 +211,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     priority?:         string;
     complexity?:       string;
     effort?:           string;
+    docStatus?:        string;
     assignMemberId?:   string;
-    implStartDate?:    string;
-    implEndDate?:      string;
     sortOrder?:        number;
     saveHistory?:      boolean;
   };
@@ -232,10 +230,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     ["comment",     commentCn],
   ]);
   if (limitErr) return limitErr;
-
-  if (implStartDate && implEndDate && implStartDate > implEndDate) {
-    return apiError("VALIDATION_ERROR", "구현 종료일은 시작일 이후여야 합니다.", 400);
-  }
 
   try {
     const existing = await prisma.tbDsFunction.findUnique({ where: { func_id: functionId } });
@@ -261,10 +255,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           coment_cn:     commentCn !== undefined ? (commentCn.trim() || null) : existing.coment_cn,
           priort_code:   priority || existing.priort_code,
           cmplx_code:    complexity || existing.cmplx_code,
-          efrt_val:      effort !== undefined ? (effort?.trim() || null) : existing.efrt_val,
+          impl_efrt_val: effort !== undefined ? (effort?.trim() || null) : existing.impl_efrt_val,
+          dsgn_doc_sttus_code: docStatus || existing.dsgn_doc_sttus_code,
           asign_mber_id: assignMemberId !== undefined ? (assignMemberId || null) : existing.asign_mber_id,
-          impl_bgng_de:  implStartDate !== undefined ? (implStartDate || null) : existing.impl_bgng_de,
-          impl_end_de:   implEndDate !== undefined ? (implEndDate || null) : existing.impl_end_de,
           sort_ordr:     sortOrder ?? existing.sort_ordr,
           mdfcn_dt:      new Date(),
         },

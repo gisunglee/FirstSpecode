@@ -180,6 +180,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       sortOrder:   area.sort_ordr,
       layoutData:  area.layer_data_dc ?? null,
       commentCn:   area.coment_cn ?? "",
+      docStatus:   area.dsgn_doc_sttus_code,
       screenId:    area.scrn_id ?? null,
       // 부모 화면의 담당자 — 프론트 권한 판정에 사용 (영역 자체 담당자 컬럼이 없으므로)
       screenAssigneeId:  area.screen?.asign_mber_id ?? null,
@@ -228,7 +229,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { screenId, name, type, displayFormCode, description, sortOrder, layoutData, commentCn, saveHistory, displayId } = body as {
+  const { screenId, name, type, displayFormCode, description, sortOrder, layoutData, commentCn, saveHistory, displayId, docStatus } = body as {
     screenId?:        string;
     name?:            string;
     type?:            string;
@@ -239,6 +240,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     commentCn?:       string;
     saveHistory?:     boolean;
     displayId?:       string;
+    docStatus?:       string;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "영역명을 입력해 주세요.", 400);
@@ -276,6 +278,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           sort_ordr:    sortOrder ?? existing.sort_ordr,
           layer_data_dc: layoutData !== undefined ? layoutData : existing.layer_data_dc,
           coment_cn:     commentCn  !== undefined ? (commentCn || null) : existing.coment_cn,
+          dsgn_doc_sttus_code: docStatus || existing.dsgn_doc_sttus_code,
           mdfcn_dt:     new Date(),
         },
       }),

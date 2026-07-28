@@ -75,7 +75,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         },
         select: {
           scrn_id: true, scrn_nm: true, asign_mber_id: true,
-          design_bgng_de: true, design_end_de: true, unit_work_id: true,
+          actl_dsgn_bgng_de: true, actl_dsgn_end_de: true, unit_work_id: true,
           unitWork: { select: { unit_work_nm: true } },
         },
         take: HARD_LIMIT,
@@ -99,7 +99,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
       for (const s of screens) {
         const progress = rtMap.get(s.scrn_id) ?? 0;
-        const isDelayed = !!s.design_end_de && s.design_end_de < todayStr && progress < 100;
+        const isDelayed = !!s.actl_dsgn_end_de && s.actl_dsgn_end_de < todayStr && progress < 100;
         items.push({
           kind: "DESIGN",
           itemId: s.scrn_id,
@@ -114,8 +114,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           functionId: null,
           functionName: null,
           progress,
-          startDate: s.design_bgng_de,
-          endDate: s.design_end_de,
+          startDate: s.actl_dsgn_bgng_de,
+          endDate: s.actl_dsgn_end_de,
           isDelayed,
         });
       }
@@ -129,13 +129,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           ...assigneeWhere(mberId),
         },
         select: {
-          func_id: true, func_nm: true, asign_mber_id: true, impl_bgng_de: true, impl_end_de: true,
+          func_id: true, func_nm: true, asign_mber_id: true,
           area: {
             select: {
               area_id: true, area_nm: true,
               screen: {
                 select: {
                   scrn_id: true, scrn_nm: true, unit_work_id: true,
+                  actl_impl_bgng_de: true, actl_impl_end_de: true,
                   unitWork: { select: { unit_work_nm: true } },
                 },
               },
@@ -155,8 +156,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       const implRtMap = new Map(progressRows.map((p) => [p.ref_id, p.impl_rt]));
 
       for (const f of functions) {
+        // 기능 자신은 구현 일정이 없음 — 소속 화면의 실질구현기간을 상속(2026-07-28)
+        const implBgngDe = f.area?.screen?.actl_impl_bgng_de ?? null;
+        const implEndDe  = f.area?.screen?.actl_impl_end_de ?? null;
         const progress = implRtMap.get(f.func_id) ?? 0;
-        const isDelayed = !!f.impl_end_de && f.impl_end_de < todayStr && progress < 100;
+        const isDelayed = !!implEndDe && implEndDe < todayStr && progress < 100;
         items.push({
           kind: "IMPL",
           itemId: f.func_id,
@@ -171,8 +175,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           functionId:   f.func_id,
           functionName: f.func_nm,
           progress,
-          startDate: f.impl_bgng_de,
-          endDate: f.impl_end_de,
+          startDate: implBgngDe,
+          endDate: implEndDe,
           isDelayed,
         });
       }

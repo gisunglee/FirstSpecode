@@ -21,6 +21,7 @@ import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { buildDesignDelayRows, buildImplDelayRows, buildAnalysisDelayRows } from "@/lib/pm/delayStatus";
 import { buildMissingStat } from "@/lib/pm/missingStatus";
 import { parseEffortHours } from "@/lib/effort";
+import { fetchUnitWorkProgress, combinePhaseProgress, resolveFunctionScreenDates } from "@/lib/pm/progressRollup";
 import type { PmSummaryResponse, TeamLoadRow } from "@/types/pm";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -48,20 +49,25 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return d.toISOString().slice(0, 10);
     })();
 
-    // 단위업무 + 담당자ID 한 번에. 진척률 등 무거운 필드는 제외.
+    // 단위업무 + 담당자ID 한 번에.
     const unitWorks = await prisma.tbDsUnitWork.findMany({
       where:  { prjct_id: projectId },
       select: {
         unit_work_id:         true,
         unit_work_display_id: true,
         unit_work_nm:         true,
-        bgng_de:              true,
-        end_de:               true,
-        progrs_rt:            true,
+        plan_dsgn_bgng_de:    true,
+        plan_dsgn_end_de:     true,
         asign_mber_id:        true,
       },
       take: HARD_LIMIT,
     });
+    // 단위업무 실적 진행률(설계+구현 롤업) — 저장값이 아니라 항상 재계산(2026-07-28)
+    const uwProgressMap = await fetchUnitWorkProgress(unitWorks.map((u) => u.unit_work_id));
+    const uwProgress = (unitWorkId: string) => {
+      const p = uwProgressMap.get(unitWorkId);
+      return p ? combinePhaseProgress(p) : 0;
+    };
 
     // ── 분석 지연 현황용 원본 조회 — 요구사항 (설계/구현과 마찬가지로 무거운 필드 제외) ──
     const requirements = await prisma.tbRqRequirement.findMany({
@@ -74,7 +80,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // 진척률 등 무거운 필드는 제외. 담당자 집계에 필요한 최소 컬럼만.
     const functions = await prisma.tbDsFunction.findMany({
       where:  { prjct_id: projectId },
-      select: { func_id: true, area_id: true, asign_mber_id: true, efrt_val: true, impl_bgng_de: true, impl_end_de: true },
+      select: { func_id: true, area_id: true, asign_mber_id: true, impl_efrt_val: true },
       take:   HARD_LIMIT,
     });
     // 영역(TbDsArea)에는 담당자 컬럼이 없음 — scrn_id 로 화면 담당자를 역참조해서 사용 (아래 buildDesignDelayRows/buildImplDelayRows)
@@ -87,10 +93,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       where:  { prjct_id: projectId },
       select: {
         scrn_id: true, unit_work_id: true, asign_mber_id: true,
-        design_bgng_de: true, design_end_de: true, design_efrt_val: true,
+        actl_dsgn_bgng_de: true, actl_dsgn_end_de: true, actl_dsgn_efrt_val: true,
+        actl_impl_bgng_de: true, actl_impl_end_de: true,
       },
       take:   HARD_LIMIT,
     });
+    // 기능 → 소속 화면의 실질설계/구현기간 — 중앙 헬퍼(lib/pm/progressRollup.ts)로 통일
+    const funcScreenDates = resolveFunctionScreenDates(functions, areas, screens);
     // 기능 진척률 — TbCmProgress 다형 참조(ref_tbl_nm='tb_ds_function'), 없으면 0
     const funcIds = functions.map((f) => f.func_id);
     const funcProgress = funcIds.length > 0
@@ -160,8 +169,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // 한 번의 순회로 팀 부하(A)만 누적
     for (const uw of unitWorks) {
-      const progress = uw.progrs_rt;
-      const endDate  = uw.end_de ?? null;
+      const progress = uwProgress(uw.unit_work_id);
+      const endDate  = uw.plan_dsgn_end_de ?? null;
 
       // 진행 단계 분류
       const stage: "notStarted" | "inProgress" | "completed" =
@@ -224,8 +233,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       screens: screens.map((s) => ({
         scrnId:      s.scrn_id,
         asignMberId: s.asign_mber_id,
-        designEndDe: s.design_end_de,
-        designEffortHours: parseEffortHours(s.design_efrt_val),
+        designEndDe: s.actl_dsgn_end_de,
+        designEffortHours: parseEffortHours(s.actl_dsgn_efrt_val),
         avgDesignRt: screenAvgDesignRtMap.get(s.scrn_id) ?? 0,
       })),
       areas: areas.map((a) => ({
@@ -242,8 +251,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         funcId:      f.func_id,
         areaId:      f.area_id,
         asignMberId: f.asign_mber_id,
-        effortHours: parseEffortHours(f.efrt_val),
-        implEndDe:   f.impl_end_de,
+        effortHours: parseEffortHours(f.impl_efrt_val),
+        implEndDe:   funcScreenDates.get(f.func_id)?.implEndDe ?? null,
         implRt:      funcImplRtMap.get(f.func_id) ?? 0,
       })),
       areas: areas.map((a) => ({
@@ -296,17 +305,25 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       ),
       buildMissingStat(
         "UNIT_WORK", "단위업무",
-        unitWorks.map((u) => ({ asignMberId: u.asign_mber_id, startDate: u.bgng_de, endDate: u.end_de })),
+        unitWorks.map((u) => ({ asignMberId: u.asign_mber_id, startDate: u.plan_dsgn_bgng_de, endDate: u.plan_dsgn_end_de })),
         false
       ),
       buildMissingStat(
         "SCREEN", "화면",
-        screens.map((s) => ({ asignMberId: s.asign_mber_id, startDate: s.design_bgng_de, endDate: s.design_end_de, effortRaw: s.design_efrt_val })),
+        screens.map((s) => ({ asignMberId: s.asign_mber_id, startDate: s.actl_dsgn_bgng_de, endDate: s.actl_dsgn_end_de, effortRaw: s.actl_dsgn_efrt_val })),
         true
       ),
       buildMissingStat(
         "FUNCTION", "기능",
-        functions.map((f) => ({ asignMberId: f.asign_mber_id, startDate: f.impl_bgng_de, endDate: f.impl_end_de, effortRaw: f.efrt_val })),
+        functions.map((f) => {
+          const dates = funcScreenDates.get(f.func_id);
+          return {
+            asignMberId: f.asign_mber_id,
+            startDate:   dates?.implBgngDe ?? null,
+            endDate:     dates?.implEndDe ?? null,
+            effortRaw:   f.impl_efrt_val,
+          };
+        }),
         true
       ),
     ];

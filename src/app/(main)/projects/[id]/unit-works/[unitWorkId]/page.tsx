@@ -62,8 +62,12 @@ type UnitWorkDetail = {
   assignMemberId: string | null;
   // 담당자 이름 — 서버에서 join으로 내려줌. 퇴장한 멤버면 null
   assignMemberName: string | null;
-  startDate: string | null;
-  endDate: string | null;
+  // 계획설계 일정/공수 — PM이 잡는 상위 마일스톤(목표치). 2026-07-28 리네임(startDate/endDate → plan*)
+  planStartDate: string | null;
+  planEndDate: string | null;
+  planEffort: string | null;
+  docStatus: string;
+  // 실적 진행률 — 하위 화면·기능 롤업 자동계산. 읽기전용(수정 불가)
   progress: number;
   sortOrder: number;
   reqId: string;
@@ -95,9 +99,11 @@ type SaveBody = {
   description: string;
   comment: string;
   assignMemberId?: string;
-  startDate?: string;
-  endDate?: string;
-  progress: number;
+  // 계획설계 일정/공수 — PM이 잡는 상위 마일스톤(목표치)
+  planStartDate?: string;
+  planEndDate?: string;
+  planEffort?: string;
+  docStatus?: string;
   sortOrder: number;
   saveHistory?: boolean;
 };
@@ -137,7 +143,7 @@ function UnitWorkDetailPageInner() {
     displayId: "",
     description: "",
     comment: "",
-    progress: 0,
+    docStatus: "BEFORE",
     sortOrder: 0,
   });
 
@@ -199,9 +205,10 @@ function UnitWorkDetailPageInner() {
           description: desc,
           comment: d.comment ?? "",
           assignMemberId: d.assignMemberId ?? undefined,
-          startDate: d.startDate ?? undefined,
-          endDate: d.endDate ?? undefined,
-          progress: d.progress,
+          planStartDate: d.planStartDate ?? undefined,
+          planEndDate: d.planEndDate ?? undefined,
+          planEffort: d.planEffort ?? undefined,
+          docStatus: d.docStatus,
           sortOrder: d.sortOrder,
         });
         // 원본 설명 저장 — 변경 여부 비교용
@@ -1141,33 +1148,31 @@ function UnitWorkDetailPageInner() {
               </div>
             </div>
 
-            {/* Row 2: 시작일 + 종료일 + 진행률 + 정렬순서 */}
+            {/* Row 2: 계획설계 시작일 + 종료일 + 공수 + 정렬순서 — PM이 잡는 상위 마일스톤(목표치) */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12 }}>
-              <FormField label="시작일">
+              <FormField label="계획설계 시작일">
                 <input
                   type="date"
-                  value={form.startDate ?? ""}
-                  onChange={(e) => handleChange("startDate", e.target.value)}
+                  value={form.planStartDate ?? ""}
+                  onChange={(e) => handleChange("planStartDate", e.target.value)}
                   readOnly={!canEdit}
                   className="sp-input"
                 />
               </FormField>
-              <FormField label="종료일">
+              <FormField label="계획설계 종료일">
                 <input
                   type="date"
-                  value={form.endDate ?? ""}
-                  onChange={(e) => handleChange("endDate", e.target.value)}
+                  value={form.planEndDate ?? ""}
+                  onChange={(e) => handleChange("planEndDate", e.target.value)}
                   readOnly={!canEdit}
                   className="sp-input"
                 />
               </FormField>
-              <FormField label="진행률 (%)">
+              <FormField label="계획설계 공수">
                 <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={form.progress}
-                  onChange={(e) => handleChange("progress", Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                  type="text"
+                  value={form.planEffort ?? ""}
+                  onChange={(e) => handleChange("planEffort", e.target.value)}
                   readOnly={!canEdit}
                   className="sp-input"
                 />
@@ -1181,6 +1186,34 @@ function UnitWorkDetailPageInner() {
                   readOnly={!canEdit}
                   className="sp-input"
                 />
+              </FormField>
+            </div>
+
+            {/* Row 3: 실적 진행률(읽기전용, 화면·기능 롤업 자동계산) + 단위업무 설계서 작성 상태 */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <FormField label="실적 진행률 (%)">
+                <input
+                  type="text"
+                  value={isNew ? "-" : `${detail?.progress ?? 0}%`}
+                  readOnly
+                  title="하위 화면·기능 진행 상황에서 자동 계산됨"
+                  className="sp-input"
+                />
+              </FormField>
+              <FormField label="설계서 작성 상태">
+                <div className="sp-select-wrap">
+                  <select
+                    value={form.docStatus ?? "BEFORE"}
+                    onChange={(e) => handleChange("docStatus", e.target.value)}
+                    disabled={!canEdit}
+                    className="sp-input"
+                  >
+                    <option value="BEFORE">작성전</option>
+                    <option value="DOING">작성중</option>
+                    <option value="DONE">작성완료</option>
+                  </select>
+                  <span className="sp-select-arrow"><SelectChevron /></span>
+                </div>
               </FormField>
             </div>
           </div>

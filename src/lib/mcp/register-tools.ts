@@ -326,6 +326,7 @@ export function registerTools(
       detailSpec: z.string().optional().describe("상세 명세"),
       analysisStart: z.string().optional().describe("분석 시작일 (YYYY-MM-DD)"),
       analysisEnd: z.string().optional().describe("분석 종료일 (YYYY-MM-DD)"),
+      analysisEffort: z.string().optional().describe("분석 공수"),
       progress: z.number().optional().describe("분석 진행률 (0~100)"),
     },
     async ({ projectId, requirementId, ...body }) => {
@@ -551,11 +552,13 @@ export function registerTools(
       description: z.string().optional().describe("단위업무 설명 (마크다운 지원)"),
       comment: z.string().optional().describe("코멘트"),
       assignMemberId: z.string().optional().describe("담당자 회원 ID"),
-      startDate: z.string().optional().describe("시작일 (YYYY-MM-DD)"),
-      endDate: z.string().optional().describe("종료일 (YYYY-MM-DD)"),
-      progress: z.number().optional().describe("진행률 (0~100)"),
+      planStartDate: z.string().optional().describe("계획설계 시작일 (YYYY-MM-DD) — PM이 잡는 상위 마일스톤"),
+      planEndDate: z.string().optional().describe("계획설계 종료일 (YYYY-MM-DD)"),
+      planEffort: z.string().optional().describe("계획설계 공수"),
+      docStatus: z.string().optional().describe("단위업무 설계서 작성 상태 (BEFORE/DOING/DONE)"),
       sortOrder: z.number().optional().describe("정렬 순서"),
     },
+    // 실적 진행률(progress)은 2026-07-28부터 하위 화면·기능 롤업 자동계산값이라 여기서 설정 불가
     async ({ projectId, unitWorkId, ...body }) => {
       try {
         const data = await specodeFetch(
@@ -656,9 +659,12 @@ export function registerTools(
       categoryM: z.string().optional().describe("중분류"),
       categoryS: z.string().optional().describe("소분류"),
       assignMemberId: z.string().optional().describe("담당자 회원 ID (list_members로 조회 가능)"),
-      designBgngDe: z.string().optional().describe("설계 시작일 (YYYY-MM-DD)"),
-      designEndDe: z.string().optional().describe("설계 종료일 (YYYY-MM-DD)"),
+      designBgngDe: z.string().optional().describe("실질설계 시작일 (YYYY-MM-DD)"),
+      designEndDe: z.string().optional().describe("실질설계 종료일 (YYYY-MM-DD)"),
       designEfrtVal: z.string().optional().describe("설계 공수"),
+      implBgngDe: z.string().optional().describe("실질구현 시작일 (YYYY-MM-DD) — 기능은 일정이 없고 화면 단위로 관리"),
+      implEndDe: z.string().optional().describe("실질구현 종료일 (YYYY-MM-DD)"),
+      docStatus: z.string().optional().describe("화면정의서 작성 상태 (BEFORE/DOING/DONE)"),
     },
     async ({ projectId, screenId, ...body }) => {
       try {
@@ -754,6 +760,7 @@ export function registerTools(
       description: z.string().optional().describe("영역 설명"),
       commentCn: z.string().optional().describe("코멘트"),
       sortOrder: z.number().optional().describe("정렬 순서"),
+      docStatus: z.string().optional().describe("영역 설계(와이어프레임) 작성 상태 (BEFORE/DOING/DONE)"),
     },
     async ({ projectId, areaId, ...body }) => {
       try {
@@ -824,12 +831,11 @@ export function registerTools(
       description: z.string().optional().describe("기능 설명"),
       priority: z.string().optional().describe("우선순위. 허용값: HIGH | MEDIUM | LOW. 기본: MEDIUM"),
       complexity: z.string().optional().describe("복잡도. 허용값: HIGH | MEDIUM | LOW. 기본: MEDIUM"),
-      effort: z.string().optional().describe("공수"),
+      effort: z.string().optional().describe("구현 공수"),
       assignMemberId: z.string().optional().describe("담당자 회원 ID"),
-      implStartDate: z.string().optional().describe("구현 시작일 (YYYY-MM-DD)"),
-      implEndDate: z.string().optional().describe("구현 종료일 (YYYY-MM-DD)"),
       sortOrder: z.number().optional().describe("정렬 순서"),
     },
+    // 기능 자신은 구현 일정이 없음 — 구현 마감은 소속 화면(update_screen의 implStartDate/implEndDate)에서 관리(2026-07-28)
     async ({ projectId, ...body }) => {
       try {
         const data = await specodeFetch(
@@ -856,12 +862,12 @@ export function registerTools(
       commentCn: z.string().optional().describe("코멘트"),
       priority: z.string().optional().describe("우선순위. 허용값: HIGH | MEDIUM | LOW. 기본: MEDIUM"),
       complexity: z.string().optional().describe("복잡도. 허용값: HIGH | MEDIUM | LOW. 기본: MEDIUM"),
-      effort: z.string().optional().describe("공수"),
+      effort: z.string().optional().describe("구현 공수"),
       assignMemberId: z.string().optional().describe("담당자 회원 ID"),
-      implStartDate: z.string().optional().describe("구현 시작일 (YYYY-MM-DD)"),
-      implEndDate: z.string().optional().describe("구현 종료일 (YYYY-MM-DD)"),
+      docStatus: z.string().optional().describe("기능정의서 작성 상태 (BEFORE/DOING/DONE)"),
       sortOrder: z.number().optional().describe("정렬 순서"),
     },
+    // 기능 자신은 구현 일정이 없음 — 구현 마감은 소속 화면(update_screen)에서 관리(2026-07-28)
     async ({ projectId, functionId, ...body }) => {
       try {
         const data = await specodeFetch(

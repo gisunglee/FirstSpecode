@@ -19,6 +19,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import type { CalendarResponse } from "@/types/calendar";
+import { fetchUnitWorkProgress, combinePhaseProgress } from "@/lib/pm/progressRollup";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -67,19 +68,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const items = await prisma.tbDsUnitWork.findMany({
       where: {
         prjct_id: projectId,
-        end_de:   { gte: monthStart, lte: monthEnd, not: null },
+        plan_dsgn_end_de: { gte: monthStart, lte: monthEnd, not: null },
       },
       select: {
         unit_work_id:         true,
         unit_work_display_id: true,
         unit_work_nm:         true,
-        end_de:               true,
-        progrs_rt:            true,
+        plan_dsgn_end_de:     true,
         asign_mber_id:        true,
       },
-      orderBy: { end_de: "asc" },
+      orderBy: { plan_dsgn_end_de: "asc" },
       take: MAX_ITEMS_PER_MONTH,
     });
+
+    // 진행률은 저장값이 아니라 화면·기능 롤업 계산값(2026-07-28)
+    const progressMap = await fetchUnitWorkProgress(items.map((u) => u.unit_work_id));
 
     // 담당자 이름 일괄 조회 (N+1 방지)
     const assigneeIds = [
@@ -102,8 +105,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         unitWorkId:   u.unit_work_id,
         displayId:    u.unit_work_display_id,
         name:         u.unit_work_nm,
-        endDate:      u.end_de ?? "", // where 에서 not:null 보장
-        progress:     u.progrs_rt,
+        endDate:      u.plan_dsgn_end_de ?? "", // where 에서 not:null 보장
+        progress:     progressMap.get(u.unit_work_id) ? combinePhaseProgress(progressMap.get(u.unit_work_id)!) : 0,
         assigneeName: u.asign_mber_id ? (nameMap.get(u.asign_mber_id) ?? null) : null,
         isMine:       u.asign_mber_id === gate.mberId,
       })),

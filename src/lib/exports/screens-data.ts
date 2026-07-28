@@ -2,8 +2,8 @@
  * exports/screens-data.ts — 화면 목록 데이터 조립 (서버 공용)
  */
 
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { fetchScreenProgress } from "@/lib/pm/progressRollup";
 
 export type ScreenImplTask = {
   aiTaskId:    string;
@@ -27,11 +27,9 @@ export type ScreenListItem = {
   requirementName:  string;
   areaCount:        number;
   sortOrder:        number;
-  // 설계 일정 — WBS 간트에서 사용 (구현 일정인 impl_bgng_de 와는 별개 축)
+  // 실질 설계/구현 일정 — 담당자가 화면 단위로 직접 커밋하는 실제 일정(WBS 간트에서 사용)
   startDate:        string | null;
   endDate:          string | null;
-  // 구현 일정 — 화면 자신은 구현 일정 컬럼이 없어서, 하위 기능들의 impl_bgng_de/impl_end_de를
-  // 최소~최대로 롤업한 값(WBS "구현" phase에서 화면 바를 그릴 때 사용).
   implStartDate:    string | null;
   implEndDate:      string | null;
   designEffort:     string | null;
@@ -76,51 +74,9 @@ export async function fetchProjectScreens(opts: {
     ],
   });
 
-  // 화면별 진척률 집계 (raw SQL — 화면 → 영역 → 기능 → tb_cm_progress)
-  type ScreenAgg = {
-    scrn_id:         string;
-    avg_design_rt:   number;
-    avg_impl_rt:     number;
-    avg_test_rt:     number;
-    min_impl_start:  string | null;
-    max_impl_end:    string | null;
-  };
-  let progMap = new Map<string, {
-    designRt: number; implRt: number; testRt: number;
-    implStartDate: string | null; implEndDate: string | null;
-  }>();
-  if (screens.length > 0) {
-    const screenIds = Prisma.join(screens.map((s) => s.scrn_id));
-    // WBS "구현" phase용 — 화면 자신은 구현 일정이 없어 하위 기능 impl_bgng_de/impl_end_de를
-    // 같은 조인에서 MIN/MAX로 같이 뽑는다(별도 쿼리 안 만듦).
-    //
-    // AVG(p.design_rt)는 tb_cm_progress 행이 아예 없는 기능(LEFT JOIN → NULL)을 "0점"이
-    // 아니라 평균에서 통째로 제외해버린다(SQL의 AVG는 NULL 무시) — COALESCE(AVG(...),0)은
-    // 전체 결과가 NULL일 때만 방어할 뿐 개별 NULL 행은 못 막아 평균이 부풀려진다(WBS 단위업무
-    // 롤업 실측 중 발견). 진척률 기록이 없는 기능은 0%로 취급해야 하므로 AVG 안에서 먼저
-    // COALESCE(p.xxx_rt, 0)로 개별 행을 0으로 채운 뒤 평균낸다.
-    const aggRows = await prisma.$queryRaw<ScreenAgg[]>`
-      SELECT a.scrn_id,
-             COALESCE(AVG(COALESCE(p.design_rt, 0)), 0) AS avg_design_rt,
-             COALESCE(AVG(COALESCE(p.impl_rt, 0)),   0) AS avg_impl_rt,
-             COALESCE(AVG(COALESCE(p.test_rt, 0)),   0) AS avg_test_rt,
-             MIN(f.impl_bgng_de) AS min_impl_start,
-             MAX(f.impl_end_de)  AS max_impl_end
-        FROM tb_ds_area a
-        JOIN tb_ds_function f ON f.area_id = a.area_id
-        LEFT JOIN tb_cm_progress p
-          ON p.ref_tbl_nm = 'tb_ds_function' AND p.ref_id = f.func_id
-       WHERE a.scrn_id IN (${screenIds})
-       GROUP BY a.scrn_id
-    `;
-    progMap = new Map(aggRows.map((r) => [r.scrn_id, {
-      designRt: Math.round(Number(r.avg_design_rt)),
-      implRt:   Math.round(Number(r.avg_impl_rt)),
-      testRt:   Math.round(Number(r.avg_test_rt)),
-      implStartDate: r.min_impl_start ?? null,
-      implEndDate:   r.max_impl_end   ?? null,
-    }]));
-  }
+  // 화면별 설계/구현/테스트 진척률 — 중앙 헬퍼(lib/pm/progressRollup.ts)로 통일.
+  // 구현 일정은 더 이상 기능에서 롤업하지 않음 — 화면 자신의 actl_impl_bgng_de/end_de를 그대로 씀(2026-07-28).
+  const progMap = await fetchScreenProgress(screens.map((s) => s.scrn_id));
 
   // 담당자 이름 일괄 조회
   const assigneeIds = [
@@ -185,11 +141,11 @@ export async function fetchProjectScreens(opts: {
       requirementName:  s.unitWork?.requirement ? s.unitWork.requirement.req_nm : "미분류",
       areaCount:        s._count.areas,
       sortOrder:        s.sort_ordr,
-      startDate:        s.design_bgng_de ?? null,
-      endDate:          s.design_end_de ?? null,
-      implStartDate:    prog?.implStartDate ?? null,
-      implEndDate:      prog?.implEndDate ?? null,
-      designEffort:     s.design_efrt_val ?? null,
+      startDate:        s.actl_dsgn_bgng_de ?? null,
+      endDate:          s.actl_dsgn_end_de ?? null,
+      implStartDate:    s.actl_impl_bgng_de ?? null,
+      implEndDate:      s.actl_impl_end_de ?? null,
+      designEffort:     s.actl_dsgn_efrt_val ?? null,
       avgDesignRt:      prog?.designRt ?? 0,
       avgImplRt:        prog?.implRt ?? 0,
       avgTestRt:        prog?.testRt ?? 0,

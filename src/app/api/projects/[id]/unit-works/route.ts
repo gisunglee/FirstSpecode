@@ -111,8 +111,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         unit_work_nm:         name.trim(),
         unit_work_dc:         description?.trim() || null,
         asign_mber_id:        assignMemberId || null,
-        bgng_de:              startDate?.trim() || null,
-        end_de:               endDate?.trim() || null,
+        plan_dsgn_bgng_de:    startDate?.trim() || null,
+        plan_dsgn_end_de:     endDate?.trim() || null,
         sort_ordr:            (maxSort?.sort_ordr ?? 0) + 1,
       },
     });

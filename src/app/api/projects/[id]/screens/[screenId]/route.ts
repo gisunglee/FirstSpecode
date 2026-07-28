@@ -144,10 +144,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       comment:          screen.coment_cn ?? "",
       urlPath:          screen.url_path ?? "",
       sortOrder:        screen.sort_ordr,
-      // 설계 일정/공수 — 구현(기능)과 분리된 축
-      designBgngDe:     screen.design_bgng_de  ?? "",
-      designEndDe:      screen.design_end_de   ?? "",
-      designEfrtVal:    screen.design_efrt_val ?? "",
+      // 실질 설계/구현 일정·공수 — 담당자가 실제로 커밋하는 일정(단위업무의 계획설계기간과는 별개 축)
+      designBgngDe:     screen.actl_dsgn_bgng_de  ?? "",
+      designEndDe:      screen.actl_dsgn_end_de   ?? "",
+      designEfrtVal:    screen.actl_dsgn_efrt_val ?? "",
+      implBgngDe:       screen.actl_impl_bgng_de  ?? "",
+      implEndDe:        screen.actl_impl_end_de   ?? "",
+      docStatus:        screen.dsgn_doc_sttus_code,
       // 담당자 — mber_nm 우선, 없으면 email, 둘 다 없으면 null (퇴장 멤버 포함)
       assignMemberId:   screen.asign_mber_id ?? null,
       assignMemberName: assignee ? (assignee.mber_nm || assignee.email_addr || null) : null,
@@ -187,7 +190,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { unitWorkId, displayId, name, description, comment, type, sortOrder, categoryL, categoryM, categoryS, layoutData, saveHistory, assignMemberId, designBgngDe, designEndDe, designEfrtVal } = body as {
+  const { unitWorkId, displayId, name, description, comment, type, sortOrder, categoryL, categoryM, categoryS, layoutData, saveHistory, assignMemberId, designBgngDe, designEndDe, designEfrtVal, implBgngDe, implEndDe, docStatus } = body as {
     unitWorkId?:     string;
     displayId?:      string;
     name?:           string;
@@ -204,11 +207,24 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     designBgngDe?:   string;
     designEndDe?:    string;
     designEfrtVal?:  string;
+    implBgngDe?:     string;
+    implEndDe?:      string;
+    docStatus?:      string;
   };
 
   // name은 부분 수정 시 생략 가능(기존값 유지) — 단, 전달됐다면 공백은 거부
   if (name !== undefined && !name.trim()) {
     return apiError("VALIDATION_ERROR", "화면명을 입력해 주세요.", 400);
+  }
+
+  // 일정 순서 검증 — 예전엔 기능(impl 날짜) 쪽에 있던 체크인데, 그 날짜가 화면으로
+  // 옮겨오면서(2026-07-28) 새 소유자인 여기서 다시 걸어야 함(누락 시 종료일<시작일이
+  // 그대로 저장되어 WBS·지연 판정에 조용히 반영됨).
+  if (designBgngDe && designEndDe && designBgngDe > designEndDe) {
+    return apiError("VALIDATION_ERROR", "설계 종료일은 시작일 이후여야 합니다.", 400);
+  }
+  if (implBgngDe && implEndDe && implBgngDe > implEndDe) {
+    return apiError("VALIDATION_ERROR", "구현 종료일은 시작일 이후여야 합니다.", 400);
   }
 
   // 장문 텍스트 한도 검증 — 정책은 src/lib/constants/textLimits.ts
@@ -270,10 +286,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           ctgry_m_nm:    categoryM !== undefined ? (categoryM?.trim() || null) : existing.ctgry_m_nm,
           ctgry_s_nm:    categoryS !== undefined ? (categoryS?.trim() || null) : existing.ctgry_s_nm,
           asign_mber_id: nextAssignee,
-          // 설계 일정/공수 — 구현(기능)과 분리된 축
-          design_bgng_de:  designBgngDe  !== undefined ? (designBgngDe?.trim()  || null) : existing.design_bgng_de,
-          design_end_de:   designEndDe   !== undefined ? (designEndDe?.trim()   || null) : existing.design_end_de,
-          design_efrt_val: designEfrtVal !== undefined ? (designEfrtVal?.trim() || null) : existing.design_efrt_val,
+          // 실질 설계/구현 일정·공수 — 담당자가 직접 커밋하는 실제 일정
+          actl_dsgn_bgng_de:  designBgngDe  !== undefined ? (designBgngDe?.trim()  || null) : existing.actl_dsgn_bgng_de,
+          actl_dsgn_end_de:   designEndDe   !== undefined ? (designEndDe?.trim()   || null) : existing.actl_dsgn_end_de,
+          actl_dsgn_efrt_val: designEfrtVal !== undefined ? (designEfrtVal?.trim() || null) : existing.actl_dsgn_efrt_val,
+          actl_impl_bgng_de:  implBgngDe    !== undefined ? (implBgngDe?.trim()    || null) : existing.actl_impl_bgng_de,
+          actl_impl_end_de:   implEndDe     !== undefined ? (implEndDe?.trim()     || null) : existing.actl_impl_end_de,
+          dsgn_doc_sttus_code: docStatus || existing.dsgn_doc_sttus_code,
           mdfcn_dt:      new Date(),
         },
       }),
