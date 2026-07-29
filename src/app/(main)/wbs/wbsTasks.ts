@@ -13,11 +13,6 @@ import { computeWbsStatus } from "@/lib/wbs/status";
 // 막대 위 텍스트에 넣을 수 있는 항목 — WbsFilterBar의 체크박스와 1:1 대응
 export type BarField = "name" | "progress" | "start" | "end";
 
-// YYYY-MM-DD — 그룹 요약 행의 롤업 시작일 표시용(자식은 원본 문자열을 그대로 씀)
-function formatDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
 // 토/일을 뺀 영업일수 — endExclusive 기준(당일 미포함)으로 [start, end) 범위를 순회
 function workingDaysBetween(start: Date, endExclusive: Date): number {
   let count = 0;
@@ -35,7 +30,7 @@ function workingDaysBetween(start: Date, endExclusive: Date): number {
 function buildBarText(item: WbsTaskItem, barFields: Set<BarField>): string {
   const segments: string[] = [];
 
-  if (barFields.has("name")) segments.push(`[${item.displayId}] ${item.name}`);
+  if (barFields.has("name")) segments.push(item.name);
   if (barFields.has("progress")) segments.push(`${item.progress}%`);
 
   if (barFields.has("start") && barFields.has("end")) {
@@ -61,14 +56,19 @@ export function buildChildTask(
   if (!item.start || !item.end) {
     return {
       id:         item.id,
-      text:       buildBarText(item, barFields),
+      // text = 좌측 그리드 "작업명" 칸(항상 이름만). barText = 막대 위 라벨(막대 표시
+      // 체크박스에 따라 진척률·기간이 덧붙음) — WbsGanttChart.tsx가 taskTemplate으로
+      // barText만 막대에 그려서, "막대 표시" 설정을 켜도 그리드 쪽 이름 칸은 안 바뀐다.
+      text:       item.name,
+      barText:    buildBarText(item, barFields),
+      displayId:  item.displayId,
       startLabel: "-",
       endLabel:   "-",
       assignee:   item.assignee ?? "-",
       effort:     item.effort ?? "-",
       progress:   item.progress,
       type:       "task",
-      details:    item.groupLabel,
+      details:    item.groupPath[0].label,
       parent:     parentId,
       href:       item.href,
     };
@@ -83,7 +83,9 @@ export function buildChildTask(
 
   return {
     id:       item.id,
-    text:     buildBarText(item, barFields),
+    text:     item.name,
+    barText:  buildBarText(item, barFields),
+    displayId: item.displayId,
     start,
     end:      endExclusive,
     startLabel: item.start, // 이미 YYYY-MM-DD 문자열이라 그대로 씀
@@ -95,71 +97,81 @@ export function buildChildTask(
     // 막대(트랙) 색은 항상 동일 — type은 진척률 선(.wx-progress-percent) 색상 결정에만
     // 쓰인다(wbs-gantt-theme.css 참고). 토글 꺼져 있으면 항상 "task"(선 하나 색).
     type:     statusColor ? computeWbsStatus(item) : "task",
-    details:  item.groupLabel,
+    details:  item.groupPath[0].label,
     parent:   parentId,
     href:     item.href,
   };
 }
 
-// groupLabel 별로 요약(summary) 부모 행을 만들고 그 아래 자식들을 매단다.
-// 부모의 기간은 자식들의 최소 시작일~최대 종료일로, 진척률은 자식 평균으로 롤업.
+// 그룹 요약(summary) 행 하나 조립 — 날짜 롤업은 groupItems(이 가지에 속한 원본 항목 전부)의
+// 문자열 start/end를 직접 비교해서 구한다(YYYY-MM-DD 포맷은 문자열 비교로도 대소 비교가
+// 정확하다 — lib/pm/delayStatus.ts 등 다른 곳의 dDay 비교와 같은 관례). buildChildTask가
+// 만든 ITask.end는 이미 라이브러리용으로 하루 밀려 있어(exclusive) 그걸 그대로 롤업에 쓰면
+// 그룹 막대의 종료일 라벨이 하루씩 밀리는 문제가 있어, 원본 문자열에서 다시 계산한다.
+// displayId/assignee는 이 그룹 자체(요구사항/단위업무/화면 중 하나)의 값을 그대로 받는다 —
+// 여러 자식을 합쳐야 하는 기간/진척률과 달리 그룹 자신은 단일 엔티티라 합산이 필요 없다
+// ("어차피 있는 값인데 왜 안 보여주냐"는 피드백으로 예전의 "-" 고정 대신 실제 값을 채움).
+function buildSummaryRow(
+  id: string, text: string, parentId: string | undefined, groupItems: WbsTaskItem[],
+  displayId: string | null, assignee: string | null,
+): ITask {
+  const avgProgress = Math.round(
+    groupItems.reduce((sum, it) => sum + it.progress, 0) / groupItems.length
+  );
+  const dated = groupItems.filter((it): it is WbsTaskItem & { start: string; end: string } => !!it.start && !!it.end);
+
+  if (dated.length === 0) {
+    // 그룹 내 전 항목이 날짜 미지정 — 요약 막대 없이 이름만
+    return {
+      id, text, barText: text, parent: parentId, displayId: displayId ?? "-",
+      startLabel: "-", endLabel: "-", assignee: assignee ?? "-", effort: "-",
+      progress: avgProgress, type: "summary", open: true,
+    };
+  }
+
+  const minStart = dated.reduce((min, it) => (it.start < min ? it.start : min), dated[0].start);
+  const maxEnd   = dated.reduce((max, it) => (it.end   > max ? it.end   : max), dated[0].end);
+  const groupStart = new Date(`${minStart}T00:00:00`);
+  // 자식 막대와 동일한 관례로 종료일 하루를 밀어 exclusive 로 변환(막대 렌더링용 end 필드).
+  const groupEndExclusive = new Date(`${maxEnd}T00:00:00`);
+  groupEndExclusive.setDate(groupEndExclusive.getDate() + 1);
+
+  return {
+    id, text, barText: text, parent: parentId,
+    displayId:  displayId ?? "-",
+    start:      groupStart,
+    end:        groupEndExclusive,
+    startLabel: minStart,
+    endLabel:   maxEnd,
+    assignee:   assignee ?? "-",
+    // 그룹 요약 행은 여러 자식이 섞여 있어 공수는 하나로 합칠 수 없음 — 빈칸 처리
+    effort:     "-",
+    workDays:   workingDaysBetween(groupStart, groupEndExclusive),
+    progress:   avgProgress,
+    type:       "summary",
+    open:       true,
+    // href 없음 — 그룹 요약 행은 실제 엔티티가 아니라 상세 페이지가 없음
+  };
+}
+
+// groupPath[0](요구사항 또는 단위업무)별로 요약 행을 만들고 그 아래 자식들을 매단다.
+// groupPath는 기능 탭이 있던 시절엔 2단까지 썼지만(기능 탭 삭제로 지금은 항상 1단),
+// 그래도 배열 형태를 유지해 여기선 groupPath[0] 하나만 보고 그룹핑한다.
 export function buildGroupedTasks(items: WbsTaskItem[], barFields: Set<BarField>, statusColor: boolean): ITask[] {
-  const byGroup = new Map<string, WbsTaskItem[]>();
+  const byKey = new Map<string, WbsTaskItem[]>();
   for (const item of items) {
-    const list = byGroup.get(item.groupLabel) ?? [];
+    const key = item.groupPath[0].label;
+    const list = byKey.get(key) ?? [];
     list.push(item);
-    byGroup.set(item.groupLabel, list);
+    byKey.set(key, list);
   }
 
   const tasks: ITask[] = [];
-  for (const [groupLabel, groupItems] of byGroup) {
-    const parentId = `group:${groupLabel}`;
-    const children = groupItems.map((item) => buildChildTask(item, barFields, statusColor, parentId));
-
-    // 날짜 없는 항목도 자식으로는 들어오지만(start/end 없음), 부모의 기간 롤업 계산에는
-    // 실제 날짜가 있는 자식만 써야 한다 — 안 그러면 min/max 가 NaN 이 된다.
-    const datedChildren = children.filter((c) => c.start && c.end);
-    const avgProgress = Math.round(
-      children.reduce((sum, c) => sum + (c.progress ?? 0), 0) / children.length
-    );
-
-    if (datedChildren.length > 0) {
-      const starts = datedChildren.map((c) => (c.start as Date).getTime());
-      const ends   = datedChildren.map((c) => (c.end as Date).getTime());
-      const groupStart = new Date(Math.min(...starts));
-      const groupEnd   = new Date(Math.max(...ends));
-
-      tasks.push({
-        id:         parentId,
-        text:       groupLabel,
-        start:      groupStart,
-        end:        groupEnd,
-        startLabel: formatDate(groupStart),
-        endLabel:   formatDate(groupEnd),
-        // 그룹 요약 행은 여러 자식이 섞여 있어 담당자/공수를 하나로 합칠 수 없음 — 빈칸 처리
-        assignee:   "-",
-        effort:     "-",
-        workDays:   workingDaysBetween(groupStart, groupEnd),
-        progress:   avgProgress,
-        type:       "summary",
-        open:       true,
-        // href 없음 — 그룹 요약 행은 실제 엔티티가 아니라 상세 페이지가 없음
-      });
-    } else {
-      // 그룹 내 전 항목이 날짜 미지정 — 요약 막대 없이 이름만
-      tasks.push({
-        id:         parentId,
-        text:       groupLabel,
-        startLabel: "-",
-        endLabel:   "-",
-        assignee:   "-",
-        effort:     "-",
-        progress:   avgProgress,
-        type:       "summary",
-        open:       true,
-      });
-    }
-    tasks.push(...children);
+  for (const [key, groupItems] of byKey) {
+    const groupId = `group:${key}`;
+    const descriptor = groupItems[0].groupPath[0];
+    tasks.push(buildSummaryRow(groupId, key, undefined, groupItems, descriptor.displayId, descriptor.assignee));
+    tasks.push(...groupItems.map((item) => buildChildTask(item, barFields, statusColor, groupId)));
   }
   return tasks;
 }

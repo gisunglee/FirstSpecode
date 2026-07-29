@@ -20,8 +20,6 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
-import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
-import { type AiTaskStatus, AI_TASK_STATUS_LABEL, AI_TASK_STATUS_BADGE } from "@/constants/codes";
 import { useAppStore } from "@/store/appStore";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 
@@ -44,12 +42,24 @@ type ScreenRow = {
   assignMemberName: string | null;
   areaCount: number;
   sortOrder: number;
+  // 실질구현기간 — 화면 자신의 actl_impl_bgng_de/end_de (2026-07-28)
+  implStartDate: string | null;
+  implEndDate: string | null;
+  // 화면정의서 작성 상태 — BEFORE(작성전) / DOING(작성중) / DONE(작성완료)
+  docStatus: string;
   avgDesignRt: number;
   avgImplRt: number;
-  avgTestRt: number;
-  // AI 구현 요청 정보 (스냅샷 → IMPLEMENT 태스크 최신 1건)
-  implTask: { aiTaskId: string; status: string; requestedAt: string } | null;
 };
+
+// 작성상태 — 색 구분 없이 기본 텍스트로만 표시 (단위업무 목록과 동일 정책).
+// "전"/"중"/"완료"로 줄여뒀던 걸 풀네임으로 되돌림 — 컬럼 폭(64px)에 4글자("작성완료")도
+// 충분히 들어가는데 굳이 줄여서 뜻이 안 와닿았다는 피드백(2026-07-29).
+const DOC_STATUS_LABEL: Record<string, string> = { BEFORE: "작성전", DOING: "작성중", DONE: "작성완료" };
+
+// "YYYY-MM-DD" → "YY-MM-DD" — 목록 "기간" 컬럼 폭을 줄이기 위해 연도를 2자리로 축약
+function shortYear(date: string): string {
+  return date.slice(2);
+}
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
 
@@ -98,9 +108,6 @@ function ScreensPageInner() {
       toast.error("설정 저장 실패: " + err.message);
     });
   }
-  // AI 구현 태스크 상세 팝업
-  const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
-
   // "내 담당" URL 동기화
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -177,7 +184,7 @@ function ScreensPageInner() {
   //             요구사항·단위업무 열의 그룹핑(병합 표시)이 깨지는 문제가 있었다.
   const items = viewMode === "category"
     ? (() => {
-        const groupKey = (s: ScreenRow) => `${s.requirementId ?? ""} ${s.unitWorkId ?? ""}`;
+        const groupKey = (s: ScreenRow) => `${s.requirementId ?? ""} ${s.unitWorkId ?? ""}`;
         // filtered는 서버가 내려준 요구사항/단위업무 그룹 순서를 유지하고 있으므로,
         // 그룹이 처음 등장하는 위치를 그대로 그룹 순서로 사용한다.
         const groupOrder = new Map<string, number>();
@@ -211,6 +218,11 @@ function ScreensPageInner() {
         method: "PUT",
         body: JSON.stringify({ orders }),
       }),
+    // 성공해도 서버 재조회로 확정 — 낙관적 업데이트만 믿고 두면 다른 필터/탭에서 보던
+    // 캐시가 어긋난 채로 남을 수 있음
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["screens", projectId] });
+    },
     onError: () => {
       toast.error("순서 변경에 실패했습니다.");
       queryClient.invalidateQueries({ queryKey: ["screens", projectId] });
@@ -245,19 +257,29 @@ function ScreensPageInner() {
       return;
     }
 
+    const unitWorkId = items[from]?.unitWorkId ?? null;
+
     const reordered = [...items];
     const [moved] = reordered.splice(from, 1);
     if (!moved) return;
     reordered.splice(to, 0, moved);
 
-    // 낙관적 업데이트 후 서버 동기화
+    // 낙관적 업데이트 후 서버 동기화 — queryKey는 실제 useQuery가 쓰는 키(담당자 필터 포함)와
+    // 정확히 일치해야 함. 예전엔 ["screens", projectId] 로만 써서 실제 캐시(["screens", projectId,
+    // effectiveAssignedTo])와 어긋나 화면에 반영이 전혀 안 되던 버그였음(2026-07-29).
     queryClient.setQueryData(
-      ["screens", projectId],
+      ["screens", projectId, effectiveAssignedTo],
       { items: reordered, totalCount: reordered.length }
     );
 
-    const orders = reordered.map((s, idx) => ({ screenId: s.screenId, sortOrder: idx + 1 }));
-    sortMutation.mutate(orders);
+    // 정렬순서는 "단위업무 안에서" 1,2,3... 로 매기는 값 — 예전엔 필터링된 전체 목록을
+    // 통째로 idx+1 로 다시 매겨서 다른 단위업무의 화면까지 전역 일련번호로 덮어써버렸다
+    // (기능 목록에도 있던 동일 버그, 2026-07-29 수정). 같은 단위업무 항목만 추려 새 상대
+    // 순서대로 1부터 다시 매겨서 그 단위업무만 갱신한다.
+    const sameUnitWorkOrders = reordered
+      .filter((s) => s.unitWorkId === unitWorkId)
+      .map((s, idx) => ({ screenId: s.screenId, sortOrder: idx + 1 }));
+    sortMutation.mutate(sameUnitWorkOrders);
   }
 
   // ── 로딩 ───────────────────────────────────────────────────────────────────
@@ -364,22 +386,32 @@ function ScreensPageInner() {
         </div>
 
         {/* 목록 — 빈 상태에서도 헤더 표시 (과업 페이지 패턴과 통일) */}
-        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+        {/* 컬럼이 늘어(기간/작성상태 추가, 2026-07-28) 좁은 화면에서 넘칠 수 있어 overflowX:auto로 전환.
+            hidden이면 넘치는 컬럼이 잘려서 안 보이는 채로 사라짐 — 단위업무 목록과 동일 패턴. */}
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflowX: "auto" }}>
           {/* 헤더 행 */}
-          <div style={gridHeaderStyle}>
+          <div style={{ ...gridHeaderStyle, gridTemplateColumns: isCategoryView ? GRID_TEMPLATE_CATEGORY : GRID_TEMPLATE_DEFAULT }}>
             <div />
-            <div>요구사항 명</div>
             <div>단위업무 명</div>
             <div>화면 명</div>
+            {/* 대/중/소분류는 분류순 모드에서만 노출 — 화면명 바로 다음에 배치해 분류 기준으로
+                훑어보기 쉽게 함(2026-07-29) */}
+            {isCategoryView && (
+              <>
+                <div>대분류</div>
+                <div>중분류</div>
+                <div>소분류</div>
+              </>
+            )}
             <div>담당자</div>
+            {/* 작성상태는 담당자 오른쪽에 배치(2026-07-29) */}
+            <div style={{ textAlign: "center" }}>작성상태</div>
             <div>화면유형</div>
-            <div style={{ textAlign: "center" }}>영역수</div>
+            {/* 화면은 실질구현기간(actl_impl_*)을 관리 — 단위업무 목록의 "설계 기간"과 구분되도록 명시 */}
+            <div style={{ textAlign: "center" }}>구현 기간</div>
+            <div style={{ textAlign: "center" }}>영역</div>
             <div style={{ textAlign: "center" }}>정렬</div>
-            <div>대분류</div>
-            <div>중분류</div>
-            <div>소분류</div>
-            <div style={{ textAlign: "center" }}>AI 구현</div>
-            <div style={{ textAlign: "center" }}>설/구/테</div>
+            <div style={{ textAlign: "center" }}>설/구</div>
           </div>
 
           {items.length === 0 ? (
@@ -388,9 +420,8 @@ function ScreensPageInner() {
             </div>
           ) : (
             items.map((screen, idx) => {
-              // 요구사항 그룹 경계 — 분류순 모드에서도 위 정렬에서 그룹 순서를 유지하므로
-              // 동일하게 적용 가능 (같은 요구사항의 화면은 항상 연속으로 붙어 있음).
-              const isFirstReq = idx === 0 || items[idx - 1].requirementId !== screen.requirementId;
+              // 요구사항 그룹 경계 — 요구사항 명 컬럼은 화면에서 뺐지만, 그룹 사이 구분선은
+              // 분류순 모드에서도 그대로 유지 (같은 요구사항의 화면은 항상 연속으로 붙어 있음).
               const isLastOfReq = idx === items.length - 1 || items[idx + 1].requirementId !== screen.requirementId;
 
               return (
@@ -406,6 +437,7 @@ function ScreensPageInner() {
                   onMouseLeave={() => setHoveredId(null)}
                   style={{
                     ...gridRowStyle,
+                    gridTemplateColumns: isCategoryView ? GRID_TEMPLATE_CATEGORY : GRID_TEMPLATE_DEFAULT,
                     borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
                     borderBottom: isLastOfReq ? "1px solid var(--color-border)" : "none",
                     background: hoveredId === screen.screenId ? "var(--color-bg-hover, rgba(99,102,241,0.06))" : "var(--color-bg-card)",
@@ -428,26 +460,6 @@ function ScreensPageInner() {
                       opacity: isCategoryView ? 0.3 : 1,
                     }}
                   >☰</div>
-
-                  {/* 요구사항 (첫 행에만 표시) */}
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                    title={isFirstReq ? screen.requirementName : undefined}
-                  >
-                    {isFirstReq ? (
-                      screen.requirementId ? (
-                        <button
-                          onClick={() => router.push(`/projects/${projectId}/requirements/${screen.requirementId}`)}
-                          style={linkBtnStyle}
-                        >
-                          {screen.requirementName}
-                        </button>
-                      ) : (
-                        <span style={{ color: "var(--color-text-tertiary)", fontSize: 13 }}>미분류</span>
-                      )
-                    ) : null}
-                  </div>
 
                   {/* 단위업무명 — 같은 unitWorkId가 연속되는 첫 행에만 표시 (두 모드 공통) */}
                   <div
@@ -484,6 +496,21 @@ function ScreensPageInner() {
                     {screen.name}
                   </div>
 
+                  {/* 대/중/소분류 — 분류순 모드에서만 노출, 화면명 바로 다음에 배치(2026-07-29) */}
+                  {isCategoryView && (
+                    <>
+                      <div style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {screen.categoryL || "-"}
+                      </div>
+                      <div style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {screen.categoryM || "-"}
+                      </div>
+                      <div style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {screen.categoryS || "-"}
+                      </div>
+                    </>
+                  )}
+
                   {/* 담당자 — 미지정/퇴장 멤버는 흐린 "-" */}
                   <div
                     style={{
@@ -498,11 +525,33 @@ function ScreensPageInner() {
                     {screen.assignMemberName ?? "-"}
                   </div>
 
+                  {/* 화면정의서 작성 상태 — 색 구분 없이 기본 텍스트(단위업무 목록과 동일 정책).
+                      담당자 오른쪽으로 위치 이동(2026-07-29) */}
+                  <div style={{ textAlign: "center" }}>
+                    <span style={{ fontSize: 12, color: "var(--color-text-primary)", whiteSpace: "nowrap" }}>
+                      {DOC_STATUS_LABEL[screen.docStatus] ?? screen.docStatus}
+                    </span>
+                  </div>
+
                   {/* 화면유형 배지 */}
                   <div>
                     <span className="sp-badge" style={typeBadgeStyle(screen.type)}>
                       {screen.type}
                     </span>
+                  </div>
+
+                  {/* 구현 기간 — 화면 자신의 실질구현기간(actl_impl_*). 단위업무 목록과 동일하게
+                      연도 2자리로 줄이고 2줄로 표시해 컬럼 폭을 좁게 유지(2026-07-28) */}
+                  <div
+                    title={screen.implStartDate && screen.implEndDate ? `${screen.implStartDate} ~ ${screen.implEndDate}` : undefined}
+                    style={{ fontSize: 11, lineHeight: 1, textAlign: "center", color: "var(--color-text-secondary)" }}
+                  >
+                    {screen.implStartDate ? (
+                      <>
+                        <div>{shortYear(screen.implStartDate)}</div>
+                        <div>{screen.implEndDate ? `~ ${shortYear(screen.implEndDate)}` : "~"}</div>
+                      </>
+                    ) : "미정"}
                   </div>
 
                   {/* 영역 수 */}
@@ -515,55 +564,11 @@ function ScreensPageInner() {
                     {screen.sortOrder}
                   </div>
 
-                  {/* 대분류 */}
-                  <div style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {screen.categoryL || "-"}
-                  </div>
-
-                  {/* 중분류 */}
-                  <div style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {screen.categoryM || "-"}
-                  </div>
-
-                  {/* 소분류 */}
-                  <div style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {screen.categoryS || "-"}
-                  </div>
-
-                  {/* AI 구현 — 스냅샷 경유 IMPLEMENT 태스크 최신 1건.
-                    배지 + 시간을 한 줄(flex row)로 배치해 row 전체 높이가 늘어나지 않도록 함. */}
-                  <div
-                    style={{ display: "flex", justifyContent: "center" }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {screen.implTask ? (
-                      <button
-                        onClick={() => setAiDetailTaskId(screen.implTask!.aiTaskId)}
-                        title={`AI 구현 태스크 · ${formatRequestedAt(screen.implTask.requestedAt)}`}
-                        style={{
-                          display: "inline-flex", alignItems: "center", gap: 6,
-                          background: "transparent", border: "none", padding: 0, cursor: "pointer",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        <span className="sp-badge" style={implStatusBadgeStyle(screen.implTask.status)}>
-                          {AI_TASK_STATUS_LABEL[screen.implTask.status as AiTaskStatus] ?? screen.implTask.status}
-                        </span>
-                        <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>
-                          {formatRequestedAt(screen.implTask.requestedAt)}
-                        </span>
-                      </button>
-                    ) : (
-                      <span style={{ color: "var(--color-text-tertiary)", fontSize: 13 }}>-</span>
-                    )}
-                  </div>
-
-                  {/* 설/구/테 평균 진행률 */}
+                  {/* 설/구 평균 진행률 — 테스트율은 화면 단위에서 더 이상 집계하지 않아 뺐다 */}
                   <div style={{ display: "flex", gap: 4, justifyContent: "center", fontSize: 11 }}>
                     {[
                       { val: screen.avgDesignRt, color: "#1565c0" },
                       { val: screen.avgImplRt, color: "#2e7d32" },
-                      { val: screen.avgTestRt, color: "#6a1b9a" },
                     ].map(({ val, color }, i) => (
                       <span key={i} style={{
                         color,
@@ -594,34 +599,8 @@ function ScreensPageInner() {
           }}
         />
       )}
-
-      {/* AI 구현 태스크 상세 팝업 */}
-      {aiDetailTaskId && (
-        <AiTaskDetailDialog
-          projectId={projectId}
-          taskId={aiDetailTaskId}
-          onClose={() => setAiDetailTaskId(null)}
-        />
-      )}
     </div>
   );
-}
-
-// ── AI 태스크 상태 배지 스타일 (AI 구현 컬럼용) ─────────────────────
-// 상태 라벨·색상은 공용 codes 모듈 사용
-
-function implStatusBadgeStyle(status: string): React.CSSProperties {
-  const c = AI_TASK_STATUS_BADGE[status as AiTaskStatus] ?? { bg: "#f5f5f5", fg: "#555" };
-  return {
-    display: "inline-block", padding: "2px 8px", borderRadius: 4,
-    fontSize: 11, fontWeight: 700, background: c.bg, color: c.fg,
-    whiteSpace: "nowrap",
-  };
-}
-
-function formatRequestedAt(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 // ── PID-00045 삭제 확인 다이얼로그 ───────────────────────────────────────────
@@ -740,16 +719,27 @@ function typeBadgeStyle(type: string): React.CSSProperties {
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-// 요구사항·단위업무·화면명·담당자·분류는 fr 비율, 소형 컬럼은 고정 / AI 구현 + 설구테
-// 담당자 컬럼(100px)을 화면명 뒤, 화면유형 앞에 삽입
-// AI 구현 컬럼은 "배지 + 시간(MM-DD HH:mm)"을 한 줄에 담도록 130px로 여유 확보
-// 담당자·화면유형·영역수·정렬·AI구현·설구테는 내용 길이에 맞춰 타이트하게 —
-// 남는 공간은 fr 컬럼(요구사항/단위업무/화면명/분류)이 자동으로 가져간다.
-const GRID_TEMPLATE = "32px 1.5fr 1.5fr 3fr 84px 58px 36px 32px 1fr 1fr 1fr 130px 6%";
+// 단위업무·화면명·분류는 fr 비율, 소형 컬럼은 고정 / 설구
+// 담당자·화면유형·영역·정렬·설구는 내용 길이에 맞춰 타이트하게 —
+// 남는 공간은 fr 컬럼(단위업무/화면명/분류)이 자동으로 가져간다.
+// 요구사항 명 컬럼은 삭제(2026-07-28) — 단위업무 명만으로도 소속 파악 가능해 중복 정보였음.
+// AI 구현 컬럼도 삭제(2026-07-28) — 화면 목록에서는 안 쓰여 뺐다. 관련 상태(aiDetailTaskId)·
+// 다이얼로그·배지 헬퍼 함수도 이 페이지에서만 쓰이던 거라 같이 정리.
+// 담당자(48px): "멋쟁이" 류 짧은 이름 기준. 화면유형(52px): LIST~REPORT 배지 폭에 맞춤.
+// 설/구(58px): "100% 100%" 두 배지가 겨우 들어가는 최소 폭.
+// 단위업무(1.5→2fr)·대/중/소분류(1→1.3fr)는 AI구현 삭제로 남은 공간을 더 많이 가져가도록
+// 화면명(3fr) 대비 비중을 키움 — 분류값이 길어 잘리던 문제(스크린샷 "1프로젝트 ...") 완화.
+// 대/중/소분류 컬럼은 분류순 모드에서만 렌더링되므로(2026-07-28) 정렬순 모드용 템플릿을 따로 둠 —
+// 정렬순에서 안 쓰는 분류 정보 때문에 나머지 컬럼이 좁아지고 화면이 복잡해 보이던 문제 해결.
+// 기간(70px)/작성상태(64px) — 단위업무 목록과 동일한 형식(2줄 날짜, 텍스트만 상태)으로 추가(2026-07-28).
+// 작성상태는 60→64px — "전/중/완료" 축약을 "작성전/작성중/작성완료" 풀네임으로 되돌리며 소폭 확장(2026-07-29).
+// 대/중/소분류 위치를 화면명 바로 다음으로 이동(2026-07-29) — 템플릿 컬럼 순서도 함께 이동.
+// 작성상태도 담당자 오른쪽으로 이동(2026-07-29).
+const GRID_TEMPLATE_DEFAULT  = "32px 2fr 3fr 48px 64px 52px 70px 30px 32px 58px";
+const GRID_TEMPLATE_CATEGORY = "32px 2fr 3fr 1.3fr 1.3fr 1.3fr 48px 64px 52px 70px 30px 32px 58px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: GRID_TEMPLATE,
   gap: 10,
   padding: "10px 16px",
   background: "var(--color-bg-muted)",
@@ -761,10 +751,9 @@ const gridHeaderStyle: React.CSSProperties = {
 };
 
 // row 높이를 컴팩트하게 — 데이터량이 많은 페이지 특성상 좁게 유지.
-// AI 구현 컬럼처럼 2줄 내용이 있어도 전체 row가 뜨지 않도록 셀별로 nowrap 강제.
+// 여러 줄이 될 수 있는 셀도 전체 row가 뜨지 않도록 셀별로 nowrap 강제.
 const gridRowStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: GRID_TEMPLATE,
   gap: 10,
   padding: "12px 16px",
   alignItems: "center",

@@ -5,7 +5,8 @@
  * 역할:
  *   - 카드에 필요한 데이터를 한 번의 라운드트립으로 모아서 반환
  *     1) progress      — 단위업무 진행률 + 요구사항/화면/기능 평균 진행률(보조 지표)
- *     2) stalled       — 마감 지났는데 미완료(progrs_rt < 100) 단위업무 + Top 5 + 화면/기능 지연 카운트
+ *     2) stalled       — 설계·구현 중 한 phase 라도 마감 지났는데 그 phase 미완료(<100%)인
+ *                        단위업무 + Top 5(설계/구현 phase 별 날짜·진척률 분리 표기) + 화면/기능 지연 카운트
  *     3) recentChanges — 설계 변경 이력 최신 5건
  *     4) teamActivity  — 최근 7일 활동 + 부하(활성 작업량) 1위 멤버
  *     5) aiUsage       — 이번 달 AI 사용 통계
@@ -158,8 +159,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       prisma.tbDsScreen.findMany({
         where:  { prjct_id: projectId },
         select: {
-          scrn_id: true, asign_mber_id: true,
-          actl_dsgn_bgng_de: true, actl_dsgn_end_de: true, actl_dsgn_efrt_val: true,
+          scrn_id: true, asign_mber_id: true, unit_work_id: true,
           actl_impl_bgng_de: true, actl_impl_end_de: true,
         },
         take:   HARD_LIMIT,
@@ -185,6 +185,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       const p = uwProgressMap.get(unitWorkId);
       return p ? combinePhaseProgress(p) : 0;
     };
+
+    // 단위업무별 구현 종료 예정일 — 단위업무 자신은 구현 일정이 없어(화면 소관), 하위
+    // 화면들의 실질구현종료일(actl_impl_end_de) 중 가장 늦은 날짜로 롤업(wbs/unitWorkPhaseRollup.ts
+    // 의 IMPL phase 롤업과 동일 기준). screenRows 는 이미 로드돼 있어 추가 쿼리 없이 JS로 집계.
+    const implEndByUnitWork = new Map<string, string | null>();
+    for (const s of screenRows) {
+      if (!s.unit_work_id || !s.actl_impl_end_de) continue;
+      const cur = implEndByUnitWork.get(s.unit_work_id);
+      if (!cur || s.actl_impl_end_de > cur) implEndByUnitWork.set(s.unit_work_id, s.actl_impl_end_de);
+    }
 
     // 기능 진척률(design_rt/impl_rt) — functionRows 가 확정된 뒤에만 조회 가능해 순차 실행.
     // TbCmProgress 다형 참조(ref_tbl_nm='tb_ds_function'), 없으면 0으로 간주(누락을 완료로
@@ -230,10 +240,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         )
       : 0;
 
-    // ── 정체된 일 — 화면(설계)/기능(구현) 지연 카운트만(목록은 단위업무만 유지) ──
-    const screenDelayedCount = screenRows.filter((s) => {
-      if (!s.actl_dsgn_end_de || s.actl_dsgn_end_de >= todayStr) return false;
-      return (scrnAvgDesignRt.get(s.scrn_id) ?? 0) < 100;
+    // ── 정체된 일 — 설계(단위업무)/구현(기능) 지연 카운트만(목록은 단위업무만 유지) ──
+    // 설계 지연은 2026-07-28부터 화면이 아니라 단위업무 기준(plan_dsgn_end_de + design_rt 롤업).
+    const designDelayedCount = unitWorkRows.filter((u) => {
+      if (!u.plan_dsgn_end_de || u.plan_dsgn_end_de >= todayStr) return false;
+      return (uwProgressMap.get(u.unit_work_id)?.designRt ?? 0) < 100;
     }).length;
     const functionDelayedCount = functionRows.filter((f) => {
       const screenImplEnd = funcScreenDates.get(f.func_id)?.implEndDe ?? null;
@@ -275,9 +286,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         false
       ),
       buildMissingStat(
+        // 실질설계기간은 2026-07-28부터 화면에 없음(단위업무 소관) — 화면 자체 일정은 구현만, 공수 필드도 없음
         "SCREEN", "화면",
-        screenRows.map((s) => ({ asignMberId: s.asign_mber_id, startDate: s.actl_dsgn_bgng_de, endDate: s.actl_dsgn_end_de, effortRaw: s.actl_dsgn_efrt_val })),
-        true
+        screenRows.map((s) => ({ asignMberId: s.asign_mber_id, startDate: s.actl_impl_bgng_de, endDate: s.actl_impl_end_de })),
+        false
       ),
       buildMissingStat(
         "FUNCTION", "기능",
@@ -296,16 +308,34 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const unassignedTotal = missingStats.reduce((sum, s) => sum + s.assigneeMissing, 0);
 
     // ── 진행률/정체 — 단위업무 실적 진행률(uwProgress)이 저장값이 아니라 계산값이라
-    // DB aggregate/count 대신 JS에서 계산(2026-07-28). plan_dsgn_end_de 가 없는 행은
-    // 정체 판정 불가 → 제외.
+    // DB aggregate/count 대신 JS에서 계산(2026-07-28).
     const total      = unitWorkRows.length;
     const completedCnt = unitWorkRows.filter((u) => uwProgress(u.unit_work_id) === 100).length;
     const averagePct = total === 0
       ? 0
       : Math.round((unitWorkRows.reduce((sum, u) => sum + uwProgress(u.unit_work_id), 0) / total) * 10) / 10;
+
+    // 정체 판정 — 설계 종료 예정일 또는 구현 종료 예정일 "둘 중 하나라도" 지났는데
+    // 그 phase 의 진척률이 100% 미만이면 정체(OR 조건). 두 phase 를 하나의 평균으로
+    // 뭉치면 "설계는 제때 끝났는데 구현 시작일도 아직인" 케이스까지 정체로 잘못 잡혀서
+    // (평균 50% < 100%) phase 별로 각각 판정하고 결과도 나눠서 보여준다.
     const stalledRows = unitWorkRows
-      .filter((u) => u.plan_dsgn_end_de && u.plan_dsgn_end_de < todayStr && uwProgress(u.unit_work_id) < 100)
-      .sort((a, b) => (a.plan_dsgn_end_de ?? "").localeCompare(b.plan_dsgn_end_de ?? ""));
+      .map((u) => {
+        const p = uwProgressMap.get(u.unit_work_id);
+        const designEnd = u.plan_dsgn_end_de ?? null;
+        const designRt  = p?.designRt ?? 0;
+        const implEnd   = implEndByUnitWork.get(u.unit_work_id) ?? null;
+        const implRt    = p?.implRt ?? 0;
+        const design = { endDate: designEnd, progress: designRt, overdue: !!designEnd && designEnd < todayStr && designRt < 100 };
+        const impl   = { endDate: implEnd,   progress: implRt,   overdue: !!implEnd   && implEnd   < todayStr && implRt   < 100 };
+        // 정렬용 — 지연을 유발한 날짜 중 더 이른(오래된) 쪽이 우선 노출되도록
+        const sortKey = [design.overdue ? design.endDate : null, impl.overdue ? impl.endDate : null]
+          .filter((d): d is string => d !== null)
+          .sort()[0] ?? "";
+        return { row: u, design, impl, sortKey, isStalled: design.overdue || impl.overdue };
+      })
+      .filter((r) => r.isStalled)
+      .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
     const stalledCnt = stalledRows.length;
     const stalledItems = stalledRows.slice(0, PREVIEW_LIMIT);
 
@@ -368,7 +398,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const memberIds = [
       ...new Set(
         [
-          ...stalledItems.map((s) => s.asign_mber_id),
+          ...stalledItems.map((s) => s.row.asign_mber_id),
           ...recentChanges.map((c) => c.chg_mber_id),
           ...activityGroups.map((g) => g.chg_mber_id),
           topLoadMemberId,
@@ -440,17 +470,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       stalled: {
         count: stalledCnt,
         items: stalledItems.map((s) => ({
-          unitWorkId:       s.unit_work_id,
-          displayId:        s.unit_work_display_id,
-          name:             s.unit_work_nm,
-          // 위 where 조건에서 null 제외 했으므로 안전하게 string 단언
-          endDate:          s.plan_dsgn_end_de ?? "",
-          progress:         uwProgress(s.unit_work_id),
-          assignMemberName: s.asign_mber_id
-            ? (memberDisplayMap.get(s.asign_mber_id) ?? null)
+          unitWorkId:       s.row.unit_work_id,
+          displayId:        s.row.unit_work_display_id,
+          name:             s.row.unit_work_nm,
+          assignMemberName: s.row.asign_mber_id
+            ? (memberDisplayMap.get(s.row.asign_mber_id) ?? null)
             : null,
+          design: s.design,
+          impl:   s.impl,
         })),
-        screenDelayedCount,
+        designDelayedCount,
         functionDelayedCount,
       },
       recentChanges: recentChanges.map((c) => ({

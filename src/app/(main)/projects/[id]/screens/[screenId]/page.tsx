@@ -29,7 +29,6 @@ import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
 import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
 import { SelectChevron } from "@/components/ui/SelectChevron";
 import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
-import { formatEffortDays } from "@/lib/effort";
 import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
@@ -48,7 +47,6 @@ type AreaRow = {
   sortOrder: number;
   designRt: number;
   implRt: number;
-  testRt: number;
 };
 
 type ScreenDetail = {
@@ -69,11 +67,8 @@ type ScreenDetail = {
   unitWorkId: string | null;
   unitWorkName: string;
   areas: AreaRow[];
-  // 실질 설계 일정/공수 — 실질 구현 일정과 분리된 축
-  designBgngDe: string;
-  designEndDe: string;
-  designEfrtVal: string;
-  // 실질 구현 일정 — 기능은 일정이 없고 화면 단위로 관리(2026-07-28)
+  // 실질 구현 일정 — 기능은 일정이 없고 화면 단위로 관리(2026-07-28). 설계 일정은
+  // 2026-07-28 2차 개편으로 화면에서 제거되어 소속 단위업무의 plan_dsgn_*로만 관리
   implBgngDe: string;
   implEndDe: string;
   // 화면정의서 작성 상태 — BEFORE/DOING/DONE
@@ -95,10 +90,6 @@ type SaveBody = {
   saveHistory?: boolean;
   // 담당자 — "" = 미지정, 서버에서 null 처리
   assignMemberId: string;
-  // 설계 일정/공수 — "" = 미지정
-  designBgngDe: string;
-  designEndDe: string;
-  designEfrtVal: string;
   implBgngDe: string;
   implEndDe: string;
   docStatus: string;
@@ -152,9 +143,6 @@ function ScreenDetailPageInner() {
     categoryM: "",
     categoryS: "",
     assignMemberId: "",
-    designBgngDe: "",
-    designEndDe: "",
-    designEfrtVal: "",
     implBgngDe: "",
     implEndDe: "",
     docStatus: "BEFORE",
@@ -249,14 +237,13 @@ function ScreenDetailPageInner() {
       categoryM: detail.categoryM,
       categoryS: detail.categoryS,
       assignMemberId: detail.assignMemberId ?? "",
-      designBgngDe: detail.designBgngDe ?? "",
-      designEndDe: detail.designEndDe ?? "",
-      designEfrtVal: detail.designEfrtVal ?? "",
       implBgngDe: detail.implBgngDe ?? "",
       implEndDe: detail.implEndDe ?? "",
       docStatus: detail.docStatus,
     });
     setOriginalDescription(detail.description ?? "");
+    // 설명 내용이 이미 있으면 미리보기로, 빈 상태(신규나 아직 작성 전)면 편집으로 시작
+    setDescTab(detail.description?.trim() ? "preview" : "edit");
     if (detail.layoutData) {
       try { setLayoutRows(JSON.parse(detail.layoutData)); } catch { /* 잘못된 JSON 무시 */ }
     } else {
@@ -452,8 +439,10 @@ function ScreenDetailPageInner() {
             🔒 <strong>읽기 전용</strong> — 이 화면은 OWNER/ADMIN 또는 PM/PL 직무, 혹은 담당자만 수정할 수 있습니다.
           </div>
         )}
-        {/* 2-컬럼 레이아웃: 기본 정보 | 화면 설명 */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 28, alignItems: "start" }}>
+        {/* 2-컬럼 레이아웃: 기본 정보 | 화면 설명 — 왼쪽(기본 정보 폼)은 고정폭, 오른쪽(설명)만
+            1fr로 남는 공간을 흡수. 좌측 메뉴를 접어 넓어진 공간이 폼 입력칸까지 늘어나던 문제
+            방지(영역/기능 상세와 동일 패턴, 2026-07-29) */}
+        <div style={{ display: "grid", gridTemplateColumns: "460px minmax(0, 1fr)", gap: 28, alignItems: "start" }}>
 
           {/* 왼쪽: 기본 정보 + 영역 목록 */}
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -510,7 +499,7 @@ function ScreenDetailPageInner() {
               {/*   브라우저 기본 동작으로 버튼에 전달되기 때문 */}
               <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 100px", gap: 16 }}>
                 <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6, fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>
                     <span>담당자</span>
                     {!isNew && (
                       <button
@@ -579,50 +568,10 @@ function ScreenDetailPageInner() {
                 </FormField>
               </div>
 
-              {/* 설계 시작일 | 설계 종료일 | 설계 공수 — 구현(기능)과 분리된 축 */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-                <FormField label="설계 시작일">
-                  <input
-                    type="date"
-                    value={form.designBgngDe}
-                    onChange={(e) => handleChange("designBgngDe", e.target.value)}
-                    readOnly={!canEdit}
-                    className="sp-input"
-                  />
-                </FormField>
-                <FormField label="설계 종료일">
-                  <input
-                    type="date"
-                    value={form.designEndDe}
-                    onChange={(e) => handleChange("designEndDe", e.target.value)}
-                    readOnly={!canEdit}
-                    className="sp-input"
-                  />
-                </FormField>
-                <FormField label={<span>설계 공수<span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: "var(--color-text-secondary)" }}>(단위: 시간)</span></span>}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      value={form.designEfrtVal}
-                      onChange={(e) => handleChange("designEfrtVal", e.target.value)}
-                      placeholder="시간 (예: 2, 0.5)"
-                      readOnly={!canEdit}
-                      className="sp-input"
-                      style={{ width: 100, flex: "none" }}
-                    />
-                    {formatEffortDays(form.designEfrtVal) && (
-                      <span style={{ fontSize: 13, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
-                        {formatEffortDays(form.designEfrtVal)}
-                      </span>
-                    )}
-                  </div>
-                </FormField>
-              </div>
-
-              {/* 구현 시작일 | 구현 종료일 | 화면정의서 작성 상태 — 기능은 일정이 없고 화면 단위로 관리(2026-07-28) */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+              {/* 구현 시작일 | 구현 종료일 — 기능은 일정이 없고 화면 단위로 관리(2026-07-28).
+                  설계 일정은 2026-07-28 2차 개편으로 화면에서 제거 — 소속 단위업무 상세에서 관리(계획설계기간),
+                  이 화면에서는 하위 기능들의 설계 진척률 롤업(%)으로만 진행 상황을 파악한다. */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 <FormField label="구현 시작일">
                   <input
                     type="date"
@@ -641,56 +590,48 @@ function ScreenDetailPageInner() {
                     className="sp-input"
                   />
                 </FormField>
-                <FormField label="화면정의서 작성 상태">
-                  <div className="sp-select-wrap">
-                    <select
-                      value={form.docStatus}
-                      onChange={(e) => handleChange("docStatus", e.target.value)}
-                      disabled={!canEdit}
-                      className="sp-input"
-                    >
-                      <option value="BEFORE">작성전</option>
-                      <option value="DOING">작성중</option>
-                      <option value="DONE">작성완료</option>
-                    </select>
-                    <span className="sp-select-arrow"><SelectChevron /></span>
-                  </div>
-                </FormField>
               </div>
 
-              {/* 메뉴 분류 (대/중/소) */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-                <FormField label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>대분류<HelpIcon onClick={() => setHelpOpen("category")} /></span>}>
-                  <input
-                    type="text"
-                    value={form.categoryL}
-                    placeholder="예: 회원 관리"
-                    onChange={(e) => handleChange("categoryL", e.target.value)}
-                    readOnly={!canEdit}
-                    className="sp-input"
-                  />
-                </FormField>
-                <FormField label="중분류">
-                  <input
-                    type="text"
-                    value={form.categoryM}
-                    placeholder="예: 회원 정보"
-                    onChange={(e) => handleChange("categoryM", e.target.value)}
-                    readOnly={!canEdit}
-                    className="sp-input"
-                  />
-                </FormField>
-                <FormField label="소분류">
-                  <input
-                    type="text"
-                    value={form.categoryS}
-                    placeholder="예: 목록 조회"
-                    onChange={(e) => handleChange("categoryS", e.target.value)}
-                    readOnly={!canEdit}
-                    className="sp-input"
-                  />
-                </FormField>
-              </div>
+              {/* 메뉴 분류 (대/중/소) — 한 행에 하나씩 */}
+              <FormField label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>대분류<HelpIcon onClick={() => setHelpOpen("category")} /></span>}>
+                <input
+                  type="text"
+                  value={form.categoryL}
+                  placeholder="예: 회원 관리"
+                  onChange={(e) => handleChange("categoryL", e.target.value)}
+                  readOnly={!canEdit}
+                  className="sp-input"
+                />
+              </FormField>
+              <FormField label="중분류">
+                <input
+                  type="text"
+                  value={form.categoryM}
+                  placeholder="예: 회원 정보"
+                  onChange={(e) => handleChange("categoryM", e.target.value)}
+                  readOnly={!canEdit}
+                  className="sp-input"
+                />
+              </FormField>
+              <FormField label="소분류">
+                <input
+                  type="text"
+                  value={form.categoryS}
+                  placeholder="예: 목록 조회"
+                  onChange={(e) => handleChange("categoryS", e.target.value)}
+                  readOnly={!canEdit}
+                  className="sp-input"
+                />
+              </FormField>
+
+              {/* 화면정의서 작성 상태 — 맨 아래로 이동(2026-07-29) */}
+              <FormField label="화면정의서 작성 상태">
+                <DocStatusSwitch
+                  value={form.docStatus}
+                  onChange={(v) => handleChange("docStatus", v)}
+                  disabled={!canEdit}
+                />
+              </FormField>
             </Section>
 
             {/* 레이아웃 에디터 — 기본 정보 아래 */}
@@ -771,7 +712,7 @@ function ScreenDetailPageInner() {
               value={form.description}
               onChange={(md) => handleChange("description", md)}
               placeholder="화면 내용 및 세부 설계를 작성하세요."
-              rows={26}
+              rows={30}
               tab={descTab}
               onTabChange={setDescTab}
               readOnly={!canEdit}
@@ -1018,10 +959,8 @@ function AreaListSection({
         <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
           {/* 헤더 */}
           <div style={areaGridHeaderStyle}>
-            <div>순서</div>
             <div>영역명</div>
-            <div style={{ textAlign: "center" }}>설/구/테</div>
-            <div style={{ textAlign: "right" }}>유형</div>
+            <div style={{ textAlign: "center" }}>설/구</div>
           </div>
           {/* 행 */}
           {areas.map((area, idx) => (
@@ -1032,9 +971,6 @@ function AreaListSection({
                 borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
               }}
             >
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-                {area.sortOrder}
-              </div>
               {/* 영역명 클릭 → 영역 상세 (FID-00149) */}
               <div>
                 <button
@@ -1051,7 +987,6 @@ function AreaListSection({
                 {[
                   { val: area.designRt, color: "#1565c0" },
                   { val: area.implRt, color: "#2e7d32" },
-                  { val: area.testRt, color: "#6a1b9a" },
                 ].map(({ val, color }, i) => (
                   <span key={i} style={{
                     color, fontWeight: 600,
@@ -1061,9 +996,6 @@ function AreaListSection({
                     {val}%
                   </span>
                 ))}
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <span style={areaTypeBadgeStyle(area.type)}>{area.type}</span>
               </div>
             </div>
           ))}
@@ -1131,7 +1063,7 @@ function FormField({
 }) {
   return (
     <div>
-      <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+      <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>
         {label}
         {required && <span style={{ color: "#e53935", marginLeft: 2 }}>*</span>}
       </label>
@@ -1140,25 +1072,52 @@ function FormField({
   );
 }
 
-function areaTypeBadgeStyle(type: string): React.CSSProperties {
-  // 신규 분류 5종 — 데이터 성격 기준 (FILTER/LIST/FORM/DETAIL/GENERAL)
-  const colors: Record<string, { bg: string; color: string }> = {
-    FILTER: { bg: "#e3f2fd", color: "#1565c0" },
-    LIST: { bg: "#e8f5e9", color: "#2e7d32" },
-    FORM: { bg: "#fff3e0", color: "#e65100" },
-    DETAIL: { bg: "#f3e5f5", color: "#6a1b9a" },
-    GENERAL: { bg: "#eceff1", color: "#37474f" },
-  };
-  const c = colors[type] ?? { bg: "#f5f5f5", color: "#555" };
-  return {
-    display: "inline-block",
-    padding: "2px 8px",
-    borderRadius: 4,
-    fontSize: 11,
-    fontWeight: 600,
-    background: c.bg,
-    color: c.color,
-  };
+// ── 화면정의서 작성 상태 라디오 그룹 — 단위업무/기능 상세와 동일한 패턴 ──
+const DOC_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "BEFORE", label: "작성 전" },
+  { value: "DOING", label: "작성 중" },
+  { value: "DONE", label: "작성 완료" },
+];
+const DOC_STATUS_COLOR: Record<string, string> = {
+  BEFORE: "var(--color-error)",
+  DOING: "var(--color-info)",
+  DONE: "var(--color-success)",
+};
+
+function DocStatusSwitch({
+  value, onChange, disabled,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="sp-radio-group" style={{ gap: 16, opacity: disabled ? 0.6 : 1, pointerEvents: disabled ? "none" : undefined }}>
+      {DOC_STATUS_OPTIONS.map((opt) => {
+        const active = value === opt.value;
+        const activeColor = DOC_STATUS_COLOR[opt.value];
+        return (
+          <div
+            key={opt.value}
+            className={`sp-radio-option${active ? " is-selected" : ""}`}
+            onClick={() => onChange(opt.value)}
+            style={{
+              flex: "none", border: "none", background: "transparent", padding: 0, whiteSpace: "nowrap",
+              color: active ? activeColor : undefined,
+              fontWeight: active ? 700 : 500,
+              transition: "color 0.15s",
+            }}
+          >
+            <span
+              className="radio-dot"
+              style={active ? { borderColor: activeColor, background: activeColor, transition: "border-color 0.15s, background 0.15s" } : undefined}
+            />
+            {opt.label}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
@@ -1213,7 +1172,8 @@ const linkBtnStyle: React.CSSProperties = {
 
 const areaGridHeaderStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "44px 1fr 80px 100px",
+  // 순서/유형 컬럼 제거 — 영역명, 설/구만 노출(2026-07-29)
+  gridTemplateColumns: "1fr 100px",
   gap: 12,
   padding: "8px 14px",
   background: "var(--color-bg-muted)",
@@ -1235,7 +1195,8 @@ const ghostSmBtnStyle: React.CSSProperties = {
 
 const areaGridRowStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "44px 1fr 80px 100px",
+  // 순서/유형 컬럼 제거 — 영역명, 설/구만 노출(2026-07-29)
+  gridTemplateColumns: "1fr 100px",
   gap: 12,
   padding: "10px 14px",
   alignItems: "center",

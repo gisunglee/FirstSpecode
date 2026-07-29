@@ -1,15 +1,13 @@
 /**
  * unitWorkPhaseRollup.ts — 단위업무의 WBS 기간·진척률을 phase(설계/구현)별로 롤업
  *
- * 단위업무 자신의 plan_dsgn_bgng_de/plan_dsgn_end_de 는 PM이 잡는 상위 계획치(목표)라
- * 하위 화면·기능의 실제 진행 상황과 무관하게 관리되는 값이고, WBS에서는 아예 안 쓴다.
- * 대신 화면의 실질설계/구현기간(actl_dsgn_ 계열 / actl_impl_ 계열)을 화면 단위로 MIN/MAX 롤업한다.
+ * 2026-07-28 2차 개편: 설계 일정(plan_dsgn_bgng_de/end_de)은 화면이 여러 개인 단위업무에서
+ * 화면마다 따로 잡기엔 부담이라는 판단으로 단위업무 자신의 컬럼으로만 관리하게 됐다 —
+ * 그래서 DESIGN phase는 더 이상 하위 화면을 MIN/MAX 롤업할 필요 없이 단위업무 자신의
+ * 값을 그대로 쓴다(예전엔 화면 기준이었음). IMPL phase는 여전히 화면 단위(actl_impl_*)를
+ * MIN/MAX 롤업 — 구현은 화면마다 개별 배정되는 게 자연스러워 화면 기준을 유지.
  *
- * 2026-07-28 스키마 개편으로 구현기간이 기능(함수)→화면으로 이동하면서, 예전에 이 파일과
- * fetchDeadlineItems.ts가 각자 구현했던 조인 로직 문제(함수가 없는 화면이 롤업에서
- * 통째로 빠지는 문제 등)가 자연히 해소됐다 — 설계·구현 기간 둘 다 이제 화면 테이블에서
- * 직접(함수 조인 없이) MIN/MAX만 하면 되고, 진척률(%)만 lib/pm/progressRollup.ts의
- * 공용 함수(기능 롤업)를 그대로 쓴다.
+ * 진척률(%)은 두 phase 모두 lib/pm/progressRollup.ts의 공용 함수(기능 롤업)를 그대로 쓴다.
  */
 
 import { Prisma } from "@prisma/client";
@@ -47,13 +45,13 @@ export async function fetchUnitWorkPhaseRollup(
            WHERE unit_work_id IN (${ids})
            GROUP BY unit_work_id
         `
+      // 설계는 단위업무 자신의 계획설계기간을 그대로 씀 — 롤업(MIN/MAX)이 필요 없어 단순 SELECT.
       : prisma.$queryRaw<DateRow[]>`
           SELECT unit_work_id,
-                 MIN(actl_dsgn_bgng_de) AS min_start,
-                 MAX(actl_dsgn_end_de)  AS max_end
-            FROM tb_ds_screen
+                 plan_dsgn_bgng_de AS min_start,
+                 plan_dsgn_end_de  AS max_end
+            FROM tb_ds_unit_work
            WHERE unit_work_id IN (${ids})
-           GROUP BY unit_work_id
         `,
     fetchUnitWorkProgress(unitWorkIds),
   ]);

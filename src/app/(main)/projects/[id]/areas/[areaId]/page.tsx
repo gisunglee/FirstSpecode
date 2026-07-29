@@ -56,6 +56,8 @@ type AreaDetail = {
   displayFormCode: string;
   sortOrder: number;
   screenId: string | null;
+  // 영역 설계(와이어프레임) 작성 상태 — BEFORE(작성전) / DOING(작성중) / DONE(작성완료)
+  docStatus: string;
   // 부모 화면의 담당자 — [삭제]/[저장] 버튼 권한 판정용 (영역 자체에는 담당자 컬럼 없음)
   screenAssigneeId: string | null;
   screenName: string;
@@ -78,7 +80,6 @@ type AreaDetail = {
     sortOrder: number;
     designRt: number;
     implRt: number;
-    testRt: number;
   }[];
 };
 
@@ -126,6 +127,7 @@ function AreaDetailPageInner() {
   const [descTab, setDescTab] = useState<"edit" | "preview">("edit");
   const [sortOrder, setSortOrder] = useState<number>(0);
   const [screenId, setScreenId] = useState(presetScreenId);
+  const [docStatus, setDocStatus] = useState("BEFORE");
 
   // ── 레이아웃 상태 ───────────────────────────────────────────────────────────
   const [layoutRows, setLayoutRows] = useState<LayoutRow[]>([]);
@@ -271,7 +273,10 @@ function AreaDetailPageInner() {
       // 기존 영역에 표시 형태 값이 없으면 STATIC(기본값)으로 폴백
       setDisplayFormCode(data.displayFormCode ?? "STATIC");
       setDescription(data.description);
+      // 설계 내용(설명)이 이미 있으면 미리보기로, 빈 상태(신규나 아직 작성 전)면 편집으로 시작
+      setDescTab(data.description?.trim() ? "preview" : "edit");
       setSortOrder(data.sortOrder);
+      setDocStatus(data.docStatus);
       setScreenId(data.screenId ?? "");
       setAsciiComment(data.commentCn ?? "");
       setExcalidrawData(data.excalidrawData);
@@ -294,6 +299,7 @@ function AreaDetailPageInner() {
         displayFormCode,
         description: description.trim(),
         sortOrder: sortOrder || 0,
+        docStatus,
         layoutData: layoutRows.length > 0 ? JSON.stringify(layoutRows) : undefined,
         commentCn: asciiComment,
         saveHistory,
@@ -955,8 +961,11 @@ function AreaDetailPageInner() {
             🔒 <strong>읽기 전용</strong> — 이 영역은 OWNER/ADMIN 또는 PM/PL 직무, 혹은 부모 화면 담당자만 수정할 수 있습니다.
           </div>
         )}
-        {/* 2-컬럼 레이아웃 */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 24, alignItems: "start" }}>
+        {/* 2-컬럼 레이아웃 — 왼쪽(기본 정보 폼)은 고정폭, 오른쪽(설명)만 1fr로 남는 공간을 흡수.
+            예전엔 양쪽 다 fr 비율(1fr 1.4fr)이라 좌측 메뉴를 접어 넓어진 공간이 양쪽에 나눠 들어가
+            폼 입력칸까지 불필요하게 늘어났었음 — 폼은 항상 같은 폭을 유지하는 게 자연스러워서
+            고정폭으로 바꾸고, 늘어난 공간은 전부 설명 쪽으로만 가게 함(2026-07-28) */}
+        <div style={{ display: "grid", gridTemplateColumns: "460px minmax(0, 1fr)", gap: 24, alignItems: "start" }}>
 
           {/* 왼쪽 컬럼: 기본 정보 + AI코멘트 + 레이아웃 + 첨부파일 + 요약 + 기능목록 */}
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -964,8 +973,8 @@ function AreaDetailPageInner() {
             {/* ── AR-00069 기본 정보 폼 ─────────────────────────────────── */}
             <section style={sectionStyle}>
 
-              {/* 소속 화면 + 유형 + 표시 형태 — 표시 형태는 라벨 두 줄 방지 위해 170px */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 130px 170px", gap: 16 }}>
+              {/* 1행: 소속 화면 (단독, 전체 폭) */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
                 <div style={formGroupStyle}>
                   <label style={labelStyle}>소속 화면</label>
                   <div className="sp-select-wrap">
@@ -985,6 +994,38 @@ function AreaDetailPageInner() {
                     <span className="sp-select-arrow"><SelectChevron /></span>
                   </div>
                 </div>
+              </div>
+
+              {/* 2행: 영역명 + 표시 ID(좁게) */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 150px", gap: 16 }}>
+                <div style={formGroupStyle}>
+                  <label style={labelStyle}>영역명 <span style={{ color: "#e53935" }}>*</span></label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="영역명을 입력하세요"
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </div>
+                <div style={formGroupStyle}>
+                  <label style={{ ...labelStyle, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    표시 ID<FieldHelp title="표시 ID" body={DISPLAY_ID_HELP_BODY} />
+                  </label>
+                  <input
+                    type="text"
+                    value={displayIdInput}
+                    onChange={(e) => setDisplayIdInput(e.target.value)}
+                    placeholder={`${getPrefix("AREA")}-XXXXX (미 입력 시 자동 생성)`}
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </div>
+              </div>
+
+              {/* 3행: 유형 + 표시 형태 + 정렬순서 — 표시 형태는 라벨 두 줄 방지 위해 170px */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 170px 80px", gap: 16 }}>
                 <div style={formGroupStyle}>
                   <label style={{ ...labelStyle, display: "inline-flex", alignItems: "center", gap: 4 }}>
                     유형<FieldHelp title="유형" body={AREA_TYPE_HELP_BODY} />
@@ -1022,34 +1063,6 @@ function AreaDetailPageInner() {
                     <span className="sp-select-arrow"><SelectChevron /></span>
                   </div>
                 </div>
-              </div>
-
-              {/* 영역명 + 표시 ID + 정렬순서 */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 150px 80px", gap: 16 }}>
-                <div style={formGroupStyle}>
-                  <label style={labelStyle}>영역명 <span style={{ color: "#e53935" }}>*</span></label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="영역명을 입력하세요"
-                    readOnly={!canEdit}
-                    className="sp-input"
-                  />
-                </div>
-                <div style={formGroupStyle}>
-                  <label style={{ ...labelStyle, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                    표시 ID<FieldHelp title="표시 ID" body={DISPLAY_ID_HELP_BODY} />
-                  </label>
-                  <input
-                    type="text"
-                    value={displayIdInput}
-                    onChange={(e) => setDisplayIdInput(e.target.value)}
-                    placeholder={`${getPrefix("AREA")}-XXXXX (미 입력 시 자동 생성)`}
-                    readOnly={!canEdit}
-                    className="sp-input"
-                  />
-                </div>
                 <div style={formGroupStyle}>
                   <label style={labelStyle}>정렬순서</label>
                   <input
@@ -1060,6 +1073,13 @@ function AreaDetailPageInner() {
                     className="sp-input"
                   />
                 </div>
+              </div>
+
+              {/* 영역 설계(와이어프레임) 작성 상태 — 단위업무/화면/기능 상세와 동일한 라디오 패턴.
+                  다른 목록/상세는 다 작성상태가 있는데 영역만 없었어서 추가함(2026-07-29) */}
+              <div style={formGroupStyle}>
+                <label style={labelStyle}>작성 상태</label>
+                <DocStatusSwitch value={docStatus} onChange={setDocStatus} disabled={!canEdit} />
               </div>
 
             </section>
@@ -1090,9 +1110,14 @@ function AreaDetailPageInner() {
             {/* AR-00073 요약 정보 — 삭제됨 */}
 
             {/* ── AR-00074 기능 목록 ────────────────────────────────────── */}
+            {/* 목록형 카드는 sectionStyle(폼용, 20/24 패딩) 대신 rightSectionStyle(14/16) 사용 —
+                같은 컬럼의 레이아웃 구성·첨부파일 카드, 그리고 화면 편집의 영역 목록 카드와
+                패딩을 맞춰 목록 카드끼리 시각적으로 통일함(2026-07-29) */}
             {!isNew && (
-              <section style={sectionStyle}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <section style={rightSectionStyle}>
+                {/* marginBottom 제거 — rightSectionStyle의 flex gap(10)이 헤더~표 간격을 이미 담당.
+                    기존엔 marginBottom(8)+gap(16)이 중첩돼 영역 목록 카드보다 간격이 넓었음 */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>기능 목록</span>
                     <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
@@ -1118,11 +1143,8 @@ function AreaDetailPageInner() {
                 ) : (
                   <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
                     <div style={funcGridHeaderStyle}>
-                      <div>순서</div>
                       <div>기능명</div>
-                      <div>우선순위</div>
-                      <div>상태</div>
-                      <div style={{ textAlign: "center" }}>설/구/테</div>
+                      <div style={{ textAlign: "center" }}>설/구</div>
                     </div>
                     {data.functions.map((fn, idx) => (
                       <div
@@ -1132,9 +1154,6 @@ function AreaDetailPageInner() {
                           borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
                         }}
                       >
-                        <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-                          {fn.sortOrder}
-                        </div>
                         <div>
                           <button
                             onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
@@ -1146,16 +1165,21 @@ function AreaDetailPageInner() {
                             {fn.name}
                           </button>
                         </div>
-                        <div>
-                          <span style={priorityBadgeStyle(fn.priority)}>{fn.priority}</span>
-                        </div>
-                        <div>
-                          <span style={statusBadgeStyle(fn.status)}>{STATUS_LABELS[fn.status] ?? fn.status}</span>
-                        </div>
-                        <div style={{ textAlign: "center", fontSize: 12, color: "var(--color-text-secondary)" }}>
-                          (<span style={{ color: "#1565c0" }}>{fn.designRt ?? 0}</span>
-                          /<span style={{ color: "#2e7d32" }}>{fn.implRt ?? 0}</span>
-                          /<span style={{ color: "#6a1b9a" }}>{fn.testRt ?? 0}</span>)
+                        {/* 배지 스타일 통일(2026-07-29) — 화면 편집의 영역 목록 표와 동일한
+                            "N% N%" 칩 형태로 표시(기존 "(N/N)" 괄호 표기 대체) */}
+                        <div style={{ display: "flex", gap: 3, justifyContent: "center", fontSize: 11 }}>
+                          {[
+                            { val: fn.designRt ?? 0, color: "#1565c0" },
+                            { val: fn.implRt ?? 0, color: "#2e7d32" },
+                          ].map(({ val, color }, i) => (
+                            <span key={i} style={{
+                              color, fontWeight: 600,
+                              background: val === 100 ? `${color}14` : "transparent",
+                              borderRadius: 3, padding: "1px 3px",
+                            }}>
+                              {val}%
+                            </span>
+                          ))}
                         </div>
                       </div>
                     ))}
@@ -1263,48 +1287,6 @@ const AREA_DISPLAY_FORMS = [
   { value: "TABS", label: "탭 전환" },
   { value: "ACCORDION", label: "아코디언" },
 ];
-
-const STATUS_LABELS: Record<string, string> = {
-  NONE: "미착수",
-  DESIGN_DONE: "설계완료",
-  IMPL_DONE: "구현완료",
-};
-
-function priorityBadgeStyle(priority: string): React.CSSProperties {
-  const colors: Record<string, { bg: string; color: string }> = {
-    HIGH: { bg: "#fce4ec", color: "#880e4f" },
-    MEDIUM: { bg: "#fff3e0", color: "#e65100" },
-    LOW: { bg: "#e8f5e9", color: "#2e7d32" },
-  };
-  const c = colors[priority] ?? { bg: "#f5f5f5", color: "#555" };
-  return {
-    display: "inline-block",
-    padding: "2px 8px",
-    borderRadius: 4,
-    fontSize: 11,
-    fontWeight: 600,
-    background: c.bg,
-    color: c.color,
-  };
-}
-
-function statusBadgeStyle(status: string): React.CSSProperties {
-  const colors: Record<string, { bg: string; color: string }> = {
-    NONE: { bg: "#f5f5f5", color: "#555" },
-    DESIGN_DONE: { bg: "#e3f2fd", color: "#1565c0" },
-    IMPL_DONE: { bg: "#e8f5e9", color: "#2e7d32" },
-  };
-  const c = colors[status] ?? { bg: "#f5f5f5", color: "#555" };
-  return {
-    display: "inline-block",
-    padding: "2px 8px",
-    borderRadius: 4,
-    fontSize: 11,
-    fontWeight: 600,
-    background: c.bg,
-    color: c.color,
-  };
-}
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
@@ -1503,18 +1485,69 @@ const AREA_DISPLAY_FORM_HELP_BODY = (
 const labelStyle: React.CSSProperties = {
   display: "block",
   marginBottom: 6,
-  fontSize: 13,
+  fontSize: 12,
   fontWeight: 600,
   color: "var(--color-text-secondary)",
 };
 
-const FUNC_GRID_TEMPLATE = "60px 1fr 100px 100px 100px";
+// ── 영역 설계(와이어프레임) 작성 상태 라디오 그룹 — 단위업무/화면/기능 상세와 동일한 패턴 ──
+const DOC_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "BEFORE", label: "작성 전" },
+  { value: "DOING", label: "작성 중" },
+  { value: "DONE", label: "작성 완료" },
+];
+const DOC_STATUS_COLOR: Record<string, string> = {
+  BEFORE: "var(--color-error)",
+  DOING: "var(--color-info)",
+  DONE: "var(--color-success)",
+};
 
+function DocStatusSwitch({
+  value, onChange, disabled,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="sp-radio-group" style={{ gap: 16, opacity: disabled ? 0.6 : 1, pointerEvents: disabled ? "none" : undefined }}>
+      {DOC_STATUS_OPTIONS.map((opt) => {
+        const active = value === opt.value;
+        const activeColor = DOC_STATUS_COLOR[opt.value];
+        return (
+          <div
+            key={opt.value}
+            className={`sp-radio-option${active ? " is-selected" : ""}`}
+            onClick={() => onChange(opt.value)}
+            style={{
+              flex: "none", border: "none", background: "transparent", padding: 0, whiteSpace: "nowrap",
+              color: active ? activeColor : undefined,
+              fontWeight: active ? 700 : 500,
+              transition: "color 0.15s",
+            }}
+          >
+            <span
+              className="radio-dot"
+              style={active ? { borderColor: activeColor, background: activeColor, transition: "border-color 0.15s, background 0.15s" } : undefined}
+            />
+            {opt.label}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// 순서/우선순위/상태 컬럼 제거 — 기능명, 설/구만 노출(2026-07-29)
+const FUNC_GRID_TEMPLATE = "1fr 100px";
+
+// 패딩을 화면 편집의 영역 목록 표(areaGridHeaderStyle/RowStyle, screens/[screenId]/page.tsx)와
+// 맞춤(8px 14px / 10px 14px) — 같은 성격의 하위 목록 표라 두 페이지에서 다르게 보이지 않도록 통일(2026-07-29)
 const funcGridHeaderStyle: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: FUNC_GRID_TEMPLATE,
   gap: 12,
-  padding: "10px 16px",
+  padding: "8px 14px",
   background: "var(--color-bg-muted)",
   fontSize: 12,
   fontWeight: 600,
@@ -1527,7 +1560,7 @@ const funcGridRowStyle: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: FUNC_GRID_TEMPLATE,
   gap: 12,
-  padding: "12px 16px",
+  padding: "10px 14px",
   alignItems: "center",
   background: "var(--color-bg-card)",
 };

@@ -1,33 +1,39 @@
 "use client";
 
 /**
- * StalledCard — 관리뷰: 정체된 일 (마감 지났는데 미완료)
+ * StalledCard — 관리뷰: 정체된 일 (설계·구현 중 한 phase 라도 마감 지났는데 그 phase 미완료)
  *
  * 역할:
- *   - 마감일이 지났는데 진행률 < 100 인 단위업무
- *   - Top 5 미리보기 + 전체 건수
- *   - 상단에 화면(설계)/기능(구현) 지연 카운트도 함께 표기 — 단위업무만 보면 놓치는
- *     설계·구현 단계 지연을 놓치지 않도록. 목록은 그대로 단위업무만(전체 상세는 PM 진단에서).
+ *   - 설계 종료 예정일 또는 구현 종료 예정일 "둘 중 하나라도" 지났는데 그 phase 진척률이
+ *     100% 미만인 단위업무. 두 phase 를 평균 내지 않고 각각 판정 — 설계는 제때 끝났는데
+ *     구현이 아직 시작 전(기간도 안 지남)인 경우까지 정체로 잘못 잡히는 걸 막기 위함.
+ *   - Top 5 미리보기 + 전체 건수. 각 행에 설계/구현 날짜·진척률을 두 줄로 분리 표시,
+ *     지연을 유발한 phase만 강조색으로 표시.
+ *   - 상단에 설계(단위업무 기준)/구현(기능 기준) 지연 카운트도 함께 표기 — 단위업무만
+ *     보면 놓치는 설계·구현 단계 지연을 놓치지 않도록. 목록은 그대로 단위업무만(전체 상세는 PM 진단에서).
  *   - 각 행 클릭 → 단위업무 상세로 이동
  */
 
 import Link from "next/link";
 import DashboardCard from "../DashboardCard";
+import HelpButton from "@/components/common/HelpButton";
+
+type PhaseInfo = { endDate: string | null; progress: number; overdue: boolean };
 
 type StalledItem = {
   unitWorkId:       string;
   displayId:        string;
   name:             string;
-  endDate:          string;
-  progress:         number;
   assignMemberName: string | null;
+  design:           PhaseInfo;
+  impl:             PhaseInfo;
 };
 
 type Props = {
   data: {
     count: number;
     items: StalledItem[];
-    screenDelayedCount:   number;
+    designDelayedCount:   number;
     functionDelayedCount: number;
   } | undefined;
   isLoading: boolean;
@@ -53,6 +59,14 @@ export default function StalledCard({ data, isLoading, error, projectId }: Props
           </span>
         ) : null
       }
+      help={
+        <HelpButton title="정체된 일 기준">
+          <p>설계·구현 중 <b>하나라도</b> 종료 예정일이 지났는데 그 진척률이 100% 미만이면 정체입니다. (기간이 안 지난 phase는 진척률이 낮아도 정체 아님)</p>
+          <p><b>설계</b> — 단위업무의 설계 종료 예정일 · 설계 진척률.<br /><b>구현</b> — 하위 화면의 구현 종료 예정일(최댓값) · 구현 진척률.</p>
+          <p>빨간색으로 표시된 줄이 실제로 정체를 유발한 phase입니다.</p>
+          <p><b>설계 N · 구현 N</b> — 목록과 별개로, 설계 지연 단위업무 수 / 구현 지연 기능 수.</p>
+        </HelpButton>
+      }
       linkHref="/pm?focus=delay"
       linkLabel="PM 진단에서 설계·구현 지연 보기"
       isLoading={isLoading}
@@ -70,7 +84,7 @@ export default function StalledCard({ data, isLoading, error, projectId }: Props
               paddingBottom: 4,
             }}
           >
-            단위업무 {data.count} · 화면 {data.screenDelayedCount} · 기능 {data.functionDelayedCount}
+            단위업무 {data.count} · 설계 {data.designDelayedCount} · 구현 {data.functionDelayedCount}
           </div>
           {data.items.map((it) => (
             <Link
@@ -131,13 +145,26 @@ export default function StalledCard({ data, isLoading, error, projectId }: Props
               </span>
               <span
                 style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-end",
+                  gap: 1,
                   fontSize: "var(--text-xs)",
-                  color: "var(--color-error)",
                   whiteSpace: "nowrap",
-                  fontFamily: "var(--font-mono)",
                 }}
               >
-                {it.endDate} · {it.progress}%
+                <span style={{ color: it.design.overdue ? "var(--color-error)" : "var(--color-text-tertiary)" }}>
+                  설계{" "}
+                  <span style={{ fontFamily: "var(--font-mono)" }}>
+                    {it.design.endDate ?? "-"}·{it.design.progress}%
+                  </span>
+                </span>
+                <span style={{ color: it.impl.overdue ? "var(--color-error)" : "var(--color-text-tertiary)" }}>
+                  구현{" "}
+                  <span style={{ fontFamily: "var(--font-mono)" }}>
+                    {it.impl.endDate ?? "-"}·{it.impl.progress}%
+                  </span>
+                </span>
               </span>
             </Link>
           ))}

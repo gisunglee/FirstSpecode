@@ -454,7 +454,8 @@ function DetailInner() {
             목록 쪽으로 더 몰아줌 — 목록이 컬럼 6개(기획명/구분/형식/AI상태/액션/수정일시)라 더 넓어야 함.
             행 높이를 고정하고 두 컬럼을 flex column으로 만들어, 컨텍스트 칩 개수가 늘어나도
             (내부 스크롤만 늘어날 뿐) 컬럼 전체 높이는 항상 목록과 정확히 같게 유지한다. */}
-        <div style={{ display: "grid", gridTemplateColumns: "5fr 2fr", gap: 16, padding: "16px 20px", borderBottom: "1px solid var(--color-border)", background: "var(--color-bg-muted)", height: 380, flexShrink: 0 }}>
+        {/* 좌우 20→24px — 헤더(10px 24px)와 동일한 전체 폭 기준으로 맞춤(2026-07-29) */}
+        <div style={{ display: "grid", gridTemplateColumns: "5fr 2fr", gap: 16, padding: "16px 24px", borderBottom: "1px solid var(--color-border)", background: "var(--color-bg-muted)", height: 380, flexShrink: 0 }}>
 
           {/* ── 좌: 산출물 목록 ── */}
           <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
@@ -643,8 +644,9 @@ function DetailInner() {
         <div style={{ display: "grid" }}>
           {/* 하단 — 결과 뷰어 (full width, 내부 스크롤 없음 — 페이지 스크롤에 맡김) */}
           <div style={{ gridColumn: "1 / -1", gridRow: "1 / -1", display: "flex", flexDirection: "column", background: "var(--color-bg-card)" }}>
-          {/* 탭 바 */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 16px", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
+          {/* 탭 바 — 좌우 패딩을 헤더·상단 섹션과 동일한 24px로 — 사이드바·화면 끝에
+              바짝 붙어 보이던 문제 해결(2026-07-29, 20px로는 부족해 24px로 재조정) */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 24px", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
             <div style={{ display: "flex", gap: 4 }}>
               <button onClick={() => setViewMode("preview")} style={{ ...tabBtn, fontWeight: viewMode === "preview" ? 700 : 400 }}>미리보기</button>
               <button onClick={() => setViewMode("edit")} style={{ ...tabBtn, fontWeight: viewMode === "edit" ? 700 : 400 }}>원문편집</button>
@@ -660,8 +662,10 @@ function DetailInner() {
             </div>
           </div>
 
-          {/* 렌더링 영역 — 내용 높이만큼 자연스럽게 늘어나고, 스크롤은 페이지(<main>) 가 담당 */}
-          <div style={{ padding: 16, minHeight: 400 }}>
+          {/* 렌더링 영역 — 내용 높이만큼 자연스럽게 늘어나고, 스크롤은 페이지(<main>) 가 담당.
+              좌우 24px — 위 탭 바·헤더와 동일한 여백. Mermaid 다이어그램도 이 패딩 안에서
+              그려지므로 사이드바에 바짝 붙어 보이던 문제가 여기서 해결됨(2026-07-29) */}
+          <div style={{ padding: "16px 24px", minHeight: 400 }}>
             {viewMode === "edit" ? (
               <textarea value={artfCn} onChange={(e) => setArtfCn(e.target.value)} className="sp-input" style={{ width: "100%", height: 500, boxSizing: "border-box", fontFamily: "monospace", resize: "vertical" }} />
             ) : !artfCn ? (

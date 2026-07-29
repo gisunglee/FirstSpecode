@@ -29,6 +29,7 @@ import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { fetchProjectMembers } from "@/lib/exports/members-data";
 import { fetchDeadlineItems } from "@/lib/pm/fetchDeadlineItems";
 import { computeDDay } from "@/lib/pm/deadlineProgress";
+import { parseEffortHours } from "@/lib/effort";
 import type { MyTaskNode, MyTaskResponse, MyTaskView, MyTaskSortBy } from "@/types/myTask";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -74,6 +75,26 @@ function flattenSkipArea(nodes: MyTaskNode[]): MyTaskNode[] {
     out.push(...flattenSkipArea(n.children));
   }
   return out;
+}
+
+// 단위업무의 구현 일정 롤업 — 하위 화면들의 실질구현기간 중 가장 이른 시작일/가장 늦은
+// 종료일. 하나도 없으면 null(비워둠). "YYYY-MM-DD" 문자열이라 사전식 비교 = 날짜 비교.
+function rollupDateRange(dates: { start: string | null; end: string | null }[]): { start: string | null; end: string | null } {
+  const starts = dates.map((d) => d.start).filter((s): s is string => !!s);
+  const ends = dates.map((d) => d.end).filter((e): e is string => !!e);
+  return {
+    start: starts.length > 0 ? starts.reduce((min, s) => (s < min ? s : min)) : null,
+    end:   ends.length   > 0 ? ends.reduce((max, e) => (e > max ? e : max)) : null,
+  };
+}
+
+// 구현 공수 롤업 — 하위 기능들의 공수(시간)를 합산. 값이 있는 기능이 하나도 없으면
+// null(0으로 채우면 "공수 0으로 확정"과 "아직 아무도 안 입력"이 구분 안 됨).
+function sumEffortHours(vals: (string | null)[]): string | null {
+  const withValue = vals.filter((v) => v && v.trim());
+  if (withValue.length === 0) return null;
+  const total = withValue.reduce((sum, v) => sum + parseEffortHours(v), 0);
+  return String(total);
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
@@ -138,58 +159,79 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const scrImpl = toMap(scrImplRows), scrDesign = toMap(scrDesignRows);
     const fnImpl = toMap(fnImplRows), fnDesign = toMap(fnDesignRows);
 
-    // 기능 자신은 일정이 없음 — 소속 화면의 실질구현기간을 그대로 상속(2026-07-28).
-    // 화면이 없는(orphan) 기능은 상속할 데가 없어 null 그대로.
+    // 기능 자신은 구현 일정이 없음 — 소속 화면의 실질구현기간을 그대로 상속(2026-07-28).
+    // 화면이 없는(orphan) 기능은 상속할 데가 없어 null 그대로. 설계 일정/공수는 애초에
+    // 단위업무 소관이라 기능은 관여하지 않음 — 항상 null.
     function toFunctionNode(
       fn: (typeof orphanFunctions)[number],
       screenImplDates?: { start: string | null; end: string | null },
     ): MyTaskNode {
-      const startDate = screenImplDates?.start ?? null;
-      const endDate   = screenImplDates?.end   ?? null;
+      const implStartDate = screenImplDates?.start ?? null;
+      const implEndDate   = screenImplDates?.end   ?? null;
       return {
         kind: "FUNCTION", id: fn.func_id, displayId: fn.func_display_id, name: fn.func_nm,
         href: `/projects/${projectId}/functions/${fn.func_id}`,
         assigneeId: fn.asign_mber_id, assigneeName: fn.asign_mber_id ? (nameMap.get(fn.asign_mber_id) ?? null) : null,
-        startDate, endDate, effort: fn.impl_efrt_val,
+        docStatus: fn.dsgn_doc_sttus_code,
+        designStartDate: null, designEndDate: null, designEffort: null,
+        implStartDate, implEndDate, implEffort: fn.impl_efrt_val,
         designProgress: fnDesign.get(fn.func_id) ?? 0, implProgress: fnImpl.get(fn.func_id) ?? 0,
-        dDay: endDate ? computeDDay(endDate, today) : null,
+        dDay: implEndDate ? computeDDay(implEndDate, today) : null,
         sortOrder: fn.sort_ordr,
         children: [],
       };
     }
 
-    const tree: MyTaskNode[] = unitWorks.map((uw) => ({
-      kind: "UNIT_WORK", id: uw.unit_work_id, displayId: uw.unit_work_display_id, name: uw.unit_work_nm,
-      href: `/projects/${projectId}/unit-works/${uw.unit_work_id}`,
-      assigneeId: uw.asign_mber_id, assigneeName: uw.asign_mber_id ? (nameMap.get(uw.asign_mber_id) ?? null) : null,
-      // 단위업무의 계획설계기간 — PM이 잡는 상위 마일스톤(목표치), 진척과 무관
-      startDate: uw.plan_dsgn_bgng_de, endDate: uw.plan_dsgn_end_de, effort: null,
-      designProgress: uwDesign.get(uw.unit_work_id) ?? 0, implProgress: uwImpl.get(uw.unit_work_id) ?? 0,
-      dDay: uw.plan_dsgn_end_de ? computeDDay(uw.plan_dsgn_end_de, today) : null,
-      sortOrder: uw.sort_ordr,
-      children: uw.screens.map((scr) => ({
-        kind: "SCREEN", id: scr.scrn_id, displayId: scr.scrn_display_id, name: scr.scrn_nm,
-        href: `/projects/${projectId}/screens/${scr.scrn_id}`,
-        assigneeId: scr.asign_mber_id, assigneeName: scr.asign_mber_id ? (nameMap.get(scr.asign_mber_id) ?? null) : null,
-        // 화면 노드는 실질설계기간 기준으로 표시(구현기간은 하위 기능 노드에서 상속해서 보여줌)
-        startDate: scr.actl_dsgn_bgng_de, endDate: scr.actl_dsgn_end_de, effort: scr.actl_dsgn_efrt_val,
-        designProgress: scrDesign.get(scr.scrn_id) ?? 0, implProgress: scrImpl.get(scr.scrn_id) ?? 0,
-        dDay: scr.actl_dsgn_end_de ? computeDDay(scr.actl_dsgn_end_de, today) : null,
-        sortOrder: scr.sort_ordr,
-        children: scr.areas.map((ar) => ({
-          kind: "AREA", id: ar.area_id, displayId: ar.area_display_id, name: ar.area_nm,
-          href: `/projects/${projectId}/areas/${ar.area_id}`,
-          assigneeId: null, assigneeName: null,
-          startDate: null, endDate: null, effort: null,
-          designProgress: null, implProgress: null,
-          dDay: null,
-          sortOrder: ar.sort_ordr,
-          children: ar.functions.map((fn) => toFunctionNode(fn, {
-            start: scr.actl_impl_bgng_de, end: scr.actl_impl_end_de,
-          })),
-        })),
-      })),
-    }));
+    const tree: MyTaskNode[] = unitWorks.map((uw) => {
+      const uwFunctions = uw.screens.flatMap((scr) => scr.areas.flatMap((ar) => ar.functions));
+      // 단위업무는 구현 일정/공수 자체가 없는 필드 — 하위 화면(일정)·기능(공수) 롤업으로 채운다.
+      const uwImplDates = rollupDateRange(uw.screens.map((scr) => ({ start: scr.actl_impl_bgng_de, end: scr.actl_impl_end_de })));
+      const uwImplEffort = sumEffortHours(uwFunctions.map((fn) => fn.impl_efrt_val));
+
+      return {
+        kind: "UNIT_WORK", id: uw.unit_work_id, displayId: uw.unit_work_display_id, name: uw.unit_work_nm,
+        href: `/projects/${projectId}/unit-works/${uw.unit_work_id}`,
+        assigneeId: uw.asign_mber_id, assigneeName: uw.asign_mber_id ? (nameMap.get(uw.asign_mber_id) ?? null) : null,
+        docStatus: uw.dsgn_doc_sttus_code,
+        // 계획설계기간/공수 — PM이 잡는 상위 마일스톤(목표치), 진척과 무관. 단위업무 직접 소유.
+        designStartDate: uw.plan_dsgn_bgng_de, designEndDate: uw.plan_dsgn_end_de, designEffort: uw.plan_dsgn_efrt_val,
+        implStartDate: uwImplDates.start, implEndDate: uwImplDates.end, implEffort: uwImplEffort,
+        designProgress: uwDesign.get(uw.unit_work_id) ?? 0, implProgress: uwImpl.get(uw.unit_work_id) ?? 0,
+        dDay: uw.plan_dsgn_end_de ? computeDDay(uw.plan_dsgn_end_de, today) : null,
+        sortOrder: uw.sort_ordr,
+        children: uw.screens.map((scr) => {
+          const scrFunctions = scr.areas.flatMap((ar) => ar.functions);
+          return {
+            kind: "SCREEN", id: scr.scrn_id, displayId: scr.scrn_display_id, name: scr.scrn_nm,
+            href: `/projects/${projectId}/screens/${scr.scrn_id}`,
+            assigneeId: scr.asign_mber_id, assigneeName: scr.asign_mber_id ? (nameMap.get(scr.asign_mber_id) ?? null) : null,
+            docStatus: scr.dsgn_doc_sttus_code,
+            // 화면 자신은 설계 일정/공수가 없음(2026-07-28부터 단위업무 소관) — 비워둔다.
+            designStartDate: null, designEndDate: null, designEffort: null,
+            // 구현 일정은 화면이 직접 소유, 구현 공수는 하위 기능들의 합산 롤업.
+            implStartDate: scr.actl_impl_bgng_de, implEndDate: scr.actl_impl_end_de,
+            implEffort: sumEffortHours(scrFunctions.map((fn) => fn.impl_efrt_val)),
+            designProgress: scrDesign.get(scr.scrn_id) ?? 0, implProgress: scrImpl.get(scr.scrn_id) ?? 0,
+            dDay: scr.actl_impl_end_de ? computeDDay(scr.actl_impl_end_de, today) : null,
+            sortOrder: scr.sort_ordr,
+            children: scr.areas.map((ar) => ({
+              kind: "AREA", id: ar.area_id, displayId: ar.area_display_id, name: ar.area_nm,
+              href: `/projects/${projectId}/areas/${ar.area_id}`,
+              assigneeId: null, assigneeName: null,
+              docStatus: ar.dsgn_doc_sttus_code,
+              designStartDate: null, designEndDate: null, designEffort: null,
+              implStartDate: null, implEndDate: null, implEffort: null,
+              designProgress: null, implProgress: null,
+              dDay: null,
+              sortOrder: ar.sort_ordr,
+              children: ar.functions.map((fn) => toFunctionNode(fn, {
+                start: scr.actl_impl_bgng_de, end: scr.actl_impl_end_de,
+              })),
+            })),
+          };
+        }),
+      };
+    });
 
     // 영역이 아예 없는(또는 영역이 화면에 안 붙은) 기능 — 트리 최상위에 별도 노드로 얹는다.
     // 어느 단위업무 소속인지 알 방법이 없어(그게 문제 상황 자체) 구조상 위치를 줄 수 없음 —

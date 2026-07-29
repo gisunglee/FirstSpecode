@@ -18,6 +18,8 @@ export type FunctionListItem = {
   areaId:          string | null;
   assignMemberId:  string | null;
   assignMemberName: string | null;
+  // 기능정의서 작성 상태 — BEFORE(작성전) / DOING(작성중) / DONE(작성완료)
+  docStatus:       string;
   areaName:        string;
   areaDisplayId:   string | null;
   areaSortOrder:   number;
@@ -33,14 +35,14 @@ export type FunctionListItem = {
   // WBS "구현" phase에서 기능 바를 그릴 때 부모 화면의 실질구현기간을 그대로 상속해서 쓴다.
   startDate:       string | null;
   endDate:         string | null;
-  // 부모 화면의 실질 설계 일정 — WBS "설계" phase에서 기능 바를 그릴 때 상속해서 쓴다.
-  screenDesignStartDate: string | null;
-  screenDesignEndDate:   string | null;
+  // 소속 단위업무의 계획설계기간 — 설계는 화면이 아니라 단위업무 소관(2026-07-28 2차 개편).
+  // WBS "설계" phase에서 기능 바를 그릴 때 2단계(화면→단위업무) 상속해서 쓴다.
+  unitWorkDesignStartDate: string | null;
+  unitWorkDesignEndDate:   string | null;
   aiDesign:        FunctionAiTaskInfo | null;
   aiInspect:       FunctionAiTaskInfo | null;
   designRt:        number;
   implRt:          number;
-  testRt:          number;
 };
 
 /**
@@ -75,12 +77,13 @@ export async function fetchProjectFunctions(opts: {
               ctgry_l_nm:      true,
               ctgry_m_nm:      true,
               ctgry_s_nm:      true,
-              actl_dsgn_bgng_de: true,
-              actl_dsgn_end_de:  true,
               actl_impl_bgng_de: true,
               actl_impl_end_de:  true,
               unitWork: {
-                select: { unit_work_id: true, unit_work_nm: true, sort_ordr: true },
+                select: {
+                  unit_work_id: true, unit_work_nm: true, sort_ordr: true,
+                  plan_dsgn_bgng_de: true, plan_dsgn_end_de: true,
+                },
               },
             },
           },
@@ -123,7 +126,7 @@ export async function fetchProjectFunctions(opts: {
   const progressRecords = funcIds.length > 0
     ? await prisma.tbCmProgress.findMany({
         where:  { ref_tbl_nm: "tb_ds_function", ref_id: { in: funcIds } },
-        select: { ref_id: true, design_rt: true, impl_rt: true, test_rt: true },
+        select: { ref_id: true, design_rt: true, impl_rt: true },
       })
     : [];
   const progressMap = new Map(progressRecords.map((p) => [p.ref_id, p]));
@@ -171,6 +174,7 @@ export async function fetchProjectFunctions(opts: {
     areaId:          f.area_id ?? null,
     assignMemberId:  f.asign_mber_id ?? null,
     assignMemberName: f.asign_mber_id ? (assigneeMap.get(f.asign_mber_id) ?? null) : null,
+    docStatus:       f.dsgn_doc_sttus_code,
     areaName:        f.area?.area_nm ?? "미분류",
     areaDisplayId:   f.area?.area_display_id ?? null,
     areaSortOrder:   f.area?.sort_ordr ?? 0,
@@ -184,12 +188,11 @@ export async function fetchProjectFunctions(opts: {
     unitWorkName:    f.area?.screen?.unitWork?.unit_work_nm ?? "미분류",
     startDate:       f.area?.screen?.actl_impl_bgng_de ?? null,
     endDate:         f.area?.screen?.actl_impl_end_de ?? null,
-    screenDesignStartDate: f.area?.screen?.actl_dsgn_bgng_de ?? null,
-    screenDesignEndDate:   f.area?.screen?.actl_dsgn_end_de ?? null,
+    unitWorkDesignStartDate: f.area?.screen?.unitWork?.plan_dsgn_bgng_de ?? null,
+    unitWorkDesignEndDate:   f.area?.screen?.unitWork?.plan_dsgn_end_de ?? null,
     aiDesign:        aiMap[f.func_id]?.["DESIGN"]  ?? null,
     aiInspect:       aiMap[f.func_id]?.["INSPECT"] ?? null,
     designRt:        progressMap.get(f.func_id)?.design_rt ?? 0,
     implRt:          progressMap.get(f.func_id)?.impl_rt   ?? 0,
-    testRt:          progressMap.get(f.func_id)?.test_rt   ?? 0,
   }));
 }

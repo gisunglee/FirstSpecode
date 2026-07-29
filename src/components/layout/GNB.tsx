@@ -694,26 +694,14 @@ function detectChipType(label: string): { type: ChipType; badge: string; rest: s
   return { type: "TEXT", badge: "", rest: label };
 }
 
-const CHIP_COLORS: Record<ChipType, { bg: string; color: string }> = {
-  UW:   { bg: "#e3f2fd", color: "#1565c0" },  // 파랑
-  SCR:  { bg: "#e8f5e9", color: "#2e7d32" },  // 초록
-  PID:  { bg: "#e8f5e9", color: "#2e7d32" },  // 초록 (화면 동일)
-  AR:   { bg: "#fff3e0", color: "#e65100" },  // 주황
-  FN:   { bg: "#f3e5f5", color: "#6a1b9a" },  // 보라
-  RQ:   { bg: "#eceff1", color: "#455a64" },  // 회색
-  LIST: { bg: "#f5f5f5", color: "#757575" },  // 회색
-  TEXT: { bg: "#f5f5f5", color: "#757575" },
-};
-
-// tag별 색상 — 브레드크럼 아이템에 tag 속성으로 전달
-const TAG_COLORS: Record<string, { bg: string; color: string }> = {
-  과업:       { bg: "#e3f2fd", color: "#1565c0" },
-  요구사항:   { bg: "#eceff1", color: "#455a64" },
-  스토리:     { bg: "#f3e5f5", color: "#6a1b9a" },
-  화면:       { bg: "#e8f5e9", color: "#2e7d32" },
-  영역:       { bg: "#fff3e0", color: "#e65100" },
-  기능:       { bg: "#f3e5f5", color: "#6a1b9a" },
-};
+// 배지 색 — 예전엔 유형별 무지개색(UW=파랑/SCR·PID=초록/AR=주황/FN=보라 등)이었으나
+// "진지한 프로그램인데 색이 너무 애들 같다"는 피드백으로 전부 중립 회색으로 통일하고,
+// 마지막(현재 위치) 항목만 브랜드 컬러로 강조하는 방식으로 변경(2026-07-29)
+function getBadgeColor(isLast: boolean): { bg: string; color: string } {
+  return isLast
+    ? { bg: "var(--color-brand-subtle)", color: "var(--color-brand)" }
+    : { bg: "var(--color-bg-muted)", color: "var(--color-text-secondary)" };
+}
 
 function BreadcrumbChip({ label, href, tag, isLast, onNavigate }: {
   label:      string;
@@ -722,9 +710,8 @@ function BreadcrumbChip({ label, href, tag, isLast, onNavigate }: {
   isLast:     boolean;
   onNavigate: (href: string) => void;
 }) {
-  const { type, badge, rest } = detectChipType(label);
-  const color = CHIP_COLORS[type];
-  const tagColor = tag ? TAG_COLORS[tag] : undefined;
+  const { badge, rest } = detectChipType(label);
+  const color = getBadgeColor(isLast);
   const clickable = !!href;
 
   // 현재 위치 = href 없는 항목
@@ -744,10 +731,10 @@ function BreadcrumbChip({ label, href, tag, isLast, onNavigate }: {
         <span className="sp-badge" style={{
           fontSize: 10, fontWeight: 600,
           padding: "1px 5px", borderRadius: 3,
-          background: tagColor?.bg ?? "#f5f5f5",
-          color: tagColor?.color ?? "#757575",
+          background: color.bg, color: color.color,
           letterSpacing: "0.02em",
           whiteSpace: "nowrap",
+          flexShrink: 0,
         }}>
           {tag}
         </span>
@@ -758,14 +745,25 @@ function BreadcrumbChip({ label, href, tag, isLast, onNavigate }: {
           padding: "1px 5px", borderRadius: 3,
           background: color.bg, color: color.color,
           fontFamily: "monospace", letterSpacing: "0.02em",
+          whiteSpace: "nowrap",
+          flexShrink: 0,
         }}>
           {badge}
         </span>
       )}
-      <span style={{
-        color: isCurrent ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-        fontWeight: isCurrent ? 700 : 400,
-      }}>
+      {/* 이름 — 노트북처럼 좁은 화면에서 긴 단위업무명 등이 브레드크럼 전체를 밀어내지
+          않도록 말줄임 처리. title 툴팁으로 전체 이름은 계속 확인 가능(2026-07-29) */}
+      <span
+        title={rest}
+        style={{
+          color: isCurrent ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+          fontWeight: isCurrent ? 700 : 400,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          maxWidth: 140,
+        }}
+      >
         {rest}
       </span>
     </span>

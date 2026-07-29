@@ -15,7 +15,12 @@ import { MY_TASK_KIND_LABELS } from "@/types/myTask";
 import InlineEditCell from "./InlineEditCell";
 
 // 행 그리드 열 고정폭 — 목록/트리 양쪽에서 동일하게 써야 두 뷰가 같은 느낌을 준다.
-export const ROW_COLS = { kind: "64px", assignee: "76px", dday: "56px", start: "92px", end: "92px", effort: "56px", design: "52px", impl: "52px" };
+export const ROW_COLS = {
+  kind: "64px", assignee: "76px", dday: "56px", docStatus: "48px",
+  designStart: "84px", designEnd: "84px", implStart: "84px", implEnd: "84px",
+  designEffort: "56px", implEffort: "56px",
+  design: "52px", impl: "52px",
+};
 
 export function endpointFor(kind: MyTaskKind, id: string, projectId: string): string | null {
   switch (kind) {
@@ -53,6 +58,23 @@ function formatDDay(d: number | null): { label: string; color: string } {
 export function DDayLabel({ dDay }: { dDay: number | null }) {
   const { label, color } = formatDDay(dDay);
   return <span style={{ fontSize: "var(--text-sm)", fontWeight: 700, color, whiteSpace: "nowrap" }}>{label}</span>;
+}
+
+// 작성상태 — 4레벨(단위업무/화면/영역/기능) 모두 자기 소유 컬럼이라 항상 값이 있음.
+// unit-works/page.tsx 목록과 동일 관례: 색 구분 없이 짧은 텍스트("전/중/완료")로만 표시하고
+// 전체 라벨은 title 툴팁으로 보조("목록에서는 강조가 과했다"는 기존 피드백과 동일 기준 적용).
+const DOC_STATUS_LIST_LABEL: Record<string, string> = { BEFORE: "작성전", DOING: "작성중", DONE: "완료" };
+const DOC_STATUS_FULL_LABEL: Record<string, string> = { BEFORE: "작성 전", DOING: "작성 중", DONE: "작성 완료" };
+
+export function DocStatusLabel({ docStatus }: { docStatus: string }) {
+  return (
+    <span
+      title={DOC_STATUS_FULL_LABEL[docStatus] ?? docStatus}
+      style={{ display: "block", textAlign: "center", fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}
+    >
+      {DOC_STATUS_LIST_LABEL[docStatus] ?? docStatus}
+    </span>
+  );
 }
 
 // 진척률은 "기능걸로 통일" 원칙 — 단위업무/화면은 하위 기능 롤업, 기능은 자기 값. 직접 편집 대상이
@@ -129,19 +151,48 @@ export function AssigneeCell({ node, projectId, onChanged, members }: CellProps 
   );
 }
 
-export function DateFieldCell({ node, projectId, onChanged, field }: CellProps & { field: "startDate" | "endDate" }) {
+// "x"(미입력)는 그 필드를 DB에 실제로 저장하는 레벨(직접 입력 대상)이 값을 안 채웠을 때만.
+// 롤업(하위 값 집계)이나 상속(상위/형제 값을 그대로 보여주기만 함)으로 채워지는 칸은 그 값이
+// 없어도 "-"로 표시 — "누가 입력을 안 했다"가 아니라 "집계할 하위 데이터가 아직 없다"일 뿐이라
+// 미입력 경고처럼 보이면 오해를 줌. 설계일정/공수는 단위업무만 직접 소유, 구현일정은 화면만
+// 직접 소유(단위업무는 롤업, 기능은 화면 값 상속), 구현공수는 기능만 직접 소유(단위업무·화면은 롤업).
+function isDesignFieldOwner(kind: MyTaskKind): boolean {
+  return kind === "UNIT_WORK";
+}
+function isImplDateOwner(kind: MyTaskKind): boolean {
+  return kind === "SCREEN";
+}
+function isImplEffortOwner(kind: MyTaskKind): boolean {
+  return kind === "FUNCTION";
+}
+
+type DateField = "designStartDate" | "designEndDate" | "implStartDate" | "implEndDate";
+
+export function DateFieldCell({ node, projectId, onChanged, field }: CellProps & { field: DateField }) {
   const endpoint = endpointFor(node.kind, node.id, projectId);
-  const value = field === "startDate" ? node.startDate : node.endDate;
-  // 기능(FUNCTION)은 2026-07-28부터 구현 일정이 없음 — 소속 화면의 일정을 그대로 보여주는
-  // 읽기전용 상속값이라 여기서 수정할 대상 자체가 없다(화면 행에서 편집해야 함).
-  // disabledText에 실제 값을 넣어야 함 — 그냥 "-"로 두면 상속된 날짜가 안 보임.
-  const supportsDate = node.kind !== "FUNCTION";
+  const value =
+    field === "designStartDate" ? node.designStartDate :
+    field === "designEndDate"   ? node.designEndDate :
+    field === "implStartDate"   ? node.implStartDate :
+                                   node.implEndDate;
+
+  // 설계 일정은 단위업무만 직접 소유 → 여기서 인라인 편집 가능(API field는 startDate/endDate).
+  // 구현 일정은 화면이 직접 소유하지만 전체 편집(PUT, 화면 상세 페이지)에서만 바꿀 수 있어
+  // 여기선 읽기전용. 단위업무의 구현 일정(롤업)·기능의 구현 일정(화면 상속)은 애초에
+  // 자기 소유가 아니라 항상 읽기전용.
+  const isDesignField = field === "designStartDate" || field === "designEndDate";
+  const editable = isDesignField && node.kind === "UNIT_WORK";
+  const apiField = field === "designStartDate" || field === "implStartDate" ? "startDate" : "endDate";
+  const isOwner = isDesignField ? isDesignFieldOwner(node.kind) : isImplDateOwner(node.kind);
+  // 직접 소유한 레벨인데 값이 없으면 "x"(미입력), 그 외(구조상 없음/롤업/상속 대상)는 "-"
+  const displayText = value ?? (isOwner ? "x" : "-");
+
   return (
     <InlineEditCell
-      disabled={!supportsDate || !endpoint}
-      disabledText={value ?? "-"}
+      disabled={!editable || !endpoint}
+      disabledText={displayText}
       align="center"
-      renderDisplay={() => value ?? "-"}
+      renderDisplay={() => displayText}
       renderEditor={(commit, cancel) => (
         <input
           type="date"
@@ -156,25 +207,34 @@ export function DateFieldCell({ node, projectId, onChanged, field }: CellProps &
           style={{ fontSize: "var(--text-sm)", padding: "1px 2px", height: 24, width: "100%", textAlign: "center" }}
         />
       )}
-      onSave={(v) => endpoint ? patchField(endpoint, field, v, onChanged) : Promise.resolve()}
+      onSave={(v) => endpoint ? patchField(endpoint, apiField, v, onChanged) : Promise.resolve()}
     />
   );
 }
 
-export function EffortCell({ node, projectId, onChanged }: CellProps) {
-  const supportsEffort = node.kind === "SCREEN" || node.kind === "FUNCTION";
+type EffortField = "designEffort" | "implEffort";
+
+export function EffortCell({ node, projectId, onChanged, field }: CellProps & { field: EffortField }) {
+  const value = field === "designEffort" ? node.designEffort : node.implEffort;
+  // 구현공수는 기능만 직접 소유해서 인라인 편집 가능. 설계공수는 단위업무 소관이지만
+  // inline 엔드포인트에 아직 없어(단위업무 상세 PUT에서만) 여기선 항상 읽기전용,
+  // 나머지(화면/단위업무의 구현공수 롤업)도 자기 소유가 아니라 읽기전용.
+  const editable = field === "implEffort" && node.kind === "FUNCTION";
   const endpoint = endpointFor(node.kind, node.id, projectId);
+  const isOwner = field === "designEffort" ? isDesignFieldOwner(node.kind) : isImplEffortOwner(node.kind);
+  // 직접 소유한 레벨인데 값이 없으면 "x"(미입력), 그 외(구조상 없음/롤업 대상)는 "-"
+  const displayText = value ?? (isOwner ? "x" : "-");
   return (
     <InlineEditCell
-      disabled={!supportsEffort || !endpoint}
-      disabledText="-"
+      disabled={!editable || !endpoint}
+      disabledText={displayText}
       align="center"
-      renderDisplay={() => node.effort ?? "-"}
+      renderDisplay={() => displayText}
       renderEditor={(commit, cancel) => (
         <input
           type="text"
           autoFocus
-          defaultValue={node.effort ?? ""}
+          defaultValue={value ?? ""}
           placeholder="공수"
           onBlur={(e) => commit(e.target.value.trim() || null)}
           onKeyDown={(e) => {

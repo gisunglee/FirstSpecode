@@ -15,23 +15,19 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export type PhaseProgress = { designRt: number; implRt: number };
-export type ScreenProgress = PhaseProgress & { testRt: number };
 
 /**
- * 화면별 설계/구현/테스트 진척률 — 하위 기능(tb_cm_progress) 평균. 기능이 하나도 없는 화면은 0.
- * testRt는 아직 자동 연동 전이라 항상 0에 가깝지만(design_rt/impl_rt와 같은 방식으로 존재는 함),
- * 화면 목록(screens-data.ts)이 그대로 노출하므로 여기서 같이 계산한다 — fetchUnitWorkProgress는
- * 단위업무 실적진행률(combinePhaseProgress)에 테스트를 넣지 않기로 했으므로 testRt를 안 돌려준다.
+ * 화면별 설계/구현 진척률 — 하위 기능(tb_cm_progress) 평균. 기능이 하나도 없는 화면은 0.
+ * 테스트(test_rt)는 2026-07-28 3차 개편으로 UI 전체에서 뺐으므로 여기서도 더 이상 계산하지 않는다.
  */
-export async function fetchScreenProgress(screenIds: string[]): Promise<Map<string, ScreenProgress>> {
+export async function fetchScreenProgress(screenIds: string[]): Promise<Map<string, PhaseProgress>> {
   if (screenIds.length === 0) return new Map();
   // COALESCE(AVG(COALESCE(rt,0)),0) — tb_cm_progress 행이 없는 기능(LEFT JOIN NULL)을
   // 평균에서 제외하지 않고 0점으로 채운 뒤 평균낸다(그냥 AVG는 NULL을 무시해 평균이 부풀려짐).
-  const rows = await prisma.$queryRaw<{ scrn_id: string; avg_design_rt: number; avg_impl_rt: number; avg_test_rt: number }[]>`
+  const rows = await prisma.$queryRaw<{ scrn_id: string; avg_design_rt: number; avg_impl_rt: number }[]>`
     SELECT a.scrn_id,
            COALESCE(AVG(COALESCE(p.design_rt, 0)), 0) AS avg_design_rt,
-           COALESCE(AVG(COALESCE(p.impl_rt, 0)),   0) AS avg_impl_rt,
-           COALESCE(AVG(COALESCE(p.test_rt, 0)),   0) AS avg_test_rt
+           COALESCE(AVG(COALESCE(p.impl_rt, 0)),   0) AS avg_impl_rt
       FROM tb_ds_area a
       JOIN tb_ds_function f ON f.area_id = a.area_id
       LEFT JOIN tb_cm_progress p
@@ -42,7 +38,6 @@ export async function fetchScreenProgress(screenIds: string[]): Promise<Map<stri
   return new Map(rows.map((r) => [r.scrn_id, {
     designRt: Math.round(Number(r.avg_design_rt)),
     implRt:   Math.round(Number(r.avg_impl_rt)),
-    testRt:   Math.round(Number(r.avg_test_rt)),
   }]));
 }
 
@@ -67,10 +62,30 @@ export async function fetchUnitWorkProgress(unitWorkIds: string[]): Promise<Map<
   }]));
 }
 
+export type DateRange = { start: string | null; end: string | null };
+
+/**
+ * 단위업무별 구현 일정 — 단위업무 자신은 구현 일정 필드가 없음(2026-07-28 개편으로 화면 소관).
+ * 하위 화면들의 실질구현기간(actl_impl_*)에서 시작=가장 이른 값, 종료=가장 늦은 값으로 롤업한다.
+ * 화면이 하나도 없거나 전부 날짜 미입력이면 start/end 둘 다 null.
+ */
+export async function fetchUnitWorkImplDates(unitWorkIds: string[]): Promise<Map<string, DateRange>> {
+  if (unitWorkIds.length === 0) return new Map();
+  const rows = await prisma.$queryRaw<{ unit_work_id: string; start_de: string | null; end_de: string | null }[]>`
+    SELECT unit_work_id,
+           MIN(actl_impl_bgng_de) AS start_de,
+           MAX(actl_impl_end_de) AS end_de
+      FROM tb_ds_screen
+     WHERE unit_work_id IN (${Prisma.join(unitWorkIds)})
+     GROUP BY unit_work_id
+  `;
+  return new Map(rows.map((r) => [r.unit_work_id, { start: r.start_de, end: r.end_de }]));
+}
+
 /** 단일 엔티티 편의 함수 — 목록이 아니라 상세 페이지 하나만 조회할 때 */
-export async function fetchOneScreenProgress(screenId: string): Promise<ScreenProgress> {
+export async function fetchOneScreenProgress(screenId: string): Promise<PhaseProgress> {
   const map = await fetchScreenProgress([screenId]);
-  return map.get(screenId) ?? { designRt: 0, implRt: 0, testRt: 0 };
+  return map.get(screenId) ?? { designRt: 0, implRt: 0 };
 }
 
 export async function fetchOneUnitWorkProgress(unitWorkId: string): Promise<PhaseProgress> {
@@ -84,15 +99,16 @@ export function combinePhaseProgress(p: PhaseProgress): number {
 }
 
 export type FunctionScreenDates = {
-  dsgnBgngDe: string | null;
-  dsgnEndDe:  string | null;
   implBgngDe: string | null;
   implEndDe:  string | null;
 };
 
 /**
- * 기능 → 소속 화면의 실질설계/구현기간 조회 맵 — 기능 자신은 일정이 없어(2026-07-28)
+ * 기능 → 소속 화면의 실질구현기간 조회 맵 — 기능 자신은 일정이 없어(2026-07-28)
  * area_id로 화면을 찾아 상속한다. 이미 메모리에 있는 배열(추가 쿼리 없이)로 계산.
+ *
+ * 설계 일정은 2026-07-28 2차 개편으로 화면이 아니라 단위업무(plan_dsgn_*)에만 있어
+ * 여기서 다루지 않는다 — 필요하면 함수 소속 화면의 unit_work_id로 직접 조회할 것.
  *
  * dashboard/manage-summary, pm-summary 등 여러 라우트가 각자 area→screen 2단 Map을
  * 손으로 만들어 같은 걸 반복 구현했었어서(그 과정에서 화면 하나는 end만, 하나는
@@ -103,7 +119,6 @@ export function resolveFunctionScreenDates(
   areas: { area_id: string; scrn_id: string | null }[],
   screens: {
     scrn_id: string;
-    actl_dsgn_bgng_de: string | null; actl_dsgn_end_de: string | null;
     actl_impl_bgng_de: string | null; actl_impl_end_de: string | null;
   }[],
 ): Map<string, FunctionScreenDates> {
@@ -115,8 +130,6 @@ export function resolveFunctionScreenDates(
     const scrnId = f.area_id ? areaToScrn.get(f.area_id) : null;
     const screen = scrnId ? scrnById.get(scrnId) : null;
     result.set(f.func_id, {
-      dsgnBgngDe: screen?.actl_dsgn_bgng_de ?? null,
-      dsgnEndDe:  screen?.actl_dsgn_end_de ?? null,
       implBgngDe: screen?.actl_impl_bgng_de ?? null,
       implEndDe:  screen?.actl_impl_end_de ?? null,
     });

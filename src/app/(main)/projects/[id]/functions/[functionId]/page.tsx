@@ -267,6 +267,8 @@ function FunctionDetailPageInner() {
       setDisplayId(data.displayId ?? "");
       setType(data.type);
       setDescription(data.description);
+      // 설명 내용이 이미 있으면 미리보기로, 빈 상태(신규나 아직 작성 전)면 편집으로 시작
+      setDescTab(data.description?.trim() ? "preview" : "edit");
       setPriority(data.priority);
       setComplexity(data.complexity);
       setEffort(data.effort);
@@ -427,7 +429,7 @@ function FunctionDetailPageInner() {
         </div>
 
 
-        {/* 설계·구현·테스트 진척률 — 수정 모드에서만 */}
+        {/* 설계·구현 진척률 — 수정 모드에서만 */}
         {!isNew && data && (
           <div style={{ marginLeft: 24 }}>
             <ProgressTracker
@@ -436,7 +438,8 @@ function FunctionDetailPageInner() {
               refId={functionId}
               // 분석은 요구사항 레벨 소관이라 제외. 설계(design_rt)는 기능이 실제 소유하는 값이고
               // 화면의 설계진척률은 이 값들의 롤업이므로 기능 페이지에서 계속 입력해야 함(2026-07-28).
-              phases={["design", "impl", "test"]}
+              // 테스트는 2026-07-28 3차 개편으로 제거 — 자동테스트 연동 전까지 수동 입력값이 의미 없음.
+              phases={["design", "impl"]}
             />
           </div>
         )}
@@ -716,14 +719,16 @@ function FunctionDetailPageInner() {
             🔒 <strong>읽기 전용</strong> — 이 기능은 OWNER/ADMIN 또는 PM/PL 직무, 혹은 담당자만 수정할 수 있습니다.
           </div>
         )}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr", gap: 20, alignItems: "start" }}>
+        {/* 왼쪽(기본 정보 폼)은 고정폭, 오른쪽(설명)만 1fr로 남는 공간을 흡수 — 좌측 메뉴를 접어
+            넓어진 공간이 폼 입력칸까지 늘어나던 문제 방지(영역 상세와 동일 패턴, 2026-07-28) */}
+        <div style={{ display: "grid", gridTemplateColumns: "460px minmax(0, 1fr)", gap: 20, alignItems: "start" }}>
 
           {/* ── 왼쪽: 기본 정보 + 첨부파일 ── */}
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             <section style={sectionStyle}>
 
-              {/* 행1: 소속 영역 | 유형 */}
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "0 16px" }}>
+              {/* 행1: 소속 영역 (단독, 전체 폭) */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "0 16px" }}>
                 <div style={formGroupStyle}>
                   <label style={labelStyle}>소속 영역</label>
                   <div className="sp-select-wrap">
@@ -732,16 +737,6 @@ function FunctionDetailPageInner() {
                       {areaOptions.map((a) => (
                         <option key={a.areaId} value={a.areaId}>{a.displayId} {a.name}</option>
                       ))}
-                    </select>
-                    <span className="sp-select-arrow"><SelectChevron /></span>
-                  </div>
-                </div>
-
-                <div style={formGroupStyle}>
-                  <label style={labelStyle}>유형</label>
-                  <div className="sp-select-wrap">
-                    <select value={type} onChange={(e) => setType(e.target.value)} disabled={!canEdit} className="sp-input">
-                      {FUNC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                     <span className="sp-select-arrow"><SelectChevron /></span>
                   </div>
@@ -774,10 +769,18 @@ function FunctionDetailPageInner() {
                 </div>
               </div>
 
-              {/* 행3: 우선순위 | 복잡도 | 담당자 | 정렬 */}
-              {/* 담당자가 없으면 PM 대시보드 "지연 현황"의 구현 지연 집계에서 이 기능이
-                  전부 "미할당"으로 잡혀 개인별 지연율에 반영되지 않는다 — 반드시 지정 필요 */}
-              <div style={{ display: "grid", gridTemplateColumns: "0.9fr 0.9fr 1.3fr 0.6fr", gap: "0 16px" }}>
+              {/* 행3: 유형 | 우선순위 | 복잡도 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 16px" }}>
+                <div style={formGroupStyle}>
+                  <label style={labelStyle}>유형</label>
+                  <div className="sp-select-wrap">
+                    <select value={type} onChange={(e) => setType(e.target.value)} disabled={!canEdit} className="sp-input">
+                      {FUNC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
+                </div>
+
                 <div style={formGroupStyle}>
                   <label style={labelStyle}>우선순위</label>
                   <div className="sp-select-wrap">
@@ -801,7 +804,12 @@ function FunctionDetailPageInner() {
                     <span className="sp-select-arrow"><SelectChevron /></span>
                   </div>
                 </div>
+              </div>
 
+              {/* 행4: 담당자 | 구현 공수 | 정렬순서 — 구현 일정은 화면에서 관리(2026-07-28), 기능엔 공수만.
+                  담당자가 없으면 PM 대시보드 "지연 현황"의 구현 지연 집계에서 이 기능이
+                  전부 "미할당"으로 잡혀 개인별 지연율에 반영되지 않는다 — 반드시 지정 필요 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 0.6fr", gap: "0 16px" }}>
                 <div style={formGroupStyle}>
                   <label style={labelStyle}>담당자</label>
                   <div className="sp-select-wrap">
@@ -823,22 +831,6 @@ function FunctionDetailPageInner() {
                   </div>
                 </div>
 
-                <div style={formGroupStyle}>
-                  <label style={labelStyle}>정렬</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={sortOrder}
-                    onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
-                    readOnly={!canEdit}
-                    className="sp-input"
-                    style={{ padding: "8px 6px" }}
-                  />
-                </div>
-              </div>
-
-              {/* 행4: 구현 공수 | 기능정의서 작성 상태 — 구현 일정은 화면에서 관리(2026-07-28), 기능엔 공수만 */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
                 <div style={formGroupStyle}>
                   <label style={labelStyle}>구현 공수(시간)</label>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -862,15 +854,24 @@ function FunctionDetailPageInner() {
                 </div>
 
                 <div style={formGroupStyle}>
+                  <label style={labelStyle}>정렬</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
+                    readOnly={!canEdit}
+                    className="sp-input"
+                    style={{ padding: "8px 6px" }}
+                  />
+                </div>
+              </div>
+
+              {/* 행5: 기능정의서 작성 상태 (단독, 전체 폭) — 라디오 3개가 답답하지 않도록 넓게 확보 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "0 16px" }}>
+                <div style={formGroupStyle}>
                   <label style={labelStyle}>기능정의서 작성 상태</label>
-                  <div className="sp-select-wrap">
-                    <select value={docStatus} onChange={(e) => setDocStatus(e.target.value)} disabled={!canEdit} className="sp-input">
-                      <option value="BEFORE">작성전</option>
-                      <option value="DOING">작성중</option>
-                      <option value="DONE">작성완료</option>
-                    </select>
-                    <span className="sp-select-arrow"><SelectChevron /></span>
-                  </div>
+                  <DocStatusSwitch value={docStatus} onChange={setDocStatus} disabled={!canEdit} />
                 </div>
               </div>
 
@@ -1557,9 +1558,58 @@ function DisplayIdHelp() {
 }
 
 const labelStyle: React.CSSProperties = {
-  display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600,
+  display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600,
   color: "var(--color-text-secondary)",
 };
+
+// ── 기능정의서 작성 상태 라디오 그룹 — 단위업무 상세와 동일한 패턴.
+// 전체 폭 단독 행으로 배치해 gap을 16으로 넉넉하게 유지(2026-07-28) ──
+const DOC_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "BEFORE", label: "작성 전" },
+  { value: "DOING", label: "작성 중" },
+  { value: "DONE", label: "작성 완료" },
+];
+const DOC_STATUS_COLOR: Record<string, string> = {
+  BEFORE: "var(--color-error)",
+  DOING: "var(--color-info)",
+  DONE: "var(--color-success)",
+};
+
+function DocStatusSwitch({
+  value, onChange, disabled,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="sp-radio-group" style={{ gap: 16, opacity: disabled ? 0.6 : 1, pointerEvents: disabled ? "none" : undefined }}>
+      {DOC_STATUS_OPTIONS.map((opt) => {
+        const active = value === opt.value;
+        const activeColor = DOC_STATUS_COLOR[opt.value];
+        return (
+          <div
+            key={opt.value}
+            className={`sp-radio-option${active ? " is-selected" : ""}`}
+            onClick={() => onChange(opt.value)}
+            style={{
+              flex: "none", border: "none", background: "transparent", padding: 0, whiteSpace: "nowrap",
+              color: active ? activeColor : undefined,
+              fontWeight: active ? 700 : 500,
+              transition: "color 0.15s",
+            }}
+          >
+            <span
+              className="radio-dot"
+              style={active ? { borderColor: activeColor, background: activeColor, transition: "border-color 0.15s, background 0.15s" } : undefined}
+            />
+            {opt.label}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 const primaryBtnStyle: React.CSSProperties = {
   padding: "8px 20px", borderRadius: 6, border: "1px solid transparent",
   background: "var(--color-primary, #1976d2)", color: "#fff",

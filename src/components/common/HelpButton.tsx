@@ -85,7 +85,7 @@ const overlayStyle: React.CSSProperties = {
 };
 
 const dialogStyle: React.CSSProperties = {
-  width: "min(440px, 90vw)",
+  width: "min(520px, 90vw)",
   background: "var(--color-bg-card)",
   borderRadius: 12,
   boxShadow: "0 12px 40px rgba(0,0,0,0.2)",
@@ -95,17 +95,17 @@ const dialogStyle: React.CSSProperties = {
 
 const headerStyle: React.CSSProperties = {
   display: "flex", alignItems: "center", justifyContent: "space-between",
-  padding: "12px 18px", borderBottom: "1px solid var(--color-border)",
+  padding: "14px 20px", borderBottom: "1px solid var(--color-border)",
   background: "var(--color-bg-muted)",
 };
 
 const closeBtnStyle: React.CSSProperties = {
-  background: "none", border: "none", fontSize: 18, cursor: "pointer",
+  background: "none", border: "none", fontSize: 20, cursor: "pointer",
   color: "var(--color-text-secondary)", padding: "0 4px", lineHeight: 1,
 };
 
 const bodyStyle: React.CSSProperties = {
-  padding: "16px 18px",
-  display: "flex", flexDirection: "column", gap: 10,
-  fontSize: "var(--text-sm)", lineHeight: 1.6, color: "var(--color-text-secondary)",
+  padding: "18px 20px",
+  display: "flex", flexDirection: "column", gap: 12,
+  fontSize: "var(--text-base)", lineHeight: 1.7, color: "var(--color-text-secondary)",
 };

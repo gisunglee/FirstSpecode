@@ -35,13 +35,22 @@ export type MyWorkItem = {
   name:      string;
   href:      string;
   startDate: string | null;
+  /** 요구사항=분석 종료일, 단위업무=구현 종료일(하위 화면 롤업), 화면=실질구현 종료일, 기능=소속 화면 상속 */
   endDate:   string | null;
   /** 0~100 — 요구사항=분석 진척률, 나머지=구현 진척률(impl_rt 롤업) */
   progress:  number;
   /** 0~100 — 단위업무/화면/기능만(설계 진척률, design_rt 롤업). 요구사항은 null */
   designProgress: number | null;
-  /** 기준일 - 마감일. 마감일 없으면 null(리스트 맨 뒤로 정렬됨) */
+  /**
+   * 설계 종료일 — 단위업무=자신의 계획설계기간, 화면/기능=부모 단위업무 상속. 요구사항은 null
+   * (분석 단계엔 설계라는 축 자체가 없어 designProgress와 동일하게 null).
+   * endDate(구현/분석)만 보고는 설계 지연 여부를 알 수 없어서 진척률과 같은 방식으로 나란히 내려준다.
+   */
+  designEndDate: string | null;
+  /** 기준일 - 구현/분석 마감일(endDate). 마감일 없으면 null(리스트 맨 뒤로 정렬됨) */
   dDay:      number | null;
+  /** 기준일 - 설계 마감일(designEndDate). 요구사항은 null */
+  designDDay: number | null;
 };
 
 // ── C. 하위 담당자 미지정 ────────────────────────────────────────────────────

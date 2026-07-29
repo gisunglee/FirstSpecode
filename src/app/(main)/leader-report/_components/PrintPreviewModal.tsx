@@ -156,15 +156,22 @@ export default function PrintPreviewModal({
               협조 및 이슈사항 현황
             </div>
             <div className="sp-doc-table-wrap" style={{ maxWidth: "none", marginBottom: 16 }}>
+              {/* 인쇄 폭이 부족해 "요청자/담당자"·"요청일~목표일" 두 컬럼이 좁은 폭에 줄바꿈되며
+                  내용/조치계획 칸까지 같이 좁아지던 문제(2026-07-29) — 요청일/목표일을 별도
+                  컬럼·행으로 안 두고, 요청자/담당자 칸 안에 작은 글씨로 이어붙여 세로로 쌓는다.
+                  (한 번은 rowSpan으로 3행 구조를 시도했으나 rowSpan 셀들의 높이를 맞추려고
+                  브라우저가 남는 높이를 "요청일~목표일" 라벨 행에만 몰아줘서 그 행만 유난히
+                  떠 보이는 문제가 있었음 — 행을 늘리지 않고 셀 안에서 해결하는 쪽으로 변경) */}
               <table className="sp-doc-table">
                 <thead>
                   <tr>
-                    <th className="sp-doc-label" style={{ width: "9%" }}>구분</th>
-                    <th className="sp-doc-label" style={{ width: "26%" }}>내용</th>
-                    <th className="sp-doc-label" style={{ width: "26%" }}>조치 계획 / 결과</th>
-                    <th className="sp-doc-label" style={{ width: "16%" }}>요청자 / 담당자</th>
-                    <th className="sp-doc-label" style={{ width: "13%" }}>요청일 ~ 목표일</th>
-                    <th className="sp-doc-label" style={{ width: "10%" }}>상태</th>
+                    <th className="sp-doc-label" style={{ width: "6%" }}>구분</th>
+                    <th className="sp-doc-label" style={{ width: "35%" }}>내용</th>
+                    <th className="sp-doc-label" style={{ width: "34%" }}>조치 계획 / 결과</th>
+                    <th className="sp-doc-label" style={{ width: "9%" }}>요청자</th>
+                    <th className="sp-doc-label" style={{ width: "9%" }}>담당자</th>
+                    {/* 상태는 "부분완료" 등 짧은 라벨만 들어가 10%→7%로 축소, 남는 폭은 내용/조치로 이동(2026-07-29) */}
+                    <th className="sp-doc-label" style={{ width: "7%" }}>상태</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -174,11 +181,24 @@ export default function PrintPreviewModal({
                     issues.map((issue) => (
                       <tr key={issue.issueId}>
                         <td>{ISSUE_CATEGORY_LABEL[issue.categoryCode]}</td>
-                        <td>{issue.cn || "-"}</td>
-                        <td>{issue.actionCn || "-"}</td>
-                        <td>{issue.requesterNm || "-"} / {issue.assigneeNm || "-"}</td>
-                        <td>{issue.reqDt ?? "-"} ~ {issue.dueDt ?? "-"}</td>
-                        <td>{ISSUE_STATUS_LABEL[issue.statusCode]}</td>
+                        <td style={{ whiteSpace: "pre-wrap" }}>{issue.cn || "-"}</td>
+                        <td style={{ whiteSpace: "pre-wrap" }}>{issue.actionCn || "-"}</td>
+                        {/* 이름과 날짜 사이 여백을 넓히고(marginTop 4→10), 라벨("요청일"/"목표일")은
+                            살짝 진하게, 날짜값은 일반 텍스트와 같은 검정으로 구분(2026-07-29).
+                            가운데 정렬 + 좌우 패딩을 줄여(10→4) 폭을 확보. 라벨과 날짜를 한 줄에
+                            같이 붙였더니 합친 길이가 좁은 컬럼 폭을 넘어서 옆 칸과 겹쳐 보였음
+                            → 라벨 줄 / 날짜 줄로 분리해서 각자 한 줄에만 들어가면 되게 함. */}
+                        <td style={{ textAlign: "center", padding: "8px 4px" }}>
+                          <div>{issue.requesterNm || "-"}</div>
+                          <div style={{ fontSize: 11, marginTop: 10, color: "var(--color-text-secondary)" }}>요청일</div>
+                          <div style={{ fontSize: 11, color: "var(--color-text-primary)", whiteSpace: "nowrap" }}>{issue.reqDt ?? "-"}</div>
+                        </td>
+                        <td style={{ textAlign: "center", padding: "8px 4px" }}>
+                          <div>{issue.assigneeNm || "-"}</div>
+                          <div style={{ fontSize: 11, marginTop: 10, color: "var(--color-text-secondary)" }}>목표일</div>
+                          <div style={{ fontSize: 11, color: "var(--color-text-primary)", whiteSpace: "nowrap" }}>{issue.dueDt ?? "-"}</div>
+                        </td>
+                        <td style={{ textAlign: "center" }}>{ISSUE_STATUS_LABEL[issue.statusCode]}</td>
                       </tr>
                     ))
                   )}

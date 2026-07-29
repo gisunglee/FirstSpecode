@@ -23,7 +23,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useAppStore } from "@/store/appStore";
 import { useMyRole, useIsSystemAdmin } from "@/hooks/useMyRole";
 import { getHomePageCookie, setHomePageCookie, clearHomePageCookie } from "@/lib/homePage";
@@ -38,9 +38,13 @@ type MenuItem = {
   // 상위 항목의 하위로 보이도록 살짝 들여쓰는 표시 (ex: 영역은 화면의 세부 구성)
   // 혼동 쌍(화면↔영역)에만 제한적으로 사용. 전체 계층 트리화는 과하므로 의도적 최소 개입
   indent?: boolean;
-  // true면 행 우측에 별 아이콘(홈페이지 지정 토글) 노출 — "대시보드" 그룹 6개 항목 전용.
+  // true면 행 우측에 별 아이콘(홈페이지 지정 토글) 노출 — 로그인 직후 착지 페이지로 고를 만한
+  // 개인 업무 화면(대시보드 그룹 5개 + 일정 그룹의 캘린더)에 부여한다. 그룹 소속과는 무관.
   // 2026-07-22: 로그인 직후 착지 페이지를 사용자가 고를 수 있게 추가.
   canPinHome?: boolean;
+  // true면 이 항목 바로 아래에 구분선 표시 — 성격이 다른 항목 묶음을 시각적으로 분리
+  // (예: 분석 그룹의 "과업·요구사항"과 그 아래 나머지 항목, 2026-07-29)
+  dividerAfter?: boolean;
 };
 
 type MenuGroup = {
@@ -88,13 +92,14 @@ export default function LNB() {
         icon: "g_dashboard",
         // 신규 3종 대시보드는 모두 현재 프로젝트(currentProjectId) 컨텍스트에서 동작.
         // URL 은 프로젝트 prefix 없이 단일 경로로 유지 — 기존 /dashboard 와 동일한 패턴.
-        // 순서(2026-07-22): 개인 업무 중심(대시보드/My Task/MY 보드/캘린더) → PM 도구(PM 현황/PM 진단).
-        // canPinHome: true — 이 6개만 별 아이콘으로 "내 홈페이지" 지정 가능(LNB 컴포넌트 본문 참조).
+        // 순서(2026-07-22): 개인 업무 중심(대시보드/My Task/MY 보드) → PM 도구(PM 현황/PM 진단).
+        // 캘린더는 2026-07-29 "일정" 그룹 맨 아래로 이동(일정 관련 메뉴끼리 묶는 게 자연스럽다는 피드백).
+        // canPinHome: true — 이 5개만 별 아이콘으로 "내 홈페이지" 지정 가능(LNB 컴포넌트 본문 참조).
         items: [
           { label: "대시보드", href: "/dashboard", icon: "i_dashboard", canPinHome: true },
           { label: "My Task",  href: "/my-task",   icon: "i_myTask",   canPinHome: true },
-          { label: "MY 보드",  href: "/my-work",   icon: "i_mywork",   canPinHome: true },
-          { label: "캘린더",   href: "/calendar",  icon: "i_calendar", canPinHome: true },
+          // 아래로 "PM 도구" 성격이 갈리는 지점이라 구분선(2026-07-29)
+          { label: "MY 보드",  href: "/my-work",   icon: "i_mywork",   canPinHome: true, dividerAfter: true },
           { label: "PM 현황",  href: "/pm-board",  icon: "i_graph",    canPinHome: true },
           { label: "PM 진단",  href: "/pm",        icon: "i_pm",       canPinHome: true },
         ],
@@ -109,6 +114,11 @@ export default function LNB() {
         items: [
           // 단위업무/화면/기능 3종 간트 조회 — 영역(Area)은 날짜 컬럼이 없어 이번 범위 제외.
           { label: "WBS 일정", href: "/wbs", icon: "i_wbs" },
+          // 캘린더 — 대시보드 그룹에서 이동(2026-07-29) — 일정 관련 메뉴끼리 묶는 게 자연스럽다는
+          // 피드백. canPinHome 유지 — 이미 캘린더를 홈페이지로 지정해둔 사용자의 설정이 깨지지
+          // 않도록. WBS/캘린더(팀 전체 일정 조회)와 아래 업무일지 이하(개인 계획/기록)는
+          // 성격이 갈려서 구분선으로 나눔.
+          { label: "캘린더", href: "/calendar", icon: "i_calendar", canPinHome: true, dividerAfter: true },
           // 업무일지 — 개인 오늘의 할일/기록. WBS와 동일하게 프로젝트 prefix 없는 flat 경로
           // (currentProjectId 는 페이지 내부에서 store 로 읽음 — pm/my-work/focus와 동일 패턴).
           { label: "업무일지", href: "/work-logs", icon: "i_myTask" },
@@ -150,7 +160,7 @@ export default function LNB() {
         icon: "g_analysis",
         items: [
           { label: "과업",              href: p("/tasks"),         icon: "i_task" },
-          { label: "요구사항",          href: p("/requirements"),  icon: "i_requirement" },
+          { label: "요구사항",          href: p("/requirements"),  icon: "i_requirement", dividerAfter: true },
           { label: "사용자스토리",      href: p("/user-stories"),  icon: "i_userStory" },
           { label: "요구분석 일괄 편집", href: p("/planning"),     icon: "i_planningBatch" },
           { label: "기획실",            href: p("/plan-studio"),   icon: "i_planStudio" },
@@ -166,8 +176,9 @@ export default function LNB() {
           { label: "단위업무",  href: p("/unit-works"), icon: "i_unitWork" },
           { label: "화면",      href: p("/screens"),    icon: "i_screen" },
           { label: "영역",      href: p("/areas"),      icon: "i_area", indent: true },
-          { label: "기능",      href: p("/functions"),  icon: "i_function" },
-          { label: "DB 테이블", href: p("/db-tables"),  icon: "i_dbTable" },
+          { label: "기능",      href: p("/functions"),  icon: "i_function", dividerAfter: true },
+          // DB 테이블은 화면/영역/기능 계층과 성격이 달라(설계 산출물 아님) 위아래 모두 구분(2026-07-29)
+          { label: "DB 테이블", href: p("/db-tables"),  icon: "i_dbTable", dividerAfter: true },
         ],
       },
       {
@@ -441,16 +452,22 @@ export default function LNB() {
           </div>
           <div className="sp-subpane-items">
             {activeGroup.items.map((it) => (
-              <SubItem
-                key={it.label}
-                item={it}
-                // "가장 긴 일치" 한 항목만 활성. prefix 충돌(예: /projects 와
-                // /projects/:id/members) 시 더 긴 쪽만 활성으로 인정하여
-                // "목록+멤버" 동시 active 문제를 방지.
-                isActive={it.href !== "#" && it.href === activeItemHref}
-                isHome={!!it.canPinHome && homePage === it.href}
-                onToggleHome={it.canPinHome ? () => toggleHomePage(it.href) : undefined}
-              />
+              <Fragment key={it.label}>
+                <SubItem
+                  item={it}
+                  // "가장 긴 일치" 한 항목만 활성. prefix 충돌(예: /projects 와
+                  // /projects/:id/members) 시 더 긴 쪽만 활성으로 인정하여
+                  // "목록+멤버" 동시 active 문제를 방지.
+                  isActive={it.href !== "#" && it.href === activeItemHref}
+                  isHome={!!it.canPinHome && homePage === it.href}
+                  onToggleHome={it.canPinHome ? () => toggleHomePage(it.href) : undefined}
+                />
+                {/* 구분선 — 항목 좌우 인셋(14px)에 맞춰 살짝 안쪽으로 들여서 사이드바 폭에
+                    딱 붙지 않게 함 */}
+                {it.dividerAfter && (
+                  <div style={{ height: 1, background: "var(--color-border)", margin: "6px 14px" }} />
+                )}
+              </Fragment>
             ))}
           </div>
         </nav>
@@ -482,7 +499,11 @@ function SubItem({
         href={item.href}
         style={{
           display: "flex", alignItems: "center", gap: 10,
-          flex: 1, minWidth: 0, padding: "8px 14px",
+          flex: 1, minWidth: 0,
+          // 하위 개념 힌트(예: 화면 아래 영역) — 살짝 들여씀. .sp-subpane-item 은
+          // padding:0 이 인라인 고정이라 CSS 클래스로는 못 건드리고, 실제 패딩을
+          // 갖는 이 Link에서 직접 처리해야 함(2026-07-29).
+          padding: item.indent ? "8px 14px 8px 26px" : "8px 14px",
           color: "inherit", textDecoration: "none",
         }}
         onClick={isDisabled ? (e) => e.preventDefault() : undefined}

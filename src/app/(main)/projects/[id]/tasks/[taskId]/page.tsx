@@ -295,148 +295,147 @@ function TaskDetailPageInner() {
         </div>
       </div>
 
-      <div style={{ padding: "0 24px 24px", maxWidth: 760 }}>
-        {/* 폼 */}
-        <div
-          style={{
-            border: "1px solid var(--color-border)",
-            borderRadius: 8,
-            padding: "24px 28px",
-            background: "var(--color-bg-card)",
-            display: "flex",
-            flexDirection: "column",
-            gap: 20,
-          }}
-        >
+      <div style={{ padding: "0 24px 24px" }}>
+        {/* 2-컬럼 레이아웃: 기본 정보 | 세부내용 — 왼쪽(기본 정보 폼)은 고정폭, 오른쪽(세부내용)만
+            1fr로 남는 공간을 흡수. 좌측 메뉴를 접어 넓어진 공간이 폼 입력칸까지 늘어나던 문제
+            방지(화면/영역/기능 상세와 동일 패턴, 2026-07-29) */}
+        <div style={{ display: "grid", gridTemplateColumns: "460px minmax(0, 1fr)", gap: 28, alignItems: "start" }}>
 
-          {/* 과업명 + 표시ID */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            <FormField label="과업명" required>
-              <input
-                type="text"
-                value={form.name}
-                placeholder="과업명을 입력하세요"
-                onChange={(e) => handleChange("name", e.target.value)}
-                className="sp-input"
-              />
-            </FormField>
-            <FormField label="표시 ID">
-              <input
-                type="text"
-                value={form.displayId}
-                placeholder={`${getPrefix("TASK")}-XXXXX (미 입력 시 자동 생성)`}
-                onChange={(e) => handleChange("displayId", e.target.value)}
-                className="sp-input"
-              />
-            </FormField>
+          {/* 왼쪽: 기본 정보 */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            <Section title="기본 정보" hideTitle>
+              {/* 과업명 — 단독 전체 폭(2026-07-29 순서 개편: 과업명 → 정의 → 표시ID/RFP → 담당자/카테고리 → 산출물) */}
+              <FormField label="과업명" required>
+                <input
+                  type="text"
+                  value={form.name}
+                  placeholder="과업명을 입력하세요"
+                  onChange={(e) => handleChange("name", e.target.value)}
+                  className="sp-input"
+                />
+              </FormField>
+
+              {/* 정의 — textarea → 단일행 input으로 변경(2026-07-29). 과업 범위는 한 줄 요약이면
+                  충분하다는 판단, 상세 설명은 오른쪽 "세부내용" 에디터에서 다룸.
+                  단일행 input이라 taskDefinition(50,000자) 한도·카운터는 불필요 — 500자 미만으로 제한만 */}
+              <FormField label="정의">
+                <input
+                  type="text"
+                  value={form.definition}
+                  placeholder="과업 범위를 간략히 설명하세요"
+                  maxLength={300}
+                  onChange={(e) => handleChange("definition", e.target.value)}
+                  className="sp-input"
+                />
+              </FormField>
+
+              {/* 표시 ID + RFP 페이지 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 160px", gap: 16 }}>
+                <FormField label="표시 ID">
+                  <input
+                    type="text"
+                    value={form.displayId}
+                    placeholder={`${getPrefix("TASK")}-XXXXX (미 입력 시 자동 생성)`}
+                    onChange={(e) => handleChange("displayId", e.target.value)}
+                    className="sp-input"
+                  />
+                </FormField>
+                <FormField label="RFP 페이지">
+                  <input
+                    type="text"
+                    value={form.rfpPage}
+                    placeholder="예: p.23"
+                    onChange={(e) => handleChange("rfpPage", e.target.value)}
+                    className="sp-input"
+                  />
+                </FormField>
+              </div>
+
+              {/* 담당자 + 카테고리 — 담당자에 넓은 공간 할당 */}
+              {/* 담당자 라벨 옆 작은 시계 아이콘 = 변경 이력 팝업 (신규 등록 모드에서는 숨김) */}
+              {/* FormField 대신 인라인 div — <label> 안에 <button>이 있으면 라벨 빈 영역 클릭이 */}
+              {/*   브라우저 기본 동작으로 버튼에 전달됨 (라벨→내부 form control 포워딩) */}
+              <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 16 }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6, fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>
+                    <span>담당자</span>
+                    {!isNew && (
+                      <button
+                        type="button"
+                        onClick={() => setAssigneeHistoryOpen(true)}
+                        title="담당자 변경 이력"
+                        style={inlineIconBtnStyle}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" strokeWidth="2"
+                          strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <circle cx="12" cy="12" r="9" />
+                          <path d="M12 7v5l3 2" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                  <div className="sp-select-wrap">
+                    <select
+                      value={form.assignMemberId}
+                      onChange={(e) => handleChange("assignMemberId", e.target.value)}
+                      className="sp-input"
+                    >
+                      <option value="">담당자 없음</option>
+                      {members.map((m) => (
+                        <option key={m.memberId} value={m.memberId}>
+                          {m.name ?? m.email}
+                          {m.memberId === myMemberId ? " (나)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
+                </div>
+                <FormField label="카테고리" required>
+                  <div className="sp-select-wrap">
+                    <select
+                      value={form.category}
+                      onChange={(e) => handleChange("category", e.target.value)}
+                      className="sp-input"
+                    >
+                      <option value="NEW_DEV">신규개발</option>
+                      <option value="IMPROVE">기능개선</option>
+                      <option value="MAINTAIN">유지보수</option>
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
+                </FormField>
+              </div>
+
+              {/* 산출물 */}
+              <FormField label="산출물">
+                <textarea
+                  value={form.outputInfo}
+                  placeholder="예: 화면설계서, ERD, API 명세서"
+                  rows={3}
+                  maxLength={TEXT_LIMITS.taskDefinition}
+                  onChange={(e) => handleChange("outputInfo", e.target.value)}
+                  className="sp-input"
+                  style={{ resize: "vertical" }}
+                />
+                <TextCounter field="taskDefinition" value={form.outputInfo} />
+              </FormField>
+            </Section>
           </div>
 
-          {/* 담당자 + 카테고리 + RFP 페이지 번호 — 담당자에 넓은 공간(2fr) 할당 */}
-          {/* 담당자 라벨 옆 작은 시계 아이콘 = 변경 이력 팝업 (신규 등록 모드에서는 숨김) */}
-          {/* FormField 대신 인라인 div — <label> 안에 <button>이 있으면 라벨 빈 영역 클릭이 */}
-          {/*   브라우저 기본 동작으로 버튼에 전달됨 (라벨→내부 form control 포워딩) */}
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 16 }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
-                <span>담당자</span>
-                {!isNew && (
-                  <button
-                    type="button"
-                    onClick={() => setAssigneeHistoryOpen(true)}
-                    title="담당자 변경 이력"
-                    style={inlineIconBtnStyle}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                      stroke="currentColor" strokeWidth="2"
-                      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <circle cx="12" cy="12" r="9" />
-                      <path d="M12 7v5l3 2" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-              <div className="sp-select-wrap">
-                <select
-                  value={form.assignMemberId}
-                  onChange={(e) => handleChange("assignMemberId", e.target.value)}
-                  className="sp-input"
-                >
-                  <option value="">담당자 없음</option>
-                  {members.map((m) => (
-                    <option key={m.memberId} value={m.memberId}>
-                      {m.name ?? m.email}
-                      {m.memberId === myMemberId ? " (나)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <span className="sp-select-arrow"><SelectChevron /></span>
-              </div>
-            </div>
-            <FormField label="카테고리" required>
-              <div className="sp-select-wrap">
-                <select
-                  value={form.category}
-                  onChange={(e) => handleChange("category", e.target.value)}
-                  className="sp-input"
-                >
-                  <option value="NEW_DEV">신규개발</option>
-                  <option value="IMPROVE">기능개선</option>
-                  <option value="MAINTAIN">유지보수</option>
-                </select>
-                <span className="sp-select-arrow"><SelectChevron /></span>
-              </div>
-            </FormField>
-            <FormField label="RFP 페이지">
-              <input
-                type="text"
-                value={form.rfpPage}
-                placeholder="예: p.23"
-                onChange={(e) => handleChange("rfpPage", e.target.value)}
-                className="sp-input"
-              />
-            </FormField>
-          </div>
-
-          {/* 정의 */}
-          {/* maxLength: textLimits.taskDefinition 한도 강제. UI 카운터(TextCounter) 별도 표시. */}
-          <FormField label="정의">
-            <textarea
-              value={form.definition}
-              placeholder="과업 범위를 간략히 설명하세요"
-              rows={3}
-              maxLength={TEXT_LIMITS.taskDefinition}
-              onChange={(e) => handleChange("definition", e.target.value)}
-              className="sp-input"
-              style={{ resize: "vertical" }}
-            />
-            <TextCounter field="taskDefinition" value={form.definition} />
-          </FormField>
-
-          {/* 세부내용 — WYSIWYG 에디터 (클립보드 이미지 붙여넣기 지원) */}
-          {/* RichEditor 내부에 카운터 자동 표시 (field 지정 시) */}
-          <FormField label="세부내용">
+          {/* 오른쪽: 세부내용 — WYSIWYG 에디터(클립보드 이미지 붙여넣기 지원). 좌측 폼과 달리
+              1fr 컬럼이라 사이드바 접힘/펼침에 따라 폭이 늘어나고 줄어든다. */}
+          <Section title="세부내용" small>
             <RichEditor
               value={form.content}
               onChange={(html) => handleChange("content", html)}
               placeholder="내용을 입력하세요. 이미지는 클립보드에서 바로 붙여넣기 가능합니다."
-              minHeight={308}
+              // rows=30 상당(MarkdownEditor 기준) 높이로 확장 — 기존(308px)의 약 2배(2026-07-29)
+              minHeight={616}
               field="taskDefinition"
             />
-          </FormField>
-
-          {/* 산출물 */}
-          <FormField label="산출물">
-            <textarea
-              value={form.outputInfo}
-              placeholder="예: 화면설계서, ERD, API 명세서"
-              rows={3}
-              maxLength={TEXT_LIMITS.taskDefinition}
-              onChange={(e) => handleChange("outputInfo", e.target.value)}
-              className="sp-input"
-              style={{ resize: "vertical" }}
-            />
-            <TextCounter field="taskDefinition" value={form.outputInfo} />
-          </FormField>
+          </Section>
 
         </div>
       </div>
@@ -501,7 +500,45 @@ function TaskDetailPageInner() {
   );
 }
 
-// ── FormField 래퍼 ───────────────────────────────────────────────────────────
+// ── 공통 컴포넌트 (화면 상세와 동일 패턴, 2026-07-29) ────────────────────────
+
+function Section({
+  title, children, small = false, hideTitle = false,
+}: {
+  title: string;
+  children: React.ReactNode;
+  /** 타이틀을 작은 uppercase 레이블로 표시 */
+  small?: boolean;
+  /** 타이틀 행 자체를 숨김 */
+  hideTitle?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        border: "1px solid var(--color-border)",
+        borderRadius: 8,
+        padding: small ? "14px 16px" : "20px 24px",
+        background: "var(--color-bg-card)",
+        display: "flex",
+        flexDirection: "column",
+        gap: small ? 10 : 16,
+      }}
+    >
+      {!hideTitle && (
+        small ? (
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            {title}
+          </span>
+        ) : (
+          <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
+            {title}
+          </h2>
+        )
+      )}
+      {children}
+    </div>
+  );
+}
 
 function FormField({
   label, required, children,
@@ -513,7 +550,7 @@ function FormField({
 }) {
   return (
     <div>
-      <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+      <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>
         {label}
         {required && <span style={{ color: "#e53935", marginLeft: 2 }}>*</span>}
       </label>

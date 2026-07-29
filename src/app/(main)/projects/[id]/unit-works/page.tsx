@@ -37,10 +37,14 @@ type UnitWorkRow = {
   // 계획설계 기간 — PM이 잡는 상위 마일스톤(목표치)
   planStartDate:    string | null;
   planEndDate:      string | null;
+  // 구현 기간 — 하위 화면들의 실질구현기간 중 가장 이른 시작일 / 가장 늦은 종료일
+  implStartDate:    string | null;
+  implEndDate:      string | null;
+  // 단위업무 설계서 작성 상태 — BEFORE(작성전) / DOING(작성중) / DONE(작성완료)
+  docStatus:        string;
   // 실적 진행률 — 하위 화면(설계)·기능(구현) 롤업 자동계산. 읽기전용.
   designRt:         number;
   implRt:           number;
-  progress:         number;
   sortOrder:        number;
   reqId:            string;
   reqDisplayId:     string;
@@ -55,6 +59,11 @@ type RequirementOption = {
   displayId:     string;
   name:          string;
 };
+
+// 작성상태 목록 표시용 — 목록에서는 색 구분 없이 기본 텍스트로만 표시(2026-07-28)
+// "전/중/완료" 축약 대신 풀네임으로 변경(2026-07-29) — 화면·영역 목록과 표기 통일
+const DOC_STATUS_LIST_LABEL: Record<string, string> = { BEFORE: "작성전", DOING: "작성중", DONE: "완료" };
+const DOC_STATUS_FULL_LABEL: Record<string, string> = { BEFORE: "작성 전", DOING: "작성 중", DONE: "작성 완료" };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
 
@@ -544,15 +553,27 @@ function UnitWorksPageInner() {
           <div>요구사항</div>
           <div>단위업무명</div>
           <div style={{ textAlign: "center" }}>담당자</div>
-          <div style={{ textAlign: "center" }}>기간</div>
-          <div style={{ textAlign: "center" }}>진행률</div>
+          {/* 작성상태는 담당자 오른쪽에 배치(2026-07-29) — 담당자를 확인한 다음 바로 진행 상태를
+              볼 수 있도록 시선 흐름을 맞춤 */}
+          <div style={{ textAlign: "center" }}>작성상태</div>
+          {/* 단위업무는 계획설계기간(plan_dsgn_*)을 관리 — 화면 목록의 "구현 기간"과 구분되도록 명시 */}
+          <div style={{ textAlign: "center" }}>설계 기간</div>
+          {/* 구현 기간 — 단위업무 자신은 값이 없고, 하위 화면들의 실질구현기간 범위(최소 시작일~최대 종료일)를 보여줌 */}
+          <div style={{ textAlign: "center" }}>구현 기간</div>
           <div style={{ textAlign: "center" }}>화면수</div>
           <div style={{ textAlign: "center" }}>AI 구현</div>
-          <div style={{ textAlign: "center" }}>설/구</div>
+          {/* 색이 아래 진척률 칩(설계=파랑/구현=초록)과 그대로 매칭되도록 헤더도 같은 색으로 라벨링 —
+              예전엔 "설/구"로 줄여놔서 무슨 뜻인지 바로 안 와닿았음 */}
+          <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+            <span style={{ color: "#1565c0" }}>설계</span>
+            <span style={{ color: "#2e7d32" }}>구현</span>
+          </div>
         </div>
 
         {items.length === 0 ? (
-          <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
+          // gridColumn: "1 / -1" 필수 — 바깥 컨테이너 자체가 display:grid(subgrid 트랙 정의)라
+          // 지정하지 않으면 이 div가 첫 번째 트랙(28px)에만 배치되어 텍스트가 세로로 한 글자씩 줄바꿈됨
+          <div style={{ gridColumn: "1 / -1", padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
             등록된 단위업무가 없습니다.
           </div>
         ) : (
@@ -600,15 +621,12 @@ function UnitWorksPageInner() {
               <div
                 onClick={(e) => e.stopPropagation()}
                 style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                title={`${uw.reqDisplayId} ${uw.reqName}`}
+                title={uw.reqName}
               >
                 <button
                   onClick={() => router.push(`/projects/${projectId}/requirements/${uw.reqId}`)}
                   style={linkBtnStyle}
                 >
-                  <span style={{ color: "var(--color-text-secondary)", fontSize: 13, marginRight: 4 }}>
-                    {uw.reqDisplayId}
-                  </span>
                   {uw.reqName}
                 </button>
               </div>
@@ -665,23 +683,43 @@ function UnitWorksPageInner() {
                 {uw.assignMemberName ?? "-"}
               </div>
 
-              {/* 기간 — "YYYY-MM-DD ~ YYYY-MM-DD"(23자) 한 줄 유지 */}
-              <div style={{ fontSize: 13, textAlign: "center", color: "var(--color-text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {uw.planStartDate && uw.planEndDate
-                  ? `${uw.planStartDate} ~ ${uw.planEndDate}`
-                  : uw.planStartDate
-                  ? `${uw.planStartDate} ~`
-                  : "미정"}
+              {/* 작성상태 — 단위업무 설계서 작성 상태. 색 구분 없이 기본 텍스트로 표시(2026-07-28) —
+                  목록에서는 강조가 과했다는 피드백. 전체 라벨은 title 툴팁으로 보조.
+                  담당자 오른쪽으로 위치 이동(2026-07-29) */}
+              <div style={{ textAlign: "center" }}>
+                <span
+                  title={DOC_STATUS_FULL_LABEL[uw.docStatus] ?? uw.docStatus}
+                  style={{ fontSize: 12, color: "var(--color-text-primary)" }}
+                >
+                  {DOC_STATUS_LIST_LABEL[uw.docStatus] ?? uw.docStatus}
+                </span>
               </div>
 
-              {/* 실적 진행률 — 화면(설계)·기능(구현) 롤업 자동계산, 읽기전용(2026-07-28) */}
-              <div style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                <span
-                  title="하위 화면·기능 진행 상황에서 자동 계산됨"
-                  style={{ fontSize: 13, color: uw.progress === 100 ? "#2e7d32" : "var(--color-text-primary)" }}
-                >
-                  {uw.progress}%
-                </span>
+              {/* 기간 — 한 줄로는 축약된 연도("YY-MM-DD")조차 잘려서 시작일/종료일을 2줄로 분리.
+                  lineHeight:1 + 10px로 두 줄을 눌러 붙여 다른 컬럼(13px 한 줄)보다 행 높이가 커지지 않게 함(2026-07-28) */}
+              <div
+                title={uw.planStartDate && uw.planEndDate ? `${uw.planStartDate} ~ ${uw.planEndDate}` : undefined}
+                style={{ fontSize: 11, lineHeight: 1, textAlign: "center", color: "var(--color-text-secondary)" }}
+              >
+                {uw.planStartDate ? (
+                  <>
+                    <div>{shortYear(uw.planStartDate)}</div>
+                    <div>{uw.planEndDate ? `~ ${shortYear(uw.planEndDate)}` : "~"}</div>
+                  </>
+                ) : "미정"}
+              </div>
+
+              {/* 구현 기간 — 단위업무 자신은 일정이 없어 하위 화면들의 실질구현기간 범위(최소~최대)를 계산해 보여줌 */}
+              <div
+                title={uw.implStartDate && uw.implEndDate ? `${uw.implStartDate} ~ ${uw.implEndDate}` : undefined}
+                style={{ fontSize: 11, lineHeight: 1, textAlign: "center", color: "var(--color-text-secondary)" }}
+              >
+                {uw.implStartDate ? (
+                  <>
+                    <div>{shortYear(uw.implStartDate)}</div>
+                    <div>{uw.implEndDate ? `~ ${shortYear(uw.implEndDate)}` : "~"}</div>
+                  </>
+                ) : "미정"}
               </div>
 
               {/* 화면수 */}
@@ -861,8 +899,8 @@ function UnitWorksPageInner() {
 function implStatusBadgeStyle(status: string): React.CSSProperties {
   const c = AI_TASK_STATUS_BADGE[status as AiTaskStatus] ?? { bg: "#f5f5f5", fg: "#555" };
   return {
-    display: "inline-block", padding: "2px 8px", borderRadius: 4,
-    fontSize: 11, fontWeight: 700, background: c.bg, color: c.fg,
+    display: "inline-block", padding: "2px 5px", borderRadius: 4,
+    fontSize: 10, fontWeight: 700, background: c.bg, color: c.fg,
     whiteSpace: "nowrap",
   };
 }
@@ -871,6 +909,11 @@ function implStatusBadgeStyle(status: string): React.CSSProperties {
 function formatRequestedAt(iso: string): string {
   const d = new Date(iso);
   return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+// "YYYY-MM-DD" → "YY-MM-DD" — 목록 "기간" 컬럼 폭을 줄이기 위해 연도를 2자리로 축약
+function shortYear(date: string): string {
+  return date.slice(2);
 }
 
 // ── 분석/설계/구현/테스트 비율 칩 ────────────────────────────────────────────
@@ -882,7 +925,7 @@ function UwRatioChip({ label, value, color }: { label: string; value: number; co
       title={`${fullLabel}: ${value}%`}
       style={{
         display: "inline-flex", alignItems: "center", justifyContent: "center",
-        fontSize: 11, lineHeight: 1,
+        fontSize: 13, lineHeight: 1,
         color: value > 0 ? color : "var(--color-text-tertiary)",
         minWidth: 24,
       }}
@@ -988,16 +1031,24 @@ function DeleteConfirmDialog({
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-// 드래그핸들 / 순서 / 요구사항 / 단위업무명(flex) / 담당자 / 기간 / 진행률 / 화면수 / AI구현 / 분설구테
+// 드래그핸들 / 순서 / 요구사항 / 단위업무명(flex) / 담당자 / 기간 / 작성상태 / 화면수 / AI구현 / 설계·구현 진행률
 // 컬럼 트랙은 바깥 컨테이너(위 JSX의 border 있는 div)에서 한 번만 정의하고,
 // 헤더 행·각 데이터 행은 subgrid 로 이 트랙을 그대로 물려받는다(아래 gridHeaderStyle/gridRowStyle).
 // 예전엔 행마다 grid-template-columns 를 각자 계산했는데(중첩 grid), 그러면 minWidth:max-content 가
 // 행별 콘텐츠 길이(단위업무명 글자 수)에 따라 달라져서 행끼리 전체 너비가 어긋나는 문제가 있었다
 // (2026-07-26 실사용 리포트). subgrid 는 모든 행이 공유하는 트랙을 컨테이너 레벨에서 한 번만
 // 계산하므로 정렬이 항상 보장되고, 단위업무명(1fr)도 매 행이 아니라 컬럼 전체 기준으로 넓어진다.
-//   요구사항 160px / 단위업무명 minmax(240px, 1fr) — 남는 공간을 여기로 흡수
-//   기간 150px("2026-04-02 ~ 2028-06-08" 23자, ellipsis) / AI 구현 120px(배지+MM-DD HH:mm)
-const GRID_TEMPLATE = "28px 36px 160px minmax(240px, 1fr) 70px 150px 60px 44px 120px 100px";
+//   요구사항 220px(이름이 잘리지 않도록 확장) / 단위업무명 minmax(240px, 1fr) — 남는 공간을 여기로 흡수
+//   기간/화면수/AI구현/설계·구현 은 실제 표시 내용(짧은 숫자·퍼센트) 대비 여유가 많아 축소함(2026-07-28)
+//   설계 기간 70px / 구현 기간 70px — 둘 다 2줄 표기라 가로 폭이 덜 필요함
+//   (구현 기간은 하위 화면 실질구현기간 범위를 보여주는 컬럼, 2026-07-29 추가)
+//   작성상태 60px — 54px에서 10%만 확장(2026-07-28)
+//   AI 구현 104px — 배지(padding/font 축소) 기준으로 재계산(2026-07-28)
+//   설계·구현 85px — 값 폰트를 단위업무명과 동일한 13px로 키우되 칼럼 폭은 축소(2026-07-28)
+// 설계·구현 평균(진행률) 컬럼은 폐지 — 설계/구현 각각 값을 보여주는 마지막 컬럼과 의미가 겹쳐서
+// 혼란만 줬음(2026-07-28).
+// 작성상태를 담당자 오른쪽으로 이동(2026-07-29)하며 트랙 순서도 함께 조정
+const GRID_TEMPLATE = "28px 36px 220px minmax(240px, 1fr) 60px 60px 70px 70px 40px 104px 85px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",

@@ -328,6 +328,10 @@ function RequirementDetailPageInner() {
       analysisEnd: detail.analysisEnd ?? "",
       progress: detail.progress ?? 0,
     });
+    // 내용이 이미 있으면 미리보기로, 빈 상태(신규나 아직 작성 전)면 편집으로 시작
+    // (화면 편집의 화면 설명 탭과 동일 패턴, 2026-07-29)
+    setSpecTab(detail.detailSpec?.trim() ? "preview" : "edit");
+    setAnalyzeTab(detail.analysisMemo?.trim() ? "preview" : "edit");
   }, [detail]);
 
   // ── 첨부파일 목록 조회 ──────────────────────────────────────────────────────
@@ -712,7 +716,7 @@ function RequirementDetailPageInner() {
         </div>
       </div>
 
-      <div style={{ padding: "0 24px 24px", maxWidth: 1400 }}>
+      <div style={{ padding: "0 24px 24px" }}>
         {/* 읽기 전용 안내 — 권한 없는 사용자가 진입한 경우, 왜 입력이 안 되는지 명시 */}
         {!isNew && !canEdit && (
           <div style={{
@@ -727,64 +731,38 @@ function RequirementDetailPageInner() {
             🔒 <strong>읽기 전용</strong> — 이 요구사항은 OWNER/ADMIN 또는 PM/PL 직무, 혹은 담당자만 수정할 수 있습니다.
           </div>
         )}
-        {/* 2단 레이아웃: 왼쪽(기본정보+원문·현행화) / 오른쪽(분석메모·상세명세+근거파일) */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 24, alignItems: "start" }}>
+        {/* 2단 레이아웃: 왼쪽(요구사항 내용+기본정보) / 오른쪽(분석메모·상세명세+근거파일)
+            — 화면 폭을 꽉 채우도록 maxWidth 제거, 좌:우 비율 4.5:5.5로 조정(2026-07-29) */}
+        <div style={{ display: "grid", gridTemplateColumns: "4.5fr 5.5fr", gap: 24, alignItems: "start" }}>
 
           {/* ── 왼쪽 컬럼 ─────────────────────────────────────────────────────── */}
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
-            {/* ── AR-00043 기본 정보 ────────────────────────────────────────────── */}
+            {/* ── AR-00043 기본 정보 — 요구사항 내용보다 다시 위로 되돌림(2026-07-29 재조정) ───── */}
             <Section>
-              {/* 상위 과업 선택 */}
-              <FormField label="상위 과업">
-                <div className="sp-select-wrap">
-                  <select
-                    value={form.taskId ?? ""}
-                    onChange={(e) => handleChange("taskId", e.target.value || "")}
-                    disabled={!canEdit}
-                    className="sp-input"
-                  >
-                    <option value="">미분류</option>
-                    {taskOptions.map((t) => (
-                      <option key={t.taskId} value={t.taskId}>{t.name}</option>
-                    ))}
-                  </select>
-                  <span className="sp-select-arrow"><SelectChevron /></span>
-                </div>
-              </FormField>
-
-              {/* 요구사항명 + RFP 페이지 (7:3 비율) */}
-              {/* 자리 이동: 표시 ID → 정렬 순서 자리, RFP 페이지 → 표시 ID 자리, 정렬 순서 → RFP 페이지 자리 */}
+              {/* 상위 과업 + 담당자 — 상위 과업 넓게(7:3) */}
               <div style={{ display: "grid", gridTemplateColumns: "7fr 3fr", gap: 16 }}>
-                <FormField label="요구사항명" required>
-                  <input
-                    type="text"
-                    value={form.name}
-                    placeholder="요구사항명을 입력하세요"
-                    onChange={(e) => handleChange("name", e.target.value)}
-                    readOnly={!canEdit}
-                    className="sp-input"
-                  />
+                <FormField label="상위 과업">
+                  <div className="sp-select-wrap">
+                    <select
+                      value={form.taskId ?? ""}
+                      onChange={(e) => handleChange("taskId", e.target.value || "")}
+                      disabled={!canEdit}
+                      className="sp-input"
+                    >
+                      <option value="">미분류</option>
+                      {taskOptions.map((t) => (
+                        <option key={t.taskId} value={t.taskId}>{t.name}</option>
+                      ))}
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
                 </FormField>
-                <FormField label="RFP 페이지">
-                  <input
-                    type="text"
-                    value={form.rfpPage}
-                    placeholder="예: p.23"
-                    onChange={(e) => handleChange("rfpPage", e.target.value)}
-                    readOnly={!canEdit}
-                    className="sp-input"
-                  />
-                </FormField>
-              </div>
-
-              {/* 담당자 + 표시 ID — 50:50 비율 */}
-              {/* 담당자 라벨 옆 작은 시계 아이콘 = 변경 이력 팝업 (신규 등록 모드에서는 숨김) */}
-              {/* FormField 대신 인라인 div — <label> 안에 <button>이 있으면 라벨 빈 영역 클릭이 */}
-              {/*   브라우저 기본 동작으로 버튼에 전달됨 (라벨→내부 form control 포워딩) */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                {/* 담당자 라벨 옆 작은 시계 아이콘 = 변경 이력 팝업 (신규 등록 모드에서는 숨김) */}
+                {/* FormField 대신 인라인 div — <label> 안에 <button>이 있으면 라벨 빈 영역 클릭이 */}
+                {/*   브라우저 기본 동작으로 버튼에 전달됨 (라벨→내부 form control 포워딩) */}
                 <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6, fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>
                     <span>담당자</span>
                     {!isNew && (
                       <button
@@ -820,6 +798,20 @@ function RequirementDetailPageInner() {
                     <span className="sp-select-arrow"><SelectChevron /></span>
                   </div>
                 </div>
+              </div>
+
+              {/* 요구사항명 + 표시 ID — 요구사항명 넓게(7:3) */}
+              <div style={{ display: "grid", gridTemplateColumns: "7fr 3fr", gap: 16 }}>
+                <FormField label="요구사항명" required>
+                  <input
+                    type="text"
+                    value={form.name}
+                    placeholder="요구사항명을 입력하세요"
+                    onChange={(e) => handleChange("name", e.target.value)}
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </FormField>
                 <FormField label="표시 ID">
                   <input
                     type="text"
@@ -832,8 +824,52 @@ function RequirementDetailPageInner() {
                 </FormField>
               </div>
 
-              {/* 분석 일정 — 진척률은 타이틀 옆 게이지로 이동 (2컬럼) */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              {/* 출처 + RFP 페이지 + 우선순위 — 3컬럼 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                <FormField label="출처" required>
+                  <div className="sp-select-wrap">
+                    <select
+                      value={form.source}
+                      onChange={(e) => handleChange("source", e.target.value)}
+                      disabled={!canEdit}
+                      className="sp-input"
+                    >
+                      <option value="RFP">RFP</option>
+                      <option value="ADD">추가</option>
+                      <option value="CHANGE">변경</option>
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
+                </FormField>
+                <FormField label="RFP 페이지">
+                  <input
+                    type="text"
+                    value={form.rfpPage}
+                    placeholder="예: p.23"
+                    onChange={(e) => handleChange("rfpPage", e.target.value)}
+                    readOnly={!canEdit}
+                    className="sp-input"
+                  />
+                </FormField>
+                <FormField label="우선순위" required>
+                  <div className="sp-select-wrap">
+                    <select
+                      value={form.priority}
+                      onChange={(e) => handleChange("priority", e.target.value)}
+                      disabled={!canEdit}
+                      className="sp-input"
+                    >
+                      <option value="HIGH">높음 (HIGH)</option>
+                      <option value="MEDIUM">중간 (MEDIUM)</option>
+                      <option value="LOW">낮음 (LOW)</option>
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
+                </FormField>
+              </div>
+
+              {/* 분석 시작일 + 분석 종료일 + 정렬 순서 — 3컬럼 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
                 <FormField label="분석 시작일">
                   <input
                     type="date"
@@ -852,40 +888,6 @@ function RequirementDetailPageInner() {
                     className="sp-input"
                   />
                 </FormField>
-              </div>
-
-              {/* 우선순위 + 출처 + 정렬 순서 — 3컬럼 */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-                <FormField label="우선순위" required>
-                  <div className="sp-select-wrap">
-                    <select
-                      value={form.priority}
-                      onChange={(e) => handleChange("priority", e.target.value)}
-                      disabled={!canEdit}
-                      className="sp-input"
-                    >
-                      <option value="HIGH">높음 (HIGH)</option>
-                      <option value="MEDIUM">중간 (MEDIUM)</option>
-                      <option value="LOW">낮음 (LOW)</option>
-                    </select>
-                    <span className="sp-select-arrow"><SelectChevron /></span>
-                  </div>
-                </FormField>
-                <FormField label="출처" required>
-                  <div className="sp-select-wrap">
-                    <select
-                      value={form.source}
-                      onChange={(e) => handleChange("source", e.target.value)}
-                      disabled={!canEdit}
-                      className="sp-input"
-                    >
-                      <option value="RFP">RFP</option>
-                      <option value="ADD">추가</option>
-                      <option value="CHANGE">변경</option>
-                    </select>
-                    <span className="sp-select-arrow"><SelectChevron /></span>
-                  </div>
-                </FormField>
                 <FormField label="정렬 순서">
                   <input
                     type="number"
@@ -901,7 +903,7 @@ function RequirementDetailPageInner() {
               </div>
             </Section>
 
-            {/* ── AR-00044 원문·현행화 ──────────────────────────────────────────── */}
+            {/* ── AR-00044 원문·현행화 — 기본 정보 아래로 되돌림(2026-07-29 재조정) ───────── */}
             <Section compact label={
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
                 <span>요구사항 내용</span>
@@ -948,7 +950,8 @@ function RequirementDetailPageInner() {
                     value={form.currentContent}
                     onChange={(html) => handleChange("currentContent", html)}
                     placeholder="협의 또는 변경 사항이 반영된 최신 내용을 입력하세요"
-                    minHeight={338}
+                    // 기존(338px) 대비 80% 증가(2026-07-29)
+                    minHeight={608}
                     readOnly={!canEdit}
                     field="htmlContent"
                   />
@@ -957,7 +960,8 @@ function RequirementDetailPageInner() {
                     value={form.originalContent}
                     onChange={(html) => handleChange("originalContent", html)}
                     placeholder="RFP 또는 계약서의 원문 그대로 입력하세요"
-                    minHeight={338}
+                    // 기존(338px) 대비 80% 증가(2026-07-29)
+                    minHeight={608}
                     readOnly={!canEdit}
                     field="htmlContent"
                   />
@@ -1089,7 +1093,8 @@ function RequirementDetailPageInner() {
                   onTabChange={setSpecTab}
                   onChange={(v) => handleChange("detailSpec", v)}
                   placeholder={`## 기능 상세\n\n- 항목1\n- 항목2`}
-                  rows={20}
+                  // 기존(20행) 대비 50% 증가(2026-07-29)
+                  rows={30}
                   readOnly={!canEdit}
                   field="detailSpec"
                 />
@@ -1121,7 +1126,8 @@ function RequirementDetailPageInner() {
                   onTabChange={setAnalyzeTab}
                   onChange={(v) => handleChange("analysisMemo", v)}
                   placeholder={`## 분석 내용\n\n- 항목1\n- 항목2`}
-                  rows={20}
+                  // 기존(20행) 대비 50% 증가(2026-07-29)
+                  rows={30}
                   readOnly={!canEdit}
                   field="analysisMemo"
                 />
@@ -1399,7 +1405,8 @@ function FormField({
 }) {
   return (
     <div>
-      <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+      {/* 라벨 서식을 과업 편집(tasks/[taskId]/page.tsx)과 통일 — fontSize 13→12, color primary→secondary(2026-07-29) */}
+      <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>
         {label}
         {required && <span style={{ color: "#e53935", marginLeft: 2 }}>*</span>}
       </label>

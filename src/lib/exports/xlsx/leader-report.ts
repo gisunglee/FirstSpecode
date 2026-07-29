@@ -87,25 +87,29 @@ function estimateRowHeight(texts: string[], mergedWidthUnits: number, minHeight 
   return Math.max(minHeight, lineCount * 15 + 6);
 }
 
-// 협조/이슈 표 · 사업수행 표가 같은 12칸짜리 데이터 그리드(C~N)를 공유한다.
-// 이슈 표는 5개 그룹(내용4/조치4/요청자·담당자2/요청일~목표일1/상태1=12)으로,
-// 사업수행 표는 정확히 반씩(금주실적6/차주계획6)으로 나눠 쓴다 — 두 표를 같은 그리드
-// 위에서 서로 다르게 merge 하는 것뿐이라 폭이 어긋나지 않는다.
-// (이전엔 금주실적:차주계획이 6:3으로 치우쳐 있었음 — 2026-07-22 피드백으로 정정)
+// 협조/이슈 표 · 사업수행 표가 같은 데이터 그리드(C~M)를 공유한다.
+// 이슈 표는 4개 그룹(내용4/조치4/요청자1/담당자1/상태1=11)으로, 사업수행 표는 HALF_END
+// 기준으로 나눠 쓴다 — 두 표를 같은 그리드 위에서 서로 다르게 merge 하는 것뿐이라 폭이
+// 어긋나지 않는다.
+// "요청일~목표일" 전용 컬럼은 폐지(2026-07-29) — 시트 전체가 너무 가로로 넓다는 피드백으로,
+// 요청자/담당자 컬럼을 재사용해 그 아래 행(2행)에 요청일/목표일을 배치(아래 이슈 표 참조).
+// "구분"(category) 컬럼도 10→13으로 넓힘 — "금주 코멘트"(5자) 라벨이 잘려 보이던 문제 해결.
 const COL = {
   margin:   1,
   category: 2,
   content:  3, // ~6 (4칸)
   action:   7, // ~10 (4칸)
-  who:      11, // ~12 (2칸)
-  dateRange: 13,
-  status:   14,
+  requester: 11,
+  assignee:  12,
+  status:   13,
 } as const;
 const CONTENT_END = 6;
 const ACTION_END   = 10;
-const WHO_END      = 12;
 const LAST_COL     = COL.status;
-const HALF_END     = 8; // 사업수행 표 "금주 실적" 병합 끝(3~8, 6칸) — 나머지 절반은 9~14
+// 사업수행 표 "금주 실적" 병합 끝 — 원래 8(6칸,72유닛)이었으나 "차주 계획"(9~13, 56유닛)보다
+// 훨씬 넓어 보인다는 피드백(2026-07-29)으로 1칸 줄임. 7(5칸,60유닛) vs 나머지 6칸(68유닛)로
+// 정확히 반반은 아니지만(그리드가 11칸 홀수라 완전히 같게는 못 나눔) 훨씬 균형 잡힘.
+const HALF_END     = 7;
 
 export async function buildLeaderReportXlsx(input: LeaderReportXlsxInput): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
@@ -117,11 +121,11 @@ export async function buildLeaderReportXlsx(input: LeaderReportXlsxInput): Promi
   const ws = wb.addWorksheet("주간업무보고서", { views: [{ showGridLines: false }] });
 
   ws.getColumn(COL.margin).width   = 2;
-  ws.getColumn(COL.category).width = 10;
+  ws.getColumn(COL.category).width = 13;
   for (let c = COL.content; c <= CONTENT_END; c++) ws.getColumn(c).width = 12;
   for (let c = COL.action; c <= ACTION_END; c++) ws.getColumn(c).width = 12;
-  for (let c = COL.who; c <= WHO_END; c++) ws.getColumn(c).width = 12;
-  ws.getColumn(COL.dateRange).width = 20;
+  ws.getColumn(COL.requester).width = 11;
+  ws.getColumn(COL.assignee).width  = 11;
   ws.getColumn(COL.status).width    = 10;
 
   // ── 제목 ──────────────────────────────────────────────────────────────
@@ -135,19 +139,20 @@ export async function buildLeaderReportXlsx(input: LeaderReportXlsxInput): Promi
   ws.addRow([]);
 
   // ── 주차 / 보고일자 ────────────────────────────────────────────────────
+  // dateRange 컬럼 폐지로 "보고일자" 라벨/값 배치를 requester~status 3칸으로 재조정(2026-07-29)
   const weekRow = ws.addRow([]);
   weekRow.getCell(COL.category).value = "주차";
   ws.mergeCells(weekRow.number, COL.content, weekRow.number, ACTION_END);
   weekRow.getCell(COL.content).value = input.weekLabel;
-  weekRow.getCell(COL.who).value = "보고일자";
-  ws.mergeCells(weekRow.number, COL.who, weekRow.number, WHO_END);
-  ws.mergeCells(weekRow.number, COL.dateRange, weekRow.number, LAST_COL);
-  weekRow.getCell(COL.dateRange).value = input.reportDateLabel;
+  weekRow.getCell(COL.requester).value = "보고일자";
+  ws.mergeCells(weekRow.number, COL.assignee, weekRow.number, LAST_COL);
+  weekRow.getCell(COL.assignee).value = input.reportDateLabel;
   applyLabelCell(weekRow.getCell(COL.category));
   applyValueCell(weekRow.getCell(COL.content));
-  applyLabelCell(weekRow.getCell(COL.who));
-  applyValueCell(weekRow.getCell(COL.dateRange));
-  weekRow.height = 22;
+  applyLabelCell(weekRow.getCell(COL.requester));
+  applyValueCell(weekRow.getCell(COL.assignee));
+  // 값 컬럼 폭이 좁아져(assignee+status=21유닛) 날짜 라벨이 2줄로 접힐 수 있어 고정 22 대신 추정
+  weekRow.height = estimateRowHeight([input.reportDateLabel], 21, 22);
   ws.addRow([]);
 
   // ── 협조 및 이슈사항 현황 ──────────────────────────────────────────────
@@ -156,17 +161,34 @@ export async function buildLeaderReportXlsx(input: LeaderReportXlsxInput): Promi
   ws.mergeCells(issueTitleRow.number, COL.category, issueTitleRow.number, LAST_COL);
   issueTitleRow.getCell(COL.category).font = { bold: true, size: 12 };
 
-  const issueHeader = ws.addRow([]);
-  issueHeader.getCell(COL.category).value = "구분";
-  issueHeader.getCell(COL.content).value  = "내용";
-  ws.mergeCells(issueHeader.number, COL.content, issueHeader.number, CONTENT_END);
-  issueHeader.getCell(COL.action).value = "조치 계획 / 결과";
-  ws.mergeCells(issueHeader.number, COL.action, issueHeader.number, ACTION_END);
-  issueHeader.getCell(COL.who).value = "요청자 / 담당자";
-  ws.mergeCells(issueHeader.number, COL.who, issueHeader.number, WHO_END);
-  issueHeader.getCell(COL.dateRange).value = "요청일 ~ 목표일";
-  issueHeader.getCell(COL.status).value = "상태";
-  applyHeaderRow(issueHeader, COL.category, LAST_COL);
+  // 헤더 2행 구조 — 3행(요청자/담당자 병합 라벨 + 요청자·담당자 + 요청일·목표일)은
+  // 맨 위 병합 라벨이 바로 아래 요청자/담당자와 같은 말을 두 번 보여주는 셈이라 불필요하다는
+  // 피드백(2026-07-29) → 요청자/담당자를 1행에 바로 놓고, 요청일/목표일만 2행으로 내림.
+  //   1행: 구분/내용/조치계획·결과/상태(rowSpan 2) + 요청자 + 담당자
+  //   2행: 요청일 | 목표일
+  const issueHeaderRow1 = ws.addRow([]);
+  const issueHeaderRow2 = ws.addRow([]);
+
+  issueHeaderRow1.getCell(COL.category).value = "구분";
+  ws.mergeCells(issueHeaderRow1.number, COL.category, issueHeaderRow2.number, COL.category);
+
+  issueHeaderRow1.getCell(COL.content).value = "내용";
+  ws.mergeCells(issueHeaderRow1.number, COL.content, issueHeaderRow2.number, CONTENT_END);
+
+  issueHeaderRow1.getCell(COL.action).value = "조치 계획 / 결과";
+  ws.mergeCells(issueHeaderRow1.number, COL.action, issueHeaderRow2.number, ACTION_END);
+
+  issueHeaderRow1.getCell(COL.requester).value = "요청자";
+  issueHeaderRow1.getCell(COL.assignee).value  = "담당자";
+
+  issueHeaderRow1.getCell(COL.status).value = "상태";
+  ws.mergeCells(issueHeaderRow1.number, COL.status, issueHeaderRow2.number, COL.status);
+
+  issueHeaderRow2.getCell(COL.requester).value = "요청일";
+  issueHeaderRow2.getCell(COL.assignee).value  = "목표일";
+
+  applyHeaderRow(issueHeaderRow1, COL.category, LAST_COL);
+  applyHeaderRow(issueHeaderRow2, COL.requester, COL.assignee);
 
   if (input.issues.length === 0) {
     const r = ws.addRow([]);
@@ -175,24 +197,44 @@ export async function buildLeaderReportXlsx(input: LeaderReportXlsxInput): Promi
     applyValueCell(r.getCell(COL.category), "center");
   } else {
     for (const issue of input.issues) {
-      const r = ws.addRow([]);
-      r.getCell(COL.category).value = issue.categoryLabel;
-      r.getCell(COL.content).value  = issue.cn;
-      ws.mergeCells(r.number, COL.content, r.number, CONTENT_END);
-      r.getCell(COL.action).value = issue.actionCn;
-      ws.mergeCells(r.number, COL.action, r.number, ACTION_END);
-      r.getCell(COL.who).value = `${issue.requesterNm} / ${issue.assigneeNm}`;
-      ws.mergeCells(r.number, COL.who, r.number, WHO_END);
-      r.getCell(COL.dateRange).value = `${issue.reqDt} ~ ${issue.dueDt}`;
-      r.getCell(COL.status).value    = issue.statusLabel;
-      applyValueCell(r.getCell(COL.category), "center");
-      applyValueCell(r.getCell(COL.content));
-      applyValueCell(r.getCell(COL.action));
-      applyValueCell(r.getCell(COL.who), "center");
-      applyValueCell(r.getCell(COL.dateRange), "center");
-      applyValueCell(r.getCell(COL.status), "center");
-      // 내용/조치 계획·결과 둘 다 4칸(48 width unit) 폭 — 더 긴 쪽 기준으로 행 높이 추정
-      r.height = estimateRowHeight([issue.cn, issue.actionCn], 48);
+      const r1 = ws.addRow([]);
+      const r2 = ws.addRow([]);
+
+      r1.getCell(COL.category).value = issue.categoryLabel;
+      ws.mergeCells(r1.number, COL.category, r2.number, COL.category);
+
+      r1.getCell(COL.content).value = issue.cn;
+      ws.mergeCells(r1.number, COL.content, r2.number, CONTENT_END);
+
+      r1.getCell(COL.action).value = issue.actionCn;
+      ws.mergeCells(r1.number, COL.action, r2.number, ACTION_END);
+
+      r1.getCell(COL.status).value = issue.statusLabel;
+      ws.mergeCells(r1.number, COL.status, r2.number, COL.status);
+
+      // 요청자/담당자는 1행, 요청일/목표일은 그 바로 아래 2행 — 같은 컬럼(요청자/담당자
+      // 컬럼)을 그대로 재사용해 별도 컬럼을 늘리지 않는다.
+      r1.getCell(COL.requester).value = issue.requesterNm;
+      r1.getCell(COL.assignee).value  = issue.assigneeNm;
+      r2.getCell(COL.requester).value = issue.reqDt;
+      r2.getCell(COL.assignee).value  = issue.dueDt;
+
+      applyValueCell(r1.getCell(COL.category), "center");
+      applyValueCell(r1.getCell(COL.content));
+      applyValueCell(r1.getCell(COL.action));
+      applyValueCell(r1.getCell(COL.status), "center");
+      applyValueCell(r1.getCell(COL.requester), "center");
+      applyValueCell(r1.getCell(COL.assignee), "center");
+      applyValueCell(r2.getCell(COL.requester), "center");
+      applyValueCell(r2.getCell(COL.assignee), "center");
+
+      // 내용/조치 계획·결과가 필요로 하는 총 높이(r1+r2 합산)를 추정해 두 행에 "균등하게"
+      // 나눈다 — 전부 r1에 몰아줬더니 요청자/담당자(r1) 행만 유난히 커 보이고 요청일/목표일
+      // (r2)은 눌려 보인다는 피드백(2026-07-29). 절반씩 나누면 둘 다 자연스러운 높이가 된다.
+      const totalHeight = estimateRowHeight([issue.cn, issue.actionCn], 48);
+      const halfHeight = Math.max(20, Math.ceil(totalHeight / 2));
+      r1.height = halfHeight;
+      r2.height = halfHeight;
     }
   }
   ws.addRow([]);
@@ -203,7 +245,7 @@ export async function buildLeaderReportXlsx(input: LeaderReportXlsxInput): Promi
   ws.mergeCells(bizTitleRow.number, COL.category, bizTitleRow.number, LAST_COL);
   bizTitleRow.getCell(COL.category).font = { bold: true, size: 12 };
 
-  const PLAN_START = HALF_END + 1; // 그리드 12칸을 정확히 반으로 나눈 뒤쪽 절반의 시작 컬럼
+  const PLAN_START = HALF_END + 1; // "차주 계획" 시작 컬럼 — HALF_END 바로 다음
 
   const bizHeader = ws.addRow([]);
   bizHeader.getCell(COL.category).value = "구분";
@@ -222,12 +264,17 @@ export async function buildLeaderReportXlsx(input: LeaderReportXlsxInput): Promi
   applyLabelCell(bizRow.getCell(COL.category));
   applyValueCell(bizRow.getCell(COL.content));
   applyValueCell(bizRow.getCell(PLAN_START));
-  bizRow.height = estimateRowHeight([input.perfCn, input.planCn], 72, 60);
+  // 금주 실적(3~7, 60유닛)과 차주 계획(8~13, 68유닛) — 폭이 달라 같다고 가정한 추정치를
+  // 그대로 쓰면 좁은 쪽 줄바꿈이 적게 잡혀 실제로 열어보면 텍스트가 눌려 보인다.
+  // 각자의 실제 폭으로 따로 추정해 더 큰 쪽으로 맞춘다.
+  const perfHeight = estimateRowHeight([input.perfCn], 60, 60);
+  const planHeight = estimateRowHeight([input.planCn], 68, 60);
+  bizRow.height = Math.max(perfHeight, planHeight);
 
   // ── 금주 코멘트 / 특이사항 (항상 표시 — 비어 있으면 "-") ─────────────────
   ws.addRow([]);
-  // content~status 병합 폭(4*12 + 4*12 + 2*12 + 20 + 10) — 아래 컬럼 width 설정과 반드시 맞출 것
-  const valueWidthUnits = 48 + 48 + 24 + 20 + 10;
+  // content~status 병합 폭(4*12 + 4*12 + 11 + 11 + 10) — 아래 컬럼 width 설정과 반드시 맞출 것
+  const valueWidthUnits = 48 + 48 + 11 + 11 + 10;
 
   const commentRow = ws.addRow([]);
   commentRow.getCell(COL.category).value = "금주 코멘트";

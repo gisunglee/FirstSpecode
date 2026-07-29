@@ -157,16 +157,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // 기능별 진척률 조회 — tb_cm_progress에서 한번에 가져오기
     const funcIds = area.functions.map(f => f.func_id);
-    let progressMap = new Map<string, { designRt: number; implRt: number; testRt: number }>();
+    let progressMap = new Map<string, { designRt: number; implRt: number }>();
     if (funcIds.length > 0) {
       const progressRows = await prisma.tbCmProgress.findMany({
         where: { ref_tbl_nm: "tb_ds_function", ref_id: { in: funcIds } },
-        select: { ref_id: true, design_rt: true, impl_rt: true, test_rt: true },
+        select: { ref_id: true, design_rt: true, impl_rt: true },
       });
       progressMap = new Map(progressRows.map(r => [r.ref_id, {
         designRt: r.design_rt,
         implRt:   r.impl_rt,
-        testRt:   r.test_rt,
       }]));
     }
 
@@ -206,7 +205,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           sortOrder: f.sort_ordr,
           designRt:  prog?.designRt ?? 0,
           implRt:    prog?.implRt ?? 0,
-          testRt:    prog?.testRt ?? 0,
         };
       }),
     });

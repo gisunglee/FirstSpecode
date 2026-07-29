@@ -4,6 +4,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { fetchScreenProgress } from "@/lib/pm/progressRollup";
+import { parseEffortHours } from "@/lib/effort";
 
 export type ScreenImplTask = {
   aiTaskId:    string;
@@ -21,21 +22,29 @@ export type ScreenListItem = {
   categoryS:        string;
   unitWorkId:       string | null;
   unitWorkName:     string;
+  unitWorkDisplayId:        string | null;
+  unitWorkAssignMemberId:   string | null;
+  unitWorkAssignMemberName: string | null;
   assignMemberId:   string | null;
   assignMemberName: string | null;
   requirementId:    string | null;
   requirementName:  string;
   areaCount:        number;
   sortOrder:        number;
-  // 실질 설계/구현 일정 — 담당자가 화면 단위로 직접 커밋하는 실제 일정(WBS 간트에서 사용)
+  // 설계 일정 — 화면 자신은 안 갖고(2026-07-28 2차 개편) 소속 단위업무의 계획설계기간을
+  // 그대로 상속해서 보여준다(WBS 간트에서 사용). 실질구현기간은 화면 자신이 직접 가짐.
   startDate:        string | null;
   endDate:          string | null;
   implStartDate:    string | null;
   implEndDate:      string | null;
-  designEffort:     string | null;
+  // 화면 자신은 공수 컬럼이 없어(설계공수는 단위업무, 구현공수는 기능 소관) 하위 기능
+  // 전체의 impl_efrt_val 합으로 대신 보여준다. 설계 공수는 화면 단위로 쪼갤 방법이 없어
+  // (단위업무 전체 하나의 값이라) 여기선 다루지 않음 — 필요하면 소속 단위업무 쪽을 볼 것.
+  implEffortHours:  number;
+  // 화면정의서 작성 상태 — BEFORE(작성전) / DOING(작성중) / DONE(작성완료)
+  docStatus:        string;
   avgDesignRt:      number;
   avgImplRt:        number;
-  avgTestRt:        number;
   implTask:         ScreenImplTask | null;
 };
 
@@ -60,6 +69,10 @@ export async function fetchProjectScreens(opts: {
         select: {
           unit_work_id: true,
           unit_work_nm: true,
+          unit_work_display_id: true,
+          asign_mber_id: true,
+          plan_dsgn_bgng_de: true,
+          plan_dsgn_end_de: true,
           requirement: {
             select: { req_id: true, req_nm: true, req_display_id: true },
           },
@@ -76,11 +89,32 @@ export async function fetchProjectScreens(opts: {
 
   // 화면별 설계/구현/테스트 진척률 — 중앙 헬퍼(lib/pm/progressRollup.ts)로 통일.
   // 구현 일정은 더 이상 기능에서 롤업하지 않음 — 화면 자신의 actl_impl_bgng_de/end_de를 그대로 씀(2026-07-28).
-  const progMap = await fetchScreenProgress(screens.map((s) => s.scrn_id));
+  const screenIds = screens.map((s) => s.scrn_id);
+  const progMap = await fetchScreenProgress(screenIds);
 
-  // 담당자 이름 일괄 조회
+  // 화면 자신은 구현 공수 컬럼이 없어(스키마상 기능 소관) 하위 영역→기능 전체의
+  // impl_efrt_val을 걷어와 JS에서 합산한다(문자열 컬럼이라 SQL SUM 대신 parseEffortHours로).
+  const implEffortFunctions = screenIds.length > 0
+    ? await prisma.tbDsFunction.findMany({
+        where:  { area: { scrn_id: { in: screenIds } } },
+        select: { impl_efrt_val: true, area: { select: { scrn_id: true } } },
+      })
+    : [];
+  const implEffortMap = new Map<string, number>();
+  for (const f of implEffortFunctions) {
+    const scrnId = f.area?.scrn_id;
+    if (!scrnId) continue;
+    implEffortMap.set(scrnId, (implEffortMap.get(scrnId) ?? 0) + parseEffortHours(f.impl_efrt_val));
+  }
+
+  // 담당자 이름 일괄 조회 — WBS 그룹으로 보기(화면 탭)의 요약 행이 소속 단위업무 자신의
+  // 담당자도 보여줘야 해서 화면 담당자와 단위업무 담당자를 한 배치로 같이 조회한다.
   const assigneeIds = [
-    ...new Set(screens.map((s) => s.asign_mber_id).filter((v): v is string => !!v)),
+    ...new Set(
+      screens
+        .flatMap((s) => [s.asign_mber_id, s.unitWork?.asign_mber_id ?? null])
+        .filter((v): v is string => !!v)
+    ),
   ];
   const assigneeMembers = assigneeIds.length > 0
     ? await prisma.tbCmMember.findMany({
@@ -95,7 +129,6 @@ export async function fetchProjectScreens(opts: {
   // 화면 단위 IMPLEMENT 태스크 최신 1건
   const implTaskMap = new Map<string, ScreenImplTask>();
   if (screens.length > 0) {
-    const screenIds = screens.map((s) => s.scrn_id);
     const implSnapshots = await prisma.tbSpImplSnapshot.findMany({
       where:  { ref_tbl_nm: "tb_ds_screen", ref_id: { in: screenIds } },
       select: { ref_id: true, ai_task_id: true, creat_dt: true },
@@ -135,20 +168,23 @@ export async function fetchProjectScreens(opts: {
       categoryS:        s.ctgry_s_nm ?? "",
       unitWorkId:       s.unit_work_id ?? null,
       unitWorkName:     s.unitWork?.unit_work_nm ?? "미분류",
+      unitWorkDisplayId:        s.unitWork?.unit_work_display_id ?? null,
+      unitWorkAssignMemberId:   s.unitWork?.asign_mber_id ?? null,
+      unitWorkAssignMemberName: s.unitWork?.asign_mber_id ? (assigneeMap.get(s.unitWork.asign_mber_id) ?? null) : null,
       assignMemberId:   s.asign_mber_id ?? null,
       assignMemberName: s.asign_mber_id ? (assigneeMap.get(s.asign_mber_id) ?? null) : null,
       requirementId:    s.unitWork?.requirement?.req_id ?? null,
       requirementName:  s.unitWork?.requirement ? s.unitWork.requirement.req_nm : "미분류",
       areaCount:        s._count.areas,
       sortOrder:        s.sort_ordr,
-      startDate:        s.actl_dsgn_bgng_de ?? null,
-      endDate:          s.actl_dsgn_end_de ?? null,
+      startDate:        s.unitWork?.plan_dsgn_bgng_de ?? null,
+      endDate:          s.unitWork?.plan_dsgn_end_de ?? null,
       implStartDate:    s.actl_impl_bgng_de ?? null,
       implEndDate:      s.actl_impl_end_de ?? null,
-      designEffort:     s.actl_dsgn_efrt_val ?? null,
+      implEffortHours:  implEffortMap.get(s.scrn_id) ?? 0,
+      docStatus:        s.dsgn_doc_sttus_code,
       avgDesignRt:      prog?.designRt ?? 0,
       avgImplRt:        prog?.implRt ?? 0,
-      avgTestRt:        prog?.testRt ?? 0,
       implTask:         impl ?? null,
     };
   });

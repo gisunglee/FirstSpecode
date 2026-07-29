@@ -58,10 +58,13 @@ export default function TeamActivityCard({ data, isLoading, error }: Props) {
       }
       help={
         <HelpButton title="팀 활동 · 부하 상위 기준">
-          <p><b>활동</b> — 최근 7일간 설계 변경(생성/수정/삭제) 이벤트가 발생한 건수만 셉니다.
-            댓글·리뷰·진행률 변경 등 다른 활동은 포함되지 않습니다.</p>
-          <p><b>부하 상위</b> — "활동"과 다른 지표입니다. 담당 단위업무 중 진행중+마감임박+지연
-            건수를 합산해 가장 큰 멤버 1명을 보여줍니다(PM 진단 팀 부하 매트릭스와 동일 정의).</p>
+          <p><b>활동</b> — 최근 7일간 설계 변경(단위업무·화면·영역·기능 등 설계 엔티티의 생성/수정/삭제)
+            이벤트가 발생한 건수만 셉니다. 댓글·리뷰·진행률 변경 등 다른 활동은 포함되지 않습니다.</p>
+          <p><b>TOP 기여자</b> — 위 활동 건수 내림차순으로 최대 3명까지 보여줍니다. 최근 7일간
+            활동한 멤버 자체가 적으면(상단 배지 인원수) 그만큼만 표시됩니다 — 목록이 짧다고 오류는 아닙니다.</p>
+          <p><b>부하 상위</b> — "활동"과 다른 지표입니다. 담당 중인 미완료(진행률&lt;100%) 단위업무마다
+            기본 1점, 그중 설계 종료 예정일이 이미 지났으면(지연) +1점, 아직 안 지났지만 7일 이내면(임박)
+            +1점을 더해 합산 — 가장 점수가 높은 멤버 1명만 보여줍니다(PM 진단 팀 부하 매트릭스와 동일 정의).</p>
         </HelpButton>
       }
       linkHref="/pm?focus=teamLoad"
@@ -73,15 +76,20 @@ export default function TeamActivityCard({ data, isLoading, error }: Props) {
     >
       {data && data.topContributors.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div
-            style={{
-              fontSize: "var(--text-xs)",
-              color: "var(--color-text-tertiary)",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-            }}
-          >
-            Top 기여자
+          <div>
+            <div
+              style={{
+                fontSize: "var(--text-xs)",
+                color: "var(--color-text-tertiary)",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
+              Top 기여자
+            </div>
+            <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", opacity: 0.8 }}>
+              최근 7일 설계 변경 건수 기준
+            </div>
           </div>
           {data.topContributors.map((c, idx) => {
             const pct = maxCount > 0 ? Math.round((c.count / maxCount) * 100) : 0;
@@ -166,6 +174,9 @@ export default function TeamActivityCard({ data, isLoading, error }: Props) {
           }}
         >
           ⚠ 부하 상위: <strong>{data.topLoadMember.displayName}</strong> ({data.topLoadMember.activeLoad}건)
+          <div style={{ opacity: 0.8, marginTop: 2 }}>
+            담당 미완료 단위업무 수 + 그중 지연·임박 가중치 합산 1위
+          </div>
         </div>
       )}
     </DashboardCard>

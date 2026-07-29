@@ -109,15 +109,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // 영역별 진척률 집계 — 영역 → 기능 → tb_cm_progress
     const areaIds = screen.areas.map(a => a.area_id);
-    let progMap = new Map<string, { designRt: number; implRt: number; testRt: number }>();
+    let progMap = new Map<string, { designRt: number; implRt: number }>();
     if (areaIds.length > 0) {
       const aggRows = await prisma.$queryRaw<{
-        area_id: string; avg_design_rt: number; avg_impl_rt: number; avg_test_rt: number;
+        area_id: string; avg_design_rt: number; avg_impl_rt: number;
       }[]>`
         SELECT f.area_id,
                COALESCE(AVG(p.design_rt), 0) AS avg_design_rt,
-               COALESCE(AVG(p.impl_rt),   0) AS avg_impl_rt,
-               COALESCE(AVG(p.test_rt),   0) AS avg_test_rt
+               COALESCE(AVG(p.impl_rt),   0) AS avg_impl_rt
           FROM tb_ds_function f
           LEFT JOIN tb_cm_progress p
             ON p.ref_tbl_nm = 'tb_ds_function' AND p.ref_id = f.func_id
@@ -127,7 +126,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       progMap = new Map(aggRows.map(r => [r.area_id, {
         designRt: Math.round(Number(r.avg_design_rt)),
         implRt:   Math.round(Number(r.avg_impl_rt)),
-        testRt:   Math.round(Number(r.avg_test_rt)),
       }]));
     }
 
@@ -144,10 +142,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       comment:          screen.coment_cn ?? "",
       urlPath:          screen.url_path ?? "",
       sortOrder:        screen.sort_ordr,
-      // 실질 설계/구현 일정·공수 — 담당자가 실제로 커밋하는 일정(단위업무의 계획설계기간과는 별개 축)
-      designBgngDe:     screen.actl_dsgn_bgng_de  ?? "",
-      designEndDe:      screen.actl_dsgn_end_de   ?? "",
-      designEfrtVal:    screen.actl_dsgn_efrt_val ?? "",
+      // 실질 구현 일정 — 담당자가 실제로 커밋하는 일정. 설계 일정은 2026-07-28 2차 개편으로
+      // 화면에서 제거되어 소속 단위업무의 plan_dsgn_*로만 관리(단위업무 상세 페이지에서 편집)
       implBgngDe:       screen.actl_impl_bgng_de  ?? "",
       implEndDe:        screen.actl_impl_end_de   ?? "",
       docStatus:        screen.dsgn_doc_sttus_code,
@@ -167,7 +163,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           sortOrder: a.sort_ordr,
           designRt:  prog?.designRt ?? 0,
           implRt:    prog?.implRt ?? 0,
-          testRt:    prog?.testRt ?? 0,
         };
       }),
     });
@@ -190,7 +185,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { unitWorkId, displayId, name, description, comment, type, sortOrder, categoryL, categoryM, categoryS, layoutData, saveHistory, assignMemberId, designBgngDe, designEndDe, designEfrtVal, implBgngDe, implEndDe, docStatus } = body as {
+  const { unitWorkId, displayId, name, description, comment, type, sortOrder, categoryL, categoryM, categoryS, layoutData, saveHistory, assignMemberId, implBgngDe, implEndDe, docStatus } = body as {
     unitWorkId?:     string;
     displayId?:      string;
     name?:           string;
@@ -204,9 +199,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     layoutData?:     string;
     saveHistory?:    boolean;
     assignMemberId?: string;
-    designBgngDe?:   string;
-    designEndDe?:    string;
-    designEfrtVal?:  string;
     implBgngDe?:     string;
     implEndDe?:      string;
     docStatus?:      string;
@@ -220,9 +212,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   // 일정 순서 검증 — 예전엔 기능(impl 날짜) 쪽에 있던 체크인데, 그 날짜가 화면으로
   // 옮겨오면서(2026-07-28) 새 소유자인 여기서 다시 걸어야 함(누락 시 종료일<시작일이
   // 그대로 저장되어 WBS·지연 판정에 조용히 반영됨).
-  if (designBgngDe && designEndDe && designBgngDe > designEndDe) {
-    return apiError("VALIDATION_ERROR", "설계 종료일은 시작일 이후여야 합니다.", 400);
-  }
   if (implBgngDe && implEndDe && implBgngDe > implEndDe) {
     return apiError("VALIDATION_ERROR", "구현 종료일은 시작일 이후여야 합니다.", 400);
   }
@@ -286,10 +275,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           ctgry_m_nm:    categoryM !== undefined ? (categoryM?.trim() || null) : existing.ctgry_m_nm,
           ctgry_s_nm:    categoryS !== undefined ? (categoryS?.trim() || null) : existing.ctgry_s_nm,
           asign_mber_id: nextAssignee,
-          // 실질 설계/구현 일정·공수 — 담당자가 직접 커밋하는 실제 일정
-          actl_dsgn_bgng_de:  designBgngDe  !== undefined ? (designBgngDe?.trim()  || null) : existing.actl_dsgn_bgng_de,
-          actl_dsgn_end_de:   designEndDe   !== undefined ? (designEndDe?.trim()   || null) : existing.actl_dsgn_end_de,
-          actl_dsgn_efrt_val: designEfrtVal !== undefined ? (designEfrtVal?.trim() || null) : existing.actl_dsgn_efrt_val,
+          // 실질 구현 일정 — 담당자가 직접 커밋하는 실제 일정
           actl_impl_bgng_de:  implBgngDe    !== undefined ? (implBgngDe?.trim()    || null) : existing.actl_impl_bgng_de,
           actl_impl_end_de:   implEndDe     !== undefined ? (implEndDe?.trim()     || null) : existing.actl_impl_end_de,
           dsgn_doc_sttus_code: docStatus || existing.dsgn_doc_sttus_code,

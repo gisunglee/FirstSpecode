@@ -1,11 +1,12 @@
 /**
  * pm/delayStatus — 멤버별 지연 현황 집계 (순수 함수)
  *
- * 설계(화면 기준)와 구현(기능 기준) 두 갈래를 각각 계산한다 — 배경은 @/types/pm 의
+ * 설계(단위업무 기준)와 구현(기능 기준) 두 갈래를 각각 계산한다 — 배경은 @/types/pm 의
  * DesignDelayRow/ImplDelayRow 주석 참조.
  *
  * 담당자 집계 주의: 영역(TbDsArea)은 담당자 컬럼이 아예 없다. areas/[areaId]/page.tsx 의
- * 기존 관례를 그대로 따라 "부모 화면의 담당자를 영역 담당자로 간주"해서 집계한다.
+ * 기존 관례를 그대로 따라 "부모 화면의 담당자를 영역 담당자로 간주"해서 집계한다(구현 지연에서만
+ * 해당 — 설계 지연은 2026-07-28 2차 개편으로 단위업무 기준이라 영역/화면을 아예 안 다룸).
  *
  * 격리:
  *   - prisma·React 무관 → 단위 테스트 용이 (lib/pm/riskScore.ts 와 같은 패턴)
@@ -38,44 +39,35 @@ function finalizeDelayRows<T extends { totalEffortHours: number; delayedEffortHo
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// 설계 지연 — 화면(Screen) 기준
+// 설계 지연 — 단위업무(UnitWork) 기준
+//
+// 2026-07-28 2차 개편: 화면 기준이었으나, 단위업무 하나에 화면이 10개 이상인 경우도
+// 흔해 화면마다 설계 일정을 따로 잡는 게 부담이라는 판단으로 단위업무 기준으로 옮김
+// (설계 일정/공수는 이제 화면이 아니라 단위업무의 plan_dsgn_*에만 있음).
 // ════════════════════════════════════════════════════════════════════════
 
-export type DesignScreenInput = {
-  scrnId:      string;
+export type DesignUnitWorkInput = {
+  unitWorkId:  string;
   asignMberId: string | null;
   designEndDe: string | null;
-  /** 설계 공수(시간) — 이미 숫자로 파싱된 값 (@/lib/effort 의 parseEffortHours 결과) */
+  /** 계획설계 공수(시간) — 이미 숫자로 파싱된 값 (@/lib/effort 의 parseEffortHours 결과) */
   designEffortHours: number;
-  /** 이 화면 하위 모든 기능의 design_rt(TbCmProgress) 평균(0~100) — 호출자가 SQL로 미리 계산해서 전달 */
+  /** 이 단위업무 하위 모든 화면→영역→기능의 design_rt(TbCmProgress) 평균(0~100) —
+   *  호출자가 lib/pm/progressRollup.ts fetchUnitWorkProgress로 미리 계산해서 전달 */
   avgDesignRt: number;
 };
 
-// 영역은 자체 필드가 없어 부모 화면의 지연 여부를 그대로 물려받는다 (담당자와 동일한 관례).
-export type DesignAreaInput = { areaId: string; scrnId: string | null };
-
 export type BuildDesignDelayInput = {
-  screens:  DesignScreenInput[];
-  areas:    DesignAreaInput[];
-  /** yyyy-MM-dd — design_end_de(문자열) 와 그대로 비교 */
-  todayStr: string;
+  unitWorks: DesignUnitWorkInput[];
+  /** yyyy-MM-dd — designEndDe(문자열) 와 그대로 비교 */
+  todayStr:  string;
   /** mberId → 표시 이름 (없으면 mberId 로 폴백) */
-  nameMap:  Map<string, string | null>;
+  nameMap:   Map<string, string | null>;
 };
 
 export function buildDesignDelayRows(input: BuildDesignDelayInput): DesignDelayRow[] {
-  const { screens, areas, todayStr, nameMap } = input;
+  const { unitWorks, todayStr, nameMap } = input;
 
-  // ── 1) 화면별 지연 여부 + 지연 공수 계산 ────────────────────────────────
-  const screenDelayed = new Map<string, boolean>();
-  const screenDelayedEffort = new Map<string, number>();
-  for (const s of screens) {
-    const isDelayed = !!s.designEndDe && s.designEndDe < todayStr && s.avgDesignRt < 100;
-    screenDelayed.set(s.scrnId, isDelayed);
-    screenDelayedEffort.set(s.scrnId, isDelayed ? s.designEffortHours * (1 - s.avgDesignRt / 100) : 0);
-  }
-
-  // ── 2) 멤버별 누적 (담당자 없으면 "미할당" 그룹으로) ───────────────────
   const rowMap = new Map<string, DesignDelayRow>();
   function getRow(mberId: string): DesignDelayRow {
     let row = rowMap.get(mberId);
@@ -83,8 +75,7 @@ export function buildDesignDelayRows(input: BuildDesignDelayInput): DesignDelayR
       row = {
         mberId,
         displayName: mberId === UNASSIGNED_MBER_KEY ? "미할당" : (nameMap.get(mberId) ?? mberId),
-        screenTotal: 0, screenDelayed: 0,
-        areaTotal: 0,   areaDelayed: 0,
+        unitWorkTotal: 0, unitWorkDelayed: 0,
         totalEffortHours: 0, delayedEffortHours: 0,
         delayRate: 0,
       };
@@ -93,25 +84,18 @@ export function buildDesignDelayRows(input: BuildDesignDelayInput): DesignDelayR
     return row;
   }
 
-  for (const s of screens) {
-    const row = getRow(s.asignMberId ?? UNASSIGNED_MBER_KEY);
-    row.screenTotal++;
-    row.totalEffortHours += s.designEffortHours;
-    if (screenDelayed.get(s.scrnId)) {
-      row.screenDelayed++;
-      row.delayedEffortHours += screenDelayedEffort.get(s.scrnId) ?? 0;
+  for (const u of unitWorks) {
+    const isDelayed = !!u.designEndDe && u.designEndDe < todayStr && u.avgDesignRt < 100;
+    const row = getRow(u.asignMberId ?? UNASSIGNED_MBER_KEY);
+    row.unitWorkTotal++;
+    row.totalEffortHours += u.designEffortHours;
+    if (isDelayed) {
+      row.unitWorkDelayed++;
+      row.delayedEffortHours += u.designEffortHours * (1 - u.avgDesignRt / 100);
     }
   }
-  // 영역은 자체 담당자가 없어 부모 화면의 담당자를 영역 담당자로 간주 (areas/[areaId]/page.tsx 와 동일 관례)
-  const screenAssigneeMap = new Map(screens.map((s) => [s.scrnId, s.asignMberId]));
-  for (const a of areas) {
-    const effectiveAssignee = (a.scrnId ? screenAssigneeMap.get(a.scrnId) : null) ?? UNASSIGNED_MBER_KEY;
-    const row = getRow(effectiveAssignee);
-    row.areaTotal++;
-    if (a.scrnId && screenDelayed.get(a.scrnId)) row.areaDelayed++;
-  }
 
-  const rows = [...rowMap.values()].filter((r) => r.screenTotal > 0 || r.areaTotal > 0);
+  const rows = [...rowMap.values()].filter((r) => r.unitWorkTotal > 0);
   return finalizeDelayRows(rows);
 }
 

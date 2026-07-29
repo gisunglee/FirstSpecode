@@ -37,16 +37,18 @@ type AreaRow = {
   screenDisplayId: string | null;
   unitWorkId: string | null;
   unitWorkName: string | null;
+  // 영역 설계(와이어프레임) 작성 상태 — BEFORE(작성전) / DOING(작성중) / DONE(작성완료)
+  docStatus: string;
   functionCount: number;
   totalEffortHours: number;
-  implStart: string | null;
-  implEnd: string | null;
   avgDesignRt: number;
   avgImplRt: number;
-  avgTestRt: number;
   // AI 구현 요청 정보 (스냅샷 → IMPLEMENT 태스크 최신 1건)
   implTask: { aiTaskId: string; status: string; requestedAt: string } | null;
 };
+
+// 작성상태 — 색 구분 없이 기본 텍스트로만 표시 (화면 목록과 동일 정책, 풀네임 표기)
+const DOC_STATUS_LABEL: Record<string, string> = { BEFORE: "작성전", DOING: "작성중", DONE: "작성완료" };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
 
@@ -219,21 +221,23 @@ function AreasPageInner() {
           </select>
         </div>
 
-        {/* 목록 — 빈 상태에서도 헤더 표시 (과업 페이지 패턴과 통일) */}
-        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+        {/* 목록 — 빈 상태에서도 헤더 표시 (과업 페이지 패턴과 통일).
+            작성상태 컬럼 추가(2026-07-29)로 넘칠 수 있어 overflowX:auto — hidden이면 잘려서 안 보이게 사라짐 */}
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflowX: "auto" }}>
           {/* 헤더 행 */}
           <div style={gridHeaderStyle}>
             <div />
             <div>단위업무 명</div>
             <div>화면 명</div>
             <div>영역 명</div>
+            {/* 작성상태는 영역명 오른쪽에 배치(2026-07-29) */}
+            <div style={{ textAlign: "center" }}>작성상태</div>
             <div>유형</div>
             <div style={{ textAlign: "center" }}>정렬</div>
             <div style={{ textAlign: "center" }}>기능수</div>
-            <div style={{ textAlign: "center" }}>구현기간</div>
-            <div style={{ textAlign: "center" }}>예상공수</div>
+            <div style={{ textAlign: "center" }}>구현공수</div>
             <div style={{ textAlign: "center" }}>AI 구현</div>
-            <div style={{ textAlign: "center" }}>설/구/테</div>
+            <div style={{ textAlign: "center" }}>설/구</div>
           </div>
 
           {items.length === 0 ? (
@@ -320,6 +324,12 @@ function AreasPageInner() {
                   {area.name}
                 </div>
 
+                {/* 작성상태 — 영역 설계(와이어프레임) 작성 상태. 색 구분 없이 기본 텍스트(다른 목록과 동일 정책).
+                    영역명 오른쪽으로 위치 이동(2026-07-29) */}
+                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
+                  {DOC_STATUS_LABEL[area.docStatus] ?? area.docStatus}
+                </div>
+
                 {/* 유형 배지 — 표시 형태 배지는 행 높이가 늘어나서 목록에서는 제거. 필요하면 영역 편집에서 확인. */}
                 <div>
                   <span className="sp-badge" style={typeBadgeStyle(area.type)}>
@@ -335,15 +345,6 @@ function AreasPageInner() {
                 {/* 기능 수 */}
                 <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
                   {area.functionCount}
-                </div>
-
-                {/* 구현기간 — 가장 빠른 시작일 ~ 가장 늦은 종료일 (한 줄 표시) */}
-                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)", whiteSpace: "nowrap" }}>
-                  {area.implStart || area.implEnd ? (
-                    <>{area.implStart ?? "-"} ~ {area.implEnd ?? "-"}</>
-                  ) : (
-                    <span style={{ color: "var(--color-text-tertiary)" }}>-</span>
-                  )}
                 </div>
 
                 {/* 예상공수 — D/H 형식 */}
@@ -394,12 +395,11 @@ function AreasPageInner() {
                   )}
                 </div>
 
-                {/* 설/구/테 평균 진행률 */}
+                {/* 설/구 평균 진행률 */}
                 <div style={{ display: "flex", gap: 4, justifyContent: "center", fontSize: 11 }}>
                   {[
                     { label: "설", val: area.avgDesignRt, color: "#1565c0" },
                     { label: "구", val: area.avgImplRt, color: "#2e7d32" },
-                    { label: "테", val: area.avgTestRt, color: "#6a1b9a" },
                   ].map(({ label, val, color }) => (
                     <span key={label} style={{
                       color,
@@ -563,8 +563,10 @@ function typeBadgeStyle(type: string): React.CSSProperties {
 function implStatusBadgeStyle(status: string): React.CSSProperties {
   const c = AI_TASK_STATUS_BADGE[status as AiTaskStatus] ?? { bg: "#f5f5f5", fg: "#555" };
   return {
-    display: "inline-block", padding: "2px 8px", borderRadius: 4,
-    fontSize: 11, fontWeight: 700, background: c.bg, color: c.fg,
+    // 단위업무 목록과 동일하게 padding/font 축소 — "완료" 등 짧은 라벨이 굳이 넓은 배지를
+    // 차지하지 않도록(2026-07-28)
+    display: "inline-block", padding: "2px 5px", borderRadius: 4,
+    fontSize: 10, fontWeight: 700, background: c.bg, color: c.fg,
     whiteSpace: "nowrap",
   };
 }
@@ -578,10 +580,16 @@ function formatRequestedAt(iso: string): string {
 
 // 단위업무·화면·영역명은 fr 비율로(가변), 배지/숫자/날짜 등은 고정폭으로 안정화.
 // 좁은 화면에서도 텍스트 셀이 ellipsis 로 자연스럽게 잘리도록 화면 목록과 동일한 패턴 사용.
-//   유형 60px(GRID/FORM 등 4자) · 정렬 40px · 기능수 50px
-//   구현기간 140px("2026-04-13 ~ 2026-04-23" 23자 nowrap)
-//   예상공수 90px("5h (5h)") · AI 구현 130px(배지+MM-DD HH:mm) · 설/구/테 80px
-const GRID_TEMPLATE = "32px 1.2fr 1.2fr 2fr 60px 40px 50px 140px 90px 130px 80px";
+// 고정폭 컬럼을 실제 표시 내용 기준으로 더 타이트하게 줄이고(2026-07-28), 그렇게 번 공간은
+// fr 비율을 키운 단위업무/화면/영역명 3개 컬럼이 더 많이 가져가도록 함.
+//   유형 60px(GRID/FORM 등 4자) · 정렬 32px · 기능수 40px
+//   구현공수(예상공수에서 개명, 2026-07-29) 64px · 작성상태 64px("작성완료" 4자) 추가
+//   AI 구현 104px(축소된 배지+MM-DD HH:mm)
+//   설/구 48px — "테"는 화면 단위에서 더 이상 집계하지 않아 라벨·데이터 모두 삭제됨
+// 구현기간 컬럼은 통째로 삭제(2026-07-28) — 구현 일정은 화면 단위 값이라 영역별로는 다
+// 똑같이 찍혀서 의미가 없었다. 쿼리(areas-data.ts)에서도 해당 집계·조인을 걷어냄.
+// 작성상태를 영역명 오른쪽으로 이동(2026-07-29)하며 트랙 순서도 함께 조정
+const GRID_TEMPLATE = "32px 1.4fr 1.4fr 2.2fr 64px 60px 32px 40px 64px 104px 48px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid",

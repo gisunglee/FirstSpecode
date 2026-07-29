@@ -8,7 +8,7 @@
  * 데이터 조회나 간트 렌더링 로직을 전혀 알지 못한다.
  *
  * 레이아웃 — 한 줄에 항상 보이는 것과 "설정" 드롭다운 뒤로 숨는 것을 분리(공간 낭비 피드백 반영):
- *   상시 노출: 탭(단위업무/화면/기능) · 담당자 · 보기(목록/그룹) · 확대/축소(일/주/월) ·
+ *   상시 노출: 탭(단위업무/화면) · 담당자 · 보기(목록/그룹) · 확대/축소(일/주/월) ·
  *              페이지당 · 페이지네이션+좌우/끝 스크롤(한 묶음)
  *   설정(햄버거) 안: 상태 필터 · 기간 필터 · 막대 표시 항목 · 상태별 색상
  *
@@ -18,15 +18,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { DEADLINE_ENTITY_LABELS, PROGRESS_KIND_LABELS } from "@/types/pm";
-import type { DeadlineEntityKind, ProgressKind } from "@/types/pm";
+import type { ProgressKind } from "@/types/pm";
 import type { BarField } from "./WbsGanttChart";
 import { WBS_ZOOM_LEVELS, type WbsZoomLevelKey } from "./wbsZoom";
 import type { WbsStatus } from "@/lib/wbs/status";
 import WbsSettingsPanel from "./WbsSettingsPanel";
-import type { WbsMemberOption, WbsPeriodPreset, WbsGridColumn } from "./wbsFilterOptions";
+import { WBS_ENTITY_ORDER, type WbsEntityKind, type WbsMemberOption, type WbsPeriodPreset, type WbsGridColumn } from "./wbsFilterOptions";
 import { ChevronLeftIcon, ChevronRightIcon, ChevronsLeftIcon, ChevronsRightIcon } from "./wbsIcons";
 
-export type { WbsMemberOption, WbsPeriodPreset } from "./wbsFilterOptions";
+export type { WbsMemberOption, WbsPeriodPreset, WbsEntityKind } from "./wbsFilterOptions";
 
 export const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
 export type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
@@ -34,8 +34,8 @@ export type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
 export type WbsViewMode = "flat" | "group";
 const VIEW_LABELS: Record<WbsViewMode, string> = { flat: "목록", group: "그룹" };
 
-// page.tsx의 키보드 단축키(1/2/3)가 이 순서와 항상 같은 걸 가리키도록 export.
-export const ENTITY_ORDER: DeadlineEntityKind[] = ["UNIT_WORK", "SCREEN", "FUNCTION"];
+// page.tsx의 키보드 단축키(1/2)가 이 순서와 항상 같은 걸 가리키도록 re-export.
+export const ENTITY_ORDER = WBS_ENTITY_ORDER;
 
 // 구현을 먼저 두는 이유 — 기본값(wbsSettingsStore의 phase: "IMPL")과 같은 순서로 보이게.
 const PROGRESS_KIND_ORDER: ProgressKind[] = ["IMPL", "DESIGN"];
@@ -45,12 +45,11 @@ const PROGRESS_KIND_ORDER: ProgressKind[] = ["IMPL", "DESIGN"];
 const PHASE_HELP_ROWS: { label: string; impl: string; design: string }[] = [
   { label: "단위업무", impl: "하위 기능 구현 일정 최소~최대 · 구현 진척률 평균", design: "하위 화면 설계 일정 최소~최대 · 설계 진척률 평균" },
   { label: "화면",     impl: "하위 기능 구현 일정 최소~최대 · 구현 진척률 평균", design: "화면 자신의 설계 일정 · 설계 진척률 평균" },
-  { label: "기능",     impl: "기능 자신의 구현 일정 · 구현 진척률",             design: "부모 화면의 설계 일정(상속) · 기능 자신의 설계 진척률" },
 ];
 
 type Props = {
-  entity: DeadlineEntityKind;
-  onEntityChange: (entity: DeadlineEntityKind) => void;
+  entity: WbsEntityKind;
+  onEntityChange: (entity: WbsEntityKind) => void;
 
   // 설계/구현 — 진척률·기간을 기능(function)의 design_rt/impl_rt 중 무엇으로 롤업할지.
   phase: ProgressKind;
@@ -183,7 +182,7 @@ export default function WbsFilterBar({
             >
               <div style={{ fontSize: "var(--text-base)", color: "var(--color-text-secondary)", lineHeight: 1.5, marginBottom: 8 }}>
                 시작일·종료일·진척률을 구현/설계 중 무엇을 기준으로 계산하는지입니다.
-                단위업무·화면은 하위 기능들을 롤업하고, 기능은 자기 자신(설계 일정만 화면에서 상속)입니다.
+                단위업무·화면 모두 하위 기능들의 값을 롤업합니다.
               </div>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--text-xs)" }}>
                 <thead>

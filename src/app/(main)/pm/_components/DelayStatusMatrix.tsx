@@ -4,7 +4,7 @@
  * DelayStatusMatrix — 지연 현황 (설계 + 구현 한 표)
  *
  * 역할:
- *   - 멤버 1행에 설계(화면/영역 기준)와 구현(단위업무/화면/영역/기능 기준) 지표를
+ *   - 멤버 1행에 설계(단위업무 기준)와 구현(단위업무/화면/영역/기능 기준) 지표를
  *     그룹 헤더로 나란히 보여준다 — 별도 표 2개로 쌓지 않고 한 줄로 쭉 이어 붙여
  *     PM이 한 멤버의 설계·구현 현황을 스크롤 없이 바로 비교할 수 있게 한다.
  *   - "지연만 보기" 토글 하나로 설계·구현 개수 컬럼이 동시에 전체 ↔ 지연만 전환된다.
@@ -12,8 +12,9 @@
  *
  * 팀 부하 매트릭스와의 차이 (헤더 캡션으로도 안내):
  *   - 팀 부하 매트릭스: 단위업무 자체의 end_de/progrs_rt 기준 작업 상태 분포 (담당/진행중/임박/지연/완료)
- *   - 지연 현황(이 컴포넌트): "지연"이라는 한 축에 집중 — 설계는 화면 자체의 일정·공수 기준,
- *     구현은 기능(Function) 기준이고 상위 계층(영역/화면/단위업무)은 하위 지연 여부를 그대로 물려받는다.
+ *   - 지연 현황(이 컴포넌트): "지연"이라는 한 축에 집중 — 설계는 단위업무 자신의 계획설계일정·공수
+ *     기준(2026-07-28 2차 개편으로 화면 단위 세분화 폐지), 구현은 기능(Function) 기준이고
+ *     상위 계층(영역/화면/단위업무)은 하위 지연 여부를 그대로 물려받는다.
  *     그래서 같은 "지연 단위업무" 라도 두 위젯의 숫자가 다를 수 있음 — 의도된 차이.
  */
 
@@ -168,7 +169,7 @@ export default function DelayStatusMatrix({ projectId, designRows, implRows, isL
             borderBottom: "1px solid var(--color-border-subtle)",
           }}
         >
-          설계는 화면(공수 × 진척률), 구현은 기능(공수 × 진척률) 기준입니다 — 팀 부하 매트릭스(단위업무 마감일 기준)와 숫자가 다를 수 있습니다.
+          설계는 단위업무(공수 × 진척률), 구현은 기능(공수 × 진척률) 기준입니다 — 팀 부하 매트릭스(단위업무 마감일 기준)와 숫자가 다를 수 있습니다.
           {asOfDate && (
             <>
               {" "}<b style={{ color: "var(--color-brand)" }}>{asOfDate} 기준</b>으로 다시 계산한 값입니다(오늘 기준 아님).
@@ -220,26 +221,26 @@ function MergedTable({
   return (
     <div style={{ overflowX: "auto" }}>
       {/* table-layout: fixed + 퍼센트 폭 — MissingStatusCard.tsx 와 동일한 이유(auto 레이아웃은
-          폭 안 준 컬럼이 남는 공간을 혼자 흡수해 카드 오른쪽이 텅 비어 보인다). 11개 컬럼
-          (멤버 1 + 설계 4 + 구현 6)에 고르게 나눠 카드 폭 전체를 채운다. */}
+          폭 안 준 컬럼이 남는 공간을 혼자 흡수해 카드 오른쪽이 텅 비어 보인다). 10개 컬럼
+          (멤버 1 + 설계 3 + 구현 6)에 고르게 나눠 카드 폭 전체를 채운다.
+          설계는 2026-07-28 2차 개편으로 단위업무 기준 단일 축이 됨(화면/영역 세분화 폐지). */}
       <table style={{ borderCollapse: "collapse", fontSize: 15, width: "100%", tableLayout: "fixed", minWidth: 780 }}>
         <thead>
           <tr style={{ background: "var(--color-bg-muted)" }}>
             <th rowSpan={2} style={{ ...thStyle, width: "15%", verticalAlign: "bottom", borderBottom: "1px solid var(--color-border)" }}>멤버</th>
-            <th colSpan={4} style={{ ...thGroupStyle, borderLeft: "1px solid var(--color-border)" }}>설계</th>
+            <th colSpan={3} style={{ ...thGroupStyle, borderLeft: "1px solid var(--color-border)" }}>설계</th>
             <th colSpan={6} style={{ ...thGroupStyle, borderLeft: "1px solid var(--color-border)" }}>구현</th>
           </tr>
           <tr style={{ background: "var(--color-bg-muted)", borderBottom: "1px solid var(--color-border)" }}>
-            <th style={{ ...thNumStyle, width: "8.5%", borderLeft: "1px solid var(--color-border)" }}>화면</th>
-            <th style={{ ...thNumStyle, width: "8.5%" }}>영역</th>
-            <th style={{ ...thNumStyle, width: "8.5%" }}>지연율</th>
-            <th style={{ ...thNumStyle, width: "8.5%" }}>지연 공수</th>
-            <th style={{ ...thNumStyle, width: "8.5%", borderLeft: "1px solid var(--color-border)" }}>단위업무</th>
-            <th style={{ ...thNumStyle, width: "8.5%" }}>화면</th>
-            <th style={{ ...thNumStyle, width: "8.5%" }}>영역</th>
-            <th style={{ ...thNumStyle, width: "8.5%" }}>기능</th>
-            <th style={{ ...thNumStyle, width: "8.5%" }}>지연율</th>
-            <th style={{ ...thNumStyle, width: "8.5%" }}>지연 공수</th>
+            <th style={{ ...thNumStyle, width: "9.4%", borderLeft: "1px solid var(--color-border)" }}>단위업무</th>
+            <th style={{ ...thNumStyle, width: "9.4%" }}>지연율</th>
+            <th style={{ ...thNumStyle, width: "9.4%" }}>지연 공수</th>
+            <th style={{ ...thNumStyle, width: "9.4%", borderLeft: "1px solid var(--color-border)" }}>단위업무</th>
+            <th style={{ ...thNumStyle, width: "9.4%" }}>화면</th>
+            <th style={{ ...thNumStyle, width: "9.4%" }}>영역</th>
+            <th style={{ ...thNumStyle, width: "9.4%" }}>기능</th>
+            <th style={{ ...thNumStyle, width: "9.4%" }}>지연율</th>
+            <th style={{ ...thNumStyle, width: "9.4%" }}>지연 공수</th>
           </tr>
         </thead>
         <tbody>
@@ -267,9 +268,8 @@ function MergedTable({
                 </td>
                 {/* 설계 */}
                 <td style={{ ...tdNumStyle, borderLeft: "1px solid var(--color-border-subtle)" }}>
-                  {d ? (delayOnly ? d.screenDelayed : d.screenTotal) : "-"}
+                  {d ? (delayOnly ? d.unitWorkDelayed : d.unitWorkTotal) : "-"}
                 </td>
-                <td style={tdNumStyle}>{d ? (delayOnly ? d.areaDelayed : d.areaTotal) : "-"}</td>
                 <td style={{ ...tdNumStyle, color: d ? delayTone(d.delayRate) : undefined, fontWeight: 600 }}>
                   {d ? `${Math.round(d.delayRate)}%` : "-"}
                 </td>
@@ -329,7 +329,7 @@ function FormulaHelpModal({ onClose }: { onClose: () => void }) {
           <div style={{ padding: "10px 14px", borderRadius: 8, background: "var(--color-bg-muted)", border: "1px solid var(--color-border)" }}>
             <div style={{ fontWeight: 700, marginBottom: 2 }}>① 지연 판정</div>
             <div style={{ color: "var(--color-text-secondary)" }}>
-              설계 = 화면의 설계 종료일이 지났고 그 화면 하위 기능들의 설계 진척률 평균이 100% 미만.<br />
+              설계 = 단위업무의 계획설계 종료일이 지났고 그 하위 기능들의 설계 진척률 평균이 100% 미만.<br />
               구현 = 기능의 구현 종료일이 지났고 그 기능의 구현 진척률이 100% 미만.
             </div>
           </div>

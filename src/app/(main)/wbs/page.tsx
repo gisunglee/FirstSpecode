@@ -4,14 +4,11 @@
  * WbsSchedulePage — WBS 일정 (URL: /wbs)
  *
  * 역할:
- *   - 단위업무 / 화면 / 기능 3종을 탭으로 전환하며 각각 간트차트로 조회
+ *   - 단위업무 / 화면 2종을 탭으로 전환하며 각각 간트차트로 조회 (기능 탭은 2026-07-29
+ *     삭제됨 — 화면 탭이 하위 기능의 구현 일정/진척률을 이미 롤업해서 보여주고 있어
+ *     기능 단위로 따로 조회하는 게 중복이라는 피드백)
  *   - 간트 인스턴스는 하나만 두고 탭 전환 시 조회 데이터만 갈아끼움
  *   - 영역(Area)은 날짜 컬럼이 없어 이번 범위에서 제외(추후 마이그레이션 필요)
- *
- * 데이터:
- *   - 화면은 설계 일정(design_bgng_de/end_de) + 설계 진척률, 기능은 구현 일정
- *     (impl_bgng_de/end_de) + 구현 진척률을 사용 — DeadlineProgressHeatmap.tsx 의
- *     "화면=설계, 기능=구현" 페어링과 동일한 의미.
  *
  * 구조 분리:
  *   - 이 파일: 상태·데이터 조회만 담당(오케스트레이션). "무엇을 보여줄지"는 WbsFilterBar,
@@ -24,11 +21,10 @@ import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
-import type { DeadlineEntityKind } from "@/types/pm";
 import type { WbsTaskItem } from "@/app/api/projects/[id]/wbs/route";
 import type { WbsGanttHandle } from "./WbsGanttChart";
 import WbsFilterBar, {
-  ENTITY_ORDER, type WbsMemberOption, type WbsPeriodPreset,
+  ENTITY_ORDER, type WbsEntityKind, type WbsMemberOption, type WbsPeriodPreset,
 } from "./WbsFilterBar";
 import { useWbsSettingsStore } from "./wbsSettingsStore";
 
@@ -80,7 +76,7 @@ function periodPresetToRange(preset: WbsPeriodPreset): { startFrom?: string; sta
 export default function WbsSchedulePage() {
   const currentProjectId = useAppStore((s) => s.currentProjectId);
 
-  const [entity, setEntity]         = useState<DeadlineEntityKind>("UNIT_WORK");
+  const [entity, setEntity]         = useState<WbsEntityKind>("UNIT_WORK");
   const [assigneeId, setAssigneeId] = useState("");
   const [page, setPage]             = useState(1);
   const [ganttHandle, setGanttHandle] = useState<WbsGanttHandle | null>(null);
@@ -120,7 +116,7 @@ export default function WbsSchedulePage() {
   // 키보드 단축키 — select/input/textarea에 포커스가 있을 땐(드롭다운 옵션 넘기기 등)
   // 그 기본 동작을 건드리면 안 되니 전부 건너뛴다.
   //   ←/→        : 간트 좌우 스크롤 버튼과 동일. Ctrl(또는 ⌘)+방향키는 3배 거리.
-  //   1/2/3      : 단위업무/화면/기능 탭 전환(WbsFilterBar.ENTITY_ORDER 순서와 항상 일치).
+  //   1/2        : 단위업무/화면 탭 전환(WbsFilterBar.ENTITY_ORDER 순서와 항상 일치).
   //                Ctrl+1 등은 브라우저 자체 탭 전환 단축키와 겹쳐서 일부러 수정키 없이만 반응.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -135,7 +131,7 @@ export default function WbsSchedulePage() {
       }
 
       if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-        const idx = ["1", "2", "3"].indexOf(e.key);
+        const idx = ["1", "2"].indexOf(e.key);
         const target = idx !== -1 ? ENTITY_ORDER[idx] : undefined;
         if (target) {
           e.preventDefault();

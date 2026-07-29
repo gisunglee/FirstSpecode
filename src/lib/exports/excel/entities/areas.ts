@@ -29,13 +29,8 @@ const columns: ExcelColumn<AreaListItem>[] = [
     format: (r) => r.unitWorkName ?? "" },
   { key: "functionCount",   header: "기능 수",      width: 10 },
   { key: "totalEffortHours", header: "총 공수(h)",  width: 12 },
-  { key: "implStart",       header: "구현 시작",    width: 12,
-    format: (r) => r.implStart ?? "" },
-  { key: "implEnd",         header: "구현 종료",    width: 12,
-    format: (r) => r.implEnd ?? "" },
   { key: "avgDesignRt",     header: "설계(%)",      width: 10 },
   { key: "avgImplRt",       header: "구현(%)",      width: 10 },
-  { key: "avgTestRt",       header: "테스트(%)",    width: 10 },
 ];
 
 export const areasExportConfig: ExportConfig<AreaListItem, { id: string }> = {

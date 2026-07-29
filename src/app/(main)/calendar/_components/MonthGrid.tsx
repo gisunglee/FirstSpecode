@@ -1,37 +1,41 @@
 "use client";
 
 /**
- * MonthGrid — 월간 캘린더 그리드 (7 × N 행)
+ * MonthGrid — 월간 캘린더 그리드 (7 × 6행)
  *
  * 역할:
  *   - 한 달을 일~토 요일 헤더 + 6주 행 그리드로 렌더
- *   - 각 셀에 그 날 endDate 인 단위업무들을 배지 형태로 표시
+ *   - 카테고리 체크박스로 걸러진 이벤트를 그 날짜 셀에 배지로 표시
+ *   - 공휴일(HOLIDAY)만 배지가 아니라 셀 배경 하이라이트로 별도 표시(2026-07-29) —
+ *     날짜당 하나뿐이라(DB @@unique) 배지 자리를 다른 업무 항목과 다투지 않게 하기 위함
  *   - 셀 클릭 → 선택된 날짜 콜백 (상위에서 사이드 패널 등에 활용 가능, 1차에서는 미사용)
  *
- * 표시 규칙:
- *   - 진행률 100% → success 색
- *   - end_de < 오늘 + progrs_rt < 100 → error (지연)
- *   - 그 외 → info (진행 중)
- *   - 한 셀에 항목이 3개 초과면 "+N" 표시
+ * 표시 규칙(배지):
+ *   - PHASE(단계일정)   → 고정 회색(neutral)
+ *   - MILESTONE(마일스톤) → 고정 강조색(accent)
+ *   - REQUIREMENT/UNIT_WORK_DESIGN/SCREEN_IMPL(업무 항목) → 진행률 기준
+ *       진행률 100% → success / 마감 지났고 100% 미만 → error(지연) / 그 외 → info
+ *   - 한 셀에 배지가 3개 초과면 "+N" 표시(공휴일 제외)
  */
 
 import Link from "next/link";
-import { useAppStore } from "@/store/appStore";
-import type { CalendarUnitWork } from "@/types/calendar";
+import type { CalendarEvent, CalendarEventCategory } from "@/types/calendar";
 
 type Props = {
   year:  number;
   month: number; // 1~12
-  /** 이 월에 endDate 가 떨어진 단위업무들 */
-  items: CalendarUnitWork[];
-  /** 본인 담당만 필터링 */
+  /** 이 월의 전체 이벤트(카테고리 무관) — 체크박스 필터는 이 컴포넌트 안에서 처리 */
+  events: CalendarEvent[];
+  /** 체크된 카테고리만 화면에 표시 */
+  selectedCategories: Set<CalendarEventCategory>;
+  /** 본인 담당만 필터 — isMine이 false인 이벤트만 숨김(null인 카테고리는 항상 표시) */
   myOnly: boolean;
 };
 
 const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 const MAX_BADGES_PER_CELL = 3;
 
-export default function MonthGrid({ year, month, items, myOnly }: Props) {
+export default function MonthGrid({ year, month, events, selectedCategories, myOnly }: Props) {
   // 1일 요일 + 말일 일수
   const firstWeekday = new Date(year, month - 1, 1).getDay(); // 0=일
   const lastDay      = new Date(year, month, 0).getDate();
@@ -51,14 +55,24 @@ export default function MonthGrid({ year, month, items, myOnly }: Props) {
     }
   }
 
-  // 날짜별 항목 매핑
-  // 필터(myOnly) 가 켜져 있으면 본인 담당만
-  const itemsByDate = new Map<string, CalendarUnitWork[]>();
-  for (const it of items) {
-    if (myOnly && !it.isMine) continue;
-    const arr = itemsByDate.get(it.endDate) ?? [];
-    arr.push(it);
-    itemsByDate.set(it.endDate, arr);
+  // 체크박스 필터(카테고리) + 담당자 필터를 통과한 이벤트만 남긴다
+  const visibleEvents = events.filter((e) => {
+    if (!selectedCategories.has(e.category)) return false;
+    if (myOnly && e.isMine === false) return false;
+    return true;
+  });
+
+  // 공휴일은 배지가 아니라 셀 배경 — 날짜별로 따로 분리(날짜당 최대 1개, DB @@unique)
+  const holidayByDate = new Map<string, string>();
+  const badgeEventsByDate = new Map<string, CalendarEvent[]>();
+  for (const e of visibleEvents) {
+    if (e.category === "HOLIDAY") {
+      holidayByDate.set(e.date, e.label);
+      continue;
+    }
+    const arr = badgeEventsByDate.get(e.date) ?? [];
+    arr.push(e);
+    badgeEventsByDate.set(e.date, arr);
   }
 
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -113,7 +127,8 @@ export default function MonthGrid({ year, month, items, myOnly }: Props) {
             dateNum={c.dateNum}
             dateStr={c.dateStr}
             isToday={c.dateStr === todayStr}
-            items={c.dateStr ? (itemsByDate.get(c.dateStr) ?? []) : []}
+            events={c.dateStr ? (badgeEventsByDate.get(c.dateStr) ?? []) : []}
+            holidayName={c.dateStr ? (holidayByDate.get(c.dateStr) ?? null) : null}
             todayStr={todayStr}
           />
         ))}
@@ -122,19 +137,34 @@ export default function MonthGrid({ year, month, items, myOnly }: Props) {
   );
 }
 
+// 업무 항목(REQUIREMENT/UNIT_WORK_DESIGN/SCREEN_IMPL)만 진행률 기준 톤 — 나머지는 고정색.
+// 마일스톤은 subtle 배경(sp-badge-accent)이 라이트 테마에서 잘 안 보인다는 피드백으로
+// 꽉 채운 브랜드색(sp-badge-solid-brand)으로 — 팀 전체가 공유하는 핵심 일정이라 다른
+// 배지보다 한 단계 더 눈에 띄어야 함.
+function badgeClassFor(e: CalendarEvent, dateStr: string, todayStr: string): string {
+  if (e.category === "MILESTONE") return "sp-badge-solid-brand";
+  if (e.category === "PHASE") return "sp-badge-neutral";
+  const progress = e.progress ?? 0;
+  const isOverdue = dateStr < todayStr && progress < 100;
+  if (progress >= 100) return "sp-badge-success";
+  if (isOverdue) return "sp-badge-error";
+  return "sp-badge-info";
+}
+
 // ── 단일 셀 ─────────────────────────────────────────────────────────────────
 function DayCell({
-  dateNum, dateStr, isToday, items, todayStr,
+  dateNum, dateStr, isToday, events, holidayName, todayStr,
 }: {
   dateNum:  number | null;
   dateStr:  string | null;
   isToday:  boolean;
-  items:    CalendarUnitWork[];
+  events:   CalendarEvent[];
+  holidayName: string | null;
   todayStr: string;
 }) {
-  const currentProjectId = useAppStore((s) => s.currentProjectId);
-  const visible  = items.slice(0, MAX_BADGES_PER_CELL);
-  const overflow = items.length - visible.length;
+  const visible  = events.slice(0, MAX_BADGES_PER_CELL);
+  const overflow = events.length - visible.length;
+  const isHoliday = holidayName !== null;
 
   return (
     <div
@@ -145,31 +175,41 @@ function DayCell({
         display: "flex",
         flexDirection: "column",
         gap: 4,
-        // 빈 셀(이전·다음 달)은 흐리게
-        background: dateNum === null ? "var(--color-bg-elevated)" : "transparent",
+        // 빈 셀(이전·다음 달)은 흐리게, 공휴일은 옅은 붉은 배경으로 하이라이트
+        background: dateNum === null
+          ? "var(--color-bg-elevated)"
+          : isHoliday ? "var(--color-error-subtle)" : "transparent",
         minHeight: 96,
         opacity: dateNum === null ? 0.4 : 1,
       }}
     >
       {dateNum !== null && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            alignItems: "center",
-          }}
-        >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4 }}>
+          {/* 공휴일 이름 — 배지 대신 날짜 옆에 작은 텍스트로만(날짜당 최대 1개) */}
+          {isHoliday && (
+            <span
+              title={holidayName ?? undefined}
+              style={{
+                fontSize: "var(--text-xs)", color: "var(--color-error)", fontWeight: 600,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0,
+              }}
+            >
+              {holidayName}
+            </span>
+          )}
           <span
             style={{
+              marginLeft: "auto",
               fontSize: "var(--text-xs)",
               fontFamily: "var(--font-mono)",
               fontWeight: isToday ? 700 : 500,
-              color: isToday ? "var(--color-text-inverse)" : "var(--color-text-tertiary)",
+              color: isToday ? "var(--color-text-inverse)" : isHoliday ? "var(--color-error)" : "var(--color-text-tertiary)",
               background: isToday ? "var(--color-brand)" : "transparent",
               padding: isToday ? "2px 6px" : "2px 2px",
               borderRadius: "var(--radius-full)",
               minWidth: 22,
               textAlign: "center",
+              flexShrink: 0,
             }}
           >
             {dateNum}
@@ -177,19 +217,14 @@ function DayCell({
         </div>
       )}
 
-      {/* 단위업무 배지 — 최대 3개 */}
-      {visible.map((it) => {
-        const isOverdue = !!dateStr && dateStr < todayStr && it.progress < 100;
-        const tone =
-          it.progress >= 100 ? "sp-badge-success" :
-          isOverdue ? "sp-badge-error" :
-          "sp-badge-info";
-        return (
-          <Link
-            key={it.unitWorkId}
-            href={`/projects/${currentProjectId}/unit-works/${it.unitWorkId}`}
+      {/* 이벤트 배지 — 최대 3개 */}
+      {visible.map((e, i) => {
+        const tone = badgeClassFor(e, dateStr ?? "", todayStr);
+        const content = (
+          <span
             className={`sp-badge ${tone}`}
             style={{
+              display: "block",
               fontSize: "var(--text-xs)",
               padding: "2px 6px",
               maxWidth: "100%",
@@ -197,12 +232,18 @@ function DayCell({
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
               textDecoration: "none",
-              cursor: "pointer",
+              cursor: e.href ? "pointer" : "default",
             }}
-            title={`${it.displayId} ${it.name}${it.assigneeName ? ` · ${it.assigneeName}` : ""}`}
+            title={e.label}
           >
-            {it.displayId} {it.name}
-          </Link>
+            {e.category === "MILESTONE" ? `📌 ${e.label}` : e.label}
+          </span>
+        );
+        // key: 이벤트 자체엔 id가 없어(카테고리·날짜·라벨 조합이 그 셀 안에서 유일)
+        return e.href ? (
+          <Link key={i} href={e.href}>{content}</Link>
+        ) : (
+          <div key={i}>{content}</div>
         );
       })}
 

@@ -4,8 +4,9 @@
  *
  * 역할:
  *   - 로그인 사용자의 "오늘 내가 뭘 해야 하지?" 데이터를 한 번에 모아 반환
- *     1) myTasks      — 내가 담당한 과업 (전체 + 카테고리 분포 + 미리보기 5건)
- *     2) myDeadlines  — 내 단위업무 중 마감 D-7 이내 + 지연 (Top 5) + 화면/기능 마감 카운트
+ *     1) myRequirements — 내가 담당한 요구사항 (전체 건수 + 분석 기간·분석률 미리보기 5건)
+ *     2) myDeadlines  — 내 단위업무 중 설계·구현 phase 하나라도 마감 D-7 이내+지연인 것 (Top 5,
+ *                       phase 별 날짜·진척률 분리 + 더 급한 phase 기준 D-day) + 화면/기능 마감 카운트
  *     3) myAiResults  — 내가 요청한 AI 태스크 최근 5건(상태 무관) + 액션 필요(완료·미적용) 건수
  *     4) myReviews    — 나에게 온 검토 요청 (미응답)
  *
@@ -13,7 +14,7 @@
  *   갭을 보완 — MY 보드(/my-work)를 만들며 확인된 니즈. 목록은 여전히 단위업무만(기존 UX 유지),
  *   화면/기능은 카운트만 추가하고 전체는 MY 보드로 링크.
  *
- * 2026-07-20(2차): myTasks 미리보기 3→5건 + 최근 수정일 노출, myAiResults 를
+ * 2026-07-20(2차): myAiResults 를
  *   "완료·미적용"만 보여주던 좁은 필터에서 "최근 요청 전체"로 확장(결과만 받고 안 쓴
  *   경우가 아니어도 볼 가치가 있다는 피드백) — 배지 숫자(actionableCount)는 기존처럼
  *   액션 필요 건수를 유지, 목록만 넓힘.
@@ -27,17 +28,16 @@
  */
 
 import { NextRequest } from "next/server";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import type { MeSummaryResponse } from "@/types/dashboard";
-import { fetchUnitWorkProgress, combinePhaseProgress } from "@/lib/pm/progressRollup";
+import { fetchUnitWorkProgress, fetchScreenProgress } from "@/lib/pm/progressRollup";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 // 개발자뷰는 "한눈에" 가 핵심 — 본문 미리보기를 작게 유지.
-const TASKS_PREVIEW_LIMIT      = 5;
+const REQUIREMENTS_PREVIEW_LIMIT = 5;
 const DEADLINES_PREVIEW_LIMIT  = 5;
 const AI_RESULTS_PREVIEW_LIMIT = 5;
 const REVIEWS_PREVIEW_LIMIT    = 5;
@@ -65,12 +65,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     horizon.setDate(horizon.getDate() + DEADLINE_LOOKAHEAD_DAYS);
     const horizonStr = horizon.toISOString().slice(0, 10);
 
+    // D-day 계산 — 음수 = 지연. text 컬럼이라 Date 로 변환 후 일 단위 차이.
+    const todayMidnight = new Date(todayStr + "T00:00:00Z").getTime();
+    const MS_PER_DAY     = 1000 * 60 * 60 * 24;
+    const computeDDay = (endDate: string) =>
+      Math.round((new Date(endDate + "T00:00:00Z").getTime() - todayMidnight) / MS_PER_DAY);
+
     const [
-      // ── 내 과업 ────────────────────────────────────────────────
-      // 카운트와 카테고리 분포는 DB 집계로 처리 — 행 전체를 메모리에 올리지 않음.
-      // 미리보기는 별도 take 쿼리로 3건만 가져온다.
-      myTasksByCategory,
-      myTasksItems,
+      // ── 내 요구사항 ────────────────────────────────────────────
+      // 개수는 DB count로, 미리보기는 별도 take 쿼리로 5건만 가져온다.
+      myRequirementsCnt,
+      myRequirementsItems,
 
       // ── 내 마감 ────────────────────────────────────────────────
       // 단위업무 진행률(progrs_rt)이 저장값이 아니라 화면·기능 롤업 계산값이라(2026-07-28)
@@ -89,20 +94,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       myReviewsCnt,
       myReviewsItems,
     ] = await Promise.all([
-      // 과업 카테고리별 카운트 — DB 에서 직접 집계 (행 무제한 로드 방지)
-      // groupBy 결과: [{ ctgry_code: "NEW_DEV", _count: { _all: 3 } }, ...]
-      prisma.tbRqTask.groupBy({
-        by:     ["ctgry_code"],
-        where:  { prjct_id: projectId, asign_mber_id: meId },
-        _count: { _all: true },
+      // 내가 담당자로 지정된 요구사항 총 건수
+      prisma.tbRqRequirement.count({
+        where: { prjct_id: projectId, asign_mber_id: meId },
       }),
 
-      // 과업 미리보기 5건 — 표시용(수정일도 함께 — 행마다 "언제 손댔는지" 보여주기 위함)
-      prisma.tbRqTask.findMany({
+      // 요구사항 미리보기 5건 — 분석 기간(anls_bgng_de~anls_end_de) + 분석률(progrs_rt)
+      prisma.tbRqRequirement.findMany({
         where:   { prjct_id: projectId, asign_mber_id: meId },
-        select:  { task_id: true, task_display_id: true, task_nm: true, ctgry_code: true, mdfcn_dt: true },
-        orderBy: { task_display_id: "asc" },
-        take:    TASKS_PREVIEW_LIMIT,
+        select: {
+          req_id: true, req_display_id: true, req_nm: true,
+          anls_bgng_de: true, anls_end_de: true, progrs_rt: true,
+        },
+        orderBy: { req_display_id: "asc" },
+        take:    REQUIREMENTS_PREVIEW_LIMIT,
       }),
 
       // 내 담당 단위업무 전체 — 마감/진행률은 아래에서 JS로 계산
@@ -114,12 +119,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         },
       }),
 
-      // 내가 담당한 화면 중 설계 마감이 +7일 이내(지연 포함)인 것 — 완료 여부는 함수 뒤에서 판정
+      // 내가 담당한 화면 중 구현 마감이 +7일 이내(지연 포함)인 것 — 완료 여부는 함수 뒤에서 판정.
+      // (실질설계기간은 2026-07-28부터 화면에 없음 — 화면 자체가 갖는 일정은 구현뿐)
       prisma.tbDsScreen.findMany({
         where: {
           prjct_id:       projectId,
           asign_mber_id:  meId,
-          actl_dsgn_end_de: { lte: horizonStr, not: null },
+          actl_impl_end_de: { lte: horizonStr, not: null },
         },
         select: { scrn_id: true },
       }),
@@ -212,24 +218,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       reviewers.map((m) => [m.mber_id, m.mber_nm || m.email_addr || null])
     );
 
-    // ── 내 화면 마감 완료 여부 판정 — 하위 기능 design_rt 평균(화면 단위 롤업).
-    // pm-summary 의 screenAvgDesignRtMap 과 동일 정의. 화면이 없으면 쿼리 자체를 건너뜀.
+    // ── 내 화면 구현 마감 완료 여부 판정 — 하위 기능 impl_rt 평균(화면 단위 롤업, 중앙 헬퍼 재사용) ──
     const myScreenIds = myScreenRows.map((s) => s.scrn_id);
-    const myScreenAvgRows = myScreenIds.length > 0
-      ? await prisma.$queryRaw<{ scrn_id: string; avg_design_rt: number }[]>`
-          SELECT a.scrn_id,
-                 COALESCE(AVG(p.design_rt), 0) AS avg_design_rt
-            FROM tb_ds_function f
-            JOIN tb_ds_area a ON a.area_id = f.area_id
-            LEFT JOIN tb_cm_progress p
-              ON p.ref_tbl_nm = 'tb_ds_function' AND p.ref_id = f.func_id
-           WHERE a.scrn_id IN (${Prisma.join(myScreenIds)})
-           GROUP BY a.scrn_id
-        `
-      : [];
-    const myScreenAvgMap = new Map(myScreenAvgRows.map((r) => [r.scrn_id, Number(r.avg_design_rt)]));
-    // 하위 기능이 아예 없는 화면은 위 쿼리 결과에 안 잡힘 → 진척 0(미완료)으로 간주
-    const screenCount = myScreenIds.filter((id) => (myScreenAvgMap.get(id) ?? 0) < 100).length;
+    const myScreenProgressMap = await fetchScreenProgress(myScreenIds);
+    const screenCount = myScreenIds.filter((id) => (myScreenProgressMap.get(id)?.implRt ?? 0) < 100).length;
 
     // ── 내 기능 구현 완료 여부 — TbCmProgress.impl_rt, 없으면 0(미완료)으로 간주 ──
     const myFuncIds = myFunctionRows.map((f) => f.func_id);
@@ -244,62 +236,92 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // ── 내 단위업무 마감/진행률 — 저장값이 아니라 화면·기능 롤업 계산값(2026-07-28) ──
     const myUwProgressMap = await fetchUnitWorkProgress(myUnitWorkRows.map((u) => u.unit_work_id));
-    const myUwProgress = (unitWorkId: string) => {
-      const p = myUwProgressMap.get(unitWorkId);
-      return p ? combinePhaseProgress(p) : 0;
-    };
-    const myUpcomingUnitWorks = myUnitWorkRows
-      .filter((u) => u.plan_dsgn_end_de && u.plan_dsgn_end_de <= horizonStr && myUwProgress(u.unit_work_id) < 100)
-      .sort((a, b) => (a.plan_dsgn_end_de ?? "").localeCompare(b.plan_dsgn_end_de ?? ""));
-    const deadlineCnt   = myUpcomingUnitWorks.length;
-    const overdueCnt    = myUpcomingUnitWorks.filter((u) => (u.plan_dsgn_end_de ?? "") < todayStr).length;
-    const deadlineItems = myUpcomingUnitWorks.slice(0, DEADLINES_PREVIEW_LIMIT);
 
-    // 과업 byCategory + count — groupBy 결과를 객체로 변환
-    let myTasksCount = 0;
-    const byCategory: Record<string, number> = {};
-    for (const g of myTasksByCategory) {
-      const n = g._count._all;
-      myTasksCount += n;
-      byCategory[g.ctgry_code] = n;
+    // 내 단위업무들의 구현 종료 예정일 롤업 — 단위업무 자신은 구현 일정이 없어(화면 소관),
+    // 하위 화면들의 실질구현종료일(actl_impl_end_de) 중 가장 늦은 날짜로 계산
+    // (manage-summary/route.ts 의 "정체된 일" 롤업과 동일 기준).
+    const myUnitWorkIds = myUnitWorkRows.map((u) => u.unit_work_id);
+    const myUwScreensForImpl = myUnitWorkIds.length > 0
+      ? await prisma.tbDsScreen.findMany({
+          where:  { unit_work_id: { in: myUnitWorkIds } },
+          select: { unit_work_id: true, actl_impl_end_de: true },
+        })
+      : [];
+    const myImplEndByUnitWork = new Map<string, string | null>();
+    for (const s of myUwScreensForImpl) {
+      if (!s.unit_work_id || !s.actl_impl_end_de) continue;
+      const cur = myImplEndByUnitWork.get(s.unit_work_id);
+      if (!cur || s.actl_impl_end_de > cur) myImplEndByUnitWork.set(s.unit_work_id, s.actl_impl_end_de);
     }
 
-    // D-day 계산 — 음수 = 지연
-    // text 컬럼이라 Date 로 변환 후 일 단위 차이.
-    const todayMidnight = new Date(todayStr + "T00:00:00Z").getTime();
-    const MS_PER_DAY    = 1000 * 60 * 60 * 24;
+    // 마감 판정 — 설계 또는 구현 "둘 중 하나라도" +7일 이내(지연 포함)인데 그 phase가
+    // 미완료(<100%)면 포함(OR 조건). 대표 D-day는 두 phase 중 더 급한(작은) 값 — 둘 다
+    // 지연이면 더 오래 지연된 쪽, 하나만 지연이면 그쪽, 둘 다 임박이면 더 가까운 쪽.
+    // (manage-summary/route.ts 의 "정체된 일" 판정과 동일한 phase 분리 원칙)
+    const myUpcomingCandidates = myUnitWorkRows
+      .map((u) => {
+        const p = myUwProgressMap.get(u.unit_work_id);
+        const designEnd = u.plan_dsgn_end_de ?? null;
+        const designRt  = p?.designRt ?? 0;
+        const implEnd   = myImplEndByUnitWork.get(u.unit_work_id) ?? null;
+        const implRt    = p?.implRt ?? 0;
+
+        const designEligible = !!designEnd && designEnd <= horizonStr && designRt < 100;
+        const implEligible   = !!implEnd   && implEnd   <= horizonStr && implRt   < 100;
+        if (!designEligible && !implEligible) return null;
+
+        const designDDay = designEnd ? computeDDay(designEnd) : null;
+        const implDDay   = implEnd   ? computeDDay(implEnd)   : null;
+
+        let dDay: number;
+        let dDaySource: "DESIGN" | "IMPL";
+        if (designEligible && implEligible) {
+          if ((designDDay as number) <= (implDDay as number)) { dDay = designDDay as number; dDaySource = "DESIGN"; }
+          else { dDay = implDDay as number; dDaySource = "IMPL"; }
+        } else if (designEligible) {
+          dDay = designDDay as number; dDaySource = "DESIGN";
+        } else {
+          dDay = implDDay as number; dDaySource = "IMPL";
+        }
+
+        return {
+          row: u,
+          dDay,
+          dDaySource,
+          design: { endDate: designEnd, progress: designRt },
+          impl:   { endDate: implEnd,   progress: implRt },
+        };
+      })
+      .filter((c): c is NonNullable<typeof c> => c !== null)
+      .sort((a, b) => a.dDay - b.dDay);
+    const deadlineCnt   = myUpcomingCandidates.length;
+    const overdueCnt    = myUpcomingCandidates.filter((c) => c.dDay < 0).length;
+    const deadlineItems = myUpcomingCandidates.slice(0, DEADLINES_PREVIEW_LIMIT);
 
     const response: MeSummaryResponse = {
-      myTasks: {
-        count:      myTasksCount,
-        byCategory,
-        items:      myTasksItems.map((t) => ({
-          taskId:    t.task_id,
-          displayId: t.task_display_id,
-          name:      t.task_nm,
-          category:  t.ctgry_code,
-          mdfcnDt:   t.mdfcn_dt?.toISOString() ?? null,
+      myRequirements: {
+        count: myRequirementsCnt,
+        items: myRequirementsItems.map((r) => ({
+          reqId:      r.req_id,
+          displayId:  r.req_display_id,
+          name:       r.req_nm,
+          startDate:  r.anls_bgng_de,
+          endDate:    r.anls_end_de,
+          progress:   r.progrs_rt,
         })),
       },
       myDeadlines: {
         count:        deadlineCnt,
         overdueCount: overdueCnt,
-        items:        deadlineItems.map((u) => {
-          // plan_dsgn_end_de 가 위 필터에서 not null 보장 + ISO 포맷 가정
-          const endDate = u.plan_dsgn_end_de ?? "";
-          const endMs   = endDate
-            ? new Date(endDate + "T00:00:00Z").getTime()
-            : todayMidnight;
-          const dDay    = Math.round((endMs - todayMidnight) / MS_PER_DAY);
-          return {
-            unitWorkId: u.unit_work_id,
-            displayId:  u.unit_work_display_id,
-            name:       u.unit_work_nm,
-            endDate,
-            progress:   myUwProgress(u.unit_work_id),
-            dDay,
-          };
-        }),
+        items:        deadlineItems.map((c) => ({
+          unitWorkId: c.row.unit_work_id,
+          displayId:  c.row.unit_work_display_id,
+          name:       c.row.unit_work_nm,
+          dDay:       c.dDay,
+          dDaySource: c.dDaySource,
+          design:     c.design,
+          impl:       c.impl,
+        })),
         screenCount,
         functionCount,
       },

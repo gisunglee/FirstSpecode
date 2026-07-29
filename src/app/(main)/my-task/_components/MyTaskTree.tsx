@@ -11,7 +11,7 @@
 
 import Link from "next/link";
 import type { MyTaskNode } from "@/types/myTask";
-import { ROW_COLS, KindLabel, DDayLabel, AssigneeCell, DateFieldCell, EffortCell, ProgressLabel, ProgressHeaderLabel } from "./TaskFieldCells";
+import { ROW_COLS, KindLabel, DDayLabel, DocStatusLabel, AssigneeCell, DateFieldCell, EffortCell, ProgressLabel, ProgressHeaderLabel } from "./TaskFieldCells";
 
 type Props = {
   nodes:     MyTaskNode[];
@@ -22,8 +22,10 @@ type Props = {
   error:     Error | null;
 };
 
-const GRID_COLS = `${ROW_COLS.kind} ${ROW_COLS.assignee} ${ROW_COLS.dday} 1fr ${ROW_COLS.start} ${ROW_COLS.end} ${ROW_COLS.effort} ${ROW_COLS.design} ${ROW_COLS.impl}`;
+const GRID_COLS = `${ROW_COLS.kind} ${ROW_COLS.assignee} ${ROW_COLS.dday} 1fr ${ROW_COLS.docStatus} ${ROW_COLS.designStart} ${ROW_COLS.designEnd} ${ROW_COLS.implStart} ${ROW_COLS.implEnd} ${ROW_COLS.designEffort} ${ROW_COLS.implEffort} ${ROW_COLS.design} ${ROW_COLS.impl}`;
 const INDENT_PX = 10;
+// 작성/설계·구현 일정·공수 헤더는 셀 값이 가운데 정렬이라 헤더도 맞춰 가운데 정렬
+const CENTER_HEADER: React.CSSProperties = { display: "block", textAlign: "center" };
 
 export default function MyTaskTree({ nodes, projectId, members, onChanged, isLoading, error }: Props) {
   return (
@@ -36,7 +38,10 @@ export default function MyTaskTree({ nodes, projectId, members, onChanged, isLoa
         }}
       >
         <span>유형</span><span>담당자</span><span>마감</span><span>작업명</span>
-        <span>시작일</span><span>종료일</span><span>공수</span>
+        <span style={CENTER_HEADER}>작성</span>
+        <span style={CENTER_HEADER}>설계시작</span><span style={CENTER_HEADER}>설계종료</span>
+        <span style={CENTER_HEADER}>구현시작</span><span style={CENTER_HEADER}>구현종료</span>
+        <span style={CENTER_HEADER}>설계공수</span><span style={CENTER_HEADER}>구현공수</span>
         <ProgressHeaderLabel />
       </div>
 
@@ -91,9 +96,13 @@ function TreeRow({
           >
             {level > 0 && "ㄴ "}{node.name || "(이름 없음)"}
           </Link>
-          <DateFieldCell node={node} projectId={projectId} field="startDate" onChanged={onChanged} />
-          <DateFieldCell node={node} projectId={projectId} field="endDate" onChanged={onChanged} />
-          <EffortCell node={node} projectId={projectId} onChanged={onChanged} />
+          <DocStatusLabel docStatus={node.docStatus} />
+          <DateFieldCell node={node} projectId={projectId} field="designStartDate" onChanged={onChanged} />
+          <DateFieldCell node={node} projectId={projectId} field="designEndDate" onChanged={onChanged} />
+          <DateFieldCell node={node} projectId={projectId} field="implStartDate" onChanged={onChanged} />
+          <DateFieldCell node={node} projectId={projectId} field="implEndDate" onChanged={onChanged} />
+          <EffortCell node={node} projectId={projectId} field="designEffort" onChanged={onChanged} />
+          <EffortCell node={node} projectId={projectId} field="implEffort" onChanged={onChanged} />
           <ProgressLabel value={node.designProgress} />
           <ProgressLabel value={node.implProgress} />
         </div>

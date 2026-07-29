@@ -99,12 +99,18 @@
 
 /* ── 막대 라벨 텍스트 오버플로우 ────────────────────────────────────────────
  * 라이브러리 기본은 막대 폭 안에서 말줄임(...) 처리 — 1~2일짜리 짧은 막대는
- * 글자가 대부분 안 보이게 됨. 막대 배경이 이제 채도 없는 회색이라 막대 밖으로
- * 글자가 넘어가도 폰트색(--wx-gantt-task-font-color)이 계속 잘 읽히므로,
- * 그냥 한 줄로 넘치게 풀어준다. .wx-willow-theme 까지 셀렉터에 포함시켜
- * 라이브러리 기본 규칙(.wx-bar.wx-GKbcLEGA .wx-content)보다 확실히 우선하도록 함.
+ * 글자가 대부분 안 보이게 됨. 일반 항목(task) 막대 배경은 채도 없는 회색이라 막대
+ * 밖으로 글자가 넘어가도 폰트색(--wx-gantt-task-font-color = --color-text-primary)이
+ * 페이지 배경과 계속 대비되어 잘 읽히므로 한 줄로 넘치게 풀어준다.
+ *
+ * summary(그룹 요약) 행은 여기서 반드시 제외해야 한다 — 배경이 --color-info(파랑),
+ * 글자색이 --color-text-inverse(흰색)라서, 라벨이 막대보다 길어 밖으로 넘치면 그
+ * 넘친 부분은 막대 밖 흰 페이지 배경 위에 흰 글자로 남아 안 보이게 된다(실제 발생한
+ * 버그 리포트 — "짧은 막대 라벨이 벗어난 부분에서 글자가 사라진다"). :not(.wx-summary)로
+ * summary만 라이브러리 기본 말줄임(요약 막대 안에서만 텍스트가 보이도록)을 그대로 둔다.
+ * .wx-willow-theme 까지 셀렉터에 포함시켜 라이브러리 기본 규칙보다 확실히 우선하도록 함.
  */
-.sp-wbs-gantt .wx-willow-theme .wx-bar .wx-content {
+.sp-wbs-gantt .wx-willow-theme .wx-bar:not(.wx-summary) .wx-content {
   overflow: visible;
   text-overflow: clip;
   white-space: nowrap;

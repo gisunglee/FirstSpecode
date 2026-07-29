@@ -14,7 +14,6 @@
  */
 
 import { NextRequest } from "next/server";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
@@ -58,6 +57,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         unit_work_nm:         true,
         plan_dsgn_bgng_de:    true,
         plan_dsgn_end_de:     true,
+        plan_dsgn_efrt_val:   true,
         asign_mber_id:        true,
       },
       take: HARD_LIMIT,
@@ -93,12 +93,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       where:  { prjct_id: projectId },
       select: {
         scrn_id: true, unit_work_id: true, asign_mber_id: true,
-        actl_dsgn_bgng_de: true, actl_dsgn_end_de: true, actl_dsgn_efrt_val: true,
         actl_impl_bgng_de: true, actl_impl_end_de: true,
       },
       take:   HARD_LIMIT,
     });
-    // 기능 → 소속 화면의 실질설계/구현기간 — 중앙 헬퍼(lib/pm/progressRollup.ts)로 통일
+    // 기능 → 소속 화면의 실질구현기간 — 중앙 헬퍼(lib/pm/progressRollup.ts)로 통일
     const funcScreenDates = resolveFunctionScreenDates(functions, areas, screens);
     // 기능 진척률 — TbCmProgress 다형 참조(ref_tbl_nm='tb_ds_function'), 없으면 0
     const funcIds = functions.map((f) => f.func_id);
@@ -109,26 +108,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         })
       : [];
     const funcImplRtMap = new Map(funcProgress.map((p) => [p.ref_id, p.impl_rt]));
-
-    // 화면별 설계 진척률 — 그 화면 하위 모든 기능(화면→영역→기능)의 design_rt 단순평균.
-    // screens/[screenId]/route.ts GET 핸들러가 영역 단위로 이미 쓰는 AVG(design_rt) 패턴을
-    // 화면 단위로 그대로 확장 — 진척률은 기능에만 있다는 원칙을 지키면서 새 컬럼을 안 만듦.
-    const screenIds = screens.map((s) => s.scrn_id);
-    const screenDesignRtRows = screenIds.length > 0
-      ? await prisma.$queryRaw<{ scrn_id: string; avg_design_rt: number }[]>`
-          SELECT a.scrn_id,
-                 COALESCE(AVG(p.design_rt), 0) AS avg_design_rt
-            FROM tb_ds_function f
-            JOIN tb_ds_area a ON a.area_id = f.area_id
-            LEFT JOIN tb_cm_progress p
-              ON p.ref_tbl_nm = 'tb_ds_function' AND p.ref_id = f.func_id
-           WHERE a.scrn_id IN (${Prisma.join(screenIds)})
-           GROUP BY a.scrn_id
-        `
-      : [];
-    const screenAvgDesignRtMap = new Map(
-      screenDesignRtRows.map((r) => [r.scrn_id, Math.round(Number(r.avg_design_rt))])
-    );
 
     // 담당자 이름 일괄 조회 (N+1 방지) — 단위업무·기능·화면·요구사항 담당자 (영역은 담당자 컬럼이 없어 제외)
     const assigneeIds = [
@@ -228,18 +207,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         return b.total - a.total;
       });
 
-    // ── D. 설계 지연 — 화면 기준 (lib/pm/delayStatus.ts 순수 함수에 위임) ──
+    // ── D. 설계 지연 — 단위업무 기준 (2026-07-28 2차 개편, lib/pm/delayStatus.ts 순수 함수에 위임) ──
     const designDelay = buildDesignDelayRows({
-      screens: screens.map((s) => ({
-        scrnId:      s.scrn_id,
-        asignMberId: s.asign_mber_id,
-        designEndDe: s.actl_dsgn_end_de,
-        designEffortHours: parseEffortHours(s.actl_dsgn_efrt_val),
-        avgDesignRt: screenAvgDesignRtMap.get(s.scrn_id) ?? 0,
-      })),
-      areas: areas.map((a) => ({
-        areaId: a.area_id,
-        scrnId: a.scrn_id,
+      unitWorks: unitWorks.map((u) => ({
+        unitWorkId:  u.unit_work_id,
+        asignMberId: u.asign_mber_id,
+        designEndDe: u.plan_dsgn_end_de,
+        designEffortHours: parseEffortHours(u.plan_dsgn_efrt_val),
+        avgDesignRt: uwProgressMap.get(u.unit_work_id)?.designRt ?? 0,
       })),
       todayStr,
       nameMap,
@@ -309,9 +284,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         false
       ),
       buildMissingStat(
+        // 화면은 이제 자체 일정이 구현(actl_impl_*)뿐이라 그 기준으로 검사(설계 일정은
+        // 단위업무 소관이라 위의 UNIT_WORK 항목에서 이미 검사됨). 공수 필드도 화면엔 없어 제외.
         "SCREEN", "화면",
-        screens.map((s) => ({ asignMberId: s.asign_mber_id, startDate: s.actl_dsgn_bgng_de, endDate: s.actl_dsgn_end_de, effortRaw: s.actl_dsgn_efrt_val })),
-        true
+        screens.map((s) => ({ asignMberId: s.asign_mber_id, startDate: s.actl_impl_bgng_de, endDate: s.actl_impl_end_de })),
+        false
       ),
       buildMissingStat(
         "FUNCTION", "기능",

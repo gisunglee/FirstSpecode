@@ -12,6 +12,7 @@
  */
 
 import DashboardCard from "../DashboardCard";
+import HelpButton from "@/components/common/HelpButton";
 
 type Props = {
   data: {
@@ -42,6 +43,12 @@ export default function ProgressCard({ data, isLoading, error }: Props) {
     <DashboardCard
       icon={<DonutIcon />}
       title="진행률"
+      help={
+        <HelpButton title="진행률 기준">
+          <p><b>가운데 %(도넛)</b> — 단위업무별 (설계 진척률 + 구현 진척률) ÷ 2 를 낸 다음, 전체 단위업무 평균. 완료는 이 값이 100%인 단위업무 수, 진행 중은 나머지(전체 − 완료)입니다.</p>
+          <p><b>요구사항 분석 / 화면 설계 / 기능 구현</b> — 위 %와는 별개로, 각 엔티티(요구사항/화면/기능) 자체를 단순 평균한 보조 지표입니다. 단위업무 %에 합산되거나 종속되지 않습니다.</p>
+        </HelpButton>
+      }
       linkHref="/pm-board"
       linkLabel="PM 현황에서 전체 보기"
       isLoading={isLoading}

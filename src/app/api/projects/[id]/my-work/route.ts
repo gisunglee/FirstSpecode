@@ -73,21 +73,26 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       fetchDeadlineItems(projectId, "FUNCTION", "DESIGN", myId),
     ]);
 
-    // IMPL 배열 기준으로 순회하며 같은 id의 DESIGN 값을 붙인다(둘 다 같은 담당자 필터로 조회했으니
-    // id 집합은 동일 — 짝이 없으면 0으로 폴백만 해두고 실제로는 항상 매칭됨).
-    function withDesign<T extends { id: string; progress: number }>(implRows: T[], designRows: T[]) {
-      const designMap = new Map(designRows.map((r) => [r.id, r.progress]));
-      return implRows.map((r) => ({ ...r, designProgress: designMap.get(r.id) ?? 0 }));
+    // IMPL 배열 기준으로 순회하며 같은 id의 DESIGN 값(진척률+마감일)을 붙인다(둘 다 같은
+    // 담당자 필터로 조회했으니 id 집합은 동일 — 짝이 없으면 폴백만 해두고 실제로는 항상 매칭됨).
+    // 설계 마감일도 진척률과 같은 패턴으로 둘 다 내려서(designProgress 옆에 designEndDate)
+    // "구현 마감일 하나만 봐서는 설계 지연 여부를 알 수 없다"는 문제를 없앤다.
+    function withDesign<T extends { id: string; progress: number; endDate: string | null }>(implRows: T[], designRows: T[]) {
+      const designMap = new Map(designRows.map((r) => [r.id, { progress: r.progress, endDate: r.endDate }]));
+      return implRows.map((r) => {
+        const d = designMap.get(r.id);
+        return { ...r, designProgress: d?.progress ?? 0, designEndDate: d?.endDate ?? null };
+      });
     }
     const unitWorkRaw = withDesign(unitWorkImpl, unitWorkDesign);
     const screenRaw   = withDesign(screenImpl, screenDesign);
     const functionRaw = withDesign(functionImpl, functionDesign);
 
-    const rawItems: { kind: MyWorkItemKind; id: string; displayId: string; name: string; href: string; startDate: string | null; endDate: string | null; progress: number; designProgress: number | null; effort: string | null }[] = [
+    const rawItems: { kind: MyWorkItemKind; id: string; displayId: string; name: string; href: string; startDate: string | null; endDate: string | null; progress: number; designProgress: number | null; designEndDate: string | null; effort: string | null }[] = [
       ...myRequirements.map((r) => ({
         kind: "REQUIREMENT" as const, id: r.req_id, displayId: r.req_display_id, name: r.req_nm,
         href: `/projects/${projectId}/requirements/${r.req_id}`,
-        startDate: r.anls_bgng_de, endDate: r.anls_end_de, progress: r.progrs_rt, designProgress: null, effort: null,
+        startDate: r.anls_bgng_de, endDate: r.anls_end_de, progress: r.progrs_rt, designProgress: null, designEndDate: null, effort: null,
       })),
       ...unitWorkRaw.map((r) => ({ kind: "UNIT_WORK" as const, ...r })),
       ...screenRaw.map((r) => ({ kind: "SCREEN" as const, ...r })),
@@ -97,7 +102,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const itemsAll: MyWorkItem[] = rawItems.map((r) => ({
       kind: r.kind, id: r.id, displayId: r.displayId, name: r.name, href: r.href,
       startDate: r.startDate, endDate: r.endDate, progress: r.progress, designProgress: r.designProgress,
+      designEndDate: r.designEndDate,
       dDay: r.endDate ? computeDDay(r.endDate, todayStr) : null,
+      designDDay: r.designEndDate ? computeDDay(r.designEndDate, todayStr) : null,
     }));
 
     const items = excludeCompleted ? itemsAll.filter((it) => it.progress < 100) : itemsAll;

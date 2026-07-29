@@ -7,7 +7,7 @@
  *
  * 위젯:
  *   A) teamLoad        — 멤버 × 작업 상태 매트릭스
- *   D) designDelay     — 멤버 × 화면/영역 설계 지연 현황 (화면 기준, 공수 가중)
+ *   D) designDelay     — 멤버 × 단위업무 설계 지연 현황 (단위업무 기준, 공수 가중)
  *   E) implDelay       — 멤버 × 4계층(단위업무/화면/영역/기능) 구현 지연 현황 (기능 기준, 공수 가중)
  */
 
@@ -33,44 +33,38 @@ export type TeamLoadRow = {
   activeLoad:   number;
 };
 
-// ── D/E. 지연 현황 — 설계(화면 기준)와 구현(기능 기준)을 분리해서 본다 ────────
+// ── D/E. 지연 현황 — 설계(단위업무 기준)와 구현(기능 기준)을 분리해서 본다 ────
 //
-// "팀 부하 매트릭스"와 다른 점: 팀 부하는 단위업무 자체의 end_de/progrs_rt로
+// "팀 부하 매트릭스"와 다른 점: 팀 부하는 단위업무 자체의 plan_dsgn_end_de/진행률로
 // 작업 상태(담당/진행중/임박/지연/완료) 분포를 보는 것이 목적이고,
 // 이 두 위젯은 "지연"이라는 한 축에 집중해 계층별 개수와 그 무게(공수 가중 지연율)를
 // 보는 것이 목적 — 그래서 지연 정의도 다르다.
 //
 // 설계와 구현은 서로 다른 작업 단위를 쓴다:
-//   - 설계 = 화면(Screen) 기준. 화면 자체가 "화면/영역을 만드는" 설계 산출물이라
-//     화면에 design_bgng_de/design_end_de/design_efrt_val 을 직접 갖는다.
-//   - 구현 = 기능(Function) 기준. 기능이 Input/Output·API·처리로직 등 구현 준비 단위.
+//   - 설계 = 단위업무(UnitWork) 기준. 화면이 여러 개(많으면 10개 이상)인 단위업무에서
+//     화면마다 설계 일정을 따로 잡는 게 부담이라(2026-07-28 2차 개편), 설계 일정/공수는
+//     단위업무의 plan_dsgn_bgng_de/end_de/efrt_val 하나로만 관리한다. 최초엔 화면 기준이었음.
+//   - 구현 = 기능(Function) 기준. 기능이 Input/Output·API·처리로직 등 구현 준비 단위이고
+//     구현 일정(actl_impl_*)은 화면이 갖는다.
 //
 // 진척률은 새로 만들지 않고 기능에 이미 있는 TbCmProgress(design_rt/impl_rt)만 참조한다.
-// 화면의 설계 진척률 = 그 화면 하위 모든 기능의 design_rt 평균
-//   (screens/[screenId]/route.ts GET 핸들러가 영역 단위로 이미 쓰는 AVG(design_rt) 패턴을
-//    화면 단위로 그대로 확장 — 가중평균이 아니라 단순평균, 기존 코드와 일관성 유지)
+// 단위업무의 설계 진척률 = 그 하위 모든 화면→영역→기능의 design_rt 평균
+//   (lib/pm/progressRollup.ts fetchUnitWorkProgress 재사용 — 공수 가중평균 아니고 단순평균)
 //
-// 영역(TbDsArea)은 담당자·일정·공수 컬럼이 DB에 아예 없다. areas/[areaId]/page.tsx 의
-// 기존 관례("영역 자체에는 담당자가 없어 부모 화면 담당자를 영역 담당자로 간주")를 그대로 따라,
-// 영역의 지연 여부도 부모 화면(설계)/부모 화면 하위 기능(구현)의 지연 여부를 그대로 물려받는다.
-//
-// 담당자가 없는 화면/기능은 "미할당" 행(mberId=UNASSIGNED_MBER_KEY, lib/pm/delayStatus.ts)으로
+// 담당자가 없는 단위업무/기능은 "미할당" 행(mberId=UNASSIGNED_MBER_KEY, lib/pm/delayStatus.ts)으로
 // 묶여서 나온다 — 예전엔 그냥 건너뛰어서, 아무도 담당하지 않는 지연 항목이 대시보드에서
 // 통째로 안 보이는 사각지대가 있었다(가장 위험한 케이스인데도 0%로 표시됨).
 export type DesignDelayRow = {
   mberId:      string;
   displayName: string;
 
-  /** 담당 화면 개수 (전체 / 지연) */
-  screenTotal:   number;
-  screenDelayed: number;
-  /** 담당 영역 개수 (전체 / 부모 화면이 설계 지연인 것) */
-  areaTotal:   number;
-  areaDelayed: number;
+  /** 담당 단위업무 개수 (전체 / 설계 지연) */
+  unitWorkTotal:   number;
+  unitWorkDelayed: number;
 
-  /** 담당 화면들의 설계 공수(시간) 합계 */
+  /** 담당 단위업무들의 계획설계 공수(시간) 합계 */
   totalEffortHours: number;
-  /** 지연 화면들의 "남은" 설계 공수(시간) 합 = Σ effort × (1 - 화면 평균 design_rt/100) */
+  /** 지연 단위업무들의 "남은" 설계 공수(시간) 합 = Σ effort × (1 - 단위업무 평균 design_rt/100) */
   delayedEffortHours: number;
   /** 공수 가중 지연율(%). totalEffortHours=0 이면 0 */
   delayRate: number;
@@ -159,15 +153,16 @@ export type AnalysisDetailItem = {
 // 클릭하면 해당 상세 페이지로 바로 링크 걸기 위함(DelayDetailModal).
 export type DelayDetailItem = {
   kind:   "DESIGN" | "IMPL";
-  /** scrn_id(DESIGN) 또는 func_id(IMPL) — 목록 key 용 */
+  /** unit_work_id(DESIGN, 2026-07-28부터) 또는 func_id(IMPL) — 목록 key 용 */
   itemId: string;
   mberId:     string | null;
   memberName: string | null;
   unitWorkId:   string | null;
   unitWorkName: string | null;
+  /** DESIGN 행은 항상 null (단위업무 단위라 특정 화면이 없음, 2026-07-28부터) */
   screenId:     string | null;
   screenName:   string | null;
-  /** DESIGN 행은 항상 null (화면 단위라 특정 영역이 없음) */
+  /** DESIGN 행은 항상 null */
   areaId:       string | null;
   areaName:     string | null;
   /** DESIGN 행은 항상 null */

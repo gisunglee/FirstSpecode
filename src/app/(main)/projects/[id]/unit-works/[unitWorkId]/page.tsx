@@ -33,6 +33,7 @@ import ReleaseDialog from "@/components/common/ReleaseDialog";
 import ReleaseHistoryDialog from "@/components/documents/ReleaseHistoryDialog";
 import { bumpMinorVersion } from "@/lib/exports/version";
 import { buildDocxFilename } from "@/lib/exports/filename";
+import { formatEffortDays } from "@/lib/effort";
 import { useAppStore } from "@/store/appStore";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
@@ -67,8 +68,10 @@ type UnitWorkDetail = {
   planEndDate: string | null;
   planEffort: string | null;
   docStatus: string;
-  // 실적 진행률 — 하위 화면·기능 롤업 자동계산. 읽기전용(수정 불가)
-  progress: number;
+  // 설계·구현 진행률 — 하위 화면(설계)·기능(구현) 롤업 자동계산. 읽기전용(수정 불가)
+  // progress(둘의 평균)만 보여주면 설계인지 구현인지 알 수 없어 헷갈리므로 분리해서 노출
+  designProgress: number;
+  implProgress: number;
   sortOrder: number;
   reqId: string;
   reqDisplayId: string;
@@ -213,6 +216,10 @@ function UnitWorkDetailPageInner() {
         });
         // 원본 설명 저장 — 변경 여부 비교용
         setOriginalDescription(desc);
+        // 설명에 이미 내용이 있으면 미리보기부터 보여준다 — 빈 문서일 때만 바로 편집 모드로.
+        // queryFn은 캐시 hit(재방문) 시 재실행되지 않으므로 첫 로드 때만 적용되고,
+        // 이후 사용자가 편집 탭으로 전환해도 다시 덮어써지지 않는다.
+        setDescTab(desc.trim() ? "preview" : "edit");
         return d;
       }),
     enabled: !isNew,
@@ -1065,156 +1072,173 @@ function UnitWorkDetailPageInner() {
               flexShrink: 0,
             }}
           >
-            {/* Row 1: 상위 요구사항 + 단위업무명 + 표시 ID + 담당자 */}
+            {/* 좌: 기본 정보(요구사항·명칭·담당자) / 우: 설계 정보(일정·공수·진행률·작성상태) — 2줄 구성 */}
             {/* 담당자 라벨 옆의 작은 시계 아이콘 = 변경 이력 팝업 (신규 등록 모드에서는 숨김) */}
             {/* FormField 대신 인라인 div 사용 — <label> 요소 안에 <button>을 두면 */}
             {/*   라벨 빈 영역 클릭이 브라우저 기본 동작으로 버튼에 전달됨 (라벨→내부 form control) */}
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1fr 2fr", gap: 12 }}>
-              <FormField label="상위 요구사항" required>
-                <div className="sp-select-wrap">
-                  <select
-                    value={form.reqId}
-                    onChange={(e) => handleChange("reqId", e.target.value)}
-                    disabled={!canEdit}
-                    className="sp-input"
-                  >
-                    <option value="">요구사항을 선택하세요</option>
-                    {reqOptions.map((r) => (
-                      <option key={r.requirementId} value={r.requirementId}>
-                        {r.displayId} — {r.name}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="sp-select-arrow"><SelectChevron /></span>
+            <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1.6fr", gap: 24 }}>
+
+              {/* ── 좌: 기본 정보 — 정렬순서는 2행으로 내리고, 1행은 상위요구사항을 넓게 씀 ── */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingRight: 24, borderRight: "1px solid var(--color-border)" }}>
+                <div style={sectionLabelStyle}>기본 정보</div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "2.6fr 1fr", gap: 12 }}>
+                  <FormField label="상위 요구사항" required>
+                    <div className="sp-select-wrap">
+                      <select
+                        value={form.reqId}
+                        onChange={(e) => handleChange("reqId", e.target.value)}
+                        disabled={!canEdit}
+                        className="sp-input"
+                      >
+                        <option value="">요구사항을 선택하세요</option>
+                        {reqOptions.map((r) => (
+                          <option key={r.requirementId} value={r.requirementId}>
+                            {r.displayId} - {r.name}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="sp-select-arrow"><SelectChevron /></span>
+                    </div>
+                  </FormField>
+                  <FormField label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>표시 ID<HelpPopover title="표시 ID" content={"명칭 대신 화면에 표시되는 고유 식별자입니다.\n비워 두면 자동으로 생성됩니다.\n\n예시)\n• 단위업무: UW-00001\n• 화면: SCR-00001\n• 영역: AR-00001\n• 기능: FN-00001"} /></span>}>
+
+                    <input
+                      type="text"
+                      value={form.displayId ?? ""}
+                      placeholder={`${getPrefix("UNIT_WORK")}-XXXXX (미 입력 시 자동 생성)`}
+                      onChange={(e) => handleChange("displayId", e.target.value)}
+                      readOnly={!canEdit}
+                      className="sp-input"
+                    />
+                  </FormField>
                 </div>
-              </FormField>
-              <FormField label="단위업무명" required>
-                <input
-                  type="text"
-                  value={form.name}
-                  placeholder="단위업무명을 입력하세요"
-                  onChange={(e) => handleChange("name", e.target.value)}
-                  readOnly={!canEdit}
-                  className="sp-input"
-                />
-              </FormField>
-              <FormField label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>표시 ID<DisplayIdHelp /></span>}>
-                <input
-                  type="text"
-                  value={form.displayId ?? ""}
-                  placeholder={`${getPrefix("UNIT_WORK")}-XXXXX (미 입력 시 자동 생성)`}
-                  onChange={(e) => handleChange("displayId", e.target.value)}
-                  readOnly={!canEdit}
-                  className="sp-input"
-                />
-              </FormField>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
-                  <span>담당자</span>
-                  {!isNew && (
-                    <button
-                      type="button"
-                      onClick={() => setAssigneeHistoryOpen(true)}
-                      title="담당자 변경 이력"
-                      style={inlineIconBtnStyle}
-                    >
-                      {/* 시계(이력) 아이콘 — 14px, currentColor로 테마 대응 */}
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" strokeWidth="2"
-                        strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <circle cx="12" cy="12" r="9" />
-                        <path d="M12 7v5l3 2" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-                <div className="sp-select-wrap">
-                  <select
-                    value={form.assignMemberId ?? ""}
-                    onChange={(e) => handleChange("assignMemberId", e.target.value)}
-                    disabled={!canEdit}
-                    className="sp-input"
-                  >
-                    <option value="">담당자 없음</option>
-                    {members.map((m) => (
-                      <option key={m.memberId} value={m.memberId}>
-                        {m.name ?? m.email}
-                        {m.memberId === myMemberId ? " (나)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="sp-select-arrow"><SelectChevron /></span>
+
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 0.6fr", gap: 12 }}>
+                  <FormField label="단위업무명" required>
+                    <input
+                      type="text"
+                      value={form.name}
+                      placeholder="단위업무명을 입력하세요"
+                      onChange={(e) => handleChange("name", e.target.value)}
+                      readOnly={!canEdit}
+                      className="sp-input"
+                    />
+                  </FormField>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6, fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>
+                      <span>담당자</span>
+                      {!isNew && (
+                        <button
+                          type="button"
+                          onClick={() => setAssigneeHistoryOpen(true)}
+                          title="담당자 변경 이력"
+                          style={inlineIconBtnStyle}
+                        >
+                          {/* 시계(이력) 아이콘 — 14px, currentColor로 테마 대응 */}
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" strokeWidth="2"
+                            strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="9" />
+                            <path d="M12 7v5l3 2" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                    <div className="sp-select-wrap">
+                      <select
+                        value={form.assignMemberId ?? ""}
+                        onChange={(e) => handleChange("assignMemberId", e.target.value)}
+                        disabled={!canEdit}
+                        className="sp-input"
+                      >
+                        <option value="">담당자 없음</option>
+                        {members.map((m) => (
+                          <option key={m.memberId} value={m.memberId}>
+                            {m.name ?? m.email}
+                            {m.memberId === myMemberId ? " (나)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="sp-select-arrow"><SelectChevron /></span>
+                    </div>
+                  </div>
+                  <FormField label="정렬순서">
+                    <input
+                      type="number"
+                      min={0}
+                      value={form.sortOrder}
+                      onChange={(e) => handleChange("sortOrder", parseInt(e.target.value) || 0)}
+                      readOnly={!canEdit}
+                      className="sp-input"
+                    />
+                  </FormField>
                 </div>
               </div>
-            </div>
 
-            {/* Row 2: 계획설계 시작일 + 종료일 + 공수 + 정렬순서 — PM이 잡는 상위 마일스톤(목표치) */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12 }}>
-              <FormField label="계획설계 시작일">
-                <input
-                  type="date"
-                  value={form.planStartDate ?? ""}
-                  onChange={(e) => handleChange("planStartDate", e.target.value)}
-                  readOnly={!canEdit}
-                  className="sp-input"
-                />
-              </FormField>
-              <FormField label="계획설계 종료일">
-                <input
-                  type="date"
-                  value={form.planEndDate ?? ""}
-                  onChange={(e) => handleChange("planEndDate", e.target.value)}
-                  readOnly={!canEdit}
-                  className="sp-input"
-                />
-              </FormField>
-              <FormField label="계획설계 공수">
-                <input
-                  type="text"
-                  value={form.planEffort ?? ""}
-                  onChange={(e) => handleChange("planEffort", e.target.value)}
-                  readOnly={!canEdit}
-                  className="sp-input"
-                />
-              </FormField>
-              <FormField label="정렬순서">
-                <input
-                  type="number"
-                  min={0}
-                  value={form.sortOrder}
-                  onChange={(e) => handleChange("sortOrder", parseInt(e.target.value) || 0)}
-                  readOnly={!canEdit}
-                  className="sp-input"
-                />
-              </FormField>
-            </div>
+              {/* ── 우: 설계 정보 — PM이 잡는 상위 마일스톤(목표치) + 설계/구현 진행률 ── */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={sectionLabelStyle}>설계 정보</div>
 
-            {/* Row 3: 실적 진행률(읽기전용, 화면·기능 롤업 자동계산) + 단위업무 설계서 작성 상태 */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <FormField label="실적 진행률 (%)">
-                <input
-                  type="text"
-                  value={isNew ? "-" : `${detail?.progress ?? 0}%`}
-                  readOnly
-                  title="하위 화면·기능 진행 상황에서 자동 계산됨"
-                  className="sp-input"
-                />
-              </FormField>
-              <FormField label="설계서 작성 상태">
-                <div className="sp-select-wrap">
-                  <select
-                    value={form.docStatus ?? "BEFORE"}
-                    onChange={(e) => handleChange("docStatus", e.target.value)}
-                    disabled={!canEdit}
-                    className="sp-input"
-                  >
-                    <option value="BEFORE">작성전</option>
-                    <option value="DOING">작성중</option>
-                    <option value="DONE">작성완료</option>
-                  </select>
-                  <span className="sp-select-arrow"><SelectChevron /></span>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <FormField label="계획설계 시작일">
+                    <input
+                      type="date"
+                      value={form.planStartDate ?? ""}
+                      onChange={(e) => handleChange("planStartDate", e.target.value)}
+                      readOnly={!canEdit}
+                      className="sp-input"
+                    />
+                  </FormField>
+                  <FormField label="계획설계 종료일">
+                    <input
+                      type="date"
+                      value={form.planEndDate ?? ""}
+                      onChange={(e) => handleChange("planEndDate", e.target.value)}
+                      readOnly={!canEdit}
+                      className="sp-input"
+                    />
+                  </FormField>
                 </div>
-              </FormField>
+
+                {/* 계획설계 공수 — 기능 상세 "구현 공수(시간)"와 동일 형식(입력값 옆에 하루 8시간 기준 일수 참고 표시).
+                    설계/구현 진행률 — progress(둘의 평균) 하나만 보여주면 어느 쪽 진행인지 알 수 없어 분리 노출. */}
+                <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 12 }}>
+                  <FormField label="계획설계 공수(시간)">
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <input
+                        type="text"
+                        value={form.planEffort ?? ""}
+                        onChange={(e) => handleChange("planEffort", e.target.value)}
+                        readOnly={!canEdit}
+                        className="sp-input"
+                        style={{ width: 72, flex: "none" }}
+                      />
+                      {formatEffortDays(form.planEffort ?? "") && (
+                        <span style={{ fontSize: 12, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
+                          {formatEffortDays(form.planEffort ?? "")}
+                        </span>
+                      )}
+                    </div>
+                  </FormField>
+                  <FormField label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>설계 진행률 (%)<HelpPopover title="설계 진행률" content={"하위 화면 → 영역 → 기능 전체의 설계 진행률을 평균낸 자동 계산값입니다.\n\n계산 방식)\n• 기능별 설계 진행률(각 기능 상세에서 입력)의 평균\n• 하위 기능이 하나도 없으면 0%\n\n직접 입력·수정할 수 없습니다."} /></span>}>
+                    <div
+                      title="하위 화면·기능의 설계 진행 상황에서 자동 계산됨"
+                      style={readonlyValueStyle}
+                    >
+                      {isNew ? "-" : `${detail?.designProgress ?? 0}%`}
+                    </div>
+                  </FormField>
+                  <FormField label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>구현 진행률 (%)<HelpPopover title="구현 진행률" content={"하위 화면 → 영역 → 기능 전체의 구현 진행률을 평균낸 자동 계산값입니다.\n\n계산 방식)\n• 기능별 구현 진행률(각 기능 상세에서 입력)의 평균\n• 하위 기능이 하나도 없으면 0%\n\n직접 입력·수정할 수 없습니다."} /></span>}>
+                    <div
+                      title="하위 화면·기능의 구현 진행 상황에서 자동 계산됨"
+                      style={readonlyValueStyle}
+                    >
+                      {isNew ? "-" : `${detail?.implProgress ?? 0}%`}
+                    </div>
+                  </FormField>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1240,6 +1264,15 @@ function UnitWorkDetailPageInner() {
                   설명
                 </label>
                 <MarkdownTabButtons tab={descTab} onTabChange={setDescTab} />
+                {/* 작성 상태 — 실제 설계서(이 카드) 위치로 이동. 상단 메타 정보에서는 제거함 */}
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginLeft: 16 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>작성 상태</span>
+                  <DocStatusSwitch
+                    value={form.docStatus ?? "BEFORE"}
+                    onChange={(v) => handleChange("docStatus", v)}
+                    disabled={!canEdit}
+                  />
+                </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 {/* 예시 버튼 — DB 설계 양식에서 로드 */}
@@ -1338,7 +1371,7 @@ function FormField({
 }) {
   return (
     <div>
-      <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+      <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>
         {label}
         {required && <span style={{ color: "#e53935", marginLeft: 2 }}>*</span>}
       </label>
@@ -1347,7 +1380,67 @@ function FormField({
   );
 }
 
-// ── 표시 ID 도움말 ───────────────────────────────────────────────────────────
+// ── 설계서 작성 상태 라디오 그룹 ─────────────────────────────────────────────
+//
+// select 박스 대신 라디오 버튼으로 표시 — 값이 3개뿐이라 드롭다운을 여는 것보다
+// 한눈에 보이는 라디오가 더 빠르게 상태를 파악·전환할 수 있고, 사용자에게
+// "선택 가능한 항목"이라는 의미가 세그먼트 버튼보다 명확하게 전달됨.
+// sp-radio-option 의 박스(테두리/배경/균등폭)는 걷어내고 dot 표시 로직만 재사용 —
+// 좁은 헤더 행 안에서 박스형은 답답해 보이고, "작성 완료"처럼 긴 라벨이 줄바꿈됨.
+
+const DOC_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "BEFORE", label: "작성 전" },
+  { value: "DOING", label: "작성 중" },
+  { value: "DONE", label: "작성 완료" },
+];
+
+// 현재 선택된 상태에만 의미색을 입힘 — 3단 모두 다른 색으로 구분:
+// 작성전=레드(제일 급함, 아직 손도 안 댐) · 작성중=블루(진행 중 — 정보성) · 작성완료=성공색(안심).
+// 선택 안 된 나머지 옵션은 색을 주지 않아(undefined) sp-radio-option 기본 회색을 그대로 씀 —
+// 그래야 "지금 상태"만 눈에 띄고 나머지 두 옵션이 잡음이 되지 않음.
+const DOC_STATUS_COLOR: Record<string, string> = {
+  BEFORE: "var(--color-error)",
+  DOING: "var(--color-info)",
+  DONE: "var(--color-success)",
+};
+
+function DocStatusSwitch({
+  value, onChange, disabled,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="sp-radio-group" style={{ gap: 16, opacity: disabled ? 0.6 : 1, pointerEvents: disabled ? "none" : undefined }}>
+      {DOC_STATUS_OPTIONS.map((opt) => {
+        const active = value === opt.value;
+        const activeColor = DOC_STATUS_COLOR[opt.value];
+        return (
+          <div
+            key={opt.value}
+            className={`sp-radio-option${active ? " is-selected" : ""}`}
+            onClick={() => onChange(opt.value)}
+            style={{
+              flex: "none", border: "none", background: "transparent", padding: 0, whiteSpace: "nowrap",
+              color: active ? activeColor : undefined,
+              fontWeight: active ? 700 : 500,
+              transition: "color 0.15s",
+            }}
+          >
+            <span
+              className="radio-dot"
+              style={active ? { borderColor: activeColor, background: activeColor, transition: "border-color 0.15s, background 0.15s" } : undefined}
+            />
+            {opt.label}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── 라벨 옆 "?" 도움말 팝업 (표시ID/진행률 등 공용) ───────────────────────────
 //
 // 마운트 위치: createPortal 로 document.body 직접.
 //   1) 부모 <label fontWeight:600> 의 볼드가 모달 본문에 상속되는 문제 차단
@@ -1355,7 +1448,7 @@ function FormField({
 // 닫기: 우상단 ×, 모달 바깥(백드롭) 클릭, ESC 키 — 셋 다 지원.
 // (※ 이 컴포넌트는 areas/functions/unit-works 페이지에 별도 정의되어 있으며 동일 패턴 유지.)
 
-function DisplayIdHelp() {
+function HelpPopover({ title, content }: { title: string; content: string }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -1382,12 +1475,12 @@ function DisplayIdHelp() {
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>표시 ID</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>{title}</span>
           <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)", lineHeight: 1 }}>×</button>
         </div>
         {/* fontWeight: 400 명시 — 부모 label(600) 상속 차단(포털로도 막히지만 명시적으로 한 번 더). */}
         <div style={{ fontSize: 13, fontWeight: 400, color: "var(--color-text-primary)", lineHeight: 1.8, whiteSpace: "pre-line" }}>
-          {"명칭 대신 화면에 표시되는 고유 식별자입니다.\n비워 두면 자동으로 생성됩니다.\n\n예시)\n• 단위업무: UW-00001\n• 화면: SCR-00001\n• 영역: AR-00001\n• 기능: FN-00001"}
+          {content}
         </div>
       </div>
     </div>
@@ -1460,6 +1553,28 @@ const inlineIconBtnStyle: React.CSSProperties = {
   cursor: "pointer",
   borderRadius: 3,
   lineHeight: 0,
+};
+
+// 좌(기본 정보)/우(설계 정보) 컬럼 구분용 소제목
+const sectionLabelStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: "var(--color-text-tertiary)",
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+};
+
+// 실적 진행률 등 — input이 아닌 읽기전용 값 표시 (편집 가능 필드와 시각적으로 구분)
+const readonlyValueStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  height: 34,
+  padding: "0 10px",
+  borderRadius: "var(--radius-sm, 6px)",
+  background: "var(--color-bg-muted)",
+  color: "var(--color-text-secondary)",
+  fontSize: "var(--text-base, 14px)",
+  boxSizing: "border-box",
 };
 
 // ── AI 태스크 설정 ────────────────────────────────────────────────────────────

@@ -1,9 +1,12 @@
 /**
  * ProgressTracker — 공통 단계별 진척률 컴포넌트
  *
- * 분석·설계·구현·테스트 단계의 진척률(0~100)을 표시하고 수정하는 UI.
+ * 분석·설계·구현 단계의 진척률(0~100)을 표시하고 수정하는 UI.
  * tb_cm_progress 테이블을 다형 참조(refTable + refId)로 사용하므로
  * 단위업무·기능·영역 등 어떤 엔티티에서도 재사용 가능하다.
+ *
+ * 테스트(test_rt)는 2026-07-28 3차 개편으로 UI에서 완전히 뺐다 — 자동테스트 연동 전까지는
+ * 수동으로 넣는 숫자가 의미가 없다는 판단. DB 컬럼(test_rt) 자체는 향후 연동을 위해 남겨둠.
  *
  * 인터랙션:
  *   - 바 클릭: 클릭 위치 비율로 값을 계산해 즉시 저장
@@ -11,7 +14,7 @@
  *
  * 사용 예시:
  *   <ProgressTracker projectId={pid} refTable="tb_ds_unit_work" refId={unitWorkId} />
- *   <ProgressTracker projectId={pid} refTable="tb_ds_function" refId={funcId} phases={["impl", "test"]} />
+ *   <ProgressTracker projectId={pid} refTable="tb_ds_function" refId={funcId} phases={["impl"]} />
  */
 
 "use client";
@@ -21,27 +24,24 @@ import { authFetch } from "@/lib/authFetch";
 
 // ─── 타입 정의 ─────────────────────────────────────────────────────────────────
 
-export type PhaseKey = "analy" | "design" | "impl" | "test";
+export type PhaseKey = "analy" | "design" | "impl";
 
 const DEFAULT_LABELS: Record<PhaseKey, string> = {
   analy:  "분석",
   design: "설계",
   impl:   "구현",
-  test:   "테스트",
 };
 
 interface PhaseProgressData {
   analyRt:  number;
   designRt: number;
   implRt:   number;
-  testRt:   number;
 }
 
 const PHASE_TO_FIELD: Record<PhaseKey, keyof PhaseProgressData> = {
   analy:  "analyRt",
   design: "designRt",
   impl:   "implRt",
-  test:   "testRt",
 };
 
 // 단계별 색상 — 동일 블루 계열, 채도·명도 차이로 단계 구분
@@ -49,7 +49,6 @@ const PHASE_COLORS: Record<PhaseKey, { from: string; to: string; glow: string }>
   analy:  { from: "#bfdbfe", to: "#60a5fa", glow: "rgba(96,165,250,0.15)"  },
   design: { from: "#93c5fd", to: "#3b82f6", glow: "rgba(59,130,246,0.15)"  },
   impl:   { from: "#60a5fa", to: "#2563eb", glow: "rgba(37,99,235,0.15)"   },
-  test:   { from: "#3b82f6", to: "#1d4ed8", glow: "rgba(29,78,216,0.15)"   },
 };
 
 export interface ProgressTrackerProps {
@@ -67,7 +66,7 @@ export default function ProgressTracker({
   projectId,
   refTable,
   refId,
-  phases = ["analy", "design", "impl", "test"],
+  phases = ["analy", "design", "impl"],
   phaseLabels = {},
   readOnly = false,
 }: ProgressTrackerProps) {
@@ -105,7 +104,7 @@ export default function ProgressTracker({
 
   if (!enabled) return null;
 
-  const values: PhaseProgressData = data ?? { analyRt: 0, designRt: 0, implRt: 0, testRt: 0 };
+  const values: PhaseProgressData = data ?? { analyRt: 0, designRt: 0, implRt: 0 };
 
   return (
     <div style={{

@@ -4,12 +4,12 @@
  * MyTaskFlatList — My Task 목록(flat) 보기
  *
  * 단위업무/화면/기능(영역 제외)을 한 줄씩, 정렬 기준(마감일순/정렬순서)에 따라 나열.
- * 담당자/시작일/종료일/공수는 셀 클릭으로 바로 편집(TaskFieldCells.tsx).
+ * 담당자/설계일정/구현일정/공수는 셀 클릭으로 바로 편집(편집 가능한 셀만 — TaskFieldCells.tsx 참고).
  */
 
 import Link from "next/link";
 import type { MyTaskNode } from "@/types/myTask";
-import { ROW_COLS, KindLabel, DDayLabel, AssigneeCell, DateFieldCell, EffortCell, ProgressLabel, ProgressHeaderLabel } from "./TaskFieldCells";
+import { ROW_COLS, KindLabel, DDayLabel, DocStatusLabel, AssigneeCell, DateFieldCell, EffortCell, ProgressLabel, ProgressHeaderLabel } from "./TaskFieldCells";
 
 type Props = {
   nodes:     MyTaskNode[];
@@ -20,7 +20,9 @@ type Props = {
   error:     Error | null;
 };
 
-const GRID_COLS = `${ROW_COLS.kind} ${ROW_COLS.assignee} ${ROW_COLS.dday} 1fr ${ROW_COLS.start} ${ROW_COLS.end} ${ROW_COLS.effort} ${ROW_COLS.design} ${ROW_COLS.impl}`;
+const GRID_COLS = `${ROW_COLS.kind} ${ROW_COLS.assignee} ${ROW_COLS.dday} 1fr ${ROW_COLS.docStatus} ${ROW_COLS.designStart} ${ROW_COLS.designEnd} ${ROW_COLS.implStart} ${ROW_COLS.implEnd} ${ROW_COLS.designEffort} ${ROW_COLS.implEffort} ${ROW_COLS.design} ${ROW_COLS.impl}`;
+// 작성/설계·구현 일정·공수 헤더는 셀 값이 가운데 정렬이라 헤더도 맞춰 가운데 정렬
+const CENTER_HEADER: React.CSSProperties = { display: "block", textAlign: "center" };
 
 export default function MyTaskFlatList({ nodes, projectId, members, onChanged, isLoading, error }: Props) {
   return (
@@ -33,7 +35,10 @@ export default function MyTaskFlatList({ nodes, projectId, members, onChanged, i
         }}
       >
         <span>유형</span><span>담당자</span><span>마감</span><span>작업명</span>
-        <span>시작일</span><span>종료일</span><span>공수</span>
+        <span style={CENTER_HEADER}>작성</span>
+        <span style={CENTER_HEADER}>설계시작</span><span style={CENTER_HEADER}>설계종료</span>
+        <span style={CENTER_HEADER}>구현시작</span><span style={CENTER_HEADER}>구현종료</span>
+        <span style={CENTER_HEADER}>설계공수</span><span style={CENTER_HEADER}>구현공수</span>
         <ProgressHeaderLabel />
       </div>
 
@@ -69,9 +74,13 @@ export default function MyTaskFlatList({ nodes, projectId, members, onChanged, i
                   >
                     {n.name || "(이름 없음)"}
                   </Link>
-                  <DateFieldCell node={n} projectId={projectId} field="startDate" onChanged={onChanged} />
-                  <DateFieldCell node={n} projectId={projectId} field="endDate" onChanged={onChanged} />
-                  <EffortCell node={n} projectId={projectId} onChanged={onChanged} />
+                  <DocStatusLabel docStatus={n.docStatus} />
+                  <DateFieldCell node={n} projectId={projectId} field="designStartDate" onChanged={onChanged} />
+                  <DateFieldCell node={n} projectId={projectId} field="designEndDate" onChanged={onChanged} />
+                  <DateFieldCell node={n} projectId={projectId} field="implStartDate" onChanged={onChanged} />
+                  <DateFieldCell node={n} projectId={projectId} field="implEndDate" onChanged={onChanged} />
+                  <EffortCell node={n} projectId={projectId} field="designEffort" onChanged={onChanged} />
+                  <EffortCell node={n} projectId={projectId} field="implEffort" onChanged={onChanged} />
                   <ProgressLabel value={n.designProgress} />
                   <ProgressLabel value={n.implProgress} />
                 </div>

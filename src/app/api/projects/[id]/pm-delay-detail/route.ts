@@ -5,7 +5,7 @@
  * 역할:
  *   - pm-summary 의 집계 숫자(멤버별 개수·지연율)를 클릭했을 때, "정확히 무엇이 지연인지"
  *     이름을 보여준다. 페이징 없이 최대 100건.
- *   - kind=DESIGN → 화면 기준 (진척률 = 하위 기능 design_rt 평균)
+ *   - kind=DESIGN → 단위업무 기준, 2026-07-28 2차 개편 (진척률 = 하위 화면·기능 design_rt 평균)
  *   - kind=IMPL   → 기능 기준 (진척률 = impl_rt, 계층 이름은 area→screen→unitWork 조인)
  *   - 지연 판정 공식은 lib/pm/delayStatus.ts 와 동일 (기준 통일)
  *
@@ -19,11 +19,11 @@
  */
 
 import { NextRequest } from "next/server";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { UNASSIGNED_MBER_KEY } from "@/lib/pm/delayStatus";
+import { fetchUnitWorkProgress } from "@/lib/pm/progressRollup";
 import type { DelayDetailItem } from "@/types/pm";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -66,56 +66,43 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const todayStr = isValidDateStr(asOfParam) ? asOfParam : new Date().toISOString().slice(0, 10);
     const items: DelayDetailItem[] = [];
 
-    // ── DESIGN — 화면 기준 ───────────────────────────────────────────────
+    // ── DESIGN — 단위업무 기준 (2026-07-28 2차 개편: 화면이 많으면 화면별 설계 일정
+    // 입력이 부담이라 설계 일정은 단위업무의 plan_dsgn_*로만 관리) ──────────────
     if (kind === "all" || kind === "design") {
-      const screens = await prisma.tbDsScreen.findMany({
+      const unitWorks = await prisma.tbDsUnitWork.findMany({
         where: {
           prjct_id: projectId,
           ...assigneeWhere(mberId),
         },
         select: {
-          scrn_id: true, scrn_nm: true, asign_mber_id: true,
-          actl_dsgn_bgng_de: true, actl_dsgn_end_de: true, unit_work_id: true,
-          unitWork: { select: { unit_work_nm: true } },
+          unit_work_id: true, unit_work_nm: true, asign_mber_id: true,
+          plan_dsgn_bgng_de: true, plan_dsgn_end_de: true,
         },
         take: HARD_LIMIT,
       });
 
-      // 화면별 설계 진척률 — pm-summary/route.ts 와 동일한 AVG(design_rt) 패턴
-      const screenIds = screens.map((s) => s.scrn_id);
-      const rtRows = screenIds.length > 0
-        ? await prisma.$queryRaw<{ scrn_id: string; avg_design_rt: number }[]>`
-            SELECT a.scrn_id,
-                   COALESCE(AVG(p.design_rt), 0) AS avg_design_rt
-              FROM tb_ds_function f
-              JOIN tb_ds_area a ON a.area_id = f.area_id
-              LEFT JOIN tb_cm_progress p
-                ON p.ref_tbl_nm = 'tb_ds_function' AND p.ref_id = f.func_id
-             WHERE a.scrn_id IN (${Prisma.join(screenIds)})
-             GROUP BY a.scrn_id
-          `
-        : [];
-      const rtMap = new Map(rtRows.map((r) => [r.scrn_id, Math.round(Number(r.avg_design_rt))]));
+      // 단위업무별 설계 진척률 — 하위 화면→영역→기능 design_rt 롤업(중앙 헬퍼 재사용)
+      const uwProgressMap = await fetchUnitWorkProgress(unitWorks.map((u) => u.unit_work_id));
 
-      for (const s of screens) {
-        const progress = rtMap.get(s.scrn_id) ?? 0;
-        const isDelayed = !!s.actl_dsgn_end_de && s.actl_dsgn_end_de < todayStr && progress < 100;
+      for (const u of unitWorks) {
+        const progress = uwProgressMap.get(u.unit_work_id)?.designRt ?? 0;
+        const isDelayed = !!u.plan_dsgn_end_de && u.plan_dsgn_end_de < todayStr && progress < 100;
         items.push({
           kind: "DESIGN",
-          itemId: s.scrn_id,
-          mberId: s.asign_mber_id,
+          itemId: u.unit_work_id,
+          mberId: u.asign_mber_id,
           memberName: null, // 아래에서 일괄 채움
-          unitWorkId:   s.unit_work_id ?? null,
-          unitWorkName: s.unitWork?.unit_work_nm ?? null,
-          screenId:   s.scrn_id,
-          screenName: s.scrn_nm,
+          unitWorkId:   u.unit_work_id,
+          unitWorkName: u.unit_work_nm,
+          screenId: null,
+          screenName: null,
           areaId: null,
           areaName: null,
           functionId: null,
           functionName: null,
           progress,
-          startDate: s.actl_dsgn_bgng_de,
-          endDate: s.actl_dsgn_end_de,
+          startDate: u.plan_dsgn_bgng_de,
+          endDate: u.plan_dsgn_end_de,
           isDelayed,
         });
       }

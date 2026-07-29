@@ -33,9 +33,12 @@
   * 코드: `cm_code_id` (PK) / `cm_code` (v100) / `code_nm` (v100) / `grp_code_id` (FK)
 * **`tb_cm_attach_file`** (첨부 파일)
   * `attach_file_id` (t, PK) / `ref_tbl_nm` (t) / `ref_id` (t): 다형 참조 구조
-* **`tb_cm_progress`** (진척 현황)
+* **`tb_cm_progress`** (진척 현황 — 현재 `tb_ds_function`에서만 사용)
   * `progrs_id` (v36, PK) / `ref_tbl_nm` (v50) / `ref_id` (v36, Unique)
-  * `analy_rt`, `design_rt`, `impl_rt`, `test_rt` (i, 0~100)
+  * `design_rt`, `impl_rt` (i, 0~100): 슬라이더로 직접 입력, 화면/단위업무는 이 값들의 평균 롤업
+  * `test_rt` (i, 0~100): 2026-07-28 3차 개편으로 UI/API 어디서도 읽거나 쓰지 않음 — 자동테스트
+    연동 전까지 컬럼만 스키마에 남겨둠(값은 과거 데이터 그대로 고정, 항상 0 취급하면 됨)
+  * `analy_rt`는 2026-07-28에 컬럼 자체가 제거됨 — 분석 진척은 `tb_rq_requirement.progrs_rt`로 이동
 * **`tb_cm_standard_info`** (기준 정보 — 시스템 운영의 기준값 lookup)
   * `std_info_id` (t, PK) / `std_info_code` (v6) / `std_bgng_de` (v8)
   * 명명 이력: 2026-05-05 reference_info / ref_* → standard_info / std_* 통일
@@ -54,6 +57,9 @@
 * **`tb_rq_requirement`** (요구사항)
   * `req_id` (t, PK) / `task_id` (t, FK) / `req_display_id` (t, NN)
   * `priort_code` (t) / `analy_cn`, `spec_cn` (t): 분석 및 스펙
+  * `anls_bgng_de`, `anls_end_de` (v, yyyy-MM-dd 문자열), `anls_efrt_val` (v): 분석 일정/공수 —
+    설계=단위업무, 구현=화면·기능처럼 분석은 요구사항 레벨에서 직접 관리(2026-07-17/28 추가)
+  * `progrs_rt` (i, 0~100): 분석 진척률(담당자 슬라이더 입력) — 예전 `tb_cm_progress.analy_rt` 대체
 * **`tb_rq_user_story`** (유저 스토리)
   * `story_id` (t, PK) / `req_id` (t, FK) / `persona_cn`, `scenario_cn` (t)
 * **`tb_rq_acceptance_criteria`** (인수 기준)
@@ -76,10 +82,27 @@
   * `ctxt_ty_code` (t) / `ref_id` (t): 참조 대상 분리
 * **`tb_ds_unit_work`** (단위 업무)
   * `unit_work_id` (t, PK) / `req_id` (t, FK) / `unit_work_nm` (t)
+  * `plan_dsgn_bgng_de`, `plan_dsgn_end_de`, `plan_dsgn_efrt_val` (v): PM이 잡는 계획 설계
+    일정/공수 — 하위 화면·기능의 실제 진행과 무관한 목표치. 2026-07-28 2차 개편으로
+    단위업무가 설계 일정/공수를 갖는 유일한 레벨이 됨(화면이 5~15개+인 경우 화면별로
+    따로 잡기엔 부담이라 여기로 통일)
+  * `dsgn_doc_sttus_code` (v, BEFORE/DOING/DONE): 단위업무 설계서 작성 상태
+  * 실적 진행률(%)은 컬럼이 없음 — 항상 하위 화면→기능(`tb_cm_progress`) 롤업으로 계산
+    (`src/lib/pm/progressRollup.ts`)
 * **`tb_ds_screen`** & **`tb_ds_area`** & **`tb_ds_function`** (화면/영역/기능 계층)
   * 화면(`tb_ds_screen`): `scrn_id` (PK) / `unit_work_id` (FK)
+    * `actl_impl_bgng_de`, `actl_impl_end_de` (v): 담당 개발자가 커밋하는 실질 구현 일정 —
+      화면이 유일하게 갖는 일정 축(설계 일정은 없음, 단위업무의 `plan_dsgn_*`를 상속 표시만 함)
+    * `dsgn_doc_sttus_code` (v): 화면정의서 작성 상태
+    * 공수(effort) 컬럼 없음 — 설계공수는 단위업무, 구현공수는 기능 소관
   * 영역(`tb_ds_area`): `area_id` (PK) / `scrn_id` (FK) / `excaldw_data` (jsonb)
-  * 기능(`tb_ds_function`): `func_id` (PK) / `area_id` (FK) / `impl_bgng_de`, `impl_end_de` (t)
+    * `dsgn_doc_sttus_code` (v): 영역 와이어프레임 작성 상태. 일정/공수/진척률 컬럼 없음
+  * 기능(`tb_ds_function`): `func_id` (PK) / `area_id` (FK)
+    * `impl_efrt_val` (v): 구현 공수(2026-07-28 리네임, 예전 `efrt_val`). 날짜 컬럼 없음 —
+      구현 일정은 소속 화면(`actl_impl_*`)을 그대로 상속해서 표시
+    * `dsgn_doc_sttus_code` (v): 기능정의서 작성 상태
+    * 설계/구현 진척률(%)은 `tb_cm_progress`(`design_rt`/`impl_rt`)에 저장 — 화면·단위업무는
+      이 값의 평균 롤업. 테스트 진척률(`test_rt`)은 2026-07-28 3차 개편으로 UI에서 완전히 뺌
 * **`tb_ds_db_table`** & **`tb_ds_db_table_column`** (데이터 모델 설계)
   * 테이블: `tbl_id` (t, PK) / `tbl_physcl_nm` (t) / `tbl_lgcl_nm` (t)
   * 컬럼: `col_id` (t, PK) / `tbl_id` (t, FK) / `col_physcl_nm` (t) / `data_ty_nm` (t)

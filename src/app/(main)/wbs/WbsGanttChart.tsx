@@ -53,11 +53,10 @@ type Props = {
   barFields:   Set<BarField>;
   statusColor: boolean;
   zoomLevel:   WbsZoomLevelKey;
-  // 그룹으로 보기 — WbsTaskItem.groupLabel(단위업무 탭=요구사항명, 화면 탭=단위업무명,
-  // 기능 탭=단위업무/화면명) 기준으로 요약(summary) 부모 행을 만들어 그 아래 묶는다.
-  // 페이지네이션은 지금 페이지에 실려온 항목 수 기준 그대로라, 같은 그룹이 페이지
-  // 경계에서 나뉘면 그룹이 두 페이지에 걸쳐 보일 수 있음(My Task의 "그룹 개수 기준
-  // 페이징"보다 단순한 버전 — 우선 이걸로 시작).
+  // 그룹으로 보기 — WbsTaskItem.groupPath[0](단위업무 탭=요구사항명, 화면 탭=단위업무명)
+  // 기준으로 요약(summary) 부모 행을 만들어 그 아래 자식으로 묶는다. 페이지네이션은 지금
+  // 페이지에 실려온 항목 수 기준 그대로라, 같은 그룹이 페이지 경계에서 나뉘면 그룹이 두
+  // 페이지에 걸쳐 보일 수 있음(My Task의 "그룹 개수 기준 페이징"보다 단순한 버전 — 우선 이걸로 시작).
   grouped: boolean;
   // 좌측 그리드에 표시할 컬럼(작업명 제외 — 항상 고정). WbsSettingsPanel의 체크박스와 연결.
   gridColumns: Set<WbsGridColumn>;
@@ -88,8 +87,18 @@ function ProgressCell({ row }: { row: ITask }) {
   return <div style={{ textAlign: "center" }}>{row.progress ?? 0}%</div>;
 }
 
+// 막대 위 라벨 — 라이브러리 기본은 이 자리에 task.text를 그대로 그리는데, 그러면 "막대 표시"
+// 체크박스(진척률/시작/종료일)를 켰을 때 그리드 "작업명" 칸까지 같이 덧붙어 보이는 문제가
+// 있었다(둘 다 같은 text 필드를 읽었으므로). wbsTasks.ts에서 text(그리드 전용, 이름만)와
+// barText(막대 전용, 체크박스 반영)를 분리해뒀으니, 막대는 taskTemplate으로 barText만 그린다
+// — 라이브러리 기본 렌더링(.wx-content에 text)을 대체하는 자리라 클래스명을 그대로 맞춘다.
+function TaskBarContent({ data }: { data: ITask }) {
+  return <div className="wx-content">{(data.barText as string | undefined) ?? data.text ?? ""}</div>;
+}
+
 // gridColumns 키 → 실제 task 필드 id(wbsTasks.ts에서 채워 넣은 값)
 const GRID_COLUMN_FIELD: Record<WbsGridColumn, string> = {
+  id:       "displayId",
   assignee: "assignee",
   start:    "startLabel",
   end:      "endLabel",
@@ -105,6 +114,7 @@ const GRID_COLUMN_FIELD: Record<WbsGridColumn, string> = {
 // 라벨 자체를 줄여야 이 폭보다 더 좁힐 수 있다(한글 2자가 이 그리드에서 한 줄로 안 꺾이는
 // 사실상의 최소폭이 56px — "기간"은 이미 2자라 더 줄일 여지가 없음).
 const GRID_COLUMN_WIDTH: Record<WbsGridColumn, number> = {
+  id:       80,
   assignee: 72,
   start:    78,
   end:      78,
@@ -119,6 +129,14 @@ const GRID_COLUMN_HEADER_LABEL: Partial<Record<WbsGridColumn, string>> = {
   progress: "진척",
 };
 
+// 라이브러리의 좌측 그리드 전체 기본 폭은 440px 고정(@svar-ui/gantt-store 기본값) — 나머지
+// 고정폭 컬럼(GRID_COLUMN_WIDTH)들을 뺀 나머지를 "작업명"이 flexgrow로 다 가져가는 구조라,
+// 기본 노출 컬럼(id+start+workDays+progress=270px) 기준 "작업명"은 약 170px밖에 안 남았다 —
+// 좁아서 이름이 자주 잘린다는 피드백으로 기본 폭 자체를 30% 늘림(170 → 약 220px).
+// width를 명시해도 flexgrow는 그대로 둬서, 그리드 폭이 이 값보다 넉넉하면 여전히 남는 공간을
+// 더 가져간다(기존 동작 유지 + 최소 보장 폭만 키움).
+const TASK_NAME_COLUMN_WIDTH = 220;
+
 // 좌측 그리드 컬럼 — "작업명"은 항목 식별/이동 수단이라 항상 고정, 나머지는 gridColumns
 // 선택에 따라 동적으로 붙인다. "시작일"도 라이브러리 기본 포맷이 년월일 순서가 아니라서
 // startLabel(wbsTasks.ts 에서 직접 만든 YYYY-MM-DD 문자열)로 대체했었던 것과 같은 이유로,
@@ -127,7 +145,7 @@ const GRID_COLUMN_HEADER_LABEL: Partial<Record<WbsGridColumn, string>> = {
 // 전용 화면이라 애초에 없음.
 function buildColumns(gridColumns: Set<WbsGridColumn>): IColumnConfig[] {
   const columns: IColumnConfig[] = [
-    { id: "text", header: "작업명", flexgrow: 3, cell: TaskNameCell },
+    { id: "text", header: "작업명", width: TASK_NAME_COLUMN_WIDTH, flexgrow: 3, cell: TaskNameCell },
   ];
   for (const key of WBS_GRID_COLUMNS) {
     if (!gridColumns.has(key)) continue;
@@ -148,6 +166,10 @@ export default function WbsGanttChart({ items, barFields, statusColor, zoomLevel
     : items.map((item) => buildChildTask(item, barFields, statusColor, undefined));
 
   const columns = buildColumns(gridColumns);
+  // 라이브러리의 좌측 그리드 전체 폭은 기본 440px 고정이라, 켜진 컬럼 수에 따라 "작업명"
+  // 몫이 들쭉날쭉했다(컬럼을 많이 켤수록 작업명이 440에서 밀려 좁아짐). 컬럼 폭 합으로
+  // 직접 계산해서 넘겨주면 TASK_NAME_COLUMN_WIDTH가 항상 최소 보장된다.
+  const gridWidth = columns.reduce((sum, c) => sum + (c.width ?? 0), 0);
   const zoom = getWbsZoomLevel(zoomLevel);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -180,7 +202,9 @@ export default function WbsGanttChart({ items, barFields, statusColor, zoomLevel
         <Gantt
           tasks={tasks}
           columns={columns}
+          gridWidth={gridWidth}
           taskTypes={WBS_TASK_TYPES}
+          taskTemplate={TaskBarContent}
           cellWidth={zoom.cellWidth}
           scales={zoom.scales}
           highlightTime={highlightWeekend}

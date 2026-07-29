@@ -37,7 +37,6 @@ const columns: ExcelColumn<FunctionListItem>[] = [
   { key: "unitWorkName",    header: "단위업무",     width: 22 },
   { key: "designRt",        header: "설계(%)",     width: 10 },
   { key: "implRt",          header: "구현(%)",     width: 10 },
-  { key: "testRt",          header: "테스트(%)",   width: 10 },
 ];
 
 export const functionsExportConfig: ExportConfig<FunctionListItem, { id: string }> = {

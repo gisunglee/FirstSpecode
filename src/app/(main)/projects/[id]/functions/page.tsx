@@ -40,6 +40,8 @@ type FuncRow = {
   sortOrder: number;
   areaId: string | null;
   assignMemberId: string | null;
+  // 기능정의서 작성 상태 — BEFORE(작성전) / DOING(작성중) / DONE(작성완료)
+  docStatus: string;
   areaName: string;
   areaDisplayId: string | null;
   areaSortOrder: number;
@@ -52,8 +54,10 @@ type FuncRow = {
   aiInspect: AiTaskInfo;
   designRt: number;
   implRt: number;
-  testRt: number;
 };
+
+// 작성상태 — 색 구분 없이 기본 텍스트로만 표시 (다른 목록 페이지와 동일 정책)
+const DOC_STATUS_LABEL: Record<string, string> = { BEFORE: "작성전", DOING: "작성중", DONE: "작성완료" };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
 
@@ -194,8 +198,9 @@ function FunctionsPageInner() {
     dragOverItem.current = null;
     if (from === null || to === null || from === to) return;
 
+    const areaId = filteredItems[from]?.areaId;
     // 영역이 다르면 이동 불가
-    if (filteredItems[from]?.areaId !== filteredItems[to]?.areaId) {
+    if (areaId !== filteredItems[to]?.areaId) {
       toast.error("같은 영역 안에서만 순서를 변경할 수 있습니다.");
       return;
     }
@@ -205,7 +210,15 @@ function FunctionsPageInner() {
     if (!moved) return;
     reordered.splice(to, 0, moved);
     queryClient.setQueryData(queryKey, { items: reordered });
-    sortMutation.mutate(reordered.map((f, i) => ({ funcId: f.funcId, sortOrder: i + 1 })));
+
+    // 정렬순서는 "영역 안에서" 1,2,3... 로 매기는 값 — 예전엔 필터링된 전체 목록을
+    // 통째로 i+1 로 다시 매겨서 다른 영역 항목까지 전역 일련번호로 덮어써버렸다
+    // (영역별로 중복되는 게 정상인데 전부 고유값이 되어버리는 버그, 2026-07-28 수정).
+    // 같은 영역 항목만 추려 새 상대 순서대로 1부터 다시 매겨서 그 영역만 갱신한다.
+    const sameAreaOrders = reordered
+      .filter((f) => f.areaId === areaId)
+      .map((f, i) => ({ funcId: f.funcId, sortOrder: i + 1 }));
+    sortMutation.mutate(sameAreaOrders);
   }
 
   // ── 인라인 편집 뮤테이션 ──────────────────────────────────────────────────
@@ -346,12 +359,14 @@ function FunctionsPageInner() {
             <div>화면 명</div>
             <div>영역 명</div>
             <div>기능명</div>
+            <div style={{ textAlign: "center" }}>작성상태</div>
             <div style={{ textAlign: "center" }}>정렬</div>
-            <div>유형</div>
-            <div>복잡도</div>
-            <div>공수</div>
+            <div style={{ textAlign: "center" }}>유형</div>
+            <div style={{ textAlign: "center" }}>복잡도</div>
+            <div style={{ textAlign: "center" }}>공수</div>
             <div style={{ textAlign: "center" }}>AI</div>
-            <div style={{ textAlign: "center", paddingLeft: 8 }}>설/구/테</div>
+            {/* 테(test)는 2026-07-28 3차 개편으로 진행률 계산에서 빠짐 — 헤더도 맞춰서 정리 */}
+            <div style={{ textAlign: "center" }}>설/구</div>
           </div>
 
           {filteredItems.length === 0 ? (
@@ -369,10 +384,7 @@ function FunctionsPageInner() {
               return (
                 <div
                   key={fn.funcId}
-                  draggable
-                  onDragStart={() => handleDragStart(idx)}
                   onDragEnter={() => handleDragEnter(idx)}
-                  onDragEnd={handleDragEnd}
                   onDragOver={(e) => e.preventDefault()}
                   onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
                   onMouseEnter={() => setHoveredId(fn.funcId)}
@@ -381,19 +393,26 @@ function FunctionsPageInner() {
                     ...gridRowStyle,
                     borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
                     background: hoveredId === fn.funcId
-                      ? (fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100
+                      ? (fn.designRt === 100 && fn.implRt === 100
                         ? "rgba(34,197,94,0.10)"
                         : "var(--color-bg-hover, rgba(99,102,241,0.06))")
-                      : (fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100
+                      : (fn.designRt === 100 && fn.implRt === 100
                         ? "rgba(34,197,94,0.04)"
                         : "var(--color-bg-card)"),
-                    borderLeft: fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100
+                    borderLeft: fn.designRt === 100 && fn.implRt === 100
                       ? "3px solid #22c55e"
                       : hoveredId === fn.funcId ? "3px solid var(--color-primary, #6366f1)" : "3px solid transparent",
                     paddingLeft: 13,
                   }}
                 >
-                  <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
+                  {/* 드래그는 이 핸들에서만 시작 — row 전체를 draggable로 두면 "정렬" input 안에서
+                      텍스트를 드래그로 선택/덮어쓰려 할 때 브라우저가 행 드래그로 가로채버림(2026-07-28) */}
+                  <div
+                    draggable
+                    onDragStart={() => handleDragStart(idx)}
+                    onDragEnd={handleDragEnd}
+                    style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}
+                  >☰</div>
 
                   {/* 단위업무명 (클릭 → 단위업무 상세, 행 클릭과 분리) */}
                   <div
@@ -464,7 +483,7 @@ function FunctionsPageInner() {
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>
                       {fn.name}
                     </span>
-                    {fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100 && (
+                    {fn.designRt === 100 && fn.implRt === 100 && (
                       <span style={{
                         fontSize: 11, fontWeight: 600, color: "#16a34a",
                         background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)",
@@ -474,6 +493,11 @@ function FunctionsPageInner() {
                         ✓ 완료
                       </span>
                     )}
+                  </div>
+
+                  {/* 작성상태 — 기능정의서 작성 상태. 색 구분 없이 기본 텍스트(다른 목록과 동일 정책) */}
+                  <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
+                    {DOC_STATUS_LABEL[fn.docStatus] ?? fn.docStatus}
                   </div>
 
                   {/* 정렬순서 — 직접 입력 가능 */}
@@ -486,7 +510,7 @@ function FunctionsPageInner() {
                         if (!isNaN(v)) setSortEdits((prev) => ({ ...prev, [fn.funcId]: v }));
                       }}
                       style={{
-                        width: 44, textAlign: "center", fontSize: 12,
+                        width: 36, boxSizing: "border-box", textAlign: "center", fontSize: 12,
                         padding: "2px 4px", borderRadius: 4,
                         border: "1px solid var(--color-border)",
                         background: sortEdits[fn.funcId] !== undefined
@@ -499,12 +523,12 @@ function FunctionsPageInner() {
                   </div>
 
                   {/* 유형 배지 */}
-                  <div>
+                  <div style={{ textAlign: "center" }}>
                     <span className="sp-badge" style={typeBadgeStyle(fn.type)}>{fn.type}</span>
                   </div>
 
                   {/* 복잡도 인라인 편집 (FID-00168) */}
-                  <div onClick={(e) => e.stopPropagation()}>
+                  <div style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                     {editingCell?.funcId === fn.funcId && editingCell.field === "complexity" ? (
                       <select
                         autoFocus
@@ -530,7 +554,7 @@ function FunctionsPageInner() {
                   </div>
 
                   {/* 공수 인라인 편집 (FID-00169) */}
-                  <div onClick={(e) => e.stopPropagation()}>
+                  <div style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                     {editingCell?.funcId === fn.funcId && editingCell.field === "effort" ? (
                       <input
                         autoFocus
@@ -543,7 +567,7 @@ function FunctionsPageInner() {
                           if (e.key === "Escape") setEditingCell(null);
                         }}
                         placeholder="예: 2h"
-                        style={{ width: 60, fontSize: 12, padding: "2px 4px", borderRadius: 4, border: "1px solid var(--color-border)" }}
+                        style={{ width: 48, boxSizing: "border-box", fontSize: 12, padding: "2px 4px", borderRadius: 4, border: "1px solid var(--color-border)" }}
                       />
                     ) : (
                       <span
@@ -563,7 +587,7 @@ function FunctionsPageInner() {
                   </div>
 
                   {/* 설계/구현/테스트 비율 */}
-                  {fn.designRt === 100 && fn.implRt === 100 && fn.testRt === 100 ? (
+                  {fn.designRt === 100 && fn.implRt === 100 ? (
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingLeft: 8 }}>
                       <span style={{
                         background: "linear-gradient(90deg, #1565c0, #2e7d32, #6a1b9a)",
@@ -582,7 +606,6 @@ function FunctionsPageInner() {
                     <div style={{ display: "flex", gap: 3, alignItems: "center", justifyContent: "center", paddingLeft: 8 }}>
                       <RatioChip label="설" value={fn.designRt} color="#1565c0" />
                       <RatioChip label="구" value={fn.implRt} color="#2e7d32" />
-                      <RatioChip label="테" value={fn.testRt} color="#6a1b9a" />
                     </div>
                   )}
                 </div>
@@ -705,8 +728,9 @@ function complexityBadgeStyle(c: string): React.CSSProperties {
 // 단위업무·화면·영역·기능명은 fr로 비율 분배, 나머지 소형 컬럼은 고정.
 // 좁은 폭에서도 텍스트가 줄바꿈되지 않도록 ellipsis 처리와 함께 사용.
 //   기능명(3fr)이 가장 큰 비중, 영역명(2fr), 단위업무·화면(1.5fr) 순.
-//   유형/복잡도 배지는 4~6자라 60/70px, AI 인디케이터는 22px 도트 2개라 55px.
-const GRID_TEMPLATE = "32px 1.5fr 1.5fr 2fr 3fr 44px 60px 70px 55px 55px 88px";
+//   유형/복잡도/공수/AI/설구 는 배지·짧은 값이라 여유가 많아 전부 타이트하게 축소함(2026-07-28)
+// 작성상태 컬럼 신규 추가(기능명 오른쪽, 2026-07-29)
+const GRID_TEMPLATE = "32px 1.5fr 1.5fr 2fr 3fr 64px 40px 56px 64px 40px 50px 78px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID_TEMPLATE, gap: 8,

@@ -26,19 +26,21 @@ export type ManageSummaryResponse = {
     functionImplAvgPct: number;
   };
   stalled: {
-    /** 마감일이 지났는데 미완료(progrs_rt < 100) 인 단위업무 총 건수 */
+    /** 설계 또는 구현 중 하나라도 종료 예정일이 지났는데 그 phase 진척률이 100% 미만인 단위업무 총 건수 */
     count: number;
-    /** 미리보기 (마감 임박 순) */
+    /** 미리보기 (가장 오래 지연된 순) */
     items: Array<{
       unitWorkId:       string;
       displayId:        string;
       name:             string;
-      endDate:          string;
-      progress:         number;
       assignMemberName: string | null;
+      /** 설계 종료 예정일(plan_dsgn_end_de) 기준 phase — overdue=종료일 경과 && progress<100 */
+      design: { endDate: string | null; progress: number; overdue: boolean };
+      /** 하위 화면 실질구현기간(actl_impl_*) 롤업 기준 phase */
+      impl:   { endDate: string | null; progress: number; overdue: boolean };
     }>;
-    /** 설계 지연 화면 건수 — 단위업무 외 엔티티의 지연도 놓치지 않도록 별도 카운트만 제공(목록 없음) */
-    screenDelayedCount: number;
+    /** 설계 지연 단위업무 건수 — 팀부하의 "지연" 정의와 달리 설계 진척률 기준(2026-07-28: 화면→단위업무 기준으로 변경) */
+    designDelayedCount: number;
     /** 구현 지연 기능 건수 */
     functionDelayedCount: number;
   };
@@ -86,35 +88,38 @@ export type ManageSummaryResponse = {
 
 // ── 개발자뷰 요약 응답 ──────────────────────────────────────────────────────
 export type MeSummaryResponse = {
-  myTasks: {
-    /** 내가 담당한 과업 총 건수 */
+  myRequirements: {
+    /** 내가 담당자로 지정된 요구사항 총 건수 */
     count: number;
-    /** ctgry_code 별 분포 */
-    byCategory: Record<string, number>;
-    /** 미리보기 (이름 정렬) */
+    /** 미리보기 5건 (표시ID 정렬) */
     items: Array<{
-      taskId:    string;
+      reqId:     string;
       displayId: string;
       name:      string;
-      category:  string;
-      /** 최근 수정일 — 없으면(한 번도 수정 안 됨) null */
-      mdfcnDt:   string | null;
+      /** 분석 시작일(yyyy-MM-dd) — 미입력이면 null */
+      startDate: string | null;
+      /** 분석 종료일(yyyy-MM-dd) — 미입력이면 null */
+      endDate:   string | null;
+      /** 분석 진척률(progrs_rt, 0~100) */
+      progress:  number;
     }>;
   };
   myDeadlines: {
-    /** 마감 임박/지연 단위업무 총 건수 */
+    /** 설계 또는 구현 중 하나라도 마감 임박/지연인 단위업무 총 건수 */
     count: number;
-    /** end_de < 오늘 인 단위업무 (지연) */
+    /** 대표 D-day(dDay) < 0 인 단위업무 (지연) */
     overdueCount: number;
-    /** Top 5 — 마감 가까운 순 (지연 → 임박) */
+    /** Top 5 — 대표 D-day 가까운 순 (지연 → 임박) */
     items: Array<{
       unitWorkId: string;
       displayId:  string;
       name:       string;
-      endDate:    string;
-      progress:   number;
-      /** 음수 = 지연(일), 0 = 오늘, 양수 = 남은 일수 */
+      /** 설계/구현 D-day 중 더 급한(작은) 값. 음수 = 지연(일), 0 = 오늘, 양수 = 남은 일수 */
       dDay:       number;
+      /** dDay 를 결정한 phase — 어느 진척률을 강조 표시할지 UI 판단용 */
+      dDaySource: "DESIGN" | "IMPL";
+      design: { endDate: string | null; progress: number };
+      impl:   { endDate: string | null; progress: number };
     }>;
     /** 내가 담당한 화면 중 마감 임박/지연(설계) 건수 — 목록은 MY 보드에서, 여기선 카운트만 */
     screenCount: number;

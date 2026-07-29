@@ -279,7 +279,6 @@ function TaskListPageInner() {
           <span style={{ textAlign: "center" }}>산출물</span>
           <span style={{ textAlign: "center" }}>담당자</span>
           <span style={{ textAlign: "center" }}>요구사항</span>
-          <span style={{ textAlign: "center" }}>H/M/L</span>
         </div>
 
         {/* 바디 */}
@@ -360,15 +359,6 @@ function TaskListPageInner() {
                 {/* 요구사항 건수 */}
                 <span style={{ fontSize: 13, color: "var(--color-text-primary)", textAlign: "center" }}>
                   {task.requirementCount}건
-                </span>
-
-                {/* HIGH/MED/LOW — 우선순위 색은 의미가 있어 유지 */}
-                <span style={{ fontSize: 13, color: "var(--color-text-secondary)", textAlign: "center" }}>
-                  <span style={{ color: "#e53935" }}>{task.prioritySummary.high}</span>
-                  {" / "}
-                  <span style={{ color: "#fb8c00" }}>{task.prioritySummary.medium}</span>
-                  {" / "}
-                  <span style={{ color: "#43a047" }}>{task.prioritySummary.low}</span>
                 </span>
 
               </div>
@@ -483,7 +473,8 @@ function DeleteTaskDialog({
 // 과업명 / 카테고리 / RFP 페이지 / 산출물 / 담당자 / 요구사항 / H·M·L
 // 과업명만 남는 공간을 흡수하며 줄어들 수 있어야 하므로 minmax(0, 1fr) —
 // 나머지는 실제 표시되는 배지·짧은 텍스트 길이에 맞춘 고정폭 + 중앙 정렬.
-const TASK_GRID_TEMPLATE = "minmax(0, 1fr) 80px 76px 140px 60px 52px 84px";
+// H/M/L(우선순위 요약) 컬럼 삭제(2026-07-29)
+const TASK_GRID_TEMPLATE = "minmax(0, 1fr) 80px 76px 140px 60px 52px";
 
 // ── 버튼 스타일 ──────────────────────────────────────────────────────────────
 

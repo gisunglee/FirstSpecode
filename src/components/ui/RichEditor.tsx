@@ -15,16 +15,19 @@
  *   TipTap 표준 시맨틱 HTML 출력 → html-docx-js 등으로 Word 변환 시 표·이미지 정상 변환
  */
 
+import { createPortal } from "react-dom";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
+import { TextStyle } from "@tiptap/extension-text-style";
+import { Color } from "@tiptap/extension-color";
 import { Table } from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableHeader from "@tiptap/extension-table-header";
 import TableCell from "@tiptap/extension-table-cell";
 import Placeholder from "@tiptap/extension-placeholder";
 import { ResizableImage } from "./ResizableImage";
-import { useEffect, useCallback, useRef, useMemo } from "react";
+import { useEffect, useCallback, useRef, useMemo, useState } from "react";
 import {
   TEXT_LIMITS, countChars,
   type TextLimitField,
@@ -85,6 +88,37 @@ export default function RichEditor({
 }: Props) {
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
 
+  // ── 글자색 팝오버 상태 ────────────────────────────────────────────────────
+  // 툴바가 overflowX:auto(가로 스크롤)라서 popover를 그 안에 absolute로 두면
+  // overflow-x:auto가 y축도 암묵적으로 auto가 되어(CSS 스펙 동작) 세로 스크롤이 생기고
+  // popover가 잘려 보였음. document.body에 포탈로 렌더링 + position:fixed 좌표로 우회.
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
+  const [colorPickerPos, setColorPickerPos] = useState<{ top: number; left: number } | null>(null);
+  const colorBtnRef = useRef<HTMLButtonElement>(null);
+  const colorPopoverRef = useRef<HTMLDivElement>(null);
+
+  function toggleColorPicker() {
+    if (colorPickerOpen) {
+      setColorPickerOpen(false);
+      return;
+    }
+    const rect = colorBtnRef.current?.getBoundingClientRect();
+    if (rect) setColorPickerPos({ top: rect.bottom + 4, left: rect.left });
+    setColorPickerOpen(true);
+  }
+
+  useEffect(() => {
+    if (!colorPickerOpen) return;
+    function handleClick(e: MouseEvent) {
+      const target = e.target as Node;
+      if (colorBtnRef.current?.contains(target)) return;
+      if (colorPopoverRef.current?.contains(target)) return;
+      setColorPickerOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [colorPickerOpen]);
+
   // ── 길이 제한 (field 지정 시 카운터 표시용) ──────────────────────────────
   // HTML 태그 포함 전체 길이 — htmlContent 한도(100K)는 태그 오버헤드 감안한 수치.
   // 사용자에게는 "체감"보다 큰 숫자가 보일 수 있지만 실제 저장 길이라 정직한 지표.
@@ -105,6 +139,8 @@ export default function RichEditor({
         codeBlock: { HTMLAttributes: { class: "sp-codeblock" } },
       }),
       Underline,
+      TextStyle,                // Color 확장은 textStyle mark에 얹혀 동작함 (필수 선행 확장)
+      Color,
       ResizableImage,           // @tiptap/extension-image 대체 (리사이즈 가능)
       Table.configure({ resizable: false }),
       TableRow,
@@ -193,6 +229,73 @@ export default function RichEditor({
           <ToolBtn active={editor.isActive("italic")}    onClick={() => editor.chain().focus().toggleItalic().run()}    title="기울임 (Ctrl+I)"><i>I</i></ToolBtn>
           <ToolBtn active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()} title="밑줄 (Ctrl+U)"><u>U</u></ToolBtn>
           <ToolBtn active={editor.isActive("code")}      onClick={() => editor.chain().focus().toggleCode().run()}      title="인라인 코드">`c`</ToolBtn>
+
+          {/* 글자색 — 팝오버로 프리셋 색상 선택. onMouseDown에서 preventDefault로 에디터
+              선택영역(selection)이 풀리지 않게 함(다른 ToolBtn과 동일 원칙).
+              팝오버 자체는 document.body에 포탈로 렌더링(아래 참조). */}
+          <button
+            ref={colorBtnRef}
+            type="button"
+            title="글자색"
+            onMouseDown={(e) => { e.preventDefault(); toggleColorPicker(); }}
+            style={{
+              padding: "3px 7px",
+              borderRadius: 4,
+              border: colorPickerOpen ? "1px solid var(--color-brand)" : "1px solid transparent",
+              background: colorPickerOpen ? "color-mix(in srgb, var(--color-brand) 12%, transparent)" : "transparent",
+              color: "var(--color-text-secondary)",
+              fontSize: 12,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+              lineHeight: "1.5",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3,
+            }}
+          >
+            <span style={{ fontWeight: 700 }}>A</span>
+            <span style={{
+              width: 10, height: 10, borderRadius: 2,
+              background: editor.getAttributes("textStyle").color || "currentColor",
+              border: "1px solid var(--color-border)",
+            }} />
+          </button>
+          {colorPickerOpen && colorPickerPos && createPortal(
+            <div
+              ref={colorPopoverRef}
+              style={{
+                position: "fixed", top: colorPickerPos.top, left: colorPickerPos.left, zIndex: 2000,
+                display: "flex", gap: 6, padding: "8px 10px",
+                background: "var(--color-bg-card)", border: "1px solid var(--color-border)",
+                borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.13)",
+              }}
+            >
+              {TEXT_COLORS.map(({ label, value }) => (
+                <button
+                  key={label}
+                  type="button"
+                  title={label}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    if (value) editor.chain().focus().setColor(value).run();
+                    else editor.chain().focus().unsetColor().run();
+                    setColorPickerOpen(false);
+                  }}
+                  style={{
+                    width: 20, height: 20, borderRadius: "50%",
+                    border: value ? "1px solid rgba(0,0,0,0.1)" : "1px solid var(--color-border)",
+                    background: value ?? "var(--color-bg-muted)",
+                    cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 10, color: "var(--color-text-tertiary)",
+                  }}
+                >
+                  {!value && "✕"}
+                </button>
+              ))}
+            </div>,
+            document.body
+          )}
 
           <Divider />
 
@@ -286,3 +389,15 @@ function ToolBtn({ children, active, onClick, title, danger }: {
 function Divider() {
   return <span style={{ width: 1, background: "var(--color-border)", margin: "2px 4px", alignSelf: "stretch" }} />;
 }
+
+// ── 글자색 프리셋 ────────────────────────────────────────────────────────────
+// value: null → 색 지우기(unsetColor). 빨/주/노/초/파/보 6색 + 지우기.
+const TEXT_COLORS: { label: string; value: string | null }[] = [
+  { label: "지우기", value: null },
+  { label: "빨강",   value: "#e53935" },
+  { label: "주황",   value: "#fb8c00" },
+  { label: "노랑",   value: "#fbc02d" },
+  { label: "초록",   value: "#43a047" },
+  { label: "파랑",   value: "#1976d2" },
+  { label: "보라",   value: "#8e24aa" },
+];

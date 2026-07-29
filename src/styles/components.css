@@ -361,11 +361,9 @@ body {
   pointer-events: none;
 }
 
-/* 하위 개념 힌트 — 혼동 쌍(예: 화면 ↔ 영역)에서 하위 쪽만 살짝 들여씀.
-   전체 계층 트리화는 과하다고 판단, 혼동 해소 목적으로만 최소 적용. */
-.sp-subpane-item.is-indented {
-  padding-left: 26px; /* 기본 14 + 12 추가 = 자연스러운 한 단계 들여쓰기 */
-}
+/* 하위 개념 힌트(들여쓰기)는 LNB.tsx의 Link 인라인 스타일에서 처리한다 — 이 div는
+   padding:0 이 인라인으로 고정돼 있어(실제 패딩은 안쪽 Link가 담당) 여기 CSS 규칙은
+   먹힐 수 없다(인라인이 항상 이김). 과거엔 여기서 시도했다가 조용히 무효였던 규칙(2026-07-29 발견). */
 
 /* collapsed 상태 — 서브 패널만 숨김 (레일은 그대로 노출)
    토글 버튼은 wrapper 우측 가장자리에 absolute로 떠있음 */
@@ -626,6 +624,9 @@ body {
 .sp-badge-warning { background: var(--color-warning-subtle); color: var(--color-warning); border: 1px solid var(--color-warning-border); }
 .sp-badge-info    { background: var(--color-info-subtle);    color: var(--color-info);    border: 1px solid var(--color-info-border); }
 .sp-badge-neutral { background: rgba(255,255,255,0.06); color: var(--color-text-secondary); border: 1px solid var(--color-border); }
+/* subtle 배경 대신 꽉 채운 브랜드색 — 마일스톤처럼 캘린더에서 눈에 띄어야 하는 단일 이벤트용
+   (subtle 계열은 옅은 배경+옅은 글자라 라이트 테마에서 대비가 낮다는 피드백, 2026-07-29) */
+.sp-badge-solid-brand { background: var(--color-brand); color: var(--color-text-inverse); border: none; }
 
 .sp-badge-lg { padding: 3px 9px; font-size: var(--text-xs); border-radius: var(--radius-md); }
 .sp-badge-pill { border-radius: var(--radius-full); }
@@ -1124,9 +1125,13 @@ body {
 .sp-rich-editor .ProseMirror h1 { font-size: 1.25rem; font-weight: 700; margin: 1.1em 0 0.3em; }
 .sp-rich-editor .ProseMirror h2 { font-size: 1.1rem;  font-weight: 700; margin: 1em 0 0.3em; }
 .sp-rich-editor .ProseMirror h3 { font-size: 1rem;    font-weight: 700; margin: 0.9em 0 0.2em; }
+/* Tailwind preflight가 ul/ol의 list-style을 전역 none으로 리셋해서
+   글머리(•)·번호(1.2.3.) 마커가 안 보이던 문제 — 명시적으로 복구 */
 .sp-rich-editor .ProseMirror ul,
 .sp-rich-editor .ProseMirror ol { padding-left: 1.5em; }
-.sp-rich-editor .ProseMirror li { margin-bottom: 0.2em; }
+.sp-rich-editor .ProseMirror ul { list-style-type: disc; }
+.sp-rich-editor .ProseMirror ol { list-style-type: decimal; }
+.sp-rich-editor .ProseMirror li { margin-bottom: 0.2em; display: list-item; }
 .sp-rich-editor .ProseMirror strong { font-weight: 600; }
 .sp-rich-editor .ProseMirror em     { font-style: italic; }
 /* 인라인 코드 */

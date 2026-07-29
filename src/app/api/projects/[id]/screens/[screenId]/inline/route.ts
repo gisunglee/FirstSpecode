@@ -1,8 +1,10 @@
 /**
  * PATCH /api/projects/[id]/screens/[screenId]/inline — My Task 인라인 편집
  *
- * Body: { field: "assignee" | "startDate" | "endDate" | "effort", value: string | null }
- *   - startDate/endDate는 실질설계 축(actl_dsgn_bgng_de/actl_dsgn_end_de) — 실질구현 일정과 분리된 축.
+ * Body: { field: "assignee", value: string | null }
+ *   - 일정/공수(실질설계/실질구현/구현공수)는 항목이 여러 개(설계기간은 화면에 없고
+ *     단위업무 소관, 구현기간+공수는 sibling route.ts PUT에서 한꺼번에 편집)라 인라인
+ *     한 필드씩 바꾸는 이 엔드포인트로는 다루지 않음 — 담당자만 여기서 즉시 변경.
  *
  * 게이트는 sibling route.ts(PUT)의 requireScreenWrite와 동일 조건 —
  * OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 담당자.
@@ -65,40 +67,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   const { field, value } = body as { field?: string; value?: string | null };
   if (!field) return apiError("VALIDATION_ERROR", "field가 필요합니다.", 400);
-  if (!["assignee", "startDate", "endDate", "effort"].includes(field)) {
-    return apiError("VALIDATION_ERROR", "field는 assignee, startDate, endDate, effort 중 하나여야 합니다.", 400);
+  if (field !== "assignee") {
+    return apiError("VALIDATION_ERROR", "field는 assignee여야 합니다.", 400);
   }
 
   try {
     const existing = await prisma.tbDsScreen.findUnique({ where: { scrn_id: screenId } });
     if (!existing || existing.prjct_id !== projectId) {
       return apiError("NOT_FOUND", "화면을 찾을 수 없습니다.", 404);
-    }
-
-    if (field === "startDate" || field === "endDate") {
-      await prisma.tbDsScreen.update({
-        where: { scrn_id: screenId },
-        data:  { [field === "startDate" ? "actl_dsgn_bgng_de" : "actl_dsgn_end_de"]: value || null, mdfcn_dt: new Date() },
-      });
-      return apiSuccess({ screenId, field, value: value || null });
-    }
-
-    if (field === "effort") {
-      await prisma.$transaction([
-        prisma.tbDsScreen.update({
-          where: { scrn_id: screenId },
-          data:  { actl_dsgn_efrt_val: value || null, mdfcn_dt: new Date() },
-        }),
-        prisma.tbDsDesignChange.create({
-          data: {
-            prjct_id: projectId, ref_tbl_nm: "tb_ds_screen", ref_id: screenId,
-            chg_type_code: "UPDATE", chg_rsn_cn: "공수 인라인 편집",
-            snapshot_data: { screenId, displayId: existing.scrn_display_id, field, value },
-            chg_mber_id: gate.mberId,
-          },
-        }),
-      ]);
-      return apiSuccess({ screenId, field, value: value || null });
     }
 
     // field === "assignee" — 값이 실제로 바뀌었을 때만 이력 저장(no-op 스킵)

@@ -31,7 +31,6 @@ const columns: ExcelColumn<ScreenListItem>[] = [
   { key: "areaCount",       header: "영역 수",     width: 10 },
   { key: "avgDesignRt",     header: "설계(%)",     width: 10 },
   { key: "avgImplRt",       header: "구현(%)",     width: 10 },
-  { key: "avgTestRt",       header: "테스트(%)",   width: 10 },
 ];
 
 export const screensExportConfig: ExportConfig<ScreenListItem, { id: string }> = {

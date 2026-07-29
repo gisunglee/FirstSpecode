@@ -34,10 +34,29 @@ export type MyTaskNode = {
   href:       string;
   assigneeId:   string | null;
   assigneeName: string | null;
-  startDate: string | null;
-  endDate:   string | null;
-  /** 공수 — SCREEN(actl_dsgn_efrt_val)/FUNCTION(impl_efrt_val)만. UNIT_WORK/AREA는 항상 null(필드 없음) */
-  effort: string | null;
+  /** 설계서/정의서 작성 상태 — BEFORE(작성전)/DOING(작성중)/DONE(작성완료). 4레벨 모두 자기 소유 컬럼이라 항상 값이 있음. */
+  docStatus: string;
+  /**
+   * 설계 일정 — UNIT_WORK(plan_dsgn_bgng_de/end_de)만 실제 값을 가짐. 설계는
+   * 단위업무 소관이라 SCREEN/FUNCTION/AREA는 항상 null(상속·롤업 안 함 — 없으면 비워둠).
+   */
+  designStartDate: string | null;
+  designEndDate:   string | null;
+  /** 설계 공수 — UNIT_WORK(plan_dsgn_efrt_val)만. 나머지는 항상 null. */
+  designEffort: string | null;
+  /**
+   * 구현 일정 — SCREEN(actl_impl_bgng_de/end_de)이 직접 소유. FUNCTION은 자기 일정이 없어
+   * 소속 화면 값을 그대로 상속, UNIT_WORK은 하위 화면들 중 가장 이른 시작일/가장 늦은
+   * 종료일로 롤업. AREA는 항상 null.
+   */
+  implStartDate: string | null;
+  implEndDate:   string | null;
+  /**
+   * 구현 공수 — FUNCTION(impl_efrt_val)이 직접 소유. SCREEN/UNIT_WORK는 하위 기능들의
+   * 공수(시간) 합산 롤업 — 하위에 값 있는 기능이 하나도 없으면 null(0으로 채우지 않음).
+   * AREA는 항상 null.
+   */
+  implEffort: string | null;
   /**
    * 설계/구현 진척률(0~100) — "진척률은 기능걸로 통일" 원칙(fetchDeadlineItems.ts와 동일).
    * FUNCTION은 자기 자신의 impl_rt/design_rt, UNIT_WORK/SCREEN은 하위 기능들의 평균 롤업.

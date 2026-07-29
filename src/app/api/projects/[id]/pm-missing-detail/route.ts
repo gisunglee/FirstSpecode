@@ -7,8 +7,9 @@
  *     "정확히 무엇이 비어있는지" 이름과 바로가기 링크를 보여준다. 페이징 없이 최대 100건.
  *   - 판정 공식은 lib/pm/missingStatus.ts buildMissingStat 과 동일 (기준 통일):
  *       담당자 미지정 = asign_mber_id 없음
- *       일정 미입력   = 시작일·종료일 중 하나라도 없음
- *       공수 미입력   = parseEffortHours <= 0 (화면/기능에만 존재)
+ *       일정 미입력   = 시작일·종료일 중 하나라도 없음 (화면은 실질구현기간 기준 —
+ *                       실질설계기간은 2026-07-28부터 화면에 없고 단위업무에만 있음)
+ *       공수 미입력   = parseEffortHours <= 0 (기능에만 존재)
  *
  * Query:
  *   entity  — REQUIREMENT | UNIT_WORK | SCREEN | FUNCTION (필수)
@@ -48,8 +49,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   if (!missing || !["assignee", "date", "effort"].includes(missing)) {
     return apiError("VALIDATION_ERROR", "missing은 assignee/date/effort 중 하나여야 합니다.", 400);
   }
-  // 요구사항/단위업무는 공수 필드가 아예 없음 — 잘못된 조합은 사전에 막아서 "0건"으로 오인하지 않게 함
-  if (missing === "effort" && (entity === "REQUIREMENT" || entity === "UNIT_WORK")) {
+  // 요구사항/단위업무/화면은 공수 필드가 아예 없음 — 잘못된 조합은 사전에 막아서 "0건"으로 오인하지 않게 함
+  if (missing === "effort" && entity !== "FUNCTION") {
     return apiError("VALIDATION_ERROR", `${entity}는 공수 필드가 없어 effort 기준을 사용할 수 없습니다.`, 400);
   }
 
@@ -97,14 +98,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         where:  { prjct_id: projectId },
         select: {
           scrn_id: true, scrn_display_id: true, scrn_nm: true, asign_mber_id: true,
-          actl_dsgn_bgng_de: true, actl_dsgn_end_de: true, actl_dsgn_efrt_val: true,
+          actl_impl_bgng_de: true, actl_impl_end_de: true,
         },
         take: HARD_LIMIT,
       });
       raw = rows.map((s) => ({
         id: s.scrn_id, displayId: s.scrn_display_id, name: s.scrn_nm,
         href: `/projects/${projectId}/screens/${s.scrn_id}`,
-        asignMberId: s.asign_mber_id, startDate: s.actl_dsgn_bgng_de, endDate: s.actl_dsgn_end_de, effort: s.actl_dsgn_efrt_val,
+        // 실질설계기간은 2026-07-28부터 화면에 없음(단위업무 소관) — 화면 자체 일정은 구현만 남음
+        asignMberId: s.asign_mber_id, startDate: s.actl_impl_bgng_de, endDate: s.actl_impl_end_de, effort: null,
       }));
     } else {
       const rows = await prisma.tbDsFunction.findMany({

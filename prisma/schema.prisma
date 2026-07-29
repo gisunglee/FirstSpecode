@@ -600,13 +600,12 @@ model TbDsScreen {
   dsply_code      String?
   layer_data_dc   String?
   coment_cn       String?
-  // 실질 설계/구현 일정·공수 — 담당자가 직접 커밋하는 실제 배정 일정.
-  // (단위업무의 plan_dsgn_* 는 PM의 상위 계획치, 여기는 실행 단위의 실제 일정)
+  // 실질 구현 일정 — 담당 개발자가 직접 커밋하는 실제 배정 일정.
+  // (단위업무의 plan_dsgn_* 는 PM의 상위 계획치. 설계는 화면 여러 개를 한 사람이 이어서
+  // 하는 경우가 많고 화면이 많으면 개별 일정 입력이 부담이라, 설계 일정/공수는 화면에
+  // 두지 않고 단위업무의 plan_dsgn_*로만 관리 — 2026-07-28 2차 개편, 최초엔 화면에 있었음)
   // 구현 일정은 원래 기능(TbDsFunction)에 있었으나, 개발자가 실제로 보고 움직이는 마감
   // 기준은 화면 단위라 이쪽으로 이동함(2026-07-28).
-  actl_dsgn_bgng_de   String?
-  actl_dsgn_end_de    String?
-  actl_dsgn_efrt_val  String?
   actl_impl_bgng_de   String?
   actl_impl_end_de    String?
   // 화면정의서 작성 상태 — BEFORE(작성전) / DOING(작성중) / DONE(작성완료)

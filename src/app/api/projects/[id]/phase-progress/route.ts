@@ -2,16 +2,19 @@
  * 공통 단계별 진척률 API (tb_cm_progress)
  *
  * GET  /api/projects/[id]/phase-progress?refTable=tb_ds_function&refId=xxx
- *   → 해당 기능의 설계·구현·테스트 진척률 조회
+ *   → 해당 기능의 설계·구현 진척률 조회
  *   → 레코드가 없으면 0으로 초기화된 기본값 반환 (404 아님)
  *
  * PUT  /api/projects/[id]/phase-progress?refTable=tb_ds_function&refId=xxx
  *   → 단계별 진척률 저장 (upsert — 없으면 생성, 있으면 수정)
- *   → Body: { designRt?, implRt?, testRt? }  각 0~100 정수
+ *   → Body: { designRt?, implRt? }  각 0~100 정수
  *
  * 다형 참조 구조: refTable(참조 테이블명) + refId(참조 레코드 ID)
  * 분석(analyRt)은 2026-07-28 제거됨 — 분석은 요구사항 레벨(TbRqRequirement.progrs_rt)에서
  * 별도 관리하고, 이 테이블은 현재 tb_ds_function 에서만 쓴다.
+ *
+ * 테스트(testRt)는 2026-07-28 3차 개편으로 이 API 인터페이스에서 제거됨 — DB 컬럼(test_rt)
+ * 자체는 향후 자동테스트 연동을 위해 스키마에 남아있지만 이 API는 더 이상 읽지도 쓰지도 않는다.
  */
 
 import { NextRequest } from "next/server";
@@ -27,12 +30,10 @@ type RouteParams = { params: Promise<{ id: string }> };
 function toResponse(row: {
   design_rt: number;
   impl_rt: number;
-  test_rt: number;
 }) {
   return {
     designRt: row.design_rt,
     implRt:   row.impl_rt,
-    testRt:   row.test_rt,
   };
 }
 
@@ -73,7 +74,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // 레코드가 없으면 0으로 초기화된 기본값 반환 (첫 접근 시에도 정상 응답)
     if (!row) {
-      return apiSuccess({ designRt: 0, implRt: 0, testRt: 0 });
+      return apiSuccess({ designRt: 0, implRt: 0 });
     }
 
     return apiSuccess(toResponse(row));
@@ -114,16 +115,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { designRt, implRt, testRt } = body as {
+  const { designRt, implRt } = body as {
     designRt?: unknown;
     implRt?:  unknown;
-    testRt?:  unknown;
   };
 
   // 전달된 값만 검증 (undefined는 기존 값 유지 — upsert create 시 0이 기본값)
   if (designRt !== undefined && !isValidRate(designRt)) return apiError("VALIDATION_ERROR", "designRt는 0~100 정수여야 합니다.", 400);
   if (implRt   !== undefined && !isValidRate(implRt))   return apiError("VALIDATION_ERROR", "implRt는 0~100 정수여야 합니다.", 400);
-  if (testRt   !== undefined && !isValidRate(testRt))   return apiError("VALIDATION_ERROR", "testRt는 0~100 정수여야 합니다.", 400);
 
   try {
     // upsert — (ref_tbl_nm, ref_id) 기준 없으면 생성, 있으면 수정
@@ -137,7 +136,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         prjct_id:      projectId,
         design_rt:     (designRt as number) ?? 0,
         impl_rt:       (implRt   as number) ?? 0,
-        test_rt:       (testRt   as number) ?? 0,
         mdfcn_mber_id: auth.mberId,
         mdfcn_dt:      new Date(),
       },
@@ -145,7 +143,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         // 전달된 값만 수정 — 나머지는 DB 기존값 유지
         ...(designRt !== undefined ? { design_rt: designRt as number } : {}),
         ...(implRt   !== undefined ? { impl_rt:   implRt   as number } : {}),
-        ...(testRt   !== undefined ? { test_rt:   testRt   as number } : {}),
         mdfcn_mber_id: auth.mberId,
         mdfcn_dt:      new Date(),
       },

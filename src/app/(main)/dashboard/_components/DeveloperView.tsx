@@ -1,18 +1,17 @@
 "use client";
 
 /**
- * DeveloperView — 개발자뷰 (내 작업 중심 3개 카드)
+ * DeveloperView — 개발자뷰 (내 작업 중심 4개 카드)
  *
  * 데이터:
  *   GET /api/projects/[id]/dashboard/me-summary
- *   1차 릴리즈 카드 3종: 내 과업 / 마감 임박 / 내 AI 결과
  */
 
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
 import type { MeSummaryResponse } from "@/types/dashboard";
 
-import MyTasksCard      from "./cards/MyTasksCard";
+import MyRequirementsCard from "./cards/MyRequirementsCard";
 import MyDeadlinesCard  from "./cards/MyDeadlinesCard";
 import MyAiResultsCard  from "./cards/MyAiResultsCard";
 import MyReviewsCard    from "./cards/MyReviewsCard";
@@ -42,8 +41,8 @@ export default function DeveloperView({ projectId }: Props) {
         error={error as Error | null}
         projectId={projectId}
       />
-      <MyTasksCard
-        data={data?.myTasks}
+      <MyRequirementsCard
+        data={data?.myRequirements}
         isLoading={isLoading}
         error={error as Error | null}
         projectId={projectId}
