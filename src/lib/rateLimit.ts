@@ -55,21 +55,30 @@ export async function checkRateLimit(args: RateLimitArgs): Promise<RateLimitResu
   //   - 기존 행 + 만료된 윈도우: 리셋
   //   - 기존 행 + 살아있는 윈도우: req_cnt++
   // Prisma $queryRaw의 태그드 템플릿은 파라미터 바인딩으로 안전.
-  const rows = await prisma.$queryRaw<Array<{ req_cnt: number; window_start_dt: Date }>>`
-    INSERT INTO tb_cm_rate_limit (rate_key_val, window_start_dt, req_cnt, creat_dt, updt_dt)
-    VALUES (${key}, NOW(), 1, NOW(), NOW())
-    ON CONFLICT (rate_key_val) DO UPDATE SET
-      window_start_dt = CASE
-        WHEN tb_cm_rate_limit.window_start_dt < ${windowExpireDt} THEN NOW()
-        ELSE tb_cm_rate_limit.window_start_dt
-      END,
-      req_cnt = CASE
-        WHEN tb_cm_rate_limit.window_start_dt < ${windowExpireDt} THEN 1
-        ELSE tb_cm_rate_limit.req_cnt + 1
-      END,
-      updt_dt = NOW()
-    RETURNING req_cnt, window_start_dt
-  `;
+  let rows: Array<{ req_cnt: number; window_start_dt: Date }>;
+  try {
+    rows = await prisma.$queryRaw<Array<{ req_cnt: number; window_start_dt: Date }>>`
+      INSERT INTO tb_cm_rate_limit (rate_key_val, window_start_dt, req_cnt, creat_dt, updt_dt)
+      VALUES (${key}, NOW(), 1, NOW(), NOW())
+      ON CONFLICT (rate_key_val) DO UPDATE SET
+        window_start_dt = CASE
+          WHEN tb_cm_rate_limit.window_start_dt < ${windowExpireDt} THEN NOW()
+          ELSE tb_cm_rate_limit.window_start_dt
+        END,
+        req_cnt = CASE
+          WHEN tb_cm_rate_limit.window_start_dt < ${windowExpireDt} THEN 1
+          ELSE tb_cm_rate_limit.req_cnt + 1
+        END,
+        updt_dt = NOW()
+      RETURNING req_cnt, window_start_dt
+    `;
+  } catch (err) {
+    // Rate limit은 방어 기능일 뿐 핵심 기능이 아님 — DB 일시 장애(예: Supabase
+    // read-only 전환 등)로 이 쿼리가 실패했다고 로그인 자체를 막으면 가용성이
+    // 핵심 기능보다 낮은 우선순위 기능에 종속되는 꼴이 됨. 차단보다 통과가 안전.
+    console.warn(`[rateLimit] upsert query failed for key=${key}:`, err);
+    return { ok: true, count: 0, retryAfter: 0 };
+  }
 
   const row = rows[0];
   // upsert 특성상 RETURNING은 항상 1행이지만 방어적으로 처리
