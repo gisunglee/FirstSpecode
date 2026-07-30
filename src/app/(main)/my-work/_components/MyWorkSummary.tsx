@@ -9,7 +9,7 @@
  *     (건수 0이면 "-" — 0%와 구분)
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MyWorkResponse } from "@/types/myWork";
 import type { ProgressKind } from "@/types/pm";
 import { PROGRESS_KIND_LABELS } from "@/types/pm";
@@ -19,6 +19,8 @@ export type StatFilter = "OVERDUE" | "DUE_SOON" | null;
 type Props = {
   summary:         MyWorkResponse["summary"] | undefined;
   progressSummary: MyWorkResponse["progressSummary"] | undefined;
+  /** 구현/설계 스위치의 최초 기본값(서버가 프로젝트 계획설계 종료일 기준으로 계산) — 로딩 전엔 undefined */
+  recommendedPhase: MyWorkResponse["recommendedPhase"] | undefined;
   isLoading: boolean;
   error:     Error | null;
   /** "지연"/"임박" 타일 클릭 시 아래 내 업무 리스트를 필터링하기 위한 상태 — page.tsx가 소유 */
@@ -28,7 +30,8 @@ type Props = {
   onJumpToUnassigned: () => void;
 };
 
-const PROGRESS_KIND_ORDER: ProgressKind[] = ["IMPL", "DESIGN"];
+// 설계 기간 중엔 설계가, 지나면 구현이 궁금한 게 자연스럽다는 피드백으로 설계를 앞에 둠(2026-07-30)
+const PROGRESS_KIND_ORDER: ProgressKind[] = ["DESIGN", "IMPL"];
 
 // 단위업무/화면/기능 — 구현·설계 스위치로 값이 바뀌는 행
 const SWITCHABLE_ROWS: { key: "unitWork" | "screen" | "function"; label: string }[] = [
@@ -37,10 +40,19 @@ const SWITCHABLE_ROWS: { key: "unitWork" | "screen" | "function"; label: string 
   { key: "function", label: "기능" },
 ];
 
-export default function MyWorkSummary({ summary, progressSummary, isLoading, error, statFilter, onStatFilterChange, onJumpToUnassigned }: Props) {
+export default function MyWorkSummary({ summary, progressSummary, recommendedPhase, isLoading, error, statFilter, onStatFilterChange, onJumpToUnassigned }: Props) {
   const [helpOpen, setHelpOpen] = useState(false);
   // 분석은 구현/설계 구분이 없어 스위치 대상이 아님 — 단위업무/화면/기능 3개만 이 스위치를 따른다.
   const [progressKind, setProgressKind] = useState<ProgressKind>("IMPL");
+  // recommendedPhase는 데이터가 도착한 후에야 값이 생기므로, 최초 1회만 적용하고 그 뒤로는
+  // (asOf 변경 등으로 값이 바뀌어도) 사용자가 고른 탭을 덮어쓰지 않는다.
+  const appliedDefaultRef = useRef(false);
+  useEffect(() => {
+    if (!appliedDefaultRef.current && recommendedPhase) {
+      setProgressKind(recommendedPhase);
+      appliedDefaultRef.current = true;
+    }
+  }, [recommendedPhase]);
 
   return (
     <div className="sp-group">

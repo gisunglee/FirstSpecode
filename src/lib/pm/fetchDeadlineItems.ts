@@ -41,6 +41,8 @@ export type RawDeadlineItem = {
   progress:   number;
   /** 공수(시간). FUNCTION=impl_efrt_val만 값이 있음. SCREEN/UNIT_WORK는 필드 자체가 없어 항상 null */
   effort:     string | null;
+  /** 설계서/정의서 작성 상태(BEFORE/DOING/DONE) — 3개 엔티티 전부 자기 소유 컬럼이라 항상 값 있음 */
+  docStatus:  string;
 };
 
 const HARD_LIMIT = 2000;
@@ -57,6 +59,7 @@ export async function fetchDeadlineItems(
       where:  { prjct_id: projectId, ...(mberId ? { asign_mber_id: mberId } : {}) },
       select: {
         func_id: true, func_display_id: true, func_nm: true, asign_mber_id: true, impl_efrt_val: true,
+        dsgn_doc_sttus_code: true,
         area: {
           select: {
             screen: {
@@ -88,6 +91,7 @@ export async function fetchDeadlineItems(
         href: `/projects/${projectId}/functions/${f.func_id}`,
         mberId: f.asign_mber_id, startDate, endDate,
         progress: rtMap.get(f.func_id) ?? 0, effort: f.impl_efrt_val,
+        docStatus: f.dsgn_doc_sttus_code,
       };
     });
   }
@@ -97,7 +101,7 @@ export async function fetchDeadlineItems(
       where:  { prjct_id: projectId, ...(mberId ? { asign_mber_id: mberId } : {}) },
       select: {
         scrn_id: true, scrn_display_id: true, scrn_nm: true, asign_mber_id: true,
-        actl_impl_bgng_de: true, actl_impl_end_de: true,
+        actl_impl_bgng_de: true, actl_impl_end_de: true, dsgn_doc_sttus_code: true,
         unitWork: { select: { plan_dsgn_bgng_de: true, plan_dsgn_end_de: true } },
       },
       take:   HARD_LIMIT,
@@ -114,7 +118,7 @@ export async function fetchDeadlineItems(
         href: `/projects/${projectId}/screens/${s.scrn_id}`,
         mberId: s.asign_mber_id, startDate, endDate,
         progress: progressKind === "DESIGN" ? (p?.designRt ?? 0) : (p?.implRt ?? 0),
-        effort: null,
+        effort: null, docStatus: s.dsgn_doc_sttus_code,
       };
     });
   }
@@ -124,7 +128,7 @@ export async function fetchDeadlineItems(
     where:  { prjct_id: projectId, ...(mberId ? { asign_mber_id: mberId } : {}) },
     select: {
       unit_work_id: true, unit_work_display_id: true, unit_work_nm: true, asign_mber_id: true,
-      plan_dsgn_bgng_de: true, plan_dsgn_end_de: true,
+      plan_dsgn_bgng_de: true, plan_dsgn_end_de: true, dsgn_doc_sttus_code: true,
     },
     take:   HARD_LIMIT,
   });
@@ -144,7 +148,7 @@ export async function fetchDeadlineItems(
       href: `/projects/${projectId}/unit-works/${u.unit_work_id}`,
       mberId: u.asign_mber_id, startDate, endDate,
       progress: progressKind === "DESIGN" ? (p?.designRt ?? 0) : (p?.implRt ?? 0),
-      effort: null,
+      effort: null, docStatus: u.dsgn_doc_sttus_code,
     };
   });
 }

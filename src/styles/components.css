@@ -624,9 +624,15 @@ body {
 .sp-badge-warning { background: var(--color-warning-subtle); color: var(--color-warning); border: 1px solid var(--color-warning-border); }
 .sp-badge-info    { background: var(--color-info-subtle);    color: var(--color-info);    border: 1px solid var(--color-info-border); }
 .sp-badge-neutral { background: rgba(255,255,255,0.06); color: var(--color-text-secondary); border: 1px solid var(--color-border); }
-/* subtle 배경 대신 꽉 채운 브랜드색 — 마일스톤처럼 캘린더에서 눈에 띄어야 하는 단일 이벤트용
-   (subtle 계열은 옅은 배경+옅은 글자라 라이트 테마에서 대비가 낮다는 피드백, 2026-07-29) */
-.sp-badge-solid-brand { background: var(--color-brand); color: var(--color-text-inverse); border: none; }
+/* subtle 배경 대신 꽉 채운 색 — 캘린더에서 눈에 띄어야 하는 단일/핵심 이벤트용
+   (subtle 계열은 옅은 배경+옅은 글자라 라이트 테마에서 대비가 낮다는 피드백, 2026-07-29)
+   brand=마일스톤 전용 색이라, 캘린더 단계일정(분석/설계/구현/테스트)은 겹치지 않게
+   info/accent/success/warning 4색을 나눠 쓴다(2026-07-30, "적은 개수의 임팩트 있는 일정"). */
+.sp-badge-solid-brand   { background: var(--color-brand);   color: var(--color-text-inverse); border: none; }
+.sp-badge-solid-info    { background: var(--color-info);    color: var(--color-text-inverse); border: none; }
+.sp-badge-solid-accent  { background: var(--color-accent);  color: var(--color-text-inverse); border: none; }
+.sp-badge-solid-success { background: var(--color-success); color: var(--color-text-inverse); border: none; }
+.sp-badge-solid-warning { background: var(--color-warning); color: var(--color-text-inverse); border: none; }
 
 .sp-badge-lg { padding: 3px 9px; font-size: var(--text-xs); border-radius: var(--radius-md); }
 .sp-badge-pill { border-radius: var(--radius-full); }

@@ -41,6 +41,8 @@ export type MyWorkItem = {
   progress:  number;
   /** 0~100 — 단위업무/화면/기능만(설계 진척률, design_rt 롤업). 요구사항은 null */
   designProgress: number | null;
+  /** 설계서/정의서 작성 상태(BEFORE/DOING/DONE) — 단위업무/화면/기능만. 요구사항은 그 필드 자체가 없어 null */
+  docStatus: string | null;
   /**
    * 설계 종료일 — 단위업무=자신의 계획설계기간, 화면/기능=부모 단위업무 상속. 요구사항은 null
    * (분석 단계엔 설계라는 축 자체가 없어 designProgress와 동일하게 null).
@@ -98,6 +100,14 @@ export type MyWorkResponse = {
   items: MyWorkItem[];
   unassignedChildren: UnassignedChildItem[];
   missingSchedule: MissingScheduleItem[];
+  /**
+   * 구현/설계 토글의 최초 기본 선택값 — 프로젝트 설정(일정 탭)의 계획설계 종료일(dsgn_end_de)과
+   * 기준일(asOf)을 비교해 서버가 계산해둔다: 기준일이 설계 종료일 이전(분석·설계 기간 도중)이면
+   * DESIGN, 지났으면 IMPL. 계획설계 종료일이 아예 없으면(단계일정 미설정) IMPL로 폴백.
+   * "최초" 선택값이라는 점이 중요 — 사용자가 토글을 이미 만졌다면 이후 이 값이 바뀌어도
+   * (asOf 변경 등) 강제로 덮어쓰지 않는다(2026-07-30).
+   */
+  recommendedPhase: "DESIGN" | "IMPL";
   /**
    * 내가 담당한 각 엔티티의 평균 진척률(0~100). 건수 0이면 null(집계 대상 없음과 0%를 구분)
    * analysis(분석)는 구현/설계 구분이 없는 자체 진척률(progrs_rt)이라 단일값.

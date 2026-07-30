@@ -283,7 +283,11 @@ function Legend() {
       <LegendDot color="var(--color-success)" label="완료(100%)" />
       <LegendDot color="var(--color-info)"    label="진행 중" />
       <LegendDot color="var(--color-error)"   label="지연" />
-      <LegendDot color="var(--color-brand)"  label="📌 마일스톤" />
+      <LegendDot color="var(--color-brand)"   label="📌 마일스톤" />
+      <LegendDot color="var(--color-info)"    label="🔍 분석" />
+      <LegendDot color="var(--color-accent)"  label="✏️ 설계" />
+      <LegendDot color="var(--color-success)" label="🛠️ 구현" />
+      <LegendDot color="var(--color-warning)" label="🧪 테스트" />
       <span style={{ marginLeft: 8 }}>
         오늘은 <span
           style={{

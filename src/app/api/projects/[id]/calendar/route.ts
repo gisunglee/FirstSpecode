@@ -88,7 +88,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }),
       prisma.tbPjMilestone.findMany({
         where:  { prjct_id: projectId, milestone_de: { gte: monthStartDate, lte: monthEndDate } },
-        select: { milestone_nm: true, milestone_de: true },
+        select: { milestone_nm: true, milestone_de: true, cn: true },
         take:   MAX_ITEMS_PER_CATEGORY,
       }),
       prisma.tbPjHoliday.findMany({
@@ -150,11 +150,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       ...buildPhaseEvents(project, monthStart, monthEnd),
       ...milestones.map((m): CalendarEvent => ({
         category: "MILESTONE", date: toDateStr(m.milestone_de), label: m.milestone_nm,
-        href: null, progress: null, isMine: null,
+        href: null, progress: null, isMine: null, content: m.cn ?? "",
       })),
       ...holidays.map((h): CalendarEvent => ({
         category: "HOLIDAY", date: toDateStr(h.holiday_de), label: h.holiday_nm,
-        href: null, progress: null, isMine: null,
+        href: null, progress: null, isMine: null, content: null,
       })),
       ...requirements.flatMap((r) => buildStartEndEvents({
         category: "REQUIREMENT", displayId: r.req_display_id, name: r.req_nm,
@@ -216,13 +216,13 @@ function buildPhaseEvents(
     if (bgng) {
       const s = toDateStr(bgng);
       if (s >= monthStart && s <= monthEnd) {
-        events.push({ category: "PHASE", date: s, label: `${label} 시작`, href: null, progress: null, isMine: null });
+        events.push({ category: "PHASE", date: s, label: `${label} 시작`, href: null, progress: null, isMine: null, content: null });
       }
     }
     if (end) {
       const s = toDateStr(end);
       if (s >= monthStart && s <= monthEnd) {
-        events.push({ category: "PHASE", date: s, label: `${label} 종료`, href: null, progress: null, isMine: null });
+        events.push({ category: "PHASE", date: s, label: `${label} 종료`, href: null, progress: null, isMine: null, content: null });
       }
     }
   }
@@ -247,10 +247,10 @@ function buildStartEndEvents(args: {
   const { category, displayId, name, startDate, endDate, href, progress, isMine, monthStart, monthEnd } = args;
   const events: CalendarEvent[] = [];
   if (startDate && startDate >= monthStart && startDate <= monthEnd) {
-    events.push({ category, date: startDate, label: `${displayId} ${name} 시작`, href, progress, isMine });
+    events.push({ category, date: startDate, label: `${displayId} ${name} 시작`, href, progress, isMine, content: null });
   }
   if (endDate && endDate >= monthStart && endDate <= monthEnd) {
-    events.push({ category, date: endDate, label: `${displayId} ${name} 종료`, href, progress, isMine });
+    events.push({ category, date: endDate, label: `${displayId} ${name} 종료`, href, progress, isMine, content: null });
   }
   return events;
 }

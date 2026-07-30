@@ -33,6 +33,12 @@ export type CalendarEvent = {
   progress: number | null;
   /** 본인 담당 여부 — "내 담당만" 필터용. 담당자 개념이 없는 카테고리는 항상 null(필터와 무관하게 항상 표시) */
   isMine: boolean | null;
+  /**
+   * 상세 팝업 본문(HTML, RichEditor) — MILESTONE만 값이 있음(빈 문자열이면 "내용 없음").
+   * 나머지 카테고리는 상세 팝업 자체가 없어 항상 null(2026-07-30, 설정 > 일정 탭의
+   * MilestoneDetailDialog를 캘린더에서도 그대로 재사용).
+   */
+  content: string | null;
 };
 
 export type CalendarResponse = {

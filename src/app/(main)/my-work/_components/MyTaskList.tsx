@@ -14,16 +14,18 @@
  * 항상 분석 마감일·진척률을 보여준다.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { MY_WORK_KIND_LABELS } from "@/types/myWork";
-import type { MyWorkItem, MyWorkItemKind } from "@/types/myWork";
+import type { MyWorkItem, MyWorkItemKind, MyWorkResponse } from "@/types/myWork";
 import type { StatFilter } from "./MyWorkSummary";
 
 type Phase = "IMPL" | "DESIGN";
 
 type Props = {
   items:     MyWorkItem[];
+  /** 구현/설계 스위치의 최초 기본값(서버가 프로젝트 계획설계 종료일 기준으로 계산) — 로딩 전엔 undefined */
+  recommendedPhase: MyWorkResponse["recommendedPhase"] | undefined;
   isLoading: boolean;
   error:     Error | null;
   /** 요약 카드의 지연/임박 타일 클릭으로 걸린 필터 — page.tsx가 소유, null이면 전체 표시 */
@@ -33,7 +35,11 @@ type Props = {
 
 // 행 그리드 열 고정폭 — 글자 수가 달라도 모든 행에서 동일한 위치에 열이 오도록 픽셀
 // 고정값을 쓴다("auto"는 행마다 독립 계산돼 들쭉날쭉해짐).
-const ROW_COLS = { kind: "48px", date: "96px", progress: "56px" };
+const ROW_COLS = { kind: "58px", docStatus: "56px", date: "96px", progress: "56px" };
+
+// 작성상태 — 단위업무/화면/기능만 값이 있음(요구사항은 그 필드 자체가 없어 항상 null → "-").
+const DOC_STATUS_LIST_LABEL: Record<string, string> = { BEFORE: "작성전", DOING: "작성중", DONE: "작성완료" };
+const DOC_STATUS_FULL_LABEL: Record<string, string> = { BEFORE: "작성 전", DOING: "작성 중", DONE: "작성 완료" };
 
 // 단위업무/화면/기능의 마감일·진척률에서 현재 phase에 해당하는 값만 골라낸다.
 // 요구사항은 designProgress가 null(설계라는 축 자체가 없음)이라 phase와 무관하게 항상 분석 값.
@@ -46,9 +52,18 @@ function resolvePhaseValue(it: MyWorkItem, phase: Phase): { date: string | null;
     : { date: it.endDate, dDay: it.dDay, progress: it.progress };
 }
 
-export default function MyTaskList({ items, isLoading, error, statFilter, onClearStatFilter }: Props) {
+export default function MyTaskList({ items, recommendedPhase, isLoading, error, statFilter, onClearStatFilter }: Props) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [phase, setPhase] = useState<Phase>("IMPL");
+  // recommendedPhase는 데이터가 도착한 후에야 값이 생기므로, 최초 1회만 적용하고 그 뒤로는
+  // (asOf 변경 등으로 값이 바뀌어도) 사용자가 고른 탭을 덮어쓰지 않는다.
+  const appliedDefaultRef = useRef(false);
+  useEffect(() => {
+    if (!appliedDefaultRef.current && recommendedPhase) {
+      setPhase(recommendedPhase);
+      appliedDefaultRef.current = true;
+    }
+  }, [recommendedPhase]);
 
   // 요약 카드의 지연/임박 타일 클릭 필터 — dDay 기준은 pm 대시보드 위젯들과 동일(지연: dDay<0, 임박: 0~3)
   // 필터 자체는 phase 토글과 무관하게 항상 구현/분석 dDay(it.dDay) 기준(요약 카드 집계와 동일 기준 유지).
@@ -91,8 +106,13 @@ export default function MyTaskList({ items, isLoading, error, statFilter, onClea
           </div>
         ) : (
           <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            {/* 작성상태(설계서/정의서 BEFORE·DOING·DONE) 열은 설계 축을 볼 때만 — 구현 진척률을
+                보는 중엔 문서 작성 여부가 관심사가 아니라는 판단(2026-07-30). */}
             {visibleItems.map((it) => {
               const v = resolvePhaseValue(it, phase);
+              const gridCols = phase === "DESIGN"
+                ? `${ROW_COLS.kind} ${ROW_COLS.date} 1fr ${ROW_COLS.docStatus} ${ROW_COLS.progress}`
+                : `${ROW_COLS.kind} ${ROW_COLS.date} 1fr ${ROW_COLS.progress}`;
               return (
                 <li key={`${it.kind}-${it.id}`} style={{ borderBottom: "1px solid var(--color-border-subtle)" }}>
                   <Link
@@ -100,7 +120,7 @@ export default function MyTaskList({ items, isLoading, error, statFilter, onClea
                     style={{
                       // 열 너비를 고정값으로 줘야 행마다 정렬이 맞음 — "auto"면 행(Link)마다 grid가
                       // 독립적이라 글자 수에 따라 열 폭이 행마다 달라져 들쭉날쭉해 보였음.
-                      display: "grid", gridTemplateColumns: `${ROW_COLS.kind} ${ROW_COLS.date} 1fr ${ROW_COLS.progress}`, gap: 8,
+                      display: "grid", gridTemplateColumns: gridCols, gap: 8,
                       padding: "6px 14px", textDecoration: "none", color: "var(--color-text-primary)",
                       alignItems: "center", whiteSpace: "nowrap",
                     }}
@@ -116,6 +136,15 @@ export default function MyTaskList({ items, isLoading, error, statFilter, onClea
                     >
                       {it.name || "(이름 없음)"}
                     </span>
+
+                    {phase === "DESIGN" && (
+                      <span
+                        title={it.docStatus ? (DOC_STATUS_FULL_LABEL[it.docStatus] ?? it.docStatus) : undefined}
+                        style={{ textAlign: "center", fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}
+                      >
+                        {it.docStatus ? (DOC_STATUS_LIST_LABEL[it.docStatus] ?? it.docStatus) : "-"}
+                      </span>
+                    )}
 
                     <span style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "var(--text-md)", color: progressColor(v.progress) }}>
                       {v.progress}%
@@ -138,7 +167,7 @@ export default function MyTaskList({ items, isLoading, error, statFilter, onClea
 function PhaseToggle({ phase, onChange }: { phase: Phase; onChange: (p: Phase) => void }) {
   return (
     <div style={{ display: "flex", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", overflow: "hidden" }}>
-      {(["IMPL", "DESIGN"] as const).map((p) => (
+      {(["DESIGN", "IMPL"] as const).map((p) => (
         <button
           key={p}
           type="button"
@@ -199,7 +228,9 @@ function TaskListHelpModal({ onClose }: { onClose: () => void }) {
               기능(소속 화면 상속)의 마감일·구현 진척률<br />
               <b>설계</b> — 단위업무(자신의 계획설계기간) · 화면·기능(부모 단위업무 설계기간 상속)의
               마감일·설계 진척률<br />
-              요구사항은 설계라는 축이 없어 토글과 무관하게 항상 분석 마감일·진척률만 표시.
+              요구사항은 설계라는 축이 없어 토글과 무관하게 항상 분석 마감일·진척률만 표시.<br />
+              <b>설계</b> 선택 시엔 유형 배지 옆에 작성상태(전/중/완료 — 설계서·화면정의서·
+              기능정의서 등의 작성 진행 상태)도 같이 표시. 요구사항은 그 필드 자체가 없어 "-".
             </div>
           </div>
 

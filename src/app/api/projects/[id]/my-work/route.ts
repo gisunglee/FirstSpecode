@@ -59,7 +59,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // 봐서는 뭘 보는지 헷갈린다는 피드백으로, 설계·구현을 나란히 다 보여주기로 함.
     // 완료 필터(progress<100)는 항상 구현(impl) 기준 — "설계만 끝나고 구현 안 된 것"까지
     // 완료로 착각해 리스트에서 사라지면 안 되기 때문에, 대표값(progress)은 구현 고정.
-    const [myRequirements, unitWorkImpl, unitWorkDesign, screenImpl, screenDesign, functionImpl, functionDesign] = await Promise.all([
+    const [myRequirements, unitWorkImpl, unitWorkDesign, screenImpl, screenDesign, functionImpl, functionDesign, project] = await Promise.all([
       prisma.tbRqRequirement.findMany({
         where:  { prjct_id: projectId, asign_mber_id: myId },
         select: { req_id: true, req_display_id: true, req_nm: true, anls_bgng_de: true, anls_end_de: true, progrs_rt: true },
@@ -71,7 +71,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       fetchDeadlineItems(projectId, "SCREEN", "DESIGN", myId),
       fetchDeadlineItems(projectId, "FUNCTION", "IMPL", myId),
       fetchDeadlineItems(projectId, "FUNCTION", "DESIGN", myId),
+      // 구현/설계 토글의 최초 기본값 계산용 — 프로젝트 설정(일정 탭)의 계획설계 종료일만 필요
+      prisma.tbPjProject.findUnique({ where: { prjct_id: projectId }, select: { dsgn_end_de: true } }),
     ]);
+
+    // 기준일(todayStr, asOf 파라미터 반영)이 계획설계 종료일 이전이면 아직 분석·설계 기간 도중이라
+    // "설계"를, 지났으면 "구현"을 최초 기본 탭으로 추천. 종료일 미설정(단계일정 안 잡음)이면
+    // 판단 근거가 없어 기존 기본값이었던 "구현"으로 폴백.
+    const designEndStr = project?.dsgn_end_de ? project.dsgn_end_de.toISOString().slice(0, 10) : null;
+    const recommendedPhase: "DESIGN" | "IMPL" = designEndStr && todayStr <= designEndStr ? "DESIGN" : "IMPL";
 
     // IMPL 배열 기준으로 순회하며 같은 id의 DESIGN 값(진척률+마감일)을 붙인다(둘 다 같은
     // 담당자 필터로 조회했으니 id 집합은 동일 — 짝이 없으면 폴백만 해두고 실제로는 항상 매칭됨).
@@ -84,15 +92,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         return { ...r, designProgress: d?.progress ?? 0, designEndDate: d?.endDate ?? null };
       });
     }
+    // docStatus는 IMPL/DESIGN 조회 어느 쪽으로 받아도 같은 값(단일 컬럼, phase 구분 없음) —
+    // withDesign이 IMPL 배열 기준으로 순회하므로 그 배열의 docStatus를 그대로 쓰면 됨.
     const unitWorkRaw = withDesign(unitWorkImpl, unitWorkDesign);
     const screenRaw   = withDesign(screenImpl, screenDesign);
     const functionRaw = withDesign(functionImpl, functionDesign);
 
-    const rawItems: { kind: MyWorkItemKind; id: string; displayId: string; name: string; href: string; startDate: string | null; endDate: string | null; progress: number; designProgress: number | null; designEndDate: string | null; effort: string | null }[] = [
+    const rawItems: { kind: MyWorkItemKind; id: string; displayId: string; name: string; href: string; startDate: string | null; endDate: string | null; progress: number; designProgress: number | null; designEndDate: string | null; effort: string | null; docStatus: string | null }[] = [
       ...myRequirements.map((r) => ({
         kind: "REQUIREMENT" as const, id: r.req_id, displayId: r.req_display_id, name: r.req_nm,
         href: `/projects/${projectId}/requirements/${r.req_id}`,
         startDate: r.anls_bgng_de, endDate: r.anls_end_de, progress: r.progrs_rt, designProgress: null, designEndDate: null, effort: null,
+        docStatus: null,
       })),
       ...unitWorkRaw.map((r) => ({ kind: "UNIT_WORK" as const, ...r })),
       ...screenRaw.map((r) => ({ kind: "SCREEN" as const, ...r })),
@@ -102,7 +113,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const itemsAll: MyWorkItem[] = rawItems.map((r) => ({
       kind: r.kind, id: r.id, displayId: r.displayId, name: r.name, href: r.href,
       startDate: r.startDate, endDate: r.endDate, progress: r.progress, designProgress: r.designProgress,
-      designEndDate: r.designEndDate,
+      designEndDate: r.designEndDate, docStatus: r.docStatus,
       dDay: r.endDate ? computeDDay(r.endDate, todayStr) : null,
       designDDay: r.designEndDate ? computeDDay(r.designEndDate, todayStr) : null,
     }));
@@ -198,6 +209,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       unassignedChildren,
       missingSchedule,
       progressSummary,
+      recommendedPhase,
       asOf: todayStr,
     };
 

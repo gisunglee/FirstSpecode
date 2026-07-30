@@ -103,6 +103,7 @@ export default function MyWorkPage() {
               <MyWorkSummary
                 summary={data?.summary}
                 progressSummary={data?.progressSummary}
+                recommendedPhase={data?.recommendedPhase}
                 isLoading={isLoading}
                 error={error as Error | null}
                 statFilter={statFilter}
@@ -114,6 +115,7 @@ export default function MyWorkPage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: 16, alignItems: "start" }}>
               <MyTaskList
                 items={data?.items ?? []}
+                recommendedPhase={data?.recommendedPhase}
                 isLoading={isLoading}
                 error={error as Error | null}
                 statFilter={statFilter}

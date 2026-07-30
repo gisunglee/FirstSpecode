@@ -9,6 +9,8 @@
  *   - 공휴일(HOLIDAY)만 배지가 아니라 셀 배경 하이라이트로 별도 표시(2026-07-29) —
  *     날짜당 하나뿐이라(DB @@unique) 배지 자리를 다른 업무 항목과 다투지 않게 하기 위함
  *   - 셀 클릭 → 선택된 날짜 콜백 (상위에서 사이드 패널 등에 활용 가능, 1차에서는 미사용)
+ *   - 마일스톤 배지 클릭 → 상세 팝업(MilestoneDetailDialog, 프로젝트 설정 > 일정 탭과 공유,
+ *     2026-07-30) — 이동할 상세 페이지가 없는 대신 이름/날짜/본문을 그 자리에서 보여준다.
  *
  * 표시 규칙(배지):
  *   - PHASE(단계일정)   → 고정 회색(neutral)
@@ -18,8 +20,10 @@
  *   - 한 셀에 배지가 3개 초과면 "+N" 표시(공휴일 제외)
  */
 
+import { useState } from "react";
 import Link from "next/link";
 import type { CalendarEvent, CalendarEventCategory } from "@/types/calendar";
+import MilestoneDetailDialog from "@/components/ui/MilestoneDetailDialog";
 
 type Props = {
   year:  number;
@@ -36,6 +40,9 @@ const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 const MAX_BADGES_PER_CELL = 3;
 
 export default function MonthGrid({ year, month, events, selectedCategories, myOnly }: Props) {
+  // 마일스톤 배지를 클릭했을 때 열리는 상세 팝업 대상 — 그리드 전체에 하나만 있으면 됨
+  const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
+
   // 1일 요일 + 말일 일수
   const firstWeekday = new Date(year, month - 1, 1).getDay(); // 0=일
   const lastDay      = new Date(year, month, 0).getDate();
@@ -130,11 +137,34 @@ export default function MonthGrid({ year, month, events, selectedCategories, myO
             events={c.dateStr ? (badgeEventsByDate.get(c.dateStr) ?? []) : []}
             holidayName={c.dateStr ? (holidayByDate.get(c.dateStr) ?? null) : null}
             todayStr={todayStr}
+            onMilestoneClick={setDetailEvent}
           />
         ))}
       </div>
+
+      {detailEvent && (
+        <MilestoneDetailDialog
+          milestone={{ name: detailEvent.label, date: detailEvent.date, content: detailEvent.content ?? "" }}
+          onClose={() => setDetailEvent(null)}
+        />
+      )}
     </div>
   );
+}
+
+// 단계일정(분석/설계/구현/테스트)은 개수가 8개뿐인 핵심 일정이라 단계마다 고유 아이콘 +
+// 꽉 채운 색으로 눈에 띄게(2026-07-30) — label이 "분석 시작"/"분석 종료"처럼 "{단계명} {시작|종료}"
+// 형태라 앞 단어만 떼어 매칭. brand는 마일스톤 전용이라 겹치지 않게 나머지 4색을 나눠 씀.
+const PHASE_STYLE: Record<string, { icon: string; badgeClass: string }> = {
+  "분석":   { icon: "🔍", badgeClass: "sp-badge-solid-info" },
+  "설계":   { icon: "✏️", badgeClass: "sp-badge-solid-accent" },
+  "구현":   { icon: "🛠️", badgeClass: "sp-badge-solid-success" },
+  "테스트": { icon: "🧪", badgeClass: "sp-badge-solid-warning" },
+};
+
+function phaseStyleFor(label: string): { icon: string; badgeClass: string } {
+  const phaseName = label.split(" ")[0];
+  return PHASE_STYLE[phaseName] ?? { icon: "📅", badgeClass: "sp-badge-neutral" };
 }
 
 // 업무 항목(REQUIREMENT/UNIT_WORK_DESIGN/SCREEN_IMPL)만 진행률 기준 톤 — 나머지는 고정색.
@@ -143,7 +173,7 @@ export default function MonthGrid({ year, month, events, selectedCategories, myO
 // 배지보다 한 단계 더 눈에 띄어야 함.
 function badgeClassFor(e: CalendarEvent, dateStr: string, todayStr: string): string {
   if (e.category === "MILESTONE") return "sp-badge-solid-brand";
-  if (e.category === "PHASE") return "sp-badge-neutral";
+  if (e.category === "PHASE") return phaseStyleFor(e.label).badgeClass;
   const progress = e.progress ?? 0;
   const isOverdue = dateStr < todayStr && progress < 100;
   if (progress >= 100) return "sp-badge-success";
@@ -153,7 +183,7 @@ function badgeClassFor(e: CalendarEvent, dateStr: string, todayStr: string): str
 
 // ── 단일 셀 ─────────────────────────────────────────────────────────────────
 function DayCell({
-  dateNum, dateStr, isToday, events, holidayName, todayStr,
+  dateNum, dateStr, isToday, events, holidayName, todayStr, onMilestoneClick,
 }: {
   dateNum:  number | null;
   dateStr:  string | null;
@@ -161,6 +191,7 @@ function DayCell({
   events:   CalendarEvent[];
   holidayName: string | null;
   todayStr: string;
+  onMilestoneClick: (e: CalendarEvent) => void;
 }) {
   const visible  = events.slice(0, MAX_BADGES_PER_CELL);
   const overflow = events.length - visible.length;
@@ -232,19 +263,21 @@ function DayCell({
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
               textDecoration: "none",
-              cursor: e.href ? "pointer" : "default",
+              cursor: (e.href || e.category === "MILESTONE") ? "pointer" : "default",
             }}
             title={e.label}
           >
-            {e.category === "MILESTONE" ? `📌 ${e.label}` : e.label}
+            {e.category === "MILESTONE" ? `📌 ${e.label}`
+              : e.category === "PHASE" ? `${phaseStyleFor(e.label).icon} ${e.label}`
+              : e.label}
           </span>
         );
         // key: 이벤트 자체엔 id가 없어(카테고리·날짜·라벨 조합이 그 셀 안에서 유일)
-        return e.href ? (
-          <Link key={i} href={e.href}>{content}</Link>
-        ) : (
-          <div key={i}>{content}</div>
-        );
+        if (e.href) return <Link key={i} href={e.href}>{content}</Link>;
+        if (e.category === "MILESTONE") {
+          return <div key={i} onClick={() => onMilestoneClick(e)}>{content}</div>;
+        }
+        return <div key={i}>{content}</div>;
       })}
 
       {overflow > 0 && (
