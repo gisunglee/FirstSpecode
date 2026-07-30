@@ -2,19 +2,21 @@
 
 SPECODE 서버의 PENDING AI 태스크를 가져와 Claude 가 직접 처리하고 결과를 서버에 저장한다.
 
-## 인자 — 3종류
+## 인자 — 4종류
 
-| 인자     | 의미                                | 서버 쿼리                         |
-| -------- | ----------------------------------- | --------------------------------- |
-| `SPEC`   | **개발(IMPLEMENT) 제외** 전체 유형  | `excludeTaskType=IMPLEMENT`       |
-| `IMP`    | **개발(IMPLEMENT) 만**               | `taskType=IMPLEMENT`              |
-| `STATUS` | **점검만** — 본문 미조회, 큐 카운트·키 정보만 출력 후 종료 | `statusOnly=true` |
+| 인자              | 의미                                | 서버 쿼리                         |
+| ----------------- | ----------------------------------- | --------------------------------- |
+| `SPEC`            | **개발(IMPLEMENT) 제외** 전체 유형  | `excludeTaskType=IMPLEMENT`       |
+| `IMP`             | **개발(IMPLEMENT) 만**               | `taskType=IMPLEMENT`              |
+| `TASK <taskId>`   | **특정 태스크 1건만** 지정 — FIFO 순서 무시 | `taskId={taskId}`         |
+| `STATUS`          | **점검만** — 본문 미조회, 큐 카운트·키 정보만 출력 후 종료 | `statusOnly=true` |
 
-- 대소문자 무관
-- 인자는 반드시 1개. 0개·2개 이상·다른 값이면 **사용법 안내만 출력하고 종료**(서버 호출 금지)
+- 대소문자 무관 (단, `TASK` 뒤의 taskId 값 자체는 원문 그대로 사용 — UUID 대소문자 보존)
+- `SPEC`/`IMP`/`STATUS` 는 인자 1개, `TASK`는 인자 2개(`TASK` + taskId). 그 외 개수·다른 값이면 **사용법 안내만 출력하고 종료**(서버 호출 금지)
 - `SPEC` 는 taskType 을 나열하지 않고 "구현만 제외" 방식이라, 향후 taskType 이 추가돼도 자동으로 포함된다
-- 🛡 **IMPLEMENT 안전 가드**: 구현 태스크는 인자가 정확히 `IMP` 일 때만 조회된다
+- 🛡 **IMPLEMENT 안전 가드**: 구현 태스크는 인자가 정확히 `IMP` 또는 `TASK <구현 태스크 id>` 일 때만 조회된다
 - 🔍 **STATUS 모드**: 키가 의도대로 동작 중인지, 본인 큐가 몇 건 있는지 빠르게 확인. 태스크 처리 안 함.
+- 🎯 **TASK 모드**: AI 태스크 상세 팝업 상단에 표시되는 태스크 ID(UUID)를 그대로 지정. 순서가 중요한 구현 태스크를 급하게 하나만 먼저 돌리고 싶을 때, 또는 요청 순서를 잘못 넣었을 때 사용. 지정한 태스크가 본인 소유가 아니거나 PENDING 이 아니면(이미 처리됨 등) 빈 결과로 조용히 종료된다.
 
 ---
 
@@ -22,20 +24,24 @@ SPECODE 서버의 PENDING AI 태스크를 가져와 Claude 가 직접 처리하�
 
 ### 0단계: 인자 검증
 
-`$ARGUMENTS` 를 공백으로 토큰 분리 → 전부 대문자 변환 → 토큰 1개이고 값이 `SPEC` / `IMP` / `STATUS` 중 하나인지 확인.
+`$ARGUMENTS` 를 공백으로 토큰 분리.
 
-부적합하면 아래 **사용법 안내**만 출력하고 종료.
+- 토큰 1개 + 값(대문자 변환)이 `SPEC` / `IMP` / `STATUS` 중 하나 → 해당 모드로 진행
+- 토큰 2개 + 첫 토큰(대문자 변환)이 `TASK` + 두 번째 토큰이 비어있지 않음 → **TASK 모드**, 두 번째 토큰을 `taskId` 로 사용 (원문 그대로, 대소문자 변환 금지 — UUID)
+- 그 외(0개·3개 이상·다른 값) → 아래 **사용법 안내**만 출력하고 종료(서버 호출 금지)
 
 ```
-⚠️ 사용법: /run-ai-tasks <SPEC|IMP|STATUS>
+⚠️ 사용법: /run-ai-tasks <SPEC|IMP|STATUS|TASK taskId>
 
-  SPEC    개발(IMPLEMENT) 제외한 모든 AI 태스크 처리
-  IMP     개발(IMPLEMENT) 태스크만 처리
-  STATUS  점검만 — 키 정보 + 큐 카운트만 표시 후 종료 (태스크 처리 안 함)
+  SPEC        개발(IMPLEMENT) 제외한 모든 AI 태스크 처리
+  IMP         개발(IMPLEMENT) 태스크만 처리
+  TASK <id>   특정 태스크 1건만 지정 실행 (순서 무시, 본인 소유만)
+  STATUS      점검만 — 키 정보 + 큐 카운트만 표시 후 종료 (태스크 처리 안 함)
 
 예시:
   /run-ai-tasks SPEC
   /run-ai-tasks IMP
+  /run-ai-tasks TASK 6bbb9baf-2318-4a58-ade8-803cfd5476ef
   /run-ai-tasks STATUS
 ```
 
@@ -65,13 +71,14 @@ SPECODE 서버의 PENDING AI 태스크를 가져와 Claude 가 직접 처리하�
 
 ### 2단계: 쿼리 파라미터 구성
 
-| 인자     | 쿼리                                            |
-| -------- | ----------------------------------------------- |
-| `SPEC`   | `limit=10&excludeTaskType=IMPLEMENT`            |
-| `IMP`    | `limit=10&taskType=IMPLEMENT`                   |
-| `STATUS` | `statusOnly=true`                               |
+| 인자          | 쿼리                                            |
+| ------------- | ----------------------------------------------- |
+| `SPEC`        | `limit=10&excludeTaskType=IMPLEMENT`            |
+| `IMP`         | `limit=10&taskType=IMPLEMENT`                   |
+| `TASK <id>`   | `taskId={taskId}` (limit·taskType 등 다른 필터 없음) |
+| `STATUS`      | `statusOnly=true`                               |
 
-🛡 최종 가드: 쿼리에 `taskType=IMPLEMENT` 가 들어가면 인자가 `IMP` 인지 재확인. 아니면 즉시 중단하고 사용법 안내로 폴백.
+🛡 최종 가드: 쿼리에 `taskType=IMPLEMENT` 가 들어가면 인자가 `IMP` 인지 재확인. 아니면 즉시 중단하고 사용법 안내로 폴백. (`TASK` 모드는 `taskType` 을 쓰지 않으므로 이 가드 대상 아님 — 서버가 어차피 본인 소유 PENDING 건만 돌려줌)
 
 ### 3단계: PENDING 태스크 조회
 
@@ -114,10 +121,20 @@ curl -s "{SPECODE_URL}/api/worker/tasks?{QUERY}" \
 응답의 `data.tasks` 가 비어있으면 아래 출력 후 종료.
 
 ```
-ℹ️ 처리할 태스크가 없습니다 (인자: {SPEC|IMP})
+ℹ️ 처리할 태스크가 없습니다 (인자: {SPEC|IMP|TASK <id>})
+```
+
+`TASK` 모드에서 비어있는 경우 원인 안내 한 줄 추가:
+
+```
+   * 지정한 taskId 가 PENDING 상태가 아니거나(이미 처리됨 등) 본인 소유가 아닐 수 있습니다.
 ```
 
 ### 4단계: 각 태스크 순서대로 처리
+
+사전 준비: `.claude/tmp` 디렉터리가 없으면 생성 (`mkdir -p .claude/tmp`).
+첨부 다운로드·결과 저장이 이 폴더를 사용하며, 프로젝트 루트 기준 상대경로라
+D 드라이브 유무나 OS와 무관하게 항상 존재를 보장할 수 있다.
 
 `data.tasks` 배열 순회.
 
@@ -146,9 +163,9 @@ curl -s -X PATCH "{SPECODE_URL}/api/worker/tasks/{taskId}/start" \
 ```bash
 curl -s "{SPECODE_URL}{task.attachments[i].downloadUrl}" \
   -H "X-Mcp-Key: {SPECODE_WORKER_KEY}" \
-  -o "d:/tmp/specode_task_{taskId}_{fileId}.{ext}"
+  -o ".claude/tmp/specode_task_{taskId}_{fileId}.{ext}"
 ```
-→ 이어서 `Read(file_path=d:/tmp/specode_task_{taskId}_{fileId}.{ext})`
+→ 이어서 `Read(file_path=.claude/tmp/specode_task_{taskId}_{fileId}.{ext})`
 이미지 파일은 Claude가 자동으로 시각 콘텐츠로 변환해 컨텍스트에 삽입한다 — base64 인코딩 불필요.
 
 **주의**:
@@ -168,17 +185,17 @@ curl -s "{SPECODE_URL}{task.attachments[i].downloadUrl}" \
 
 #### 4-4. 결과 저장 및 전달
 
-1. Write 로 저장: `d:/tmp/specode_result_{taskId}.md`
+1. Write 로 저장: `.claude/tmp/specode_result_{taskId}.md`
 2. `task_complete.py` 로 전송:
    ```bash
-   python .claude/commands/task_complete.py {taskId} DONE d:/tmp/specode_result_{taskId}.md
+   python .claude/commands/task_complete.py {taskId} DONE .claude/tmp/specode_result_{taskId}.md
    ```
    실패 시 `FAILED` 로 전송.
 
 ### 5단계: 임시 파일 정리
 
 ```bash
-rm -f d:/tmp/specode_result_*.md d:/tmp/specode_task_*
+rm -f .claude/tmp/specode_result_*.md .claude/tmp/specode_task_*
 ```
 
 `specode_task_*` 는 4-2b 에서 `downloadUrl` 로 내려받은 첨부 이미지 임시 파일이다.
@@ -186,7 +203,7 @@ rm -f d:/tmp/specode_result_*.md d:/tmp/specode_task_*
 ### 6단계: 결과 요약
 
 ```
-✅ 처리 완료 (인자: {SPEC|IMP})
+✅ 처리 완료 (인자: {SPEC|IMP|TASK <id>})
    성공 {n} / 실패 {m} / 전체 {total}
 ```
 
@@ -194,8 +211,9 @@ rm -f d:/tmp/specode_result_*.md d:/tmp/specode_task_*
 
 ## 주의사항 (체크리스트)
 
-- [ ] 인자 없거나 `SPEC`/`IMP` 아니면 서버 호출 금지 — 사용법만 출력
+- [ ] 인자가 `SPEC`/`IMP`/`STATUS`(1개) 또는 `TASK <id>`(2개) 형식이 아니면 서버 호출 금지 — 사용법만 출력
 - [ ] 🛡 `taskType=IMPLEMENT` 쿼리는 인자가 `IMP` 일 때만 생성
+- [ ] 🎯 `TASK` 모드는 `taskId` 만 쿼리에 싣고 다른 필터(limit/taskType 등) 추가 금지
 - [ ] 🔑 `SPECODE_WORKER_KEY` 미설정 시 사용법만 출력하고 종료 (서버 호출 금지)
 - [ ] 🔑 첫 응답 받은 직후 `data.meta` 기반 신원 안내 출력 (사용자 신원 확인용)
 - [ ] 🧠 `task.reqCn` 은 서버에서 시스템프롬프트가 합성된 완성형 — 워커가 추가 합성 금지

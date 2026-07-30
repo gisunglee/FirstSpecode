@@ -23,6 +23,7 @@ import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
+import HelpButton from "@/components/common/HelpButton";
 import {
   type AiTaskStatus,
   AI_TASK_STATUS_LABEL, AI_TASK_STATUS_BADGE, AI_TASK_TYPE_LABEL,
@@ -299,8 +300,17 @@ function AiTasksPageInner() {
   return (
     <div style={{ padding: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", position: "sticky", top: 0, zIndex: 10, minHeight: 52, background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", marginBottom: 16 }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
-          AI 태스크 목록
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+            AI 태스크 목록
+          </div>
+          <HelpButton title="/run-ai-tasks 이용법">
+            <p>PENDING 태스크를 Claude Code 워커가 대신 처리하는 커맨드입니다. 터미널에서 실행합니다.</p>
+            <p><code className="sp-code">/run-ai-tasks SPEC</code> — 구현(IMPLEMENT) 제외 전체 태스크 처리</p>
+            <p><code className="sp-code">/run-ai-tasks IMP</code> — 구현(IMPLEMENT) 태스크만 처리</p>
+            <p><code className="sp-code">/run-ai-tasks TASK &lt;taskId&gt;</code> — 특정 태스크 1건만 순서 무시하고 실행. taskId는 이 목록에서 행을 클릭해 열리는 상세 팝업 상단에 표시된 값입니다.</p>
+            <p><code className="sp-code">/run-ai-tasks STATUS</code> — 처리 없이 본인 PENDING 큐 건수만 확인</p>
+          </HelpButton>
         </div>
         {(() => {
           // 화면 useQuery 와 동일한 필터를 그대로 querystring 으로 직렬화 — 화면-엑셀 일치

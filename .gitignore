@@ -37,6 +37,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# /run-ai-tasks 워커 임시 파일 — 태스크 결과·첨부 다운로드 스크래치 공간
+.claude/tmp/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

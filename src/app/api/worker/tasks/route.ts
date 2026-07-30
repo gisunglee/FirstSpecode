@@ -19,6 +19,10 @@
  *                     향후 taskType 종류가 늘어나도 "구현만 빼기" 식 호출이 가능하도록 분리
  *                     taskType(포함)과 동시에 주면 포함 후 제외 순으로 적용
  *   refType         — 참조 유형 필터 (AREA|FUNCTION), 쉼표 복수 지원
+ *   taskId          — 특정 태스크 1건만 지정 조회. FIFO 순서 무시하고 콕 찍어서 실행할 때 사용
+ *                     (예: 구현 태스크를 요청 순서와 무관하게 급한 것부터 처리하고 싶은 경우)
+ *                     지정 시 taskType/excludeTaskType/refType/limit 은 무시됨(단건 조회라 의미 없음)
+ *                     ownerFilter 는 그대로 적용 — 본인 소유 + 자기 프로젝트가 아니면 빈 결과
  *   statusOnly      — "true" 이면 태스크 본문은 가져오지 않고 큐 카운트만 반환 (자가 점검용)
  *                     /run-ai-tasks STATUS 명령에서 사용 — 인증 정보 + 큐 통계만 필요
  *
@@ -59,6 +63,11 @@ export async function GET(request: NextRequest) {
   const taskTypes        = parseCsvParam(url.searchParams.get("taskType"));
   const excludeTaskTypes = parseCsvParam(url.searchParams.get("excludeTaskType"));
   const refTypes         = parseCsvParam(url.searchParams.get("refType"));
+
+  // [2026-07-30] 단건 지정 조회 — FIFO 순서 무시하고 특정 taskId 하나만 콕 찍어 처리.
+  // /run-ai-tasks TASK <taskId> 명령에서 사용. ownerFilter 와 AND 결합되므로
+  // 타인 소유이거나 이미 PENDING 이 아닌 taskId 를 넣어도 조회되지 않는다.
+  const taskId = url.searchParams.get("taskId");
 
   // 포함/제외 조건을 하나의 task_ty_code 필터로 합친다.
   // Prisma where 에서 같은 키를 스프레드하면 뒤 값이 앞 값을 덮어쓰므로,
@@ -117,14 +126,15 @@ export async function GET(request: NextRequest) {
           { exec_avlbl_dt: null },
           { exec_avlbl_dt: { lte: new Date() } },
         ],
+        ...(taskId ? { ai_task_id: taskId } : {}),
         ...(taskTypeWhere ? { task_ty_code: taskTypeWhere } : {}),
         ...(refTypes.length === 1  ? { ref_ty_code: refTypes[0]   } : {}),
         ...(refTypes.length >  1  ? { ref_ty_code: { in: refTypes } }   : {}),
         // 본인 요청 + 자기 프로젝트로 자동 한정 (사칭 차단)
         ...ownerFilter,
       },
-      orderBy: { req_dt: "asc" }, // FIFO — 오래된 요청부터 처리
-      take: limit,
+      orderBy: { req_dt: "asc" }, // FIFO — 오래된 요청부터 처리 (taskId 단건 조회 시엔 무의미하지만 결과에 영향 없음)
+      take: taskId ? 1 : limit,
       select: {
         ai_task_id:        true,
         prjct_id:          true,
