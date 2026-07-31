@@ -74,11 +74,16 @@ SPECODE 서버의 PENDING AI 태스크를 가져와 Claude 가 직접 처리하�
 | 인자          | 쿼리                                            |
 | ------------- | ----------------------------------------------- |
 | `SPEC`        | `limit=10&excludeTaskType=IMPLEMENT`            |
-| `IMP`         | `limit=10&taskType=IMPLEMENT`                   |
+| `IMP`         | `limit=1&taskType=IMPLEMENT`                    |
 | `TASK <id>`   | `taskId={taskId}` (limit·taskType 등 다른 필터 없음) |
 | `STATUS`      | `statusOnly=true`                               |
 
 🛡 최종 가드: 쿼리에 `taskType=IMPLEMENT` 가 들어가면 인자가 `IMP` 인지 재확인. 아니면 즉시 중단하고 사용법 안내로 폴백. (`TASK` 모드는 `taskType` 을 쓰지 않으므로 이 가드 대상 아님 — 서버가 어차피 본인 소유 PENDING 건만 돌려줌)
+
+`IMP`를 한 번에 1건만 가져오는 이유: 구현 변경 receipt가 사람의 검토를 기다리면 source
+baseline이 아직 전진하지 않는다. 다음 구현까지 연속 실행하면 두 작업의 변경 범위가 섞일
+수 있으므로, 1건 완료 후 스펙 반영함의 미결 접수를 먼저 처리한다. 스펙 편차가 0건이어도
+로컬 증거는 담당자가 확인해야 하므로 receipt가 자동으로 baseline을 전진시키지 않는다.
 
 ### 3단계: PENDING 태스크 조회
 
@@ -136,9 +141,28 @@ curl -s "{SPECODE_URL}/api/worker/tasks?{QUERY}" \
 첨부 다운로드·결과 저장이 이 폴더를 사용하며, 프로젝트 루트 기준 상대경로라
 D 드라이브 유무나 OS와 무관하게 항상 존재를 보장할 수 있다.
 
+Node.js 실행 가능 여부를 `node --version`으로 확인한다. 실패하면 태스크 시작 전
+중단하고 Node.js 설치를 안내한다. Claude Code가 동작하는 개발 환경이면 일반적으로
+이미 설치되어 있다.
+
 `data.tasks` 배열 순회.
 
-#### 4-1. 태스크 시작 (PENDING → IN_PROGRESS)
+#### 4-1. IMPLEMENT 작업 직전 source snapshot
+
+`task.taskType === "IMPLEMENT"`일 때만 실행한다.
+
+```bash
+node .claude/commands/source_snapshot.mjs capture \
+  --output ".claude/tmp/specode_source_{taskId}_before.json.gz"
+```
+
+이 스냅샷은 Git commit 여부와 관계없이 현재 텍스트 소스의 경로·hash·내용을 로컬에
+보관한다. `.env`, 키/인증서, `.git`, `node_modules`, 빌드 결과물은 도구가 제외한다.
+캡처 실패 시 태스크 시작 API를 호출하지 말고 PENDING 상태로 둔 채 사용자에게 보고한다.
+
+#### 4-1b. 태스크 시작 (PENDING → IN_PROGRESS)
+
+source snapshot이 필요 없는 태스크거나 IMPLEMENT snapshot이 성공한 다음 호출한다.
 
 ```bash
 curl -s -X PATCH "{SPECODE_URL}/api/worker/tasks/{taskId}/start" \
@@ -178,24 +202,128 @@ curl -s "{SPECODE_URL}{task.attachments[i].downloadUrl}" \
 서버측 시스템프롬프트가 출력 형식·등급 기준·절대 규칙을 모두 정의하고 있으므로, 워커는 추가 지침을 덧붙이지 않는다.
 
 예외 분기:
-- **IMPLEMENT** — 단위업무 개발: `req_cn` 의 지시에 따라 실제 코드 작성·수정 진행
+- **IMPLEMENT** — 단위업무 개발: `req_cn` 의 지시에 따라 실제 코드 작성·수정 진행.
+  `task.implementationSnapshots`는 구현요청 당시 단위업무·화면·영역·기능 설명 원문과
+  hash다. 구현 후 스펙 편차 후보를 만들 때만 사용하고, 현재 SPECODE 값을 새로 추측하지 않는다.
 - **CUSTOM**    — `task.reqCn` 을 그대로 처리
+- **CUSTOM + refType=SPEC_RECONCILIATION** — 서버가 전달한 증거·설계 컨텍스트를
+  분석하되 `task.reqCn`에 명시된 JSON 구조만 출력한다. 코드 fence나 앞뒤 설명을
+  붙이지 않는다. 완료 API가 대상 소속·허용 필드·before 원문/hash를 다시 검증한 뒤
+  receipt 후보로 저장하므로 형식이 다르면 분석 실패로 남는다.
+- **CUSTOM + refType=SPEC_RECONCILIATION_ROUTER** — 변경 파일을 설계 scope에만
+  연결한다. proposal을 만들지 않고 `task.reqCn`의 assignments JSON만 반환한다.
+- **CUSTOM + refType=SPEC_RECONCILIATION_BATCH** — 해당 배치의 제한된 Diff와 설계
+  대상만 비교한다. `task.reqCn`의 proposals JSON만 반환한다.
 
 결과는 마크다운으로 작성. 첨부 이미지가 있다면 4-2b 에서 이미 멀티모달 컨텍스트에 주입되어 있다.
+
+#### 4-3b. IMPLEMENT 작업 직후 source Diff와 스펙 편차 제출
+
+`task.taskType === "IMPLEMENT"`일 때만 다음을 순서대로 수행한다.
+
+1. 작업 직후 snapshot과 태스크 단위 Diff를 만든다.
+
+   ```bash
+   node .claude/commands/source_snapshot.mjs capture \
+     --output ".claude/tmp/specode_source_{taskId}_after.json.gz"
+
+   node .claude/commands/source_snapshot.mjs compare \
+     ".claude/tmp/specode_source_{taskId}_before.json.gz" \
+     ".claude/tmp/specode_source_{taskId}_after.json.gz" \
+     --output ".claude/tmp/specode_source_{taskId}_diff.json"
+   ```
+
+2. `specode_source_{taskId}_diff.json`의 전체 변경 증거를 넣어
+   `.claude/tmp/specode_receipt_{taskId}.json`을 만든다. 이 시점에는 전체를 한 번에
+   분석하거나 proposal을 직접 만들지 않는다. 서버가 구현요청 당시 snapshot만 대상으로
+   작은 분석 배치를 만들고, 결과를 검증·병합한다.
+
+   JSON 형식:
+
+   ```json
+   {
+     "repoKey": "diff.json의 repoKey",
+     "branchName": "diff.json의 branchName",
+     "checkpointType": "SOURCE_MANIFEST",
+     "baseCheckpoint": "diff.json의 baseCheckpoint",
+     "headCheckpoint": "diff.json의 headCheckpoint",
+     "headStable": true,
+     "evidenceTrust": "LOCAL_AGENT_ATTESTED",
+     "evidenceVerify": "ATTESTED",
+     "diffHash": "diff.json의 diffHash",
+     "sourceEvidence": {
+       "snapshotTool": "source_snapshot.mjs/v2",
+       "changedFiles": ["diff.changes의 모든 path"],
+       "files": [
+         {
+           "path": "diff.changes[].path",
+           "status": "diff.changes[].status",
+           "patch": "diff.changes[].patch"
+         }
+       ],
+       "securityFiltered": true
+     },
+     "analysisScope": {
+       "changedPaths": ["diff.changes의 모든 path"],
+       "includeProjectIndex": false,
+       "autoBatch": true
+     },
+     "summary": "구현 결과 자동 비교 대기",
+     "analysisVersion": "implementation/auto-batch-v1",
+     "proposals": []
+   }
+   ```
+
+   `sourceEvidence.files`에는 변경을 하나도 버리지 않고 전부 넣는다. 구현요청 receipt의
+   설계 대상은 서버가 `implementationSnapshots`에서 제한하므로 현재 스펙을 새로 읽어
+   섞지 않는다. `diff.changedFileCount === 0`이면 `analysisScope`를 생략한다. 이 경우에는
+   자동 배치를 만들지 않고 사람이 무변경 증거만 확인한다.
+
+3. 태스크 완료 전 receipt를 먼저 제출한다.
+
+   ```bash
+   node .claude/commands/submit_implementation_receipt.mjs \
+     {taskId} ".claude/tmp/specode_receipt_{taskId}.json"
+   ```
+
+   응답의 `batchAnalysis.batches`가 자동 비교의 최초 작업 목록이다. receipt는
+   `ANALYZING`으로 검토함에 남고, 배치가 모두 끝나면 `NEEDS_REVIEW`가 된다.
+
+   제출 실패 시 `task_complete.mjs`를 호출하지 않는다. 태스크와 로컬 증거 파일을
+   IN_PROGRESS 상태로 남기고 오류를 보고한다. receipt 제출 성공 후에만 4-4로 진행한다.
 
 #### 4-4. 결과 저장 및 전달
 
 1. Write 로 저장: `.claude/tmp/specode_result_{taskId}.md`
-2. `task_complete.py` 로 전송:
+2. `task_complete.mjs` 로 전송:
    ```bash
-   python .claude/commands/task_complete.py {taskId} DONE .claude/tmp/specode_result_{taskId}.md
+   node .claude/commands/task_complete.mjs {taskId} DONE .claude/tmp/specode_result_{taskId}.md
    ```
    실패 시 `FAILED` 로 전송.
+
+#### 4-5. 새로 생긴 정합성 배치 연속 처리
+
+`SPEC` 모드는 최초 배열을 한 번 처리하고 끝내지 않는다. Router 완료 시 같은 receipt의
+분석 배치가 새로 생성되므로 남은 최대 처리 건수 안에서 PENDING 큐를 다시 조회한다.
+
+`IMP` 모드는 구현 태스크 완료 뒤, 방금 제출한 receipt의
+`SPEC_RECONCILIATION_ROUTER`/`SPEC_RECONCILIATION_BATCH` 태스크만 같은 방식으로 처리한다.
+다른 receipt의 SPEC 태스크까지 확장하지 않는다. `reqSnapshotData.receiptId`로 소속을
+확인한다.
+
+- 조회 → start → `reqCn` 그대로 실행 → JSON complete → 재조회 순서
+- 한 배치 실패 시 나머지는 계속 처리
+- 한 명령에서 최대 100개 또는 설정된 한도까지만 처리
+- 남은 태스크가 있으면 review URL과 남은 수를 보고
+- 모든 배치 완료 시 서버가 자동 병합; 다른 제안은 `BATCH_CONFLICT`로 남김
 
 ### 5단계: 임시 파일 정리
 
 ```bash
-rm -f .claude/tmp/specode_result_*.md .claude/tmp/specode_task_*
+rm -f .claude/tmp/specode_result_*.md \
+      .claude/tmp/specode_task_* \
+      .claude/tmp/specode_source_* \
+      .claude/tmp/specode_receipt_*.json
 ```
 
 `specode_task_*` 는 4-2b 에서 `downloadUrl` 로 내려받은 첨부 이미지 임시 파일이다.
@@ -216,8 +344,13 @@ rm -f .claude/tmp/specode_result_*.md .claude/tmp/specode_task_*
 - [ ] 🎯 `TASK` 모드는 `taskId` 만 쿼리에 싣고 다른 필터(limit/taskType 등) 추가 금지
 - [ ] 🔑 `SPECODE_WORKER_KEY` 미설정 시 사용법만 출력하고 종료 (서버 호출 금지)
 - [ ] 🔑 첫 응답 받은 직후 `data.meta` 기반 신원 안내 출력 (사용자 신원 확인용)
+- [ ] 태스크 시작 전 `node --version` 확인
 - [ ] 🧠 `task.reqCn` 은 서버에서 시스템프롬프트가 합성된 완성형 — 워커가 추가 합성 금지
-- [ ] curl 은 조회·시작에만 사용, 결과 전송은 반드시 `task_complete.py` (한글 UTF-8 보장)
+- [ ] IMPLEMENT는 소스 수정 전/후 `source_snapshot.mjs`를 실행해 커밋 없는 변경도 태스크 단위로 분리
+- [ ] IMPLEMENT의 스펙 후보는 `implementationSnapshots`의 원문/hash를 그대로 기준으로 사용
+- [ ] 근거 없는 추측은 source fact에 쓰지 않고 inference/confidence로 분리
+- [ ] IMPLEMENT는 receipt 제출 성공 후에만 `task_complete.mjs ... DONE` 호출
+- [ ] curl 은 조회·시작에만 사용, 결과 전송은 반드시 `task_complete.mjs` (한글 UTF-8 보장)
 - [ ] 한 태스크 실패해도 다음 태스크 계속 처리
 - [ ] 🖼 `task.attachments.length > 0` 태스크는 4-2b 를 반드시 수행 (첨부 이미지 무시 금지)
 - [ ] 이미지 Read 또는 다운로드 실패 시 해당 태스크는 FAILED 로 전송

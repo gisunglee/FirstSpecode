@@ -209,6 +209,7 @@ export default function LNB() {
         icon: "g_ai",
         items: [
           { label: "AI 태스크",     href: p("/ai-tasks"),           icon: "i_aiTask" },
+          { label: "스펙 반영함",   href: p("/spec-reconciliations"), icon: "i_changeLog" },
           { label: "기획 가져오기", href: p("/planning/ai-import"), icon: "i_planImport" },
           { label: "설계 가져오기", href: p("/design-import"),      icon: "i_designImport" },
         ],

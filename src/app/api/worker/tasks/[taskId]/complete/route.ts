@@ -28,6 +28,12 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { requireWorkerAuth } from "../../../_lib/auth";
+import { applyReconciliationAnalysisResult } from "@/lib/spec-reconciliation/applyAnalysisResult";
+import {
+  applyReconciliationBatchResult,
+  applyReconciliationRouterResult,
+  markReconciliationBatchFailed,
+} from "@/lib/spec-reconciliation/batchResults";
 
 type RouteParams = { params: Promise<{ taskId: string }> };
 
@@ -65,6 +71,32 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     //   같은 트랜잭션이라 task 의 ref_ty_code/ref_id 가 일관됨.
     //   ref 갱신 실패 시 트랜잭션 롤백 → task 상태 전환도 함께 되돌아감 (상태 불일치 차단).
     const txResult = await prisma.$transaction(async (tx) => {
+      const task = await tx.tbAiTask.findFirst({
+        where: {
+          ai_task_id: taskId,
+          task_sttus_code: "IN_PROGRESS",
+          prjct_id: auth.prjctId,
+          req_mber_id: auth.mberId,
+        },
+        select: { ref_ty_code: true, ref_id: true },
+      });
+      if (
+        task &&
+        ["SPEC_RECONCILIATION_ROUTER", "SPEC_RECONCILIATION_BATCH"].includes(
+          task.ref_ty_code,
+        )
+      ) {
+        // 전체 재계획과 완료 처리가 같은 lock 순서(receipt → task)를 사용해야
+        // SUPERSEDED 경계에서 deadlock이나 이전 run 결과 재활성화가 생기지 않는다.
+        await tx.$queryRaw(Prisma.sql`
+          SELECT receipt.receipt_id
+          FROM tb_sp_impl_receipt receipt
+          JOIN tb_sp_reconcile_batch batch
+            ON batch.receipt_id = receipt.receipt_id
+          WHERE batch.batch_id = ${task.ref_id}
+          FOR UPDATE OF receipt
+        `);
+      }
       const updated = await tx.tbAiTask.updateMany({
         where: {
           ai_task_id:      taskId,
@@ -83,15 +115,26 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         return { ok: false as const };
       }
 
-      // DONE 성공 건에만 ref 엔티티로 결과 전파.
-      // FAILED 의 resultCn 은 에러 메시지일 가능성이 높아 사용자 컨텐츠 컬럼 오염 방지.
-      if (status === "DONE") {
-        const task = await tx.tbAiTask.findUnique({
-          where:  { ai_task_id: taskId },
-          select: { ref_ty_code: true, ref_id: true },
-        });
-        if (task) {
-          await applyResultToRef(tx, task.ref_ty_code, task.ref_id, trimmedResult);
+      if (task) {
+        // DONE은 구조화 결과를 ref에 반영한다. FAILED는 일반 컨텐츠를 오염시키지 않고
+        // 정합성 batch 상태에만 실패 원인을 기록한다.
+        if (status === "DONE") {
+          await applyResultToRef(
+            tx,
+            task.ref_ty_code,
+            task.ref_id,
+            trimmedResult,
+          );
+        } else if (
+          ["SPEC_RECONCILIATION_ROUTER", "SPEC_RECONCILIATION_BATCH"].includes(
+            task.ref_ty_code,
+          )
+        ) {
+          await markReconciliationBatchFailed(
+            tx,
+            task.ref_id,
+            trimmedResult || "AI Worker가 배치 분석을 실패 처리했습니다.",
+          );
         }
       }
 
@@ -177,6 +220,18 @@ async function applyResultToRef(
           mdfcn_dt: new Date(),
         },
       });
+      return;
+    }
+    case "SPEC_RECONCILIATION": {
+      await applyReconciliationAnalysisResult(tx, refId, result);
+      return;
+    }
+    case "SPEC_RECONCILIATION_ROUTER": {
+      await applyReconciliationRouterResult(tx, refId, result);
+      return;
+    }
+    case "SPEC_RECONCILIATION_BATCH": {
+      await applyReconciliationBatchResult(tx, refId, result);
       return;
     }
   }

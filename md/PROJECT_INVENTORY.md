@@ -52,6 +52,7 @@
 | | 화면 | `/projects/{id}/screens` | |
 | | 영역 | `/projects/{id}/areas` | Excalidraw 와이어프레임 |
 | | 기능 | `/projects/{id}/functions` | 컬럼 매핑 포함 |
+| | 스펙 반영함 | `/projects/{id}/spec-reconciliations` | 구현 편차·후속 source 변경 검토 |
 | | DB 테이블 | `/projects/{id}/db-tables` | |
 | **테스트** | 단위 테스트 명세서 | `/projects/{id}/test-specs?kind=UNIT` | |
 | | 통합 테스트 명세서 | `/projects/{id}/test-specs?kind=INTEGRATION` | |
@@ -123,6 +124,7 @@
 | `api/admin/*` | `/api/admin/users`, `/projects`, `/audit`, `/batch/*`, `/cleanup/*`, `/docs/*`, `/support-session/*` | SUPER_ADMIN 전용 |
 | `api/docs/*` | `/api/docs/tree`, `/[section]/[page]` | Docs Hub 공개 조회(사용자 뷰어) |
 | `api/worker/*` | `/api/worker/tasks`, `/[taskId]/start`, `/complete` | 외부 AI 워커가 AI 태스크를 pull/complete하는 채널 |
+| `api/integrations/*` | `/api/integrations/source-repositories/[provider]/webhook` | 서명된 GitHub PR/GitLab MR 자동 접수 |
 | `api/mcp` | `/api/mcp` | **HTTP MCP 엔드포인트** — MCP 클라이언트가 붙는 단일 채널 |
 | `api/diff-test/*` | — | 내부 프롬프트 diff 실험 도구 |
 
@@ -134,6 +136,8 @@ unit-works / screens / areas / functions / db-tables      ← 설계 단계 계�
 col-mappings, col-mapping-groups                           ← 기능-컬럼 매핑
 ai-tasks                                                    ← AI 태스크 큐 (요청/재시도/취소/거절/결과파일)
 impl-request/{build,preview,pre-impl,submit}                ← 구현요청 팝업 전용 API (페이지 아님)
+source-repositories, source-baselines                       ← Git provider 연결과 source 확정점
+impl-receipts, spec-reconciliations                         ← 구현 변경 접수·분석·검토·CI gate
 design-changes, design-history                               ← 설계 변경 이력(자동 추적)
 reviews                                                       ← 리뷰 요청/코멘트
 members, invitations                                          ← 멤버/초대
@@ -153,7 +157,7 @@ test-specs                                                             ← 테�
 
 ## 4. 현재 DB 핵심 테이블 `[CURRENT]`
 
-**단일 진실 소스는 `prisma/schema.prisma`다** (75개 모델, 2026-07-30 커밋 기준). 아래는
+**단일 진실 소스는 `prisma/schema.prisma`다.** 모델 수는 기능 추가에 따라 바뀌므로 아래 목록과 스키마를 함께 확인한다.
 접두어별로 그룹화한 정리본이며, 각 테이블의 상세 컬럼은 스키마 파일에서 직접 확인할 것.
 `.claude/database/a.TableScript.md`는 컬럼 레벨 설명이 상세하지만 일부 테이블(예:
 `tb_wr_*`, `tb_qa_*` 등)이 누락되어 있어 갱신이 늦을 수 있다 — 표에 없는 테이블을 찾을 땐
@@ -170,7 +174,7 @@ test-specs                                                             ← 테�
 | 업무일지/리포트 (`tb_wr_`) | `tb_wr_work_log`, `tb_wr_work_log_item`, `tb_wr_weekly_report`, `tb_wr_issue` |
 | 테스트/품질 (`tb_qa_`) | `tb_qa_check_master`, `tb_qa_test_spec`, `tb_qa_test_spec_uw`, `tb_qa_test_spec_screen`, `tb_qa_test_case`, `tb_qa_test_round`, `tb_qa_test_result`, `tb_qa_defect`, `tb_qa_evidence` |
 | 표준 가이드 (`tb_sg_`) | `tb_sg_std_guide` |
-| 특수목적 (`tb_sp_`) | `tb_sp_diff_test_master`/`tb_sp_diff_test_node`(diff 실험), `tb_sp_impl_snapshot`(구현요청 스펙 스냅샷, `PROJECT_OVERVIEW.md` §4 참조) |
+| 특수목적 (`tb_sp_`) | `tb_sp_diff_test_master`/`tb_sp_diff_test_node`(diff 실험), `tb_sp_impl_snapshot`(구현요청 스펙 스냅샷), `tb_sp_source_repository`, `tb_sp_source_baseline`, `tb_sp_impl_receipt`, `tb_sp_reconcile_batch`(자동 비교 컨텍스트 배치), `tb_sp_reconcile_item`, `tb_sp_spec_source_link`(UW-00036 source 정합성) |
 
 ### 폐기된 테이블 `[DEPRECATED]`
 - **`tb_rq_baseline_snapshot`** — 과거 요구사항 "베이스라인 확정" 기능에서 사용되던
@@ -187,7 +191,7 @@ test-specs                                                             ← 테�
 파라미터/필수여부/허용값)를 바꾸면 반드시 이 파일도 같이 수정한다(`.claude/CLAUDE.md`
 MCP 동기화 규칙).
 
-### 5-1. 도구 카테고리 (총 37개, `register-tools.ts` 파일 헤더 기준)
+### 5-1. 도구 카테고리 (`register-tools.ts`가 단일 진실 소스)
 | 카테고리 | 도구 |
 |---|---|
 | 프로젝트 | `list_projects`, `get_project`, `list_members` |
@@ -201,6 +205,8 @@ MCP 동기화 규칙).
 | 설계-기능 | `list_functions`, `get_function`, `create_function`, `update_function` |
 | 설계-트리 | `get_design_tree` (배치 조회 — 단위업무 ID 1~20개 필수, "전체 조회" 미지원) |
 | DB | `list_db_tables`, `get_db_table`, `get_db_table_usage`, `get_db_column_usage` |
+| 스펙 정합성 | `get_source_baselines`, `get_reconciliation_context`, `submit_implementation_receipt`, `submit_maintenance_change`, `submit_provider_verified_change`, `list_spec_reconciliations`, `get_spec_reconciliation`, `queue_reconciliation_analysis`, `retry_reconciliation_batch`, `confirm_reconciliation_resolution`, `check_reconciliation_gate` |
+| 워커 배포 | `get_worker_command_files` |
 
 ### 5-2. 의도적으로 제공하지 않는 것 `[POLICY]`
 - **DELETE 미지원**: MCP에서는 어떤 엔티티도 삭제할 수 없다. AI가 한 번의 잘못된 호출로
@@ -230,7 +236,7 @@ MCP 동기화 규칙).
 사용자가 자기 프로젝트에서 만드는 `UnitWork`(§2 트리의 데이터, `tb_ds_unit_work`)와는
 적용 대상이 다르다 — 자세한 구분은 `PROJECT_OVERVIEW.md` §3 참조.
 
-원본: `.claude/biz/A.단위업무.md` (전체 35개 단위업무 및 화면 매핑). PRD 본문은
+원본: `.claude/biz/A.단위업무.md` (전체 36개 단위업무 및 화면 매핑). PRD 본문은
 `/md/prd/UW-XXXXX_단위업무명.md` (예: `UW-00035_시스템공통레이아웃.md`) — **개발 착수 전
 필독**.
 
@@ -242,6 +248,7 @@ MCP 동기화 규칙).
 | 설계 | UW-00020~00026 | 화면/영역/기능 CRUD, AI 태스크 관리, 설계트리, 워크스페이스 AI, 피드백 알림 |
 | AI/표준가이드 | UW-00027~00034 | 일괄설계(BulkDesign), 요구사항 허브, 설계변경이력, 표준가이드 CRUD/분류/검토/검색 |
 | 공통 | UW-00035 | 시스템 공통 레이아웃(GNB/LNB/StatusBar) |
+| 스펙 정합성 | UW-00036 | 구현 편차·후속 source 변경 수집, 사람 검토, 스펙/소스 현행화 |
 
 **참고**: 위 목록은 "UW PRD 스코프"이며 실제 코드의 메뉴 명칭(§1)과 1:1 대응하지 않는
 경우가 있다(예: WBS/캘린더/업무일지/리더리포트/PM보드 등은 이후 개편으로 추가된 화면 —

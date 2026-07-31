@@ -79,6 +79,12 @@
 | `db.standard.manage` | OWNER / ADMIN | **DBA** | — |
 | `ai.request` | OWNER / ADMIN / MEMBER | — | — |
 | `ai.bulkDesign` / `.planStudio` | OWNER / ADMIN / MEMBER | — | **PRO 이상** |
+| `specReconcile.read` | OWNER / ADMIN / MEMBER / VIEWER | — | — |
+| `specReconcile.submit` | OWNER / ADMIN / MEMBER | — | — |
+| `specReconcile.review` | OWNER / ADMIN | **PM / PL** | — |
+| `specReconcile.apply` | OWNER / ADMIN | **PM / PL** | — |
+| `specReconcile.override` | OWNER / ADMIN | — | — |
+| `specReconcile.connectProvider` | OWNER / ADMIN | — | Git provider token·webhook secret 관리 |
 | `config.manage` | OWNER / ADMIN | **PM / PL** | — |
 | `apiKey.manage` | OWNER / ADMIN | — | — |
 | `code.read` / `code.write` | (read: 전체) / (write: OWNER / ADMIN) | — | — |

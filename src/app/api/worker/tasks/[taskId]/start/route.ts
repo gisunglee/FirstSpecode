@@ -35,14 +35,34 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // where 절에 상태(PENDING) + 소유권(prjct_id, req_mber_id)을 모두 박아
     // 단일 SQL 문으로 검증과 갱신을 원자적으로 수행.
     // 동시 호출 시 DB 행 락으로 단 하나만 count=1 을 받고 나머지는 0.
-    const updated = await prisma.tbAiTask.updateMany({
-      where: {
-        ai_task_id:      taskId,
-        task_sttus_code: "PENDING",
-        prjct_id:        auth.prjctId,
-        req_mber_id:     auth.mberId,
-      },
-      data: { task_sttus_code: "IN_PROGRESS" },
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.tbAiTask.updateMany({
+        where: {
+          ai_task_id:      taskId,
+          task_sttus_code: "PENDING",
+          prjct_id:        auth.prjctId,
+          req_mber_id:     auth.mberId,
+        },
+        data: { task_sttus_code: "IN_PROGRESS" },
+      });
+      if (result.count !== 1) return result;
+
+      const task = await tx.tbAiTask.findUnique({
+        where: { ai_task_id: taskId },
+        select: { ref_ty_code: true, ref_id: true },
+      });
+      if (
+        task &&
+        ["SPEC_RECONCILIATION_ROUTER", "SPEC_RECONCILIATION_BATCH"].includes(
+          task.ref_ty_code,
+        )
+      ) {
+        await tx.tbSpReconcileBatch.updateMany({
+          where: { batch_id: task.ref_id, ai_task_id: taskId },
+          data: { batch_sttus_code: "ANALYZING", mdfcn_dt: new Date() },
+        });
+      }
+      return result;
     });
 
     if (updated.count === 1) {

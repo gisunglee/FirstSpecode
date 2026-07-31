@@ -46,6 +46,8 @@ export type WorkerAuth = {
   apiKeyId:   string;
   // 응답 메타에 노출 — 사용자가 어떤 키로 동작 중인지 즉시 인지하도록
   lastUsedAt: Date | null;
+  role:       string;
+  job:        string | null;
 };
 
 /**
@@ -122,7 +124,11 @@ export async function requireWorkerAuth(
   // 키 발급 시점에는 멤버였더라도 운영 중 변경되면 그 시점부터 거부.
   const membership = await prisma.tbPjProjectMember.findUnique({
     where:  { prjct_id_mber_id: { prjct_id: mcpKey.prjct_id, mber_id: mcpKey.mber_id } },
-    select: { mber_sttus_code: true },
+    select: {
+      mber_sttus_code: true,
+      role_code: true,
+      job_title_code: true,
+    },
   });
   if (!membership || membership.mber_sttus_code !== "ACTIVE") {
     return apiError(
@@ -162,5 +168,7 @@ export async function requireWorkerAuth(
     keyName:    mcpKey.key_nm,
     apiKeyId:   mcpKey.api_key_id,
     lastUsedAt: mcpKey.last_used_dt,
+    role:       membership.role_code,
+    job:        membership.job_title_code,
   };
 }

@@ -1,12 +1,36 @@
 # SPECODE 구현 변경 수집 및 스펙 정합성 확정 설계안
 
-> 문서 상태: `DRAFT — 사용자·Claude 공동 검토용`  
+> 문서 상태: `IMPLEMENTED — 전체 설계 구현 및 검증 완료`
 > 작성일: 2026-07-31  
-> 구현 상태: 이 문서의 제안 기능은 아직 구현되지 않았다.  
+> 구현 상태: 유형 A/B, 4계층 적용, 검토·rollback, provider/webhook/CI gate까지 완료.
 > 검토 반영: 2026-07-31 Claude 1차 피드백 반영 — 영속 source baseline, 증거 검증,
 > 비-Git 경로, 1단계 MVP 종료 방식, `PRE_IMPL` 공존 규칙 보완  
 > 목적: SPECODE로 설계한 뒤 구현 과정 또는 구현 완료 후 발생한 소스 변경을 다시
 > SPECODE의 단위업무·화면·영역·기능 설계에 안전하고 쉽게 반영하는 방법을 정의한다.
+
+---
+
+## 구현 상태 — 2026-07-31
+
+구현 완료:
+
+- 유형 A `/run-ai-tasks IMP`와 유형 B `/sync-specode [UW-XXXXX]`
+- commit·working tree DRAFT·비-Git content-addressed manifest
+- source repository/baseline/receipt/item/spec-source link 전체 모델
+- 단위업무·화면·영역·기능 설명의 hash 적용과 3-way merge
+- 여섯 가지 결정, 보완 source 재확인, 제한 일괄 적용, 적용 rollback
+- 증거 확인과 source baseline 전진의 원자적 낙관적 잠금
+- GitHub/GitLab provider 검증, 서명 PR/MR webhook, CI warning gate
+- 설계 상세의 미반영 변경 배지
+- MCP와 worker 명령 배포
+
+검증 완료:
+
+- additive DB migration 적용
+- `npm run test:spec-reconciliation`
+- `npm run test:spec-reconciliation:db` (실제 DB transaction 후 rollback)
+- `npm run typecheck`
+- `npm run build`
 
 ---
 
@@ -84,9 +108,9 @@ C0 ──[1번 구현]──> C1 ──[2번 구현]──> C2 ──[3번 구�
 
 ---
 
-## 2. 현재 SPECODE에서 확인된 기반과 한계
+## 2. 구현 착수 시점 SPECODE에서 확인된 기반과 한계
 
-### 2-1. 재사용 가능한 현재 기반 `[CURRENT]`
+### 2-1. 재사용 가능한 기존 기반 `[구현 착수 전 기준]`
 
 1. 구현요청 `submit`은 `tb_ai_task`를 만들고, 요청 당시 단위업무·화면·영역·기능의 설명
    원문과 해시를 `tb_sp_impl_snapshot`에 저장한다.
@@ -100,7 +124,7 @@ C0 ──[1번 구현]──> C1 ──[2번 구현]──> C2 ──[3번 구�
 6. HTTP MCP(`/api/mcp`)를 통해 외부 Claude Code·Codex가 SPECODE 데이터를 조회·수정할
    수 있다. 단, 현재 구현 변경 제출 도구는 없다.
 
-### 2-2. 현재 한계 `[CURRENT — 미구현]`
+### 2-2. 당시 한계 `[구현 착수 전 기준]`
 
 - 로컬 저장소의 Git Diff를 수집하지 않는다.
 - 구현요청 시작·종료 커밋을 저장하지 않는다.
@@ -598,21 +622,23 @@ PENDING
 
 ### 10-4. 1단계 MVP의 실제 종료 방식
 
-1단계는 **스펙 자동 적용을 하지 않지만 판단만 저장하고 끝내지도 않는다.** 결정별 완료
+1단계는 **안전한 구조화 변경을 제한적으로 자동 적용한다.** 첫 적용 대상은
+`tb_ds_function.func_dc` 한 필드다. 결정별 완료
 조건을 다음처럼 제공해 실제로 `CLOSED`까지 도달시킨다.
 
 | 결정 | 1단계 완료 방법 |
 |---|---|
-| `APPLY_SPEC` | 대상 설계 화면을 열어 사용자가 기존 기능으로 수정 → `반영 확인`에서 대상 필드와 `before_hash`·제안값 또는 연결된 `tb_ds_design_change`를 재조회 |
+| `APPLY_SPEC` | 현재 필드 hash가 `before_hash`와 같으면 원클릭 적용 + 변경 이력 저장. 다르면 `STALE_SPEC` |
 | `FIX_SOURCE` | 수정 commit/manifest를 같은 receipt의 보완 증거로 제출 → 해당 항목 재분석 |
 | `NO_SPEC_CHANGE` | 검토 사유를 저장하면 즉시 해결 |
 | `ACCEPT_EXCEPTION` | 사유·담당자·만료일·후속 과제를 저장하면 조건부 해결 |
 | `MODEL_GAP` | 일반 리뷰 또는 설계 개선 과제를 연결하면 해결 |
 | `DEFERRED` | 해결이 아니므로 패키지 종료를 막음 |
 
-사용자가 제안 문장을 그대로 쓰지 않고 더 나은 문장으로 수정했다면 단순 문자열 비교로
-실패시키지 않는다. 변경 이력과 최신 필드 값을 함께 보여주고 승인자가 `수동 반영 확인`을
-남긴다. 2단계부터 `APPLY_SPEC`를 낙관적 잠금이 포함된 트랜잭션으로 자동 적용한다.
+`APPLY_SPEC`는 대상 PK·필드명·전체 before/after 값·before hash를 사용한다. 클릭 시 AI를
+다시 호출하거나 문자열 전체 검색을 하지 않는다. 서버가 현재 필드의 hash를 다시 계산하고,
+일치할 때만 전체 필드 교체와 `tb_ds_design_change` 생성을 한 트랜잭션으로 수행한다.
+불일치하면 자동 병합하지 않고 `STALE_SPEC`으로 전환한다.
 
 ---
 
@@ -755,7 +781,8 @@ Unified diff와 테스트 로그는 `tb_cm_attach_file`의 다형 참조
 7. 승인자·승인 시각 기록
 8. receipt를 종료하고 `tb_sp_source_baseline`을 새 commit/manifest로 전진
 
-위 자동 적용 흐름은 **2단계 기능**이다. 1단계는 10-4의 수동 반영 확인 흐름을 사용한다.
+위 자동 적용 흐름은 **1단계부터 `FUNCTION.func_dc`에 한해 사용한다.** 2단계는 같은
+프로토콜을 단위업무·화면·영역의 허용 필드로 확장한다.
 
 ### 12-2. `PRE_IMPL`과 구분
 
@@ -1010,7 +1037,7 @@ baseline 전진에 사용하지 않고, 승인자가 원본 저장소 또는 별
 - “중요 변경 누락 0건, 검토 후보 수가 사람이 감당 가능한 수준”이라는 팀 기준을 정하고
   통과해야 1단계 DB·화면 구현에 착수한다.
 
-### 1단계 — 수동 제출 MVP
+### 1단계 — 제한적 자동 적용 MVP
 
 - `tb_sp_source_baseline`, `tb_sp_impl_receipt`, `tb_sp_reconcile_item` 세 테이블
 - 기본 저장소·브랜치의 최초 baseline 설정과 낙관적 잠금
@@ -1019,14 +1046,15 @@ baseline 전진에 사용하지 않고, 승인자가 원본 저장소 또는 별
 - AI 분석 결과를 기본 목록·상세 화면에 표시
 - 제출자가 영향 대상을 선택하고 AI가 후보를 보완
 - 별도 검토 헤더와 영속 스펙-소스 연결지도는 만들지 않음
-- 스펙 자동 적용 없이 기존 스펙 화면 수정 + `반영 확인`으로 실제 조치 완료 검증
+- `FUNCTION.func_dc` 구조화 변경의 원클릭 적용 + `before_hash` 충돌 차단
+- 적용과 `tb_ds_design_change` 생성을 같은 트랜잭션으로 처리
 - `PRE_IMPL`은 `소스 검증 없음`으로 명확히 표시하고 receipt를 닫지 못하게 함
 
-### 2단계 — 스펙 반영
+### 2단계 — 적용 대상 확장
 
-- `APPLY_SPEC` 일괄 적용
-- `before_hash` 동시성 검증
-- `tb_ds_design_change` 연결
+- 단위업무·화면·영역의 허용 필드로 구조화 patch 적용 확대
+- 겹치지 않는 변경의 3-way 병합 검토
+- 일괄 적용·rollback
 - `FIX_SOURCE`, `TEMPORARY_EXCEPTION`, `MODEL_GAP` 후속 처리
 - 정합성 확정 과정 자동화와 사용자 입력 축소
 
@@ -1059,8 +1087,8 @@ baseline 전진에 사용하지 않고, 승인자가 원본 저장소 또는 별
 5. 각 후보에 증거 신뢰등급·확인된 소스 사실·AI 추론·스펙 제안을 분리해서 보여준다.
 6. 사용자는 `스펙 반영/소스 수정/영향 없음/임시 예외/설계 모델 보완` 중 하나를 선택할
    수 있다.
-7. 자동 적용이 없어도 기존 화면에서 스펙을 수정한 뒤 `반영 확인`하거나 수정 소스를
-   재제출해 receipt를 `CLOSED`로 만들 수 있다.
+7. `FUNCTION.func_dc` 제안은 hash가 같을 때 원클릭 적용되고, 다르면 `STALE_SPEC`으로
+   안전하게 차단된다.
 8. 승인되지 않은 소스 변경이 스펙을 자동 수정하지 않는다.
 9. 승인된 스펙 변경은 변경자·근거 commit/manifest·관련 AI 태스크 또는 후속 변경
    패키지를 추적할
@@ -1164,3 +1192,73 @@ Claude는 이 문서를 요약하는 데서 끝내지 말고 다음을 비판적
 - `prisma/schema.prisma` — DB 단일 진실 소스
 - `src/lib/permissions.ts` — 권한 단일 진실 소스
 - `.claude/design/DS_TOKENS.md`, `DS_COMPONENTS.md`, `tokens.css`, `components.css`
+
+---
+
+## 22. 최종 구현 감사
+
+| 설계 항목 | 구현 결과 |
+|:----------|:----------|
+| 유형 A 구현 편차 | `/run-ai-tasks IMP` + 구현요청 snapshot + implementation receipt |
+| 유형 B 후속 수정 | `/sync-specode [UW-XXXXX]` + 영속 source baseline |
+| 커밋 없는 변경 | `WORKTREE:{manifestHash}` DRAFT, 확정 전 baseline 전진 금지 |
+| 비-Git | content-addressed gzip snapshot + `SOURCE_MANIFEST` |
+| 증거 신뢰등급 | provider 직접 검증 / local attested / user uploaded override |
+| 사실·추론·제안 분리 | receipt item 필드와 상세 화면에서 분리 표시 |
+| 영향 대상 탐색 | 사용자 범위 + 4계층 context + 확정된 source link + fallback |
+| 4계층 적용 | 중앙 target registry와 허용 필드 whitelist |
+| 스펙 충돌 | before hash, 보수적 line 3-way merge, STALE_SPEC 재분석 |
+| 사람 결정 | APPLY_SPEC / FIX_SOURCE / NO_SPEC_CHANGE / ACCEPT_EXCEPTION / MODEL_GAP / DEFERRED |
+| 일괄 적용 | 저·중위험 구현 상세/명확화만 원자적 적용 |
+| rollback | 적용 값 재검증 후 역변경 이력 + 자식 receipt 생성 |
+| baseline 동시성 | version 조건 update와 실패 시 전체 transaction rollback |
+| provider 자동 수집 | GitHub/GitLab 연결, provider compare, 서명 PR/MR webhook |
+| 품질 gate | 프로젝트별 WARN/BLOCK·차단 위험도 + CI/merge/deploy 판정 API·MCP |
+| 증거 보관 | 프로젝트별 보관일, dry-run 후 patch/content 정리, hash·판단 이력 유지 |
+| 설계 화면 피드백 | 4계층 상세 미반영 변경 배지 |
+| API·MCP 동기화 | 제출·조회·재분석·보완 확인·gate 도구 등록 |
+| 검증 | migration, domain/snapshot test, DB rollback scenario, typecheck, production build |
+
+---
+
+## 23. 자동 비교 배치 구현 확정안 (2026-07-31)
+
+### 결정
+
+- receipt는 하나만 만든다. 배치는 `tb_sp_reconcile_batch` 자식으로 저장한다.
+- receipt는 source evidence, 사람 결정, baseline 전진의 원자성 경계다.
+- batch는 LLM 컨텍스트와 재시도의 경계다.
+- 구현요청은 요청 당시 snapshot만 설계 대상으로 쓴다.
+- 후속 수정은 UW 인자가 있으면 그 UW, 없으면 프로젝트 인덱스를 사용한다.
+
+### 계획·실행·병합
+
+1. 전체 변경 파일을 받는다. 최대 5,000개를 넘으면 분할 제출을 요구한다.
+2. 확정 source link로 파일을 scope에 먼저 배정한다.
+3. 남은 파일이 여러 scope에 걸리면 compact index만 담은 router task를 만든다.
+4. 파일 30개, Diff 80,000자, 대상 100개, 설계 원문 120,000자 예산으로 분석 batch를 만든다.
+5. 60,000자를 넘는 한 파일 patch는 segment로 나누고 모든 segment를 보관한다.
+6. Worker는 router 완료 후 생성된 batch task를 재조회한다.
+7. 모든 batch가 완료되면 동일 대상 제안을 deterministic merge한다.
+8. 동일 값은 중복 제거하고 다른 값은 `BATCH_CONFLICT`로 남긴다.
+9. 사람이 충돌 제안을 선택한 뒤 기존 6가지 검토 결정을 수행한다.
+10. receipt 종료 시에만 source baseline을 한 번 전진한다.
+
+### 실패·동시성
+
+- 한 batch 실패는 완료 결과를 버리지 않고 `ANALYSIS_PARTIAL_FAILED`로 표시한다.
+- 실패 batch만 retry한다.
+- 마지막 batch의 동시 완료는 receipt row lock 뒤 상태를 다시 읽고 한 번만 병합한다.
+- 자동 분석 중에는 이전 item 결정 API를 차단한다.
+- 연결 실패 파일은 `UNMAPPED` batch로 남기며 누락하지 않는다.
+- 기존 item을 교체하는 재분석은 `replaceExisting=true`를 명시해야 한다.
+- 교체된 batch는 삭제하지 않고 `SUPERSEDED`로 남겨 AI 실행 감사 이력을 보존한다.
+
+### 구현 파일
+
+- Prisma/DDL: `prisma/schema.prisma`, `prisma/sql/2026-07-31_*spec_reconciliation.sql`
+- 계획/분할: `batchContracts.ts`, `batchPartitioner.ts`, `batchPlanner.ts`
+- 결과/병합: `batchResults.ts`
+- Worker: task start/complete API, `/run-ai-tasks`
+- UI: receipt 상세 `BatchProgressPanel`, 충돌 후보 선택 UI
+- MCP: `queue_reconciliation_analysis`, `retry_reconciliation_batch`

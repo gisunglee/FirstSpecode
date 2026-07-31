@@ -1,7 +1,34 @@
 # SPECODE 구현 변경 정합성 설계 요약
 
-> 상태: 설계 요약 — 아직 구현되지 않음  
+> 상태: 전체 설계 구현·DB 반영·검증 완료 (2026-07-31)
 > 상세 설계: [SPEC_IMPLEMENTATION_RECONCILIATION_PLAN.md](./SPEC_IMPLEMENTATION_RECONCILIATION_PLAN.md)
+
+현재 동작 범위:
+
+```text
+/run-ai-tasks IMP
+  → 커밋 없는 source 전/후 snapshot
+  → 구현요청 당시 4계층 스펙과 편차 제출
+  → 웹 스펙 반영함
+  → 단위업무·화면·영역·기능 설명 적용
+  → 설계 변경 이력 + source baseline 전진
+
+/sync-specode [UW-XXXXX]
+  → 마지막 source baseline 이후 변경 수집
+  → Git commit 또는 비-Git manifest Diff
+  → 설계 컨텍스트·연결지도 후보 비교
+  → 웹 스펙 반영함
+
+GitHub PR / GitLab MR
+  → 서명 webhook
+  → 서버 provider commit·ancestry·Diff 검증
+  → AI 분석 큐
+  → 웹 스펙 반영함
+```
+
+3-way 병합, 제한 일괄 적용, 여섯 가지 결정, 적용 rollback, provider 연결,
+미반영 설계 배지와 CI 경고 gate까지 포함한다.
+프로젝트 환경설정에서 gate `WARN/BLOCK`, 차단 위험도와 Diff 보관기간을 관리한다.
 
 ---
 
@@ -163,8 +190,8 @@ AI는 hash만 분석하지 않는다. 변경된 실제 내용을 receipt에 추�
 ```text
 M4..M5로 변경 경로 확인
   → 변경 파일의 before/after 또는 정규화된 patch 생성
-  → tb_cm_attach_file에 receipt 증거로 첨부
-  → 첨부 내용의 hash 검증
+  → 로컬 gzip snapshot과 receipt evidence JSON에 content/patch 저장
+  → evidence의 Diff hash 검증
   → AI 분석
 ```
 
@@ -181,17 +208,17 @@ M4..M5로 변경 경로 확인
 
 ## 6. 영향받은 스펙을 찾는 방법
 
-### 1단계
+### 최초 후보 탐색
 
 유형 A는 `ai_task_id + tb_sp_impl_snapshot`으로 대상을 찾는다.  
 유형 B는 제출자가 관련 단위업무·화면·영역·기능을 선택한다.  
 AI가 파일·심볼·API·테이블을 보고 추가 후보를 제안한다.
 
-영속 스펙-소스 연결지도는 요구하지 않는다.
+연결지도가 없어도 동작하며 단위업무 지정 또는 프로젝트 인덱스로 fallback한다.
 
-### 3단계
+### 확정 후 학습
 
-실제 제출 결과가 쌓이면 `tb_sp_spec_source_link`를 만든다.  
+확정된 제출 결과로 `tb_sp_spec_source_link`를 갱신한다.
 단위업무·화면·영역·기능과 파일·심볼·API·테이블을 N:M으로 연결한다.
 
 ---
@@ -391,58 +418,96 @@ sequenceDiagram
 
 ---
 
-## 14. 구현 단계
-
-### 0단계
-
-실제 변경 5~10건을 MD/JSON으로 shadow 검증한다.  
-누락률·오탐률·판단 시간을 측정한다.  
-운영 스펙과 DB는 자동 수정하지 않는다.
-
-### 1단계
-
-세 테이블과 수동 제출 UI를 만든다.
+## 14. 구현 완료 확인
 
 ```text
-tb_sp_source_baseline
-tb_sp_impl_receipt
-tb_sp_reconcile_item
+DB
+  source repository + baseline + receipt + item + source link
+
+로컬
+  /run-ai-tasks IMP
+  /sync-specode [UW-XXXXX]
+  commit 없는 WORKTREE DRAFT
+  비-Git content-addressed manifest
+
+웹
+  baseline/provider 설정
+  증거·사실·추론·Diff 확인
+  6가지 결정
+  3-way merge·제한 일괄 적용·rollback
+  최종 증거 확인·baseline 전진
+
+자동 수집
+  GitHub/GitLab provider 직접 검증
+  서명 PR/MR webhook
+  CI warning gate
+  프로젝트별 WARN/BLOCK·차단 위험도
+
+보관
+  기본 90일
+  만료 patch/content 미리보기 후 정리
+  경로·hash·checkpoint·결정 이력 유지
+
+설계 화면
+  단위업무·화면·영역·기능 미반영 변경 배지
 ```
 
-스펙은 기존 화면에서 사람이 수정한다.  
-`반영 확인`이 실제 변경을 검증한다.  
-검증이 끝나면 유형 A/B 모두 baseline을 전진시킨다.
+검증 명령:
 
-### 2단계
-
-승인된 `APPLY_SPEC`를 트랜잭션으로 자동 적용한다.  
-`before_hash`로 동시 수정을 방지한다.  
-`tb_ds_design_change`와 연결한다.
-
-### 3단계
-
-스펙-소스 연결지도를 만든다.  
-파일·심볼·API·테이블 관계를 축적한다.
-
-### 4단계
-
-GitHub/GitLab·PR·CI를 연동한다.  
-미제출 변경 경고와 선택적 merge/배포 게이트를 추가한다.
+```bash
+npm run db:migrate:spec-reconciliation
+npm run test:spec-reconciliation
+npm run test:spec-reconciliation:db
+npm run typecheck
+npm run build
+```
 
 ---
 
-## 15. 최소 API와 MCP
+## 15. 구현된 단계
+
+### 기본 수집·검토
+
+source baseline, receipt, item과 유형 A/B 제출·검토 UI를 구현했다.
+네 계층 설명 필드는 hash 검증 후 적용하며 적용과 변경 이력은 한 트랜잭션이다.
+
+### 안전한 적용
+
+겹치지 않는 최신 스펙 변경은 3-way 병합안으로 보여준다.
+낮은 위험도만 선택 일괄 적용하고 하나라도 실패하면 전부 rollback한다.
+확정 적용을 취소하면 자식 receipt를 생성해 불일치를 다시 노출한다.
+
+### 연결지도
+
+확정 evidence의 파일·심볼을 `tb_sp_spec_source_link`에 누적한다.
+다음 분석은 변경 경로로 연결 후보를 찾고, 없으면 UW 또는 프로젝트 설계 인덱스로
+fallback한다.
+
+### Provider·품질 gate
+
+GitHub/GitLab token을 source 전용 테이블에 암호화 저장한다.
+서버 검증 제출, 서명된 PR/MR webhook 자동 접수, CI warning gate를 구현했다.
+
+---
+
+## 16. API와 MCP
 
 ### API
 
 ```text
 /source-baselines
+/source-repositories
 /impl-receipts
 /impl-receipts/{receiptId}/analyze
+/impl-receipts/provider
 /spec-reconciliations
 /spec-reconciliations/{receiptId}/items/{itemId}/decision
-/spec-reconciliations/{receiptId}/items/{itemId}/confirm-resolution
+/spec-reconciliations/{receiptId}/items/{itemId}/apply
+/spec-reconciliations/{receiptId}/items/{itemId}/resolve-batch-conflict
+/spec-reconciliations/{receiptId}/batches/{batchId}/retry
+/spec-reconciliations/{receiptId}/items/{itemId}/rollback
 /spec-reconciliations/{receiptId}/verify
+/spec-reconciliations/gate
 ```
 
 ### MCP
@@ -450,8 +515,24 @@ GitHub/GitLab·PR·CI를 연동한다.
 ```text
 submit_implementation_receipt
 submit_maintenance_change
-get_reconciliation
+submit_provider_verified_change
+get_spec_reconciliation
+queue_reconciliation_analysis
+retry_reconciliation_batch
 confirm_reconciliation_resolution
+check_reconciliation_gate
+```
+
+유형 A의 실제 입구는 기존 `/run-ai-tasks`다.
+
+```text
+구현요청 스펙 snapshot 조회
+  → 작업 직전 source snapshot
+  → 소스 수정
+  → 작업 직후 source snapshot
+  → 태스크 범위 전체 Diff로 implementation receipt 제출
+  → 서버 자동 배치 분석·검증·병합
+  → 기존 task complete
 ```
 
 개발자의 최종 사용 문장은 하나다.
@@ -460,7 +541,7 @@ confirm_reconciliation_resolution
 
 ---
 
-## 16. 권한
+## 17. 권한
 
 - 조회: VIEWER 이상
 - 제출: MEMBER 이상
@@ -471,7 +552,7 @@ confirm_reconciliation_resolution
 
 ---
 
-## 17. 완료 결과
+## 18. 완료 결과
 
 이 기능을 만들면:
 
@@ -482,3 +563,28 @@ confirm_reconciliation_resolution
 - 승인되지 않은 소스가 스펙을 덮어쓰지 않는다.
 - 실제 스펙/소스 조치가 끝나야 receipt가 닫힌다.
 - 다음 변경은 갱신된 baseline부터 비교한다.
+
+---
+
+## 19. 대형 UW 자동 비교 배치
+
+이제 Diff와 스펙을 한 프롬프트에 전부 넣지 않는다.
+
+```text
+전체 Diff를 receipt 1건에 저장한다.
+  → 확정된 source link로 파일을 화면/영역 scope에 먼저 배정한다.
+  → 남은 파일이 여러 scope에 걸리면 AI router가 경로만 분류한다.
+  → 파일 30개 / Diff 80,000자 / 설계 대상 100개 / 설계 원문 120,000자 안에서 배치를 만든다.
+  → 큰 파일 patch는 60,000자 segment로 나누되 버리지 않는다.
+  → Worker가 router 완료 후 새 분석 배치를 다시 조회한다.
+  → 모든 배치가 완료되면 같은 대상의 동일 제안은 합친다.
+  → 같은 대상의 다른 제안은 BATCH_CONFLICT로 사람에게 고르게 한다.
+  → 병합된 receipt만 기존 검토·적용·baseline 확정 흐름으로 간다.
+```
+
+변경 경로는 최대 5,000개까지 받는다. 이 값은 서버 보호 상한이고, LLM 품질은 위의
+더 작은 배치 예산으로 지킨다. 연결되지 않은 파일도 `UNMAPPED` 배치에 남기므로 조용히
+누락되지 않는다.
+
+배치 하나가 실패하면 receipt는 `ANALYSIS_PARTIAL_FAILED`다. 웹이나 MCP에서 실패 배치만
+재시도한다. 완료 배치와 사람 결정을 다시 실행하지 않는다.

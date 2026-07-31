@@ -39,6 +39,12 @@ yarn-error.log*
 
 # /run-ai-tasks 워커 임시 파일 — 태스크 결과·첨부 다운로드 스크래치 공간
 .claude/tmp/
+.claude/specode/
+
+# 스펙 정합성 자동 테스트 산출물
+tmp/spec-reconciliation-tests/
+tmp/specode-test-before.json.gz
+tmp/specode-test-git-diff.json
 
 # typescript
 *.tsbuildinfo

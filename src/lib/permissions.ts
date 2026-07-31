@@ -134,6 +134,15 @@ export const PERMISSIONS = {
   "ai.bulkDesign":      { roles: ["OWNER", "ADMIN", "MEMBER"], requiresPlan: "PRO" },
   "ai.planStudio":      { roles: ["OWNER", "ADMIN", "MEMBER"], requiresPlan: "PRO" },
 
+  // ── 구현 변경 스펙 정합성 ────────────────────────────────────────
+  // 제출은 개발 멤버 이상, 검토·적용은 리딩 역할, 검증 실패 override는 관리자만 수행한다.
+  "specReconcile.read":     { roles: ["OWNER", "ADMIN", "MEMBER", "VIEWER"] },
+  "specReconcile.submit":   { roles: ["OWNER", "ADMIN", "MEMBER"] },
+  "specReconcile.review":   { roles: ["OWNER", "ADMIN"], jobs: ["PM", "PL"] },
+  "specReconcile.apply":    { roles: ["OWNER", "ADMIN"], jobs: ["PM", "PL"] },
+  "specReconcile.override": { roles: ["OWNER", "ADMIN"] },
+  "specReconcile.connectProvider": { roles: ["OWNER", "ADMIN"] },
+
   // ── 환경설정 / API 키 ────────────────────────────────────────────
   // config.manage: 환경설정 — OWNER/ADMIN 또는 PM/PL 직무 (기획·리딩 업무에서 필요)
   // apiKey.manage: 외부 AI 공급자 키(OpenAI/Anthropic 등) — OWNER/ADMIN 전용

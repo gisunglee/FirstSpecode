@@ -17,7 +17,12 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/mcp": [
       "./.claude/commands/run-ai-tasks.md",
-      "./.claude/commands/task_complete.py",
+      "./.claude/commands/task_complete.mjs",
+      "./.claude/commands/source_snapshot.mjs",
+      "./.claude/commands/submit_implementation_receipt.mjs",
+      "./.claude/commands/sync-specode.md",
+      "./.claude/commands/prepare_specode_sync.mjs",
+      "./.claude/commands/submit_maintenance_receipt.mjs",
     ],
   },
 

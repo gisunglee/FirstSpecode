@@ -40,6 +40,7 @@ import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
 import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
 import { formatEffortDays } from "@/lib/effort";
 import { useAppStore } from "@/store/appStore";
+import { UnresolvedSpecBadge } from "@/components/spec-reconciliation/UnresolvedSpecBadge";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -426,6 +427,13 @@ function FunctionDetailPageInner() {
           <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
             {isNew ? "기능 신규 등록" : `기능 편집 (${data?.displayId ?? ""})`}
           </span>
+          {!isNew ? (
+            <UnresolvedSpecBadge
+              projectId={projectId}
+              targetType="FUNCTION"
+              targetId={functionId}
+            />
+          ) : null}
         </div>
 
 

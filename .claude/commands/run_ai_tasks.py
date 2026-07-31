@@ -215,33 +215,51 @@ def main():
 
     print(f"[SPECODE AI 워커] 시작 | 서버: {SPECODE_URL} | 최대: {args.limit}건")
 
-    params = f"limit={args.limit}"
-    if args.task_type:
-        params += f"&taskType={args.task_type}"
-    if args.ref_type:
-        params += f"&refType={args.ref_type}"
-
-    try:
-        resp = worker_request("GET", f"/api/worker/tasks?{params}")
-    except RuntimeError as e:
-        print(f"[오류] 태스크 조회 실패: {e}")
-        sys.exit(1)
-
-    tasks = resp.get("data", {}).get("tasks", [])
-    count = resp.get("data", {}).get("count", 0)
-    print(f"[조회] PENDING {count}건")
-
-    if not tasks:
-        print("처리할 태스크가 없습니다.")
-        return
-
     success_count = 0
     fail_count    = 0
-    for task in tasks:
-        if process_task(task):
-            success_count += 1
-        else:
-            fail_count += 1
+    attempted_task_ids: set[str] = set()
+
+    # Router 태스크가 완료되면 같은 receipt의 분석 배치가 새 PENDING 태스크로 생긴다.
+    # 최초 조회 한 번으로 끝내지 않고 남은 처리 예산 안에서 큐를 다시 조회해야
+    # router → 분석 배치 → receipt 병합이 한 번의 worker 실행으로 이어진다.
+    while success_count + fail_count < args.limit:
+        remaining = args.limit - success_count - fail_count
+        params = f"limit={remaining}"
+        if args.task_type:
+            params += f"&taskType={args.task_type}"
+        if args.ref_type:
+            params += f"&refType={args.ref_type}"
+
+        try:
+            resp = worker_request("GET", f"/api/worker/tasks?{params}")
+        except RuntimeError as e:
+            print(f"[오류] 태스크 조회 실패: {e}")
+            if success_count + fail_count == 0:
+                sys.exit(1)
+            break
+
+        tasks = [
+            task
+            for task in resp.get("data", {}).get("tasks", [])
+            if task.get("taskId") not in attempted_task_ids
+        ]
+        count = resp.get("data", {}).get("count", 0)
+        print(f"[조회] PENDING {count}건 | 남은 처리 예산 {remaining}건")
+        if not tasks:
+            break
+
+        for task in tasks:
+            attempted_task_ids.add(task["taskId"])
+            if process_task(task):
+                success_count += 1
+            else:
+                fail_count += 1
+            if success_count + fail_count >= args.limit:
+                break
+
+    if success_count + fail_count == 0:
+        print("처리할 태스크가 없습니다.")
+        return
 
     print(f"\n[완료] 성공: {success_count}건, 실패: {fail_count}건")
 

@@ -43,6 +43,7 @@ import AiTaskFilePicker from "@/components/ui/AiTaskFilePicker";
 import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
 import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
 import { type AiTaskStatus, AI_TASK_STATUS_LABEL, AI_TASK_STATUS_DOT } from "@/constants/codes";
+import { UnresolvedSpecBadge } from "@/components/spec-reconciliation/UnresolvedSpecBadge";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -853,6 +854,13 @@ function UnitWorkDetailPageInner() {
           <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)", flexShrink: 0 }}>
             {isNew ? "단위업무 신규 등록" : `단위업무 편집 (${detail?.displayId ?? ""})`}
           </span>
+          {!isNew ? (
+            <UnresolvedSpecBadge
+              projectId={projectId}
+              targetType="UNIT_WORK"
+              targetId={unitWorkId}
+            />
+          ) : null}
         </div>
 
         {/* 우: 테스트 명세 + AI 작업 + PRD 다운로드 + 취소·저장 */}

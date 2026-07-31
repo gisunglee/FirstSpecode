@@ -41,6 +41,7 @@ import ExcalidrawDialog from "@/components/ui/ExcalidrawDialog";
 import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
 import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
 import { useAppStore } from "@/store/appStore";
+import { UnresolvedSpecBadge } from "@/components/spec-reconciliation/UnresolvedSpecBadge";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -722,6 +723,13 @@ function AreaDetailPageInner() {
           <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
             {isNew ? "영역 신규 등록" : `영역 편집 (${data?.displayId ?? ""})`}
           </span>
+          {!isNew ? (
+            <UnresolvedSpecBadge
+              projectId={projectId}
+              targetType="AREA"
+              targetId={areaId}
+            />
+          ) : null}
         </div>
 
         {/* 스페이서 */}

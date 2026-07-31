@@ -137,7 +137,7 @@ SPECODE의 핵심 데이터는 분석과 설계가 분리된 두 트리가 아�
 
 ---
 
-## 4. 구현요청(Implementation Request) — 현재 개념적 흐름과 한계 `[CURRENT]`
+## 4. 구현요청과 구현 변경 정합성 라이프사이클 `[CURRENT]`
 
 설계(§2 트리)가 실제 AI 구현으로 이어지는 유일한 경로다. **페이지가 아니라 상세 화면에서
 띄우는 공통 팝업**(`src/components/ui/ImplRequestPopup.tsx`)이며, 4개의 API가 이를
@@ -160,15 +160,44 @@ Task 트리에서 호출을 확인했다.
 상태로 갱신할 수 있다(`task_ty_code = "PRE_IMPL"` 더미 태스크로 감사 추적). 이후
 구현요청에서 해당 레이어는 NO_CHANGE로 표시된다.
 
-### 명확한 현재 한계 `[CURRENT — 미구현 범위]`
-현재 구현요청 스냅샷은 **SPECODE 내부 스펙(각 엔티티 `_dc` 필드 등)의 변경만** 추적한다.
-- **로컬 소스 코드와 스펙을 비교**하는 기능은 없다.
-- **구현 결과를 스펙에 역반영하고 정합성을 확정**하는 기능은 없다.
-- "선 구현 적용"은 스냅샷 기준선을 수동으로 갱신하는 수준이며, 실제 구현 코드를 읽어
-  검증하지 않는다.
+### 구현 변경 정합성 흐름
 
-"스펙 → 구현 → 검증 → 현행화"까지 이어지는 전체 라이프사이클은 **현재 기능이 아니라
-향후 별도 기능 기획 대상**이다 `[VISION]`.
+구현요청 이후 실제 source와 스펙의 차이는 UW-00036이 처리한다.
+
+```text
+유형 A: /run-ai-tasks IMP
+  → 구현 전/후 source Diff
+  → 요청 당시 tb_sp_impl_snapshot과 편차 분석
+
+유형 B: /sync-specode [UW-XXXXX]
+  → 프로젝트·repo·branch의 마지막 source baseline 이후 변경 분석
+
+공통
+  → 전체 Diff와 분석 범위를 receipt로 제출
+  → 서버가 연결지도 우선 + 필요 시 AI router로 화면·영역별 비교 배치 생성
+  → Worker가 router 뒤에 생긴 배치까지 재조회·분석
+  → 서버가 배치 결과 검증·중복 제거·충돌 표시
+  → 스펙 반영함에서 증거·사실·AI 추론·제안 확인
+  → 스펙 반영 / 소스 수정 / 영향 없음 / 임시 예외 / 모델 보완 / 보류
+  → 조치 검증
+  → receipt 종료와 source baseline 전진
+```
+
+Git이 없으면 source manifest를 사용한다. 미커밋 변경은 DRAFT로만 분석한다.
+GitHub/GitLab 연결은 서버가 commit·ancestry·Diff를 직접 검증하고 서명된 PR/MR
+webhook을 자동 접수할 수 있다. 단위업무·화면·영역·기능 상세에는 미반영 변경 배지가
+표시된다.
+
+대형 UW도 receipt는 한 건이다. `tb_sp_reconcile_batch`가 LLM 컨텍스트만 여러 건으로
+분리한다. 모든 배치가 완료된 뒤 receipt item을 한 번 병합하며 source baseline도 receipt가
+닫힐 때 한 번만 전진한다.
+
+"선 구현 적용"은 여전히 구현요청 snapshot만 갱신하는 복구 기능이다. source 증거를
+검증하거나 정합성 receipt를 닫거나 source baseline을 전진시키지 않는다.
+
+상세 설계와 운영 규칙은 `md/SPEC_IMPLEMENTATION_RECONCILIATION_PLAN.md`, 요약은
+`md/SPEC_IMPLEMENTATION_RECONCILIATION_SUMMARY.md`, PRD는
+`md/prd/UW-00036_구현 변경 스펙 정합성 관리.md`를 따른다.
 
 ---
 

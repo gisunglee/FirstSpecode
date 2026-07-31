@@ -147,6 +147,18 @@ export async function GET(request: NextRequest) {
         req_dt:            true,
         retry_cnt:         true,
         parent_task_id:    true,
+        // IMPLEMENT 작업자는 요청 시점 스펙과 실제 결과의 편차를 구조화해
+        // 제출해야 한다. 원문과 hash를 함께 내려야 임의의 최신 스펙이 아니라
+        // 정확히 요청 당시 기준으로 제안을 만들 수 있다.
+        implSnapshots: {
+          select: {
+            ref_tbl_nm:   true,
+            ref_id:       true,
+            content_hash: true,
+            raw_cn:       true,
+          },
+          orderBy: { creat_dt: "asc" },
+        },
       },
     });
 
@@ -204,6 +216,14 @@ export async function GET(request: NextRequest) {
         requestedAt:      t.req_dt.toISOString(),
         retryCnt:         t.retry_cnt,
         parentTaskId:     t.parent_task_id    ?? null,
+        implementationSnapshots: t.task_ty_code === "IMPLEMENT"
+          ? t.implSnapshots.map((snapshot) => ({
+              refTable:    snapshot.ref_tbl_nm,
+              refId:       snapshot.ref_id,
+              contentHash: snapshot.content_hash.trim(),
+              rawContent:  snapshot.raw_cn,
+            }))
+          : [],
         attachments:      attachmentMap.get(t.ai_task_id) ?? [],
       })),
       // 워커 클라이언트가 "지금 누구 키로, 어느 프로젝트에서" 동작 중인지
