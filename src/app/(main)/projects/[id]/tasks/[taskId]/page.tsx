@@ -97,33 +97,42 @@ function TaskDetailPageInner() {
   const { setBreadcrumb } = useAppStore();
 
   // ── 기존 과업 로드 (수정 모드) ──────────────────────────────────────────────
+  //
+  // ⚠️ queryFn 안에서 setState를 호출하지 않는다.
+  //   TanStack Query는 동일 queryKey 캐시 hit 시 queryFn을 재실행하지 않으므로
+  //   queryFn 내부 setState는 "뒤로 가기 → 동일 row 재진입" 케이스에서
+  //   폼이 빈 상태로 남는 버그를 유발한다. 요구사항 상세 페이지에서
+  //   이미 동일한 문제로 고친 이력이 있다(2026-04-24).
   const { isLoading, data: taskDetail } = useQuery({
     queryKey: ["task", projectId, taskId],
     queryFn: () =>
       authFetch<{ data: TaskDetail }>(
         `/api/projects/${projectId}/tasks/${taskId}`
-      ).then((r) => {
-        const d = r.data;
-        // content가 기존 마크다운이면 HTML로 변환 후 에디터에 주입
-        // HTML 여부: '<' 포함 여부로 판별 (TipTap은 항상 HTML 저장)
-        const rawContent = d.content ?? "";
-        const content = rawContent && !rawContent.includes("<")
-          ? renderMarkdown(rawContent)
-          : rawContent;
-        setForm({
-          name: d.name,
-          displayId: d.displayId ?? "",
-          category: d.category,
-          definition: d.definition ?? "",
-          content,
-          outputInfo: d.outputInfo ?? "",
-          rfpPage: d.rfpPage ?? "",
-          assignMemberId: d.assignMemberId ?? "",
-        });
-        return d;
-      }),
+      ).then((r) => r.data),
     enabled: !isNew,
   });
+
+  // taskDetail 로드되거나 taskId가 바뀌면 폼을 항상 동기화 — 캐시 hit 재방문에서도 재실행됨.
+  useEffect(() => {
+    if (!taskDetail) return;
+    const d = taskDetail;
+    // content가 기존 마크다운이면 HTML로 변환 후 에디터에 주입
+    // HTML 여부: '<' 포함 여부로 판별 (TipTap은 항상 HTML 저장)
+    const rawContent = d.content ?? "";
+    const content = rawContent && !rawContent.includes("<")
+      ? renderMarkdown(rawContent)
+      : rawContent;
+    setForm({
+      name: d.name,
+      displayId: d.displayId ?? "",
+      category: d.category,
+      definition: d.definition ?? "",
+      content,
+      outputInfo: d.outputInfo ?? "",
+      rfpPage: d.rfpPage ?? "",
+      assignMemberId: d.assignMemberId ?? "",
+    });
+  }, [taskDetail]);
 
   // ── 프로젝트 멤버 목록 (담당자 콤보박스용) ──────────────────────────────────
   const { data: memberData } = useQuery({

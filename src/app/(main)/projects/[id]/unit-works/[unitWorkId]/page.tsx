@@ -193,37 +193,44 @@ function UnitWorkDetailPageInner() {
   const myMemberId = memberData?.myMemberId ?? "";
 
   // ── 기존 단위업무 로드 (수정 모드) ─────────────────────────────────────────
+  //
+  // ⚠️ queryFn 안에서 setState를 호출하지 않는다.
+  //   TanStack Query는 동일 queryKey 캐시 hit 시 queryFn을 재실행하지 않으므로
+  //   queryFn 내부 setState는 "뒤로 가기 → 동일 row 재진입" 케이스에서
+  //   폼이 빈 상태로 남는 버그를 유발한다. 요구사항 상세 페이지에서
+  //   이미 동일한 문제로 고친 이력이 있다(2026-04-24).
   const { data: detail, isLoading: isDetailLoading, refetch: refetchDetail } = useQuery({
     queryKey: ["unit-work", projectId, unitWorkId],
     queryFn: () =>
       authFetch<{ data: UnitWorkDetail }>(
         `/api/projects/${projectId}/unit-works/${unitWorkId}`
-      ).then((r) => {
-        const d = r.data;
-        const desc = d.description ?? "";
-        setForm({
-          reqId: d.reqId,
-          name: d.name,
-          displayId: d.displayId ?? "",
-          description: desc,
-          comment: d.comment ?? "",
-          assignMemberId: d.assignMemberId ?? undefined,
-          planStartDate: d.planStartDate ?? undefined,
-          planEndDate: d.planEndDate ?? undefined,
-          planEffort: d.planEffort ?? undefined,
-          docStatus: d.docStatus,
-          sortOrder: d.sortOrder,
-        });
-        // 원본 설명 저장 — 변경 여부 비교용
-        setOriginalDescription(desc);
-        // 설명에 이미 내용이 있으면 미리보기부터 보여준다 — 빈 문서일 때만 바로 편집 모드로.
-        // queryFn은 캐시 hit(재방문) 시 재실행되지 않으므로 첫 로드 때만 적용되고,
-        // 이후 사용자가 편집 탭으로 전환해도 다시 덮어써지지 않는다.
-        setDescTab(desc.trim() ? "preview" : "edit");
-        return d;
-      }),
+      ).then((r) => r.data),
     enabled: !isNew,
   });
+
+  // detail 로드되거나 unitWorkId가 바뀌면 폼을 항상 동기화 — 캐시 hit 재방문에서도 재실행됨.
+  useEffect(() => {
+    if (!detail) return;
+    const d = detail;
+    const desc = d.description ?? "";
+    setForm({
+      reqId: d.reqId,
+      name: d.name,
+      displayId: d.displayId ?? "",
+      description: desc,
+      comment: d.comment ?? "",
+      assignMemberId: d.assignMemberId ?? undefined,
+      planStartDate: d.planStartDate ?? undefined,
+      planEndDate: d.planEndDate ?? undefined,
+      planEffort: d.planEffort ?? undefined,
+      docStatus: d.docStatus,
+      sortOrder: d.sortOrder,
+    });
+    // 원본 설명 저장 — 변경 여부 비교용
+    setOriginalDescription(desc);
+    // 설명에 이미 내용이 있으면 미리보기부터 보여준다 — 빈 문서일 때만 바로 편집 모드로.
+    setDescTab(desc.trim() ? "preview" : "edit");
+  }, [detail]);
 
   // ── 편집 권한 계산 ─────────────────────────────────────────────────────────
   // 통과: OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 단위업무 담당자.

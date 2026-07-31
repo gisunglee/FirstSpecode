@@ -124,28 +124,37 @@ function UserStoryDetailPageInner() {
   const reqOptions = reqsData ?? [];
 
   // ── 기존 스토리 로드 (수정 모드) ────────────────────────────────────────────
+  //
+  // ⚠️ queryFn 안에서 setState를 호출하지 않는다.
+  //   TanStack Query는 동일 queryKey 캐시 hit 시 queryFn을 재실행하지 않으므로
+  //   queryFn 내부 setState는 "뒤로 가기 → 동일 row 재진입" 케이스에서
+  //   폼이 빈 상태로 남는 버그를 유발한다. 요구사항 상세 페이지에서
+  //   이미 동일한 문제로 고친 이력이 있다(2026-04-24).
   const { data: detail, isLoading: isDetailLoading } = useQuery({
     queryKey: ["user-story", projectId, storyId],
     queryFn: () =>
       authFetch<{ data: StoryDetail }>(
         `/api/projects/${projectId}/user-stories/${storyId}`
-      ).then((r) => {
-        const d = r.data;
-        setForm({
-          requirementId: d.requirementId,
-          name: d.name,
-          persona: d.persona,
-          scenario: d.scenario,
-        });
-        setAcRows(
-          d.acceptanceCriteria.length > 0
-            ? d.acceptanceCriteria.map((ac) => ({ given: ac.given, when: ac.when, then: ac.then }))
-            : [{ given: "", when: "", then: "" }]
-        );
-        return d;
-      }),
+      ).then((r) => r.data),
     enabled: !isNew,
   });
+
+  // detail 로드되거나 storyId가 바뀌면 폼을 항상 동기화 — 캐시 hit 재방문에서도 재실행됨.
+  useEffect(() => {
+    if (!detail) return;
+    const d = detail;
+    setForm({
+      requirementId: d.requirementId,
+      name: d.name,
+      persona: d.persona,
+      scenario: d.scenario,
+    });
+    setAcRows(
+      d.acceptanceCriteria.length > 0
+        ? d.acceptanceCriteria.map((ac) => ({ given: ac.given, when: ac.when, then: ac.then }))
+        : [{ given: "", when: "", then: "" }]
+    );
+  }, [detail]);
 
   // 편집/삭제 권한: 매트릭스 통과 OR 본인이 연결 요구사항의 담당자
   // (user-stories/[storyId]/route.ts requireUserStoryWrite 와 동일 게이트).
