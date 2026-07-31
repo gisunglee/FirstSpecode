@@ -4,7 +4,7 @@
  * 역할:
  *   - McpServer 인스턴스에 SPECODE 도구들을 등록
  *
- * 도구 카테고리 (37개):
+ * 도구 카테고리 (38개):
  *   [프로젝트]     list_projects, get_project, list_members
  *   [기획-과업]    list_tasks, get_task, create_task, update_task
  *   [기획-요구사항] list_requirements, get_requirement, create_requirement, update_requirement
@@ -16,6 +16,7 @@
  *   [설계-기능]    list_functions, get_function, create_function, update_function
  *   [설계-트리]    get_design_tree (배치 조회 — 단위업무 ID 1~20개 필수, "전체 조회" 미지원)
  *   [DB]           list_db_tables, get_db_table, get_db_table_usage, get_db_column_usage
+ *   [워커 배포]    get_worker_command_files (/run-ai-tasks 커맨드를 고객 로컬에 설치할 파일 내용 제공)
  *
  * 정책 — DELETE 미지원:
  *   MCP에서는 어떤 엔티티도 삭제할 수 없다. AI가 한 번의 잘못된 호출로 cascade 삭제를
@@ -42,6 +43,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { SpecodeFetch } from "@/lib/mcp/api-client";
+import { getWorkerCommandFiles, WORKER_COMMAND_SETUP_GUIDE } from "@/lib/mcp/workerCommandFiles";
 
 // ─── 공통 헬퍼 ──────────────────────────────────────────────────
 
@@ -990,6 +992,32 @@ export function registerTools(
           `/api/projects/${projectId}/db-tables/${tableId}/columns/${colId}/usage`
         );
         return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  // ═══════════════════════════════════════════════════════════════
+  // 11. 워커 커맨드 배포 (Worker Command Distribution)
+  // ═══════════════════════════════════════════════════════════════
+  // SPECODE를 이용하는 고객사도 /run-ai-tasks 로컬 커맨드가 있어야 AI 태스크를
+  // 처리할 수 있다. 매번 파일을 복사해 안내하는 대신, MCP로 원본 파일 내용을
+  // 그대로 내려줘서 고객 Claude Code가 스스로 로컬에 설치하게 한다.
+  // DB 접근 없이 정적 파일만 읽으므로 project 무관 — specodeFetch(프로젝트 스코프)
+  // 대신 fs로 직접 읽는다 (getWorkerCommandFiles 내부에서 처리).
+
+  server.tool(
+    "get_worker_command_files",
+    "/run-ai-tasks 슬래시커맨드 설치 파일 제공 — 고객 로컬 저장소에 " +
+      "AI 태스크 워커 커맨드를 설치할 때 사용합니다. 반환된 files 배열의 " +
+      "각 항목을 path 그대로 로컬 프로젝트에 저장하세요. setupGuide에 " +
+      "이어서 해야 할 .env.local 설정과 사용법이 안내되어 있습니다.",
+    {},
+    async () => {
+      try {
+        const files = getWorkerCommandFiles();
+        return textResult({ files, setupGuide: WORKER_COMMAND_SETUP_GUIDE });
       } catch (err) {
         return errorResult(err);
       }
