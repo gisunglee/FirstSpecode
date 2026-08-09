@@ -1,7 +1,15 @@
+import path from "path";
 import type { NextConfig } from "next";
 import { getSecurityHeaders } from "./src/lib/securityHeaders";
 
 const nextConfig: NextConfig = {
+  // 상위 폴더(/Users/igiseong)에 별도 package-lock.json이 있어서
+  // Turbopack이 워크스페이스 루트를 잘못 추론해 tailwindcss 등
+  // node_modules 모듈을 찾지 못하는 문제 방지 (명시적으로 프로젝트 루트 고정)
+  turbopack: {
+    root: path.join(__dirname),
+  },
+
   experimental: {
     // 세부내용에 base64 이미지 첨부 지원 — Server Actions body 크기 10MB로 확장
     // App Router API route도 이 설정을 따름

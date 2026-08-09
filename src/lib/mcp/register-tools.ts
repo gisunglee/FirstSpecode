@@ -204,7 +204,7 @@ export function registerTools(
     {
       projectId: z.string().describe("프로젝트 ID"),
       name: z.string().describe("과업명 (필수)"),
-      category: z.string().describe("카테고리 (필수). 허용값: NEW_DEV(신규개발) | IMPROVE(기능개선) | MAINTAIN(유지보수)"),
+      category: z.string().describe("카테고리 (필수). 허용값: NEW_DEV(신규개발) | IMPROVE(기능개선)"),
       definition: z.string().optional().describe("과업 정의"),
       content: z.string().optional().describe("상세 내용"),
       outputInfo: z.string().optional().describe("산출물 정보"),
@@ -230,7 +230,7 @@ export function registerTools(
       projectId: z.string().describe("프로젝트 ID"),
       taskId: z.string().describe("과업 ID"),
       name: z.string().describe("과업명 (필수)"),
-      category: z.string().describe("카테고리 (필수). 허용값: NEW_DEV | IMPROVE | MAINTAIN"),
+      category: z.string().describe("카테고리 (필수). 허용값: NEW_DEV | IMPROVE"),
       definition: z.string().optional().describe("과업 정의"),
       content: z.string().optional().describe("상세 내용"),
       outputInfo: z.string().optional().describe("산출물 정보"),

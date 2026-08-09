@@ -48,13 +48,11 @@ type TasksResponse = { tasks: Task[]; totalCount: number };
 const CATEGORY_LABEL: Record<string, string> = {
   NEW_DEV:  "신규개발",
   IMPROVE:  "기능개선",
-  MAINTAIN: "유지보수",
 };
 
 const CATEGORY_COLOR: Record<string, { bg: string; color: string }> = {
   NEW_DEV:  { bg: "#e3f2fd", color: "#1565c0" },
   IMPROVE:  { bg: "#e8f5e9", color: "#2e7d32" },
-  MAINTAIN: { bg: "#fff3e0", color: "#e65100" },
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────

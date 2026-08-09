@@ -372,6 +372,19 @@ function RequirementDetailPageInner() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  // ── 진척률 즉시 저장 뮤테이션 ─────────────────────────────────────────────────
+  // 진척률은 전용 API(progrs_rt만 갱신)로 클릭 즉시 저장 — 본문 saveMutation과 분리되어
+  // 있어 화면의 다른 미저장 입력값(이름, 내용 등)에는 영향을 주지 않는다.
+  const progressMutation = useMutation({
+    mutationFn: (value: number) =>
+      authFetch<{ data: { progress: number } }>(
+        `/api/projects/${projectId}/requirements/${reqId}/progress`,
+        { method: "PUT", body: JSON.stringify({ progress: value }) }
+      ),
+    onSuccess: (_res, value) => handleChange("progress", value),
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   // ── 변경 이력 조회 ─────────────────────────────────────────────────────────
   const { data: historyData, refetch: refetchHistory } = useQuery({
     queryKey: ["req-history", projectId, reqId],
@@ -652,9 +665,8 @@ function RequirementDetailPageInner() {
 
         {/* 분석 진척률 — 기능 편집 페이지(ProgressTracker)와 동일한 게이지 스타일을
             타이틀 옆으로 이동. 요구사항은 진척률이 자체 컬럼(progrs_rt) 하나뿐이라
-            페이지 저장 시 다른 필드와 함께 저장되도록 로컬 폼 state에만 반영한다
-            (기능 페이지처럼 클릭 즉시 API 저장하면, 화면에서 아직 저장 안 한 다른
-            입력값까지 함께 커밋돼버리는 문제가 생기기 때문). */}
+            전용 API(progress/route.ts)로 클릭 즉시 저장한다 — 본문 저장(saveMutation)과
+            분리돼 있어 화면의 다른 미저장 입력값에는 영향을 주지 않는다. */}
         {!isNew && (
           <div style={{ display: "flex", alignItems: "stretch", borderRadius: 10, background: "rgba(0,0,0,0.04)", padding: "2px 10px" }}>
             <PhaseItem
@@ -663,8 +675,8 @@ function RequirementDetailPageInner() {
               value={form.progress}
               isLoading={isDetailLoading}
               readOnly={!canEdit}
-              isSaving={false}
-              onSave={(v) => handleChange("progress", v)}
+              isSaving={progressMutation.isPending}
+              onSave={(v) => progressMutation.mutate(v)}
             />
           </div>
         )}

@@ -212,7 +212,7 @@ const SYSTEM_PROMPT_TEMPLATE = `당신은 SI(System Integration) 프로젝트 �
 | 과업명 (name) | ⭐ 필수 | 예: "회원관리 기능 개발" — 간결하고 명확하게 |
 | 과업 정의 (definition) | ✅ 권장 | 과업 범위, 주요 목적, 처리 대상 — 1~3문장 요약 |
 | 세부내용 (content) | ✅ 권장 | RFP·계약서의 해당 과업 원문 전체 — 구체적 요청사항·조건·제약이 모두 포함된 원문 텍스트 |
-| 분류 (category) | 선택 | NEW_DEV (신규개발) / IMPROVE (기능개선) / MAINTAIN (유지보수) |
+| 분류 (category) | 선택 | NEW_DEV (신규개발) / IMPROVE (기능개선) |
 | 산출물 (outputInfo) | ✅ 권장 | 이 과업에서 나오는 산출물 목록 |
 | RFP 페이지 (rfpPage) | 선택 | 예: "p.23" 또는 "p.23-25" — RFP 원문에서 해당 과업이 기술된 페이지 |
 
@@ -430,7 +430,7 @@ SPECODE 기획 가져오기 > 내보내기에서 복사한 JSON을 붙여넣으�
 
 | 필드 | 허용 값 |
 |------|---------|
-| category | \`NEW_DEV\` (신규개발) \| \`IMPROVE\` (기능개선) \| \`MAINTAIN\` (유지보수) |
+| category | \`NEW_DEV\` (신규개발) \| \`IMPROVE\` (기능개선) |
 | priority | \`HIGH\` \| \`MEDIUM\` \| \`LOW\` |
 | source | \`RFP\` \| \`ADD\` \| \`CHANGE\` |
 | systemId | SPECODE 내보내기 JSON에 포함된 UUID 그대로 사용. 직접 작성 불가 |

@@ -13,7 +13,7 @@
  *       {
  *         systemId?: string,       // 수정 시 과업 UUID. 없으면 신규
  *         name: string,
- *         category: string,        // NEW_DEV | IMPROVE | MAINTAIN
+ *         category: string,        // NEW_DEV | IMPROVE
  *         definition?: string,
  *         outputInfo?: string,
  *         content?: string,
@@ -72,7 +72,7 @@ type RouteParams = { params: Promise<{ id: string }> };
 //                   DB에 저장되어 UI 라벨/배지 매칭이 깨지는 사고를 막기 위한 안전망.
 const ALLOWED_SOURCES    = ["RFP", "ADD", "CHANGE"]           as const;
 const ALLOWED_PRIORITIES = ["HIGH", "MEDIUM", "LOW"]          as const;
-const ALLOWED_CATEGORIES = ["NEW_DEV", "IMPROVE", "MAINTAIN"] as const;
+const ALLOWED_CATEGORIES = ["NEW_DEV", "IMPROVE"] as const;
 
 function pickAllowed(
   value:    string | undefined | null,

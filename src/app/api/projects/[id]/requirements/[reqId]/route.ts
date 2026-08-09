@@ -29,7 +29,7 @@ type RouteParams = { params: Promise<{ id: string; reqId: string }> };
  * 둘 다 실패하면 403 Response 반환.
  * requirePermission 을 직접 쓰지 않는 이유: 매트릭스 + 리소스 동적 조건 OR 합산이 필요하기 때문.
  */
-async function requireRequirementWrite(
+export async function requireRequirementWrite(
   request: NextRequest,
   projectId: string,
   reqId: string

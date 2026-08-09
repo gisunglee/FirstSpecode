@@ -989,7 +989,6 @@ function TaskDetailPanel({ projectId, taskId, displayId, onSaved }: { projectId:
               <select value={category} onChange={(e) => setCategory(e.target.value)} disabled={!canEditTask} className="sp-input">
                 <option value="NEW_DEV">신규개발</option>
                 <option value="IMPROVE">기능 개선</option>
-                <option value="MAINTAIN">유지 보수</option>
               </select>
               <span className="sp-select-arrow"><SelectChevron /></span>
             </div>

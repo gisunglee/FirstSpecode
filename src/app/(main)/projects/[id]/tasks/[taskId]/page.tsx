@@ -410,7 +410,6 @@ function TaskDetailPageInner() {
                     >
                       <option value="NEW_DEV">신규개발</option>
                       <option value="IMPROVE">기능개선</option>
-                      <option value="MAINTAIN">유지보수</option>
                     </select>
                     <span className="sp-select-arrow"><SelectChevron /></span>
                   </div>
