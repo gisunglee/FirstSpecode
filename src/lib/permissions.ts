@@ -199,6 +199,10 @@ export function hasPermission(actor: ActorContext, permission: Permission): bool
   // as PermissionRule — satisfies 로 체크된 값을 optional 속성 포함 형태로 접근
   const rule = PERMISSIONS[permission] as PermissionRule;
 
+  // VIEWER는 직무(PM/PL/DBA/DEV 등)와 무관하게 명시적으로 부여된 읽기 권한만 사용한다.
+  // roles에 VIEWER가 없는 권한을 jobs 조건으로 우회하지 못하게 역할 경계를 먼저 적용한다.
+  if (actor.role === "VIEWER" && !rule.roles?.includes("VIEWER")) return false;
+
   // 역할 조건 만족?
   const roleOK = rule.roles && actor.role
     ? (rule.roles as readonly RoleCode[]).includes(actor.role)
@@ -234,6 +238,13 @@ export function explainPermission(
   permission: Permission
 ): { code: "FORBIDDEN_ROLE" | "FORBIDDEN_PLAN"; message: string } | null {
   const rule = PERMISSIONS[permission] as PermissionRule;
+
+  if (actor.role === "VIEWER" && !rule.roles?.includes("VIEWER")) {
+    return {
+      code: "FORBIDDEN_ROLE",
+      message: "뷰어는 읽기만 가능합니다. 수정하려면 프로젝트 역할을 MEMBER 이상으로 변경해 주세요.",
+    };
+  }
 
   const roleOK = rule.roles && actor.role
     ? (rule.roles as readonly RoleCode[]).includes(actor.role) : false;

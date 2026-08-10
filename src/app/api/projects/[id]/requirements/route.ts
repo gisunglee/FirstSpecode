@@ -9,6 +9,10 @@ import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
+import { parseJsonBody } from "@/lib/parseJsonBody";
+import { requirementCreateSchema } from "@/lib/specContentSchemas";
+import { listMeaningfulFields } from "@/lib/specContentFieldPolicy";
+import { requireSpecCreateFields } from "@/lib/specContentWritePolicy";
 import { fetchProjectRequirements } from "@/lib/exports/requirements-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -42,23 +46,22 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const gate = await requirePermission(request, projectId, "content.create");
   if (gate instanceof Response) return gate;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
-  }
-
+  const parsed = await parseJsonBody(request, requirementCreateSchema);
+  if (parsed instanceof Response) return parsed;
   const {
     taskId, name, priority, source, rfpPage,
     originalContent, currentContent, analysisMemo, detailSpec,
-  } = body as {
-    taskId?: string; name?: string; priority?: string; source?: string;
-    rfpPage?: string; originalContent?: string; currentContent?: string;
-    analysisMemo?: string; detailSpec?: string;
-  };
+  } = parsed.data;
+  const fieldError = requireSpecCreateFields(gate, "REQUIREMENT", listMeaningfulFields(parsed.data));
+  if (fieldError) return fieldError;
 
-  if (!name?.trim()) return apiError("VALIDATION_ERROR", "요구사항명을 입력해 주세요.", 400);
-  if (!priority) return apiError("VALIDATION_ERROR", "우선순위를 선택해 주세요.", 400);
-  if (!source) return apiError("VALIDATION_ERROR", "출처를 선택해 주세요.", 400);
+  if (taskId) {
+    const parentTask = await prisma.tbRqTask.findFirst({
+      where: { task_id: taskId, prjct_id: projectId },
+      select: { task_id: true },
+    });
+    if (!parentTask) return apiError("NOT_FOUND", "과업을 찾을 수 없습니다.", 404);
+  }
 
   // 장문 텍스트 한도 검증 — 정책은 src/lib/constants/textLimits.ts
   // orgnl/curncy 는 RichEditor HTML 출력 → htmlContent 한도(100K) 적용
@@ -105,6 +108,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         analy_cn:       analysisMemo?.trim() || null,
         spec_cn:        detailSpec?.trim() || null,
         sort_ordr:      (maxSort?.sort_ordr ?? 0) + 1,
+        creat_mber_id:  gate.mberId,
       },
     });
 

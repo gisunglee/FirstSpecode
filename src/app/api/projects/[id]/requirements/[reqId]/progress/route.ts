@@ -9,29 +9,26 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
-import { requireRequirementWrite } from "../route";
+import {
+  requireSpecContentWrite,
+  requireSpecChangedFields,
+} from "@/lib/specContentWritePolicy";
+import { parseJsonBody } from "@/lib/parseJsonBody";
+import { requirementProgressSchema } from "@/lib/specContentSchemas";
 
 type RouteParams = { params: Promise<{ id: string; reqId: string }> };
-
-function isValidRate(v: unknown): v is number {
-  return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 100;
-}
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, reqId } = await params;
 
-  const gate = await requireRequirementWrite(request, projectId, reqId);
+  const gate = await requireSpecContentWrite(request, projectId, "REQUIREMENT", reqId);
   if (gate instanceof Response) return gate;
+  const creatorFieldError = requireSpecChangedFields(gate, "REQUIREMENT", ["progress"]);
+  if (creatorFieldError) return creatorFieldError;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
-  }
-
-  const { progress } = body as { progress?: unknown };
-  if (!isValidRate(progress)) {
-    return apiError("VALIDATION_ERROR", "진척률은 0~100 정수여야 합니다.", 400);
-  }
+  const parsed = await parseJsonBody(request, requirementProgressSchema);
+  if (parsed instanceof Response) return parsed;
+  const { progress } = parsed.data;
 
   try {
     const existing = await prisma.tbRqRequirement.findUnique({ where: { req_id: reqId } });
@@ -41,7 +38,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const updated = await prisma.tbRqRequirement.update({
       where: { req_id: reqId },
-      data: { progrs_rt: progress, mdfcn_dt: new Date() },
+      data: { progrs_rt: progress, mdfcn_mber_id: gate.mberId, mdfcn_dt: new Date() },
     });
 
     return apiSuccess({ progress: updated.progrs_rt });

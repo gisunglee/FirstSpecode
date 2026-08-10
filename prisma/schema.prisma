@@ -570,7 +570,9 @@ model TbDsUnitWork {
   // 단위업무 설계서 작성 상태 — BEFORE(작성전) / DOING(작성중) / DONE(작성완료)
   dsgn_doc_sttus_code  String          @default("BEFORE")
   sort_ordr            Int             @default(0)
+  creat_mber_id        String?         // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
   creat_dt             DateTime        @default(now())
+  mdfcn_mber_id        String?         // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
   mdfcn_dt             DateTime?
   coment_cn            String?
   screens              TbDsScreen[]
@@ -597,7 +599,9 @@ model TbDsScreen {
   url_path        String?
   asign_mber_id   String? // 담당자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
   sort_ordr       Int           @default(0)
+  creat_mber_id   String?       // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
   creat_dt        DateTime      @default(now())
+  mdfcn_mber_id   String?       // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
   mdfcn_dt        DateTime?
   ctgry_l_nm      String?
   ctgry_m_nm      String?
@@ -641,7 +645,9 @@ model TbDsArea {
   // 종속 팝업도 별도 화면이 아닌 영역의 표시 형태 변형으로 표현.
   display_form_code String         @default("STATIC")
   sort_ordr         Int            @default(0)
+  creat_mber_id     String?        // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
   creat_dt          DateTime       @default(now())
+  mdfcn_mber_id     String?        // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
   mdfcn_dt          DateTime?
   excaldw_data      Json?
   layer_data_dc     String?
@@ -666,7 +672,9 @@ model TbDsFunction {
   func_dc         String?
   priort_code     String      @default("MEDIUM")
   sort_ordr       Int         @default(0)
+  creat_mber_id   String?     // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
   creat_dt        DateTime    @default(now())
+  mdfcn_mber_id   String?     // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
   mdfcn_dt        DateTime?
   asign_mber_id   String?
   cmplx_code      String      @default("MEDIUM")
@@ -849,7 +857,9 @@ model TbRqTask {
   rfp_page_no     String?
   asign_mber_id   String? // 담당자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
   sort_ordr       Int               @default(0)
+  creat_mber_id   String?           // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
   creat_dt        DateTime          @default(now())
+  mdfcn_mber_id   String?           // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
   mdfcn_dt        DateTime?
   requirements    TbRqRequirement[]
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 보강)
@@ -880,7 +890,9 @@ model TbRqRequirement {
   anls_efrt_val  String?
   progrs_rt      Int             @default(0)
   sort_ordr      Int             @default(0)
+  creat_mber_id  String?         // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
   creat_dt       DateTime        @default(now())
+  mdfcn_mber_id  String?         // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
   mdfcn_dt       DateTime?
   unitWorks      TbDsUnitWork[]
   task           TbRqTask?       @relation(fields: [task_id], references: [task_id])
@@ -900,7 +912,9 @@ model TbRqUserStory {
   persona_cn         String?
   scenario_cn        String?
   sort_ordr          Int                      @default(0)
+  creat_mber_id      String?                  // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
   creat_dt           DateTime                 @default(now())
+  mdfcn_mber_id      String?                  // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
   mdfcn_dt           DateTime?
   acceptanceCriteria TbRqAcceptanceCriteria[]
   requirement        TbRqRequirement          @relation(fields: [req_id], references: [req_id])

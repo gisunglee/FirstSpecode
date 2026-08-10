@@ -11,67 +11,19 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
-import { requireAuth } from "@/lib/requireAuth";
-import {
-  hasPermission, isRoleCode, isJobCode,
-  type RoleCode, type JobCode,
-} from "@/lib/permissions";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
+import {
+  requireSpecContentWrite,
+  requireSpecChangedFields,
+  getSpecContentCapabilities,
+  creatorWindowConflict,
+} from "@/lib/specContentWritePolicy";
+import { isCreatorWindowConflict, lockAndAssertCreatorWindow } from "@/lib/specContentWriteConcurrency";
+import { parseJsonBody } from "@/lib/parseJsonBody";
+import { areaUpdateSchema } from "@/lib/specContentSchemas";
 
 type RouteParams = { params: Promise<{ id: string; areaId: string }> };
-
-/**
- * 영역 수정/삭제 권한 게이트.
- *
- * 영역 자체에는 담당자 컬럼이 없어 부모 화면(scrn_id)의 담당자를 영역 담당자로 간주.
- *
- * 통과 조건 (OR):
- *   ① permissions 매트릭스 "requirement.update" — OWNER/ADMIN 역할 또는 PM/PL 직무
- *   ② 본인이 부모 화면의 담당자(parent screen.asign_mber_id)
- *
- * 영역에 부모 화면이 없으면(scrn_id null) 매트릭스 통과만 허용.
- */
-async function requireAreaWrite(
-  request: NextRequest,
-  projectId: string,
-  areaId: string
-): Promise<{ mberId: string } | Response> {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where:  { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-    select: { role_code: true, job_title_code: true, mber_sttus_code: true },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "프로젝트 멤버가 아닙니다.", 403);
-  }
-
-  const role: RoleCode | null = isRoleCode(membership.role_code) ? membership.role_code : null;
-  const job:  JobCode  | null = isJobCode(membership.job_title_code) ? membership.job_title_code : null;
-
-  const matrixOK = hasPermission(
-    { role, job, plan: "FREE", systemRole: null },
-    "requirement.update"
-  );
-  if (matrixOK) return { mberId: auth.mberId };
-
-  // 부모 화면의 담당자인지 확인
-  const target = await prisma.tbDsArea.findUnique({
-    where:   { area_id: areaId },
-    include: { screen: { select: { asign_mber_id: true } } },
-  });
-  if (!target || target.prjct_id !== projectId) {
-    return apiError("NOT_FOUND", "영역을 찾을 수 없습니다.", 404);
-  }
-  const parentAssigneeId = target.screen?.asign_mber_id ?? null;
-  if (parentAssigneeId !== auth.mberId) {
-    return apiError("FORBIDDEN", "이 영역을 수정할 권한이 없습니다.", 403);
-  }
-
-  return { mberId: auth.mberId };
-}
 
 // ─── GET: 영역 상세 조회 ─────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
@@ -129,6 +81,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (!area || area.prjct_id !== projectId) {
       return apiError("NOT_FOUND", "영역을 찾을 수 없습니다.", 404);
     }
+    const permissions = await getSpecContentCapabilities(request, projectId, "AREA", areaId, gate);
 
     // 타입별 최신 1건만 추출
     const aiTasks: Record<string, { aiTaskId: string; status: string }> = {};
@@ -170,6 +123,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     return apiSuccess({
+      permissions,
       areaId:      area.area_id,
       displayId:   area.area_display_id,
       name:        area.area_nm,
@@ -219,29 +173,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, areaId } = await params;
 
   // OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 부모 화면 담당자만 수정 가능
-  const gate = await requireAreaWrite(request, projectId, areaId);
+  const gate = await requireSpecContentWrite(request, projectId, "AREA", areaId);
   if (gate instanceof Response) return gate;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
-  }
-
-  const { screenId, name, type, displayFormCode, description, sortOrder, layoutData, commentCn, saveHistory, displayId, docStatus } = body as {
-    screenId?:        string;
-    name?:            string;
-    type?:            string;
-    displayFormCode?: string;
-    description?:     string;
-    sortOrder?:       number;
-    layoutData?:      string;
-    commentCn?:       string;
-    saveHistory?:     boolean;
-    displayId?:       string;
-    docStatus?:       string;
-  };
-
-  if (!name?.trim()) return apiError("VALIDATION_ERROR", "영역명을 입력해 주세요.", 400);
+  const parsed = await parseJsonBody(request, areaUpdateSchema);
+  if (parsed instanceof Response) return parsed;
+  const { screenId, name, type, displayFormCode, description, sortOrder, layoutData, commentCn, saveHistory, displayId, docStatus } = parsed.data;
 
   // 장문 텍스트 한도 검증 — 정책은 src/lib/constants/textLimits.ts
   const limitErr = apiTextLimitGuard([
@@ -257,12 +194,35 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (!existing || existing.prjct_id !== projectId) {
       return apiError("NOT_FOUND", "영역을 찾을 수 없습니다.", 404);
     }
+    const changedFields = [
+      ...(screenId !== undefined && (screenId || null) !== existing.scrn_id ? ["screenId"] : []),
+      ...(name.trim() !== existing.area_nm ? ["name"] : []),
+      ...(type !== undefined && type !== existing.area_ty_code ? ["type"] : []),
+      ...(displayFormCode !== undefined && displayFormCode !== existing.display_form_code ? ["displayFormCode"] : []),
+      ...(description !== undefined && (description.trim() || null) !== existing.area_dc ? ["description"] : []),
+      ...(sortOrder !== undefined && sortOrder !== existing.sort_ordr ? ["sortOrder"] : []),
+      ...(layoutData !== undefined && (layoutData || null) !== existing.layer_data_dc ? ["layoutData"] : []),
+      ...(commentCn !== undefined && (commentCn || null) !== existing.coment_cn ? ["commentCn"] : []),
+      ...(displayId !== undefined && displayId.trim() !== existing.area_display_id ? ["displayId"] : []),
+      ...(docStatus !== undefined && docStatus !== existing.dsgn_doc_sttus_code ? ["docStatus"] : []),
+    ];
+    const fieldError = requireSpecChangedFields(gate, "AREA", changedFields);
+    if (fieldError) return fieldError;
+
+    if (screenId !== undefined && screenId !== existing.scrn_id && screenId) {
+      const targetScreen = await prisma.tbDsScreen.findFirst({
+        where: { scrn_id: screenId, prjct_id: projectId },
+        select: { scrn_id: true },
+      });
+      if (!targetScreen) return apiError("NOT_FOUND", "화면을 찾을 수 없습니다.", 404);
+    }
 
     const newDescription = description?.trim() || null;
 
     // 수정 + 설계 변경 이력 (트랜잭션)
-    await prisma.$transaction([
-      prisma.tbDsArea.update({
+    await prisma.$transaction(async (tx) => {
+      await lockAndAssertCreatorWindow(tx, "AREA", areaId, gate);
+      await tx.tbDsArea.update({
         where: { area_id: areaId },
         data: {
           scrn_id:      screenId !== undefined ? (screenId || null) : existing.scrn_id,
@@ -278,9 +238,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           coment_cn:     commentCn  !== undefined ? (commentCn || null) : existing.coment_cn,
           dsgn_doc_sttus_code: docStatus || existing.dsgn_doc_sttus_code,
           mdfcn_dt:     new Date(),
+          mdfcn_mber_id: gate.mberId,
         },
-      }),
-      prisma.tbDsDesignChange.create({
+      });
+      await tx.tbDsDesignChange.create({
         data: {
           prjct_id:      projectId,
           ref_tbl_nm:    "tb_ds_area",
@@ -295,10 +256,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           },
           chg_mber_id: gate.mberId,
         },
-      }),
-      // 설명 변경 이력 — tb_ds_design_change에 before/after JSON으로 저장
-      ...(saveHistory ? [
-        prisma.tbDsDesignChange.create({
+      });
+      if (saveHistory) {
+        // 설명 변경 이력 — tb_ds_design_change에 before/after JSON으로 저장
+        await tx.tbDsDesignChange.create({
           data: {
             prjct_id:      projectId,
             ref_tbl_nm:    "tb_ds_area",
@@ -311,12 +272,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             },
             chg_mber_id: gate.mberId,
           },
-        }),
-      ] : []),
-    ]);
+        });
+      }
+    });
 
     return apiSuccess({ areaId });
   } catch (err) {
+    if (isCreatorWindowConflict(err)) return creatorWindowConflict();
     console.error(`[PUT /api/projects/${projectId}/areas/${areaId}] DB 오류:`, err);
     return apiError("DB_ERROR", "저장 중 오류가 발생했습니다.", 500);
   }
@@ -329,7 +291,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const deleteChildren = url.searchParams.get("deleteChildren") !== "false"; // 기본 true
 
   // OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 부모 화면 담당자만 삭제 가능
-  const gate = await requireAreaWrite(request, projectId, areaId);
+  const gate = await requireSpecContentWrite(request, projectId, "AREA", areaId, "DELETE");
   if (gate instanceof Response) return gate;
 
   try {

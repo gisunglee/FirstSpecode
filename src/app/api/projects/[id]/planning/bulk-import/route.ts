@@ -53,8 +53,7 @@
 import { NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
-import { checkRole } from "@/lib/checkRole";
+import { requireSpecManager } from "@/lib/specContentWritePolicy";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { createIdPrefixCache } from "@/lib/idPrefix";
 
@@ -191,19 +190,9 @@ async function nextStorySortOrder(reqId: string, tx: TxClient): Promise<number> 
 // ── POST 핸들러 ──────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId } = await params;
-
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
-  const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER"]);
-  if (roleCheck) return roleCheck;
+  const gate = await requireSpecManager(request, projectId);
+  if (gate instanceof Response) return gate;
 
   let body: unknown;
   try { body = await request.json(); } catch {
@@ -257,6 +246,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
               dtl_cn:         taskInput.content?.trim()     ?? existing.dtl_cn,
               // [2026-04-25] P2: RFP 페이지 — 키 자체가 빠지면 기존 값 유지
               rfp_page_no:    taskInput.rfpPage?.trim()     ?? existing.rfp_page_no,
+              mdfcn_mber_id:  gate.mberId,
               mdfcn_dt:       new Date(),
             },
           });
@@ -279,6 +269,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
               // [2026-04-25] P2: RFP 페이지
               rfp_page_no:     taskInput.rfpPage?.trim()     || null,
               sort_ordr:       sortOrder,
+              creat_mber_id:   gate.mberId,
             },
           });
           taskId = created.task_id;
@@ -314,6 +305,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 analy_cn:     reqInput.discussionMd?.trim()    ?? existing.analy_cn,
                 // [2026-04-25] P2: RFP 페이지
                 rfp_page_no:  reqInput.rfpPage?.trim()         ?? existing.rfp_page_no,
+                mdfcn_mber_id: gate.mberId,
                 mdfcn_dt:     new Date(),
               },
             });
@@ -339,6 +331,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 // [2026-04-25] P2: RFP 페이지
                 rfp_page_no:    reqInput.rfpPage?.trim()         || null,
                 sort_ordr:      sortOrder,
+                creat_mber_id:  gate.mberId,
               },
             });
             reqId = created.req_id;
@@ -365,6 +358,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                   story_nm:    storyInput.name.trim(),
                   persona_cn:  storyInput.persona?.trim()  ?? existing.persona_cn,
                   scenario_cn: storyInput.scenario?.trim() ?? existing.scenario_cn,
+                  mdfcn_mber_id: gate.mberId,
                   mdfcn_dt:    new Date(),
                 },
               });
@@ -401,6 +395,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                   persona_cn:       storyInput.persona?.trim()  ?? "",
                   scenario_cn:      storyInput.scenario?.trim() ?? "",
                   sort_ordr:        sortOrder,
+                  creat_mber_id:    gate.mberId,
                 },
               });
               // 인수기준 일괄 생성

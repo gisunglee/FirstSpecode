@@ -41,12 +41,14 @@ import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
 import { formatEffortDays } from "@/lib/effort";
 import { useAppStore } from "@/store/appStore";
 import { UnresolvedSpecBadge } from "@/components/spec-reconciliation/UnresolvedSpecBadge";
+import type { SpecContentPermissions } from "@/types/specContentPermissions";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
 type AiTaskInfo = { aiTaskId: string; status: string };
 
 type FuncDetail = {
+  permissions?: SpecContentPermissions;
   funcId: string;
   displayId: string;
   name: string;
@@ -207,11 +209,12 @@ function FunctionDetailPageInner() {
   const myMemberId = memberData?.myMemberId ?? "";
   const members    = memberData?.members ?? [];
 
-  const { has: hasPerm } = usePermissions(projectId);
-  const matrixUpdateOK = hasPerm("requirement.update");
+  const { has: hasPerm, myRole } = usePermissions(projectId);
+  const matrixUpdateOK = myRole !== "VIEWER" && hasPerm("requirement.update");
   const originalAssigneeId = data?.assignMemberId ?? null;
   const isAssignee = !!myMemberId && originalAssigneeId === myMemberId;
-  const canEdit = isNew ? true : (matrixUpdateOK || isAssignee);
+  const canEdit = isNew ? hasPerm("content.create") : (data?.permissions?.canEdit ?? (matrixUpdateOK || isAssignee));
+  const canDelete = !isNew && (data?.permissions?.canDelete ?? false);
 
   // GNB 브레드크럼 설정 — 단위업무 > 화면 > 영역 > 기능
   useEffect(() => {
@@ -298,8 +301,20 @@ function FunctionDetailPageInner() {
         saveHistory: saveHistory || undefined,
       };
       if (isNew) {
+        const createBody = {
+          areaId: body.areaId,
+          name: body.name,
+          type: body.type,
+          description: body.description,
+          priority: body.priority,
+          ...(body.displayId ? { displayId: body.displayId } : {}),
+          ...(body.complexity !== "MEDIUM" ? { complexity: body.complexity } : {}),
+          ...(body.effort ? { effort: body.effort } : {}),
+          ...(body.assignMemberId ? { assignMemberId: body.assignMemberId } : {}),
+          ...(body.sortOrder > 0 ? { sortOrder: body.sortOrder } : {}),
+        };
         return authFetch<{ data: { funcId?: string } }>(`/api/projects/${projectId}/functions`, {
-          method: "POST", body: JSON.stringify(body),
+          method: "POST", body: JSON.stringify(createBody),
         });
       }
       return authFetch<{ data: { funcId?: string } }>(`/api/projects/${projectId}/functions/${functionId}`, {
@@ -674,8 +689,8 @@ function FunctionDetailPageInner() {
           {/* 구분선 */}
           <div style={{ width: 1, height: 20, background: "var(--color-border)" }} />
 
-          {/* 삭제 — 신규 모드 아니고 편집 권한 있을 때만 노출 */}
-          {!isNew && canEdit && (
+          {/* 삭제는 서버가 계산한 관리자 권한일 때만 노출 */}
+          {canDelete && (
             <button
               onClick={() => setDeleteConfirmOpen(true)}
               disabled={saveMutation.isPending || deleteMutation.isPending}
@@ -724,7 +739,7 @@ function FunctionDetailPageInner() {
             fontSize: 12,
             color: "var(--color-text-secondary)",
           }}>
-            🔒 <strong>읽기 전용</strong> — 이 기능은 OWNER/ADMIN 또는 PM/PL 직무, 혹은 담당자만 수정할 수 있습니다.
+            🔒 <strong>읽기 전용</strong> — {data?.permissions?.reasonMessage ?? "이 기능을 수정할 권한이 없습니다."}
           </div>
         )}
         {/* 왼쪽(기본 정보 폼)은 고정폭, 오른쪽(설명)만 1fr로 남는 공간을 흡수 — 좌측 메뉴를 접어

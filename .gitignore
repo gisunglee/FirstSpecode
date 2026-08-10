@@ -43,6 +43,7 @@ yarn-error.log*
 
 # 스펙 정합성 자동 테스트 산출물
 tmp/spec-reconciliation-tests/
+tmp/spec-content-policy-tests/
 tmp/specode-test-before.json.gz
 tmp/specode-test-git-diff.json
 

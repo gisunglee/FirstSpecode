@@ -42,12 +42,14 @@ import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
 import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
 import { useAppStore } from "@/store/appStore";
 import { UnresolvedSpecBadge } from "@/components/spec-reconciliation/UnresolvedSpecBadge";
+import type { SpecContentPermissions } from "@/types/specContentPermissions";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
 type AiTaskInfo = { aiTaskId: string; status: string };
 
 type AreaDetail = {
+  permissions?: SpecContentPermissions;
   areaId: string;
   displayId: string;
   name: string;
@@ -229,10 +231,11 @@ function AreaDetailPageInner() {
   });
   const myMemberId = memberData?.myMemberId ?? "";
 
-  const { has: hasPerm } = usePermissions(projectId);
-  const matrixUpdateOK = hasPerm("requirement.update");
+  const { has: hasPerm, myRole } = usePermissions(projectId);
+  const matrixUpdateOK = myRole !== "VIEWER" && hasPerm("requirement.update");
   const isParentScreenAssignee = !!myMemberId && data?.screenAssigneeId === myMemberId;
-  const canEdit = isNew ? true : (matrixUpdateOK || isParentScreenAssignee);
+  const canEdit = isNew ? hasPerm("content.create") : (data?.permissions?.canEdit ?? (matrixUpdateOK || isParentScreenAssignee));
+  const canDelete = !isNew && (data?.permissions?.canDelete ?? false);
 
   // GNB 브레드크럼 설정 — 단위업무 > 화면 > 영역 > 기능 목록
   useEffect(() => {
@@ -306,9 +309,18 @@ function AreaDetailPageInner() {
         saveHistory,
       };
       if (isNew) {
+        const createBody = {
+          screenId: body.screenId,
+          name: body.name,
+          type: body.type,
+          displayFormCode: body.displayFormCode,
+          description: body.description,
+          ...(body.displayId ? { displayId: body.displayId } : {}),
+          ...(body.sortOrder > 0 ? { sortOrder: body.sortOrder } : {}),
+        };
         return authFetch<{ data: { areaId?: string } }>(`/api/projects/${projectId}/areas`, {
           method: "POST",
-          body: JSON.stringify(body),
+          body: JSON.stringify(createBody),
         });
       }
       return authFetch<{ data: { areaId?: string } }>(`/api/projects/${projectId}/areas/${areaId}`, {
@@ -926,8 +938,8 @@ function AreaDetailPageInner() {
           {/* 구분선 */}
           {!isNew && <div style={{ width: 1, height: 20, background: "var(--color-border)" }} />}
 
-          {/* 삭제 — 신규 모드 아니고 편집 권한 있을 때만 노출 */}
-          {!isNew && canEdit && (
+          {/* 삭제는 서버가 계산한 관리자 권한일 때만 노출 */}
+          {canDelete && (
             <button
               onClick={() => setDeleteConfirmOpen(true)}
               style={{ ...dangerBtnStyle, fontSize: 12, padding: "5px 14px", minWidth: 60 }}
@@ -966,7 +978,7 @@ function AreaDetailPageInner() {
             fontSize: 12,
             color: "var(--color-text-secondary)",
           }}>
-            🔒 <strong>읽기 전용</strong> — 이 영역은 OWNER/ADMIN 또는 PM/PL 직무, 혹은 부모 화면 담당자만 수정할 수 있습니다.
+            🔒 <strong>읽기 전용</strong> — {data?.permissions?.reasonMessage ?? "이 영역을 수정할 권한이 없습니다."}
           </div>
         )}
         {/* 2-컬럼 레이아웃 — 왼쪽(기본 정보 폼)은 고정폭, 오른쪽(설명)만 1fr로 남는 공간을 흡수.

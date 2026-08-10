@@ -25,6 +25,7 @@ import { useIdPrefixes } from "@/hooks/useIdPrefixes";
 import { ReqSaveOptionDialog } from "@/components/common/ReqSaveOptionDialog";
 import { usePermissions } from "@/hooks/useMyRole";
 import { useCanEditTask } from "@/hooks/useCanEditTask";
+import type { SpecContentPermissions } from "@/types/specContentPermissions";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -90,6 +91,9 @@ function PlanningTreePageInner() {
   const params      = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const projectId   = params.id;
+  const { has: hasProjectPermission, myRole } = usePermissions(projectId);
+  const canCreateSpec = myRole !== "VIEWER" && hasProjectPermission("content.create");
+  const canManageStructure = myRole !== "VIEWER" && hasProjectPermission("requirement.update");
 
   const [keyword,        setKeyword]        = useState("");
   const [assigneeFilter, setAssigneeFilter] = useState("");  // "" = 전체, "__none__" = 미지정, otherwise = memberId
@@ -369,14 +373,16 @@ function PlanningTreePageInner() {
               fontSize:     13,
             }}
           />
-          <button
-            onClick={() => addTaskMutation.mutate()}
-            disabled={addTaskMutation.isPending}
-            style={addBtnStyle}
-            title="과업 추가"
-          >
-            + 과업
-          </button>
+          {canCreateSpec && (
+            <button
+              onClick={() => addTaskMutation.mutate()}
+              disabled={addTaskMutation.isPending}
+              style={addBtnStyle}
+              title="과업 추가"
+            >
+              + 과업
+            </button>
+          )}
         </div>
 
         {/* 담당자 필터 + 통계 */}
@@ -411,7 +417,7 @@ function PlanningTreePageInner() {
             return (
               <div
                 key={task.taskId}
-                draggable={!kw}
+                draggable={!kw && canManageStructure}
                 onDragStart={() => handleTaskDragStart(fullIdx)}
                 onDragEnter={() => handleTaskDragEnter(fullIdx)}
                 onDragEnd={handleTaskDragEnd}
@@ -431,6 +437,8 @@ function PlanningTreePageInner() {
                   onDelete={setDeleteTarget}
                   onSortReqs={(orders) => sortReqsMutation.mutate(orders)}
                   onSortStories={(orders) => sortStoriesMutation.mutate(orders)}
+                  canCreate={canCreateSpec}
+                  canManage={canManageStructure}
                 />
               </div>
             );
@@ -486,6 +494,8 @@ function PlanningTreePageInner() {
                     onAddStory={(reqId) => addStoryMutation.mutate(reqId)}
                     onDelete={setDeleteTarget}
                     onSortStories={(orders) => sortStoriesMutation.mutate(orders)}
+                    canCreate={canCreateSpec}
+                    canManage={canManageStructure}
                   />
                 ))
               }
@@ -554,6 +564,7 @@ function PlanningTreePageInner() {
 function TaskTreeNode({
   task, selected, collapsed, keyword, highlight, isReqVisible,
   onSelect, onToggle, onAddReq, onAddStory, onDelete, onSortReqs, onSortStories,
+  canCreate, canManage,
 }: {
   task:          TaskNode;
   selected:      SelectedNode | null;
@@ -568,6 +579,8 @@ function TaskTreeNode({
   onDelete:      (t: { type: string; id: string; name: string }) => void;
   onSortReqs:    (orders: { requirementId: string; sortOrder: number }[]) => void;
   onSortStories: (orders: { storyId: string; sortOrder: number }[]) => void;
+  canCreate:     boolean;
+  canManage:     boolean;
 }) {
   const isOpen   = !collapsed.has(task.taskId);
   const isActive = selected?.type === "task" && selected.id === task.taskId;
@@ -615,8 +628,8 @@ function TaskTreeNode({
         isOpen={isOpen}
         onClick={() => onSelect({ type: "task", id: task.taskId, displayId: task.displayId })}
         onToggle={() => onToggle(task.taskId)}
-        onAdd={() => onAddReq(task.taskId)}
-        onDelete={() => onDelete({ type: "task", id: task.taskId, name: task.name })}
+        onAdd={canCreate ? () => onAddReq(task.taskId) : undefined}
+        onDelete={canManage ? () => onDelete({ type: "task", id: task.taskId, name: task.name }) : undefined}
         addTitle="요구사항 추가"
       />
       {isOpen && task.requirements.filter(isReqVisible).map((req) => {
@@ -625,7 +638,7 @@ function TaskTreeNode({
         return (
           <div
             key={req.reqId}
-            draggable={!keyword}
+            draggable={!keyword && canManage}
             onDragStart={() => { dragReqItem.current = fullIdx; }}
             onDragEnter={() => { dragReqOverItem.current = fullIdx; }}
             onDragEnd={handleReqDragEnd}
@@ -643,6 +656,8 @@ function TaskTreeNode({
               onAddStory={onAddStory}
               onDelete={onDelete}
               onSortStories={onSortStories}
+              canCreate={canCreate}
+              canManage={canManage}
             />
           </div>
         );
@@ -655,7 +670,7 @@ function TaskTreeNode({
 
 function ReqTreeNode({
   req, depth, selected, collapsed, keyword, highlight,
-  onSelect, onToggle, onAddStory, onDelete, onSortStories,
+  onSelect, onToggle, onAddStory, onDelete, onSortStories, canCreate, canManage,
 }: {
   req:           ReqNode;
   depth:         number;
@@ -668,6 +683,8 @@ function ReqTreeNode({
   onAddStory:    (reqId: string) => void;
   onDelete:      (t: { type: string; id: string; name: string }) => void;
   onSortStories: (orders: { storyId: string; sortOrder: number }[]) => void;
+  canCreate:     boolean;
+  canManage:     boolean;
 }) {
   const isOpen   = !collapsed.has(req.reqId);
   const isActive = selected?.type === "requirement" && selected.id === req.reqId;
@@ -708,8 +725,8 @@ function ReqTreeNode({
         hasChildren={req.storyCount > 0}
         onClick={() => onSelect({ type: "requirement", id: req.reqId, displayId: req.displayId })}
         onToggle={req.storyCount > 0 ? () => onToggle(req.reqId) : undefined}
-        onAdd={() => onAddStory(req.reqId)}
-        onDelete={() => onDelete({ type: "requirement", id: req.reqId, name: req.name })}
+        onAdd={canCreate ? () => onAddStory(req.reqId) : undefined}
+        onDelete={canManage ? () => onDelete({ type: "requirement", id: req.reqId, name: req.name }) : undefined}
         addTitle="사용자스토리 추가"
       />
       {isOpen && visibleStories.map((story) => {
@@ -717,7 +734,7 @@ function ReqTreeNode({
         return (
           <div
             key={story.storyId}
-            draggable={!keyword}
+            draggable={!keyword && canManage}
             onDragStart={() => { dragStoryItem.current = fullIdx; }}
             onDragEnter={() => { dragStoryOverItem.current = fullIdx; }}
             onDragEnd={handleStoryDragEnd}
@@ -730,6 +747,7 @@ function ReqTreeNode({
               highlight={highlight}
               onSelect={onSelect}
               onDelete={onDelete}
+              canManage={canManage}
             />
           </div>
         );
@@ -741,7 +759,7 @@ function ReqTreeNode({
 // ── 스토리 트리 노드 ──────────────────────────────────────────────────────────
 
 function StoryTreeNode({
-  story, depth, selected, highlight, onSelect, onDelete,
+  story, depth, selected, highlight, onSelect, onDelete, canManage,
 }: {
   story:     StoryNode;
   depth:     number;
@@ -749,6 +767,7 @@ function StoryTreeNode({
   highlight: (t: string) => React.ReactNode;
   onSelect:  (n: SelectedNode) => void;
   onDelete:  (t: { type: string; id: string; name: string }) => void;
+  canManage: boolean;
 }) {
   const isActive = selected?.type === "story" && selected.id === story.storyId;
 
@@ -763,7 +782,7 @@ function StoryTreeNode({
       isOpen={false}
       hasChildren={false}
       onClick={() => onSelect({ type: "story", id: story.storyId, displayId: story.displayId })}
-      onDelete={() => onDelete({ type: "story", id: story.storyId, name: story.name })}
+      onDelete={canManage ? () => onDelete({ type: "story", id: story.storyId, name: story.name }) : undefined}
       addTitle=""
     />
   );
@@ -788,7 +807,7 @@ function TreeRow({
   onClick:      () => void;   // 선택만 (우측 패널)
   onToggle?:    () => void;   // 접힘/펼침만 (화살표 클릭)
   onAdd?:       () => void;
-  onDelete:     () => void;
+  onDelete?:    () => void;
   addTitle:     string;
 }) {
   const [hovered, setHovered] = useState(false);
@@ -862,7 +881,9 @@ function TreeRow({
           {onAdd && addTitle && (
             <button onClick={onAdd} style={iconBtnStyle} title={addTitle}>+</button>
           )}
-          <button onClick={onDelete} style={{ ...iconBtnStyle, color: "#e53935" }} title="삭제">×</button>
+          {onDelete && (
+            <button onClick={onDelete} style={{ ...iconBtnStyle, color: "#e53935" }} title="삭제">×</button>
+          )}
         </div>
       )}
     </div>
@@ -903,7 +924,7 @@ function TaskDetailPanel({ projectId, taskId, displayId, onSaved }: { projectId:
   const { data: detail, isLoading } = useQuery({
     queryKey: ["task-detail", projectId, taskId],
     queryFn:  () =>
-      authFetch<{ data: { name: string; displayId: string | null; category: string; definition: string | null; content: string | null; outputInfo: string | null; rfpPage: string | null; assignMemberId: string | null } }>(
+      authFetch<{ data: { name: string; displayId: string | null; category: string; definition: string | null; content: string | null; outputInfo: string | null; rfpPage: string | null; assignMemberId: string | null; permissions?: SpecContentPermissions } }>(
         `/api/projects/${projectId}/tasks/${taskId}`
       ).then((r) => {
         setName(r.data.name);
@@ -935,7 +956,8 @@ function TaskDetailPanel({ projectId, taskId, displayId, onSaved }: { projectId:
   // 담당자 비교는 원본(API 응답) assignMemberId 로 — 폼에서 담당자를 바꾸는 도중에도
   // 권한 판정이 흔들리지 않도록 detail(로드값)을 기준으로 한다.
   const isAssignee = !!myMemberId && detail?.assignMemberId === myMemberId;
-  const { canEditTask } = useCanEditTask(projectId, { isAssignee });
+  const { canEditTask: legacyCanEditTask } = useCanEditTask(projectId, { isAssignee });
+  const canEditTask = detail?.permissions?.canEdit ?? legacyCanEditTask;
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -1044,7 +1066,7 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
   const { data: detail, isLoading } = useQuery({
     queryKey: ["req-detail-tree", projectId, reqId],
     queryFn:  () =>
-      authFetch<{ data: { name: string; displayId: string | null; sortOrder: number | null; priority: string; source: string; rfpPage: string | null; assignMemberId: string | null; originalContent: string; currentContent: string; analysisMemo: string; detailSpec: string; requirementId: string; taskId: string | null } }>(
+      authFetch<{ data: { name: string; displayId: string | null; sortOrder: number | null; priority: string; source: string; rfpPage: string | null; assignMemberId: string | null; originalContent: string; currentContent: string; analysisMemo: string; detailSpec: string; requirementId: string; taskId: string | null; permissions?: SpecContentPermissions } }>(
         `/api/projects/${projectId}/requirements/${reqId}`
       ).then((r) => {
         setName(r.data.name);
@@ -1079,10 +1101,10 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
   // 편집 권한 — 요구사항 개별 편집 화면([reqId]/page.tsx)과 동일한 게이트.
   // 담당자 비교는 원본(API 응답) assignMemberId 로 — 폼에서 담당자를 바꾸는 도중에도
   // 권한 판정이 흔들리지 않도록 detail(로드값)을 기준으로 한다.
-  const { has: hasPerm } = usePermissions(projectId);
-  const matrixUpdateOK = hasPerm("requirement.update");
+  const { has: hasPerm, myRole: panelRole } = usePermissions(projectId);
+  const matrixUpdateOK = panelRole !== "VIEWER" && hasPerm("requirement.update");
   const isAssignee = !!myMemberId && detail?.assignMemberId === myMemberId;
-  const canEdit = matrixUpdateOK || isAssignee;
+  const canEdit = detail?.permissions?.canEdit ?? (matrixUpdateOK || isAssignee);
 
   // 변경 이력 목록 — 개별 편집 화면과 동일하게 저장 다이얼로그의 "다음 버전" 미리보기용
   const { data: historyData } = useQuery({
@@ -1379,7 +1401,7 @@ function StoryDetailPanel({ projectId, storyId, displayId, onSaved }: { projectI
   const { data: detail, isLoading } = useQuery({
     queryKey: ["story-detail-tree", projectId, storyId],
     queryFn:  () =>
-      authFetch<{ data: { requirementId: string; name: string; persona: string; scenario: string; requirementAssigneeId: string | null; acceptanceCriteria: AcRow[] } }>(
+      authFetch<{ data: { requirementId: string; name: string; persona: string; scenario: string; requirementAssigneeId: string | null; acceptanceCriteria: AcRow[]; permissions?: SpecContentPermissions } }>(
         `/api/projects/${projectId}/user-stories/${storyId}`
       ).then((r) => {
         setReqId(r.data.requirementId);
@@ -1404,10 +1426,10 @@ function StoryDetailPanel({ projectId, storyId, displayId, onSaved }: { projectI
   const myMemberId = memberData?.myMemberId ?? "";
 
   // 편집 권한 — 사용자스토리 개별 편집 화면과 동일한 게이트(매트릭스 OR 연결 요구사항의 담당자)
-  const { has: hasPerm } = usePermissions(projectId);
-  const matrixUpdateOK = hasPerm("requirement.update");
+  const { has: hasPerm, myRole: panelRole } = usePermissions(projectId);
+  const matrixUpdateOK = panelRole !== "VIEWER" && hasPerm("requirement.update");
   const isAssigneeOfReq = !!myMemberId && detail?.requirementAssigneeId === myMemberId;
-  const canEdit = matrixUpdateOK || isAssigneeOfReq;
+  const canEdit = detail?.permissions?.canEdit ?? (matrixUpdateOK || isAssigneeOfReq);
 
   const saveMutation = useMutation({
     mutationFn: () =>

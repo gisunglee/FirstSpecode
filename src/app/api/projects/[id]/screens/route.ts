@@ -11,6 +11,10 @@ import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
+import { parseJsonBody } from "@/lib/parseJsonBody";
+import { screenCreateSchema } from "@/lib/specContentSchemas";
+import { listMeaningfulFields } from "@/lib/specContentFieldPolicy";
+import { requireSpecCreateFields } from "@/lib/specContentWritePolicy";
 import { fetchProjectScreens } from "@/lib/exports/screens-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -45,22 +49,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const gate = await requirePermission(request, projectId, "content.create");
   if (gate instanceof Response) return gate;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
-  }
-
-  const { unitWorkId, displayId: inputDisplayId, name, type, categoryL, categoryM, categoryS } = body as {
-    unitWorkId?:  string;
-    displayId?:   string;
-    name?:        string;
-    type?:        string;
-    categoryL?:   string;
-    categoryM?:   string;
-    categoryS?:   string;
-  };
-
-  if (!name?.trim()) return apiError("VALIDATION_ERROR", "화면명을 입력해 주세요.", 400);
+  const parsed = await parseJsonBody(request, screenCreateSchema);
+  if (parsed instanceof Response) return parsed;
+  const { unitWorkId, displayId: inputDisplayId, name, type, categoryL, categoryM, categoryS } = parsed.data;
+  const fieldError = requireSpecCreateFields(gate, "SCREEN", listMeaningfulFields(parsed.data));
+  if (fieldError) return fieldError;
 
   // 장문 텍스트 한도 검증 — 정책은 src/lib/constants/textLimits.ts
   const limitErr = apiTextLimitGuard([
@@ -102,36 +95,38 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       select:  { sort_ordr: true },
     });
 
-    const screen = await prisma.tbDsScreen.create({
-      data: {
-        prjct_id:        projectId,
-        unit_work_id:    unitWorkId || null,
-        scrn_display_id: displayId,
-        scrn_nm:         name.trim(),
-        scrn_ty_code:    type || "LIST",
-        ctgry_l_nm:      categoryL?.trim() || null,
-        ctgry_m_nm:      categoryM?.trim() || null,
-        ctgry_s_nm:      categoryS?.trim() || null,
-        sort_ordr:       (maxSort?.sort_ordr ?? 0) + 1,
-      },
-    });
-
-    // 설계 변경 이력 자동 기록 (FID-00147 v3 정책)
-    await prisma.tbDsDesignChange.create({
-      data: {
-        prjct_id:      projectId,
-        ref_tbl_nm:    "tb_ds_screen",
-        ref_id:        screen.scrn_id,
-        chg_type_code: "CREATE",
-        chg_rsn_cn:    "화면 신규 생성",
-        snapshot_data: {
-          screenId:  screen.scrn_id,
-          displayId: screen.scrn_display_id,
-          name:      screen.scrn_nm,
-          type:      screen.scrn_ty_code,
+    const screen = await prisma.$transaction(async (tx) => {
+      const created = await tx.tbDsScreen.create({
+        data: {
+          prjct_id:        projectId,
+          unit_work_id:    unitWorkId || null,
+          scrn_display_id: displayId,
+          scrn_nm:         name.trim(),
+          scrn_ty_code:    type || "LIST",
+          ctgry_l_nm:      categoryL?.trim() || null,
+          ctgry_m_nm:      categoryM?.trim() || null,
+          ctgry_s_nm:      categoryS?.trim() || null,
+          sort_ordr:       (maxSort?.sort_ordr ?? 0) + 1,
+          creat_mber_id:   gate.mberId,
         },
-        chg_mber_id: gate.mberId,
-      },
+      });
+      await tx.tbDsDesignChange.create({
+        data: {
+          prjct_id:      projectId,
+          ref_tbl_nm:    "tb_ds_screen",
+          ref_id:        created.scrn_id,
+          chg_type_code: "CREATE",
+          chg_rsn_cn:    "화면 신규 생성",
+          snapshot_data: {
+            screenId:  created.scrn_id,
+            displayId: created.scrn_display_id,
+            name:      created.scrn_nm,
+            type:      created.scrn_ty_code,
+          },
+          chg_mber_id: gate.mberId,
+        },
+      });
+      return created;
     });
 
     return apiSuccess({ screenId: screen.scrn_id, displayId: screen.scrn_display_id }, 201);

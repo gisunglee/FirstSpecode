@@ -11,6 +11,10 @@ import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
+import { parseJsonBody } from "@/lib/parseJsonBody";
+import { unitWorkCreateSchema } from "@/lib/specContentSchemas";
+import { listMeaningfulFields } from "@/lib/specContentFieldPolicy";
+import { requireSpecCreateFields } from "@/lib/specContentWritePolicy";
 import { fetchProjectUnitWorks } from "@/lib/exports/unit-works-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -46,23 +50,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const gate = await requirePermission(request, projectId, "content.create");
   if (gate instanceof Response) return gate;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
-  }
-
-  const { reqId, name, displayId: inputDisplayId, description, assignMemberId, startDate, endDate } = body as {
-    reqId?:          string;
-    name?:           string;
-    displayId?:      string;
-    description?:    string;
-    assignMemberId?: string;
-    startDate?:      string;
-    endDate?:        string;
-  };
-
-  if (!reqId?.trim())  return apiError("VALIDATION_ERROR", "상위 요구사항을 선택해 주세요.", 400);
-  if (!name?.trim())   return apiError("VALIDATION_ERROR", "단위업무명을 입력해 주세요.", 400);
+  const parsed = await parseJsonBody(request, unitWorkCreateSchema);
+  if (parsed instanceof Response) return parsed;
+  const { reqId, name, displayId: inputDisplayId, description, assignMemberId, startDate, endDate } = parsed.data;
+  const fieldError = requireSpecCreateFields(gate, "UNIT_WORK", listMeaningfulFields(parsed.data));
+  if (fieldError) return fieldError;
 
   // 장문 텍스트 한도 검증 — 정책은 src/lib/constants/textLimits.ts
   const limitErr = apiTextLimitGuard([
@@ -114,6 +106,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         plan_dsgn_bgng_de:    startDate?.trim() || null,
         plan_dsgn_end_de:     endDate?.trim() || null,
         sort_ordr:            (maxSort?.sort_ordr ?? 0) + 1,
+        creat_mber_id:        gate.mberId,
       },
     });
 

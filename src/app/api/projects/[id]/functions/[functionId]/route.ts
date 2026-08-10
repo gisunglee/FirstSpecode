@@ -9,61 +9,19 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
-import { requireAuth } from "@/lib/requireAuth";
-import {
-  hasPermission, isRoleCode, isJobCode,
-  type RoleCode, type JobCode,
-} from "@/lib/permissions";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
+import {
+  requireSpecContentWrite,
+  requireSpecChangedFields,
+  getSpecContentCapabilities,
+  creatorWindowConflict,
+} from "@/lib/specContentWritePolicy";
+import { isCreatorWindowConflict, lockAndAssertCreatorWindow } from "@/lib/specContentWriteConcurrency";
+import { parseJsonBody } from "@/lib/parseJsonBody";
+import { functionUpdateSchema } from "@/lib/specContentSchemas";
 
 type RouteParams = { params: Promise<{ id: string; functionId: string }> };
-
-/**
- * 기능 수정/삭제 권한 게이트.
- *
- * 통과 조건 (OR):
- *   ① permissions 매트릭스 "requirement.update" — OWNER/ADMIN 역할 또는 PM/PL 직무
- *   ② 본인이 기능의 담당자(asign_mber_id)
- */
-async function requireFunctionWrite(
-  request: NextRequest,
-  projectId: string,
-  functionId: string
-): Promise<{ mberId: string } | Response> {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where:  { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-    select: { role_code: true, job_title_code: true, mber_sttus_code: true },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "프로젝트 멤버가 아닙니다.", 403);
-  }
-
-  const role: RoleCode | null = isRoleCode(membership.role_code) ? membership.role_code : null;
-  const job:  JobCode  | null = isJobCode(membership.job_title_code) ? membership.job_title_code : null;
-
-  const matrixOK = hasPermission(
-    { role, job, plan: "FREE", systemRole: null },
-    "requirement.update"
-  );
-  if (matrixOK) return { mberId: auth.mberId };
-
-  const target = await prisma.tbDsFunction.findUnique({
-    where:  { func_id: functionId },
-    select: { asign_mber_id: true, prjct_id: true },
-  });
-  if (!target || target.prjct_id !== projectId) {
-    return apiError("NOT_FOUND", "기능을 찾을 수 없습니다.", 404);
-  }
-  if (target.asign_mber_id !== auth.mberId) {
-    return apiError("FORBIDDEN", "이 기능을 수정할 권한이 없습니다.", 403);
-  }
-
-  return { mberId: auth.mberId };
-}
 
 // ─── GET: 기능 상세 조회 ─────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
@@ -126,6 +84,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (!fn || fn.prjct_id !== projectId) {
       return apiError("NOT_FOUND", "기능을 찾을 수 없습니다.", 404);
     }
+    const permissions = await getSpecContentCapabilities(request, projectId, "FUNCTION", functionId, gate);
 
     // 태스크 타입별 최신 1건만 추출
     const aiTasks: Record<string, { aiTaskId: string; status: string }> = {};
@@ -150,6 +109,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     return apiSuccess({
+      permissions,
       funcId:         fn.func_id,
       displayId:      fn.func_display_id,
       name:           fn.func_nm,
@@ -189,33 +149,16 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, functionId } = await params;
 
   // OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 담당자만 수정 가능
-  const gate = await requireFunctionWrite(request, projectId, functionId);
+  const gate = await requireSpecContentWrite(request, projectId, "FUNCTION", functionId);
   if (gate instanceof Response) return gate;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
-  }
-
+  const parsed = await parseJsonBody(request, functionUpdateSchema);
+  if (parsed instanceof Response) return parsed;
   const {
     areaId, displayId, name, type, description, commentCn,
     priority, complexity, effort, docStatus,
     assignMemberId, sortOrder, saveHistory,
-  } = body as {
-    areaId?:           string;
-    displayId?:        string;
-    name?:             string;
-    type?:             string;
-    description?:      string;
-    commentCn?:        string;
-    priority?:         string;
-    complexity?:       string;
-    effort?:           string;
-    docStatus?:        string;
-    assignMemberId?:   string;
-    sortOrder?:        number;
-    saveHistory?:      boolean;
-  };
+  } = parsed.data;
 
   // name은 부분 수정 시 생략 가능(기존값 유지) — 단, 전달됐다면 공백은 거부
   if (name !== undefined && !name.trim()) {
@@ -236,12 +179,37 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (!existing || existing.prjct_id !== projectId) {
       return apiError("NOT_FOUND", "기능을 찾을 수 없습니다.", 404);
     }
+    const changedFields = [
+      ...(areaId !== undefined && (areaId || null) !== existing.area_id ? ["areaId"] : []),
+      ...(displayId !== undefined && displayId.trim() !== existing.func_display_id ? ["displayId"] : []),
+      ...(name !== undefined && name.trim() !== existing.func_nm ? ["name"] : []),
+      ...(type !== undefined && type !== existing.func_ty_code ? ["type"] : []),
+      ...(description !== undefined && (description.trim() || null) !== existing.func_dc ? ["description"] : []),
+      ...(commentCn !== undefined && (commentCn.trim() || null) !== existing.coment_cn ? ["commentCn"] : []),
+      ...(priority !== undefined && priority !== existing.priort_code ? ["priority"] : []),
+      ...(complexity !== undefined && complexity !== existing.cmplx_code ? ["complexity"] : []),
+      ...(effort !== undefined && (effort.trim() || null) !== existing.impl_efrt_val ? ["effort"] : []),
+      ...(docStatus !== undefined && docStatus !== existing.dsgn_doc_sttus_code ? ["docStatus"] : []),
+      ...(assignMemberId !== undefined && (assignMemberId || null) !== existing.asign_mber_id ? ["assignMemberId"] : []),
+      ...(sortOrder !== undefined && sortOrder !== existing.sort_ordr ? ["sortOrder"] : []),
+    ];
+    const fieldError = requireSpecChangedFields(gate, "FUNCTION", changedFields);
+    if (fieldError) return fieldError;
+
+    if (areaId !== undefined && areaId !== existing.area_id && areaId) {
+      const targetArea = await prisma.tbDsArea.findFirst({
+        where: { area_id: areaId, prjct_id: projectId },
+        select: { area_id: true },
+      });
+      if (!targetArea) return apiError("NOT_FOUND", "영역을 찾을 수 없습니다.", 404);
+    }
 
     const newDescription = description?.trim() || null;
     const oldDescription = existing.func_dc ?? null;
 
-    await prisma.$transaction([
-      prisma.tbDsFunction.update({
+    await prisma.$transaction(async (tx) => {
+      await lockAndAssertCreatorWindow(tx, "FUNCTION", functionId, gate);
+      await tx.tbDsFunction.update({
         where: { func_id: functionId },
         data: {
           // area_id: 명시적으로 전달된 경우만 변경
@@ -260,9 +228,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           asign_mber_id: assignMemberId !== undefined ? (assignMemberId || null) : existing.asign_mber_id,
           sort_ordr:     sortOrder ?? existing.sort_ordr,
           mdfcn_dt:      new Date(),
+          mdfcn_mber_id: gate.mberId,
         },
-      }),
-      prisma.tbDsDesignChange.create({
+      });
+      await tx.tbDsDesignChange.create({
         data: {
           prjct_id:      projectId,
           ref_tbl_nm:    "tb_ds_function",
@@ -277,10 +246,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           },
           chg_mber_id: gate.mberId,
         },
-      }),
-      // 설명 변경 이력 — tb_ds_design_change에 before/after JSON으로 저장
-      ...(saveHistory ? [
-        prisma.tbDsDesignChange.create({
+      });
+      if (saveHistory) {
+        // 설명 변경 이력 — tb_ds_design_change에 before/after JSON으로 저장
+        await tx.tbDsDesignChange.create({
           data: {
             prjct_id:      projectId,
             ref_tbl_nm:    "tb_ds_function",
@@ -293,12 +262,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             },
             chg_mber_id: gate.mberId,
           },
-        }),
-      ] : []),
-    ]);
+        });
+      }
+    });
 
     return apiSuccess({ funcId: functionId });
   } catch (err) {
+    if (isCreatorWindowConflict(err)) return creatorWindowConflict();
     console.error(`[PUT /api/projects/${projectId}/functions/${functionId}] DB 오류:`, err);
     return apiError("DB_ERROR", "저장 중 오류가 발생했습니다.", 500);
   }
@@ -309,7 +279,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, functionId } = await params;
 
   // OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 담당자만 삭제 가능
-  const gate = await requireFunctionWrite(request, projectId, functionId);
+  const gate = await requireSpecContentWrite(request, projectId, "FUNCTION", functionId, "DELETE");
   if (gate instanceof Response) return gate;
 
   try {

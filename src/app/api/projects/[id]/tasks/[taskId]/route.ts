@@ -7,9 +7,17 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
-import { requireTaskWrite } from "@/lib/taskWriteGate";
+import {
+  requireSpecContentWrite,
+  requireSpecChangedFields,
+  getSpecContentCapabilities,
+  creatorWindowConflict,
+} from "@/lib/specContentWritePolicy";
+import { isCreatorWindowConflict, lockAndAssertCreatorWindow } from "@/lib/specContentWriteConcurrency";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
+import { parseJsonBody } from "@/lib/parseJsonBody";
+import { taskUpdateSchema } from "@/lib/specContentSchemas";
 
 type RouteParams = { params: Promise<{ id: string; taskId: string }> };
 
@@ -34,6 +42,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           select: { mber_nm: true, email_addr: true },
         })
       : null;
+    const permissions = await getSpecContentCapabilities(request, projectId, "TASK", taskId, gate);
 
     return apiSuccess({
       taskId:           task.task_id,
@@ -46,6 +55,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       rfpPage:          task.rfp_page_no    ?? null,
       assignMemberId:   task.asign_mber_id  ?? null,
       assignMemberName: assignee ? (assignee.mber_nm || assignee.email_addr || null) : null,
+      permissions,
     });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/tasks/${taskId}] DB 오류:`, err);
@@ -57,25 +67,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, taskId } = await params;
 
-  // OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 담당자 OR 환경설정 MEMBER_TASK_UPT_PSBL_YN="Y"
-  const gate = await requireTaskWrite(request, projectId, { taskId });
+  const gate = await requireSpecContentWrite(request, projectId, "TASK", taskId);
   if (gate instanceof Response) return gate;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
-  }
-
-  const { name, category, definition, content, outputInfo, rfpPage, displayId, assignMemberId } = body as {
-    name?: string; category?: string;
-    definition?: string; content?: string;
-    outputInfo?: string; rfpPage?: string;
-    displayId?: string;
-    assignMemberId?: string;
-  };
-
-  if (!name?.trim()) return apiError("VALIDATION_ERROR", "과업명을 입력해 주세요.", 400);
-  if (!category?.trim()) return apiError("VALIDATION_ERROR", "카테고리를 선택해 주세요.", 400);
+  const parsed = await parseJsonBody(request, taskUpdateSchema);
+  if (parsed instanceof Response) return parsed;
+  const { name, category, definition, content, outputInfo, rfpPage, displayId, assignMemberId } = parsed.data;
 
   // 장문 텍스트 한도 검증 — 정책은 src/lib/constants/textLimits.ts
   const limitErr = apiTextLimitGuard([
@@ -92,6 +89,19 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       where: { task_id: taskId, prjct_id: projectId },
     });
     if (!existing) return apiError("NOT_FOUND", "과업을 찾을 수 없습니다.", 404);
+
+    const changedFields = [
+      ...(name.trim() !== existing.task_nm ? ["name"] : []),
+      ...(category !== existing.ctgry_code ? ["category"] : []),
+      ...(definition !== undefined && (definition.trim() || null) !== existing.defn_cn ? ["definition"] : []),
+      ...(content !== undefined && (content.trim() || null) !== existing.dtl_cn ? ["content"] : []),
+      ...(outputInfo !== undefined && (outputInfo.trim() || null) !== existing.output_info_cn ? ["outputInfo"] : []),
+      ...(rfpPage !== undefined && (rfpPage.trim() || null) !== existing.rfp_page_no ? ["rfpPage"] : []),
+      ...(assignMemberId !== undefined && (assignMemberId || null) !== existing.asign_mber_id ? ["assignMemberId"] : []),
+      ...(displayId !== undefined && displayId.trim() !== existing.task_display_id ? ["displayId"] : []),
+    ];
+    const fieldError = requireSpecChangedFields(gate, "TASK", changedFields);
+    if (fieldError) return fieldError;
 
     // 담당자 변경 감지 — 값이 실제로 바뀌었을 때만 이력 저장 (no-op 스킵)
     // SettingsHistoryDialog의 itemName과 정확히 일치해야 필터됨
@@ -118,26 +128,26 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       };
     }
 
-    // 담당자 이력이 있으면 update + history를 한 트랜잭션으로, 없으면 단건 update
-    const updateOp = prisma.tbRqTask.update({
-      where: { task_id: taskId },
-      data: {
-        task_nm:         name.trim(),
-        task_display_id: displayId?.trim() || existing.task_display_id,
-        ctgry_code:      category,
-        defn_cn:         definition !== undefined ? (definition?.trim() || null) : existing.defn_cn,
-        dtl_cn:          content !== undefined ? (content?.trim() || null) : existing.dtl_cn,
-        output_info_cn:  outputInfo !== undefined ? (outputInfo?.trim() || null) : existing.output_info_cn,
-        rfp_page_no:     rfpPage !== undefined ? (rfpPage?.trim() || null) : existing.rfp_page_no,
-        asign_mber_id:   nextAssignee,
-        mdfcn_dt:        new Date(),
-      },
-    });
+    await prisma.$transaction(async (tx) => {
+      await lockAndAssertCreatorWindow(tx, "TASK", taskId, gate);
+      await tx.tbRqTask.update({
+        where: { task_id: taskId },
+        data: {
+          task_nm:         name.trim(),
+          task_display_id: displayId?.trim() || existing.task_display_id,
+          ctgry_code:      category,
+          defn_cn:         definition !== undefined ? (definition?.trim() || null) : existing.defn_cn,
+          dtl_cn:          content !== undefined ? (content?.trim() || null) : existing.dtl_cn,
+          output_info_cn:  outputInfo !== undefined ? (outputInfo?.trim() || null) : existing.output_info_cn,
+          rfp_page_no:     rfpPage !== undefined ? (rfpPage?.trim() || null) : existing.rfp_page_no,
+          asign_mber_id:   nextAssignee,
+          mdfcn_mber_id:   gate.mberId,
+          mdfcn_dt:        new Date(),
+        },
+      });
 
-    if (assigneeChanged) {
-      await prisma.$transaction([
-        updateOp,
-        prisma.tbDsDesignChange.create({
+      if (assigneeChanged) {
+        await tx.tbDsDesignChange.create({
           data: {
             prjct_id:      projectId,
             ref_tbl_nm:    "tb_rq_task",
@@ -152,14 +162,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             },
             chg_mber_id: gate.mberId,
           },
-        }),
-      ]);
-    } else {
-      await updateOp;
-    }
+        });
+      }
+    });
 
     return apiSuccess({ ok: true });
   } catch (err) {
+    if (isCreatorWindowConflict(err)) return creatorWindowConflict();
     console.error(`[PUT /api/projects/${projectId}/tasks/${taskId}] DB 오류:`, err);
     return apiError("DB_ERROR", "저장 중 오류가 발생했습니다.", 500);
   }
@@ -169,8 +178,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, taskId } = await params;
 
-  // OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 담당자 OR 환경설정 MEMBER_TASK_UPT_PSBL_YN="Y"
-  const gate = await requireTaskWrite(request, projectId, { taskId });
+  const gate = await requireSpecContentWrite(request, projectId, "TASK", taskId, "DELETE");
   if (gate instanceof Response) return gate;
 
   // deleteType: 'ALL' | 'TASK_ONLY'

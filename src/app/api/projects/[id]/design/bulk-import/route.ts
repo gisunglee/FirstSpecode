@@ -53,8 +53,7 @@
 import { NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
-import { checkRole } from "@/lib/checkRole";
+import { requireSpecManager } from "@/lib/specContentWritePolicy";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { createIdPrefixCache } from "@/lib/idPrefix";
 
@@ -214,19 +213,9 @@ async function nextFunctionSortOrder(projectId: string, tx: TxClient): Promise<n
 // ── POST 핸들러 ──────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId } = await params;
-
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
-  const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER"]);
-  if (roleCheck) return roleCheck;
+  const gate = await requireSpecManager(request, projectId);
+  if (gate instanceof Response) return gate;
 
   let body: unknown;
   try { body = await request.json(); } catch {
@@ -272,6 +261,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             data: {
               unit_work_nm: uwInput.name.trim(),
               unit_work_dc: uwInput.description?.trim() ?? existing.unit_work_dc,
+              mdfcn_mber_id: gate.mberId,
               mdfcn_dt:     new Date(),
             },
           });
@@ -302,6 +292,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
               unit_work_nm:        uwInput.name.trim(),
               unit_work_dc:        uwInput.description?.trim() || null,
               sort_ordr:           sortOrder,
+              creat_mber_id:       gate.mberId,
             },
           });
           unitWorkId = created.unit_work_id;
@@ -334,6 +325,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 ctgry_l_nm:   scInput.categoryL?.trim()  ?? existing.ctgry_l_nm,
                 ctgry_m_nm:   scInput.categoryM?.trim()  ?? existing.ctgry_m_nm,
                 ctgry_s_nm:   scInput.categoryS?.trim()  ?? existing.ctgry_s_nm,
+                mdfcn_mber_id: gate.mberId,
                 mdfcn_dt:     new Date(),
               },
             });
@@ -356,6 +348,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 ctgry_m_nm:     scInput.categoryM?.trim()    || null,
                 ctgry_s_nm:     scInput.categoryS?.trim()    || null,
                 sort_ordr:      sortOrder,
+                creat_mber_id:  gate.mberId,
               },
             });
             screenId = created.scrn_id;
@@ -384,6 +377,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                   area_dc:      arInput.description?.trim() ?? existing.area_dc,
                   // [2026-04-25] D5: 화이트리스트 미통과 시 기존 값 유지
                   area_ty_code: pickAllowed(arInput.areaType, ALLOWED_AREA_TYPES, existing.area_ty_code),
+                  mdfcn_mber_id: gate.mberId,
                   mdfcn_dt:     new Date(),
                 },
               });
@@ -402,6 +396,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                   // [2026-04-25] D5: 화이트리스트 미통과 시 default "LIST" (신규 분류 기본값)
                   area_ty_code:   pickAllowed(arInput.areaType, ALLOWED_AREA_TYPES, "LIST"),
                   sort_ordr:      sortOrder,
+                  creat_mber_id:  gate.mberId,
                 },
               });
               areaId = created.area_id;
@@ -430,6 +425,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                     func_ty_code: pickAllowed(fnInput.functionType, ALLOWED_FUNCTION_TYPES, existing.func_ty_code),
                     priort_code:  pickAllowed(fnInput.priority,     ALLOWED_PRIORITIES,     existing.priort_code),
                     cmplx_code:   pickAllowed(fnInput.complexity,   ALLOWED_COMPLEXITIES,   existing.cmplx_code),
+                    mdfcn_mber_id: gate.mberId,
                     mdfcn_dt:     new Date(),
                   },
                 });
@@ -449,6 +445,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                     priort_code:     pickAllowed(fnInput.priority,     ALLOWED_PRIORITIES,     "MEDIUM"),
                     cmplx_code:      pickAllowed(fnInput.complexity,   ALLOWED_COMPLEXITIES,   "MEDIUM"),
                     sort_ordr:       sortOrder,
+                    creat_mber_id:   gate.mberId,
                   },
                 });
                 result.created.functions++;

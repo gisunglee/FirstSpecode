@@ -11,6 +11,10 @@ import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
+import { parseJsonBody } from "@/lib/parseJsonBody";
+import { functionCreateSchema } from "@/lib/specContentSchemas";
+import { listMeaningfulFields } from "@/lib/specContentFieldPolicy";
+import { requireSpecCreateFields } from "@/lib/specContentWritePolicy";
 import { fetchProjectFunctions } from "@/lib/exports/functions-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -41,28 +45,22 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const gate = await requirePermission(request, projectId, "content.create");
   if (gate instanceof Response) return gate;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
-  }
-
+  const parsed = await parseJsonBody(request, functionCreateSchema);
+  if (parsed instanceof Response) return parsed;
   const {
     areaId, displayId: inputDisplayId, name, type, description, priority, complexity, effort,
     assignMemberId, sortOrder,
-  } = body as {
-    areaId?:         string;
-    displayId?:      string;
-    name?:           string;
-    type?:           string;
-    description?:    string;
-    priority?:       string;
-    complexity?:     string;
-    effort?:         string;
-    assignMemberId?: string;
-    sortOrder?:      number;
-  };
+  } = parsed.data;
+  const fieldError = requireSpecCreateFields(gate, "FUNCTION", listMeaningfulFields(parsed.data));
+  if (fieldError) return fieldError;
 
-  if (!name?.trim()) return apiError("VALIDATION_ERROR", "기능명을 입력해 주세요.", 400);
+  if (areaId) {
+    const parentArea = await prisma.tbDsArea.findFirst({
+      where: { area_id: areaId, prjct_id: projectId },
+      select: { area_id: true },
+    });
+    if (!parentArea) return apiError("NOT_FOUND", "영역을 찾을 수 없습니다.", 404);
+  }
 
   // 장문 텍스트 한도 검증 — 정책은 src/lib/constants/textLimits.ts
   const limitErr = apiTextLimitGuard([
@@ -94,37 +92,40 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     });
     const nextSort = sortOrder ?? (maxSort._max.sort_ordr ?? 0) + 1;
 
-    const fn = await prisma.tbDsFunction.create({
-      data: {
-        prjct_id:       projectId,
-        area_id:        areaId || null,
-        func_display_id: displayId,
-        func_nm:        name.trim(),
-        func_ty_code:   type || "OTHER",
-        func_dc:        description?.trim() || null,
-        priort_code:    priority || "MEDIUM",
-        cmplx_code:     complexity || "MEDIUM",
-        impl_efrt_val:  effort?.trim() || null,
-        asign_mber_id:  assignMemberId || null,
-        sort_ordr:      nextSort,
-      },
-    });
-
-    await prisma.tbDsDesignChange.create({
-      data: {
-        prjct_id:      projectId,
-        ref_tbl_nm:    "tb_ds_function",
-        ref_id:        fn.func_id,
-        chg_type_code: "CREATE",
-        chg_rsn_cn:    "기능 생성",
-        snapshot_data: {
-          funcId:    fn.func_id,
-          displayId: displayId,
-          name:      name.trim(),
-          type:      type || "OTHER",
+    const fn = await prisma.$transaction(async (tx) => {
+      const created = await tx.tbDsFunction.create({
+        data: {
+          prjct_id:        projectId,
+          area_id:         areaId || null,
+          func_display_id: displayId,
+          func_nm:         name.trim(),
+          func_ty_code:    type || "OTHER",
+          func_dc:         description?.trim() || null,
+          priort_code:     priority || "MEDIUM",
+          cmplx_code:      complexity || "MEDIUM",
+          impl_efrt_val:   effort?.trim() || null,
+          asign_mber_id:   assignMemberId || null,
+          sort_ordr:       nextSort,
+          creat_mber_id:   gate.mberId,
         },
-        chg_mber_id: gate.mberId,
-      },
+      });
+      await tx.tbDsDesignChange.create({
+        data: {
+          prjct_id:      projectId,
+          ref_tbl_nm:    "tb_ds_function",
+          ref_id:        created.func_id,
+          chg_type_code: "CREATE",
+          chg_rsn_cn:    "기능 생성",
+          snapshot_data: {
+            funcId:    created.func_id,
+            displayId,
+            name:      name.trim(),
+            type:      type || "OTHER",
+          },
+          chg_mber_id: gate.mberId,
+        },
+      });
+      return created;
     });
 
     return apiSuccess({ funcId: fn.func_id, displayId }, 201);
