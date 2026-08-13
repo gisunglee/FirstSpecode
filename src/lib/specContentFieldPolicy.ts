@@ -37,7 +37,7 @@ const MEMBER_CREATE_FIELDS: Record<SpecResourceType, readonly string[]> = {
   ],
   USER_STORY: ["requirementId", "name", "persona", "scenario", "acceptanceCriteria"],
   UNIT_WORK: ["reqId", "name", "description"],
-  SCREEN: ["unitWorkId", "name", "type", "categoryL", "categoryM", "categoryS"],
+  SCREEN: ["unitWorkId", "name", "description", "layoutData", "type", "categoryL", "categoryM", "categoryS"],
   AREA: ["screenId", "name", "type", "displayFormCode", "description"],
   FUNCTION: ["areaId", "name", "type", "description", "priority"],
 };
