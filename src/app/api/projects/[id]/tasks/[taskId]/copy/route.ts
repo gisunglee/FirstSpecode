@@ -9,7 +9,7 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireTaskWrite } from "@/lib/taskWriteGate";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { createIdPrefixCache } from "@/lib/idPrefix";
 
@@ -18,9 +18,8 @@ type RouteParams = { params: Promise<{ id: string; taskId: string }> };
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, taskId } = await params;
 
-  // 복사 = 새 과업 생성과 동등 → 본인 담당이라도 다른 사람 과업 복사로 권한 우회 가능하면 안 됨
-  // 그래서 taskId 미전달(생성 게이트와 동일 정책)
-  const gate = await requireTaskWrite(request, projectId);
+  // 복사는 새 과업 생성과 동일한 권한을 사용한다. VIEWER는 content.create에서 차단된다.
+  const gate = await requirePermission(request, projectId, "content.create");
   if (gate instanceof Response) return gate;
 
   try {
@@ -81,6 +80,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           output_info_cn:  original.output_info_cn,
           rfp_page_no:     original.rfp_page_no,
           sort_ordr:       sortOrder,
+          creat_mber_id:   gate.mberId,
         },
       });
 
@@ -99,6 +99,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             req_nm:         req.req_nm,
             priort_code:    req.priort_code,
             sort_ordr:      req.sort_ordr,
+            creat_mber_id:  gate.mberId,
           },
         });
 
@@ -111,6 +112,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
               story_id:         newStoryId,
               req_id:           newReqId,
               story_display_id: story.story_display_id,
+              creat_mber_id:    gate.mberId,
             },
           });
 

@@ -48,13 +48,11 @@ type TasksResponse = { tasks: Task[]; totalCount: number };
 const CATEGORY_LABEL: Record<string, string> = {
   NEW_DEV:  "신규개발",
   IMPROVE:  "기능개선",
-  MAINTAIN: "유지보수",
 };
 
 const CATEGORY_COLOR: Record<string, { bg: string; color: string }> = {
   NEW_DEV:  { bg: "#e3f2fd", color: "#1565c0" },
   IMPROVE:  { bg: "#e8f5e9", color: "#2e7d32" },
-  MAINTAIN: { bg: "#fff3e0", color: "#e65100" },
 };
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
@@ -75,8 +73,7 @@ function TaskListPageInner() {
   const projectId   = params.id;
   const queryClient = useQueryClient();
 
-  // 과업 등록/순서변경/복사 가능 여부 — 백엔드 taskWriteGate 와 동일 규칙
-  // (OWNER/ADMIN 또는 PM/PL, 또는 환경설정 MEMBER_TASK_UPT_PSBL_YN="Y" 인 멤버)
+  // 과업 등록/복사 가능 여부 — content.create 권한을 사용하며 VIEWER는 제외된다.
   const { canCreateTask } = useCanEditTask(projectId);
 
   // 담당자 필터 — 전역 appStore.myAssigneeMode 구독 (GNB 토글과 양방향 바인딩)

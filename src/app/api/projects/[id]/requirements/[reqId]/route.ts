@@ -5,71 +5,22 @@
  */
 
 import { NextRequest } from "next/server";
-import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
-import { requireAuth } from "@/lib/requireAuth";
 import {
-  hasPermission, isRoleCode, isJobCode,
-  type RoleCode, type JobCode,
-} from "@/lib/permissions";
+  requireSpecContentWrite,
+  requireSpecChangedFields,
+  getSpecContentCapabilities,
+  creatorWindowConflict,
+} from "@/lib/specContentWritePolicy";
+import { isCreatorWindowConflict, lockAndAssertCreatorWindow } from "@/lib/specContentWriteConcurrency";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 import { deleteFile } from "@/lib/fileStorage";
+import { parseJsonBody } from "@/lib/parseJsonBody";
+import { requirementUpdateSchema } from "@/lib/specContentSchemas";
 
 type RouteParams = { params: Promise<{ id: string; reqId: string }> };
-
-/**
- * 요구사항 편집/삭제 권한 게이트.
- *
- * 통과 조건 (OR):
- *   ① permissions 매트릭스 "requirement.update" 통과 — OWNER/ADMIN 역할 또는 PM/PL 직무
- *   ② 본인이 해당 요구사항의 담당자(asign_mber_id) — 매트릭스로 표현 못 하는 동적 조건
- *
- * 둘 다 실패하면 403 Response 반환.
- * requirePermission 을 직접 쓰지 않는 이유: 매트릭스 + 리소스 동적 조건 OR 합산이 필요하기 때문.
- */
-async function requireRequirementWrite(
-  request: NextRequest,
-  projectId: string,
-  reqId: string
-): Promise<{ mberId: string } | Response> {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where:  { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-    select: { role_code: true, job_title_code: true, mber_sttus_code: true },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "프로젝트 멤버가 아닙니다.", 403);
-  }
-
-  const role: RoleCode | null = isRoleCode(membership.role_code) ? membership.role_code : null;
-  const job:  JobCode  | null = isJobCode(membership.job_title_code) ? membership.job_title_code : null;
-
-  // ① 매트릭스 권한 체크 — plan 은 이 권한 규칙에 영향 없으므로 FREE 고정
-  const matrixOK = hasPermission(
-    { role, job, plan: "FREE", systemRole: null },
-    "requirement.update"
-  );
-
-  if (matrixOK) return { mberId: auth.mberId };
-
-  // ② 본인이 담당자인지 확인
-  const existing = await prisma.tbRqRequirement.findUnique({
-    where:  { req_id: reqId },
-    select: { asign_mber_id: true, prjct_id: true },
-  });
-  if (!existing || existing.prjct_id !== projectId) {
-    return apiError("NOT_FOUND", "요구사항을 찾을 수 없습니다.", 404);
-  }
-  if (existing.asign_mber_id !== auth.mberId) {
-    return apiError("FORBIDDEN", "이 요구사항을 수정할 권한이 없습니다.", 403);
-  }
-
-  return { mberId: auth.mberId };
-}
 
 // ─── GET: 요구사항 상세 조회 ─────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
@@ -96,6 +47,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           select: { mber_nm: true, email_addr: true },
         })
       : null;
+    const permissions = await getSpecContentCapabilities(request, projectId, "REQUIREMENT", reqId, gate);
 
     return apiSuccess({
       requirementId:    req.req_id,
@@ -118,6 +70,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       analysisEnd:      req.anls_end_de  ?? null,
       analysisEffort:   req.anls_efrt_val ?? null,
       progress:         req.progrs_rt,
+      permissions,
     });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/requirements/${reqId}] DB 오류:`, err);
@@ -129,15 +82,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, reqId } = await params;
 
-  // OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 담당자만 수정 가능
-  const gate = await requireRequirementWrite(request, projectId, reqId);
+  const gate = await requireSpecContentWrite(request, projectId, "REQUIREMENT", reqId);
   if (gate instanceof Response) return gate;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
-  }
-
+  const parsed = await parseJsonBody(request, requirementUpdateSchema);
+  if (parsed instanceof Response) return parsed;
   const {
     taskId, name, priority, source, rfpPage,
     originalContent, currentContent, analysisMemo, detailSpec,
@@ -145,30 +94,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     analysisStart, analysisEnd, analysisEffort, progress,
     saveHistory, versionMode, versionComment,
     saveSpecHistory, saveAnalyHistory,
-  } = body as {
-    taskId?: string; name?: string; priority?: string; source?: string;
-    rfpPage?: string; originalContent?: string; currentContent?: string;
-    analysisMemo?: string; detailSpec?: string; reqDisplayId?: string;
-    sortOrder?: number;
-    assignMemberId?: string;
-    // 분석 일정/공수/진척률 — 담당자가 직접 입력하는 값
-    analysisStart?:  string;
-    analysisEnd?:    string;
-    analysisEffort?: string;
-    progress?:       number;
-    saveHistory?: boolean;
-    versionMode?: "major" | "minor";
-    versionComment?: string;
-    saveSpecHistory?: boolean;
-    saveAnalyHistory?: boolean;
-  };
-
-  if (!name?.trim()) return apiError("VALIDATION_ERROR", "요구사항명을 입력해 주세요.", 400);
-  if (!priority)     return apiError("VALIDATION_ERROR", "우선순위를 선택해 주세요.", 400);
-  if (!source)       return apiError("VALIDATION_ERROR", "출처를 선택해 주세요.", 400);
-  if (progress !== undefined && (progress < 0 || progress > 100)) {
-    return apiError("VALIDATION_ERROR", "진척률은 0~100 사이여야 합니다.", 400);
-  }
+  } = parsed.data;
   if (analysisStart && analysisEnd && analysisEnd < analysisStart) {
     return apiError("VALIDATION_ERROR", "분석 종료일은 시작일 이후여야 합니다.", 400);
   }
@@ -191,6 +117,37 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const existing = await prisma.tbRqRequirement.findUnique({ where: { req_id: reqId } });
     if (!existing || existing.prjct_id !== projectId) {
       return apiError("NOT_FOUND", "요구사항을 찾을 수 없습니다.", 404);
+    }
+
+    const changedFields = [
+      ...(taskId !== undefined && (taskId || null) !== existing.task_id ? ["taskId"] : []),
+      ...(name.trim() !== existing.req_nm ? ["name"] : []),
+      ...(priority !== existing.priort_code ? ["priority"] : []),
+      ...(source !== existing.src_code ? ["source"] : []),
+      ...(rfpPage !== undefined && (rfpPage.trim() || null) !== existing.rfp_page_no ? ["rfpPage"] : []),
+      ...(originalContent !== undefined && (originalContent.trim() || null) !== existing.orgnl_cn ? ["originalContent"] : []),
+      ...(currentContent !== undefined && (currentContent.trim() || null) !== existing.curncy_cn ? ["currentContent"] : []),
+      ...(analysisMemo !== undefined && (analysisMemo.trim() || null) !== existing.analy_cn ? ["analysisMemo"] : []),
+      ...(detailSpec !== undefined && (detailSpec.trim() || null) !== existing.spec_cn ? ["detailSpec"] : []),
+      ...(reqDisplayId !== undefined && reqDisplayId.trim() !== existing.req_display_id ? ["reqDisplayId"] : []),
+      ...(sortOrder !== undefined && sortOrder !== existing.sort_ordr ? ["sortOrder"] : []),
+      ...(assignMemberId !== undefined && (assignMemberId || null) !== existing.asign_mber_id ? ["assignMemberId"] : []),
+      ...(analysisStart !== undefined && (analysisStart.trim() || null) !== existing.anls_bgng_de ? ["analysisStart"] : []),
+      ...(analysisEnd !== undefined && (analysisEnd.trim() || null) !== existing.anls_end_de ? ["analysisEnd"] : []),
+      ...(analysisEffort !== undefined && (analysisEffort.trim() || null) !== existing.anls_efrt_val ? ["analysisEffort"] : []),
+      ...(progress !== undefined && progress !== existing.progrs_rt ? ["progress"] : []),
+    ];
+    const fieldError = requireSpecChangedFields(gate, "REQUIREMENT", changedFields);
+    if (fieldError) return fieldError;
+
+    if (taskId) {
+      const targetTask = await prisma.tbRqTask.findUnique({
+        where: { task_id: taskId },
+        select: { prjct_id: true },
+      });
+      if (!targetTask || targetTask.prjct_id !== projectId) {
+        return apiError("VALIDATION_ERROR", "같은 프로젝트의 과업만 선택할 수 있습니다.", 400);
+      }
     }
 
     const newOrgnlCn   = originalContent?.trim() || null;
@@ -225,14 +182,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       };
     }
 
-    // ── 트랜잭션 구성 ────────────────────────────────────────────────────
-    // $transaction 오버로드가 배열/함수 두 가지라 Parameters[0] 만으론 배열 타입이
-    // 좁혀지지 않음 → PrismaPromise 배열로 명시
-    const ops: Prisma.PrismaPromise<unknown>[] = [];
-
-    // 1. 요구사항 본문 UPDATE (항상 실행)
-    ops.push(
-      prisma.tbRqRequirement.update({
+    let nextVersion: string | null = null;
+    await prisma.$transaction(async (tx) => {
+      await lockAndAssertCreatorWindow(tx, "REQUIREMENT", reqId, gate);
+      await tx.tbRqRequirement.update({
         where: { req_id: reqId },
         data:  {
           // taskId가 명시적으로 전달된 경우만 변경 (undefined면 기존 값 유지)
@@ -252,15 +205,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           anls_end_de:    analysisEnd   !== undefined ? (analysisEnd?.trim()   || null) : existing.anls_end_de,
           anls_efrt_val:  analysisEffort !== undefined ? (analysisEffort?.trim() || null) : existing.anls_efrt_val,
           progrs_rt:      progress ?? existing.progrs_rt,
+          mdfcn_mber_id:  gate.mberId,
           mdfcn_dt:       new Date(),
         },
-      })
-    );
+      });
 
-    // 1-b. 담당자 변경 이력 (자동 저장 — saveHistory 플래그 불필요)
-    if (assigneeChanged) {
-      ops.push(
-        prisma.tbDsDesignChange.create({
+      // 1-b. 담당자 변경 이력 (자동 저장 — saveHistory 플래그 불필요)
+      if (assigneeChanged) {
+        await tx.tbDsDesignChange.create({
           data: {
             prjct_id:      projectId,
             ref_tbl_nm:    "tb_rq_requirement",
@@ -275,36 +227,33 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             },
             chg_mber_id: gate.mberId,
           },
-        })
-      );
-    }
-
-    // 2. 이력 저장 (saveHistory=true 일 때만)
-    let nextVersion: string | null = null;
-    if (saveHistory) {
-      const lastHistory = await prisma.tbRqRequirementHistory.findFirst({
-        where:   { req_id: reqId },
-        orderBy: { creat_dt: "desc" },
-        select:  { vrsn_no: true },
-      });
-
-      if (!lastHistory) {
-        nextVersion = "V1.0";
-      } else {
-        const parts = lastHistory.vrsn_no.replace("V", "").split(".");
-        const major = parseInt(parts[0] ?? "1", 10);
-        const minor = parseInt(parts[1] ?? "0", 10);
-
-        if (versionMode === "major") {
-          nextVersion = `V${major + 1}.0`;
-        } else {
-          // minor (기본)
-          nextVersion = `V${major}.${minor + 1}`;
-        }
+        });
       }
 
-      ops.push(
-        prisma.tbRqRequirementHistory.create({
+      // 2. 이력 저장 (saveHistory=true 일 때만)
+      if (saveHistory) {
+        const lastHistory = await tx.tbRqRequirementHistory.findFirst({
+          where:   { req_id: reqId },
+          orderBy: { creat_dt: "desc" },
+          select:  { vrsn_no: true },
+        });
+
+        if (!lastHistory) {
+          nextVersion = "V1.0";
+        } else {
+          const parts = lastHistory.vrsn_no.replace("V", "").split(".");
+          const major = parseInt(parts[0] ?? "1", 10);
+          const minor = parseInt(parts[1] ?? "0", 10);
+
+          if (versionMode === "major") {
+            nextVersion = `V${major + 1}.0`;
+          } else {
+            // minor (기본)
+            nextVersion = `V${major}.${minor + 1}`;
+          }
+        }
+
+        await tx.tbRqRequirementHistory.create({
           data: {
             req_id:         reqId,
             vrsn_no:        nextVersion,
@@ -313,14 +262,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             vrsn_coment_cn: versionComment?.trim() || null,
             chg_mber_id:    gate.mberId,
           },
-        })
-      );
-    }
+        });
+      }
 
-    // 3. 분석 메모 변경 → tbDsDesignChange (saveAnalyHistory=true 일 때만)
-    if (saveAnalyHistory && newAnalyCn !== oldAnalyCn) {
-      ops.push(
-        prisma.tbDsDesignChange.create({
+      // 3. 분석 메모 변경 → tbDsDesignChange (saveAnalyHistory=true 일 때만)
+      if (saveAnalyHistory && newAnalyCn !== oldAnalyCn) {
+        await tx.tbDsDesignChange.create({
           data: {
             prjct_id:      projectId,
             ref_tbl_nm:    "tb_rq_requirement",
@@ -330,14 +277,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             snapshot_data: { before: oldAnalyCn, after: newAnalyCn },
             chg_mber_id:   gate.mberId,
           },
-        })
-      );
-    }
+        });
+      }
 
-    // 4. 상세 명세 변경 → tbDsDesignChange (saveSpecHistory=true 일 때만)
-    if (saveSpecHistory && newSpecCn !== oldSpecCn) {
-      ops.push(
-        prisma.tbDsDesignChange.create({
+      // 4. 상세 명세 변경 → tbDsDesignChange (saveSpecHistory=true 일 때만)
+      if (saveSpecHistory && newSpecCn !== oldSpecCn) {
+        await tx.tbDsDesignChange.create({
           data: {
             prjct_id:      projectId,
             ref_tbl_nm:    "tb_rq_requirement",
@@ -347,14 +292,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             snapshot_data: { before: oldSpecCn, after: newSpecCn },
             chg_mber_id:   gate.mberId,
           },
-        })
-      );
-    }
-
-    await prisma.$transaction(ops);
+        });
+      }
+    });
 
     return apiSuccess({ requirementId: reqId, version: nextVersion });
   } catch (err) {
+    if (isCreatorWindowConflict(err)) return creatorWindowConflict();
     console.error(`[PUT /api/projects/${projectId}/requirements/${reqId}] DB 오류:`, err);
     return apiError("DB_ERROR", "저장 중 오류가 발생했습니다.", 500);
   }
@@ -366,8 +310,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const url          = new URL(request.url);
   const deleteChildren = url.searchParams.get("deleteChildren") !== "false"; // 기본 true
 
-  // OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 담당자만 삭제 가능
-  const gate = await requireRequirementWrite(request, projectId, reqId);
+  const gate = await requireSpecContentWrite(request, projectId, "REQUIREMENT", reqId, "DELETE");
   if (gate instanceof Response) return gate;
 
   try {

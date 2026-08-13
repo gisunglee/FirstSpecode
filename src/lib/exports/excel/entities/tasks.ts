@@ -27,7 +27,6 @@ import {
 const CATEGORY_LABEL: Record<string, string> = {
   NEW_DEV:  "신규개발",
   IMPROVE:  "기능개선",
-  MAINTAIN: "유지보수",
 };
 
 // ─── 컬럼 정의 ──────────────────────────────────────────────────────────────

@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "esModuleInterop": true,
+    "types": ["node"],
+    "strict": true,
+    "skipLibCheck": true,
+    "outDir": "tmp/spec-content-policy-tests",
+    "rootDir": "."
+  },
+  "include": [
+    "src/lib/permissions.ts",
+    "src/lib/specContentPolicyCore.ts",
+    "src/lib/specContentFieldPolicy.ts",
+    "scripts/spec-content-policy.test.ts"
+  ]
+}

@@ -54,14 +54,17 @@
 ## 4. 요구사항 관리 (Requirements)
 * **`tb_rq_task`** (과업/Task)
   * `task_id` (t, PK) / `task_display_id` (t, NN) / `task_nm` (t, NN)
+  * `creat_mber_id`, `mdfcn_mber_id` (t): 생성자/최종 수정자 — 생성 후 30분 보정 권한과 감사 추적에 사용
 * **`tb_rq_requirement`** (요구사항)
   * `req_id` (t, PK) / `task_id` (t, FK) / `req_display_id` (t, NN)
   * `priort_code` (t) / `analy_cn`, `spec_cn` (t): 분석 및 스펙
   * `anls_bgng_de`, `anls_end_de` (v, yyyy-MM-dd 문자열), `anls_efrt_val` (v): 분석 일정/공수 —
     설계=단위업무, 구현=화면·기능처럼 분석은 요구사항 레벨에서 직접 관리(2026-07-17/28 추가)
   * `progrs_rt` (i, 0~100): 분석 진척률(담당자 슬라이더 입력) — 예전 `tb_cm_progress.analy_rt` 대체
+  * `creat_mber_id`, `mdfcn_mber_id` (t): 생성자/최종 수정자
 * **`tb_rq_user_story`** (유저 스토리)
   * `story_id` (t, PK) / `req_id` (t, FK) / `persona_cn`, `scenario_cn` (t)
+  * `creat_mber_id`, `mdfcn_mber_id` (t): 생성자/최종 수정자
 * **`tb_rq_acceptance_criteria`** (인수 기준)
   * `ac_id` (t, PK) / `story_id` (t, FK) / `given_cn`, `when_cn`, `then_cn` (t)
 * **`tb_rq_baseline_snapshot`** (베이스라인 스냅샷) & **`tb_rq_requirement_history`** (이력)
@@ -89,15 +92,19 @@
   * `dsgn_doc_sttus_code` (v, BEFORE/DOING/DONE): 단위업무 설계서 작성 상태
   * 실적 진행률(%)은 컬럼이 없음 — 항상 하위 화면→기능(`tb_cm_progress`) 롤업으로 계산
     (`src/lib/pm/progressRollup.ts`)
+  * `creat_mber_id`, `mdfcn_mber_id` (t): 생성자/최종 수정자
 * **`tb_ds_screen`** & **`tb_ds_area`** & **`tb_ds_function`** (화면/영역/기능 계층)
   * 화면(`tb_ds_screen`): `scrn_id` (PK) / `unit_work_id` (FK)
+    * `creat_mber_id`, `mdfcn_mber_id` (t): 생성자/최종 수정자
     * `actl_impl_bgng_de`, `actl_impl_end_de` (v): 담당 개발자가 커밋하는 실질 구현 일정 —
       화면이 유일하게 갖는 일정 축(설계 일정은 없음, 단위업무의 `plan_dsgn_*`를 상속 표시만 함)
     * `dsgn_doc_sttus_code` (v): 화면정의서 작성 상태
     * 공수(effort) 컬럼 없음 — 설계공수는 단위업무, 구현공수는 기능 소관
   * 영역(`tb_ds_area`): `area_id` (PK) / `scrn_id` (FK) / `excaldw_data` (jsonb)
+    * `creat_mber_id`, `mdfcn_mber_id` (t): 생성자/최종 수정자
     * `dsgn_doc_sttus_code` (v): 영역 와이어프레임 작성 상태. 일정/공수/진척률 컬럼 없음
   * 기능(`tb_ds_function`): `func_id` (PK) / `area_id` (FK)
+    * `creat_mber_id`, `mdfcn_mber_id` (t): 생성자/최종 수정자
     * `impl_efrt_val` (v): 구현 공수(2026-07-28 리네임, 예전 `efrt_val`). 날짜 컬럼 없음 —
       구현 일정은 소속 화면(`actl_impl_*`)을 그대로 상속해서 표시
     * `dsgn_doc_sttus_code` (v): 기능정의서 작성 상태

@@ -25,6 +25,7 @@ import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
 import { SelectChevron } from "@/components/ui/SelectChevron";
 import TextCounter from "@/components/ui/TextCounter";
 import { TEXT_LIMITS } from "@/lib/constants/textLimits";
+import type { SpecContentPermissions } from "@/types/specContentPermissions";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,7 @@ type TaskDetail = {
   // 담당자 — 서버 join으로 내려옴
   assignMemberId: string | null;
   assignMemberName: string | null;
+  permissions?: SpecContentPermissions;
 };
 
 type SaveBody = {
@@ -146,13 +148,13 @@ function TaskDetailPageInner() {
   const members = memberData?.members ?? [];
   const myMemberId = memberData?.myMemberId ?? "";
 
-  // ── 편집/삭제 가능 여부 — 백엔드 taskWriteGate 와 동일 규칙 ──────────────────
-  // 신규 등록 모드는 isAssignee 가 무의미하므로 false 로 둠 (canCreateTask 가 결정)
-  // 수정 모드는 본인이 담당자인지(isAssignee)도 통과 조건에 포함
+  // ── 편집/삭제 가능 여부 — 상세 조회가 반환한 서버 권한을 우선 사용 ───────────
+  // 신규 등록은 content.create, 상세 수정은 중앙 스펙 쓰기 정책이 최종 결정한다.
   const isAssignee = !isNew && !!myMemberId && taskDetail?.assignMemberId === myMemberId;
   const { canEditTask, canCreateTask } = useCanEditTask(projectId, { isAssignee });
   // 화면 분기: 신규는 canCreateTask, 수정은 canEditTask
-  const canSave = isNew ? canCreateTask : canEditTask;
+  const canSave = isNew ? canCreateTask : (taskDetail?.permissions?.canEdit ?? canEditTask);
+  const canDelete = !isNew && (taskDetail?.permissions?.canDelete ?? false);
 
   // ── 복사 뮤테이션 ──────────────────────────────────────────────────────────
   const copyMutation = useMutation({
@@ -186,16 +188,27 @@ function TaskDetailPageInner() {
 
   // ── 저장 뮤테이션 ──────────────────────────────────────────────────────────
   const saveMutation = useMutation({
-    mutationFn: (body: SaveBody) =>
-      isNew
-        ? authFetch(`/api/projects/${projectId}/tasks`, {
+    mutationFn: (body: SaveBody) => {
+      if (isNew) {
+        const createBody = {
+          name: body.name,
+          category: body.category,
+          definition: body.definition,
+          content: body.content,
+          outputInfo: body.outputInfo,
+          rfpPage: body.rfpPage,
+          ...(body.displayId.trim() ? { displayId: body.displayId } : {}),
+        };
+        return authFetch(`/api/projects/${projectId}/tasks`, {
           method: "POST",
-          body: JSON.stringify(body),
-        })
-        : authFetch(`/api/projects/${projectId}/tasks/${taskId}`, {
+          body: JSON.stringify(createBody),
+        });
+      }
+      return authFetch(`/api/projects/${projectId}/tasks/${taskId}`, {
           method: "PUT",
           body: JSON.stringify(body),
-        }),
+        });
+    },
     onSuccess: () => {
       toast.success(isNew ? "과업이 생성되었습니다." : "저장되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["tasks", projectId] });
@@ -281,8 +294,8 @@ function TaskDetailPageInner() {
               {copyMutation.isPending ? "복사 중..." : "복사"}
             </button>
           )}
-          {/* 삭제 — 편집 권한자(canEditTask) 만 노출 */}
-          {!isNew && canEditTask && (
+          {/* 삭제는 서버가 계산한 관리자 권한일 때만 노출 */}
+          {canDelete && (
             <button
               onClick={() => { setDeleteType("ALL"); setDeleteDialogOpen(true); }}
               disabled={saveMutation.isPending}
@@ -305,6 +318,11 @@ function TaskDetailPageInner() {
       </div>
 
       <div style={{ padding: "0 24px 24px" }}>
+        {!isNew && !canSave && (
+          <div className="sp-hint is-warn" style={{ marginBottom: "var(--space-4)" }}>
+            🔒 <strong>읽기 전용</strong> — {taskDetail?.permissions?.reasonMessage ?? "이 과업을 수정할 권한이 없습니다."}
+          </div>
+        )}
         {/* 2-컬럼 레이아웃: 기본 정보 | 세부내용 — 왼쪽(기본 정보 폼)은 고정폭, 오른쪽(세부내용)만
             1fr로 남는 공간을 흡수. 좌측 메뉴를 접어 넓어진 공간이 폼 입력칸까지 늘어나던 문제
             방지(화면/영역/기능 상세와 동일 패턴, 2026-07-29) */}
@@ -410,7 +428,6 @@ function TaskDetailPageInner() {
                     >
                       <option value="NEW_DEV">신규개발</option>
                       <option value="IMPROVE">기능개선</option>
-                      <option value="MAINTAIN">유지보수</option>
                     </select>
                     <span className="sp-select-arrow"><SelectChevron /></span>
                   </div>

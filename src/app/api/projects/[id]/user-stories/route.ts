@@ -7,6 +7,10 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { parseJsonBody } from "@/lib/parseJsonBody";
+import { userStoryCreateSchema } from "@/lib/specContentSchemas";
+import { listMeaningfulFields } from "@/lib/specContentFieldPolicy";
+import { requireSpecCreateFields } from "@/lib/specContentWritePolicy";
 import { getIdPrefix } from "@/lib/idPrefix";
 import { fetchProjectUserStories } from "@/lib/exports/user-stories-data";
 
@@ -41,21 +45,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const gate = await requirePermission(request, projectId, "content.create");
   if (gate instanceof Response) return gate;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
-  }
-
-  const { requirementId, name, persona, scenario, acceptanceCriteria } = body as {
-    requirementId?:       string;
-    name?:                string;
-    persona?:             string;
-    scenario?:            string;
-    acceptanceCriteria?:  { given?: string; when?: string; then?: string }[];
-  };
-
-  if (!requirementId) return apiError("VALIDATION_ERROR", "요구사항을 선택해 주세요.", 400);
-  if (!name?.trim())  return apiError("VALIDATION_ERROR", "스토리명을 입력해 주세요.", 400);
+  const parsed = await parseJsonBody(request, userStoryCreateSchema);
+  if (parsed instanceof Response) return parsed;
+  const { requirementId, name, persona, scenario, acceptanceCriteria } = parsed.data;
+  const fieldError = requireSpecCreateFields(gate, "USER_STORY", listMeaningfulFields(parsed.data));
+  if (fieldError) return fieldError;
   // persona, scenario는 선택 항목 (트리에서 빠른 추가 시 생략 가능)
 
   // 요구사항이 이 프로젝트에 속하는지 확인
@@ -93,6 +87,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           persona_cn:       persona?.trim() ?? "",
           scenario_cn:      scenario?.trim() ?? "",
           sort_ordr:        (maxSort?.sort_ordr ?? 0) + 1,
+          creat_mber_id:    gate.mberId,
         },
       });
 

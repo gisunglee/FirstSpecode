@@ -31,6 +31,7 @@ import { SelectChevron } from "@/components/ui/SelectChevron";
 import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
 import { useAppStore } from "@/store/appStore";
 import { UnresolvedSpecBadge } from "@/components/spec-reconciliation/UnresolvedSpecBadge";
+import type { SpecContentPermissions } from "@/types/specContentPermissions";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,7 @@ type AreaRow = {
 };
 
 type ScreenDetail = {
+  permissions?: SpecContentPermissions;
   screenId: string;
   displayId: string;
   name: string;
@@ -215,11 +217,12 @@ function ScreenDetailPageInner() {
 
   // ── 편집 권한 계산 ─────────────────────────────────────────────────────────
   // 통과: OWNER/ADMIN 역할 OR PM/PL 직무 OR 본인이 화면 담당자.
-  const { has: hasPerm } = usePermissions(projectId);
-  const matrixUpdateOK = hasPerm("requirement.update");
+  const { has: hasPerm, myRole } = usePermissions(projectId);
+  const matrixUpdateOK = myRole !== "VIEWER" && hasPerm("requirement.update");
   const originalAssigneeId = detail?.assignMemberId ?? null;
   const isAssignee = !!myMemberId && originalAssigneeId === myMemberId;
-  const canEdit = isNew ? true : (matrixUpdateOK || isAssignee);
+  const canEdit = isNew ? hasPerm("content.create") : (detail?.permissions?.canEdit ?? (matrixUpdateOK || isAssignee));
+  const canDelete = !isNew && (detail?.permissions?.canDelete ?? false);
 
   // detail이 로드되거나 다른 screenId로 바뀌면 폼/레이아웃을 항상 동기화.
   //   캐시 hit(재방문) 시에도 detail은 바로 값이 들어와 이 효과가 재실행되므로
@@ -276,16 +279,27 @@ function ScreenDetailPageInner() {
 
   // ── 저장 뮤테이션 ──────────────────────────────────────────────────────────
   const saveMutation = useMutation({
-    mutationFn: (body: SaveBody) =>
-      isNew
-        ? authFetch<{ data: { screenId: string } }>(`/api/projects/${projectId}/screens`, {
+    mutationFn: (body: SaveBody) => {
+      if (isNew) {
+        const createBody = {
+          unitWorkId: body.unitWorkId,
+          name: body.name,
+          type: body.type,
+          categoryL: body.categoryL,
+          categoryM: body.categoryM,
+          categoryS: body.categoryS,
+          ...(body.displayId?.trim() ? { displayId: body.displayId } : {}),
+        };
+        return authFetch<{ data: { screenId: string } }>(`/api/projects/${projectId}/screens`, {
           method: "POST",
-          body: JSON.stringify(body),
-        })
-        : authFetch<{ data: { screenId: string } }>(`/api/projects/${projectId}/screens/${screenId}`, {
+          body: JSON.stringify(createBody),
+        });
+      }
+      return authFetch<{ data: { screenId: string } }>(`/api/projects/${projectId}/screens/${screenId}`, {
           method: "PUT",
           body: JSON.stringify(body),
-        }),
+        });
+    },
     onSuccess: (res, variables) => {
       toast.success(isNew ? "화면이 등록되었습니다." : "저장되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["screens", projectId] });
@@ -409,8 +423,8 @@ function ScreenDetailPageInner() {
           >
             취소
           </button>
-          {/* 삭제 — 신규 모드 아니고 편집 권한 있을 때만 노출 */}
-          {!isNew && canEdit && (
+          {/* 삭제는 서버가 계산한 관리자 권한일 때만 노출 */}
+          {canDelete && (
             <button
               onClick={() => { setDeleteChildren(null); setDeleteConfirmOpen(true); }}
               disabled={saveMutation.isPending}
@@ -444,7 +458,7 @@ function ScreenDetailPageInner() {
             fontSize: 12,
             color: "var(--color-text-secondary)",
           }}>
-            🔒 <strong>읽기 전용</strong> — 이 화면은 OWNER/ADMIN 또는 PM/PL 직무, 혹은 담당자만 수정할 수 있습니다.
+            🔒 <strong>읽기 전용</strong> — {detail?.permissions?.reasonMessage ?? "이 화면을 수정할 권한이 없습니다."}
           </div>
         )}
         {/* 2-컬럼 레이아웃: 기본 정보 | 화면 설명 — 왼쪽(기본 정보 폼)은 고정폭, 오른쪽(설명)만

@@ -6,10 +6,13 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
-import { requireTaskWrite } from "@/lib/taskWriteGate";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
+import { parseJsonBody } from "@/lib/parseJsonBody";
+import { taskCreateSchema } from "@/lib/specContentSchemas";
+import { listMeaningfulFields } from "@/lib/specContentFieldPolicy";
+import { requireSpecCreateFields } from "@/lib/specContentWritePolicy";
 import { fetchProjectTasks } from "@/lib/exports/tasks-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -42,24 +45,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const { id: projectId } = await params;
 
-  // OWNER/ADMIN 역할 OR PM/PL 직무 — MEMBER 는 환경설정 MEMBER_TASK_UPT_PSBL_YN="Y" 일 때만 통과
-  const gate = await requireTaskWrite(request, projectId);
+  // VIEWER를 제외한 프로젝트 멤버는 스펙을 등록할 수 있다.
+  const gate = await requirePermission(request, projectId, "content.create");
   if (gate instanceof Response) return gate;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
-  }
-
-  const { name, category, definition, content, outputInfo, rfpPage, displayId: inputDisplayId } = body as {
-    name?: string; category?: string;
-    definition?: string; content?: string;
-    outputInfo?: string; rfpPage?: string;
-    displayId?: string;
-  };
-
-  if (!name?.trim()) return apiError("VALIDATION_ERROR", "과업명을 입력해 주세요.", 400);
-  if (!category?.trim()) return apiError("VALIDATION_ERROR", "카테고리를 선택해 주세요.", 400);
+  const parsed = await parseJsonBody(request, taskCreateSchema);
+  if (parsed instanceof Response) return parsed;
+  const { name, category, definition, content, outputInfo, rfpPage, displayId: inputDisplayId } = parsed.data;
+  const fieldError = requireSpecCreateFields(gate, "TASK", listMeaningfulFields(parsed.data));
+  if (fieldError) return fieldError;
 
   // 장문 텍스트 한도 검증 — 정책은 src/lib/constants/textLimits.ts
   // definition/content/outputInfo 모두 과업 본문 → taskDefinition 한도(50K)
@@ -109,6 +103,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         output_info_cn:  outputInfo?.trim() || null,
         rfp_page_no:     rfpPage?.trim() || null,
         sort_ordr:       sortOrder,
+        creat_mber_id:   gate.mberId,
       },
     });
 

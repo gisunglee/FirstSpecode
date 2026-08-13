@@ -6,8 +6,10 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requirePermission } from "@/lib/requirePermission";
+import { requireSpecManager } from "@/lib/specContentWritePolicy";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { parseJsonBody } from "@/lib/parseJsonBody";
+import { userStorySortSchema } from "@/lib/specContentSchemas";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -16,18 +18,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
   // 요구사항 편집 매트릭스와 동일 게이트 — OWNER/ADMIN 역할 OR PM/PL 직무
   // (다건 재정렬이라 개별 스토리의 담당자 조건은 적용하지 않음 — requirements/sort와 동일 관례)
-  const gate = await requirePermission(request, projectId, "requirement.update");
+  const gate = await requireSpecManager(request, projectId);
   if (gate instanceof Response) return gate;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
-  }
-
-  const { orders } = body as { orders?: { storyId: string; sortOrder: number }[] };
-  if (!Array.isArray(orders) || orders.length === 0) {
-    return apiError("VALIDATION_ERROR", "orders 배열이 필요합니다.", 400);
-  }
+  const parsed = await parseJsonBody(request, userStorySortSchema);
+  if (parsed instanceof Response) return parsed;
+  const { orders } = parsed.data;
 
   try {
     // 스토리가 해당 프로젝트에 속하는지 확인 후 sort_ordr 일괄 갱신
@@ -38,7 +34,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             story_id: storyId,
             requirement: { prjct_id: projectId },
           },
-          data: { sort_ordr: sortOrder },
+          data: { sort_ordr: sortOrder, mdfcn_mber_id: gate.mberId, mdfcn_dt: new Date() },
         })
       )
     );

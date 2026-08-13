@@ -19,6 +19,7 @@ import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import { usePermissions } from "@/hooks/useMyRole";
 import { SelectChevron } from "@/components/ui/SelectChevron";
+import type { SpecContentPermissions } from "@/types/specContentPermissions";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -44,6 +45,7 @@ type StoryDetail = {
   taskId: string | null;
   taskName: string;
   acceptanceCriteria: { acId: string; given: string; when: string; then: string }[];
+  permissions?: SpecContentPermissions;
 };
 
 type RequirementOption = {
@@ -103,8 +105,8 @@ function UserStoryDetailPageInner() {
   const myMemberId = memberData?.myMemberId ?? "";
 
   // 매트릭스 권한 — OWNER/ADMIN 역할 또는 PM/PL 직무
-  const { has: hasPerm } = usePermissions(projectId);
-  const matrixUpdateOK = hasPerm("requirement.update");
+  const { has: hasPerm, myRole } = usePermissions(projectId);
+  const matrixUpdateOK = myRole !== "VIEWER" && hasPerm("requirement.update");
 
   // ── 요구사항 목록 (선택 드롭다운) ──────────────────────────────────────────
   const { data: reqsData } = useQuery({
@@ -160,8 +162,10 @@ function UserStoryDetailPageInner() {
   // (user-stories/[storyId]/route.ts requireUserStoryWrite 와 동일 게이트).
   // 신규 등록 모드(isNew)는 아직 연결 요구사항의 담당자 개념이 무의미하므로 항상 허용.
   const isAssigneeOfReq = !!myMemberId && detail?.requirementAssigneeId === myMemberId;
-  const canEdit = isNew || matrixUpdateOK || isAssigneeOfReq;
-  const canDelete = !isNew && (matrixUpdateOK || isAssigneeOfReq);
+  const canEdit = isNew
+    ? hasPerm("content.create")
+    : (detail?.permissions?.canEdit ?? (matrixUpdateOK || isAssigneeOfReq));
+  const canDelete = !isNew && (detail?.permissions?.canDelete ?? false);
 
   // ── 삭제 뮤테이션 ──────────────────────────────────────────────────────────
   const deleteMutation = useMutation({
@@ -323,7 +327,7 @@ function UserStoryDetailPageInner() {
             fontSize: 12,
             color: "var(--color-text-secondary)",
           }}>
-            🔒 <strong>읽기 전용</strong> — 이 사용자스토리는 OWNER/ADMIN 또는 PM/PL 직무, 혹은 연결된 요구사항의 담당자만 수정할 수 있습니다.
+            🔒 <strong>읽기 전용</strong> — {detail?.permissions?.reasonMessage ?? "이 사용자스토리를 수정할 권한이 없습니다."}
           </div>
         )}
       {/* 2-컬럼 레이아웃: 기본 정보 | 인수기준 */}

@@ -13,68 +13,28 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
-import { hasPermission, isRoleCode, isJobCode, type RoleCode, type JobCode } from "@/lib/permissions";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import {
+  requireSpecContentWrite,
+  requireSpecChangedFields,
+} from "@/lib/specContentWritePolicy";
+import { parseJsonBody } from "@/lib/parseJsonBody";
+import { functionInlineSchema } from "@/lib/specContentSchemas";
 
 type RouteParams = { params: Promise<{ id: string; functionId: string }> };
-
-async function requireFunctionWrite(
-  request: NextRequest,
-  projectId: string,
-  functionId: string
-): Promise<{ mberId: string } | Response> {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where:  { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-    select: { role_code: true, job_title_code: true, mber_sttus_code: true },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "프로젝트 멤버가 아닙니다.", 403);
-  }
-
-  const role: RoleCode | null = isRoleCode(membership.role_code) ? membership.role_code : null;
-  const job:  JobCode  | null = isJobCode(membership.job_title_code) ? membership.job_title_code : null;
-
-  const matrixOK = hasPermission({ role, job, plan: "FREE", systemRole: null }, "requirement.update");
-  if (matrixOK) return { mberId: auth.mberId };
-
-  const target = await prisma.tbDsFunction.findUnique({
-    where:  { func_id: functionId },
-    select: { asign_mber_id: true, prjct_id: true },
-  });
-  if (!target || target.prjct_id !== projectId) {
-    return apiError("NOT_FOUND", "기능을 찾을 수 없습니다.", 404);
-  }
-  if (target.asign_mber_id !== auth.mberId) {
-    return apiError("FORBIDDEN", "이 기능을 수정할 권한이 없습니다.", 403);
-  }
-
-  return { mberId: auth.mberId };
-}
-
-const VALID_FIELDS = ["complexity", "effort", "assignee"] as const;
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, functionId } = await params;
 
-  const gate = await requireFunctionWrite(request, projectId, functionId);
+  const gate = await requireSpecContentWrite(request, projectId, "FUNCTION", functionId);
   if (gate instanceof Response) return gate;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
-  }
-
-  const { field, value } = body as { field?: string; value?: string | null };
-  if (!field || value === undefined) {
-    return apiError("VALIDATION_ERROR", "field와 value가 필요합니다.", 400);
-  }
-  if (!(VALID_FIELDS as readonly string[]).includes(field)) {
-    return apiError("VALIDATION_ERROR", `field는 ${VALID_FIELDS.join(", ")} 중 하나여야 합니다.`, 400);
-  }
+  const parsed = await parseJsonBody(request, functionInlineSchema);
+  if (parsed instanceof Response) return parsed;
+  const { field, value } = parsed.data;
+  const policyField = field === "assignee" ? "assignMemberId" : field;
+  const fieldError = requireSpecChangedFields(gate, "FUNCTION", [policyField]);
+  if (fieldError) return fieldError;
 
   try {
     const existing = await prisma.tbDsFunction.findUnique({ where: { func_id: functionId } });
@@ -84,8 +44,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     if (field === "complexity" || field === "effort") {
       const updateData = field === "complexity"
-        ? { cmplx_code: value as string, mdfcn_dt: new Date() }
-        : { impl_efrt_val: value || null, mdfcn_dt: new Date() };
+        ? { cmplx_code: value as string, mdfcn_mber_id: gate.mberId, mdfcn_dt: new Date() }
+        : { impl_efrt_val: value || null, mdfcn_mber_id: gate.mberId, mdfcn_dt: new Date() };
 
       await prisma.$transaction([
         prisma.tbDsFunction.update({ where: { func_id: functionId }, data: updateData }),
@@ -119,7 +79,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     await prisma.$transaction([
       prisma.tbDsFunction.update({
         where: { func_id: functionId },
-        data:  { asign_mber_id: nextAssignee, mdfcn_dt: new Date() },
+        data:  { asign_mber_id: nextAssignee, mdfcn_mber_id: gate.mberId, mdfcn_dt: new Date() },
       }),
       prisma.tbDsDesignChange.create({
         data: {

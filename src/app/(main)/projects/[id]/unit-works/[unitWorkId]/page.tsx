@@ -44,6 +44,7 @@ import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
 import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
 import { type AiTaskStatus, AI_TASK_STATUS_LABEL, AI_TASK_STATUS_DOT } from "@/constants/codes";
 import { UnresolvedSpecBadge } from "@/components/spec-reconciliation/UnresolvedSpecBadge";
+import type { SpecContentPermissions } from "@/types/specContentPermissions";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -56,6 +57,7 @@ type RequirementOption = {
 type AiTaskInfo = { aiTaskId: string; status: string };
 
 type UnitWorkDetail = {
+  permissions?: SpecContentPermissions;
   unitWorkId: string;
   displayId: string;
   name: string;
@@ -238,11 +240,12 @@ function UnitWorkDetailPageInner() {
   // 담당자 비교는 API 응답의 원본(detail.assignMemberId) 으로 — 폼에서 임의 변경된 값으로
   // 판단하면 자기 자신을 담당자에서 빼는 순간 권한이 사라지는 버그가 생긴다.
   // 신규 등록 모드는 별도 권한이라 본 게이트에서 제외 (기존 동작 유지).
-  const { has: hasPerm } = usePermissions(projectId);
-  const matrixUpdateOK = hasPerm("requirement.update");
+  const { has: hasPerm, myRole } = usePermissions(projectId);
+  const matrixUpdateOK = myRole !== "VIEWER" && hasPerm("requirement.update");
   const originalAssigneeId = detail?.assignMemberId ?? null;
   const isAssignee = !!myMemberId && originalAssigneeId === myMemberId;
-  const canEdit = isNew ? true : (matrixUpdateOK || isAssignee);
+  const canEdit = isNew ? hasPerm("content.create") : (detail?.permissions?.canEdit ?? (matrixUpdateOK || isAssignee));
+  const canDelete = !isNew && (detail?.permissions?.canDelete ?? false);
 
   // ── Word 출력 / 발행 권한 — 요구사항 페이지와 동일 정책 ───────────────────
   // content.export = MEMBER 이상. 신규 모드에선 출력할 데이터가 없어서 비활성.
@@ -336,16 +339,28 @@ function UnitWorkDetailPageInner() {
 
   // ── 저장 뮤테이션 ──────────────────────────────────────────────────────────
   const saveMutation = useMutation({
-    mutationFn: (body: SaveBody) =>
-      isNew
-        ? authFetch(`/api/projects/${projectId}/unit-works`, {
+    mutationFn: (body: SaveBody) => {
+      if (isNew) {
+        const createBody = {
+          reqId: body.reqId,
+          name: body.name,
+          description: body.description,
+          ...(body.displayId?.trim() ? { displayId: body.displayId } : {}),
+          ...(body.assignMemberId ? { assignMemberId: body.assignMemberId } : {}),
+          ...(body.planStartDate ? { startDate: body.planStartDate } : {}),
+          ...(body.planEndDate ? { endDate: body.planEndDate } : {}),
+        };
+        return authFetch(`/api/projects/${projectId}/unit-works`, {
           method: "POST",
-          body: JSON.stringify(body),
-        })
-        : authFetch(`/api/projects/${projectId}/unit-works/${unitWorkId}`, {
+          body: JSON.stringify(createBody),
+        });
+      }
+      const { reqId: _reqId, ...updateBody } = body;
+      return authFetch(`/api/projects/${projectId}/unit-works/${unitWorkId}`, {
           method: "PUT",
-          body: JSON.stringify(body),
-        }),
+          body: JSON.stringify(updateBody),
+        });
+    },
     onSuccess: (_, variables) => {
       toast.success("저장되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["unit-works", projectId] });
@@ -1031,8 +1046,8 @@ function UnitWorkDetailPageInner() {
           >
             취소
           </button>
-          {/* 삭제 — 신규 모드 아니고 편집 권한 있을 때만 노출 */}
-          {!isNew && canEdit && (
+          {/* 삭제는 서버가 계산한 관리자 권한일 때만 노출 */}
+          {canDelete && (
             <button
               onClick={() => { setDeleteChildren(null); setDeleteDialogOpen(true); }}
               disabled={saveMutation.isPending}
@@ -1066,7 +1081,7 @@ function UnitWorkDetailPageInner() {
             fontSize: 12,
             color: "var(--color-text-secondary)",
           }}>
-            🔒 <strong>읽기 전용</strong> — 이 단위업무는 OWNER/ADMIN 또는 PM/PL 직무, 혹은 담당자만 수정할 수 있습니다.
+            🔒 <strong>읽기 전용</strong> — {detail?.permissions?.reasonMessage ?? "이 단위업무를 수정할 권한이 없습니다."}
           </div>
         )}
         {/* 폼 — 상하 레이아웃 (상: 메타 정보 2줄, 하: 설명) */}

@@ -37,6 +37,7 @@ import ExportMenu from "@/components/common/ExportMenu";
 import { ReqSaveOptionDialog } from "@/components/common/ReqSaveOptionDialog";
 import { SelectChevron } from "@/components/ui/SelectChevron";
 import { PhaseItem } from "@/components/ui/ProgressTracker";
+import type { SpecContentPermissions } from "@/types/specContentPermissions";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -86,6 +87,7 @@ type RequirementDetail = {
   analysisStart: string | null;
   analysisEnd: string | null;
   progress: number;
+  permissions?: SpecContentPermissions;
 };
 
 // 프로젝트 멤버 — 담당자 콤보박스 옵션용
@@ -253,11 +255,12 @@ function RequirementDetailPageInner() {
   // 담당자 비교는 반드시 "원본(API 응답) 담당자ID" 로 — 폼에서 임의로 바꾼 값으로 판단하면
   // 자기 자신을 담당자에서 빼는 순간 권한이 사라지는 버그가 생긴다.
   // 신규 등록 모드(reqId === "new") 는 별도 권한이라 본 게이트에서 제외 (기존 동작 유지).
-  const { has: hasPerm } = usePermissions(projectId);
-  const matrixUpdateOK = hasPerm("requirement.update");
+  const { has: hasPerm, myRole } = usePermissions(projectId);
+  const matrixUpdateOK = myRole !== "VIEWER" && hasPerm("requirement.update");
   const originalAssigneeId = detail?.assignMemberId ?? null;
   const isAssignee = !!myMemberId && originalAssigneeId === myMemberId;
-  const canEdit = isNew ? true : (matrixUpdateOK || isAssignee);
+  const canEdit = isNew ? hasPerm("content.create") : (detail?.permissions?.canEdit ?? (matrixUpdateOK || isAssignee));
+  const canDelete = !isNew && (detail?.permissions?.canDelete ?? false);
 
   // Word 출력 권한 — content.export 매트릭스(MEMBER 이상). 신규 모드에선 출력할 데이터가 없어서 비활성.
   // 시스템 관리자 지원 세션은 API 측에서 자동 차단되므로 UI 단에선 별도 분기 불필요.
@@ -347,16 +350,29 @@ function RequirementDetailPageInner() {
 
   // ── 저장 뮤테이션 ──────────────────────────────────────────────────────────
   const saveMutation = useMutation({
-    mutationFn: (body: SaveBody) =>
-      isNew
-        ? authFetch<{ data: { requirementId: string } }>(`/api/projects/${projectId}/requirements`, {
+    mutationFn: (body: SaveBody) => {
+      if (isNew) {
+        const createBody = {
+          taskId: body.taskId,
+          name: body.name,
+          priority: body.priority,
+          source: body.source,
+          rfpPage: body.rfpPage,
+          originalContent: body.originalContent,
+          currentContent: body.currentContent,
+          analysisMemo: body.analysisMemo,
+          detailSpec: body.detailSpec,
+        };
+        return authFetch<{ data: { requirementId: string } }>(`/api/projects/${projectId}/requirements`, {
           method: "POST",
-          body: JSON.stringify(body),
-        })
-        : authFetch(`/api/projects/${projectId}/requirements/${reqId}`, {
+          body: JSON.stringify(createBody),
+        });
+      }
+      return authFetch(`/api/projects/${projectId}/requirements/${reqId}`, {
           method: "PUT",
           body: JSON.stringify(body),
-        }),
+        });
+    },
     onSuccess: (res) => {
       toast.success(isNew ? "요구사항이 등록되었습니다." : "저장되었습니다.");
       queryClient.invalidateQueries({ queryKey: ["requirements", projectId] });
@@ -369,6 +385,19 @@ function RequirementDetailPageInner() {
         queryClient.invalidateQueries({ queryKey: ["requirement", projectId, reqId] });
       }
     },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // ── 진척률 즉시 저장 뮤테이션 ─────────────────────────────────────────────────
+  // 진척률은 전용 API(progrs_rt만 갱신)로 클릭 즉시 저장 — 본문 saveMutation과 분리되어
+  // 있어 화면의 다른 미저장 입력값(이름, 내용 등)에는 영향을 주지 않는다.
+  const progressMutation = useMutation({
+    mutationFn: (value: number) =>
+      authFetch<{ data: { progress: number } }>(
+        `/api/projects/${projectId}/requirements/${reqId}/progress`,
+        { method: "PUT", body: JSON.stringify({ progress: value }) }
+      ),
+    onSuccess: (_res, value) => handleChange("progress", value),
     onError: (err: Error) => toast.error(err.message),
   });
 
@@ -652,9 +681,8 @@ function RequirementDetailPageInner() {
 
         {/* 분석 진척률 — 기능 편집 페이지(ProgressTracker)와 동일한 게이지 스타일을
             타이틀 옆으로 이동. 요구사항은 진척률이 자체 컬럼(progrs_rt) 하나뿐이라
-            페이지 저장 시 다른 필드와 함께 저장되도록 로컬 폼 state에만 반영한다
-            (기능 페이지처럼 클릭 즉시 API 저장하면, 화면에서 아직 저장 안 한 다른
-            입력값까지 함께 커밋돼버리는 문제가 생기기 때문). */}
+            전용 API(progress/route.ts)로 클릭 즉시 저장한다 — 본문 저장(saveMutation)과
+            분리돼 있어 화면의 다른 미저장 입력값에는 영향을 주지 않는다. */}
         {!isNew && (
           <div style={{ display: "flex", alignItems: "stretch", borderRadius: 10, background: "rgba(0,0,0,0.04)", padding: "2px 10px" }}>
             <PhaseItem
@@ -663,8 +691,8 @@ function RequirementDetailPageInner() {
               value={form.progress}
               isLoading={isDetailLoading}
               readOnly={!canEdit}
-              isSaving={false}
-              onSave={(v) => handleChange("progress", v)}
+              isSaving={progressMutation.isPending}
+              onSave={(v) => progressMutation.mutate(v)}
             />
           </div>
         )}
@@ -672,8 +700,8 @@ function RequirementDetailPageInner() {
         <div style={{ flex: 1 }} />
 
         <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-          {/* 삭제 — 신규 모드 아니고 편집 권한 있을 때만 노출 */}
-          {!isNew && canEdit && (
+          {/* 삭제는 서버가 계산한 관리자 권한일 때만 노출 */}
+          {canDelete && (
             <button
               onClick={() => setReqDeleteOpen(true)}
               style={{ fontSize: 12, padding: "5px 14px", minWidth: 60, borderRadius: 6, border: "1px solid #e53935", background: "none", color: "#e53935", cursor: "pointer", fontWeight: 600 }}
@@ -728,7 +756,7 @@ function RequirementDetailPageInner() {
             fontSize: 12,
             color: "var(--color-text-secondary)",
           }}>
-            🔒 <strong>읽기 전용</strong> — 이 요구사항은 OWNER/ADMIN 또는 PM/PL 직무, 혹은 담당자만 수정할 수 있습니다.
+            🔒 <strong>읽기 전용</strong> — {detail?.permissions?.reasonMessage ?? "이 요구사항을 수정할 권한이 없습니다."}
           </div>
         )}
         {/* 2단 레이아웃: 왼쪽(요구사항 내용+기본정보) / 오른쪽(분석메모·상세명세+근거파일)

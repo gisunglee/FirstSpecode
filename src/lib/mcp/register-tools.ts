@@ -146,7 +146,7 @@ export function registerTools(
   server.tool(
     "list_members",
     "프로젝트 멤버 목록 조회 — 이름/이메일/역할/직무를 가진 멤버 목록을 반환합니다. " +
-      "create_*/update_* 도구의 assignMemberId(담당자 지정)에 쓸 멤버 ID를 찾을 때 사용하세요. " +
+      "update_* 도구의 assignMemberId(담당자 지정)에 쓸 멤버 ID를 찾을 때 사용하세요. 생성 시 담당자 지정은 OWNER/ADMIN 또는 PM/PL만 가능합니다. " +
       "응답의 myMemberId가 요청자 본인의 멤버 ID입니다",
     { projectId: z.string().describe("프로젝트 ID") },
     async ({ projectId }) => {
@@ -204,7 +204,7 @@ export function registerTools(
     {
       projectId: z.string().describe("프로젝트 ID"),
       name: z.string().describe("과업명 (필수)"),
-      category: z.string().describe("카테고리 (필수). 허용값: NEW_DEV(신규개발) | IMPROVE(기능개선) | MAINTAIN(유지보수)"),
+      category: z.string().describe("카테고리 (필수). 허용값: NEW_DEV(신규개발) | IMPROVE(기능개선)"),
       definition: z.string().optional().describe("과업 정의"),
       content: z.string().optional().describe("상세 내용"),
       outputInfo: z.string().optional().describe("산출물 정보"),
@@ -225,17 +225,17 @@ export function registerTools(
 
   server.tool(
     "update_task",
-    "과업 수정 — 기존 과업 정보를 업데이트합니다",
+    "과업 수정 — OWNER/ADMIN·PM/PL, 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다",
     {
       projectId: z.string().describe("프로젝트 ID"),
       taskId: z.string().describe("과업 ID"),
       name: z.string().describe("과업명 (필수)"),
-      category: z.string().describe("카테고리 (필수). 허용값: NEW_DEV | IMPROVE | MAINTAIN"),
+      category: z.string().describe("카테고리 (필수). 허용값: NEW_DEV | IMPROVE"),
       definition: z.string().optional().describe("과업 정의"),
       content: z.string().optional().describe("상세 내용"),
       outputInfo: z.string().optional().describe("산출물 정보"),
       rfpPage: z.string().optional().describe("RFP 페이지 번호"),
-      assignMemberId: z.string().optional().describe("담당자 회원 ID (list_members로 조회 가능)"),
+      assignMemberId: z.string().optional().describe("담당자 회원 ID (OWNER/ADMIN 또는 PM/PL만 변경 가능, list_members로 조회)"),
     },
     async ({ projectId, taskId, ...body }) => {
       try {
@@ -328,7 +328,7 @@ export function registerTools(
 
   server.tool(
     "update_requirement",
-    "요구사항 수정 — 기존 요구사항 정보를 업데이트합니다",
+    "요구사항 수정 — OWNER/ADMIN·PM/PL, 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다",
     {
       projectId: z.string().describe("프로젝트 ID"),
       requirementId: z.string().describe("요구사항 ID"),
@@ -437,7 +437,7 @@ export function registerTools(
 
   server.tool(
     "update_user_story",
-    "사용자스토리 수정 — 기존 사용자스토리를 업데이트합니다",
+    "사용자스토리 수정 — OWNER/ADMIN·PM/PL, 상위 요구사항/과업의 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다",
     {
       projectId: z.string().describe("프로젝트 ID"),
       storyId: z.string().describe("사용자스토리 ID"),
@@ -536,15 +536,15 @@ export function registerTools(
 
   server.tool(
     "create_unit_work",
-    "단위업무 생성 — 새 단위업무를 등록합니다. displayId(UW-NNNNN)는 자동 채번됩니다. 선행: list_requirements로 reqId를 조회하세요 (상위 요구사항 필수)",
+    "단위업무 생성 — 새 단위업무를 등록합니다. displayId(UW-NNNNN)는 자동 채번됩니다. 선행: list_requirements로 reqId를 조회하세요 (상위 요구사항 필수). 담당자·일정 지정은 OWNER/ADMIN 또는 PM/PL만 가능합니다",
     {
       projectId: z.string().describe("프로젝트 ID"),
       reqId: z.string().describe("상위 요구사항 ID (필수). list_requirements에서 조회 가능"),
       name: z.string().describe("단위업무명 (필수)"),
       description: z.string().optional().describe("단위업무 설명 (마크다운 지원)"),
-      assignMemberId: z.string().optional().describe("담당자 회원 ID"),
-      startDate: z.string().optional().describe("시작일 (YYYY-MM-DD)"),
-      endDate: z.string().optional().describe("종료일 (YYYY-MM-DD)"),
+      assignMemberId: z.string().optional().describe("담당자 회원 ID (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능)"),
+      startDate: z.string().optional().describe("시작일 (YYYY-MM-DD, 생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능)"),
+      endDate: z.string().optional().describe("종료일 (YYYY-MM-DD, 생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능)"),
     },
     async ({ projectId, ...body }) => {
       try {
@@ -561,14 +561,14 @@ export function registerTools(
 
   server.tool(
     "update_unit_work",
-    "단위업무 수정 — 기존 단위업무 정보를 업데이트합니다",
+    "단위업무 수정 — OWNER/ADMIN·PM/PL, 자신 또는 상위 요구사항/과업의 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다",
     {
       projectId: z.string().describe("프로젝트 ID"),
       unitWorkId: z.string().describe("단위업무 ID"),
       name: z.string().describe("단위업무명 (필수)"),
       description: z.string().optional().describe("단위업무 설명 (마크다운 지원)"),
       comment: z.string().optional().describe("코멘트"),
-      assignMemberId: z.string().optional().describe("담당자 회원 ID"),
+      assignMemberId: z.string().optional().describe("담당자 회원 ID (OWNER/ADMIN 또는 PM/PL만 변경 가능)"),
       planStartDate: z.string().optional().describe("계획설계 시작일 (YYYY-MM-DD) — PM이 잡는 상위 마일스톤"),
       planEndDate: z.string().optional().describe("계획설계 종료일 (YYYY-MM-DD)"),
       planEffort: z.string().optional().describe("계획설계 공수"),
@@ -643,7 +643,7 @@ export function registerTools(
       name: z.string().describe("화면명 (필수)"),
       unitWorkId: z.string().optional().describe("소속 단위업무 ID"),
       description: z.string().optional().describe("화면 설명 (마크다운 지원)"),
-      displayCode: z.string().optional().describe("화면 표시 코드"),
+      displayId: z.string().optional().describe("화면 표시 ID (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능; 생략 시 자동 채번)"),
       type: z.string().optional().describe("화면 유형. 허용값: LIST | DETAIL | GRID | TAB | FULL_SCREEN. 기본: LIST"),
       categoryL: z.string().optional().describe("대분류"),
       categoryM: z.string().optional().describe("중분류"),
@@ -664,19 +664,19 @@ export function registerTools(
 
   server.tool(
     "update_screen",
-    "화면 수정 — 기존 화면 정보를 업데이트합니다",
+    "화면 수정 — OWNER/ADMIN·PM/PL, 자신 또는 상위 단위업무/요구사항/과업의 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다",
     {
       projectId: z.string().describe("프로젝트 ID"),
       screenId: z.string().describe("화면 ID"),
       name: z.string().optional().describe("화면명"),
       description: z.string().optional().describe("화면 설명"),
       comment: z.string().optional().describe("코멘트"),
-      displayCode: z.string().optional().describe("화면 표시 코드"),
+      displayId: z.string().optional().describe("화면 표시 ID (OWNER/ADMIN 또는 PM/PL만 변경 가능)"),
       type: z.string().optional().describe("화면 유형. 허용값: LIST | DETAIL | GRID | TAB | FULL_SCREEN. 기본: LIST"),
       categoryL: z.string().optional().describe("대분류"),
       categoryM: z.string().optional().describe("중분류"),
       categoryS: z.string().optional().describe("소분류"),
-      assignMemberId: z.string().optional().describe("담당자 회원 ID (list_members로 조회 가능)"),
+      assignMemberId: z.string().optional().describe("담당자 회원 ID (OWNER/ADMIN 또는 PM/PL만 변경 가능, list_members로 조회)"),
       implBgngDe: z.string().optional().describe("실질구현 시작일 (YYYY-MM-DD) — 기능은 일정이 없고 화면 단위로 관리. 설계 일정은 화면에 없음(update_unit_work로 관리)"),
       implEndDe: z.string().optional().describe("실질구현 종료일 (YYYY-MM-DD)"),
       docStatus: z.string().optional().describe("화면정의서 작성 상태 (BEFORE/DOING/DONE)"),
@@ -741,14 +741,14 @@ export function registerTools(
 
   server.tool(
     "create_area",
-    "영역 생성 — 새 영역을 등록합니다. 화면에 소속시키려면 screenId를 전달하세요 (선행: list_screens로 조회)",
+    "영역 생성 — 새 영역을 등록합니다. 화면에 소속시키려면 screenId를 전달하세요 (선행: list_screens로 조회). 정렬 순서 지정은 OWNER/ADMIN 또는 PM/PL만 가능합니다",
     {
       projectId: z.string().describe("프로젝트 ID"),
       name: z.string().describe("영역명 (필수)"),
       screenId: z.string().optional().describe("소속 화면 ID"),
       type: z.string().optional().describe("영역 유형. 허용값: SEARCH | GRID | FORM | DETAIL | BUTTON | TAB | CHART | OTHER. 기본: LIST"),
       description: z.string().optional().describe("영역 설명"),
-      sortOrder: z.number().optional().describe("정렬 순서"),
+      sortOrder: z.number().optional().describe("정렬 순서 (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능)"),
     },
     async ({ projectId, ...body }) => {
       try {
@@ -765,7 +765,7 @@ export function registerTools(
 
   server.tool(
     "update_area",
-    "영역 수정 — 기존 영역 정보를 업데이트합니다",
+    "영역 수정 — OWNER/ADMIN·PM/PL, 상위 화면/단위업무/요구사항/과업의 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다",
     {
       projectId: z.string().describe("프로젝트 ID"),
       areaId: z.string().describe("영역 ID"),
@@ -837,7 +837,7 @@ export function registerTools(
 
   server.tool(
     "create_function",
-    "기능 생성 — 새 기능을 등록합니다. 영역에 소속시키려면 areaId를 전달하세요 (선행: list_areas로 조회)",
+    "기능 생성 — 새 기능을 등록합니다. 영역에 소속시키려면 areaId를 전달하세요 (선행: list_areas로 조회). 복잡도·공수·담당자·정렬 지정은 OWNER/ADMIN 또는 PM/PL만 가능합니다",
     {
       projectId: z.string().describe("프로젝트 ID"),
       name: z.string().describe("기능명 (필수)"),
@@ -845,10 +845,10 @@ export function registerTools(
       type: z.string().optional().describe("기능 유형. 허용값: SEARCH | SAVE | DELETE | DOWNLOAD | UPLOAD | NAVIGATE | VALIDATE | OTHER. 기본: OTHER"),
       description: z.string().optional().describe("기능 설명"),
       priority: z.string().optional().describe("우선순위. 허용값: HIGH | MEDIUM | LOW. 기본: MEDIUM"),
-      complexity: z.string().optional().describe("복잡도. 허용값: HIGH | MEDIUM | LOW. 기본: MEDIUM"),
-      effort: z.string().optional().describe("구현 공수"),
-      assignMemberId: z.string().optional().describe("담당자 회원 ID"),
-      sortOrder: z.number().optional().describe("정렬 순서"),
+      complexity: z.string().optional().describe("복잡도. 허용값: HIGH | MEDIUM | LOW (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능; 생략 시 MEDIUM)"),
+      effort: z.string().optional().describe("구현 공수 (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능)"),
+      assignMemberId: z.string().optional().describe("담당자 회원 ID (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능)"),
+      sortOrder: z.number().optional().describe("정렬 순서 (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능)"),
     },
     // 기능 자신은 구현 일정이 없음 — 구현 마감은 소속 화면(update_screen의 implStartDate/implEndDate)에서 관리(2026-07-28)
     async ({ projectId, ...body }) => {
@@ -866,7 +866,7 @@ export function registerTools(
 
   server.tool(
     "update_function",
-    "기능 수정 — 기존 기능 정보를 업데이트합니다",
+    "기능 수정 — OWNER/ADMIN·PM/PL, 자신 또는 상위 화면/단위업무/요구사항/과업의 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다",
     {
       projectId: z.string().describe("프로젝트 ID"),
       functionId: z.string().describe("기능 ID"),
@@ -878,7 +878,7 @@ export function registerTools(
       priority: z.string().optional().describe("우선순위. 허용값: HIGH | MEDIUM | LOW. 기본: MEDIUM"),
       complexity: z.string().optional().describe("복잡도. 허용값: HIGH | MEDIUM | LOW. 기본: MEDIUM"),
       effort: z.string().optional().describe("구현 공수"),
-      assignMemberId: z.string().optional().describe("담당자 회원 ID"),
+      assignMemberId: z.string().optional().describe("담당자 회원 ID (OWNER/ADMIN 또는 PM/PL만 변경 가능)"),
       docStatus: z.string().optional().describe("기능정의서 작성 상태 (BEFORE/DOING/DONE)"),
       sortOrder: z.number().optional().describe("정렬 순서"),
     },
