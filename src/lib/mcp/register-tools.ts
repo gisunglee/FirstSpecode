@@ -642,6 +642,7 @@ export function registerTools(
       projectId: z.string().describe("프로젝트 ID"),
       name: z.string().describe("화면명 (필수)"),
       unitWorkId: z.string().optional().describe("소속 단위업무 ID"),
+      description: z.string().optional().describe("화면 설명 (마크다운 지원)"),
       displayCode: z.string().optional().describe("화면 표시 코드"),
       type: z.string().optional().describe("화면 유형. 허용값: LIST | DETAIL | GRID | TAB | FULL_SCREEN. 기본: LIST"),
       categoryL: z.string().optional().describe("대분류"),

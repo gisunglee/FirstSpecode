@@ -76,7 +76,13 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
   const [creating, setCreating] = useState(false);
   // 생성 직후 원문 표시용 (1회만 — 이후 조회 불가)
   const [createdRawKey, setCreatedRawKey] = useState<string | null>(null);
+  // 생성 직후 배너에 쓸 용도 — keyUseSe는 폼을 다시 열면 바뀔 수 있어 별도 보관
+  const [createdKeyUseSe, setCreatedKeyUseSe] = useState<KeyUseSe>("CLIENT");
   const [copied, setCopied] = useState(false);
+  const [configCopied, setConfigCopied] = useState(false);
+  // 이미 발급된 키에는 원문이 없어 생성 직후 배너를 볼 수 없으므로
+  // "지금 이 페이지에 온 사람"을 위한 상시 안내를 별도로 둔다 (기본은 접힘)
+  const [showGuide, setShowGuide] = useState(false);
   // [2026-04-26] 키 용도 선택 — 안전 기본값: 'CLIENT' (Claude Code MCP 도구용)
   const [keyUseSe, setKeyUseSe] = useState<KeyUseSe>("CLIENT");
 
@@ -141,6 +147,7 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
       const body = await res.json();
       if (res.ok) {
         setCreatedRawKey(body.data.rawKey);
+        setCreatedKeyUseSe(keyUseSe);
         setNewKeyName("");
         setShowCreate(false);
         fetchKeys();
@@ -160,6 +167,36 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
     setCopied(true);
     toast.success("MCP 키가 클립보드에 복사되었습니다.");
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // 용도별 연결 스니펫 — CLIENT는 .mcp.json 통째로, WORKER는 .env.local용 두 줄
+  // origin은 지금 접속 중인 도메인(로컬/스테이징/운영) 그대로 사용해야 발급받은 프로젝트에 맞게 연결됨
+  const buildConnectionSnippet = (useSe: KeyUseSe, rawKey: string): string => {
+    const origin = window.location.origin;
+    if (useSe === "CLIENT") {
+      return JSON.stringify(
+        {
+          mcpServers: {
+            specode: {
+              type: "http",
+              url: `${origin}/api/mcp`,
+              headers: { Authorization: `Bearer ${rawKey}` },
+            },
+          },
+        },
+        null,
+        2,
+      );
+    }
+    return `SPECODE_URL=${origin}\nSPECODE_WORKER_KEY=${rawKey}`;
+  };
+
+  const handleCopyConfig = async () => {
+    if (!createdRawKey) return;
+    await navigator.clipboard.writeText(buildConnectionSnippet(createdKeyUseSe, createdRawKey));
+    setConfigCopied(true);
+    toast.success("연결 설정이 클립보드에 복사되었습니다.");
+    setTimeout(() => setConfigCopied(false), 2000);
   };
 
   // 키 폐기
@@ -191,14 +228,99 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
             키 발급 시 &quot;특정 프로젝트 고정&quot;을 선택하면 다른 프로젝트 데이터가 노출되는 사고를 막을 수 있습니다.
           </p>
         </div>
-        <button
-          className="sp-btn sp-btn-primary"
-          onClick={() => { setShowCreate(true); setCreatedRawKey(null); }}
-          style={{ fontSize: "var(--text-sm)", whiteSpace: "nowrap" }}
-        >
-          + 키 생성
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            className="sp-btn sp-btn-secondary"
+            onClick={() => setShowGuide((v) => !v)}
+            style={{ fontSize: "var(--text-sm)", whiteSpace: "nowrap" }}
+          >
+            {showGuide ? "연결 방법 접기" : "🔗 연결 방법 보기"}
+          </button>
+          <button
+            className="sp-btn sp-btn-primary"
+            onClick={() => { setShowCreate(true); setCreatedRawKey(null); }}
+            style={{ fontSize: "var(--text-sm)", whiteSpace: "nowrap" }}
+          >
+            + 키 생성
+          </button>
+        </div>
       </div>
+
+      {/* 상시 연결 가이드 — 이미 발급된 키는 원문을 다시 볼 수 없어(보안 정책)
+          생성 직후 배너만으로는 재방문 사용자에게 설명이 되지 않는다.
+          그래서 실제 키 값 없이도 붙여넣을 수 있는 플레이스홀더 스니펫을 상시 제공한다. */}
+      {showGuide && (
+        <div style={{
+          padding: "16px",
+          background: "var(--color-bg-info, #e3f2fd)",
+          border: "1px solid var(--color-border-info, #90caf9)",
+          borderRadius: 8,
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+        }}>
+          <div>
+            <p style={{ margin: "0 0 6px", fontWeight: 600, fontSize: "var(--text-sm)", color: "var(--color-text-info, #1565c0)" }}>
+              발급받은 키, 어디에 어떻게 붙여넣나요?
+            </p>
+            <ol style={{ margin: 0, paddingLeft: 20, fontSize: "var(--text-sm)", color: "var(--color-text)", display: "flex", flexDirection: "column", gap: 4 }}>
+              <li>위 &quot;+ 키 생성&quot;으로 키를 만들면 원문이 <strong>그 순간 한 번만</strong> 화면에 표시됩니다. 재조회는 불가능하니 그때 복사하세요.</li>
+              <li>연결하려는 곳에 맞춰 아래 방식 중 하나로 붙여넣습니다.</li>
+            </ol>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div>
+              <p style={{ margin: "0 0 4px", fontSize: "var(--text-sm)", fontWeight: 500 }}>Claude Code (다른 프로젝트 폴더)</p>
+              <p style={{ margin: "0 0 6px", fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
+                연결하려는 프로젝트 루트에 <code>.mcp.json</code> 파일로 저장하거나, Claude Code에게 아래 내용을 그대로 붙여넣고 &quot;MCP 연결해줘&quot;라고 요청하세요.
+              </p>
+              <pre style={{
+                margin: 0,
+                padding: "8px 12px",
+                background: "var(--color-bg-subtle, #f5f5f5)",
+                borderRadius: 4,
+                fontSize: "var(--text-xs)",
+                fontFamily: "monospace",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-all",
+              }}>
+                {buildConnectionSnippet("CLIENT", "위에서 발급받은 spk_ 키")}
+              </pre>
+            </div>
+
+            <div>
+              <p style={{ margin: "0 0 4px", fontSize: "var(--text-sm)", fontWeight: 500 }}>Claude Desktop 앱</p>
+              <p style={{ margin: 0, fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
+                설정 → Developer → Edit Config 에서 위와 같은 형식(<code>type: &quot;http&quot;</code>, <code>url</code>, <code>Authorization</code> 헤더)으로 추가합니다.
+              </p>
+            </div>
+
+            <div>
+              <p style={{ margin: "0 0 4px", fontSize: "var(--text-sm)", fontWeight: 500 }}>claude.ai (웹)</p>
+              <p style={{ margin: 0, fontSize: "var(--text-xs)", color: "var(--color-text-secondary)" }}>
+                설정 → Connectors → &quot;Add custom connector&quot;에서 엔드포인트 URL과 Bearer 토큰을 입력합니다.
+              </p>
+            </div>
+
+            <div>
+              <p style={{ margin: "0 0 4px", fontSize: "var(--text-sm)", fontWeight: 500 }}>CLI로 즉시 등록</p>
+              <pre style={{
+                margin: 0,
+                padding: "8px 12px",
+                background: "var(--color-bg-subtle, #f5f5f5)",
+                borderRadius: 4,
+                fontSize: "var(--text-xs)",
+                fontFamily: "monospace",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-all",
+              }}>
+                {`claude mcp add specode --transport http ${typeof window !== "undefined" ? window.location.origin : ""}/api/mcp --header "Authorization: Bearer 위에서 발급받은 spk_ 키"`}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 생성 직후 원문 표시 배너 */}
       {createdRawKey && (
@@ -230,6 +352,37 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
             >
               {copied ? "복사됨" : "복사"}
             </button>
+          </div>
+
+          {/* 연결 설정 스니펫 — 소스가 없는 프로젝트에서도 그대로 붙여넣어 연결할 수 있도록 완성본 제공 */}
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--color-border-warning, #ffe082)" }}>
+            <p style={{ margin: "0 0 8px", fontSize: "var(--text-sm)", color: "var(--color-text)" }}>
+              {createdKeyUseSe === "CLIENT"
+                ? "연결하려는 프로젝트 폴더의 .mcp.json에 아래 내용을 저장하거나, Claude Code에게 그대로 붙여넣고 \"MCP 연결해줘\"라고 요청하세요."
+                : "연결하려는 프로젝트 폴더의 .env.local에 아래 두 줄을 추가하세요. 이후 MCP가 연결된 Claude Code에서 get_worker_command_files 도구를 요청하면 /run-ai-tasks, /sync-specode 커맨드가 설치됩니다."}
+            </p>
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <pre style={{
+                flex: 1,
+                margin: 0,
+                padding: "8px 12px",
+                background: "var(--color-bg-subtle, #f5f5f5)",
+                borderRadius: 4,
+                fontSize: "var(--text-xs)",
+                fontFamily: "monospace",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-all",
+              }}>
+                {buildConnectionSnippet(createdKeyUseSe, createdRawKey)}
+              </pre>
+              <button
+                className="sp-btn sp-btn-secondary"
+                onClick={handleCopyConfig}
+                style={{ fontSize: "var(--text-sm)", whiteSpace: "nowrap" }}
+              >
+                {configCopied ? "복사됨" : "복사"}
+              </button>
+            </div>
           </div>
         </div>
       )}

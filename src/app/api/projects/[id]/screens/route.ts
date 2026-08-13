@@ -50,22 +50,25 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { unitWorkId, displayId: inputDisplayId, name, type, categoryL, categoryM, categoryS } = body as {
-    unitWorkId?:  string;
-    displayId?:   string;
-    name?:        string;
-    type?:        string;
-    categoryL?:   string;
-    categoryM?:   string;
-    categoryS?:   string;
+  const { unitWorkId, displayId: inputDisplayId, name, description, layoutData, type, categoryL, categoryM, categoryS } = body as {
+    unitWorkId?:   string;
+    displayId?:    string;
+    name?:         string;
+    description?:  string;
+    layoutData?:   string;
+    type?:         string;
+    categoryL?:    string;
+    categoryM?:    string;
+    categoryS?:    string;
   };
 
   if (!name?.trim()) return apiError("VALIDATION_ERROR", "화면명을 입력해 주세요.", 400);
 
   // 장문 텍스트 한도 검증 — 정책은 src/lib/constants/textLimits.ts
   const limitErr = apiTextLimitGuard([
-    ["name",      name],
-    ["displayId", inputDisplayId],
+    ["name",        name],
+    ["displayId",   inputDisplayId],
+    ["description", description],
   ]);
   if (limitErr) return limitErr;
 
@@ -108,6 +111,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         unit_work_id:    unitWorkId || null,
         scrn_display_id: displayId,
         scrn_nm:         name.trim(),
+        scrn_dc:         description?.trim() || null,
+        layer_data_dc:   layoutData || null,
         scrn_ty_code:    type || "LIST",
         ctgry_l_nm:      categoryL?.trim() || null,
         ctgry_m_nm:      categoryM?.trim() || null,

@@ -1,7 +1,7 @@
 ---
 description: 구현 완료 후 직접 수정된 소스를 SPECODE 스펙 반영함에 제출
 argument-hint: "[UW-XXXXX]"
-allowed-tools: Bash, Read, Write, Grep, Glob
+allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion
 ---
 
 # /sync-specode — 후속 소스 변경을 SPECODE와 동기화
@@ -16,6 +16,27 @@ allowed-tools: Bash, Read, Write, Grep, Glob
 인자의 UW ID는 선택이다. 지정하면 그 단위업무 하위 화면·영역·기능을 우선 비교한다.
 생략하면 확정된 스펙-소스 연결지도와 프로젝트 설계 인덱스로 영향 대상을 찾는다.
 
+## 0. 분석 범위 확인
+
+UW ID가 지정되면 별도 질문 없이 바로 진행한다.
+
+UW ID가 없으면 작업을 시작하기 전에 `AskUserQuestion`으로 다음 안내와 선택지를 보여준다.
+
+```text
+분석 범위를 선택해 주세요.
+
+프로젝트 전체 분석도 가능하지만, 단위업무를 지정하면 관련 화면·영역·기능에 집중하므로
+분석 정확도가 높아지고 검토할 후보가 줄어듭니다.
+
+1. 단위업무 지정 (권장)
+2. 프로젝트 전체 분석
+```
+
+- `단위업무 지정 (권장)`을 선택하면 `UW-XXXXX` 형식의 ID를 추가로 입력받아 아래 단계의
+  `$ARGUMENTS` 대신 사용한다. 형식이 잘못됐으면 실행하지 말고 다시 입력받는다.
+- `프로젝트 전체 분석`을 선택한 경우에만 인자 없이 계속한다.
+- 사용자가 질문을 취소하면 동기화도 취소하며 snapshot이나 receipt를 만들지 않는다.
+
 ## 1. 분석 입력 준비
 
 프로젝트 루트에서 실행한다.
@@ -23,6 +44,8 @@ allowed-tools: Bash, Read, Write, Grep, Glob
 ```bash
 node .claude/commands/prepare_specode_sync.mjs $ARGUMENTS
 ```
+
+0단계에서 UW ID를 입력받았다면 위 명령의 `$ARGUMENTS`에는 그 값을 사용한다.
 
 실패하면 임의의 base를 만들지 않는다. 특히 `SOURCE_BASELINE_REQUIRED`이면 SPECODE 웹에서
 최초 source baseline을 승인하도록 안내하고 종료한다. ancestry 오류는 force-push 또는
