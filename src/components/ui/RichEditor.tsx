@@ -32,6 +32,11 @@ import {
   TEXT_LIMITS, countChars,
   type TextLimitField,
 } from "@/lib/constants/textLimits";
+import { useEditorPrefsStore } from "@/store/editorPrefsStore";
+import { FontScaleControl } from "./FontScaleControl";
+import { useDraggablePosition } from "@/hooks/useDraggablePosition";
+import { useResizablePanelSize } from "@/hooks/useResizablePanelSize";
+import { PanelResizeHandle } from "./PanelResizeHandle";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -118,6 +123,16 @@ export default function RichEditor({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [colorPickerOpen]);
+
+  // ── 확대 창(플로팅 패널) ──────────────────────────────────────────────────
+  // 모달이 아니라 position:fixed 오버레이 — 배경(상세명세·분석메모 등)은 계속 편집 가능.
+  // EditorContent를 portal로 옮기면 TipTap이 ProseMirror뷰를 재마운트해 커서/스크롤이
+  // 튈 수 있어서, 같은 DOM 위치를 유지한 채 style만 fixed로 바꿔 화면 위에 띄운다.
+  const fontScale = useEditorPrefsStore((s) => s.fontScale);
+  const [expanded, setExpanded] = useState(false);
+  const { pos: panelPos, onDragStart: onPanelDragStart } = useDraggablePosition({ x: 32, y: 88 });
+  // MarkdownEditor(상세명세 등) 확대 창과 같은 기본 크기 — 폭이 서로 다르면 어색해서 통일
+  const { size: panelSize, onResizeStart: onPanelResizeStart } = useResizablePanelSize({ width: 760, height: 600 });
 
   // ── 길이 제한 (field 지정 시 카운터 표시용) ──────────────────────────────
   // HTML 태그 포함 전체 길이 — htmlContent 한도(100K)는 태그 오버헤드 감안한 수치.
@@ -213,7 +228,50 @@ export default function RichEditor({
   if (!editor) return null;
 
   return (
-    <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, background: "var(--color-bg-card)", overflow: "hidden" }}>
+    <>
+      {/* 확대 중일 때 원래 자리에 남는 안내 플레이스홀더 — 배경(상세명세 등)은 이 아래에서 그대로 편집 가능 */}
+      {expanded && (
+        <div style={{ border: "1px dashed var(--color-border)", borderRadius: 6, padding: "20px 16px", textAlign: "center", color: "var(--color-text-tertiary)", fontSize: 13, background: "var(--color-bg-muted)" }}>
+          확대 창에서 편집 중입니다.
+        </div>
+      )}
+
+      <div style={expanded ? {
+        position:      "fixed",
+        left:          panelPos.x,
+        top:           panelPos.y,
+        width:         panelSize.width,
+        maxWidth:      "calc(100vw - 48px)",
+        height:        panelSize.height,
+        maxHeight:     "calc(100vh - 48px)",
+        zIndex:        1500,
+        display:       "flex",
+        flexDirection: "column",
+        border:        "1px solid var(--color-border)",
+        borderRadius:  8,
+        background:    "var(--color-bg-card)",
+        boxShadow:     "0 8px 32px rgba(0,0,0,0.28)",
+        overflow:      "hidden",
+      } : { border: "1px solid var(--color-border)", borderRadius: 6, background: "var(--color-bg-card)", overflow: "hidden" }}>
+
+        {/* 확대 창 헤더 — 드래그로 위치 이동, 배경은 모달 아니라서 계속 편집 가능 */}
+        {expanded && (
+          <div
+            onMouseDown={onPanelDragStart}
+            style={{ cursor: "move", userSelect: "none", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "var(--color-bg-muted)", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}
+          >
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>⠿ 요구사항 내용 (확대)</span>
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              style={{ padding: "3px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-secondary)", cursor: "pointer" }}
+            >
+              ✕ 닫기
+            </button>
+          </div>
+        )}
+
+        {expanded && <PanelResizeHandle onMouseDown={onPanelResizeStart} />}
 
       {/* ── 툴바 ───────────────────────────────────────────────────────── */}
       {!readOnly && (
@@ -325,12 +383,22 @@ export default function RichEditor({
 
           <ToolBtn active={false} onClick={() => editor.chain().focus().undo().run()} title="실행 취소 (Ctrl+Z)">↩</ToolBtn>
           <ToolBtn active={false} onClick={() => editor.chain().focus().redo().run()} title="다시 실행 (Ctrl+Y)">↪</ToolBtn>
+
+          <Divider />
+
+          <FontScaleControl />
+
+          <Divider />
+
+          <ToolBtn active={expanded} onClick={() => setExpanded((v) => !v)} title="확대 창으로 편집 (폭이 좁아 답답할 때)">
+            {expanded ? "⤡ 접기" : "⤢ 확대"}
+          </ToolBtn>
         </div>
       )}
 
       {/* ── 에디터 본문 ─────────────────────────────────────────────────── */}
       <div
-        style={{ minHeight, cursor: readOnly ? "default" : "text" }}
+        style={{ minHeight, cursor: readOnly ? "default" : "text", zoom: fontScale, flex: expanded ? 1 : undefined, overflow: expanded ? "auto" : undefined }}
         onClick={() => !readOnly && editor.chain().focus().run()}
       >
         <EditorContent editor={editor} className="sp-rich-editor" />
@@ -350,7 +418,8 @@ export default function RichEditor({
           {current.toLocaleString()} / {max.toLocaleString()}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

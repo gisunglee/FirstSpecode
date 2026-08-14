@@ -28,6 +28,7 @@ import dynamic from "next/dynamic";
 // 탭 전환/모달 오픈 등 실제 편집이 시작되는 시점에 청크가 다운로드됨
 const RichEditor = dynamic(() => import("@/components/ui/RichEditor"), { ssr: false });
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
+import { FontScaleControl } from "@/components/ui/FontScaleControl";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
 import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
@@ -1083,7 +1084,8 @@ function RequirementDetailPageInner() {
                     <FieldHelp title="상세 명세" body={SPEC_HELP_BODY} />
                   </span>
                   <MarkdownTabButtons tab={specTab} onTabChange={setSpecTab} />
-                  <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                  <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+                    <FontScaleControl />
                     <button
                       type="button"
                       onClick={() => setSpecExampleOpen(true)}
@@ -1120,6 +1122,7 @@ function RequirementDetailPageInner() {
                   tab={specTab}
                   onTabChange={setSpecTab}
                   onChange={(v) => handleChange("detailSpec", v)}
+                  title="상세 명세"
                   placeholder={`## 기능 상세\n\n- 항목1\n- 항목2`}
                   // 기존(20행) 대비 50% 증가(2026-07-29)
                   rows={30}
@@ -1136,7 +1139,8 @@ function RequirementDetailPageInner() {
                     <FieldHelp title="분석 메모" body={ANALYSIS_MEMO_HELP_BODY} />
                   </span>
                   <MarkdownTabButtons tab={analyzeTab} onTabChange={setAnalyzeTab} />
-                  <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                  <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+                    <FontScaleControl />
                     {!isNew && (
                       <button
                         type="button"
@@ -1153,6 +1157,7 @@ function RequirementDetailPageInner() {
                   tab={analyzeTab}
                   onTabChange={setAnalyzeTab}
                   onChange={(v) => handleChange("analysisMemo", v)}
+                  title="분석 메모"
                   placeholder={`## 분석 내용\n\n- 항목1\n- 항목2`}
                   // 기존(20행) 대비 50% 증가(2026-07-29)
                   rows={30}

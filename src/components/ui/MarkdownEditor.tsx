@@ -6,7 +6,8 @@
  * 역할:
  *   - tab / onTabChange 를 외부에서 전달하면 외부 제어 (탭 버튼을 라벨 옆에 배치 가능)
  *   - 전달하지 않으면 내부 상태로 자체 제어
- *   - 내부 헤더 행 없음 — 세로 공간 낭비 방지
+ *   - 평소엔 내부 헤더 행 없음(세로 공간 낭비 방지) — 우상단 "⤢" 아이콘만 떠 있고,
+ *     클릭해 확대했을 때만 헤더(드래그·탭·폰트조절·닫기)가 나타남
  */
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
@@ -15,6 +16,11 @@ import {
   TEXT_LIMITS, countChars,
   type TextLimitField,
 } from "@/lib/constants/textLimits";
+import { useEditorPrefsStore } from "@/store/editorPrefsStore";
+import { useDraggablePosition } from "@/hooks/useDraggablePosition";
+import { useResizablePanelSize } from "@/hooks/useResizablePanelSize";
+import { FontScaleControl } from "./FontScaleControl";
+import { PanelResizeHandle } from "./PanelResizeHandle";
 
 /**
  * HTML 문서 여부 판별 — <!DOCTYPE, <html, <head, <body 등
@@ -42,17 +48,31 @@ type Props = {
    * 미지정 시: 무제한 (예: AI 결과 표시용).
    */
   field?:         TextLimitField;
+  /** 확대 창 헤더에 표시할 이름(예: "상세 명세"). 미지정 시 "편집". */
+  title?:         string;
 };
 
 export default function MarkdownEditor({
   value, onChange, placeholder, rows = 14, readOnly = false,
-  tab: externalTab, onTabChange: _onTabChange,
+  tab: externalTab, onTabChange,
   fullHeight = false,
   field,
+  title = "편집",
 }: Props) {
   // 외부 탭이 없으면 내부 state로 fallback (탭 버튼은 외부 MarkdownTabButtons에서 제어)
   const [internalTab] = useState<"edit" | "preview">("edit");
   const tab = externalTab ?? internalTab;
+
+  // RichEditor(요구사항내용)와 공유하는 전역 폰트 스케일 — FontScaleControl로 조절
+  const fontScale = useEditorPrefsStore((s) => s.fontScale);
+
+  // ── 확대 창(플로팅 패널) — RichEditor와 동일 패턴(모달 아님, 배경 계속 편집 가능) ──
+  const [expanded, setExpanded] = useState(false);
+  const { pos: panelPos, onDragStart: onPanelDragStart } = useDraggablePosition({ x: 32, y: 88 });
+  // RichEditor(요구사항내용) 확대 창과 같은 기본 크기 — 폭이 서로 다르면 어색해서 통일
+  const { size: panelSize, onResizeStart: onPanelResizeStart } = useResizablePanelSize({ width: 760, height: 600 });
+  // 확대 중엔 rows/fullHeight 설정과 무관하게 패널 안을 꽉 채운다
+  const stretch = fullHeight || expanded;
 
   // ── 길이 제한 (field prop 지정 시) ───────────────────────────────────────
   // current 는 글자수 기준 (이모지·서로게이트 안전).
@@ -123,13 +143,74 @@ export default function MarkdownEditor({
   }, [tab, isHtml, hasMermaid, value, renderMermaidBlocks]);
 
   return (
-    <div style={{
-      display:       "flex",
-      flexDirection: "column",
-      flex:          fullHeight ? 1 : "none",
-      minHeight:     0,
-      height:        fullHeight ? "100%" : undefined,
-    }}>
+    <>
+      {/* 확대 중일 때 원래 자리에 남는 안내 플레이스홀더 — 배경(다른 필드)은 그대로 편집 가능 */}
+      {expanded && (
+        <div style={{ border: "1px dashed var(--color-border)", borderRadius: 6, padding: "20px 16px", textAlign: "center", color: "var(--color-text-tertiary)", fontSize: 13, background: "var(--color-bg-muted)" }}>
+          확대 창에서 편집 중입니다.
+        </div>
+      )}
+
+      <div style={expanded ? {
+        position:      "fixed",
+        left:          panelPos.x,
+        top:           panelPos.y,
+        width:         panelSize.width,
+        maxWidth:      "calc(100vw - 48px)",
+        height:        panelSize.height,
+        maxHeight:     "calc(100vh - 48px)",
+        zIndex:        1500,
+        display:       "flex",
+        flexDirection: "column",
+        border:        "1px solid var(--color-border)",
+        borderRadius:  8,
+        background:    "var(--color-bg-card)",
+        boxShadow:     "0 8px 32px rgba(0,0,0,0.28)",
+        overflow:      "hidden",
+      } : {
+        position:      "relative",
+        display:       "flex",
+        flexDirection: "column",
+        flex:          fullHeight ? 1 : "none",
+        minHeight:     0,
+        height:        fullHeight ? "100%" : undefined,
+      }}>
+
+        {/* 확대 창 헤더 — 드래그 이동, 탭·폰트조절·닫기 */}
+        {expanded && (
+          <div
+            onMouseDown={onPanelDragStart}
+            style={{ cursor: "move", userSelect: "none", display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "var(--color-bg-muted)", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}
+          >
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", whiteSpace: "nowrap" }}>⠿ {title} (확대)</span>
+            {onTabChange && <MarkdownTabButtons tab={tab} onTabChange={onTabChange} />}
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+              <FontScaleControl />
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                style={{ padding: "3px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-secondary)", cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                ✕ 닫기
+              </button>
+            </div>
+          </div>
+        )}
+
+        {expanded && <PanelResizeHandle onMouseDown={onPanelResizeStart} />}
+
+        {/* 확대 전 — 우상단 작은 확대 아이콘(레이아웃 공간 차지 안 함) */}
+        {!expanded && (
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            title="확대 창으로 편집 (폭이 좁아 답답할 때)"
+            style={{ position: "absolute", top: 4, right: 4, zIndex: 5, padding: "1px 5px", fontSize: 11, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-secondary)", cursor: "pointer", opacity: 0.7 }}
+          >
+            ⤢
+          </button>
+        )}
+
       {tab === "edit" ? (
         <textarea
           value={value}
@@ -141,7 +222,7 @@ export default function MarkdownEditor({
           onChange={(e) => onChange(e.target.value)}
           style={{
             width:        "100%",
-            height:       fullHeight ? "100%" : (rows * 21),
+            height:       stretch ? "100%" : (rows * 21),
             padding:      "8px 12px",
             borderRadius: 6,
             border:       "1px solid var(--color-border)",
@@ -154,7 +235,8 @@ export default function MarkdownEditor({
             // 2026-05-29: 12 → 13. 단위업무/요구사항 등 장문 편집에서 답답함 해소
             fontSize:     13,
             lineHeight:   1.5,
-            flex:         fullHeight ? 1 : "none",
+            zoom:         fontScale,
+            flex:         stretch ? 1 : "none",
             minHeight:    0,
           }}
         />
@@ -165,12 +247,12 @@ export default function MarkdownEditor({
           sandbox="allow-scripts"
           style={{
             width:        "100%",
-            height:       fullHeight ? "100%" : (rows * 21),
+            height:       stretch ? "100%" : (rows * 21),
             border:       "1px solid var(--color-border)",
             borderRadius: 6,
             background:   "#fff",
-            flex:         fullHeight ? 1 : "none",
-            minHeight:    fullHeight ? 0 : (rows * 21),
+            flex:         stretch ? 1 : "none",
+            minHeight:    stretch ? 0 : (rows * 21),
           }}
           title="HTML 미리보기"
         />
@@ -180,8 +262,8 @@ export default function MarkdownEditor({
           className="sp-markdown"
           style={{
             width:        "100%",
-            height:       fullHeight ? "100%" : (rows * 21),
-            maxHeight:    fullHeight ? undefined : (rows * 21),
+            height:       stretch ? "100%" : (rows * 21),
+            maxHeight:    stretch ? undefined : (rows * 21),
             padding:      "12px 16px",
             border:       "1px solid var(--color-border)",
             background:   "var(--color-bg-card)",
@@ -189,8 +271,9 @@ export default function MarkdownEditor({
             boxSizing:    "border-box",
             borderRadius: 6,
             overflowY:    "auto",
-            flex:         fullHeight ? 1 : "none",
-            minHeight:    fullHeight ? 0 : undefined,
+            zoom:         fontScale,
+            flex:         stretch ? 1 : "none",
+            minHeight:    stretch ? 0 : undefined,
           }}
           dangerouslySetInnerHTML={{ __html: renderMarkdown(value) || "<p style='color:#aaa;font-size:13px'>내용 없음</p>" }}
         />
@@ -210,7 +293,8 @@ export default function MarkdownEditor({
           {current.toLocaleString()} / {max.toLocaleString()}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 
