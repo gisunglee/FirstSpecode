@@ -11,6 +11,8 @@ import { useCallback, useState } from "react";
 
 const MIN_WIDTH  = 420;
 const MIN_HEIGHT = 280;
+const MAX_WIDTH  = 1400;
+const WIDTH_STEP = 80;
 
 export function useResizablePanelSize(initial: { width: number; height: number }) {
   const [size, setSize] = useState(initial);
@@ -37,5 +39,9 @@ export function useResizablePanelSize(initial: { width: number; height: number }
     window.addEventListener("mouseup", onUp);
   }, [size]);
 
-  return { size, onResizeStart };
+  // 헤더의 "넓게/좁게" 버튼용 — 드래그 핸들과 별개로 폭만 단계 조절(높이는 그대로 둠)
+  const widen  = useCallback(() => setSize((s) => ({ ...s, width: Math.min(MAX_WIDTH, s.width + WIDTH_STEP) })), []);
+  const narrow = useCallback(() => setSize((s) => ({ ...s, width: Math.max(MIN_WIDTH, s.width - WIDTH_STEP) })), []);
+
+  return { size, onResizeStart, widen, narrow };
 }

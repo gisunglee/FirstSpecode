@@ -21,6 +21,7 @@ import { useDraggablePosition } from "@/hooks/useDraggablePosition";
 import { useResizablePanelSize } from "@/hooks/useResizablePanelSize";
 import { FontScaleControl } from "./FontScaleControl";
 import { PanelResizeHandle } from "./PanelResizeHandle";
+import { PanelSizeControl } from "./PanelSizeControl";
 
 /**
  * HTML 문서 여부 판별 — <!DOCTYPE, <html, <head, <body 등
@@ -70,7 +71,7 @@ export default function MarkdownEditor({
   const [expanded, setExpanded] = useState(false);
   const { pos: panelPos, onDragStart: onPanelDragStart } = useDraggablePosition({ x: 32, y: 88 });
   // RichEditor(요구사항내용) 확대 창과 같은 기본 크기 — 폭이 서로 다르면 어색해서 통일
-  const { size: panelSize, onResizeStart: onPanelResizeStart } = useResizablePanelSize({ width: 760, height: 600 });
+  const { size: panelSize, onResizeStart: onPanelResizeStart, widen: widenPanel, narrow: narrowPanel } = useResizablePanelSize({ width: 760, height: 600 });
   // 확대 중엔 rows/fullHeight 설정과 무관하게 패널 안을 꽉 채운다
   const stretch = fullHeight || expanded;
 
@@ -180,12 +181,13 @@ export default function MarkdownEditor({
         {expanded && (
           <div
             onMouseDown={onPanelDragStart}
-            style={{ cursor: "move", userSelect: "none", display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "var(--color-bg-muted)", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}
+            style={{ cursor: "move", userSelect: "none", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "8px 12px", background: "var(--color-bg-muted)", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}
           >
             <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", whiteSpace: "nowrap" }}>⠿ {title} (확대)</span>
             {onTabChange && <MarkdownTabButtons tab={tab} onTabChange={onTabChange} />}
-            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
               <FontScaleControl />
+              <PanelSizeControl onNarrow={narrowPanel} onWiden={widenPanel} />
               <button
                 type="button"
                 onClick={() => setExpanded(false)}

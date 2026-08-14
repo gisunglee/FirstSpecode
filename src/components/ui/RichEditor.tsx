@@ -37,6 +37,7 @@ import { FontScaleControl } from "./FontScaleControl";
 import { useDraggablePosition } from "@/hooks/useDraggablePosition";
 import { useResizablePanelSize } from "@/hooks/useResizablePanelSize";
 import { PanelResizeHandle } from "./PanelResizeHandle";
+import { PanelSizeControl } from "./PanelSizeControl";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -132,7 +133,7 @@ export default function RichEditor({
   const [expanded, setExpanded] = useState(false);
   const { pos: panelPos, onDragStart: onPanelDragStart } = useDraggablePosition({ x: 32, y: 88 });
   // MarkdownEditor(상세명세 등) 확대 창과 같은 기본 크기 — 폭이 서로 다르면 어색해서 통일
-  const { size: panelSize, onResizeStart: onPanelResizeStart } = useResizablePanelSize({ width: 760, height: 600 });
+  const { size: panelSize, onResizeStart: onPanelResizeStart, widen: widenPanel, narrow: narrowPanel } = useResizablePanelSize({ width: 760, height: 600 });
 
   // ── 길이 제한 (field 지정 시 카운터 표시용) ──────────────────────────────
   // HTML 태그 포함 전체 길이 — htmlContent 한도(100K)는 태그 오버헤드 감안한 수치.
@@ -260,14 +261,17 @@ export default function RichEditor({
             onMouseDown={onPanelDragStart}
             style={{ cursor: "move", userSelect: "none", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "var(--color-bg-muted)", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}
           >
-            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>⠿ 요구사항 내용 (확대)</span>
-            <button
-              type="button"
-              onClick={() => setExpanded(false)}
-              style={{ padding: "3px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-secondary)", cursor: "pointer" }}
-            >
-              ✕ 닫기
-            </button>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", whiteSpace: "nowrap" }}>⠿ 요구사항 내용 (확대)</span>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+              <PanelSizeControl onNarrow={narrowPanel} onWiden={widenPanel} />
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                style={{ padding: "3px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-secondary)", cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                ✕ 닫기
+              </button>
+            </div>
           </div>
         )}
 
