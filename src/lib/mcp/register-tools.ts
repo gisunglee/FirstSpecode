@@ -16,7 +16,7 @@
  *   [설계-기능]    list_functions, get_function, create_function, update_function
  *   [설계-트리]    get_design_tree (배치 조회 — 단위업무 ID 1~20개 필수, "전체 조회" 미지원)
  *   [DB]           list_db_tables, get_db_table, get_db_table_usage, get_db_column_usage
- *   [스펙 정합성]   source baseline·컨텍스트·Type A/B 제출·검토 결과 조회·보완 확인
+ *   [스펙 동기화]   UW 실행 시작·구조화 결과 제출·실행/항목 조회 (적용은 웹 전용)
  *   [워커 배포]    get_worker_command_files (/run-ai-tasks 커맨드를 고객 로컬에 설치할 파일 내용 제공)
  *
  * 정책 — DELETE 미지원:
@@ -45,20 +45,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { SpecodeFetch } from "@/lib/mcp/api-client";
 import { getWorkerCommandFiles, WORKER_COMMAND_SETUP_GUIDE } from "@/lib/mcp/workerCommandFiles";
-import { receiptSubmissionSchema } from "@/lib/spec-reconciliation/contracts";
-
-const providerReceiptSubmissionSchema = receiptSubmissionSchema.omit({
-  repoProvider: true,
-  checkpointType: true,
-  headStable: true,
-  evidenceTrust: true,
-  evidenceVerify: true,
-  ancestryVerified: true,
-  diffHash: true,
-  evidenceVerifyData: true,
-  sourceEvidence: true,
-  manifest: true,
-});
+import { syncResultSubmissionSchema } from "@/lib/spec-sync/contracts";
 
 // ─── 공통 헬퍼 ──────────────────────────────────────────────────
 
@@ -1015,22 +1002,56 @@ export function registerTools(
   );
 
   // ═══════════════════════════════════════════════════════════════
-  // 11. 구현 변경 스펙 정합성 (Spec Reconciliation)
+  // 11. 구현-설계 동기화 V2 (Spec Sync)
   // ═══════════════════════════════════════════════════════════════
-  // 제출·조회·FIX_SOURCE 보완 확인은 MCP로 제공한다. APPLY_SPEC은 소스 사실과
-  // Diff를 사람이 확인하고 웹에서 승인해야 하므로 자동 호출 경로를 만들지 않는다.
+  // 실행과 분석 결과 제출·조회만 제공한다. 실제 설계 반영은 근거를 본 사람이
+  // 웹 화면에서 승인해야 하므로 MCP에 decision/apply 도구를 등록하지 않는다.
 
   server.tool(
-    "get_source_baselines",
-    "프로젝트·저장소·브랜치별 마지막 정합성 확정 source checkpoint 조회. " +
-      "후속 변경은 반드시 이 응답의 checkpoint를 base로 사용하세요.",
+    "start_spec_sync",
+    "지정 UW의 현재 설계 snapshot을 만들고 구현-설계 비교 실행을 시작합니다. " +
+      "기본 CHECK는 설계 구현 여부와 중요한 설계 누락 후보만 확인합니다.",
     {
       projectId: z.string().describe("프로젝트 ID"),
+      unitWorkRef: z.string().describe("단위업무 UUID 또는 UW-XXXXX 표시 ID"),
+      mode: z.enum(["CHECK", "DEEP_SYNC"]).optional().describe("기본 CHECK"),
+      clientSubmissionKey: z
+        .string()
+        .max(100)
+        .optional()
+        .describe("재시도 중 중복 실행 방지용 클라이언트 키"),
     },
-    async ({ projectId }) => {
+    async ({ projectId, unitWorkRef, mode, clientSubmissionKey }) => {
+      try {
+        const data = await specodeFetch(`/api/projects/${projectId}/spec-syncs`, {
+          method: "POST",
+          body: JSON.stringify({
+            unitWorkRef,
+            mode: mode ?? "CHECK",
+            clientSubmissionKey,
+          }),
+        });
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.tool(
+    "submit_spec_sync_result",
+    "로컬 저장소에서 탐색·검증한 구조화 결과를 저장합니다. " +
+      "설계는 수정하지 않고 웹 검토 대기 항목만 만듭니다.",
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+      runId: z.string().describe("start_spec_sync에서 받은 실행 ID"),
+      result: syncResultSubmissionSchema,
+    },
+    async ({ projectId, runId, result }) => {
       try {
         const data = await specodeFetch(
-          `/api/projects/${projectId}/source-baselines`,
+          `/api/projects/${projectId}/spec-syncs/${runId}/result`,
+          { method: "POST", body: JSON.stringify(result) },
         );
         return textResult(data);
       } catch (err) {
@@ -1040,134 +1061,27 @@ export function registerTools(
   );
 
   server.tool(
-    "get_reconciliation_context",
-    "변경 경로 또는 UW를 기준으로 4계층 설계 원문/hash와 확정된 스펙-소스 연결 후보 조회. " +
-      "proposal의 beforeValue/beforeHash는 이 응답을 그대로 사용하세요.",
-    {
-      projectId: z.string().describe("프로젝트 ID"),
-      unitWork: z.string().optional().describe("선택적 단위업무 UUID 또는 UW 표시 ID"),
-      changedPaths: z.array(z.string()).max(200).optional().describe("변경된 저장소 상대 경로"),
-      includeProjectIndex: z.boolean().optional().describe("연결 후보가 없을 때 전체 설계 인덱스 포함"),
-    },
-    async ({ projectId, unitWork, changedPaths, includeProjectIndex }) => {
-      try {
-        const qs = new URLSearchParams();
-        if (unitWork) qs.set("unitWork", unitWork);
-        if (includeProjectIndex) qs.set("includeProjectIndex", "true");
-        for (const path of changedPaths ?? []) qs.append("path", path);
-        const data = await specodeFetch(
-          `/api/projects/${projectId}/spec-reconciliation-context?${qs}`,
-        );
-        return textResult(data);
-      } catch (err) {
-        return errorResult(err);
-      }
-    },
-  );
-
-  server.tool(
-    "submit_implementation_receipt",
-    "최초 IMPLEMENT 작업의 실제 소스 증거와 요청 당시 스펙 편차를 스펙 반영함에 제출. " +
-      "스펙을 직접 수정하지 않으며 웹 승인을 기다리는 receipt를 만듭니다.",
-    {
-      projectId: z.string().describe("프로젝트 ID"),
-      aiTaskId: z.string().describe("원 IMPLEMENT AI 태스크 ID"),
-      receipt: receiptSubmissionSchema,
-    },
-    async ({ projectId, aiTaskId, receipt }) => {
-      try {
-        const data = await specodeFetch(
-          `/api/projects/${projectId}/impl-receipts`,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              originType: "IMPLEMENTATION",
-              aiTaskId,
-              receipt,
-            }),
-          },
-        );
-        return textResult(data);
-      } catch (err) {
-        return errorResult(err);
-      }
-    },
-  );
-
-  server.tool(
-    "submit_maintenance_change",
-    "구현 완료 후 직접 수정된 source를 마지막 source baseline과 비교한 Type B receipt로 제출. " +
-      "미커밋이면 headStable=false로 DRAFT 분석만 저장하세요.",
-    {
-      projectId: z.string().describe("프로젝트 ID"),
-      receipt: receiptSubmissionSchema,
-    },
-    async ({ projectId, receipt }) => {
-      try {
-        const data = await specodeFetch(
-          `/api/projects/${projectId}/impl-receipts`,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              originType: "MAINTENANCE",
-              receipt,
-            }),
-          },
-        );
-        return textResult(data);
-      } catch (err) {
-        return errorResult(err);
-      }
-    },
-  );
-
-  server.tool(
-    "list_spec_reconciliations",
-    "스펙 반영함 목록 조회 — 구현 결과와 스펙이 달라 사람이 검토해야 하는 접수, " +
-      "확정 완료, source baseline 충돌 건을 반환합니다.",
+    "list_spec_syncs",
+    "구현-설계 동기화 실행 목록과 검토 대기 수를 조회합니다.",
     {
       projectId: z.string().describe("프로젝트 ID"),
       status: z
         .enum([
-          "DRAFT",
+          "RUNNING",
+          "NEEDS_INPUT",
           "NEEDS_REVIEW",
-          "CLOSED",
-          "STALE_BASELINE",
+          "COMPLETED",
+          "FAILED",
+          "CANCELLED",
         ])
-        .optional()
-        .describe("접수 상태 필터"),
-      limit: z.number().int().min(1).max(200).optional().describe("최대 건수"),
+        .optional(),
+      unitWork: z.string().optional().describe("단위업무 UUID 또는 UW 표시 ID"),
+      limit: z.number().int().min(1).max(200).optional(),
     },
-    async ({ projectId, status, limit }) => {
+    async ({ projectId, status, unitWork, limit }) => {
       try {
-        const qs = buildQs({ status, limit });
-        const data = await specodeFetch(
-          `/api/projects/${projectId}/spec-reconciliations${qs}`
-        );
-        return textResult(data);
-      } catch (err) {
-        return errorResult(err);
-      }
-    }
-  );
-
-  server.tool(
-    "submit_provider_verified_change",
-    "연결된 GitHub/GitLab에서 base/head와 실제 Diff를 SPECODE 서버가 직접 조회한 뒤 " +
-      "PROVIDER_VERIFIED 후속 변경으로 제출합니다. provider 연결과 기존 baseline이 필요합니다.",
-    {
-      projectId: z.string().describe("프로젝트 ID"),
-      receipt: providerReceiptSubmissionSchema,
-    },
-    async ({ projectId, receipt }) => {
-      try {
-        const data = await specodeFetch(
-          `/api/projects/${projectId}/impl-receipts/provider`,
-          {
-            method: "POST",
-            body: JSON.stringify({ receipt }),
-          },
-        );
+        const qs = buildQs({ status, unitWork, limit });
+        const data = await specodeFetch(`/api/projects/${projectId}/spec-syncs${qs}`);
         return textResult(data);
       } catch (err) {
         return errorResult(err);
@@ -1176,180 +1090,16 @@ export function registerTools(
   );
 
   server.tool(
-    "queue_reconciliation_analysis",
-    "저장된 source evidence를 SPECODE 서버 AI 큐에서 다시 분석합니다. " +
-      "단위업무, 변경 경로 또는 전체 인덱스 중 분석 범위를 반드시 지정하세요.",
+    "get_spec_sync",
+    "동기화 실행의 구현 판정, 설계 누락 후보, 코드 근거와 사람 결정 상태를 조회합니다.",
     {
       projectId: z.string().describe("프로젝트 ID"),
-      receiptId: z.string().describe("구현 변경 접수 ID"),
-      unitWorkRef: z
-        .string()
-        .optional()
-        .describe("단위업무 UUID 또는 UW 표시 ID"),
-      changedPaths: z
-        .array(z.string())
-        .max(5_000)
-        .optional()
-        .describe("변경된 저장소 상대 경로"),
-      includeProjectIndex: z
-        .boolean()
-        .optional()
-        .describe("연결 후보가 없을 때 프로젝트 전체 설계 인덱스 포함"),
-      instruction: z
-        .string()
-        .max(4000)
-        .optional()
-        .describe("분석 시 추가로 확인할 내용"),
-      replaceExisting: z
-        .boolean()
-        .optional()
-        .describe("사람 결정 전 기존 배치를 이전 분석으로 보존하고 새 실행을 계획"),
+      runId: z.string().describe("동기화 실행 ID"),
     },
-    async ({
-      projectId,
-      receiptId,
-      unitWorkRef,
-      changedPaths,
-      includeProjectIndex,
-      instruction,
-      replaceExisting,
-    }) => {
+    async ({ projectId, runId }) => {
       try {
         const data = await specodeFetch(
-          `/api/projects/${projectId}/impl-receipts/${receiptId}/analyze`,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              unitWorkRef,
-              changedPaths: changedPaths ?? [],
-              includeProjectIndex: includeProjectIndex ?? false,
-              instruction,
-              replaceExisting: replaceExisting ?? false,
-            }),
-          },
-        );
-        return textResult(data);
-      } catch (err) {
-        return errorResult(err);
-      }
-    },
-  );
-
-  server.tool(
-    "retry_reconciliation_batch",
-    "실패한 자동 비교 배치 하나만 새 AI 작업으로 재등록합니다. 완료 배치와 receipt 전체는 다시 실행하지 않습니다.",
-    {
-      projectId: z.string().describe("프로젝트 ID"),
-      receiptId: z.string().describe("구현 변경 접수 ID"),
-      batchId: z.string().describe("FAILED 상태의 비교 배치 ID"),
-    },
-    async ({ projectId, receiptId, batchId }) => {
-      try {
-        const data = await specodeFetch(
-          `/api/projects/${projectId}/spec-reconciliations/${receiptId}` +
-            `/batches/${batchId}/retry`,
-          { method: "POST" },
-        );
-        return textResult(data);
-      } catch (err) {
-        return errorResult(err);
-      }
-    },
-  );
-
-  server.tool(
-    "confirm_reconciliation_resolution",
-    "FIX_SOURCE 결정 후 수정된 commit/manifest 증거를 같은 항목에 제출해 재검증과 " +
-      "baseline 전진을 요청합니다. USER_UPLOADED 증거는 웹 관리자 override가 추가로 필요합니다.",
-    {
-      projectId: z.string().describe("프로젝트 ID"),
-      receiptId: z.string().describe("스펙 변경 접수 ID"),
-      itemId: z.string().describe("FIX_SOURCE 항목 ID"),
-      checkpointType: z.enum(["GIT_COMMIT", "SOURCE_MANIFEST"]),
-      headCheckpoint: z.string(),
-      evidenceTrust: z.enum(["LOCAL_AGENT_ATTESTED", "USER_UPLOADED"]),
-      ancestryVerified: z.boolean().nullable().optional(),
-      diffHash: z.string().optional(),
-      evidence: z.record(z.string(), z.unknown()),
-      sourceFact: z.string(),
-      reason: z.string(),
-    },
-    async ({
-      projectId,
-      receiptId,
-      itemId,
-      checkpointType,
-      headCheckpoint,
-      evidenceTrust,
-      ancestryVerified,
-      diffHash,
-      evidence,
-      sourceFact,
-      reason,
-    }) => {
-      try {
-        const data = await specodeFetch(
-          `/api/projects/${projectId}/spec-reconciliations/${receiptId}` +
-            `/items/${itemId}/confirm-resolution`,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              checkpointType,
-              headCheckpoint,
-              evidenceTrust,
-              ancestryVerified,
-              diffHash,
-              evidence,
-              sourceFact,
-              reason,
-            }),
-          },
-        );
-        return textResult(data);
-      } catch (err) {
-        return errorResult(err);
-      }
-    },
-  );
-
-  server.tool(
-    "get_spec_reconciliation",
-    "스펙 변경 접수 상세 조회 — 확인된 소스 사실, AI 영향 추론, 기능 설명 before/after, " +
-      "위험도와 현재 결정 상태를 반환합니다. 실제 적용 승인은 웹 스펙 반영함에서 수행하세요.",
-    {
-      projectId: z.string().describe("프로젝트 ID"),
-      receiptId: z.string().describe("스펙 변경 접수 ID"),
-    },
-    async ({ projectId, receiptId }) => {
-      try {
-        const data = await specodeFetch(
-          `/api/projects/${projectId}/spec-reconciliations/${receiptId}`
-        );
-        return textResult(data);
-      } catch (err) {
-        return errorResult(err);
-      }
-    }
-  );
-
-  server.tool(
-    "check_reconciliation_gate",
-    "CI·merge·배포 전에 source baseline과 미해결 스펙 정합성 receipt를 확인합니다. " +
-      "기본 정책은 WARN이며 allowed=false와 reasons를 CI 정책에서 사용할 수 있습니다.",
-    {
-      projectId: z.string().describe("프로젝트 ID"),
-      repoKey: z.string().describe("저장소 고정 식별자"),
-      branch: z.string().describe("브랜치명"),
-      head: z
-        .string()
-        .optional()
-        .describe("현재 배포 또는 merge 대상 checkpoint"),
-    },
-    async ({ projectId, repoKey, branch, head }) => {
-      try {
-        const qs = buildQs({ repoKey, branch, head });
-        const data = await specodeFetch(
-          `/api/projects/${projectId}/spec-reconciliations/gate${qs}`,
+          `/api/projects/${projectId}/spec-syncs/${runId}`,
         );
         return textResult(data);
       } catch (err) {

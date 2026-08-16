@@ -30,7 +30,6 @@ import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
 import { SelectChevron } from "@/components/ui/SelectChevron";
 import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
 import { useAppStore } from "@/store/appStore";
-import { UnresolvedSpecBadge } from "@/components/spec-reconciliation/UnresolvedSpecBadge";
 import type { SpecContentPermissions } from "@/types/specContentPermissions";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
@@ -397,13 +396,6 @@ function ScreenDetailPageInner() {
           <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
             {isNew ? "화면 신규 등록" : `화면 편집 (${detail?.displayId ?? ""})`}
           </span>
-          {!isNew ? (
-            <UnresolvedSpecBadge
-              projectId={projectId}
-              targetType="SCREEN"
-              targetId={screenId}
-            />
-          ) : null}
         </div>
         {/* 우: PRD 다운로드 + 삭제·취소·저장 */}
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>

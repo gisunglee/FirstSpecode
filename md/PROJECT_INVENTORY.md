@@ -124,7 +124,6 @@
 | `api/admin/*` | `/api/admin/users`, `/projects`, `/audit`, `/batch/*`, `/cleanup/*`, `/docs/*`, `/support-session/*` | SUPER_ADMIN 전용 |
 | `api/docs/*` | `/api/docs/tree`, `/[section]/[page]` | Docs Hub 공개 조회(사용자 뷰어) |
 | `api/worker/*` | `/api/worker/tasks`, `/[taskId]/start`, `/complete` | 외부 AI 워커가 AI 태스크를 pull/complete하는 채널 |
-| `api/integrations/*` | `/api/integrations/source-repositories/[provider]/webhook` | 서명된 GitHub PR/GitLab MR 자동 접수 |
 | `api/mcp` | `/api/mcp` | **HTTP MCP 엔드포인트** — MCP 클라이언트가 붙는 단일 채널 |
 | `api/diff-test/*` | — | 내부 프롬프트 diff 실험 도구 |
 
@@ -136,8 +135,7 @@ unit-works / screens / areas / functions / db-tables      ← 설계 단계 계�
 col-mappings, col-mapping-groups                           ← 기능-컬럼 매핑
 ai-tasks                                                    ← AI 태스크 큐 (요청/재시도/취소/거절/결과파일)
 impl-request/{build,preview,pre-impl,submit}                ← 구현요청 팝업 전용 API (페이지 아님)
-source-repositories, source-baselines                       ← Git provider 연결과 source 확정점
-impl-receipts, spec-reconciliations                         ← 구현 변경 접수·분석·검토·CI gate
+spec-syncs                                                  ← 현재 UW 설계와 현재 소스 비교 실행·결과·결정
 design-changes, design-history                               ← 설계 변경 이력(자동 추적)
 reviews                                                       ← 리뷰 요청/코멘트
 members, invitations                                          ← 멤버/초대
@@ -174,7 +172,7 @@ test-specs                                                             ← 테�
 | 업무일지/리포트 (`tb_wr_`) | `tb_wr_work_log`, `tb_wr_work_log_item`, `tb_wr_weekly_report`, `tb_wr_issue` |
 | 테스트/품질 (`tb_qa_`) | `tb_qa_check_master`, `tb_qa_test_spec`, `tb_qa_test_spec_uw`, `tb_qa_test_spec_screen`, `tb_qa_test_case`, `tb_qa_test_round`, `tb_qa_test_result`, `tb_qa_defect`, `tb_qa_evidence` |
 | 표준 가이드 (`tb_sg_`) | `tb_sg_std_guide` |
-| 특수목적 (`tb_sp_`) | `tb_sp_diff_test_master`/`tb_sp_diff_test_node`(diff 실험), `tb_sp_impl_snapshot`(구현요청 스펙 스냅샷), `tb_sp_source_repository`, `tb_sp_source_baseline`, `tb_sp_impl_receipt`, `tb_sp_reconcile_batch`(자동 비교 컨텍스트 배치), `tb_sp_reconcile_item`, `tb_sp_spec_source_link`(UW-00036 source 정합성) |
+| 특수목적 (`tb_sp_`) | `tb_sp_diff_test_master`/`tb_sp_diff_test_node`(diff 실험), `tb_sp_impl_snapshot`(구현요청 스펙 스냅샷), `tb_sp_sync_run`/`tb_sp_sync_item`(UW-00036 구현-설계 동기화) |
 
 ### 폐기된 테이블 `[DEPRECATED]`
 - **`tb_rq_baseline_snapshot`** — 과거 요구사항 "베이스라인 확정" 기능에서 사용되던

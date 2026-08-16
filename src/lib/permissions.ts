@@ -134,14 +134,11 @@ export const PERMISSIONS = {
   "ai.bulkDesign":      { roles: ["OWNER", "ADMIN", "MEMBER"], requiresPlan: "PRO" },
   "ai.planStudio":      { roles: ["OWNER", "ADMIN", "MEMBER"], requiresPlan: "PRO" },
 
-  // ── 구현 변경 스펙 정합성 ────────────────────────────────────────
-  // 제출은 개발 멤버 이상, 검토·적용은 리딩 역할, 검증 실패 override는 관리자만 수행한다.
-  "specReconcile.read":     { roles: ["OWNER", "ADMIN", "MEMBER", "VIEWER"] },
-  "specReconcile.submit":   { roles: ["OWNER", "ADMIN", "MEMBER"] },
-  "specReconcile.review":   { roles: ["OWNER", "ADMIN"], jobs: ["PM", "PL"] },
-  "specReconcile.apply":    { roles: ["OWNER", "ADMIN"], jobs: ["PM", "PL"] },
-  "specReconcile.override": { roles: ["OWNER", "ADMIN"] },
-  "specReconcile.connectProvider": { roles: ["OWNER", "ADMIN"] },
+  // V2 구현-설계 동기화. 결과 제출은 개발 멤버, 실제 설계 반영은 PM/PL 이상이 맡는다.
+  "specSync.read":     { roles: ["OWNER", "ADMIN", "MEMBER", "VIEWER"] },
+  "specSync.submit":   { roles: ["OWNER", "ADMIN", "MEMBER"] },
+  "specSync.review":   { roles: ["OWNER", "ADMIN"], jobs: ["PM", "PL"] },
+  "specSync.apply":    { roles: ["OWNER", "ADMIN"], jobs: ["PM", "PL"] },
 
   // ── 환경설정 / API 키 ────────────────────────────────────────────
   // config.manage: 환경설정 — OWNER/ADMIN 또는 PM/PL 직무 (기획·리딩 업무에서 필요)

@@ -1,112 +1,58 @@
-/**
- * 스펙 반영함 화면 API DTO.
- */
+/** 스펙 동기화 목록·상세 UI가 소비하는 API 응답 타입. */
 
-export type HierarchyNode = {
-  id: string;
-  displayId: string;
-  name: string;
+export type Evidence = {
+  path: string;
+  symbol: string | null;
+  startLine: number;
+  endLine: number;
+  snippet: string;
 };
 
-export type Hierarchy = {
-  unitWork?: HierarchyNode | null;
-  screen?: HierarchyNode | null;
-  area?: HierarchyNode | null;
-  function?: HierarchyNode | null;
-};
-
-export type ReconcileItem = {
-  itemId: string;
-  classification: string;
-  targetRefType: string;
-  targetRefId: string;
-  targetField: string;
-  targetHierarchy: Hierarchy;
-  sourceEvidence: unknown;
-  sourceFact: string;
-  inferredImpact: string | null;
-  beforeValue: string;
-  proposedValue: string;
-  beforeHash: string;
-  risk: string;
+export type SyncItem = {
+  syncItemId: string;
+  findingType: "IMPLEMENTATION" | "DESIGN_COVERAGE";
+  resultCode: string;
+  importance: string;
+  targetType: string | null;
+  targetDisplayId: string | null;
+  targetName: string | null;
+  targetField: string | null;
+  designStatement: string | null;
+  sourceFact: string | null;
+  reason: string;
+  evidence: Evidence[];
   confidence: string;
+  beforeValue: string | null;
+  currentValue: string | null;
+  proposedValue: string | null;
   status: string;
   decision: string | null;
   decisionReason: string | null;
-  decisionMemberName: string | null;
-  decidedAt: string | null;
-  designChangeId: string | null;
-  resolutionEvidence: unknown;
-  exceptionExpiresAt: string | null;
-  exceptionOwnerMemberId: string | null;
-  followupTaskId: string | null;
-  reviewRequestId: string | null;
-  mergePreview: string | null;
-  mergeLatestHash: string | null;
-  mergeConflicts: unknown;
-  batchOrigin: unknown;
-  resolvedAt: string | null;
 };
 
-export type ReconcileBatch = {
-  batchId: string;
-  batchNo: number;
-  batchKey: string;
-  scopeType: string;
-  scopeRefId: string | null;
-  scopeName: string;
-  sourcePaths: unknown;
-  targetCount: number;
-  metrics: unknown;
+export type SyncRunDetail = {
+  syncRunId: string;
+  unitWorkDisplayId: string;
+  unitWorkName: string;
+  mode: string;
   status: string;
-  taskId: string | null;
-  summary: string | null;
+  designSnapshotHash: string;
+  sourceScope: {
+    status?: string;
+    files?: Array<{ path: string; kind: string; reason: string }>;
+    questions?: string[];
+  } | null;
+  summary: {
+    implementation?: string;
+    designCoverage?: string;
+    pendingCount?: number;
+  } | null;
+  implementationVerdict: string | null;
+  designCoverageVerdict: string | null;
   failure: string | null;
-  retryCount: number;
+  requesterId: string | null;
   createdAt: string;
+  analyzedAt: string | null;
   completedAt: string | null;
-};
-
-export type ReceiptDetail = {
-  receiptId: string;
-  originType: string;
-  aiTaskId: string | null;
-  status: string;
-  reviewStatus: string;
-  summary: string;
-  checkpointType: string;
-  baseCheckpoint: string;
-  headCheckpoint: string;
-  headStable: boolean;
-  submittedBaselineVersion: number;
-  currentBaselineVersion: number;
-  sourceEvidence: unknown;
-  evidenceTrust: string;
-  evidenceVerify: string;
-  ancestryVerified: boolean | null;
-  diffHash: string | null;
-  evidenceVerifyData: unknown;
-  overrideReason: string | null;
-  prUrl: string | null;
-  selectedTargets: Array<{
-    targetRefType: string;
-    targetRefId: string;
-  }> | null;
-  analysisScope: unknown;
-  analysisVersion: string | null;
-  submitMemberName: string;
-  createdAt: string;
-  closedAt: string | null;
-  canApply: boolean;
-  canOverride: boolean;
-  batches: ReconcileBatch[];
-  items: ReconcileItem[];
-};
-
-export type ProjectMember = {
-  memberId: string;
-  name: string | null;
-  email: string;
-  role: string;
-  job: string;
+  items: SyncItem[];
 };

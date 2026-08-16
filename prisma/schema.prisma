@@ -240,11 +240,7 @@ model TbPjProject {
   dbTableRevisions  TbDsDbTableRevision[]
   progresses        TbCmProgress[]
   aiTasks           TbAiTask[]
-  sourceBaselines   TbSpSourceBaseline[]
-  sourceRepositories TbSpSourceRepository[]
-  implReceipts      TbSpImplReceipt[]
-  reconcileBatches  TbSpReconcileBatch[]
-  specSourceLinks   TbSpSpecSourceLink[]
+  syncRuns          TbSpSyncRun[]
   attachFiles       TbCmAttachFile[]
   reviewRequests    tb_ds_review_request[]
   codeGroups        TbCmCodeGroup[]
@@ -501,6 +497,7 @@ model TbDsDesignChange {
 
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
   project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_design_change_prjct_fk")
+  syncItems TbSpSyncItem[]
 
   // 대시보드 "최근 변경" + "팀 활동(7일)" 카드용 인덱스.
   // (prjct_id, chg_dt DESC) 로 프로젝트별 최신순 페이지네이션·범위 스캔 모두 효율화.
@@ -578,6 +575,7 @@ model TbDsUnitWork {
   screens              TbDsScreen[]
   // 2026-05-10 — 테스트 명세서 매핑 (단위테스트는 1행 / 통합테스트는 N행)
   testSpecLinks        TbQaTestSpecUw[]
+  syncRuns             TbSpSyncRun[]
   requirement          TbRqRequirement @relation(fields: [req_id], references: [req_id])
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 보강)
   project              TbPjProject     @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_unit_work_prjct_fk")
@@ -831,8 +829,6 @@ model TbAiTask {
   compl_dt          DateTime?
   apply_dt          DateTime?
   implSnapshots     TbSpImplSnapshot[]
-  implReceipts      TbSpImplReceipt[]
-  reconcileBatches  TbSpReconcileBatch[]
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
   // 자식인 tb_sp_impl_snapshot 은 ai_task FK 가 이미 CASCADE 라 자동 따라 정리됨
   project           TbPjProject        @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ai_task_prjct_fk")
@@ -1568,212 +1564,75 @@ model TbSpImplSnapshot {
   @@map("tb_sp_impl_snapshot")
 }
 
-// ── 소스 정합성 기준점 — 프로젝트·저장소·브랜치별 마지막 확정 source ──────
-model TbSpSourceBaseline {
-  baseline_id               String            @id @default(uuid())
-  prjct_id                  String
-  repo_key                  String            @db.VarChar(200)
-  repo_provider_code        String            @default("LOCAL") @db.VarChar(30)
-  branch_nm                 String            @db.VarChar(200)
-  checkpoint_ty_code        String            @db.VarChar(30)
-  last_reconciled_commit_sha    String?        @db.VarChar(128)
-  last_reconciled_manifest_hash String?        @db.Char(64)
-  checkpoint_version_no     Int               @default(0)
-  history_audit_code        String            @default("NOT_AUDITED") @db.VarChar(30)
-  last_receipt_id           String?
-  reconciled_mber_id        String?
-  reconciled_dt             DateTime?
-  checkpoint_metadata_data  Json?
-  use_yn                    String            @default("Y") @db.Char(1)
-  creat_dt                  DateTime          @default(now())
-  mdfcn_dt                  DateTime          @default(now())
+// ── 구현-설계 동기화 V2 실행 헤더 ─────────────────────────────────────────
+model TbSpSyncRun {
+  sync_run_id                    String   @id @default(uuid())
+  prjct_id                       String
+  unit_work_id                   String?
+  unit_work_display_id           String   @db.VarChar(50)
+  unit_work_nm                   String   @db.VarChar(500)
+  client_submission_key          String?  @db.VarChar(100)
+  sync_mode_code                 String   @db.VarChar(20)
+  sync_sttus_code                String   @default("RUNNING") @db.VarChar(30)
+  design_snapshot_data           Json
+  design_snapshot_hash           String   @db.Char(64)
+  source_scope_data              Json?
+  analysis_summary_data          Json?
+  implementation_verdict_code    String?  @db.VarChar(20)
+  design_coverage_verdict_code   String?  @db.VarChar(30)
+  failure_cn                     String?
+  req_mber_id                    String?
+  analyzed_dt                    DateTime?
+  compl_dt                       DateTime?
+  creat_dt                       DateTime @default(now())
+  mdfcn_dt                       DateTime @default(now())
 
-  project  TbPjProject       @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_sp_source_baseline_prjct_fk")
-  receipts TbSpImplReceipt[]
+  project  TbPjProject   @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_sp_sync_run_prjct_fk")
+  unitWork TbDsUnitWork? @relation(fields: [unit_work_id], references: [unit_work_id], onDelete: SetNull, map: "tb_sp_sync_run_unit_work_fk")
+  items    TbSpSyncItem[]
 
-  @@unique([prjct_id, repo_key, branch_nm], map: "tb_sp_source_baseline_scope_uk")
-  @@index([prjct_id, mdfcn_dt(sort: Desc)], map: "tb_sp_source_baseline_prjct_dt_idx")
-  @@map("tb_sp_source_baseline")
+  @@unique([prjct_id, client_submission_key], map: "tb_sp_sync_run_submission_uk")
+  @@index([prjct_id, creat_dt(sort: Desc)], map: "tb_sp_sync_run_prjct_dt_idx")
+  @@index([prjct_id, unit_work_display_id, creat_dt(sort: Desc)], map: "tb_sp_sync_run_uw_dt_idx")
+  @@index([prjct_id, sync_sttus_code, creat_dt(sort: Desc)], map: "tb_sp_sync_run_sttus_idx")
+  @@map("tb_sp_sync_run")
 }
 
-// ── Source provider 연결 — AI provider key와 분리된 Git 전용 자격증명 ──────
-model TbSpSourceRepository {
-  repository_id            String   @id @default(uuid())
-  prjct_id                 String
-  repo_key                 String   @db.VarChar(200)
-  provider_code            String   @db.VarChar(30)
-  provider_repository_path String   @db.VarChar(500)
-  repository_url           String?  @db.VarChar(2000)
-  api_base_url              String   @db.VarChar(1000)
-  default_branch_nm         String   @default("main") @db.VarChar(200)
-  encpt_token_val           String?
-  mask_token_val            String?
-  encpt_webhook_secret_val  String?
-  webhook_active_yn         String   @default("N") @db.Char(1)
-  creat_mber_id             String?
-  use_yn                    String   @default("Y") @db.Char(1)
-  creat_dt                  DateTime @default(now())
-  mdfcn_dt                  DateTime @default(now())
+// ── 구현-설계 동기화 V2 판정·제안·사람 결정 ───────────────────────────────
+model TbSpSyncItem {
+  sync_item_id        String    @id @default(uuid())
+  sync_run_id         String
+  finding_ty_code     String    @db.VarChar(30)
+  result_code         String    @db.VarChar(40)
+  importance_code     String    @db.VarChar(20)
+  target_ref_ty_code  String?   @db.VarChar(20)
+  target_ref_id       String?
+  target_field_nm     String?   @db.VarChar(50)
+  target_display_id   String?   @db.VarChar(50)
+  target_nm           String?   @db.VarChar(500)
+  design_statement_cn String?
+  source_fact_cn      String?
+  reason_cn           String
+  source_evidence_data Json
+  confidence_code     String    @db.VarChar(20)
+  before_value_cn     String?
+  before_hash         String?   @db.Char(64)
+  proposed_value_cn   String?
+  item_sttus_code     String    @default("INFORMATIONAL") @db.VarChar(30)
+  decision_code       String?   @db.VarChar(20)
+  decision_rsn_cn     String?
+  decision_mber_id    String?
+  decision_dt         DateTime?
+  design_change_id    String?   @unique(map: "tb_sp_sync_item_design_change_uk")
+  creat_dt             DateTime  @default(now())
+  mdfcn_dt             DateTime  @default(now())
 
-  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_sp_source_repository_prjct_fk")
+  run          TbSpSyncRun       @relation(fields: [sync_run_id], references: [sync_run_id], onDelete: Cascade, map: "tb_sp_sync_item_run_fk")
+  designChange TbDsDesignChange? @relation(fields: [design_change_id], references: [chg_id], onDelete: SetNull, map: "tb_sp_sync_item_design_change_fk")
 
-  @@unique([prjct_id, repo_key], map: "tb_sp_source_repository_scope_uk")
-  @@index([provider_code, provider_repository_path], map: "tb_sp_source_repository_provider_idx")
-  @@map("tb_sp_source_repository")
-}
-
-// ── 구현 변경 접수 — 소스 증거 패키지이자 스펙 반영 검토 헤더 ────────────
-model TbSpImplReceipt {
-  receipt_id             String             @id @default(uuid())
-  prjct_id               String
-  origin_ty_code         String             @default("IMPLEMENTATION") @db.VarChar(30)
-  client_submission_key  String?            @db.VarChar(100)
-  parent_receipt_id      String?
-  ai_task_id             String?            @unique(map: "tb_sp_impl_receipt_ai_task_uk")
-  baseline_id            String
-  baseline_version_no    Int
-  base_checkpoint_val    String             @db.VarChar(128)
-  head_checkpoint_val    String             @db.VarChar(128)
-  checkpoint_ty_code     String             @db.VarChar(30)
-  source_evidence_data   Json
-  evidence_trust_code    String             @default("LOCAL_AGENT_ATTESTED") @db.VarChar(30)
-  evidence_verify_code   String             @default("ATTESTED") @db.VarChar(30)
-  ancestry_verify_yn     String?            @db.Char(1)
-  diff_hash              String?            @db.Char(64)
-  evidence_verify_data   Json?
-  override_rsn_cn        String?
-  override_mber_id       String?
-  pr_url                 String?
-  summary_cn             String?
-  manifest_data          Json?
-  selected_target_data   Json?
-  analysis_scope_data    Json?
-  risk_summary_data      Json?
-  review_sttus_code      String             @default("NEEDS_REVIEW") @db.VarChar(30)
-  revwr_mber_id          String?
-  analysis_version       String?            @db.VarChar(50)
-  head_stable_yn         String             @default("Y") @db.Char(1)
-  receipt_sttus_code     String             @default("NEEDS_REVIEW") @db.VarChar(30)
-  submit_mber_id         String?
-  close_mber_id          String?
-  verified_dt            DateTime?
-  close_dt               DateTime?
-  creat_dt               DateTime           @default(now())
-  mdfcn_dt               DateTime           @default(now())
-
-  project        TbPjProject        @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_sp_impl_receipt_prjct_fk")
-  aiTask         TbAiTask?           @relation(fields: [ai_task_id], references: [ai_task_id], onDelete: SetNull, map: "tb_sp_impl_receipt_ai_task_fk")
-  sourceBaseline TbSpSourceBaseline @relation(fields: [baseline_id], references: [baseline_id], onDelete: Restrict, map: "tb_sp_impl_receipt_baseline_fk")
-  batches        TbSpReconcileBatch[]
-  items          TbSpReconcileItem[]
-
-  @@index([prjct_id, receipt_sttus_code, creat_dt(sort: Desc)], map: "tb_sp_impl_receipt_prjct_sttus_idx")
-  @@index([baseline_id, baseline_version_no], map: "tb_sp_impl_receipt_baseline_ver_idx")
-  @@unique([prjct_id, client_submission_key], map: "tb_sp_impl_receipt_submission_uk")
-  @@index([parent_receipt_id], map: "tb_sp_impl_receipt_parent_idx")
-  @@map("tb_sp_impl_receipt")
-}
-
-// ── 대형 정합성 분석 배치 — receipt는 유지하고 AI 컨텍스트만 의미 단위로 분할 ──
-model TbSpReconcileBatch {
-  batch_id             String          @id @default(uuid())
-  receipt_id           String
-  prjct_id             String
-  batch_no             Int
-  batch_key            String          @db.VarChar(200)
-  scope_ty_code        String          @db.VarChar(30)
-  scope_ref_id         String?         @db.VarChar(36)
-  scope_nm             String          @db.VarChar(300)
-  source_paths_data    Json
-  target_refs_data     Json
-  routing_data         Json?
-  metrics_data         Json
-  batch_sttus_code     String          @default("PLANNED") @db.VarChar(30)
-  ai_task_id           String?         @unique(map: "tb_sp_reconcile_batch_ai_task_uk")
-  analysis_result_data Json?
-  summary_cn           String?
-  failure_cn           String?
-  retry_cnt            Int             @default(0)
-  creat_dt             DateTime        @default(now())
-  mdfcn_dt             DateTime        @default(now())
-  compl_dt             DateTime?
-
-  receipt TbSpImplReceipt @relation(fields: [receipt_id], references: [receipt_id], onDelete: Cascade, map: "tb_sp_reconcile_batch_receipt_fk")
-  project TbPjProject     @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_sp_reconcile_batch_prjct_fk")
-  aiTask  TbAiTask?       @relation(fields: [ai_task_id], references: [ai_task_id], onDelete: SetNull, map: "tb_sp_reconcile_batch_ai_task_fk")
-
-  @@unique([receipt_id, batch_key], map: "tb_sp_reconcile_batch_key_uk")
-  @@index([receipt_id, batch_sttus_code, batch_no], map: "tb_sp_reconcile_batch_receipt_sttus_idx")
-  @@index([prjct_id, creat_dt(sort: Desc)], map: "tb_sp_reconcile_batch_prjct_dt_idx")
-  @@map("tb_sp_reconcile_batch")
-}
-
-// ── 스펙 반영 후보 — 직접 대상 필드와 변경 전/후 전체 값을 보관 ───────────
-model TbSpReconcileItem {
-  item_id                  String          @id @default(uuid())
-  receipt_id               String
-  classification_code      String          @default("SPEC_CHANGE") @db.VarChar(30)
-  target_ref_ty_code       String          @db.VarChar(30)
-  target_ref_id            String          @db.VarChar(36)
-  target_field_nm          String          @db.VarChar(50)
-  target_hierarchy_data    Json
-  source_evidence_data     Json
-  source_fact_cn           String
-  inferred_impact_cn       String?
-  before_value_cn          String
-  proposed_value_cn        String
-  before_hash              String          @db.Char(64)
-  risk_code                String          @default("MEDIUM") @db.VarChar(20)
-  confidence_code          String          @default("MEDIUM") @db.VarChar(20)
-  item_sttus_code          String          @default("PENDING") @db.VarChar(30)
-  decision_code            String?         @db.VarChar(30)
-  decision_rsn_cn          String?
-  decision_mber_id         String?
-  decision_dt              DateTime?
-  design_change_id         String?
-  resolution_evidence_data Json?
-  exception_expire_dt      DateTime?
-  exception_owner_mber_id  String?
-  followup_task_id          String?
-  review_request_id         String?
-  merge_preview_cn          String?
-  merge_latest_hash         String?         @db.Char(64)
-  merge_conflict_data       Json?
-  batch_origin_data         Json?
-  resolved_dt               DateTime?
-  creat_dt                 DateTime        @default(now())
-  mdfcn_dt                 DateTime        @default(now())
-
-  receipt TbSpImplReceipt @relation(fields: [receipt_id], references: [receipt_id], onDelete: Cascade, map: "tb_sp_reconcile_item_receipt_fk")
-
-  @@index([receipt_id, item_sttus_code], map: "tb_sp_reconcile_item_receipt_sttus_idx")
-  @@index([target_ref_ty_code, target_ref_id], map: "tb_sp_reconcile_item_target_idx")
-  @@map("tb_sp_reconcile_item")
-}
-
-// ── 스펙-소스 연결지도 — 확정된 receipt 증거에서 파일·심볼 연결을 누적 ─────
-model TbSpSpecSourceLink {
-  link_id               String   @id @default(uuid())
-  prjct_id              String
-  target_ref_ty_code    String   @db.VarChar(30)
-  target_ref_id         String   @db.VarChar(36)
-  source_kind_code      String   @db.VarChar(30)
-  source_path           String   @db.VarChar(1000)
-  source_symbol         String   @default("") @db.VarChar(500)
-  relation_ty_code      String   @default("DIRECT") @db.VarChar(30)
-  confidence_code       String   @default("MEDIUM") @db.VarChar(20)
-  first_receipt_id      String
-  last_receipt_id       String
-  use_yn                String   @default("Y") @db.Char(1)
-  creat_dt              DateTime @default(now())
-  mdfcn_dt              DateTime @default(now())
-
-  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_sp_spec_source_link_prjct_fk")
-
-  @@unique([prjct_id, target_ref_ty_code, target_ref_id, source_kind_code, source_path, source_symbol], map: "tb_sp_spec_source_link_scope_uk")
-  @@index([prjct_id, source_path, use_yn], map: "tb_sp_spec_source_link_path_idx")
-  @@index([target_ref_ty_code, target_ref_id, use_yn], map: "tb_sp_spec_source_link_target_idx")
-  @@map("tb_sp_spec_source_link")
+  @@index([sync_run_id, item_sttus_code], map: "tb_sp_sync_item_run_sttus_idx")
+  @@index([target_ref_ty_code, target_ref_id], map: "tb_sp_sync_item_target_idx")
+  @@map("tb_sp_sync_item")
 }
 
 // ─── 배치 잡 실행 로그 (2026-05-06 도입) ────────────────────────────────────

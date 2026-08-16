@@ -159,63 +159,37 @@
 * **`tb_sp_diff_test_master`** & **`tb_sp_diff_test_node`**
   * `diff_prompt_md` (t), `diff_summary_json` (jsonb), `chg_mode_code` 등 프롬프트 변경점 추적 용도
 
-## 9. 구현 변경 스펙 정합성 (UW-00036)
+## 9. 구현-설계 동기화 (UW-00036)
 
-* **`tb_sp_source_repository`** (Git source provider 연결)
-  * `repository_id` (t, PK) / `prjct_id` (t, FK) / `repo_key` (v200)
-  * `provider_code`: `GITHUB` | `GITLAB`
-  * `provider_repository_path`, `api_base_url`, `default_branch_nm`
-  * `encpt_token_val`, `encpt_webhook_secret_val`: source 검증 전용 암호화 자격증명
-  * `mask_token_val`: UI 표시용. token 원문은 API로 반환하지 않음
-  * `(prjct_id, repo_key)` Unique
-* **`tb_sp_source_baseline`** (프로젝트·저장소·브랜치별 마지막 정합성 확정점)
-  * `baseline_id` (t, PK) / `prjct_id` (t, FK)
-  * `repo_key`, `branch_nm`: 저장소·브랜치 식별자. `(prjct_id, repo_key, branch_nm)` Unique
-  * `repo_provider_code`, `checkpoint_metadata_data`, `use_yn`
-  * `checkpoint_ty_code`: `GIT_COMMIT` | `SOURCE_MANIFEST`
-  * `last_reconciled_commit_sha` 또는 `last_reconciled_manifest_hash`
-  * `checkpoint_version_no`: receipt 동시 종료를 막는 낙관적 잠금 version
-  * `history_audit_code`: 최초 기준점 이전 이력의 검증 상태. 초기값 `NOT_AUDITED`
-* **`tb_sp_impl_receipt`** (구현 변경 증거 패키지 + 검토 헤더)
-  * `receipt_id` (t, PK) / `prjct_id` (t, FK) / `baseline_id` (t, FK)
-  * `ai_task_id` (t, nullable Unique): 구현요청 태스크당 receipt 한 건
-  * `client_submission_key`: 로컬 명령·webhook 재시도 idempotency key
-  * `parent_receipt_id`: rollback·재분석 계보
-  * `baseline_version_no`, `base_checkpoint_val`, `head_checkpoint_val`
-  * `source_evidence_data`, `manifest_data`, `selected_target_data`, `analysis_scope_data`, `risk_summary_data` (jsonb)
-  * `evidence_trust_code`: `PROVIDER_VERIFIED` | `LOCAL_AGENT_ATTESTED` | `USER_UPLOADED`
-  * `evidence_verify_code`, `ancestry_verify_yn`, `diff_hash`, `evidence_verify_data`
-  * `override_rsn_cn`, `override_mber_id`, `head_stable_yn`
-  * `review_sttus_code`, `analysis_version`, `revwr_mber_id`
-  * `receipt_sttus_code`: `DRAFT` | `NEEDS_REVIEW` | `CLOSED` | `STALE_BASELINE`
-* **`tb_sp_reconcile_batch`** (receipt 내부 자동 비교 실행 단위)
-  * `batch_id` (t, PK) / `receipt_id` (t, FK CASCADE) / `prjct_id` (t, FK CASCADE)
-  * `batch_no`, `batch_key`: receipt 안 순서와 idempotent 의미 키. `(receipt_id, batch_key)` Unique
-  * `scope_ty_code`: `ROUTER` | `UNIT_WORK` | `SCREEN` | `AREA` | `SHARED` | `UNMAPPED`
-  * `scope_ref_id`, `scope_nm`, `source_paths_data`, `target_refs_data`, `routing_data`, `metrics_data`
-  * `batch_sttus_code`: `PENDING` | `ANALYZING` | `COMPLETED` | `FAILED` | `SUPERSEDED`
-  * `ai_task_id` (nullable Unique, FK SET NULL): 현재 시도의 Worker 태스크
-  * `analysis_result_data`, `summary_cn`, `failure_cn`, `retry_cnt`, `compl_dt`
-  * receipt는 여러 개로 나누지 않는다. 모든 분석 배치 결과를 합친 뒤 receipt가 baseline을 한 번 전진한다.
-* **`tb_sp_reconcile_item`** (스펙 변경 후보와 사람 결정)
-  * `item_id` (t, PK) / `receipt_id` (t, FK, ON DELETE CASCADE)
-  * `target_ref_ty_code`, `target_ref_id`, `target_field_nm`: 직접 적용 대상
-  * 허용 대상: `UNIT_WORK.unit_work_dc`, `SCREEN.scrn_dc`, `AREA.area_dc`, `FUNCTION.func_dc`
-  * `target_hierarchy_data`, `source_evidence_data` (jsonb): 표시·감사용 스냅샷
-  * `before_value_cn`, `proposed_value_cn`, `before_hash`: 안전한 전체 필드 교체 입력
-  * `source_fact_cn`, `inferred_impact_cn`: 확인된 사실과 AI 추론 분리
-  * `item_sttus_code`: `PENDING` | `APPLIED` | `NO_SPEC_CHANGE` | `STALE_SPEC` |
-    `AWAITING_SOURCE_FIX` | `RESOLVED` | `ROLLED_BACK` | `BATCH_CONFLICT`
-  * `decision_code`, `decision_rsn_cn`, `decision_mber_id`, `design_change_id`
-  * `resolution_evidence_data`, 예외 담당자·만료일, 후속 task/review ID
-  * `merge_preview_cn`, `merge_latest_hash`, `merge_conflict_data`: 3-way 병합 검토
-  * `batch_origin_data`: 병합된 후보를 만든 batch ID 목록
-* **`tb_sp_spec_source_link`** (확정 스펙-소스 연결지도)
-  * 설계 대상과 파일·심볼을 연결하고 최초/최근 receipt 계보를 저장
-  * `(prjct_id, target_ref_ty_code, target_ref_id, source_kind_code, source_path,
-    source_symbol, relation_ty_code)` Unique
+이 기능은 Git 기준선이나 Diff 이력을 저장하지 않는다. 지정 UW의 실행 시점 설계 snapshot과
+로컬 에이전트가 확인한 현재 소스를 비교하고, 결과를 비동기 웹 검토용으로만 보관한다.
 
-DDL:
+* **`tb_sp_sync_run`** (동기화 실행 헤더)
+  * `sync_run_id` (t, PK), `prjct_id` (t, FK CASCADE)
+  * `unit_work_id` (t, nullable FK SET NULL), UW 표시 ID·이름 snapshot
+  * `sync_mode_code`: `CHECK | DEEP_SYNC`
+  * `sync_sttus_code`: `RUNNING | NEEDS_INPUT | NEEDS_REVIEW | COMPLETED | FAILED | CANCELLED`
+  * `design_snapshot_data`, `design_snapshot_hash`: 실행 시점 의미 설계와 canonical SHA-256
+  * `source_scope_data`: 로컬에서 확정한 관련 파일·심볼 범위
+  * 두 독립 verdict: 구현 정합성 `PASS | FAIL | UNKNOWN`, 설계 커버리지
+    `CLEAR | GAP_CANDIDATE | UNKNOWN`
+  * `client_submission_key`: 같은 로컬 요청의 네트워크 재시도 중복 방지
+* **`tb_sp_sync_item`** (항목별 분석·사람 결정)
+  * `sync_item_id` (t, PK), `sync_run_id` (t, FK CASCADE)
+  * `finding_ty_code`: `IMPLEMENTATION | DESIGN_COVERAGE`
+  * 구현 결과와 커버리지 결과는 서로 다른 축으로 저장
+  * evidence는 저장소 상대 path, symbol, line, redacted snippet과 hash만 보관
+  * AI는 `proposed_value_cn`만 제안하고 `before_value_cn/before_hash`는 서버가 run snapshot에서 파생
+  * 자동 적용 대상은 네 설명 필드만 허용:
+    `UNIT_WORK.unit_work_dc`, `SCREEN.scrn_dc`, `AREA.area_dc`, `FUNCTION.func_dc`
+  * `item_sttus_code`: `INFORMATIONAL | PENDING | APPLIED | REJECTED | DEFERRED | DESIGN_CHANGED`
+  * APPLY는 대상 행 잠금과 exact hash 재검사를 통과한 경우에만 수행하고
+    `tb_ds_design_change`와 연결한다.
 
-* 신규 설치: `prisma/sql/2026-07-31_create_spec_reconciliation.sql`
-* 기존 수직 흐름 확장: `prisma/sql/2026-07-31_expand_spec_reconciliation.sql`
+제거된 V1 테이블:
+`tb_sp_source_repository`, `tb_sp_source_baseline`, `tb_sp_impl_receipt`,
+`tb_sp_reconcile_batch`, `tb_sp_reconcile_item`, `tb_sp_spec_source_link`.
+
+`tb_sp_impl_snapshot`은 구현요청 당시 설계 snapshot 기능이 계속 사용하므로 유지한다.
+
+DDL: `prisma/sql/2026-08-17_create_spec_sync_v2.sql`

@@ -1,0 +1,39 @@
+{
+  "resultStatus": "ANALYZED",
+  "analysis": {
+    "mode": "CHECK",
+    "sourceScope": {
+      "status": "CONFIRMED",
+      "files": [
+        {
+          "path": "scripts/fixtures/spec-sync-source.ts",
+          "symbols": ["add"],
+          "kind": "PRIMARY",
+          "reason": "검증기 fixture"
+        }
+      ],
+      "userConfirmed": false,
+      "confirmationNote": null
+    },
+    "implementation": {
+      "verdict": "PASS",
+      "summary": "fixture",
+      "items": [
+        {
+          "evidence": [
+            {
+              "path": "scripts/fixtures/spec-sync-source.ts",
+              "symbol": "add",
+              "startLine": 1,
+              "endLine": 3,
+              "snippet": "export function add(left: number, right: number) {\n  return left + right;\n}",
+              "snippetHash": "018e76cf040d6a6ce02580219aa95f4cbda4dbfa247d707d5b8def35168ce3e8",
+              "redacted": false
+            }
+          ]
+        }
+      ]
+    },
+    "designCoverage": { "verdict": "CLEAR", "summary": "fixture", "items": [] }
+  }
+}

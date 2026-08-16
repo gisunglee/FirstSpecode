@@ -219,9 +219,7 @@ def main():
     fail_count    = 0
     attempted_task_ids: set[str] = set()
 
-    # Router 태스크가 완료되면 같은 receipt의 분석 배치가 새 PENDING 태스크로 생긴다.
-    # 최초 조회 한 번으로 끝내지 않고 남은 처리 예산 안에서 큐를 다시 조회해야
-    # router → 분석 배치 → receipt 병합이 한 번의 worker 실행으로 이어진다.
+    # 처리 중 새로 등록된 일반 AI 태스크도 남은 실행 예산 안에서 이어서 조회한다.
     while success_count + fail_count < args.limit:
         remaining = args.limit - success_count - fail_count
         params = f"limit={remaining}"

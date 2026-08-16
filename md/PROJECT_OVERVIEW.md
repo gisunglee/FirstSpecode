@@ -162,38 +162,22 @@ Task 트리에서 호출을 확인했다.
 
 ### 구현 변경 정합성 흐름
 
-구현요청 이후 실제 source와 스펙의 차이는 UW-00036이 처리한다.
+SPECODE 밖에서 수정된 현재 source와 현재 설계의 차이는 UW-00036이 처리한다.
 
 ```text
-유형 A: /run-ai-tasks IMP
-  → 구현 전/후 source Diff
-  → 요청 당시 tb_sp_impl_snapshot과 편차 분석
-
-유형 B: /sync-specode [UW-XXXXX]
-  → 프로젝트·repo·branch의 마지막 source baseline 이후 변경 분석
-
-공통
-  → 전체 Diff와 분석 범위를 receipt로 제출
-  → 서버가 연결지도 우선 + 필요 시 AI router로 화면·영역별 비교 배치 생성
-  → Worker가 router 뒤에 생긴 배치까지 재조회·분석
-  → 서버가 배치 결과 검증·중복 제거·충돌 표시
-  → 스펙 반영함에서 증거·사실·AI 추론·제안 확인
-  → 스펙 반영 / 소스 수정 / 영향 없음 / 임시 예외 / 모델 보완 / 보류
-  → 조치 검증
-  → receipt 종료와 source baseline 전진
+/sync-specode UW-XXXXX
+  → 실행 시점의 UW 설계 snapshot 생성
+  → 로컬 에이전트가 현재 저장소에서 관련 소스 범위를 검색·확정
+  → CHECK: 설계대로 구현됐는지 + 중요한 설계 누락 후보 비교
+  → 결과와 짧은 코드 근거를 tb_sp_sync_run/tb_sp_sync_item에 저장
+  → 스펙 동기화 웹 화면에서 항목별 적용 / 거부 / 보류
+  → 적용 시 같은 설계 필드 행 잠금과 exact hash 확인
+  → 변경 없을 때만 설명 필드 갱신과 tb_ds_design_change 이력 생성
 ```
 
-Git이 없으면 source manifest를 사용한다. 미커밋 변경은 DRAFT로만 분석한다.
-GitHub/GitLab 연결은 서버가 commit·ancestry·Diff를 직접 검증하고 서명된 PR/MR
-webhook을 자동 접수할 수 있다. 단위업무·화면·영역·기능 상세에는 미반영 변경 배지가
-표시된다.
-
-대형 UW도 receipt는 한 건이다. `tb_sp_reconcile_batch`가 LLM 컨텍스트만 여러 건으로
-분리한다. 모든 배치가 완료된 뒤 receipt item을 한 번 병합하며 source baseline도 receipt가
-닫힐 때 한 번만 전진한다.
-
-"선 구현 적용"은 여전히 구현요청 snapshot만 갱신하는 복구 기능이다. source 증거를
-검증하거나 정합성 receipt를 닫거나 source baseline을 전진시키지 않는다.
+Git, commit, Diff, provider 연결과 source baseline은 사용하지 않는다. `CHECK`가 기본이고
+더 넓은 역설계가 필요한 `DEEP_SYNC`는 별도 Shadow 검증을 통과한 환경에서만 활성화한다.
+"선 구현 적용"의 `tb_sp_impl_snapshot`은 구현요청용 기능으로 별도 유지된다.
 
 상세 설계와 운영 규칙은 `md/SPEC_IMPLEMENTATION_RECONCILIATION_PLAN.md`, 요약은
 `md/SPEC_IMPLEMENTATION_RECONCILIATION_SUMMARY.md`, PRD는
