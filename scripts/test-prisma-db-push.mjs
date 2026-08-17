@@ -3,9 +3,9 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
 if (!databaseUrl) {
-  throw new Error("DATABASE_URL is required");
+  throw new Error("DIRECT_URL or DATABASE_URL is required");
 }
 
 const workspaceRoot = path.resolve(
@@ -31,8 +31,13 @@ const prismaCli = path.join(
 function runPrisma(args) {
   const result = spawnSync(process.execPath, [prismaCli, ...args], {
     cwd: workspaceRoot,
-    env: { ...process.env, DATABASE_URL: testUrl.toString() },
+    env: {
+      ...process.env,
+      DATABASE_URL: testUrl.toString(),
+      DIRECT_URL: testUrl.toString(),
+    },
     encoding: "utf8",
+    timeout: 120_000,
   });
   if (result.status !== 0) {
     throw new Error(

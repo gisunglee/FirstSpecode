@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
+import { computeNextDisplayId } from "@/lib/nextDisplayId";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { screenCreateSchema } from "@/lib/specContentSchemas";
@@ -77,16 +78,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (inputDisplayId?.trim()) {
       displayId = inputDisplayId.trim();
     } else {
-      const maxScr = await prisma.tbDsScreen.findFirst({
-        where:   { prjct_id: projectId },
-        orderBy: { scrn_display_id: "desc" },
-        select:  { scrn_display_id: true },
-      });
-      const nextSeq = maxScr
-        ? (parseInt(maxScr.scrn_display_id.replace(/\D/g, "")) || 0) + 1
-        : 1;
       const scrPrefix = await getIdPrefix(projectId, "SCREEN");
-      displayId = `${scrPrefix}-${String(nextSeq).padStart(5, "0")}`;
+      const existing = await prisma.tbDsScreen.findMany({
+        where:  { prjct_id: projectId },
+        select: { scrn_display_id: true },
+      });
+      displayId = computeNextDisplayId(existing.map((s) => s.scrn_display_id), scrPrefix);
     }
 
     // sort_ordr: 전체 마지막 + 1

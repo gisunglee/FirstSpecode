@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
+import { computeNextDisplayId } from "@/lib/nextDisplayId";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { unitWorkCreateSchema } from "@/lib/specContentSchemas";
@@ -76,16 +77,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (inputDisplayId?.trim()) {
       displayId = inputDisplayId.trim();
     } else {
-      const maxUw = await prisma.tbDsUnitWork.findFirst({
-        where:   { prjct_id: projectId },
-        orderBy: { unit_work_display_id: "desc" },
-        select:  { unit_work_display_id: true },
-      });
-      const nextSeq = maxUw
-        ? (parseInt(maxUw.unit_work_display_id.replace(/\D/g, "")) || 0) + 1
-        : 1;
       const uwPrefix = await getIdPrefix(projectId, "UNIT_WORK");
-      displayId = `${uwPrefix}-${String(nextSeq).padStart(5, "0")}`;
+      const existing = await prisma.tbDsUnitWork.findMany({
+        where:  { prjct_id: projectId },
+        select: { unit_work_display_id: true },
+      });
+      displayId = computeNextDisplayId(existing.map((u) => u.unit_work_display_id), uwPrefix);
     }
 
     // sort_ordr: 해당 요구사항 내 마지막 + 1

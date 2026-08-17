@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { createIdPrefixCache } from "@/lib/idPrefix";
+import { maxDisplayIdSeq } from "@/lib/nextDisplayId";
 
 type RouteParams = { params: Promise<{ id: string; taskId: string }> };
 
@@ -34,16 +35,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     });
     if (!original) return apiError("NOT_FOUND", "과업을 찾을 수 없습니다.", 404);
 
-    // 채번 베이스값 조회
-    const [maxTask, maxReq, maxSort] = await Promise.all([
-      prisma.tbRqTask.findFirst({
-        where: { prjct_id: projectId },
-        orderBy: { task_display_id: "desc" },
+    // 같은 트랜잭션에서 과업 1건 + 다수 요구사항을 채번하므로 캐시로 prefix 조회 절약
+    const prefixCache = createIdPrefixCache(projectId);
+    const taskPrefix  = await prefixCache.get("TASK");
+    const reqPrefix   = await prefixCache.get("REQUIREMENT");
+
+    // 채번 베이스값 조회 — "PREFIX-숫자" 형식에 맞는 값만 골라 최댓값을 찾는다
+    // (형식을 벗어난 표시ID가 하나라도 있으면 문자열 정렬 기반 채번이 깨지므로 사용 금지)
+    const [existingTasks, existingReqs, maxSort] = await Promise.all([
+      prisma.tbRqTask.findMany({
+        where:  { prjct_id: projectId },
         select: { task_display_id: true },
       }),
-      prisma.tbRqRequirement.findFirst({
-        where: { prjct_id: projectId },
-        orderBy: { req_display_id: "desc" },
+      prisma.tbRqRequirement.findMany({
+        where:  { prjct_id: projectId },
         select: { req_display_id: true },
       }),
       prisma.tbRqTask.findFirst({
@@ -53,14 +58,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }),
     ]);
 
-    let taskSeq  = maxTask  ? (parseInt(maxTask.task_display_id.replace(/\D/g, "")) || 0) + 1 : 1;
-    let reqSeq   = maxReq   ? (parseInt(maxReq.req_display_id.replace(/\D/g, "")) || 0) + 1 : 1;
+    let taskSeq = maxDisplayIdSeq(existingTasks.map((t) => t.task_display_id), taskPrefix) + 1;
+    let reqSeq  = maxDisplayIdSeq(existingReqs.map((r) => r.req_display_id), reqPrefix) + 1;
     const sortOrder = (maxSort?.sort_ordr ?? 0) + 1;
-
-    // 같은 트랜잭션에서 과업 1건 + 다수 요구사항을 채번하므로 캐시로 prefix 조회 절약
-    const prefixCache = createIdPrefixCache(projectId);
-    const taskPrefix  = await prefixCache.get("TASK");
-    const reqPrefix   = await prefixCache.get("REQUIREMENT");
 
     const newTaskId = `${crypto.randomUUID()}`;
     const newDisplayId = `${taskPrefix}-${String(taskSeq).padStart(5, "0")}`;

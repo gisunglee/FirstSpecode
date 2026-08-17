@@ -27,6 +27,7 @@ export const taskUpdateSchema = taskCreateSchema.extend({
 export const requirementCreateSchema = z.object({
   taskId: optionalNullableText,
   name: requiredText("요구사항명을 입력해 주세요."),
+  displayId: optionalText,
   priority: requiredText("우선순위를 선택해 주세요."),
   source: requiredText("출처를 선택해 주세요."),
   rfpPage: optionalText,

@@ -12,6 +12,7 @@ import { userStoryCreateSchema } from "@/lib/specContentSchemas";
 import { listMeaningfulFields } from "@/lib/specContentFieldPolicy";
 import { requireSpecCreateFields } from "@/lib/specContentWritePolicy";
 import { getIdPrefix } from "@/lib/idPrefix";
+import { computeNextDisplayId } from "@/lib/nextDisplayId";
 import { fetchProjectUserStories } from "@/lib/exports/user-stories-data";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -60,16 +61,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   try {
     // 표시 ID 채번 (STR-NNNNN) — 프로젝트 내 최대값 + 1
-    const maxStory = await prisma.tbRqUserStory.findFirst({
-      where:   { requirement: { prjct_id: projectId } },
-      orderBy: { story_display_id: "desc" },
-      select:  { story_display_id: true },
-    });
-    const nextSeq  = maxStory
-      ? (parseInt(maxStory.story_display_id.replace(/\D/g, "")) || 0) + 1
-      : 1;
     const storyPrefix = await getIdPrefix(projectId, "USER_STORY");
-    const displayId = `${storyPrefix}-${String(nextSeq).padStart(5, "0")}`;
+    const existingStories = await prisma.tbRqUserStory.findMany({
+      where:  { requirement: { prjct_id: projectId } },
+      select: { story_display_id: true },
+    });
+    const displayId = computeNextDisplayId(existingStories.map((s) => s.story_display_id), storyPrefix);
 
     // sort_ordr: 해당 요구사항의 마지막 + 1
     const maxSort = await prisma.tbRqUserStory.findFirst({

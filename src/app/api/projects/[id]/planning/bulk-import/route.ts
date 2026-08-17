@@ -56,6 +56,7 @@ import { prisma } from "@/lib/prisma";
 import { requireSpecManager } from "@/lib/specContentWritePolicy";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { createIdPrefixCache } from "@/lib/idPrefix";
+import { maxDisplayIdSeq } from "@/lib/nextDisplayId";
 
 // Prisma 인터랙티브 트랜잭션 클라이언트 타입
 // 채번 헬퍼에 tx를 넘겨야 트랜잭션 내 미커밋 데이터를 읽을 수 있음
@@ -125,40 +126,10 @@ type TaskInput = {
 };
 
 // ── displayId 채번 헬퍼 ──────────────────────────────────────────────────────
-// 반드시 트랜잭션 클라이언트(tx)를 받아서 호출해야 함
-// → 동일 트랜잭션 내 미커밋 INSERT를 읽어야 중복 displayId를 막을 수 있음
-
-// prefix 는 호출자가 미리 캐시에서 받아 인자로 전달 — bulk 채번 시 DB 반복 조회 방지
-
-async function nextTaskDisplayId(projectId: string, tx: TxClient, prefix: string): Promise<string> {
-  const max = await tx.tbRqTask.findFirst({
-    where:   { prjct_id: projectId },
-    orderBy: { task_display_id: "desc" },
-    select:  { task_display_id: true },
-  });
-  const seq = max ? (parseInt(max.task_display_id.replace(/\D/g, "")) || 0) + 1 : 1;
-  return `${prefix}-${String(seq).padStart(5, "0")}`;
-}
-
-async function nextReqDisplayId(projectId: string, tx: TxClient, prefix: string): Promise<string> {
-  const max = await tx.tbRqRequirement.findFirst({
-    where:   { prjct_id: projectId },
-    orderBy: { req_display_id: "desc" },
-    select:  { req_display_id: true },
-  });
-  const seq = max ? (parseInt(max.req_display_id.replace(/\D/g, "")) || 0) + 1 : 1;
-  return `${prefix}-${String(seq).padStart(5, "0")}`;
-}
-
-async function nextStoryDisplayId(projectId: string, tx: TxClient, prefix: string): Promise<string> {
-  const max = await tx.tbRqUserStory.findFirst({
-    where:   { requirement: { prjct_id: projectId } },
-    orderBy: { story_display_id: "desc" },
-    select:  { story_display_id: true },
-  });
-  const seq = max ? (parseInt(max.story_display_id.replace(/\D/g, "")) || 0) + 1 : 1;
-  return `${prefix}-${String(seq).padStart(5, "0")}`;
-}
+// 채번은 트랜잭션 진입 전 최댓값을 한 번만 계산하고, 이후 신규 항목마다 로컬에서
+// 순번을 1씩 증가시켜 사용한다 (같은 요청 안에서 신규 항목 2개 이상이어도 중복 없음).
+// "PREFIX-숫자" 형식을 벗어난 표시ID(과거 오염 데이터, 수동 입력값)는 무시하고
+// 형식에 맞는 값 중 최댓값만 기준으로 삼는다 — maxDisplayIdSeq 참고.
 
 async function nextTaskSortOrder(projectId: string, tx: TxClient): Promise<number> {
   const max = await tx.tbRqTask.findFirst({
@@ -218,6 +189,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const reqPrefix   = await prefixCache.get("REQUIREMENT");
     const storyPrefix = await prefixCache.get("USER_STORY");
 
+    // 채번 최댓값도 트랜잭션 진입 전 한 번만 계산 후, 신규 항목마다 로컬에서 +1
+    const [existingTasks, existingReqs, existingStories] = await Promise.all([
+      prisma.tbRqTask.findMany({ where: { prjct_id: projectId }, select: { task_display_id: true } }),
+      prisma.tbRqRequirement.findMany({ where: { prjct_id: projectId }, select: { req_display_id: true } }),
+      prisma.tbRqUserStory.findMany({ where: { requirement: { prjct_id: projectId } }, select: { story_display_id: true } }),
+    ]);
+    let taskSeq  = maxDisplayIdSeq(existingTasks.map((t) => t.task_display_id), taskPrefix);
+    let reqSeq   = maxDisplayIdSeq(existingReqs.map((r) => r.req_display_id), reqPrefix);
+    let storySeq = maxDisplayIdSeq(existingStories.map((s) => s.story_display_id), storyPrefix);
+
     // 트랜잭션으로 묶어서 부분 실패 방지
     await prisma.$transaction(async (tx) => {
       for (const taskInput of tasks) {
@@ -254,7 +235,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           result.updated.tasks++;
         } else {
           // ── 과업 신규 등록 ─────────────────────────────────────────────────
-          const displayId  = await nextTaskDisplayId(projectId, tx, taskPrefix);
+          taskSeq++;
+          const displayId  = `${taskPrefix}-${String(taskSeq).padStart(5, "0")}`;
           const sortOrder  = await nextTaskSortOrder(projectId, tx);
           const created    = await tx.tbRqTask.create({
             data: {
@@ -313,7 +295,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             result.updated.requirements++;
           } else {
             // 신규
-            const displayId = await nextReqDisplayId(projectId, tx, reqPrefix);
+            reqSeq++;
+            const displayId = `${reqPrefix}-${String(reqSeq).padStart(5, "0")}`;
             const sortOrder = await nextReqSortOrder(projectId, taskId, tx);
             const created   = await tx.tbRqRequirement.create({
               data: {
@@ -385,7 +368,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
               result.updated.stories++;
             } else {
               // 신규
-              const displayId = await nextStoryDisplayId(projectId, tx, storyPrefix);
+              storySeq++;
+              const displayId = `${storyPrefix}-${String(storySeq).padStart(5, "0")}`;
               const sortOrder = await nextStorySortOrder(reqId, tx);
               const created   = await tx.tbRqUserStory.create({
                 data: {

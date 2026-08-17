@@ -81,6 +81,7 @@ try {
       SELECT conname
       FROM pg_constraint
       WHERE conrelid IN (
+        'public.tb_ds_col_mapping'::regclass,
         'public.tb_sp_sync_run'::regclass,
         'public.tb_sp_sync_item'::regclass
       )
@@ -88,9 +89,14 @@ try {
     `);
     const names = new Set(constraints.map((row) => row.conname));
     for (const required of [
+      "tb_ds_col_mapping_grp_id_fkey",
+      "tb_sp_sync_run_prjct_fk",
+      "tb_sp_sync_run_unit_work_fk",
       "tb_sp_sync_run_mode_ck",
       "tb_sp_sync_run_sttus_ck",
       "tb_sp_sync_run_snapshot_hash_ck",
+      "tb_sp_sync_item_run_fk",
+      "tb_sp_sync_item_design_change_fk",
       "tb_sp_sync_item_result_axis_ck",
       "tb_sp_sync_item_axis_target_ck",
       "tb_sp_sync_item_evidence_ck",

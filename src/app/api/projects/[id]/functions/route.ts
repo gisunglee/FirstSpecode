@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
+import { computeNextDisplayId } from "@/lib/nextDisplayId";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { functionCreateSchema } from "@/lib/specContentSchemas";
@@ -76,14 +77,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (inputDisplayId?.trim()) {
       displayId = inputDisplayId.trim();
     } else {
-      const last = await prisma.tbDsFunction.findFirst({
-        where:   { prjct_id: projectId },
-        orderBy: { func_display_id: "desc" },
-        select:  { func_display_id: true },
-      });
-      const nextNum = last ? parseInt(last.func_display_id.replace(/\D/g, "")) + 1 : 1;
       const fnPrefix = await getIdPrefix(projectId, "FUNCTION");
-      displayId = `${fnPrefix}-${String(nextNum).padStart(5, "0")}`;
+      const existing = await prisma.tbDsFunction.findMany({
+        where:  { prjct_id: projectId },
+        select: { func_display_id: true },
+      });
+      displayId = computeNextDisplayId(existing.map((f) => f.func_display_id), fnPrefix);
     }
 
     const maxSort = await prisma.tbDsFunction.aggregate({

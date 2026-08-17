@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
+import { computeNextDisplayId } from "@/lib/nextDisplayId";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { requirementCreateSchema } from "@/lib/specContentSchemas";
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const parsed = await parseJsonBody(request, requirementCreateSchema);
   if (parsed instanceof Response) return parsed;
   const {
-    taskId, name, priority, source, rfpPage,
+    taskId, name, displayId: inputDisplayId, priority, source, rfpPage,
     originalContent, currentContent, analysisMemo, detailSpec,
   } = parsed.data;
   const fieldError = requireSpecCreateFields(gate, "REQUIREMENT", listMeaningfulFields(parsed.data));
@@ -67,6 +68,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   // orgnl/curncy 는 RichEditor HTML 출력 → htmlContent 한도(100K) 적용
   const limitErr = apiTextLimitGuard([
     ["name",         name],
+    ["displayId",    inputDisplayId],
     ["htmlContent",  originalContent],
     ["htmlContent",  currentContent],
     ["analysisMemo", analysisMemo],
@@ -75,17 +77,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (limitErr) return limitErr;
 
   try {
-    // 표시 ID 채번 — prefix 는 프로젝트 환경설정에서 조회
-    const maxReq = await prisma.tbRqRequirement.findFirst({
-      where: { prjct_id: projectId },
-      orderBy: { req_display_id: "desc" },
-      select: { req_display_id: true },
-    });
-    const nextSeq = maxReq
-      ? (parseInt(maxReq.req_display_id.replace(/\D/g, "")) || 0) + 1
-      : 1;
-    const reqPrefix = await getIdPrefix(projectId, "REQUIREMENT");
-    const displayId = `${reqPrefix}-${String(nextSeq).padStart(5, "0")}`;
+    // 표시 ID — 사용자 입력이 있으면 그대로 사용, 없으면 자동 채번 (prefix는 프로젝트 환경설정에서 조회)
+    let displayId: string;
+    if (inputDisplayId?.trim()) {
+      displayId = inputDisplayId.trim();
+    } else {
+      const reqPrefix = await getIdPrefix(projectId, "REQUIREMENT");
+      const existingReqs = await prisma.tbRqRequirement.findMany({
+        where:  { prjct_id: projectId },
+        select: { req_display_id: true },
+      });
+      displayId = computeNextDisplayId(existingReqs.map((r) => r.req_display_id), reqPrefix);
+    }
 
     // sort_ordr: 마지막 + 1
     const maxSort = await prisma.tbRqRequirement.findFirst({

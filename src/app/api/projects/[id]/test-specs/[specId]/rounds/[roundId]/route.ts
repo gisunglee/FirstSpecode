@@ -19,6 +19,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
+import { maxDisplayIdSeq } from "@/lib/nextDisplayId";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 
 type RouteParams = { params: Promise<{ id: string; specId: string; roundId: string }> };
@@ -136,8 +137,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "회차를 찾을 수 없습니다.", 404);
     }
 
-    // 결함 표시 ID 자동 채번을 위한 prefix 미리 조회
+    // 결함 표시 ID 자동 채번을 위한 prefix + 최댓값을 트랜잭션 진입 전 한 번만 조회
+    // ("PREFIX-숫자" 형식을 벗어난 값은 무시 — maxDisplayIdSeq 참고), 이후 결함 생성마다 로컬에서 +1
     const defectPrefix = await getIdPrefix(projectId, "DEFECT");
+    const existingDefects = await prisma.tbQaDefect.findMany({
+      where:  { prjct_id: projectId },
+      select: { defect_display_id: true },
+    });
+    let defectSeq = maxDisplayIdSeq(existingDefects.map((d) => d.defect_display_id), defectPrefix);
 
     await prisma.$transaction(async (tx) => {
       // 1) 회차 메타 업데이트
@@ -184,26 +191,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         await tx.tbQaDefect.deleteMany({ where: { result_id: r.resultId } });
         const defects = r.defects?.filter((d) => d.defectCn.trim()) ?? [];
         if (defects.length > 0) {
-          // 결함 표시 ID 채번 — 프로젝트 내 마지막 DF-NNNNN + 1 부터
-          const lastDefect = await tx.tbQaDefect.findFirst({
-            where:   { prjct_id: projectId },
-            orderBy: { defect_display_id: "desc" },
-            select:  { defect_display_id: true },
-          });
-          let nextSeq = lastDefect
-            ? (parseInt(lastDefect.defect_display_id.replace(/\D/g, "")) || 0) + 1
-            : 1;
           for (const d of defects) {
+            defectSeq++;
             await tx.tbQaDefect.create({
               data: {
                 prjct_id:           projectId,
                 result_id:          r.resultId,
-                defect_display_id:  `${defectPrefix}-${String(nextSeq).padStart(5, "0")}`,
+                defect_display_id:  `${defectPrefix}-${String(defectSeq).padStart(5, "0")}`,
                 defect_cn:          d.defectCn.trim(),
                 sttus_code:         "OPEN",
               },
             });
-            nextSeq++;
           }
         }
       }

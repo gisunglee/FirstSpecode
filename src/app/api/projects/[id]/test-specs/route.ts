@@ -26,6 +26,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
+import { computeNextDisplayId } from "@/lib/nextDisplayId";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -175,16 +176,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (inputDisplayId?.trim()) {
       displayId = inputDisplayId.trim();
     } else {
-      const last = await prisma.tbQaTestSpec.findFirst({
-        where:   { prjct_id: projectId },
-        orderBy: { test_spec_display_id: "desc" },
-        select:  { test_spec_display_id: true },
-      });
-      const nextSeq = last
-        ? (parseInt(last.test_spec_display_id.replace(/\D/g, "")) || 0) + 1
-        : 1;
       const prefix = await getIdPrefix(projectId, "TEST_SPEC");
-      displayId = `${prefix}-${String(nextSeq).padStart(5, "0")}`;
+      const existing = await prisma.tbQaTestSpec.findMany({
+        where:  { prjct_id: projectId },
+        select: { test_spec_display_id: true },
+      });
+      displayId = computeNextDisplayId(existing.map((s) => s.test_spec_display_id), prefix);
     }
 
     // sort_ordr 마지막 + 1

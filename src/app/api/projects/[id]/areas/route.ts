@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
+import { computeNextDisplayId } from "@/lib/nextDisplayId";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { areaCreateSchema } from "@/lib/specContentSchemas";
@@ -73,14 +74,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (inputDisplayId?.trim()) {
       displayId = inputDisplayId.trim();
     } else {
-      const last = await prisma.tbDsArea.findFirst({
-        where:   { prjct_id: projectId },
-        orderBy: { area_display_id: "desc" },
-        select:  { area_display_id: true },
-      });
-      const nextNum = last ? parseInt(last.area_display_id.replace(/\D/g, "")) + 1 : 1;
       const arPrefix = await getIdPrefix(projectId, "AREA");
-      displayId = `${arPrefix}-${String(nextNum).padStart(5, "0")}`;
+      const existing = await prisma.tbDsArea.findMany({
+        where:  { prjct_id: projectId },
+        select: { area_display_id: true },
+      });
+      displayId = computeNextDisplayId(existing.map((a) => a.area_display_id), arPrefix);
     }
 
     // 정렬순서 기본값: 현재 최대 + 1

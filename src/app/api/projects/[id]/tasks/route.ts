@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { getIdPrefix } from "@/lib/idPrefix";
+import { computeNextDisplayId } from "@/lib/nextDisplayId";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { taskCreateSchema } from "@/lib/specContentSchemas";
@@ -72,16 +73,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (inputDisplayId?.trim()) {
       displayId = inputDisplayId.trim();
     } else {
-      const maxTask = await prisma.tbRqTask.findFirst({
-        where: { prjct_id: projectId },
-        orderBy: { task_display_id: "desc" },
+      const taskPrefix = await getIdPrefix(projectId, "TASK");
+      const existingTasks = await prisma.tbRqTask.findMany({
+        where:  { prjct_id: projectId },
         select: { task_display_id: true },
       });
-      const nextSeq = maxTask
-        ? (parseInt(maxTask.task_display_id.replace(/\D/g, "")) || 0) + 1
-        : 1;
-      const taskPrefix = await getIdPrefix(projectId, "TASK");
-      displayId = `${taskPrefix}-${String(nextSeq).padStart(5, "0")}`;
+      displayId = computeNextDisplayId(existingTasks.map((t) => t.task_display_id), taskPrefix);
     }
 
     // sort_ordr: 마지막 + 1
