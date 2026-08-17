@@ -243,6 +243,7 @@ model TbPjProject {
   syncRuns          TbSpSyncRun[]
   attachFiles       TbCmAttachFile[]
   reviewRequests    tb_ds_review_request[]
+  asisQuestions     tb_ds_asis_question[]
   codeGroups        TbCmCodeGroup[]
   codes             TbCmCode[]
   memos             TbDsMemo[]
@@ -1172,6 +1173,35 @@ model tb_ds_review_request {
   @@index([ref_tbl_nm, ref_id], map: "idx_ds_review_ref")
   @@index([req_mber_id, review_sttus_code], map: "idx_ds_review_req_mber")
   @@index([revwr_mber_id, review_sttus_code], map: "idx_ds_review_revwr")
+}
+
+// ── AS-IS 미해결 질문 — 온보딩/분석 중 확인 안 된 사실 추적 ───────────────
+// tb_ds_review_request(동료 피어리뷰, 만족도 평가 포함)와는 목적이 달라 별도로 둔다.
+// 여기는 "AI가 소스/대화로 확인 못한 사실을 사람에게 물어보는" 용도라 만족도 점수 같은
+// 피어리뷰 전용 필드가 없다. purpose_code는 항상 필수 — 조회 시 무조건 필터링해서
+// 용도가 다른 질문끼리 섞이지 않게 한다 (여러 세션이 같은 저장소를 공유하기 때문).
+model tb_ds_asis_question {
+  question_id   String    @id(map: "pk_ds_asis_question") @db.VarChar(36)
+  prjct_id      String    @db.VarChar(36)
+  purpose_code  String    @db.VarChar(30) // 예: ASIS_ONBOARDING — 생성 시 항상 필수
+  batch_id      String?   @db.VarChar(100) // 온보딩 회차 구분, 예: "2026-08-17 1차 온보딩 1회차"
+  ref_tbl_nm    String    @db.VarChar(50) // 다형 참조 — tb_ds_screen / tb_ds_unit_work 등
+  ref_id        String    @db.VarChar(36)
+  question_cn   String
+  answer_cn     String?
+  status_code   String    @default("OPEN") @db.VarChar(20) // OPEN | ANSWERED | CLOSED
+  req_mber_id   String    @db.VarChar(36) // 질문을 등록한 회원(온보딩 실행자)
+  revwr_mber_id String?   @db.VarChar(36) // 답변 예정자 — 없으면 프로젝트 전체에 열림
+  creat_dt      DateTime  @default(now()) @db.Timestamp(6)
+  mdfcn_dt      DateTime  @default(now()) @db.Timestamp(6)
+  answered_dt   DateTime? @db.Timestamp(6)
+
+  // 프로젝트 삭제 시 자동 정리
+  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_asis_question_prjct_fk")
+
+  @@index([prjct_id, purpose_code, status_code], map: "idx_ds_asis_question_purpose")
+  @@index([prjct_id, batch_id], map: "idx_ds_asis_question_batch")
+  @@index([ref_tbl_nm, ref_id], map: "idx_ds_asis_question_ref")
 }
 
 // ── 기준 정보 (standard info) — 프로젝트별 기준값 lookup 테이블 ───────────

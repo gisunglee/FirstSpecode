@@ -15,8 +15,9 @@
  *   [설계-영역]    list_areas, get_area, create_area, update_area
  *   [설계-기능]    list_functions, get_function, create_function, update_function
  *   [설계-트리]    get_design_tree (배치 조회 — 단위업무 ID 1~20개 필수, "전체 조회" 미지원)
- *   [DB]           list_db_tables, get_db_table, get_db_table_usage, get_db_column_usage
+ *   [DB]           list_db_tables, get_db_table, create_db_table, update_db_table, get_db_table_usage, get_db_column_usage
  *   [스펙 동기화]   UW 실행 시작·구조화 결과 제출·실행/항목 조회 (적용은 웹 전용)
+ *   [AS-IS 온보딩] create_asis_question, list_asis_questions(조건 필수), answer_asis_question
  *   [워커 배포]    get_worker_command_files (/run-ai-tasks 커맨드를 고객 로컬에 설치할 파일 내용 제공)
  *
  * 정책 — DELETE 미지원:
@@ -960,6 +961,69 @@ export function registerTools(
   );
 
   server.tool(
+    "create_db_table",
+    "DB 테이블 생성 — 물리 테이블명만 필수입니다. 컬럼은 이 도구로 만들 수 없고, " +
+      "생성 후 update_db_table로 별도 설정해야 합니다",
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+      tblPhysclNm: z.string().describe("물리 테이블명 (필수)"),
+      tblLgclNm: z.string().optional().describe("논리 테이블명"),
+      tblDc: z.string().optional().describe("테이블 설명"),
+      assignMemberId: z.string().optional().describe("담당자 회원 ID"),
+    },
+    async ({ projectId, ...body }) => {
+      try {
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/db-tables`,
+          { method: "POST", body: JSON.stringify(body) }
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  server.tool(
+    "update_db_table",
+    "DB 테이블 정보와 컬럼을 갱신합니다. columns는 부분 추가가 아니라 전체 교체입니다 " +
+      "— 이 목록에 없는 기존 컬럼은 삭제됩니다. 컬럼을 추가할 때도 반드시 기존 컬럼 " +
+      "전체를 함께 전달하세요 (먼저 get_db_table로 현재 컬럼 목록을 조회한 뒤, 거기에 " +
+      "새 컬럼을 더해서 호출하는 방식을 권장합니다)",
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+      tableId: z.string().describe("테이블 ID"),
+      tblPhysclNm: z.string().describe("물리 테이블명 (필수 — 기존 값 그대로라도 전달)"),
+      tblLgclNm: z.string().optional().describe("논리 테이블명"),
+      tblDc: z.string().optional().describe("테이블 설명"),
+      assignMemberId: z.string().optional().describe("담당자 회원 ID"),
+      columns: z
+        .array(
+          z.object({
+            colId: z.string().optional().describe("기존 컬럼 수정 시 지정, 신규 컬럼은 생략"),
+            colPhysclNm: z.string().describe("물리 컬럼명 (필수)"),
+            colLgclNm: z.string().optional().describe("논리 컬럼명"),
+            dataTyNm: z.string().optional().describe("데이터 타입"),
+            colDc: z.string().optional().describe("컬럼 설명"),
+          })
+        )
+        .optional()
+        .describe("전체 컬럼 목록 (부분 아님 — 전체 교체). 생략하면 기존 컬럼 전체 삭제됨에 주의"),
+    },
+    async ({ projectId, tableId, ...body }) => {
+      try {
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/db-tables/${tableId}`,
+          { method: "PUT", body: JSON.stringify(body) }
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  server.tool(
     "get_db_table_usage",
     "DB 테이블 사용 현황 조회 — 이 테이블을 참조하는 기능/영역/화면 목록과 " +
       "컬럼별 사용 통계, IO 분포, 마지막 매핑 시각을 반환합니다. " +
@@ -1109,7 +1173,95 @@ export function registerTools(
   );
 
   // ═══════════════════════════════════════════════════════════════
-  // 12. 워커 커맨드 배포 (Worker Command Distribution)
+  // 12. AS-IS 온보딩 — 미해결 질문 (AS-IS Question Tracking)
+  // ═══════════════════════════════════════════════════════════════
+  // 2차 사업(기존 시스템 위 증축) 프로젝트를 온보딩할 때, 소스 분석이나 대화로
+  // 확인 못한 사실을 추적하는 용도. tb_ds_review_request(동료 피어리뷰)와는
+  // 별개 — 만족도 평가가 없는 대신 purpose_code로 용도를 태깅해서, 여러 세션이
+  // 같은 저장소를 공유해도 서로 다른 목적의 질문끼리 섞이지 않게 한다.
+
+  server.tool(
+    "create_asis_question",
+    "AS-IS 온보딩 중 소스나 대화로 확인하지 못한 사실을 질문으로 남깁니다. " +
+      "이 도구는 온보딩/AS-IS 분석 목적 전용입니다 — 일반적인 작업 메모나 " +
+      "TODO 용도로 사용하지 마세요. purposeCode는 온보딩 세션 내내 일관된 " +
+      "값을 지정하세요 (예: ASIS_ONBOARDING). 대상 엔티티(refTblNm/refId)의 " +
+      "description에도 별도로 '미확인' 표시를 남기는 걸 권장합니다.",
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+      purposeCode: z.string().describe("용도 태그 (필수) — 예: ASIS_ONBOARDING"),
+      batchId: z.string().optional().describe("온보딩 회차 식별자, 예: '2026-08-17 1차 온보딩 1회차'"),
+      refTblNm: z.string().describe("대상 엔티티 테이블명 (필수), 예: tb_ds_screen"),
+      refId: z.string().describe("대상 엔티티 ID (필수)"),
+      questionCn: z.string().describe("질문 내용"),
+      revwrMemberId: z.string().optional().describe("답변 예정 회원 ID (list_members로 조회)"),
+    },
+    async ({ projectId, ...body }) => {
+      try {
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/asis-questions`,
+          { method: "POST", body: JSON.stringify(body) }
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  server.tool(
+    "list_asis_questions",
+    "AS-IS 미해결 질문을 조회합니다. purposeCode, batchId, refTblNm+refId 중 " +
+      "최소 하나는 반드시 지정해야 합니다 — 조건 없이 전체를 조회할 수 없습니다 " +
+      "(여러 세션/용도가 이 저장소를 공유하므로 무분별한 전체 조회를 막습니다).",
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+      purposeCode: z.string().optional().describe("용도 태그로 필터"),
+      batchId: z.string().optional().describe("온보딩 회차로 필터"),
+      refTblNm: z.string().optional().describe("대상 엔티티 테이블명 (refId와 함께 지정)"),
+      refId: z.string().optional().describe("대상 엔티티 ID (refTblNm과 함께 지정)"),
+      statusCode: z.string().optional().describe("OPEN | ANSWERED | CLOSED"),
+    },
+    async ({ projectId, ...query }) => {
+      try {
+        const params = new URLSearchParams(
+          Object.entries(query).filter(([, v]) => v !== undefined) as [string, string][]
+        );
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/asis-questions?${params.toString()}`
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  server.tool(
+    "answer_asis_question",
+    "AS-IS 미해결 질문에 답변을 등록합니다. 상태가 ANSWERED로 바뀝니다. " +
+      "답변을 실제 스펙(화면/기능 등의 description)에 반영하는 건 이 도구의 " +
+      "역할이 아닙니다 — update_screen 등으로 별도로 반영하세요.",
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+      questionId: z.string().describe("질문 ID"),
+      answerCn: z.string().describe("답변 내용"),
+    },
+    async ({ projectId, questionId, ...body }) => {
+      try {
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/asis-questions/${questionId}`,
+          { method: "PATCH", body: JSON.stringify(body) }
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  // ═══════════════════════════════════════════════════════════════
+  // 13. 워커 커맨드 배포 (Worker Command Distribution)
   // ═══════════════════════════════════════════════════════════════
   // SPECODE를 이용하는 고객사도 /run-ai-tasks 로컬 커맨드가 있어야 AI 태스크를
   // 처리할 수 있다. 매번 파일을 복사해 안내하는 대신, MCP로 원본 파일 내용을

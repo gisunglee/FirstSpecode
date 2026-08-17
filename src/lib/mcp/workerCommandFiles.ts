@@ -11,6 +11,7 @@ const WORKER_COMMAND_FILE_PATHS = [
   ".claude/commands/task_complete.mjs",
   ".claude/commands/sync-specode.md",
   ".claude/commands/validate_specode_sync.mjs",
+  ".claude/commands/onboard-asis.md",
 ] as const;
 
 export type WorkerCommandFile = { path: string; content: string };
@@ -40,7 +41,12 @@ export const WORKER_COMMAND_SETUP_GUIDE = `
    /run-ai-tasks IMP
    /run-ai-tasks STATUS
    /sync-specode UW-00036
+   /onboard-asis
 
 /sync-specode는 Git 기준선 없이 현재 UW 설계와 현재 관련 소스를 비교합니다.
 기본 CHECK를 권장하며, 분석 결과의 실제 설계 반영은 SPECODE 웹에서 사람이 승인합니다.
+
+/onboard-asis는 2차 사업(기존 시스템 위 증축) 프로젝트에서, 1차 시스템 소스를 분석해
+단위업무/화면/영역/기능/DB 테이블을 SPECODE에 등록합니다. 대량 작업이라 시간이 걸리며,
+단계마다 확인을 받으며 진행합니다.
 `.trim();
