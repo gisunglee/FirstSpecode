@@ -106,6 +106,26 @@ src/lib/mcp/register-tools.ts      ← HTTP MCP (Next.js /api/mcp)
 
 ---
 
+## ⚡ 설계 내용 작성 전 필수 확인
+
+요구사항/단위업무/화면/영역/기능의 설명(description, detailSpec 등)을 사용자와
+논의하거나 MCP로 등록·수정하기 전에 **반드시** `get_design_template` MCP 도구로
+해당 계층의 표준 양식을 먼저 조회할 것.
+
+```
+get_design_template(projectId, refType)
+refType: REQUIREMENT | UNIT_WORK | SCREEN | AREA | FUNCTION
+```
+
+조회한 예시(exampleCn)·빈 템플릿(templateCn) 구조를 따라 내용을 작성하고,
+"표준 양식에 맞춰 작성하겠습니다" 또는 "표준 양식대로 채우려면 ~정보가
+추가로 필요합니다"라고 사용자에게 먼저 알린 뒤 등록을 진행할 것.
+
+> 표준 양식은 `tb_ai_design_template`에 저장되며 프로젝트별로 커스터마이징
+> 가능하다 — 해당 프로젝트 전용 양식이 있으면 공통 양식보다 우선 적용된다.
+
+---
+
 ## ⚡ DB / DDL 작업 시작 전 필수 읽기
 
 DB 스키마 조회·수정·마이그레이션 작업 전에 **반드시** 읽을 것:

@@ -15,6 +15,8 @@
  *   [설계-영역]    list_areas, get_area, create_area, update_area
  *   [설계-기능]    list_functions, get_function, create_function, update_function
  *   [설계-트리]    get_design_tree (배치 조회 — 단위업무 ID 1~20개 필수, "전체 조회" 미지원)
+ *   [설계-표준양식] get_design_template (요구사항/단위업무/화면/영역/기능 description 작성 표준 양식 —
+ *                    설계 내용을 논의하거나 description을 작성하기 전에 반드시 먼저 호출할 것)
  *   [DB]           list_db_tables, get_db_table, create_db_table, update_db_table, get_db_table_usage, get_db_column_usage
  *   [스펙 동기화]   UW 실행 시작·구조화 결과 제출·실행/항목 조회 (적용은 웹 전용)
  *   [AS-IS 온보딩] create_asis_question, list_asis_questions(조건 필수), answer_asis_question
@@ -288,7 +290,8 @@ export function registerTools(
 
   server.tool(
     "create_requirement",
-    "요구사항 생성 — 새 요구사항을 등록합니다. displayId(REQ-NNNNN)는 자동 채번됩니다. 과업에 소속시키려면 taskId를 전달하세요 (선행: list_tasks 또는 get_planning_tree로 taskId 조회)",
+    "요구사항 생성 — 새 요구사항을 등록합니다. displayId(REQ-NNNNN)는 자동 채번됩니다. 과업에 소속시키려면 taskId를 전달하세요 (선행: list_tasks 또는 get_planning_tree로 taskId 조회). " +
+      "originalContent/detailSpec 등 설명 내용을 작성하기 전에 get_design_template(refType=REQUIREMENT)로 표준 양식을 먼저 확인하세요.",
     {
       projectId: z.string().describe("프로젝트 ID"),
       name: z.string().describe("요구사항명 (필수)"),
@@ -316,7 +319,8 @@ export function registerTools(
 
   server.tool(
     "update_requirement",
-    "요구사항 수정 — OWNER/ADMIN·PM/PL, 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다",
+    "요구사항 수정 — OWNER/ADMIN·PM/PL, 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다. " +
+      "originalContent/detailSpec 등 설명 내용을 작성하기 전에 get_design_template(refType=REQUIREMENT)로 표준 양식을 먼저 확인하세요.",
     {
       projectId: z.string().describe("프로젝트 ID"),
       requirementId: z.string().describe("요구사항 ID"),
@@ -524,7 +528,8 @@ export function registerTools(
 
   server.tool(
     "create_unit_work",
-    "단위업무 생성 — 새 단위업무를 등록합니다. displayId(UW-NNNNN)는 자동 채번됩니다. 선행: list_requirements로 reqId를 조회하세요 (상위 요구사항 필수). 담당자·일정 지정은 OWNER/ADMIN 또는 PM/PL만 가능합니다",
+    "단위업무 생성 — 새 단위업무를 등록합니다. displayId(UW-NNNNN)는 자동 채번됩니다. 선행: list_requirements로 reqId를 조회하세요 (상위 요구사항 필수). 담당자·일정 지정은 OWNER/ADMIN 또는 PM/PL만 가능합니다. " +
+      "description을 작성하기 전에 get_design_template(refType=UNIT_WORK)로 표준 양식을 먼저 확인하세요.",
     {
       projectId: z.string().describe("프로젝트 ID"),
       reqId: z.string().describe("상위 요구사항 ID (필수). list_requirements에서 조회 가능"),
@@ -549,7 +554,8 @@ export function registerTools(
 
   server.tool(
     "update_unit_work",
-    "단위업무 수정 — OWNER/ADMIN·PM/PL, 자신 또는 상위 요구사항/과업의 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다",
+    "단위업무 수정 — OWNER/ADMIN·PM/PL, 자신 또는 상위 요구사항/과업의 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다. " +
+      "description을 작성하기 전에 get_design_template(refType=UNIT_WORK)로 표준 양식을 먼저 확인하세요.",
     {
       projectId: z.string().describe("프로젝트 ID"),
       unitWorkId: z.string().describe("단위업무 ID"),
@@ -626,7 +632,8 @@ export function registerTools(
 
   server.tool(
     "create_screen",
-    "화면 생성 — 새 화면을 등록합니다. 단위업무에 소속시키려면 unitWorkId를 전달하세요 (선행: list_unit_works로 조회)",
+    "화면 생성 — 새 화면을 등록합니다. 단위업무에 소속시키려면 unitWorkId를 전달하세요 (선행: list_unit_works로 조회). " +
+      "description을 작성하기 전에 get_design_template(refType=SCREEN)로 표준 양식을 먼저 확인하세요.",
     {
       projectId: z.string().describe("프로젝트 ID"),
       name: z.string().describe("화면명 (필수)"),
@@ -653,7 +660,8 @@ export function registerTools(
 
   server.tool(
     "update_screen",
-    "화면 수정 — OWNER/ADMIN·PM/PL, 자신 또는 상위 단위업무/요구사항/과업의 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다",
+    "화면 수정 — OWNER/ADMIN·PM/PL, 자신 또는 상위 단위업무/요구사항/과업의 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다. " +
+      "description을 작성하기 전에 get_design_template(refType=SCREEN)로 표준 양식을 먼저 확인하세요.",
     {
       projectId: z.string().describe("프로젝트 ID"),
       screenId: z.string().describe("화면 ID"),
@@ -730,7 +738,8 @@ export function registerTools(
 
   server.tool(
     "create_area",
-    "영역 생성 — 새 영역을 등록합니다. 화면에 소속시키려면 screenId를 전달하세요 (선행: list_screens로 조회). 정렬 순서 지정은 OWNER/ADMIN 또는 PM/PL만 가능합니다",
+    "영역 생성 — 새 영역을 등록합니다. 화면에 소속시키려면 screenId를 전달하세요 (선행: list_screens로 조회). 정렬 순서 지정은 OWNER/ADMIN 또는 PM/PL만 가능합니다. " +
+      "description을 작성하기 전에 get_design_template(refType=AREA)로 표준 양식을 먼저 확인하세요.",
     {
       projectId: z.string().describe("프로젝트 ID"),
       name: z.string().describe("영역명 (필수)"),
@@ -754,7 +763,8 @@ export function registerTools(
 
   server.tool(
     "update_area",
-    "영역 수정 — OWNER/ADMIN·PM/PL, 상위 화면/단위업무/요구사항/과업의 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다",
+    "영역 수정 — OWNER/ADMIN·PM/PL, 상위 화면/단위업무/요구사항/과업의 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다. " +
+      "description을 작성하기 전에 get_design_template(refType=AREA)로 표준 양식을 먼저 확인하세요.",
     {
       projectId: z.string().describe("프로젝트 ID"),
       areaId: z.string().describe("영역 ID"),
@@ -826,7 +836,8 @@ export function registerTools(
 
   server.tool(
     "create_function",
-    "기능 생성 — 새 기능을 등록합니다. 영역에 소속시키려면 areaId를 전달하세요 (선행: list_areas로 조회). 복잡도·공수·담당자·정렬 지정은 OWNER/ADMIN 또는 PM/PL만 가능합니다",
+    "기능 생성 — 새 기능을 등록합니다. 영역에 소속시키려면 areaId를 전달하세요 (선행: list_areas로 조회). 복잡도·공수·담당자·정렬 지정은 OWNER/ADMIN 또는 PM/PL만 가능합니다. " +
+      "description을 작성하기 전에 get_design_template(refType=FUNCTION)로 표준 양식을 먼저 확인하세요.",
     {
       projectId: z.string().describe("프로젝트 ID"),
       name: z.string().describe("기능명 (필수)"),
@@ -855,7 +866,8 @@ export function registerTools(
 
   server.tool(
     "update_function",
-    "기능 수정 — OWNER/ADMIN·PM/PL, 자신 또는 상위 화면/단위업무/요구사항/과업의 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다",
+    "기능 수정 — OWNER/ADMIN·PM/PL, 자신 또는 상위 화면/단위업무/요구사항/과업의 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다. " +
+      "description을 작성하기 전에 get_design_template(refType=FUNCTION)로 표준 양식을 먼저 확인하세요.",
     {
       projectId: z.string().describe("프로젝트 ID"),
       functionId: z.string().describe("기능 ID"),
@@ -909,6 +921,39 @@ export function registerTools(
         const qs = buildQs({ unitWorkIds: unitWorkIds.join(",") });
         const data = await specodeFetch(
           `/api/projects/${projectId}/design/tree${qs}`
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  // ═══════════════════════════════════════════════════════════════
+  // 9-2. 설계 — 표준 양식 (Design Template)
+  // ═══════════════════════════════════════════════════════════════
+
+  server.tool(
+    "get_design_template",
+    "요구사항/단위업무/화면/영역/기능 설명(description) 작성 표준 양식 조회 — " +
+      "사용자와 설계 내용을 논의하거나 create_requirement/update_requirement, " +
+      "create_unit_work/update_unit_work, create_screen/update_screen, " +
+      "create_area/update_area, create_function/update_function으로 description을 " +
+      "작성하기 전에 반드시 먼저 호출하세요. 반환된 예시(exampleCn)·빈 템플릿(templateCn) 구조를 " +
+      "따라 내용을 작성하고, 표준 양식에 맞추겠다는 점 또는 양식을 채우는 데 필요한 " +
+      "추가 정보를 사용자에게 먼저 알린 뒤 진행하세요. 프로젝트 전용 양식이 있으면 " +
+      "공통 양식보다 우선 적용됩니다. 해당 계층에 등록된 양식이 없으면 data가 null입니다.",
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+      refType: z
+        .enum(["REQUIREMENT", "UNIT_WORK", "SCREEN", "AREA", "FUNCTION"])
+        .describe("표준 양식을 조회할 대상 계층"),
+    },
+    async ({ projectId, refType }) => {
+      try {
+        const qs = buildQs({ refType });
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/design-templates/resolve${qs}`
         );
         return textResult(data);
       } catch (err) {
