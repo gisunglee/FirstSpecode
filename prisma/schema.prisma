@@ -191,14 +191,14 @@ model TbPjProject {
   // ── 단계별 일정 (2026-07-16 도입) ────────────────────────────────────
   // 별도 테이블 없이 프로젝트 테이블에 4단계 × 시작/종료 8컬럼으로 관리.
   // bgng_de/end_de(프로젝트 전체 기간)와 별개로, 단계별 진행 현황 표시에 사용.
-  anls_bgng_de  DateTime?
-  anls_end_de   DateTime?
-  dsgn_bgng_de  DateTime?
-  dsgn_end_de   DateTime?
-  dev_bgng_de   DateTime?
-  dev_end_de    DateTime?
-  test_bgng_de  DateTime?
-  test_end_de   DateTime?
+  anls_bgng_de DateTime?
+  anls_end_de  DateTime?
+  dsgn_bgng_de DateTime?
+  dsgn_end_de  DateTime?
+  dev_bgng_de  DateTime?
+  dev_end_de   DateTime?
+  test_bgng_de DateTime?
+  test_end_de  DateTime?
 
   creat_mber_id String?
   creat_dt      DateTime  @default(now())
@@ -213,59 +213,59 @@ model TbPjProject {
   //                     (= del_dt + 보관기간; 기본 14일, TbSysConfigTemplate 으로 조정)
   // hard_del_dt 가 지난 행은 별도 배치(project-hard-delete)가 일괄 정리한다.
   // 보관 기간 동안 OWNER 는 복구(restore) 가능, SUPER_ADMIN 은 항상 조회 가능.
-  del_yn            String                    @default("N") @db.Char(1)
-  del_dt            DateTime?
-  del_mber_id       String?
-  hard_del_dt       DateTime?
-  planStudios       TbDsPlanStudio[]
-  apiKeys           TbPjProjectApiKey[]
-  invitations       TbPjProjectInvitation[]
-  members           TbPjProjectMember[]
-  settings          TbPjProjectSettings?
-  settingsHistory   TbPjSettingsHistory[]
-  standardInfos     TbCmStandardInfo[]
+  del_yn           String                    @default("N") @db.Char(1)
+  del_dt           DateTime?
+  del_mber_id      String?
+  hard_del_dt      DateTime?
+  planStudios      TbDsPlanStudio[]
+  apiKeys          TbPjProjectApiKey[]
+  invitations      TbPjProjectInvitation[]
+  members          TbPjProjectMember[]
+  settings         TbPjProjectSettings?
+  settingsHistory  TbPjSettingsHistory[]
+  standardInfos    TbCmStandardInfo[]
   // 2026-05-06 P1 — 핵심 도메인 6개 CASCADE
-  unitWorks         TbDsUnitWork[]
-  screens           TbDsScreen[]
-  areas             TbDsArea[]
-  functions         TbDsFunction[]
-  tasks             TbRqTask[]
-  requirements      TbRqRequirement[]
+  unitWorks        TbDsUnitWork[]
+  screens          TbDsScreen[]
+  areas            TbDsArea[]
+  functions        TbDsFunction[]
+  tasks            TbRqTask[]
+  requirements     TbRqRequirement[]
   // 2026-05-06 P2 — 부가 도메인 15개 CASCADE
-  projectConfigs    TbPjProjectConfig[]
-  removalNotices    TbPjMemberRemovalNotice[]
-  designChanges     TbDsDesignChange[]
-  documentReleases  TbDsDocumentRelease[]
-  dbTables          TbDsDbTable[]
-  dbTableRevisions  TbDsDbTableRevision[]
-  progresses        TbCmProgress[]
-  aiTasks           TbAiTask[]
-  syncRuns          TbSpSyncRun[]
-  attachFiles       TbCmAttachFile[]
-  reviewRequests    tb_ds_review_request[]
-  asisQuestions     tb_ds_asis_question[]
-  codeGroups        TbCmCodeGroup[]
-  codes             TbCmCode[]
-  memos             TbDsMemo[]
-  stdGuides         TbSgStdGuide[]
+  projectConfigs   TbPjProjectConfig[]
+  removalNotices   TbPjMemberRemovalNotice[]
+  designChanges    TbDsDesignChange[]
+  documentReleases TbDsDocumentRelease[]
+  dbTables         TbDsDbTable[]
+  dbTableRevisions TbDsDbTableRevision[]
+  progresses       TbCmProgress[]
+  aiTasks          TbAiTask[]
+  syncRuns         TbSpSyncRun[]
+  attachFiles      TbCmAttachFile[]
+  reviewRequests   tb_ds_review_request[]
+  asisQuestions    tb_ds_asis_question[]
+  codeGroups       TbCmCodeGroup[]
+  codes            TbCmCode[]
+  memos            TbDsMemo[]
+  stdGuides        TbSgStdGuide[]
   // 2026-05-10 — QA 도메인 (테스트 명세서·케이스·회차·결과·결함·증적)
-  testSpecs         TbQaTestSpec[]
-  testCases         TbQaTestCase[]
-  testRounds        TbQaTestRound[]
-  testResults       TbQaTestResult[]
-  defects           TbQaDefect[]
-  evidences         TbQaEvidence[]
+  testSpecs        TbQaTestSpec[]
+  testCases        TbQaTestCase[]
+  testRounds       TbQaTestRound[]
+  testResults      TbQaTestResult[]
+  defects          TbQaDefect[]
+  evidences        TbQaEvidence[]
   // 2026-05-11 — 공통 점검 마스터 (프로젝트 전용 항목)
-  checkMasters      TbQaCheckMaster[]
+  checkMasters     TbQaCheckMaster[]
   // 2026-07-20 — 업무일지 / 주간보고
-  workLogs          TbWrWorkLog[]
-  weeklyReports     TbWrWeeklyReport[]
+  workLogs         TbWrWorkLog[]
+  weeklyReports    TbWrWeeklyReport[]
   // 2026-07-22 — 협조 및 이슈사항 (리더 리포트 인쇄용)
-  issues            TbWrIssue[]
+  issues           TbWrIssue[]
   // 2026-07-21 — 마일스톤 (설정 > 일정 탭)
-  milestones        TbPjMilestone[]
+  milestones       TbPjMilestone[]
   // 2026-07-22 — 공휴일 (설정 > 일정 탭) — WBS/업무일지 근무일 계산의 참조 데이터
-  holidays          TbPjHoliday[]
+  holidays         TbPjHoliday[]
 
   // 배치(project-hard-delete) 가 매일 스캔하는 인덱스
   // (del_yn='Y' AND hard_del_dt <= now()) 조건을 빠르게 추리기 위함
@@ -467,14 +467,14 @@ model TbPjMilestone {
 // 표준 목록(krHolidays.ts)을 프로젝트별로 "일괄 등록"해 실제 데이터로 굳혀 둔다.
 // 수정 기능은 없음 — 잘못 등록한 날짜는 삭제 후 다시 등록(또는 수동 추가)한다.
 model TbPjHoliday {
-  holiday_id    String    @id @default(uuid())
+  holiday_id    String   @id @default(uuid())
   prjct_id      String
   holiday_nm    String
-  holiday_de    DateTime  @db.Date
+  holiday_de    DateTime @db.Date
   // LEGAL(표준 공휴일 일괄 등록) / CUSTOM(사용자가 직접 추가) — 목록 화면 배지 구분용
-  holiday_se_cd String    @default("CUSTOM")
+  holiday_se_cd String   @default("CUSTOM")
   creat_mber_id String
-  creat_dt      DateTime  @default(now())
+  creat_dt      DateTime @default(now())
 
   project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_pj_holiday_prjct_fk")
 
@@ -497,13 +497,12 @@ model TbDsDesignChange {
   chg_type_code String   @default("UPDATE")
 
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
-  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_design_change_prjct_fk")
+  project   TbPjProject    @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_design_change_prjct_fk")
   syncItems TbSpSyncItem[]
 
   // 대시보드 "최근 변경" + "팀 활동(7일)" 카드용 인덱스.
   // (prjct_id, chg_dt DESC) 로 프로젝트별 최신순 페이지네이션·범위 스캔 모두 효율화.
   @@index([prjct_id, chg_dt(sort: Desc)], map: "idx_ds_design_change_prjct_dt")
-
   @@map("tb_ds_design_change")
 }
 
@@ -552,11 +551,11 @@ model TbDsDocumentRelease {
 }
 
 model TbDsUnitWork {
-  unit_work_id         String          @id @default(uuid())
+  unit_work_id         String           @id @default(uuid())
   prjct_id             String
   req_id               String
   unit_work_display_id String
-  unit_work_nm         String          @default("")
+  unit_work_nm         String           @default("")
   unit_work_dc         String?
   asign_mber_id        String?
   // 계획 설계 일정/공수 — PM이 잡는 상위 마일스톤. 하위 화면·기능의 실제 진행과는
@@ -566,20 +565,20 @@ model TbDsUnitWork {
   plan_dsgn_end_de     String?
   plan_dsgn_efrt_val   String?
   // 단위업무 설계서 작성 상태 — BEFORE(작성전) / DOING(작성중) / DONE(작성완료)
-  dsgn_doc_sttus_code  String          @default("BEFORE")
-  sort_ordr            Int             @default(0)
-  creat_mber_id        String?         // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
-  creat_dt             DateTime        @default(now())
-  mdfcn_mber_id        String?         // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
+  dsgn_doc_sttus_code  String           @default("BEFORE")
+  sort_ordr            Int              @default(0)
+  creat_mber_id        String? // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
+  creat_dt             DateTime         @default(now())
+  mdfcn_mber_id        String? // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
   mdfcn_dt             DateTime?
   coment_cn            String?
   screens              TbDsScreen[]
   // 2026-05-10 — 테스트 명세서 매핑 (단위테스트는 1행 / 통합테스트는 N행)
   testSpecLinks        TbQaTestSpecUw[]
   syncRuns             TbSpSyncRun[]
-  requirement          TbRqRequirement @relation(fields: [req_id], references: [req_id])
+  requirement          TbRqRequirement  @relation(fields: [req_id], references: [req_id])
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 보강)
-  project              TbPjProject     @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_unit_work_prjct_fk")
+  project              TbPjProject      @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_unit_work_prjct_fk")
 
   @@index([prjct_id], map: "tb_ds_unit_work_prjct_idx")
   // 대시보드 "내 마감 임박" + "정체된 일" 카드 — (prjct_id, asign_mber_id) 동등 조건이 자주 옴.
@@ -588,26 +587,26 @@ model TbDsUnitWork {
 }
 
 model TbDsScreen {
-  scrn_id         String        @id @default(uuid())
-  prjct_id        String
-  unit_work_id    String?
-  scrn_display_id String
-  scrn_nm         String        @default("")
-  scrn_dc         String?
-  scrn_ty_code    String        @default("LIST")
-  url_path        String?
-  asign_mber_id   String? // 담당자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
-  sort_ordr       Int           @default(0)
-  creat_mber_id   String?       // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
-  creat_dt        DateTime      @default(now())
-  mdfcn_mber_id   String?       // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
-  mdfcn_dt        DateTime?
-  ctgry_l_nm      String?
-  ctgry_m_nm      String?
-  ctgry_s_nm      String?
-  dsply_code      String?
-  layer_data_dc   String?
-  coment_cn       String?
+  scrn_id             String               @id @default(uuid())
+  prjct_id            String
+  unit_work_id        String?
+  scrn_display_id     String
+  scrn_nm             String               @default("")
+  scrn_dc             String?
+  scrn_ty_code        String               @default("LIST")
+  url_path            String?
+  asign_mber_id       String? // 담당자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
+  sort_ordr           Int                  @default(0)
+  creat_mber_id       String? // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
+  creat_dt            DateTime             @default(now())
+  mdfcn_mber_id       String? // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
+  mdfcn_dt            DateTime?
+  ctgry_l_nm          String?
+  ctgry_m_nm          String?
+  ctgry_s_nm          String?
+  dsply_code          String?
+  layer_data_dc       String?
+  coment_cn           String?
   // 실질 구현 일정 — 담당 개발자가 직접 커밋하는 실제 배정 일정.
   // (단위업무의 plan_dsgn_* 는 PM의 상위 계획치. 설계는 화면 여러 개를 한 사람이 이어서
   // 하는 경우가 많고 화면이 많으면 개별 일정 입력이 부담이라, 설계 일정/공수는 화면에
@@ -617,77 +616,77 @@ model TbDsScreen {
   actl_impl_bgng_de   String?
   actl_impl_end_de    String?
   // 화면정의서 작성 상태 — BEFORE(작성전) / DOING(작성중) / DONE(작성완료)
-  dsgn_doc_sttus_code String        @default("BEFORE")
-  areas           TbDsArea[]
-  unitWork        TbDsUnitWork? @relation(fields: [unit_work_id], references: [unit_work_id])
+  dsgn_doc_sttus_code String               @default("BEFORE")
+  areas               TbDsArea[]
+  unitWork            TbDsUnitWork?        @relation(fields: [unit_work_id], references: [unit_work_id])
   // 테스트 명세서 매핑 — 단위 테스트가 이 화면을 대상으로 작성되었음을 의미
-  testSpecLinks   TbQaTestSpecScreen[]
+  testSpecLinks       TbQaTestSpecScreen[]
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 보강)
-  project         TbPjProject   @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_screen_prjct_fk")
+  project             TbPjProject          @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_screen_prjct_fk")
 
   @@index([prjct_id], map: "tb_ds_screen_prjct_idx")
   @@map("tb_ds_screen")
 }
 
 model TbDsArea {
-  area_id           String         @id @default(uuid())
-  prjct_id          String
-  scrn_id           String?
-  area_display_id   String
-  area_nm           String         @default("")
-  area_dc           String?
+  area_id             String         @id @default(uuid())
+  prjct_id            String
+  scrn_id             String?
+  area_display_id     String
+  area_nm             String         @default("")
+  area_dc             String?
   // 영역 유형 — "무엇이 담기는가" (데이터 성격)
   // FILTER(조회 조건) / LIST(데이터 목록) / FORM(데이터 양식) / DETAIL(상세 정보) / GENERAL(일반 콘텐츠)
-  area_ty_code      String         @default("LIST")
+  area_ty_code        String         @default("LIST")
   // 영역 표시 형태 — "어떻게 배치/작동하는가" (시각 방식)
   // STATIC(고정) / POPOVER(팝오버) / MODAL(모달) / DRAWER(드로어) / TABS(탭 전환) / ACCORDION(아코디언)
   // 종속 팝업도 별도 화면이 아닌 영역의 표시 형태 변형으로 표현.
-  display_form_code String         @default("STATIC")
-  sort_ordr         Int            @default(0)
-  creat_mber_id     String?        // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
-  creat_dt          DateTime       @default(now())
-  mdfcn_mber_id     String?        // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
-  mdfcn_dt          DateTime?
-  excaldw_data      Json?
-  layer_data_dc     String?
-  coment_cn         String?
+  display_form_code   String         @default("STATIC")
+  sort_ordr           Int            @default(0)
+  creat_mber_id       String? // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
+  creat_dt            DateTime       @default(now())
+  mdfcn_mber_id       String? // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
+  mdfcn_dt            DateTime?
+  excaldw_data        Json?
+  layer_data_dc       String?
+  coment_cn           String?
   // 영역 설계(와이어프레임) 작성 상태 — BEFORE(작성전) / DOING(작성중) / DONE(작성완료)
-  dsgn_doc_sttus_code String       @default("BEFORE")
-  screen            TbDsScreen?    @relation(fields: [scrn_id], references: [scrn_id])
-  functions         TbDsFunction[]
+  dsgn_doc_sttus_code String         @default("BEFORE")
+  screen              TbDsScreen?    @relation(fields: [scrn_id], references: [scrn_id])
+  functions           TbDsFunction[]
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 보강)
-  project           TbPjProject    @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_area_prjct_fk")
+  project             TbPjProject    @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_area_prjct_fk")
 
   @@index([prjct_id], map: "tb_ds_area_prjct_idx")
   @@map("tb_ds_area")
 }
 
 model TbDsFunction {
-  func_id         String      @id @default(uuid())
-  prjct_id        String
-  area_id         String?
-  func_display_id String
-  func_nm         String      @default("")
-  func_dc         String?
-  priort_code     String      @default("MEDIUM")
-  sort_ordr       Int         @default(0)
-  creat_mber_id   String?     // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
-  creat_dt        DateTime    @default(now())
-  mdfcn_mber_id   String?     // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
-  mdfcn_dt        DateTime?
-  asign_mber_id   String?
-  cmplx_code      String      @default("MEDIUM")
+  func_id             String      @id @default(uuid())
+  prjct_id            String
+  area_id             String?
+  func_display_id     String
+  func_nm             String      @default("")
+  func_dc             String?
+  priort_code         String      @default("MEDIUM")
+  sort_ordr           Int         @default(0)
+  creat_mber_id       String? // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
+  creat_dt            DateTime    @default(now())
+  mdfcn_mber_id       String? // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
+  mdfcn_dt            DateTime?
+  asign_mber_id       String?
+  cmplx_code          String      @default("MEDIUM")
   // 구현 공수 (2026-07-28 리네임: efrt_val → impl_efrt_val — 화면의 actl_dsgn_efrt_val과 대칭)
-  impl_efrt_val   String?
-  func_ty_code    String      @default("OTHER")
+  impl_efrt_val       String?
+  func_ty_code        String      @default("OTHER")
   // 기능정의서 작성 상태 — BEFORE(작성전) / DOING(작성중) / DONE(작성완료)
   // 구현 일정(시작/종료일)은 화면(TbDsScreen.actl_impl_*)으로 이동함 — 기능 개별 마감일은
   // 관리하지 않고, 화면 마감일 안에서 개인이 알아서 진행(구현/테스트 진척률=%만 tb_cm_progress에 기록)
-  dsgn_doc_sttus_code String    @default("BEFORE")
-  coment_cn       String?
-  area            TbDsArea?   @relation(fields: [area_id], references: [area_id])
+  dsgn_doc_sttus_code String      @default("BEFORE")
+  coment_cn           String?
+  area                TbDsArea?   @relation(fields: [area_id], references: [area_id])
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 보강)
-  project         TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_function_prjct_fk")
+  project             TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_function_prjct_fk")
 
   @@index([prjct_id], map: "tb_ds_function_prjct_idx")
   @@map("tb_ds_function")
@@ -756,12 +755,12 @@ model TbDsDbTableRevision {
 /// 컬럼 매핑 그룹 — 기능(FUNCTION) 하나가 여러 조회/저장 그룹을 가질 수 있도록
 ///   이름을 별도 테이블에 둔다 (그룹명 변경이 매핑 행 여러 개에 중복되지 않게 하기 위함)
 model TbDsColMappingGroup {
-  grp_id      String    @id @default(uuid())
+  grp_id      String   @id(map: "tb_ds_col_mapping_group_pk") @default(uuid())
   ref_ty_code String
   ref_id      String
   grp_nm      String
-  sort_ordr   Int       @default(0)
-  creat_dt    DateTime  @default(now())
+  sort_ordr   Int      @default(0)
+  creat_dt    DateTime @default(now()) @db.Timestamp(6)
 
   mappings TbDsColMapping[]
 
@@ -783,7 +782,7 @@ model TbDsColMapping {
   creat_dt     DateTime? @default(now()) @db.Timestamp(6)
 
   // 그룹 삭제 시 그 안의 매핑도 함께 정리
-  group TbDsColMappingGroup @relation(fields: [grp_id], references: [grp_id], onDelete: Cascade)
+  group TbDsColMappingGroup @relation(fields: [grp_id], references: [grp_id], onDelete: Cascade, map: "tb_ds_col_mapping_grp_id_fkey")
 
   @@index([grp_id], map: "tb_ds_col_mapping_grp_idx")
   @@map("tb_ds_col_mapping")
@@ -838,7 +837,6 @@ model TbAiTask {
   @@index([prjct_id, req_dt(sort: Desc)], map: "idx_ai_task_prjct_dt")
   // 대시보드 "내 AI 결과(미적용)" 카드 — (prjct_id, req_mber_id, task_sttus_code) 동등 조건 매칭
   @@index([prjct_id, req_mber_id, task_sttus_code], map: "idx_ai_task_prjct_mber_status")
-
   @@map("tb_ai_task")
 }
 
@@ -854,9 +852,9 @@ model TbRqTask {
   rfp_page_no     String?
   asign_mber_id   String? // 담당자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
   sort_ordr       Int               @default(0)
-  creat_mber_id   String?           // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
+  creat_mber_id   String? // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
   creat_dt        DateTime          @default(now())
-  mdfcn_mber_id   String?           // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
+  mdfcn_mber_id   String? // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
   mdfcn_dt        DateTime?
   requirements    TbRqRequirement[]
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 보강)
@@ -887,9 +885,9 @@ model TbRqRequirement {
   anls_efrt_val  String?
   progrs_rt      Int             @default(0)
   sort_ordr      Int             @default(0)
-  creat_mber_id  String?         // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
+  creat_mber_id  String? // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
   creat_dt       DateTime        @default(now())
-  mdfcn_mber_id  String?         // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
+  mdfcn_mber_id  String? // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
   mdfcn_dt       DateTime?
   unitWorks      TbDsUnitWork[]
   task           TbRqTask?       @relation(fields: [task_id], references: [task_id])
@@ -909,9 +907,9 @@ model TbRqUserStory {
   persona_cn         String?
   scenario_cn        String?
   sort_ordr          Int                      @default(0)
-  creat_mber_id      String?                  // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
+  creat_mber_id      String? // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
   creat_dt           DateTime                 @default(now())
-  mdfcn_mber_id      String?                  // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
+  mdfcn_mber_id      String? // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
   mdfcn_dt           DateTime?
   acceptanceCriteria TbRqAcceptanceCriteria[]
   requirement        TbRqRequirement          @relation(fields: [req_id], references: [req_id])
@@ -965,7 +963,6 @@ model TbRqRequirementHistory {
 
   @@map("tb_rq_requirement_history")
 }
-
 
 /// AI 프롬프트 템플릿 — tb_ai_prompt_template
 ///
@@ -1029,23 +1026,23 @@ model TbAiDesignTemplate {
 // 목적 1: 팀원의 일일/주간 업무일지를 모아 PM 주간보고 초안을 AI 로 생성
 // 목적 2: 개발자가 하루 시작 전 오늘 할 일을 계획하고, 마무리에 한 일을 기록하는 습관 형성
 model TbWrWorkLog {
-  work_log_id   String    @id @default(uuid())
+  work_log_id   String            @id @default(uuid())
   prjct_id      String
   creat_mber_id String // 작성자 — FK 미설정(퇴장 멤버 기록 보존)
   // DAILY = log_dt 당일 일지, WEEK = log_dt(그 주 월요일) 기준 "이번주 계획"
-  log_ty_code   String    @default("DAILY") @db.VarChar(10)
-  log_dt        DateTime  @db.Date
+  log_ty_code   String            @default("DAILY") @db.VarChar(10)
+  log_dt        DateTime          @db.Date
   // DAILY: 오늘 작업 결과(특이사항), WEEK: 이번주 계획 개요
   note_cn       String?
   // WEEK 전용 — "이번주 결과"(주간 회고). DAILY는 결과를 note_cn 하나로 충분히 표현하지만
   // WEEK는 계획(note_cn)과 결과를 별도 텍스트로 구분해 달라는 요청으로 추가 (2026-07-20).
   // DAILY 로그에서는 사용하지 않음(항상 null).
   result_cn     String?
-  creat_dt      DateTime  @default(now())
+  creat_dt      DateTime          @default(now())
   mdfr_mber_id  String?
   mdfcn_dt      DateTime?
   items         TbWrWorkLogItem[]
-  project       TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_wr_work_log_prjct_fk")
+  project       TbPjProject       @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_wr_work_log_prjct_fk")
 
   // 회원 1명당 하루/한 주에 로그 1건만 존재 — upsert 키
   @@unique([prjct_id, creat_mber_id, log_ty_code, log_dt], map: "uk_wr_work_log_mber_day")
@@ -1055,15 +1052,15 @@ model TbWrWorkLog {
 }
 
 model TbWrWorkLogItem {
-  item_id     String   @id @default(uuid())
+  item_id     String      @id @default(uuid())
   work_log_id String
   item_cn     String // 할일 내용 — 자유 텍스트 또는 연결된 일감명 스냅샷
   // 일감 연결 시: UNIT_WORK | SCREEN | FUNCTION | TASK — 미연결이면 둘 다 null
-  ref_ty_code String?  @db.VarChar(20)
+  ref_ty_code String?     @db.VarChar(20)
   ref_id      String? // FK 미설정 — ref_ty_code 로 분기 조회 (TbAiTask.ref_* 와 동일 관례)
-  done_yn     String   @default("N") @db.Char(1)
-  sort_ordr   Int      @default(0)
-  creat_dt    DateTime @default(now())
+  done_yn     String      @default("N") @db.Char(1)
+  sort_ordr   Int         @default(0)
+  creat_dt    DateTime    @default(now())
   workLog     TbWrWorkLog @relation(fields: [work_log_id], references: [work_log_id], onDelete: Cascade, map: "tb_wr_work_log_item_log_fk")
 
   @@index([work_log_id], map: "idx_wr_work_log_item_log")
@@ -1071,9 +1068,9 @@ model TbWrWorkLogItem {
 }
 
 model TbWrWeeklyReport {
-  weekly_report_id String    @id @default(uuid())
+  weekly_report_id String      @id @default(uuid())
   prjct_id         String
-  week_start_dt    DateTime  @db.Date // 그 주 월요일
+  week_start_dt    DateTime    @db.Date // 그 주 월요일
   // AI가 생성한 원본 그대로 — 참고용이며 더 이상 편집 대상이 아님(읽기 전용 표시 + 복사).
   // "## 금주실적" 헤더에 오타가 나면 구분이 안 되는 문제가 있어(2026-07-22), 실제 보고서로
   // 쓰는 내용은 아래 perf_cn/plan_cn/comment_cn/note_cn 컬럼으로 분리했다 — PM이 이 원본을
@@ -1091,7 +1088,7 @@ model TbWrWeeklyReport {
   note_cn          String?
   ai_task_id       String? // 마지막 생성에 쓰인 TbAiTask.ai_task_id (추적용, FK 없음)
   creat_mber_id    String // 최초 생성 요청 PM — FK 미설정(퇴장 멤버 기록 보존)
-  creat_dt         DateTime  @default(now())
+  creat_dt         DateTime    @default(now())
   mdfr_mber_id     String?
   mdfcn_dt         DateTime?
   project          TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_wr_weekly_report_prjct_fk")
@@ -1104,29 +1101,29 @@ model TbWrWeeklyReport {
 }
 
 model TbWrIssue {
-  issue_id      String    @id @default(uuid())
+  issue_id      String      @id @default(uuid())
   prjct_id      String
   // CUSTOMER_REQ(고객요청) | OUR_REQ(당사요청) | ISSUE(이슈)
   // "요청자" 하나로는 누가 누구에게 요청한 건지 방향이 안 보인다는 피드백으로 분리 —
   // 방향이 있는 협조요청 2종 + 방향이 없는 일반 이슈로 구분한다 (2026-07-22 확장).
-  category_code String   @default("ISSUE") @db.VarChar(20)
+  category_code String      @default("ISSUE") @db.VarChar(20)
   cn            String // 내용
   action_cn     String? // 조치 계획 / 결과
   // 요청자(발견자) — 고객사 담당자 등 시스템 밖 인물도 많아 자유 텍스트(FK 없음)
   requester_nm  String?
   // 담당자 — 외부 협력사 인력 등 프로젝트 멤버가 아닌 사람도 지정할 수 있어 자유 텍스트
   assignee_nm   String?
-  req_dt        DateTime? @db.Date
+  req_dt        DateTime?   @db.Date
   // 목표(예정)일 — "언제까지 처리할지"가 없으면 방치되기 쉬워 추가
-  due_dt        DateTime? @db.Date
+  due_dt        DateTime?   @db.Date
   // OPEN(대기) | IN_PROGRESS(진행중) | PARTIAL(부분완료) | DONE(완료)
-  status_code   String    @default("OPEN") @db.VarChar(10)
+  status_code   String      @default("OPEN") @db.VarChar(10)
   // 보고 여부(Y/N) — 내부적으로는 계속 관리하지만, 고객에게 보이는 인쇄 미리보기에는
   // Y인 것만 노출한다. 오래돼서 더는 언급할 필요 없는 항목을 지우지 않고 N으로 빼둘 수 있음.
-  rpt_yn        String    @default("Y") @db.Char(1)
-  sort_ordr     Int       @default(0)
+  rpt_yn        String      @default("Y") @db.Char(1)
+  sort_ordr     Int         @default(0)
   creat_mber_id String
-  creat_dt      DateTime  @default(now())
+  creat_dt      DateTime    @default(now())
   mdfr_mber_id  String?
   mdfcn_dt      DateTime?
   project       TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_wr_issue_prjct_fk")
@@ -1596,29 +1593,29 @@ model TbSpImplSnapshot {
 
 // ── 구현-설계 동기화 V2 실행 헤더 ─────────────────────────────────────────
 model TbSpSyncRun {
-  sync_run_id                    String   @id @default(uuid())
-  prjct_id                       String
-  unit_work_id                   String?
-  unit_work_display_id           String   @db.VarChar(50)
-  unit_work_nm                   String   @db.VarChar(500)
-  client_submission_key          String?  @db.VarChar(100)
-  sync_mode_code                 String   @db.VarChar(20)
-  sync_sttus_code                String   @default("RUNNING") @db.VarChar(30)
-  design_snapshot_data           Json
-  design_snapshot_hash           String   @db.Char(64)
-  source_scope_data              Json?
-  analysis_summary_data          Json?
-  implementation_verdict_code    String?  @db.VarChar(20)
-  design_coverage_verdict_code   String?  @db.VarChar(30)
-  failure_cn                     String?
-  req_mber_id                    String?
-  analyzed_dt                    DateTime?
-  compl_dt                       DateTime?
-  creat_dt                       DateTime @default(now())
-  mdfcn_dt                       DateTime @default(now())
+  sync_run_id                  String    @id(map: "tb_sp_sync_run_pk") @default(dbgenerated("(gen_random_uuid())::text"))
+  prjct_id                     String
+  unit_work_id                 String?
+  unit_work_display_id         String    @db.VarChar(50)
+  unit_work_nm                 String    @db.VarChar(500)
+  client_submission_key        String?   @db.VarChar(100)
+  sync_mode_code               String    @db.VarChar(20)
+  sync_sttus_code              String    @default("RUNNING") @db.VarChar(30)
+  design_snapshot_data         Json
+  design_snapshot_hash         String    @db.Char(64)
+  source_scope_data            Json?
+  analysis_summary_data        Json?
+  implementation_verdict_code  String?   @db.VarChar(20)
+  design_coverage_verdict_code String?   @db.VarChar(30)
+  failure_cn                   String?
+  req_mber_id                  String?
+  analyzed_dt                  DateTime? @db.Timestamp(6)
+  compl_dt                     DateTime? @db.Timestamp(6)
+  creat_dt                     DateTime  @default(now()) @db.Timestamp(6)
+  mdfcn_dt                     DateTime  @default(now()) @db.Timestamp(6)
 
-  project  TbPjProject   @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_sp_sync_run_prjct_fk")
-  unitWork TbDsUnitWork? @relation(fields: [unit_work_id], references: [unit_work_id], onDelete: SetNull, map: "tb_sp_sync_run_unit_work_fk")
+  project  TbPjProject    @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_sp_sync_run_prjct_fk")
+  unitWork TbDsUnitWork?  @relation(fields: [unit_work_id], references: [unit_work_id], onDelete: SetNull, map: "tb_sp_sync_run_unit_work_fk")
   items    TbSpSyncItem[]
 
   @@unique([prjct_id, client_submission_key], map: "tb_sp_sync_run_submission_uk")
@@ -1630,32 +1627,32 @@ model TbSpSyncRun {
 
 // ── 구현-설계 동기화 V2 판정·제안·사람 결정 ───────────────────────────────
 model TbSpSyncItem {
-  sync_item_id        String    @id @default(uuid())
-  sync_run_id         String
-  finding_ty_code     String    @db.VarChar(30)
-  result_code         String    @db.VarChar(40)
-  importance_code     String    @db.VarChar(20)
-  target_ref_ty_code  String?   @db.VarChar(20)
-  target_ref_id       String?
-  target_field_nm     String?   @db.VarChar(50)
-  target_display_id   String?   @db.VarChar(50)
-  target_nm           String?   @db.VarChar(500)
-  design_statement_cn String?
-  source_fact_cn      String?
-  reason_cn           String
-  source_evidence_data Json
-  confidence_code     String    @db.VarChar(20)
-  before_value_cn     String?
-  before_hash         String?   @db.Char(64)
-  proposed_value_cn   String?
-  item_sttus_code     String    @default("INFORMATIONAL") @db.VarChar(30)
-  decision_code       String?   @db.VarChar(20)
-  decision_rsn_cn     String?
-  decision_mber_id    String?
-  decision_dt         DateTime?
-  design_change_id    String?   @unique(map: "tb_sp_sync_item_design_change_uk")
-  creat_dt             DateTime  @default(now())
-  mdfcn_dt             DateTime  @default(now())
+  sync_item_id         String    @id(map: "tb_sp_sync_item_pk") @default(dbgenerated("(gen_random_uuid())::text"))
+  sync_run_id          String
+  finding_ty_code      String    @db.VarChar(30)
+  result_code          String    @db.VarChar(40)
+  importance_code      String    @db.VarChar(20)
+  target_ref_ty_code   String?   @db.VarChar(20)
+  target_ref_id        String?
+  target_field_nm      String?   @db.VarChar(50)
+  target_display_id    String?   @db.VarChar(50)
+  target_nm            String?   @db.VarChar(500)
+  design_statement_cn  String?
+  source_fact_cn       String?
+  reason_cn            String
+  source_evidence_data Json      @default("[]")
+  confidence_code      String    @db.VarChar(20)
+  before_value_cn      String?
+  before_hash          String?   @db.Char(64)
+  proposed_value_cn    String?
+  item_sttus_code      String    @default("INFORMATIONAL") @db.VarChar(30)
+  decision_code        String?   @db.VarChar(20)
+  decision_rsn_cn      String?
+  decision_mber_id     String?
+  decision_dt          DateTime? @db.Timestamp(6)
+  design_change_id     String?   @unique(map: "tb_sp_sync_item_design_change_uk")
+  creat_dt             DateTime  @default(now()) @db.Timestamp(6)
+  mdfcn_dt             DateTime  @default(now()) @db.Timestamp(6)
 
   run          TbSpSyncRun       @relation(fields: [sync_run_id], references: [sync_run_id], onDelete: Cascade, map: "tb_sp_sync_item_run_fk")
   designChange TbDsDesignChange? @relation(fields: [design_change_id], references: [chg_id], onDelete: SetNull, map: "tb_sp_sync_item_design_change_fk")
@@ -1759,20 +1756,20 @@ model TbCmBatchJobItem {
 ///
 /// 카테고리(ctgry_code) 예: INIT_SCREEN | QUERY | INPUT_QUERY | INPUT | SECURITY | ETC
 model TbQaCheckMaster {
-  check_id        String    @id @default(uuid())
-  prjct_id        String?   // NULL 시스템 공통
-  ctgry_code      String    // 세부 카테고리
-  scenario_cn     String
-  expected_cn     String?
-  sort_ordr       Int       @default(0)
-  use_yn          String    @default("Y") @db.Char(1)
-  creat_mber_id   String?
-  creat_dt        DateTime  @default(now())
-  mdfr_mber_id    String?
-  mdfcn_dt        DateTime?
+  check_id      String    @id @default(uuid())
+  prjct_id      String? // NULL 시스템 공통
+  ctgry_code    String // 세부 카테고리
+  scenario_cn   String
+  expected_cn   String?
+  sort_ordr     Int       @default(0)
+  use_yn        String    @default("Y") @db.Char(1)
+  creat_mber_id String?
+  creat_dt      DateTime  @default(now())
+  mdfr_mber_id  String?
+  mdfcn_dt      DateTime?
 
   // 프로젝트 전용일 때만 CASCADE — 시스템 공통(prjct_id NULL)은 영향 없음
-  project  TbPjProject? @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_qa_check_master_prjct_fk")
+  project TbPjProject? @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_qa_check_master_prjct_fk")
 
   @@index([prjct_id, use_yn, ctgry_code, sort_ordr], map: "tb_qa_check_master_idx")
   @@map("tb_qa_check_master")
@@ -1782,25 +1779,25 @@ model TbQaCheckMaster {
 model TbQaTestSpec {
   test_spec_id         String    @id @default(uuid())
   prjct_id             String
-  test_spec_display_id String    // TS-00001 — 자동 채번 (수동 입력도 허용)
-  test_kind_code       String    // UNIT | INTEGRATION
+  test_spec_display_id String // TS-00001 — 자동 채번 (수동 입력도 허용)
+  test_kind_code       String // UNIT | INTEGRATION
   test_spec_nm         String
   test_spec_dc         String?
   // 진행 상태 — DRAFT(작성중) | IN_PROGRESS(진행중) | PASSED(합격) | FAILED(불합격)
   sttus_code           String    @default("DRAFT")
-  asign_mber_id        String?   // 담당자 (테스트 책임자)
+  asign_mber_id        String? // 담당자 (테스트 책임자)
   // 진척률 — 0~100 (10 단위 권장). UI 선택값은 0,10,20,...100.
   prgrs_rt             Int       @default(0)
   sort_ordr            Int       @default(0)
   creat_dt             DateTime  @default(now())
   mdfcn_dt             DateTime?
 
-  uwLinks      TbQaTestSpecUw[]
-  screenLinks  TbQaTestSpecScreen[]
-  cases        TbQaTestCase[]
-  rounds       TbQaTestRound[]
+  uwLinks     TbQaTestSpecUw[]
+  screenLinks TbQaTestSpecScreen[]
+  cases       TbQaTestCase[]
+  rounds      TbQaTestRound[]
 
-  project  TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_qa_test_spec_prjct_fk")
+  project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_qa_test_spec_prjct_fk")
 
   @@index([prjct_id], map: "tb_qa_test_spec_prjct_idx")
   @@map("tb_qa_test_spec")
@@ -1809,12 +1806,12 @@ model TbQaTestSpec {
 /// 테스트 명세서 ↔ 단위업무 매핑.
 /// UNIT: 행 1개만 허용 / INTEGRATION: N개 허용 (application 검증).
 model TbQaTestSpecUw {
-  test_spec_id  String
-  unit_work_id  String
-  sort_ordr     Int    @default(0)
+  test_spec_id String
+  unit_work_id String
+  sort_ordr    Int    @default(0)
 
-  testSpec  TbQaTestSpec  @relation(fields: [test_spec_id], references: [test_spec_id], onDelete: Cascade, map: "tb_qa_test_spec_uw_spec_fk")
-  unitWork  TbDsUnitWork  @relation(fields: [unit_work_id], references: [unit_work_id], onDelete: Cascade, map: "tb_qa_test_spec_uw_uw_fk")
+  testSpec TbQaTestSpec @relation(fields: [test_spec_id], references: [test_spec_id], onDelete: Cascade, map: "tb_qa_test_spec_uw_spec_fk")
+  unitWork TbDsUnitWork @relation(fields: [unit_work_id], references: [unit_work_id], onDelete: Cascade, map: "tb_qa_test_spec_uw_uw_fk")
 
   @@id([test_spec_id, unit_work_id])
   @@index([unit_work_id], map: "tb_qa_test_spec_uw_uw_idx")
@@ -1826,12 +1823,12 @@ model TbQaTestSpecUw {
 /// 통합 테스트는 UW/화면 자유. 명세서 본문 박스의 "프로그램 ID" 는
 /// 우선 이 매핑의 화면 displayId 들이 들어가고, 없으면 UW 매핑으로 fallback.
 model TbQaTestSpecScreen {
-  test_spec_id  String
-  scrn_id       String
-  sort_ordr     Int    @default(0)
+  test_spec_id String
+  scrn_id      String
+  sort_ordr    Int    @default(0)
 
-  testSpec  TbQaTestSpec @relation(fields: [test_spec_id], references: [test_spec_id], onDelete: Cascade, map: "tb_qa_test_spec_screen_spec_fk")
-  screen    TbDsScreen   @relation(fields: [scrn_id],      references: [scrn_id],      onDelete: Cascade, map: "tb_qa_test_spec_screen_scrn_fk")
+  testSpec TbQaTestSpec @relation(fields: [test_spec_id], references: [test_spec_id], onDelete: Cascade, map: "tb_qa_test_spec_screen_spec_fk")
+  screen   TbDsScreen   @relation(fields: [scrn_id], references: [scrn_id], onDelete: Cascade, map: "tb_qa_test_spec_screen_scrn_fk")
 
   @@id([test_spec_id, scrn_id])
   @@index([scrn_id], map: "tb_qa_test_spec_screen_scrn_idx")
@@ -1844,125 +1841,125 @@ model TbQaTestSpecScreen {
 ///   - 실무 명세서에서 자주 쓰이는 컨텍스트 컬럼. 모두 nullable 또는 기본값.
 ///   - UI 는 시나리오·예상결과만 항상 노출, 나머지는 접이식 펼치기.
 model TbQaTestCase {
-  test_case_id      String    @id @default(uuid())
-  prjct_id          String    // 프로젝트 격리·권한 체크용
-  test_spec_id      String
-  case_no           Int       // 명세서 내 일련번호 (1, 2, 3 ...)
+  test_case_id    String    @id @default(uuid())
+  prjct_id        String // 프로젝트 격리·권한 체크용
+  test_spec_id    String
+  case_no         Int // 명세서 내 일련번호 (1, 2, 3 ...)
   // 카테고리 — CHECKLIST(공통 점검) | FUNCTIONAL(기능 시나리오)
-  ctgry_code        String
+  ctgry_code      String
   // 구분(그룹명) — FUNCTIONAL 만 사용. 도메인 그룹핑 (예: "회원", "승인", "관리")
   // CHECKLIST 에서는 항상 NULL 유지 (UI 노출 X).
-  grp_nm            String?
-  scenario_cn       String    // 테스트 내용 (필수)
-  expected_cn       String    // 예상 결과 (필수)
+  grp_nm          String?
+  scenario_cn     String // 테스트 내용 (필수)
+  expected_cn     String // 예상 결과 (필수)
   // ── 부가 컨텍스트 (옵션) ──
-  precondition_cn   String?   // 전제조건 — 예: "OWNER 로그인, 프로젝트 1개 생성"
-  test_data_cn      String?   // 테스트 데이터 — 예: "이메일: a@b.com / 비번: Test1234!"
-  test_account_cn   String?   // 테스트 계정 — 예: "OWNER 계정 / MEMBER 계정"
-  priort_code       String    @default("MEDIUM")  // HIGH | MEDIUM | LOW
+  precondition_cn String? // 전제조건 — 예: "OWNER 로그인, 프로젝트 1개 생성"
+  test_data_cn    String? // 테스트 데이터 — 예: "이메일: a@b.com / 비번: Test1234!"
+  test_account_cn String? // 테스트 계정 — 예: "OWNER 계정 / MEMBER 계정"
+  priort_code     String    @default("MEDIUM") // HIGH | MEDIUM | LOW
   // 해당 여부 — 공통 체크리스트에서 "이 화면엔 검색 없음 → N(N/A)" 처리용
   // Y = 적용 (결과 입력 받음) / N = 해당없음 (결과 입력 비활성)
-  applicable_yn     String    @default("Y")
-  remark_cn         String?   // 비고
-  ai_gen_yn         String    @default("N")  // AI 자동 생성 여부 (Y/N)
-  sort_ordr         Int       @default(0)
-  creat_dt          DateTime  @default(now())
-  mdfcn_dt          DateTime?
+  applicable_yn   String    @default("Y")
+  remark_cn       String? // 비고
+  ai_gen_yn       String    @default("N") // AI 자동 생성 여부 (Y/N)
+  sort_ordr       Int       @default(0)
+  creat_dt        DateTime  @default(now())
+  mdfcn_dt        DateTime?
 
-  testSpec  TbQaTestSpec     @relation(fields: [test_spec_id], references: [test_spec_id], onDelete: Cascade, map: "tb_qa_test_case_spec_fk")
-  project   TbPjProject      @relation(fields: [prjct_id],     references: [prjct_id],     onDelete: Cascade, map: "tb_qa_test_case_prjct_fk")
-  results   TbQaTestResult[]
+  testSpec TbQaTestSpec     @relation(fields: [test_spec_id], references: [test_spec_id], onDelete: Cascade, map: "tb_qa_test_case_spec_fk")
+  project  TbPjProject      @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_qa_test_case_prjct_fk")
+  results  TbQaTestResult[]
 
-  @@index([prjct_id],     map: "tb_qa_test_case_prjct_idx")
+  @@index([prjct_id], map: "tb_qa_test_case_prjct_idx")
   @@index([test_spec_id], map: "tb_qa_test_case_spec_idx")
   @@map("tb_qa_test_case")
 }
 
 /// 테스트 회차 — 1차/2차/3차 등 재테스트 사이클.
 model TbQaTestRound {
-  round_id      String    @id @default(uuid())
-  prjct_id      String
-  test_spec_id  String
-  round_no      Int       // 1, 2, 3 ... 회차 번호
-  envir_code    String    @default("DEV")          // DEV | STG | PROD
-  bld_vrsn_nm   String?                            // 빌드/커밋 버전
-  bgng_dt       DateTime?
-  end_dt        DateTime?
+  round_id     String    @id @default(uuid())
+  prjct_id     String
+  test_spec_id String
+  round_no     Int // 1, 2, 3 ... 회차 번호
+  envir_code   String    @default("DEV") // DEV | STG | PROD
+  bld_vrsn_nm  String? // 빌드/커밋 버전
+  bgng_dt      DateTime?
+  end_dt       DateTime?
   // 회차 상태 — IN_PROGRESS(진행중) | DONE(완료)
-  sttus_code    String    @default("IN_PROGRESS")
-  creat_dt      DateTime  @default(now())
+  sttus_code   String    @default("IN_PROGRESS")
+  creat_dt     DateTime  @default(now())
 
-  testSpec  TbQaTestSpec     @relation(fields: [test_spec_id], references: [test_spec_id], onDelete: Cascade, map: "tb_qa_test_round_spec_fk")
-  project   TbPjProject      @relation(fields: [prjct_id],     references: [prjct_id],     onDelete: Cascade, map: "tb_qa_test_round_prjct_fk")
-  results   TbQaTestResult[]
+  testSpec TbQaTestSpec     @relation(fields: [test_spec_id], references: [test_spec_id], onDelete: Cascade, map: "tb_qa_test_round_spec_fk")
+  project  TbPjProject      @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_qa_test_round_prjct_fk")
+  results  TbQaTestResult[]
 
-  @@unique([test_spec_id, round_no], map: "tb_qa_test_round_uniq")  // 명세서당 회차 번호 중복 방지
-  @@index([prjct_id],                 map: "tb_qa_test_round_prjct_idx")
+  @@unique([test_spec_id, round_no], map: "tb_qa_test_round_uniq") // 명세서당 회차 번호 중복 방지
+  @@index([prjct_id], map: "tb_qa_test_round_prjct_idx")
   @@map("tb_qa_test_round")
 }
 
 /// 케이스 × 회차 결과 — 한 케이스의 한 회차에서의 합부 판정.
 model TbQaTestResult {
-  result_id     String    @id @default(uuid())
-  prjct_id      String
-  round_id      String
-  test_case_id  String
+  result_id    String    @id @default(uuid())
+  prjct_id     String
+  round_id     String
+  test_case_id String
   // 합부 — PASS(적합) | FAIL(부적합) | BLOCKED(차단됨) | NA(해당없음)
-  result_code   String    @default("NA")
-  remark_cn     String?                     // 비고 (결함 외 일반 메모)
-  test_mber_id  String?                     // 테스트 수행자
-  test_dt       DateTime?
-  creat_dt      DateTime  @default(now())
-  mdfcn_dt      DateTime?
+  result_code  String    @default("NA")
+  remark_cn    String? // 비고 (결함 외 일반 메모)
+  test_mber_id String? // 테스트 수행자
+  test_dt      DateTime?
+  creat_dt     DateTime  @default(now())
+  mdfcn_dt     DateTime?
 
-  round      TbQaTestRound  @relation(fields: [round_id],     references: [round_id],     onDelete: Cascade, map: "tb_qa_test_result_round_fk")
-  testCase   TbQaTestCase   @relation(fields: [test_case_id], references: [test_case_id], onDelete: Cascade, map: "tb_qa_test_result_case_fk")
-  project    TbPjProject    @relation(fields: [prjct_id],     references: [prjct_id],     onDelete: Cascade, map: "tb_qa_test_result_prjct_fk")
-  defects    TbQaDefect[]
-  evidences  TbQaEvidence[]
+  round     TbQaTestRound  @relation(fields: [round_id], references: [round_id], onDelete: Cascade, map: "tb_qa_test_result_round_fk")
+  testCase  TbQaTestCase   @relation(fields: [test_case_id], references: [test_case_id], onDelete: Cascade, map: "tb_qa_test_result_case_fk")
+  project   TbPjProject    @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_qa_test_result_prjct_fk")
+  defects   TbQaDefect[]
+  evidences TbQaEvidence[]
 
-  @@unique([round_id, test_case_id], map: "tb_qa_test_result_uniq")  // 회차당 케이스 1결과
-  @@index([prjct_id],                map: "tb_qa_test_result_prjct_idx")
+  @@unique([round_id, test_case_id], map: "tb_qa_test_result_uniq") // 회차당 케이스 1결과
+  @@index([prjct_id], map: "tb_qa_test_result_prjct_idx")
   @@map("tb_qa_test_result")
 }
 
 /// 결함 — 테스트 결과(FAIL)에 연결된 결함 row. 상태·담당·조치 이력 보유.
 model TbQaDefect {
-  defect_id          String    @id @default(uuid())
-  prjct_id           String
-  result_id          String
-  defect_display_id  String    // DF-00001 — 자동 채번
-  defect_cn          String    // 결함 내용
+  defect_id         String    @id @default(uuid())
+  prjct_id          String
+  result_id         String
+  defect_display_id String // DF-00001 — 자동 채번
+  defect_cn         String // 결함 내용
   // 결함 상태 — OPEN(미조치) | FIXED(수정완료) | CLOSED(닫힘) | REOPENED(재발)
-  sttus_code         String    @default("OPEN")
-  asign_mber_id      String?                       // 조치 담당자
-  fix_cn             String?                       // 조치 결과
-  fix_dt             DateTime?
-  creat_dt           DateTime  @default(now())
-  mdfcn_dt           DateTime?
+  sttus_code        String    @default("OPEN")
+  asign_mber_id     String? // 조치 담당자
+  fix_cn            String? // 조치 결과
+  fix_dt            DateTime?
+  creat_dt          DateTime  @default(now())
+  mdfcn_dt          DateTime?
 
-  result   TbQaTestResult @relation(fields: [result_id], references: [result_id], onDelete: Cascade, map: "tb_qa_defect_result_fk")
-  project  TbPjProject    @relation(fields: [prjct_id],  references: [prjct_id],  onDelete: Cascade, map: "tb_qa_defect_prjct_fk")
+  result  TbQaTestResult @relation(fields: [result_id], references: [result_id], onDelete: Cascade, map: "tb_qa_defect_result_fk")
+  project TbPjProject    @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_qa_defect_prjct_fk")
 
-  @@index([prjct_id],  map: "tb_qa_defect_prjct_idx")
+  @@index([prjct_id], map: "tb_qa_defect_prjct_idx")
   @@index([result_id], map: "tb_qa_defect_result_idx")
   @@map("tb_qa_defect")
 }
 
 /// 증적 — 스크린샷·로그 등 결과별 첨부파일 (N개 가능).
 model TbQaEvidence {
-  evidence_id     String    @id @default(uuid())
-  prjct_id        String
-  result_id       String
-  file_nm         String
-  file_path       String                    // Supabase Storage 경로 (다른 첨부 모델과 통일)
-  file_size       Int
-  mime_ty_code    String?
-  upload_mber_id  String?
-  creat_dt        DateTime  @default(now())
+  evidence_id    String   @id @default(uuid())
+  prjct_id       String
+  result_id      String
+  file_nm        String
+  file_path      String // Supabase Storage 경로 (다른 첨부 모델과 통일)
+  file_size      Int
+  mime_ty_code   String?
+  upload_mber_id String?
+  creat_dt       DateTime @default(now())
 
-  result   TbQaTestResult @relation(fields: [result_id], references: [result_id], onDelete: Cascade, map: "tb_qa_evidence_result_fk")
-  project  TbPjProject    @relation(fields: [prjct_id],  references: [prjct_id],  onDelete: Cascade, map: "tb_qa_evidence_prjct_fk")
+  result  TbQaTestResult @relation(fields: [result_id], references: [result_id], onDelete: Cascade, map: "tb_qa_evidence_result_fk")
+  project TbPjProject    @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_qa_evidence_prjct_fk")
 
   @@index([prjct_id], map: "tb_qa_evidence_prjct_idx")
   @@map("tb_qa_evidence")

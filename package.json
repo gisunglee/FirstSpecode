@@ -9,6 +9,7 @@
     "db:push": "dotenv -e .env.local -- prisma db push",
     "db:studio": "dotenv -e .env.local -- prisma studio",
     "db:generate": "dotenv -e .env.local -- prisma generate",
+    "test:db-push": "dotenv -e .env.local -- node scripts/test-prisma-db-push.mjs",
     "db:migrate:drop-baseline": "dotenv -e .env.local -- prisma db execute --schema prisma/schema.prisma --file ddl/20260512-drop-baseline.sql",
     "db:migrate:spec-sync": "dotenv -e .env.local -- prisma db execute --schema prisma/schema.prisma --file prisma/sql/2026-08-17_create_spec_sync_v2.sql",
     "db:migrate:spec-creator-permissions": "dotenv -e .env.local -- node scripts/run-spec-creator-permissions-migration.mjs",
@@ -18,6 +19,7 @@
     "test:spec-content-policy": "tsc -p tsconfig.spec-content-policy-tests.json && node --test tmp/spec-content-policy-tests/scripts/spec-content-policy.test.js",
     "test:spec-sync": "tsc -p tsconfig.spec-sync-tests.json && node --test tmp/spec-sync-tests/scripts/spec-sync-contract.test.js scripts/spec-sync-migration.test.mjs && node .claude/commands/validate_specode_sync.mjs --repo . --input scripts/fixtures/spec-sync-valid-result.json",
     "test:spec-sync:db": "dotenv -e .env.local -- node scripts/check-spec-sync-db.mjs --expect-v2 && dotenv -e .env.local -- node scripts/spec-sync-db-smoke.mjs",
+    "test:asis-question:db": "dotenv -e .env.local -- node scripts/asis-question-db-smoke.mjs",
     "scan:text-lengths": "dotenv -e .env.local -- npx tsx scripts/scan-text-lengths.ts",
     "postinstall": "node -e \"const fs=require('fs'),f='node_modules/@excalidraw/excalidraw/dist/dev/index.css';if(fs.existsSync(f)){const c=fs.readFileSync(f,'utf8');fs.writeFileSync(f,c.replace(/\\/\\*#\\s*sourceMappingURL=[^*]*\\*\\//g,''));}\" && prisma generate"
   },
