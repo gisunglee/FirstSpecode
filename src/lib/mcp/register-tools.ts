@@ -554,6 +554,7 @@ export function registerTools(
       projectId: z.string().describe("프로젝트 ID"),
       unitWorkId: z.string().describe("단위업무 ID"),
       name: z.string().describe("단위업무명 (필수)"),
+      displayId: z.string().optional().describe("단위업무 표시 ID (OWNER/ADMIN 또는 PM/PL만 변경 가능)"),
       description: z.string().optional().describe("단위업무 설명 (마크다운 지원)"),
       comment: z.string().optional().describe("코멘트"),
       assignMemberId: z.string().optional().describe("담당자 회원 ID (OWNER/ADMIN 또는 PM/PL만 변경 가능)"),
