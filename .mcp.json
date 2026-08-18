@@ -5,7 +5,7 @@
       "type": "http",
       "url": "https://www.specode.co.kr/api/mcp",
       "headers": {
-        "Authorization": "Bearer spk_d1109b1d68ecd24e2ac9234e01b77ad52af175d38e24f28c0ed1b94d94155c55"
+        "Authorization": "Bearer spk_b7f1e7aef02444d41848ea9b2ef9e983e481009351eeeed65cf13e61b6d5d8da"
       }
     }
   }
