@@ -19,6 +19,7 @@ import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { collectLayers } from "@/lib/impl-request/collector";
 import { TABLE_MAP } from "@/lib/impl-request/collector";
+import { getMandatoryGuideBlock } from "@/lib/impl-request/guideSelector";
 import { parseAiRequest, saveAiTaskAttachments } from "@/lib/aiTaskAttach";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -85,10 +86,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       ],
     });
 
-    // ── req_cn 조립: <시스템프롬프트> + <코멘트> + <구현요청서> ──
+    // ── req_cn 조립: <시스템프롬프트> + <표준가이드> + <코멘트> + <구현요청서> ──
+    // 표준가이드(COMMON/SECURITY/ERROR)는 시스템프롬프트 바로 다음, 코멘트/구현요청서
+    // 이전에 삽입 — "지켜야 할 기준"끼리 먼저 묶고 그 다음 요청 본문이 오는 순서.
+    // 등록된 가이드가 없으면 null이라 기존 동작과 동일(섹션 자체가 안 생김).
     const parts: string[] = [];
     if (promptTmpl?.sys_prompt_cn?.trim()) {
       parts.push(`<시스템프롬프트>\n${promptTmpl.sys_prompt_cn.trim()}\n</시스템프롬프트>`);
+    }
+    const guideBlock = await getMandatoryGuideBlock(projectId);
+    if (guideBlock) {
+      parts.push(guideBlock);
     }
     if (body.comentCn?.trim()) {
       parts.push(`<코멘트>\n${body.comentCn.trim()}\n</코멘트>`);
