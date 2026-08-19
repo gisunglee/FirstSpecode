@@ -37,6 +37,28 @@
 
 ---
 
+## SKIPPED (기준 문서 없이는 검토할 수 없는 경우)
+
+`code-quality`/`ui-design`처럼 호출자가 전달하는 기준 문서가 있어야만 동작하는 리뷰어는,
+기준 문서를 못 받으면 위 표준 스키마 대신 아래의 짧은 형태로 리턴한다 (에러가 아니라
+정상적인 결과다 — `score`/`counts`/`issues`/`summary_ko`는 넣지 않는다):
+
+````
+```json
+{
+  "agent": "code-quality" | "ui-design",
+  "target": "UW-XXXXX 또는 경로",
+  "verdict": "SKIPPED",
+  "reason": "왜 검토할 수 없는지 (예: 기준 문서 미전달)"
+}
+```
+````
+
+오케스트레이터는 `SKIPPED` 응답을 종합 판정(PASS/WARN/FAIL 집계, score/counts 합산)에서
+제외한다.
+
+---
+
 ## 필드 작성 규칙
 
 ### `verdict` 판정 로직 (severity-rules.md와 일치)

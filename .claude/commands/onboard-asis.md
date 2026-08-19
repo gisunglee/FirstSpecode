@@ -1,7 +1,7 @@
 ---
 description: 기존(1차) 시스템 소스를 분석해 SPECODE에 AS-IS 정보를 등록합니다.
 argument-hint: (없음)
-allowed-tools: Read, Grep, Glob, Bash, AskUserQuestion, mcp__specode__list_projects, mcp__specode__list_asis_questions, mcp__specode__create_asis_question, mcp__specode__answer_asis_question, mcp__specode__create_unit_work, mcp__specode__update_unit_work, mcp__specode__create_screen, mcp__specode__update_screen, mcp__specode__create_area, mcp__specode__update_area, mcp__specode__create_function, mcp__specode__update_function, mcp__specode__create_db_table, mcp__specode__update_db_table, mcp__specode__get_db_table, mcp__specode__list_requirements
+allowed-tools: Read, Grep, Glob, Bash, AskUserQuestion, mcp__specode__list_projects, mcp__specode__list_asis_questions, mcp__specode__create_asis_question, mcp__specode__answer_asis_question, mcp__specode__get_design_template, mcp__specode__create_unit_work, mcp__specode__update_unit_work, mcp__specode__create_screen, mcp__specode__update_screen, mcp__specode__create_area, mcp__specode__update_area, mcp__specode__create_function, mcp__specode__update_function, mcp__specode__create_db_table, mcp__specode__update_db_table, mcp__specode__get_db_table, mcp__specode__list_requirements
 ---
 
 # /onboard-asis — 기존 시스템 AS-IS 정보 온보딩
@@ -85,6 +85,26 @@ SPECODE에 단위업무·화면·영역·기능·DB 테이블로 등록한다. �
 4. 확정되기 전에는 8번(등록)으로 넘어가지 않는다.
 
 ## 8. 등록
+
+**등록을 시작하기 전, 이번 실행에서 실제로 다룰 계층마다 `get_design_template(projectId,
+refType)`을 반드시 한 번씩 호출**해서 표준 양식(`templateCn`/`exampleCn`)을 확보한다
+(UNIT_WORK/SCREEN/AREA/FUNCTION 전부 등장하면 4번 호출). 같은 refType을 다시 조회할
+필요는 없다 — 이번 실행 안에서 한 번 받은 구조를 계속 재사용한다. 이 조회 없이
+description을 자유 서식으로 채워서 등록하지 않는다.
+
+작성 시 지킬 것:
+
+- **표준 양식의 섹션·표를 하나도 생략하지 않는다.** 예: FUNCTION의 `기능ID`/`기능명`
+  행과 Input/Output의 `DB 매핑` 컬럼, `참조 테이블 관계`/`처리 로직`/`업무 규칙` 섹션.
+  AREA의 `UI 구조` 다이어그램 섹션. SCREEN의 영역 목록 `영역ID` 컬럼. UNIT_WORK의
+  화면 흐름 `이동 | 전달 파라미터 | 동작` 표. 소스에서 못 찾은 값은 빈 칸이나 "확인
+  필요"로 남기되, 행·열·섹션 자체를 통째로 빼지 않는다.
+- **헤더의 ID는 이번에 직접 지정한 `displayId`를 쓴다** (예: `#### 기능: [AS-FN-00002]
+  이메일 중복확인`). AS-IS 원본 시스템의 레거시 ID(`원본FID-00002` 등)를 헤더 자리에
+  대신 넣지 않는다 — 추적이 필요하면 표 안에 "원본ID" 같은 별도 행을 만들어 참조용으로만
+  남긴다.
+- 표준 양식에 없는 AS-IS 특이사항·마이그레이션 메모는 각 섹션 뒤에 자유 텍스트로
+  덧붙이는 건 괜찮다. 단, 표준 섹션을 대체하거나 순서를 바꾸지 않는다.
 
 확정된 영역만, 개별 도구를 하나씩 순서대로 호출해서 등록한다
 (`create_unit_work` → `create_screen` → `create_area` → `create_function`,

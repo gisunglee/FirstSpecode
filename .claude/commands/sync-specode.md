@@ -1,7 +1,7 @@
 ---
 description: 현재 소스와 지정 UW 설계를 비교하고, 검토 가능한 결과를 SPECODE에 제출합니다.
 argument-hint: UW-XXXXX [--deep]
-allowed-tools: Read, Grep, Glob, Bash, AskUserQuestion, mcp__specode__list_projects, mcp__specode__start_spec_sync, mcp__specode__submit_spec_sync_result
+allowed-tools: Read, Grep, Glob, Bash, AskUserQuestion, mcp__specode__list_projects, mcp__specode__start_spec_sync, mcp__specode__submit_spec_sync_result, mcp__specode__get_design_template
 ---
 
 # /sync-specode — 현재 소스를 SPECODE 설계와 비교
@@ -64,6 +64,14 @@ allowed-tools: Read, Grep, Glob, Bash, AskUserQuestion, mcp__specode__list_proje
 
 `resultStatus=ANALYZED`일 때 아래 구조를 정확히 만든다. 모든 설계 target은 implementation.items에
 정확히 한 번 들어가야 한다. `proposal`에는 TO-BE만 넣고 AS-IS/hash는 만들지 않는다.
+
+`proposal` 텍스트를 작성하기 전에는 대상 `targetType`(REQUIREMENT/UNIT_WORK/SCREEN/AREA/
+FUNCTION)에 해당하는 refType으로 `get_design_template(projectId, refType)`을 호출해서
+표준 양식(`templateCn`/`exampleCn`)을 확인하고, 그 표·섹션 구조를 그대로 따라 작성한다 —
+자유 서식으로 제안하지 않는다. 웹에서 사람이 그대로 승인하면 설계 description에 반영되므로,
+새로 등록하는 것과 동일한 기준을 적용한다. 이번 실행에서 같은 refType은 한 번만 조회해서
+재사용하고, `targetField`가 이미 표준 양식을 따르는 기존 값이면(부분 수정) 그 구조를 깨지
+않는 선에서 해당 부분만 고친 전체 텍스트를 proposal로 만든다.
 
 ```json
 {

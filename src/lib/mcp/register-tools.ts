@@ -20,7 +20,10 @@
  *   [DB]           list_db_tables, get_db_table, create_db_table, update_db_table, get_db_table_usage, get_db_column_usage
  *   [스펙 동기화]   UW 실행 시작·구조화 결과 제출·실행/항목 조회 (적용은 웹 전용)
  *   [AS-IS 온보딩] create_asis_question, list_asis_questions(조건 필수), answer_asis_question
- *   [워커 배포]    get_worker_command_files (/run-ai-tasks 커맨드를 고객 로컬에 설치할 파일 내용 제공)
+ *   [표준 가이드]  search_standard_guides, get_standard_guide (프로젝트 코딩/디자인 표준 문서 —
+ *                    /review-uw의 code-quality/ui-design 리뷰어가 기준 문서로 사용)
+ *   [워커 배포]    get_worker_command_files (/run-ai-tasks, /sync-specode, /onboard-asis,
+ *                    /review-uw 커맨드를 고객 로컬에 설치할 파일 내용 제공)
  *
  * 정책 — DELETE 미지원:
  *   MCP에서는 어떤 엔티티도 삭제할 수 없다. AI가 한 번의 잘못된 호출로 cascade 삭제를
@@ -1307,20 +1310,79 @@ export function registerTools(
   );
 
   // ═══════════════════════════════════════════════════════════════
-  // 13. 워커 커맨드 배포 (Worker Command Distribution)
+  // 13. 표준 가이드 (Standard Guide)
   // ═══════════════════════════════════════════════════════════════
-  // SPECODE를 이용하는 고객사도 /run-ai-tasks 로컬 커맨드가 있어야 AI 태스크를
-  // 처리할 수 있다. 매번 파일을 복사해 안내하는 대신, MCP로 원본 파일 내용을
-  // 그대로 내려줘서 고객 Claude Code가 스스로 로컬에 설치하게 한다.
+  // 프로젝트별 코딩/디자인 표준 문서 저장소(tb_sg_std_guide). UW-00030 PRD에서부터
+  // AI가 참고 기준으로 쓰는 걸 목적으로 설계됐다 — /review-uw의 code-quality/
+  // ui-design 리뷰어가 이 도구로 프로젝트의 실제 기준 문서를 가져다 쓴다. 목록은
+  // 메타 정보만, 본문(content)은 get_standard_guide로 개별 조회한다 —
+  // list_functions/get_function과 같은 패턴.
+
+  server.tool(
+    "search_standard_guides",
+    "표준 가이드 목록 조회 — 프로젝트의 코딩/디자인 표준 문서를 카테고리·검색어로 " +
+      "찾습니다. 카테고리: UI | DATA | AUTH | API | COMMON | SECURITY | FILE | " +
+      "ERROR | BATCH | REPORT. 목록에는 본문이 없으므로 실제 내용이 필요하면 " +
+      "get_standard_guide로 개별 조회하세요. use를 생략하면 사용중(Y)인 것만 " +
+      "반환합니다 — 미사용(N)은 AI 참고용이 아닌 보관 상태입니다.",
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+      category: z
+        .enum(["UI", "DATA", "AUTH", "API", "COMMON", "SECURITY", "FILE", "ERROR", "BATCH", "REPORT"])
+        .optional()
+        .describe("카테고리 필터"),
+      search: z.string().optional().describe("제목·본문 부분일치 검색어"),
+      use: z.enum(["Y", "N"]).optional().describe("사용여부 필터. 생략 시 Y(사용중)만"),
+    },
+    async ({ projectId, category, search, use }) => {
+      try {
+        const qs = buildQs({ category, search, use: use ?? "Y" });
+        const data = await specodeFetch(`/api/projects/${projectId}/standard-guides${qs}`);
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.tool(
+    "get_standard_guide",
+    "표준 가이드 상세 조회 — 가이드 본문(content)을 포함해 반환합니다.",
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+      guideId: z.string().describe("가이드 ID"),
+    },
+    async ({ projectId, guideId }) => {
+      try {
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/standard-guides/${guideId}`,
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  // ═══════════════════════════════════════════════════════════════
+  // 14. 워커 커맨드 배포 (Worker Command Distribution)
+  // ═══════════════════════════════════════════════════════════════
+  // SPECODE를 이용하는 고객사도 /run-ai-tasks, /sync-specode, /onboard-asis,
+  // /review-uw 같은 로컬 커맨드(및 그 서브에이전트)가 있어야 각 기능을 쓸 수
+  // 있다. 매번 파일을 복사해 안내하는 대신, MCP로 원본 파일 내용을 그대로
+  // 내려줘서 고객 Claude Code가 스스로 로컬에 설치하게 한다.
   // DB 접근 없이 정적 파일만 읽으므로 project 무관 — specodeFetch(프로젝트 스코프)
   // 대신 fs로 직접 읽는다 (getWorkerCommandFiles 내부에서 처리).
 
   server.tool(
     "get_worker_command_files",
-    "/run-ai-tasks 슬래시커맨드 설치 파일 제공 — 고객 로컬 저장소에 " +
-      "AI 태스크 워커 커맨드를 설치할 때 사용합니다. 반환된 files 배열의 " +
-      "각 항목을 path 그대로 로컬 프로젝트에 저장하세요. setupGuide에 " +
-      "이어서 해야 할 .env.local 설정과 사용법이 안내되어 있습니다.",
+    "SPECODE 관련 슬래시커맨드 전체(설치 파일) 제공 — 고객 로컬 저장소에 " +
+      "/run-ai-tasks, /sync-specode, /onboard-asis, /review-uw 커맨드와 그 " +
+      "서브에이전트를 설치할 때 사용합니다. 사용자가 'SPECODE MCP 연결하고 " +
+      "관련 커맨드 설치해줘' 같은 요청을 하면 이 도구를 호출하세요. 반환된 " +
+      "files 배열의 각 항목을 path 그대로(디렉터리 구조 포함) 로컬 프로젝트에 " +
+      "저장하세요. setupGuide에 이어서 해야 할 .env.local 설정과 사용법이 " +
+      "안내되어 있습니다.",
     {},
     async () => {
       try {

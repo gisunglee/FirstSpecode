@@ -53,6 +53,9 @@ const USE_FILTERS: Array<{ value: "" | "Y" | "N"; label: string }> = [
   { value: "N", label: "미사용" },
 ];
 
+// /review-uw가 항상 참고하는 카테고리 — 나머지 7종은 제목을 보고 관련 있을 때만 참고
+const AI_MANDATORY_CATEGORIES: readonly GuideCategory[] = ["COMMON", "SECURITY", "ERROR"];
+
 // ── 유틸 ──────────────────────────────────────────────────────────────────────
 
 function formatDateShort(iso: string | null): string {
@@ -169,6 +172,37 @@ function StandardGuideListInner() {
           );
         })}
       </div>
+
+      {/* ── AI 참조 안내 배너 — 선택된 카테고리를 /review-uw가 어떻게 쓰는지 안내.
+          COMMON/SECURITY/ERROR는 모든 검토에서 항상 참고, 나머지 7종은 review-uw가
+          제목만 보고 이번 단위업무와 관련 있다고 판단할 때만 골라서 참고한다. COMMON과
+          UI는 실제 코드 위치를 적어두면 AI가 그 파일을 직접 열어보고 검증할 수 있어서
+          예시 문구를 따로 덧붙인다(2026-08-20). ── */}
+      {(() => {
+        const isMandatory = category !== "" && AI_MANDATORY_CATEGORIES.includes(category as GuideCategory);
+        const message = category === ""
+          ? "🤖 표준 가이드는 /review-uw가 참고합니다. 공통 규칙·보안 정책·에러 처리는 모든 검토에서 항상, 나머지 카테고리는 제목을 보고 관련 있을 때만 참고합니다."
+          : category === "COMMON"
+          ? "🤖 AI가 모든 단위업무 검토에서 항상 참고합니다. 자주 참고할 공통 파일·폴더 경로를 적어두면 AI가 직접 열어보고 검증합니다. 예) 공통 유틸: src/lib/utils.ts · 공통 API 응답 포맷: src/lib/apiResponse.ts"
+          : category === "UI"
+          ? "🤖 AI가 제목을 보고 관련 있는 단위업무만 골라 참고합니다. 자주 참고할 디자인 파일·폴더 경로를 적어두면 AI가 직접 열어보고 검증합니다. 예) 디자인 토큰: src/styles/tokens.css · 공통 컴포넌트: src/components/ui/"
+          : isMandatory
+          ? "🤖 AI가 모든 단위업무 검토에서 항상 참고합니다. 체크리스트처럼 간결하게 작성하세요."
+          : "🤖 AI가 제목을 보고 관련 있는 단위업무만 골라 참고합니다. 제목을 구체적으로, 본문은 간결하게 작성하세요.";
+        return (
+          <div style={{
+            margin: "0 24px 14px",
+            padding: "8px 14px",
+            background: "var(--color-info-subtle, #f0f4ff)",
+            border: "1px solid var(--color-info, #3b82f6)",
+            borderRadius: 6,
+            fontSize: 12,
+            color: "var(--color-text-secondary)",
+          }}>
+            {message}
+          </div>
+        );
+      })()}
 
       {/* ── 사용여부 세그먼트 + 검색 + 건수 (한 줄) ── */}
       <div style={{

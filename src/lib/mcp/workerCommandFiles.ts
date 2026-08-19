@@ -12,6 +12,12 @@ const WORKER_COMMAND_FILE_PATHS = [
   ".claude/commands/sync-specode.md",
   ".claude/commands/validate_specode_sync.mjs",
   ".claude/commands/onboard-asis.md",
+  ".claude/commands/review-uw.md",
+  ".claude/agents/prd-compliance-reviewer.md",
+  ".claude/agents/code-quality-reviewer.md",
+  ".claude/agents/ui-design-reviewer.md",
+  ".claude/agents/_shared/report-format.md",
+  ".claude/agents/_shared/severity-rules.md",
 ] as const;
 
 export type WorkerCommandFile = { path: string; content: string };
@@ -42,6 +48,7 @@ export const WORKER_COMMAND_SETUP_GUIDE = `
    /run-ai-tasks STATUS
    /sync-specode UW-00036
    /onboard-asis
+   /review-uw UW-00036
 
 /sync-specode는 Git 기준선 없이 현재 UW 설계와 현재 관련 소스를 비교합니다.
 기본 CHECK를 권장하며, 분석 결과의 실제 설계 반영은 SPECODE 웹에서 사람이 승인합니다.
@@ -49,4 +56,11 @@ export const WORKER_COMMAND_SETUP_GUIDE = `
 /onboard-asis는 2차 사업(기존 시스템 위 증축) 프로젝트에서, 1차 시스템 소스를 분석해
 단위업무/화면/영역/기능/DB 테이블을 SPECODE에 등록합니다. 대량 작업이라 시간이 걸리며,
 단계마다 확인을 받으며 진행합니다.
+
+/review-uw는 SPECODE 서버의 현재 설계와 표준 가이드(공통 설계 > 표준 가이드)를 기준으로
+특정 UW 구현 품질을 검토합니다. PRD 준수 관점은 항상 검토하고, 코드 품질·UI 디자인
+관점은 해당 프로젝트에 등록된 표준 가이드가 있을 때만 검토합니다. 로컬 파일이나 사용자
+확인 질문이 필요 없습니다 — SPECODE 웹의 공통 설계 > 표준 가이드에 UI/코드 품질 관련
+문서를 등록해두면 실행할 때마다 자동으로 반영되고, 등록된 게 없으면 그 관점만 조용히
+건너뜁니다. 서버에는 아무것도 저장하지 않는 즉석 리포트입니다.
 `.trim();
