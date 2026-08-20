@@ -82,13 +82,26 @@ export async function requireWorkerAuth(
     where:   { key_hash: keyHash },
     include: {
       member: {
-        select: { mber_id: true, mber_nm: true, email_addr: true },
+        select: {
+          mber_id: true,
+          mber_nm: true,
+          email_addr: true,
+          mber_sttus_code: true,
+        },
       },
     },
   });
 
   // 1. 키 미존재 또는 폐기 — 같은 메시지로 통합 (정보 노출 최소화)
   if (!mcpKey || mcpKey.revoke_dt !== null) {
+    return apiError(
+      "INVALID_MCP_KEY",
+      "유효하지 않은 MCP 키입니다. 키가 폐기되었거나 존재하지 않습니다.",
+      401,
+    );
+  }
+
+  if (mcpKey.member.mber_sttus_code !== "ACTIVE") {
     return apiError(
       "INVALID_MCP_KEY",
       "유효하지 않은 MCP 키입니다. 키가 폐기되었거나 존재하지 않습니다.",

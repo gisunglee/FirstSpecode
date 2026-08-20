@@ -58,7 +58,7 @@ export type MenuIconKey =
   | "i_aiTask" | "i_planImport" | "i_designImport" | "i_promptTemplate"
   | "i_designTemplate"
   | "i_review" | "i_memo" | "i_docs" | "i_library"
-  | "i_graph" | "i_changeLog" | "i_diffTest" | "i_cleanup"
+  | "i_graph" | "i_changeLog" | "i_cleanup"
   // 신규 대시보드 메뉴 (캘린더/PM/내 업무/My Task)
   | "i_calendar" | "i_pm" | "i_mywork" | "i_myTask"
   // 테스트 항목 — 단위(단일 박스)·통합(연결된 박스들)
@@ -423,12 +423,6 @@ const ICONS: Record<MenuIconKey, ReactNode> = {
       <path d="M3 12a9 9 0 1 0 3-6.7" />
       <path d="M3 4v4h4" />
       <path d="M12 7v5l3 2" />
-    </>
-  ),
-  i_diffTest: (
-    <>
-      <path d="M16 18l6-6-6-6" />
-      <path d="M8 6l-6 6 6 6" />
     </>
   ),
   // 캘린더 — 달력

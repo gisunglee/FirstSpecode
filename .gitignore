@@ -45,6 +45,7 @@ yarn-error.log*
 tmp/spec-reconciliation-tests/
 tmp/spec-sync-tests/
 tmp/spec-content-policy-tests/
+tmp/auth-security-tests/
 tmp/specode-test-before.json.gz
 tmp/specode-test-git-diff.json
 

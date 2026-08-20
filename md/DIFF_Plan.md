@@ -1,4 +1,7 @@
-# SPECODE — Diff Prompt Test 기능 설계서 (Plan.md)
+# SPECODE — Diff Prompt Test 기능 설계서 (Plan.md, 런타임 제거됨)
+
+> **상태:** 2026-08-20 보안 개선에서 `/test/diff-prompt`, `/api/diff-test/**`,
+> `src/lib/diff-test/**` 런타임 구현을 제거했다. 이 문서는 과거 실험 설계 기록으로만 보존한다.
 
 > **목적:** UW/PID/AR/FID 4계층 스펙을 입력·저장하고, 변경 시 자동으로 "차이점 프롬프트(PRD_CHANGE.md)"를 생성하는 테스트 기능
 > **스택:** Next.js 14+ (App Router) + PostgreSQL + TypeScript

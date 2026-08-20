@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "esModuleInterop": true,
+    "types": ["node"],
+    "strict": true,
+    "skipLibCheck": true,
+    "outDir": "tmp/auth-security-tests",
+    "rootDir": "."
+  },
+  "include": [
+    "src/lib/auth.ts",
+    "src/lib/authCredentialPolicy.ts",
+    "src/lib/authTokenStorage.ts",
+    "src/lib/refreshTokenRotation.ts",
+    "scripts/auth-security-policy.test.ts"
+  ]
+}

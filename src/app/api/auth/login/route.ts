@@ -188,6 +188,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 정지·탈퇴 계정은 비밀번호가 맞아도 세션을 만들지 않는다.
+    // 계정 상태를 노출하지 않도록 일반 인증 실패와 같은 응답을 사용한다.
+    if (member.mber_sttus_code !== "ACTIVE") {
+      return NextResponse.json(
+        { code: "INVALID_CREDENTIALS", message: "이메일 또는 비밀번호가 올바르지 않습니다.", failCount: 0 },
+        { status: 401 }
+      );
+    }
+
     // ⑤ 로그인 성공
     const refreshTokenRaw  = generateRefreshToken();
     const refreshTokenHash = hashRefreshToken(refreshTokenRaw);

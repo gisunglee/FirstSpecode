@@ -13,6 +13,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { storeAuthTokens } from "@/lib/authTokenStorage";
 
 export default function SocialLinkPage() {
   return (
@@ -58,8 +59,10 @@ function SocialLinkInner() {
       }
 
       // 토큰 저장 후 대시보드 이동
-      sessionStorage.setItem("access_token",  body.data.accessToken);
-      sessionStorage.setItem("refresh_token", body.data.refreshToken);
+      if (!storeAuthTokens(body.data.accessToken, body.data.refreshToken, "session")) {
+        setError("브라우저에 로그인 정보를 저장할 수 없습니다.");
+        return;
+      }
       router.replace("/dashboard");
 
     } catch {

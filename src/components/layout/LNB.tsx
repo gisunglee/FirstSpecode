@@ -247,7 +247,6 @@ export default function LNB() {
         items: [
           { label: "그래프 뷰",        href: p("/graph"),          icon: "i_graph" },
           { label: "설계 변경 이력",   href: p("/design-changes"), icon: "i_changeLog" },
-          { label: "Diff 테스트",      href: "/test/diff-prompt",  icon: "i_diffTest" },
         ],
       },
       // 시스템 관리 — SUPER_ADMIN 만 노출. 프로젝트 문맥과 무관하므로 pBase 불필요.

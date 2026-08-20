@@ -18,6 +18,8 @@
     "test:text-limits": "npx tsx scripts/test-text-limits.ts",
     "test:spec-content-policy": "tsc -p tsconfig.spec-content-policy-tests.json && node --test tmp/spec-content-policy-tests/scripts/spec-content-policy.test.js",
     "test:spec-sync": "tsc -p tsconfig.spec-sync-tests.json && node --test tmp/spec-sync-tests/scripts/spec-sync-contract.test.js scripts/spec-sync-migration.test.mjs && node .claude/commands/validate_specode_sync.mjs --repo . --input scripts/fixtures/spec-sync-valid-result.json",
+    "test:auth-security": "tsc -p tsconfig.auth-security-tests.json && node --test tmp/auth-security-tests/scripts/auth-security-policy.test.js",
+    "test:auth-security:db": "dotenv -e .env.local -- npx tsx scripts/refresh-token-rotation-db-smoke.ts",
     "test:spec-sync:db": "dotenv -e .env.local -- node scripts/check-spec-sync-db.mjs --expect-v2 && dotenv -e .env.local -- node scripts/spec-sync-db-smoke.mjs",
     "test:asis-question:db": "dotenv -e .env.local -- node scripts/asis-question-db-smoke.mjs",
     "scan:text-lengths": "dotenv -e .env.local -- npx tsx scripts/scan-text-lengths.ts",

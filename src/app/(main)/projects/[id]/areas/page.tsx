@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import { type AiTaskStatus, AI_TASK_STATUS_LABEL, AI_TASK_STATUS_BADGE } from "@/constants/codes";
+import { usePermissions } from "@/hooks/useMyRole";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
@@ -68,6 +69,7 @@ function AreasPageInner() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const projectId = params.id;
+  const { myRole } = usePermissions(projectId);
 
   // 화면 필터 (URL ?screenId=xxx 로 초기화 — 브레드크럼에서 진입 시 자동 적용)
   const [screenFilter, setScreenFilter] = useState(searchParams.get("screenId") ?? "");
@@ -120,6 +122,51 @@ function AreasPageInner() {
       queryClient.invalidateQueries({ queryKey });
     },
   });
+
+  // ── 영역명 인라인 편집 ────────────────────────────────────────────────────────
+  // VIEWER는 decideSpecContentWrite에서 항상 차단되므로 연필 아이콘 자체를 숨긴다.
+  // 그 외(담당자 아님/생성자 보정시간 만료 등)는 서버 판정에 맡기고 실패 시 토스트로 안내.
+  const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [editNameValue, setEditNameValue] = useState("");
+
+  const nameMutation = useMutation({
+    mutationFn: ({ areaId, name }: { areaId: string; name: string }) =>
+      authFetch(`/api/projects/${projectId}/areas/${areaId}`, {
+        method: "PUT",
+        body:   JSON.stringify({ name }),
+      }),
+    onSuccess: (_res, variables) => {
+      queryClient.setQueryData<{ items: AreaRow[]; totalCount: number }>(
+        queryKey,
+        (old) => old ? {
+          ...old,
+          items: old.items.map((r) =>
+            r.areaId === variables.areaId ? { ...r, name: variables.name } : r
+          ),
+        } : old
+      );
+      setEditingNameId(null);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+      setEditingNameId(null);
+    },
+  });
+
+  function startEditName(area: AreaRow, e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditingNameId(area.areaId);
+    setEditNameValue(area.name);
+  }
+
+  function commitEditName(area: AreaRow) {
+    const trimmed = editNameValue.trim();
+    if (!trimmed || trimmed === area.name) {
+      setEditingNameId(null);
+      return;
+    }
+    nameMutation.mutate({ areaId: area.areaId, name: trimmed });
+  }
 
   // ── 드래그 핸들러 ──────────────────────────────────────────────────────────
   function handleDragStart(index: number) {
@@ -249,7 +296,7 @@ function AreasPageInner() {
             items.map((area, idx) => (
               <div
                 key={area.areaId}
-                draggable
+                draggable={editingNameId !== area.areaId}
                 onDragStart={() => handleDragStart(idx)}
                 onDragEnter={() => handleDragEnter(idx)}
                 onDragEnd={handleDragEnd}
@@ -310,18 +357,50 @@ function AreasPageInner() {
                   }
                 </div>
 
-                {/* 영역명 — displayId + name 한 줄. 좁은 폭에서는 ellipsis (title로 전체 노출) */}
+                {/* 영역명 — displayId + name 한 줄. 좁은 폭에서는 ellipsis (title로 전체 노출).
+                    연필 클릭 시 인라인 편집(입력 후 focus out/Enter로 즉시 저장) */}
                 <div
                   style={{
-                    fontSize: 13,
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    fontSize: 13, display: "flex", alignItems: "center", minWidth: 0,
+                    overflow: "hidden", whiteSpace: "nowrap",
                   }}
-                  title={`${area.displayId} ${area.name}`}
+                  title={editingNameId === area.areaId ? undefined : `${area.displayId} ${area.name}`}
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <span style={{ color: "var(--color-text-secondary)", fontSize: 13, marginRight: 6 }}>
-                    {area.displayId}
-                  </span>
-                  {area.name}
+                  {editingNameId === area.areaId ? (
+                    <input
+                      autoFocus
+                      value={editNameValue}
+                      onChange={(e) => setEditNameValue(e.target.value)}
+                      onBlur={() => commitEditName(area)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") { e.preventDefault(); commitEditName(area); }
+                        if (e.key === "Escape") { e.preventDefault(); setEditingNameId(null); }
+                      }}
+                      style={{ ...nameEditInputStyle, minWidth: 0, flex: 1 }}
+                    />
+                  ) : (
+                    <>
+                      <span
+                        onClick={() => router.push(`/projects/${projectId}/areas/${area.areaId}`)}
+                        style={{ cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}
+                      >
+                        <span style={{ color: "var(--color-text-secondary)", fontSize: 13, marginRight: 6 }}>
+                          {area.displayId}
+                        </span>
+                        {area.name}
+                      </span>
+                      {myRole !== "VIEWER" && (
+                        <button
+                          onClick={(e) => startEditName(area, e)}
+                          title="영역명 수정"
+                          style={editIconBtnStyle}
+                        >
+                          <PencilIcon />
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
 
                 {/* 작성상태 — 영역 설계(와이어프레임) 작성 상태. 색 구분 없이 기본 텍스트(다른 목록과 동일 정책).
@@ -533,6 +612,16 @@ function DeleteConfirmDialog({
   );
 }
 
+// ── 인라인 편집용 연필 아이콘 (외부 아이콘 라이브러리 미도입 — 인라인 SVG) ──
+function PencilIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
 function typeBadgeStyle(type: string): React.CSSProperties {
@@ -668,6 +757,30 @@ const secondaryBtnStyle: React.CSSProperties = {
   color: "var(--color-text-primary)",
   fontSize: 14,
   cursor: "pointer",
+};
+
+const nameEditInputStyle: React.CSSProperties = {
+  padding:      "3px 6px",
+  borderRadius: 4,
+  border:       "1px solid var(--color-brand, #1976d2)",
+  background:   "var(--color-bg-card)",
+  color:        "var(--color-text-primary)",
+  fontSize:     13,
+  outline:      "none",
+  boxSizing:    "border-box",
+};
+
+const editIconBtnStyle: React.CSSProperties = {
+  display:        "inline-flex",
+  alignItems:     "center",
+  justifyContent: "center",
+  flexShrink:     0,
+  marginLeft:     6,
+  padding:        2,
+  border:         "none",
+  background:     "none",
+  color:          "var(--color-text-tertiary)",
+  cursor:         "pointer",
 };
 
 const dangerBtnStyle: React.CSSProperties = {

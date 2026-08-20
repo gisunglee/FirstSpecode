@@ -232,7 +232,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           area_ty_code: type || existing.area_ty_code,
           // 표시 형태 — 클라이언트가 안 보내면 기존값 유지 (부분 수정 안전)
           display_form_code: displayFormCode ?? existing.display_form_code,
-          area_dc:      newDescription,
+          // description 미전송 시 기존값 유지 — 예전엔 무조건 덮어써서 부분 수정(PUT) 호출이
+          // description을 안 보내면 null로 지워지던 버그였음 (다른 필드들과 다르게 이 필드만
+          // undefined 체크가 빠져 있었음)
+          area_dc:      description !== undefined ? newDescription : existing.area_dc,
           sort_ordr:    sortOrder ?? existing.sort_ordr,
           layer_data_dc: layoutData !== undefined ? layoutData : existing.layer_data_dc,
           coment_cn:     commentCn  !== undefined ? (commentCn || null) : existing.coment_cn,

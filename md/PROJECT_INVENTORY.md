@@ -71,7 +71,6 @@
 | | 메모 | `/projects/{id}/memos` | |
 | **데이터 조회** | 그래프 뷰 | `/projects/{id}/graph` | |
 | | 설계 변경 이력 | `/projects/{id}/design-changes` | |
-| | Diff 테스트 | `/test/diff-prompt` | 내부 프롬프트 diff 실험 도구 |
 | **시스템 관리**(SUPER_ADMIN 전용) | 대시보드 | `/admin` | |
 | | 사용자 | `/admin/users` | |
 | | 프로젝트 | `/admin/projects` | |
@@ -125,7 +124,6 @@
 | `api/docs/*` | `/api/docs/tree`, `/[section]/[page]` | Docs Hub 공개 조회(사용자 뷰어) |
 | `api/worker/*` | `/api/worker/tasks`, `/[taskId]/start`, `/complete` | 외부 AI 워커가 AI 태스크를 pull/complete하는 채널 |
 | `api/mcp` | `/api/mcp` | **HTTP MCP 엔드포인트** — MCP 클라이언트가 붙는 단일 채널 |
-| `api/diff-test/*` | — | 내부 프롬프트 diff 실험 도구 |
 
 ### 3-2. `api/projects/[id]/*` 주요 서브리소스
 ```

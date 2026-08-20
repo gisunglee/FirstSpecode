@@ -20,6 +20,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import McpKeyManager from "@/components/mcp-keys/McpKeyManager";
+import { readStoredRefreshToken } from "@/lib/authTokenStorage";
 
 // ─── 타입 ────────────────────────────────────────────────────────────────
 // 2026-04-24 탭 정리: 4개 → 2개
@@ -469,7 +470,7 @@ function SecurityTab({ hasPassword }: { hasPassword: boolean }) {
     setSaving(true);
     try {
       const at = sessionStorage.getItem("access_token") ?? "";
-      const rt = sessionStorage.getItem("refresh_token") ?? "";
+      const rt = readStoredRefreshToken()?.token ?? "";
       const res = await fetch("/api/member/profile/password", {
         method:  "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${at}` },
@@ -689,4 +690,3 @@ function SocialTab({
     </div>
   );
 }
-

@@ -17,9 +17,14 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/apiFetch";
+import { refreshAccessToken } from "@/lib/authRefreshClient";
+import {
+  readStoredRefreshToken,
+  removeStoredRefreshToken,
+  storeAuthTokens,
+} from "@/lib/authTokenStorage";
 
 const LS_SAVED_EMAIL    = "lc_saved_email";
-const LS_REFRESH_TOKEN  = "lc_refresh_token";
 
 function formatLockTime(isoString: string): string {
   const d  = new Date(isoString);
@@ -73,25 +78,21 @@ function LoginInner() {
     const savedEmail = localStorage.getItem(LS_SAVED_EMAIL);
     if (savedEmail) { setEmail(savedEmail); setRememberEmail(true); }
 
-    const storedRT = localStorage.getItem(LS_REFRESH_TOKEN);
+    const storedRT = readStoredRefreshToken("local");
     if (!storedRT) return;
 
     setIsAutoLogging(true);
-    fetch("/api/auth/token/refresh", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken: storedRT }),
-    })
-      .then(async (res) => {
-        if (!res.ok) { localStorage.removeItem(LS_REFRESH_TOKEN); return; }
-        const body = await res.json();
-        sessionStorage.setItem("access_token", body.data.accessToken);
-        localStorage.setItem(LS_REFRESH_TOKEN, body.data.refreshToken);
+    refreshAccessToken("local")
+      .then((accessToken) => {
+        if (!accessToken) {
+          removeStoredRefreshToken("local");
+          return;
+        }
         router.replace(redirectTo);
       })
-      .catch(() => { localStorage.removeItem(LS_REFRESH_TOKEN); })
+      .catch(() => { removeStoredRefreshToken("local"); })
       .finally(() => { setIsAutoLogging(false); });
-  }, [router]);
+  }, [redirectTo, router]);
 
   // ── FID-00015 로그인 실행 ─────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
@@ -110,11 +111,14 @@ function LoginInner() {
       const body = await res.json();
 
       if (res.ok) {
-        sessionStorage.setItem("access_token", body.data.accessToken);
-        if (autoLogin) {
-          localStorage.setItem(LS_REFRESH_TOKEN, body.data.refreshToken);
-        } else {
-          sessionStorage.setItem("refresh_token", body.data.refreshToken);
+        const stored = storeAuthTokens(
+          body.data.accessToken,
+          body.data.refreshToken,
+          autoLogin ? "local" : "session",
+        );
+        if (!stored) {
+          setSubmitError("브라우저에 로그인 정보를 저장할 수 없습니다.");
+          return;
         }
         if (rememberEmail) { localStorage.setItem(LS_SAVED_EMAIL, email); }
         else               { localStorage.removeItem(LS_SAVED_EMAIL); }

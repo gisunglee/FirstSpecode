@@ -202,10 +202,22 @@ export async function POST(request: NextRequest) {
       where: {
         provdr_code_provdr_user_id: { provdr_code: provdrCode, provdr_user_id: provdrUserId },
       },
-      include: { member: { select: { mber_id: true, email_addr: true } } },
+      include: {
+        member: {
+          select: {
+            mber_id: true,
+            email_addr: true,
+            mber_sttus_code: true,
+          },
+        },
+      },
     });
 
     if (existingSocial) {
+      if (existingSocial.member.mber_sttus_code !== "ACTIVE") {
+        return apiError("ACCOUNT_INACTIVE", "접근 권한이 없습니다.", 403);
+      }
+
       // EXISTING — 기존 소셜 로그인
       const rt      = generateRefreshToken();
       const rtHash  = hashRefreshToken(rt);
@@ -230,10 +242,14 @@ export async function POST(request: NextRequest) {
     // ── 동일 이메일 기존 계정 조회 ──
     const existingMember = await prisma.tbCmMember.findUnique({
       where:  { email_addr: provdrEmail },
-      select: { mber_id: true },
+      select: { mber_id: true, mber_sttus_code: true },
     });
 
     if (existingMember) {
+      if (existingMember.mber_sttus_code !== "ACTIVE") {
+        return apiError("ACCOUNT_INACTIVE", "접근 권한이 없습니다.", 403);
+      }
+
       // LINK_REQUIRED — 연동 확인 필요
       const socialToken = signSocialToken({ provdrCode, provdrUserId, email: provdrEmail });
       const res = NextResponse.json({ data: { resultType: "LINK_REQUIRED", socialToken, email: provdrEmail } });

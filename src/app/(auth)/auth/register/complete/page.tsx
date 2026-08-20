@@ -14,6 +14,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/apiFetch";
+import { storeAuthTokens } from "@/lib/authTokenStorage";
 
 const REDIRECT_DELAY_SEC = 3;
 
@@ -56,9 +57,9 @@ function RegisterCompleteInner() {
         // 토큰 저장 (추후 인증 상태 관리 통합 시 교체)
         // apiSuccess()는 { data: T } 구조로 감싸므로 res.data로 접근
         if (typeof window !== "undefined") {
-          sessionStorage.setItem("access_token", res.data.accessToken);
-          // refreshToken은 httpOnly cookie로 이동 예정 — 현재는 sessionStorage 임시 저장
-          sessionStorage.setItem("refresh_token", res.data.refreshToken);
+          if (!storeAuthTokens(res.data.accessToken, res.data.refreshToken, "session")) {
+            throw new Error("브라우저에 로그인 정보를 저장할 수 없습니다.");
+          }
         }
         setStatus("success");
       })

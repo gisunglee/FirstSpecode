@@ -21,6 +21,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
+import { usePermissions } from "@/hooks/useMyRole";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
@@ -78,10 +79,57 @@ function ScreensPageInner() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const projectId = params.id;
+  const { myRole } = usePermissions(projectId);
 
   // 삭제 다이얼로그 상태
   const [deleteTarget, setDeleteTarget] = useState<ScreenRow | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  // ── 화면명 인라인 편집 ────────────────────────────────────────────────────────
+  // VIEWER는 decideSpecContentWrite에서 항상 차단되므로 연필 아이콘 자체를 숨긴다.
+  // 그 외(담당자 아님/생성자 보정시간 만료 등)는 서버 판정에 맡기고 실패 시 토스트로 안내.
+  // 드래그 핸들(☰)이 이름 셀과 분리되어 있어 편집 중에도 행 draggable 가드가 불필요.
+  const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [editNameValue, setEditNameValue] = useState("");
+
+  const nameMutation = useMutation({
+    mutationFn: ({ screenId, name }: { screenId: string; name: string }) =>
+      authFetch(`/api/projects/${projectId}/screens/${screenId}`, {
+        method: "PUT",
+        body:   JSON.stringify({ name }),
+      }),
+    onSuccess: (_res, variables) => {
+      queryClient.setQueryData<{ items: ScreenRow[]; totalCount: number }>(
+        ["screens", projectId, effectiveAssignedTo],
+        (old) => old ? {
+          ...old,
+          items: old.items.map((r) =>
+            r.screenId === variables.screenId ? { ...r, name: variables.name } : r
+          ),
+        } : old
+      );
+      setEditingNameId(null);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+      setEditingNameId(null);
+    },
+  });
+
+  function startEditName(screen: ScreenRow, e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditingNameId(screen.screenId);
+    setEditNameValue(screen.name);
+  }
+
+  function commitEditName(screen: ScreenRow) {
+    const trimmed = editNameValue.trim();
+    if (!trimmed || trimmed === screen.name) {
+      setEditingNameId(null);
+      return;
+    }
+    nameMutation.mutate({ screenId: screen.screenId, name: trimmed });
+  }
 
   // ── 드래그 상태 ────────────────────────────────────────────────────────────
   const dragItem = useRef<number | null>(null);
@@ -482,18 +530,49 @@ function ScreensPageInner() {
                     }
                   </div>
 
-                  {/* 화면명 */}
+                  {/* 화면명 — 연필 클릭 시 인라인 편집(입력 후 focus out/Enter로 즉시 저장) */}
                   <div
                     style={{
-                      fontSize: 13,
-                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      fontSize: 13, display: "flex", alignItems: "center", minWidth: 0,
+                      overflow: "hidden", whiteSpace: "nowrap",
                     }}
-                    title={`${screen.displayId} ${screen.name}`}
+                    title={editingNameId === screen.screenId ? undefined : `${screen.displayId} ${screen.name}`}
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <span style={{ color: "var(--color-text-secondary)", fontSize: 13, marginRight: 6 }}>
-                      {screen.displayId}
-                    </span>
-                    {screen.name}
+                    {editingNameId === screen.screenId ? (
+                      <input
+                        autoFocus
+                        value={editNameValue}
+                        onChange={(e) => setEditNameValue(e.target.value)}
+                        onBlur={() => commitEditName(screen)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); commitEditName(screen); }
+                          if (e.key === "Escape") { e.preventDefault(); setEditingNameId(null); }
+                        }}
+                        style={{ ...nameEditInputStyle, minWidth: 0, flex: 1 }}
+                      />
+                    ) : (
+                      <>
+                        <span
+                          onClick={() => router.push(`/projects/${projectId}/screens/${screen.screenId}`)}
+                          style={{ cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}
+                        >
+                          <span style={{ color: "var(--color-text-secondary)", fontSize: 13, marginRight: 6 }}>
+                            {screen.displayId}
+                          </span>
+                          {screen.name}
+                        </span>
+                        {myRole !== "VIEWER" && (
+                          <button
+                            onClick={(e) => startEditName(screen, e)}
+                            title="화면명 수정"
+                            style={editIconBtnStyle}
+                          >
+                            <PencilIcon />
+                          </button>
+                        )}
+                      </>
+                    )}
                   </div>
 
                   {/* 대/중/소분류 — 분류순 모드에서만 노출, 화면명 바로 다음에 배치(2026-07-29) */}
@@ -694,6 +773,16 @@ function DeleteConfirmDialog({
   );
 }
 
+// ── 인라인 편집용 연필 아이콘 (외부 아이콘 라이브러리 미도입 — 인라인 SVG) ──
+function PencilIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
 function typeBadgeStyle(type: string): React.CSSProperties {
@@ -832,6 +921,30 @@ const secondaryBtnStyle: React.CSSProperties = {
   color: "var(--color-text-primary)",
   fontSize: 14,
   cursor: "pointer",
+};
+
+const nameEditInputStyle: React.CSSProperties = {
+  padding:      "3px 6px",
+  borderRadius: 4,
+  border:       "1px solid var(--color-brand, #1976d2)",
+  background:   "var(--color-bg-card)",
+  color:        "var(--color-text-primary)",
+  fontSize:     13,
+  outline:      "none",
+  boxSizing:    "border-box",
+};
+
+const editIconBtnStyle: React.CSSProperties = {
+  display:        "inline-flex",
+  alignItems:     "center",
+  justifyContent: "center",
+  flexShrink:     0,
+  marginLeft:     6,
+  padding:        2,
+  border:         "none",
+  background:     "none",
+  color:          "var(--color-text-tertiary)",
+  cursor:         "pointer",
 };
 
 const dangerBtnStyle: React.CSSProperties = {

@@ -16,6 +16,7 @@ import { useCallback, useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { clearAuthTokensAcrossTabs } from "@/lib/authRefreshClient";
 import { useAppStore } from "@/store/appStore";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -104,8 +105,7 @@ function WithdrawInner() {
       }
 
       // 로컬 토큰 제거
-      sessionStorage.removeItem("access_token");
-      sessionStorage.removeItem("refresh_token");
+      clearAuthTokensAcrossTabs();
 
       setStep("done");
       setTimeout(() => router.replace("/auth/login"), 2000);

@@ -3,9 +3,9 @@
  *
  * 역할:
  *   1. IP별 Rate Limit (60회/분)
- *   2. 이미 폐기된 RT의 재사용이면 → 도난 간주, 세션 전체 강제 종료
+ *   2. 짧은 동시 재요청은 409, 그 이후 폐기 RT 재사용은 세션 전체 강제 종료
  *   3. 저장된 Refresh Token으로 새 AT/RT 발급
- *   4. 기존 RT revoke, 새 RT INSERT (sesn_id 유지)
+ *   4. 기존 RT 조건부 소비와 새 RT INSERT를 원자적으로 처리 (sesn_id 유지)
  *   5. auto_login_yn = 'Y'이면 만료일 10일 연장
  *
  * Body: { refreshToken: string }
@@ -21,6 +21,12 @@ import {
   hashRefreshToken,
   refreshTokenExpiryDate,
 } from "@/lib/auth";
+import {
+  classifyRevokedRefreshTokenUse,
+  RefreshSessionInvalidatedError,
+  RefreshTokenRotationConflictError,
+  rotateRefreshTokenAtomically,
+} from "@/lib/refreshTokenRotation";
 
 // 토큰 갱신 폭주 방어 — 정상 사용자는 30분마다 1회 수준이므로 60회/분은 충분히 여유
 const REFRESH_IP_LIMIT      = 60;
@@ -72,11 +78,20 @@ export async function POST(request: NextRequest) {
       return apiError("INVALID_TOKEN", "유효하지 않은 Refresh Token입니다.", 401);
     }
 
-    // ── 도난 탐지(RFC 6749 모범) ────────────────────────────────────
+    // ── 재시도 경쟁과 도난 재사용 구분 ─────────────────────────────────
     // 이미 폐기된 RT가 또 들어오면 "회전 이후 도난된 구(舊) RT 재사용" 시나리오로 간주.
     // 해당 세션의 살아있는 모든 RT를 폐기하고 세션 자체를 invalidate → 공격자와 정상
     // 사용자 모두 재로그인을 강제해 도난 피해를 차단한다.
     if (stored.revoked_dt !== null) {
+      const reuseKind = classifyRevokedRefreshTokenUse(stored.revoked_dt, new Date());
+      if (reuseKind === "CONCURRENT_RETRY") {
+        return apiError(
+          "REFRESH_CONFLICT",
+          "다른 탭에서 로그인 세션을 갱신하고 있습니다.",
+          409
+        );
+      }
+
       if (stored.sesn_id) {
         const now = new Date();
         await prisma.$transaction(async (tx) => {
@@ -84,8 +99,8 @@ export async function POST(request: NextRequest) {
             where: { sesn_id: stored.sesn_id!, revoked_dt: null },
             data:  { revoked_dt: now },
           });
-          await tx.tbCmMemberSession.update({
-            where: { sesn_id: stored.sesn_id! },
+          await tx.tbCmMemberSession.updateMany({
+            where: { sesn_id: stored.sesn_id!, invald_dt: null },
             data:  { invald_dt: now },
           });
         });
@@ -109,46 +124,68 @@ export async function POST(request: NextRequest) {
       return apiError("UNAUTHORIZED", "접근 권한이 없습니다.", 401);
     }
 
+    if (!stored.sesn_id) {
+      return apiError("INVALID_TOKEN", "유효하지 않은 Refresh Token입니다.", 401);
+    }
+
+    // Refresh는 빈도가 낮은 경계이므로 연결 세션의 무효화 여부를 직접 확인한다.
+    const session = await prisma.tbCmMemberSession.findUnique({
+      where: { sesn_id: stored.sesn_id },
+      select: { mber_id: true, invald_dt: true },
+    });
+    if (
+      !session ||
+      session.mber_id !== stored.mber_id ||
+      session.invald_dt !== null
+    ) {
+      return apiError("SESSION_INVALIDATED", "유효하지 않은 로그인 세션입니다.", 401);
+    }
+
+    const sessionId = stored.sesn_id;
+
     const newRawToken  = generateRefreshToken();
     const newTokenHash = hashRefreshToken(newRawToken);
     // auto_login_yn = 'Y'이면 만료일을 현재 기준 10일로 연장 (rolling session)
     const newExpiry    = refreshTokenExpiryDate();
     const now          = new Date();
 
-    await prisma.$transaction(async (tx) => {
-      // 기존 토큰 폐기
-      await tx.tbCmRefreshToken.update({
-        where: { token_id: stored.token_id },
-        data:  { revoked_dt: now },
-      });
-
-      // 새 토큰 발급 — 기존 sesn_id를 반드시 이어받아야
-      // logout 시 세션 무효화가 작동하고, AT 페이로드의 sesnId와도 일치한다.
-      await tx.tbCmRefreshToken.create({
-        data: {
-          mber_id:       stored.mber_id,
-          token_hash_val: newTokenHash,
-          auto_login_yn:  stored.auto_login_yn,
-          expiry_dt:      newExpiry,
-          sesn_id:        stored.sesn_id,
-        },
-      });
-
-      // 세션 마지막 접속 시각 갱신 — 접속 추적 및 장기 미사용 세션 정리용
-      if (stored.sesn_id) {
-        await tx.tbCmMemberSession.update({
-          where: { sesn_id: stored.sesn_id },
-          data:  { last_acces_dt: now },
-        });
-      }
-    });
-
+    // 서명 실패로 DB 회전만 완료되는 상황을 피하려고 트랜잭션 전에 AT를 만든다.
     const accessToken = signAccessToken({
       mberId: stored.member.mber_id,
       email:  stored.member.email_addr ?? "",
-      // 새 AT도 동일 세션에 묶이도록 sesnId 유지 (없으면 undefined)
-      sesnId: stored.sesn_id ?? undefined,
+      // 새 AT도 검증된 동일 세션에 묶는다.
+      sesnId: sessionId,
     });
+
+    try {
+      await prisma.$transaction((tx) =>
+        rotateRefreshTokenAtomically(tx, {
+          tokenId:      stored.token_id,
+          memberId:     stored.mber_id,
+          sessionId,
+          newTokenHash,
+          autoLoginYn:  stored.auto_login_yn,
+          newExpiry,
+          now,
+        })
+      );
+    } catch (err) {
+      if (err instanceof RefreshTokenRotationConflictError) {
+        return apiError(
+          "REFRESH_CONFLICT",
+          "다른 탭에서 로그인 세션을 갱신하고 있습니다.",
+          409
+        );
+      }
+      if (err instanceof RefreshSessionInvalidatedError) {
+        return apiError(
+          "SESSION_INVALIDATED",
+          "유효하지 않은 로그인 세션입니다.",
+          401
+        );
+      }
+      throw err;
+    }
 
     return apiSuccess({ accessToken, refreshToken: newRawToken });
 

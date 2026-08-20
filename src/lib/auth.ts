@@ -65,23 +65,50 @@ function getJwtSecret(): string {
 
 /** JWT 액세스 토큰 페이로드
  *  sesnId는 세션 기반 강제 로그아웃(관리자 기능, 민감 API)에 쓰인다.
- *  과거 발급된 AT나 API 키 인증 경로에서는 undefined일 수 있으므로 optional.
+ *  액세스 토큰은 항상 로그인 세션에 연결되며, 세션 없는 토큰은 검증에서 거부한다.
  */
 export type AccessTokenPayload = {
   mberId: string;
   email:  string;
-  sesnId?: string;
+  sesnId: string;
+  tokenType: "ACCESS";
 };
 
 /** JWT 액세스 토큰 발급 */
-export function signAccessToken(payload: AccessTokenPayload): string {
-  return jwt.sign(payload, getJwtSecret(), { expiresIn: ACCESS_TOKEN_EXPIRES });
+export function signAccessToken(
+  payload: Omit<AccessTokenPayload, "tokenType">
+): string {
+  return jwt.sign(
+    { ...payload, tokenType: "ACCESS" },
+    getJwtSecret(),
+    { algorithm: "HS256", expiresIn: ACCESS_TOKEN_EXPIRES }
+  );
 }
 
 /** JWT 액세스 토큰 검증 — 실패 시 null 반환 */
 export function verifyAccessToken(token: string): AccessTokenPayload | null {
   try {
-    return jwt.verify(token, getJwtSecret()) as AccessTokenPayload;
+    const decoded = jwt.verify(token, getJwtSecret(), {
+      algorithms: ["HS256"],
+    });
+
+    if (
+      typeof decoded !== "object" ||
+      typeof decoded.mberId !== "string" || decoded.mberId.length === 0 ||
+      typeof decoded.email !== "string" ||
+      typeof decoded.sesnId !== "string" || decoded.sesnId.length === 0 ||
+      (decoded.tokenType !== undefined && decoded.tokenType !== "ACCESS")
+    ) {
+      return null;
+    }
+
+    // tokenType이 없는 토큰은 배포 직전 30분 동안 발급된 기존 AT와의 호환용이다.
+    return {
+      mberId: decoded.mberId,
+      email: decoded.email,
+      sesnId: decoded.sesnId,
+      tokenType: "ACCESS",
+    };
   } catch {
     return null;
   }
@@ -140,24 +167,46 @@ export function verifyTokenExpiryDate(): Date {
 // 동일 이메일 감지 시 연동 확인 대기에 사용하는 임시 JWT — 10분 유효
 const SOCIAL_TOKEN_EXPIRES = "10m";
 
+export type SocialTokenPayload = {
+  provdrCode: string;
+  provdrUserId: string;
+  email: string;
+  tokenType: "SOCIAL";
+};
+
 /** 소셜 임시 토큰 발급 (LINK_REQUIRED 케이스) */
-export function signSocialToken(payload: {
-  provdrCode:    string;
-  provdrUserId:  string;
-  email:         string;
-}): string {
-  return jwt.sign(payload, getJwtSecret(), { expiresIn: SOCIAL_TOKEN_EXPIRES });
+export function signSocialToken(
+  payload: Omit<SocialTokenPayload, "tokenType">
+): string {
+  return jwt.sign(
+    { ...payload, tokenType: "SOCIAL" },
+    getJwtSecret(),
+    { algorithm: "HS256", expiresIn: SOCIAL_TOKEN_EXPIRES }
+  );
 }
 
 /** 소셜 임시 토큰 검증 — 실패 시 null 반환 */
-export function verifySocialToken(
-  token: string
-): { provdrCode: string; provdrUserId: string; email: string } | null {
+export function verifySocialToken(token: string): SocialTokenPayload | null {
   try {
-    return jwt.verify(token, getJwtSecret()) as {
-      provdrCode: string;
-      provdrUserId: string;
-      email: string;
+    const decoded = jwt.verify(token, getJwtSecret(), {
+      algorithms: ["HS256"],
+    });
+
+    if (
+      typeof decoded !== "object" ||
+      typeof decoded.provdrCode !== "string" || decoded.provdrCode.length === 0 ||
+      typeof decoded.provdrUserId !== "string" || decoded.provdrUserId.length === 0 ||
+      typeof decoded.email !== "string" || decoded.email.length === 0 ||
+      (decoded.tokenType !== undefined && decoded.tokenType !== "SOCIAL")
+    ) {
+      return null;
+    }
+
+    return {
+      provdrCode: decoded.provdrCode,
+      provdrUserId: decoded.provdrUserId,
+      email: decoded.email,
+      tokenType: "SOCIAL",
     };
   } catch {
     return null;

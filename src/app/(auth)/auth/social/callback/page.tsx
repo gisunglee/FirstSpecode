@@ -14,6 +14,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { storeAuthTokens } from "@/lib/authTokenStorage";
 
 export default function SocialCallbackPage() {
   return (
@@ -55,8 +56,10 @@ function SocialCallbackInner() {
 
         if (resultType === "NEW" || resultType === "EXISTING") {
           // 토큰 저장 후 리다렉트
-          sessionStorage.setItem("access_token", accessToken);
-          sessionStorage.setItem("refresh_token", refreshToken);
+          if (!storeAuthTokens(accessToken, refreshToken, "session")) {
+            setError("브라우저에 로그인 정보를 저장할 수 없습니다.");
+            return;
+          }
           router.replace(finalUrl);
 
         } else if (resultType === "LINK_REQUIRED") {

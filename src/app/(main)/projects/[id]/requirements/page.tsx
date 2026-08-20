@@ -72,7 +72,7 @@ function RequirementsPageInner() {
   // ── 요구사항 정의서 발행/이력 ─────────────────────────────────────────────
   // 정의서 발행은 프로젝트 단위 — refId = projectId (한 프로젝트 = 한 라인 산출물).
   // 권한: content.export (MEMBER+). VIEWER 는 버튼 자체 숨김.
-  const { has: hasPerm } = usePermissions(projectId);
+  const { has: hasPerm, myRole } = usePermissions(projectId);
   const canRelease       = hasPerm("content.export");
   const [isReleaseOpen,         setIsReleaseOpen]         = useState(false);
   const [isReleaseHistoryOpen,  setIsReleaseHistoryOpen]  = useState(false);
@@ -220,6 +220,51 @@ function RequirementsPageInner() {
       queryClient.invalidateQueries({ queryKey: ["requirements", projectId] });
     },
   });
+
+  // ── 요구사항명 인라인 편집 ────────────────────────────────────────────────────
+  // VIEWER는 decideSpecContentWrite에서 항상 차단되므로 연필 아이콘 자체를 숨긴다.
+  // 그 외 역할(담당자 아님/생성자 보정시간 만료 등)은 서버 판정에 맡기고 실패 시 토스트로 안내.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+
+  const nameMutation = useMutation({
+    mutationFn: ({ requirementId, name }: { requirementId: string; name: string }) =>
+      authFetch(`/api/projects/${projectId}/requirements/${requirementId}/name`, {
+        method: "PUT",
+        body:   JSON.stringify({ name }),
+      }),
+    onSuccess: (_res, variables) => {
+      queryClient.setQueryData<{ items: RequirementRow[]; totalCount: number }>(
+        ["requirements", projectId, effectiveAssignedTo],
+        (old) => old ? {
+          ...old,
+          items: old.items.map((r) =>
+            r.requirementId === variables.requirementId ? { ...r, name: variables.name } : r
+          ),
+        } : old
+      );
+      setEditingId(null);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+      setEditingId(null);
+    },
+  });
+
+  function startEditName(req: RequirementRow, e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditingId(req.requirementId);
+    setEditValue(req.name);
+  }
+
+  function commitEditName(req: RequirementRow) {
+    const trimmed = editValue.trim();
+    if (!trimmed || trimmed === req.name) {
+      setEditingId(null);
+      return;
+    }
+    nameMutation.mutate({ requirementId: req.requirementId, name: trimmed });
+  }
 
   // ── 드래그 핸들러 ──────────────────────────────────────────────────────────
   function handleDragStart(index: number) {
@@ -403,7 +448,7 @@ function RequirementsPageInner() {
             return (
               <div
                 key={req.requirementId}
-                draggable
+                draggable={editingId !== req.requirementId}
                 onDragStart={() => handleDragStart(idx)}
                 onDragEnter={() => handleDragEnter(idx)}
                 onDragEnd={handleDragEnd}
@@ -435,12 +480,42 @@ function RequirementsPageInner() {
                   ) : null}
                 </div>
 
-                {/* 요구사항명 */}
-                <div style={{ fontSize: 13 }}>
-                  <span style={{ color: "var(--color-text-secondary)", fontSize: 13, marginRight: 6 }}>
-                    {req.displayId}
-                  </span>
-                  {req.name}
+                {/* 요구사항명 — 연필 아이콘 클릭 시 인라인 편집(입력 후 focus out/Enter로 즉시 저장) */}
+                <div style={{ fontSize: 13, display: "flex", alignItems: "center", minWidth: 0 }} onClick={(e) => e.stopPropagation()}>
+                  {editingId === req.requirementId ? (
+                    <input
+                      autoFocus
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onBlur={() => commitEditName(req)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") { e.preventDefault(); commitEditName(req); }
+                        if (e.key === "Escape") { e.preventDefault(); setEditingId(null); }
+                      }}
+                      style={nameEditInputStyle}
+                    />
+                  ) : (
+                    <>
+                      <span
+                        onClick={() => router.push(`/projects/${projectId}/requirements/${req.requirementId}`)}
+                        style={{ cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                      >
+                        <span style={{ color: "var(--color-text-secondary)", fontSize: 13, marginRight: 6 }}>
+                          {req.displayId}
+                        </span>
+                        {req.name}
+                      </span>
+                      {myRole !== "VIEWER" && (
+                        <button
+                          onClick={(e) => startEditName(req, e)}
+                          title="요구사항명 수정"
+                          style={editIconBtnStyle}
+                        >
+                          <PencilIcon />
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
 
                 {/* 담당자 — 미지정/퇴장 멤버는 흐린 "-" */}
@@ -534,6 +609,16 @@ function RequirementsPageInner() {
         refreshTag={releaseRefreshTag}
       />
     </div>
+  );
+}
+
+// ── 요구사항명 인라인 편집용 연필 아이콘 (외부 아이콘 라이브러리 미도입 — 인라인 SVG) ──
+function PencilIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
   );
 }
 
@@ -779,6 +864,30 @@ const filterInputStyle: React.CSSProperties = {
   color:        "var(--color-text-primary)",
   minWidth:     220,
   outline:      "none",
+};
+
+const editIconBtnStyle: React.CSSProperties = {
+  display:        "inline-flex",
+  alignItems:     "center",
+  justifyContent: "center",
+  flexShrink:     0,
+  marginLeft:     6,
+  padding:        2,
+  border:         "none",
+  background:     "none",
+  color:          "var(--color-text-tertiary)",
+  cursor:         "pointer",
+};
+
+const nameEditInputStyle: React.CSSProperties = {
+  width:        "100%",
+  fontSize:     13,
+  padding:      "4px 6px",
+  border:       "1px solid var(--color-brand, #1976d2)",
+  borderRadius: 4,
+  outline:      "none",
+  background:   "var(--color-bg-card)",
+  color:        "var(--color-text-primary)",
 };
 
 const secondaryBtnStyle: React.CSSProperties = {

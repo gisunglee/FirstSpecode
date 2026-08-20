@@ -22,6 +22,7 @@ import { authFetch } from "@/lib/authFetch";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import { type AiTaskStatus, AI_TASK_STATUS_LABEL, AI_TASK_STATUS_BADGE } from "@/constants/codes";
 import { useAppStore } from "@/store/appStore";
+import { usePermissions } from "@/hooks/useMyRole";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
@@ -82,6 +83,7 @@ function UnitWorksPageInner() {
   const router      = useRouter();
   const queryClient = useQueryClient();
   const projectId   = params.id;
+  const { myRole }  = usePermissions(projectId);
 
   // 요구사항 필터 (빈 문자열 = 전체)
   // URL 쿼리 ?reqId=xxx 로 초기화 (상세 페이지 브레드크럼에서 진입 시 해당 요구사항으로 자동 필터)
@@ -159,7 +161,52 @@ function UnitWorksPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasLoadedProfile]);
 
-  // (인라인 수정 제거 — 상세 페이지에서 수정)
+  // ── 단위업무명 인라인 편집 ────────────────────────────────────────────────────
+  // VIEWER는 decideSpecContentWrite에서 항상 차단되므로 연필 아이콘 자체를 숨긴다.
+  // 그 외(담당자 아님/생성자 보정시간 만료 등)는 서버 판정에 맡기고 실패 시 토스트로 안내
+  // (요구사항 목록의 인라인 이름 편집과 동일 패턴). 이름만 보내는 PUT은 sibling route.ts가
+  // 나머지 필드를 undefined 체크로 보존하므로 안전하다.
+  const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [editNameValue, setEditNameValue] = useState("");
+
+  const nameMutation = useMutation({
+    mutationFn: ({ unitWorkId, name }: { unitWorkId: string; name: string }) =>
+      authFetch(`/api/projects/${projectId}/unit-works/${unitWorkId}`, {
+        method: "PUT",
+        body:   JSON.stringify({ name }),
+      }),
+    onSuccess: (_res, variables) => {
+      queryClient.setQueryData<{ items: UnitWorkRow[]; totalCount: number }>(
+        ["unit-works", projectId, filterReqId, effectiveAssignedTo],
+        (old) => old ? {
+          ...old,
+          items: old.items.map((r) =>
+            r.unitWorkId === variables.unitWorkId ? { ...r, name: variables.name } : r
+          ),
+        } : old
+      );
+      setEditingNameId(null);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+      setEditingNameId(null);
+    },
+  });
+
+  function startEditName(uw: UnitWorkRow, e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditingNameId(uw.unitWorkId);
+    setEditNameValue(uw.name);
+  }
+
+  function commitEditName(uw: UnitWorkRow) {
+    const trimmed = editNameValue.trim();
+    if (!trimmed || trimmed === uw.name) {
+      setEditingNameId(null);
+      return;
+    }
+    nameMutation.mutate({ unitWorkId: uw.unitWorkId, name: trimmed });
+  }
 
   // ── 드래그 상태 ────────────────────────────────────────────────────────────
   const dragItem     = useRef<number | null>(null);
@@ -583,7 +630,7 @@ function UnitWorksPageInner() {
             return (
             <div
               key={uw.unitWorkId}
-              draggable
+              draggable={editingNameId !== uw.unitWorkId}
               onDragStart={() => handleDragStart(idx)}
               onDragEnter={() => handleDragEnter(idx)}
               onDragEnd={handleDragEnd}
@@ -632,37 +679,68 @@ function UnitWorksPageInner() {
               </div>
 
               {/* 단위업무명 — flex 자식 중 name 만 ellipsis(min-width:0).
-                  displayId/완료 배지는 flexShrink:0 으로 항상 전체 노출 */}
+                  displayId/완료 배지는 flexShrink:0 으로 항상 전체 노출.
+                  연필 클릭 시 인라인 편집(입력 후 focus out/Enter로 즉시 저장) */}
               <div
                 style={{
                   fontSize: 13,
                   display: "flex", alignItems: "center", gap: 8,
                   overflow: "hidden", whiteSpace: "nowrap", minWidth: 0,
                 }}
-                title={`${uw.displayId} ${uw.name}`}
+                title={editingNameId === uw.unitWorkId ? undefined : `${uw.displayId} ${uw.name}`}
+                onClick={(e) => e.stopPropagation()}
               >
-                <span style={{ color: "var(--color-text-secondary)", fontSize: 13, flexShrink: 0 }}>
-                  {uw.displayId}
-                </span>
-                <span
-                  style={{
-                    overflow: "hidden", textOverflow: "ellipsis", minWidth: 0,
-                    ...(isComplete
-                      ? { color: "var(--color-text-secondary)", textDecoration: "none" }
-                      : {}),
-                  }}
-                >
-                  {uw.name}
-                </span>
-                {isComplete && (
-                  <span className="sp-badge" style={{
-                    fontSize: 11, fontWeight: 600, color: "#16a34a",
-                    background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)",
-                    borderRadius: 4, padding: "1px 7px", letterSpacing: "0.2px", whiteSpace: "nowrap",
-                    flexShrink: 0,
-                  }}>
-                    ✓ 완료
-                  </span>
+                {editingNameId === uw.unitWorkId ? (
+                  <input
+                    autoFocus
+                    value={editNameValue}
+                    onChange={(e) => setEditNameValue(e.target.value)}
+                    onBlur={() => commitEditName(uw)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); commitEditName(uw); }
+                      if (e.key === "Escape") { e.preventDefault(); setEditingNameId(null); }
+                    }}
+                    style={{ ...nameEditInputStyle, minWidth: 0, flex: 1 }}
+                  />
+                ) : (
+                  <>
+                    <span
+                      onClick={() => router.push(`/projects/${projectId}/unit-works/${uw.unitWorkId}`)}
+                      style={{ cursor: "pointer", color: "var(--color-text-secondary)", fontSize: 13, flexShrink: 0 }}
+                    >
+                      {uw.displayId}
+                    </span>
+                    <span
+                      onClick={() => router.push(`/projects/${projectId}/unit-works/${uw.unitWorkId}`)}
+                      style={{
+                        cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0,
+                        ...(isComplete
+                          ? { color: "var(--color-text-secondary)", textDecoration: "none" }
+                          : {}),
+                      }}
+                    >
+                      {uw.name}
+                    </span>
+                    {isComplete && (
+                      <span className="sp-badge" style={{
+                        fontSize: 11, fontWeight: 600, color: "#16a34a",
+                        background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)",
+                        borderRadius: 4, padding: "1px 7px", letterSpacing: "0.2px", whiteSpace: "nowrap",
+                        flexShrink: 0,
+                      }}>
+                        ✓ 완료
+                      </span>
+                    )}
+                    {myRole !== "VIEWER" && (
+                      <button
+                        onClick={(e) => startEditName(uw, e)}
+                        title="단위업무명 수정"
+                        style={editIconBtnStyle}
+                      >
+                        <PencilIcon />
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -890,6 +968,16 @@ function UnitWorksPageInner() {
         />
       )}
     </div>
+  );
+}
+
+// ── 인라인 편집용 연필 아이콘 (외부 아이콘 라이브러리 미도입 — 인라인 SVG) ──
+function PencilIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
   );
 }
 
@@ -1152,15 +1240,27 @@ const secondaryBtnStyle: React.CSSProperties = {
   cursor:       "pointer",
 };
 
-const inlineInputStyle: React.CSSProperties = {
+const nameEditInputStyle: React.CSSProperties = {
   padding:      "3px 6px",
   borderRadius: 4,
-  border:       "1px solid var(--color-border)",
+  border:       "1px solid var(--color-brand, #1976d2)",
   background:   "var(--color-bg-card)",
   color:        "var(--color-text-primary)",
   fontSize:     13,
   outline:      "none",
   boxSizing:    "border-box",
+};
+
+const editIconBtnStyle: React.CSSProperties = {
+  display:        "inline-flex",
+  alignItems:     "center",
+  justifyContent: "center",
+  flexShrink:     0,
+  padding:        2,
+  border:         "none",
+  background:     "none",
+  color:          "var(--color-text-tertiary)",
+  cursor:         "pointer",
 };
 
 const outlineBtnStyle: React.CSSProperties = {

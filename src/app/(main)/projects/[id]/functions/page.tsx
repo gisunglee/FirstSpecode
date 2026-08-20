@@ -23,6 +23,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
+import { usePermissions } from "@/hooks/useMyRole";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
@@ -78,6 +79,7 @@ function FunctionsPageInner() {
   const queryClient = useQueryClient();
   const projectId = params.id;
   const areaIdFilter = searchParams.get("areaId") ?? undefined;
+  const { myRole } = usePermissions(projectId);
 
   // AI 태스크 상세 팝업
   const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
@@ -243,6 +245,52 @@ function FunctionsPageInner() {
   function commitEdit(funcId: string, field: "complexity" | "effort") {
     if (!editingCell) return;
     inlineMutation.mutate({ funcId, field, value: editValue });
+  }
+
+  // ── 기능명 인라인 편집 ────────────────────────────────────────────────────────
+  // 복잡도/공수 편집(editingCell/editValue)과 별개 상태로 관리 — 동시에 다른 셀을 편집 중이어도
+  // 서로 간섭하지 않음. VIEWER는 decideSpecContentWrite에서 항상 차단되므로 연필 아이콘 자체를
+  // 숨긴다. 그 외(담당자 아님/생성자 보정시간 만료 등)는 서버 판정에 맡기고 실패 시 토스트로 안내.
+  const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [editNameValue, setEditNameValue] = useState("");
+
+  const nameMutation = useMutation({
+    mutationFn: ({ funcId, name }: { funcId: string; name: string }) =>
+      authFetch(`/api/projects/${projectId}/functions/${funcId}`, {
+        method: "PUT",
+        body:   JSON.stringify({ name }),
+      }),
+    onSuccess: (_res, variables) => {
+      queryClient.setQueryData<{ items: FuncRow[] }>(
+        queryKey,
+        (old) => old ? {
+          ...old,
+          items: old.items.map((r) =>
+            r.funcId === variables.funcId ? { ...r, name: variables.name } : r
+          ),
+        } : old
+      );
+      setEditingNameId(null);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+      setEditingNameId(null);
+    },
+  });
+
+  function startEditName(fn: FuncRow, e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditingNameId(fn.funcId);
+    setEditNameValue(fn.name);
+  }
+
+  function commitEditName(fn: FuncRow) {
+    const trimmed = editNameValue.trim();
+    if (!trimmed || trimmed === fn.name) {
+      setEditingNameId(null);
+      return;
+    }
+    nameMutation.mutate({ funcId: fn.funcId, name: trimmed });
   }
 
   // ── 로딩 ───────────────────────────────────────────────────────────────────
@@ -468,30 +516,63 @@ function FunctionsPageInner() {
                     ) : ""}
                   </div>
 
-                  {/* 기능명 — flex 자식 중 name 만 ellipsis(min-width:0), displayId/완료배지는 shrink 금지 */}
+                  {/* 기능명 — flex 자식 중 name 만 ellipsis(min-width:0), displayId/완료배지는 shrink 금지.
+                      연필 클릭 시 인라인 편집(입력 후 focus out/Enter로 즉시 저장) */}
                   <div
                     style={{
                       fontSize: 13,
                       display: "flex", alignItems: "center", gap: 8,
                       overflow: "hidden", whiteSpace: "nowrap", minWidth: 0,
                     }}
-                    title={`${fn.displayId} ${fn.name}`}
+                    title={editingNameId === fn.funcId ? undefined : `${fn.displayId} ${fn.name}`}
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <span style={{ color: "var(--color-text-secondary)", fontSize: 13, flexShrink: 0 }}>
-                      {fn.displayId}
-                    </span>
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>
-                      {fn.name}
-                    </span>
-                    {fn.designRt === 100 && fn.implRt === 100 && (
-                      <span style={{
-                        fontSize: 11, fontWeight: 600, color: "#16a34a",
-                        background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)",
-                        borderRadius: 4, padding: "1px 7px", whiteSpace: "nowrap",
-                        flexShrink: 0,
-                      }}>
-                        ✓ 완료
-                      </span>
+                    {editingNameId === fn.funcId ? (
+                      <input
+                        autoFocus
+                        value={editNameValue}
+                        onChange={(e) => setEditNameValue(e.target.value)}
+                        onBlur={() => commitEditName(fn)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); commitEditName(fn); }
+                          if (e.key === "Escape") { e.preventDefault(); setEditingNameId(null); }
+                        }}
+                        style={{ ...nameEditInputStyle, minWidth: 0, flex: 1 }}
+                      />
+                    ) : (
+                      <>
+                        <span
+                          onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
+                          style={{ cursor: "pointer", color: "var(--color-text-secondary)", fontSize: 13, flexShrink: 0 }}
+                        >
+                          {fn.displayId}
+                        </span>
+                        <span
+                          onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
+                          style={{ cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}
+                        >
+                          {fn.name}
+                        </span>
+                        {fn.designRt === 100 && fn.implRt === 100 && (
+                          <span style={{
+                            fontSize: 11, fontWeight: 600, color: "#16a34a",
+                            background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)",
+                            borderRadius: 4, padding: "1px 7px", whiteSpace: "nowrap",
+                            flexShrink: 0,
+                          }}>
+                            ✓ 완료
+                          </span>
+                        )}
+                        {myRole !== "VIEWER" && (
+                          <button
+                            onClick={(e) => startEditName(fn, e)}
+                            title="기능명 수정"
+                            style={editIconBtnStyle}
+                          >
+                            <PencilIcon />
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
 
@@ -706,6 +787,15 @@ function AiDot({ label, taskInfo, onClick }: {
 
 // ── 상수·스타일 ───────────────────────────────────────────────────────────────
 
+// 인라인 편집용 연필 아이콘 (외부 아이콘 라이브러리 미도입 — 인라인 SVG)
+function PencilIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
 
 function typeBadgeStyle(type: string): React.CSSProperties {
   return {
@@ -766,6 +856,27 @@ const secondaryBtnStyle: React.CSSProperties = {
   padding: "8px 16px", borderRadius: 6,
   border: "1px solid var(--color-border)", background: "var(--color-bg-card)",
   color: "var(--color-text-primary)", fontSize: 14, cursor: "pointer",
+};
+const nameEditInputStyle: React.CSSProperties = {
+  padding:      "3px 6px",
+  borderRadius: 4,
+  border:       "1px solid var(--color-brand, #1976d2)",
+  background:   "var(--color-bg-card)",
+  color:        "var(--color-text-primary)",
+  fontSize:     13,
+  outline:      "none",
+  boxSizing:    "border-box",
+};
+const editIconBtnStyle: React.CSSProperties = {
+  display:        "inline-flex",
+  alignItems:     "center",
+  justifyContent: "center",
+  flexShrink:     0,
+  padding:        2,
+  border:         "none",
+  background:     "none",
+  color:          "var(--color-text-tertiary)",
+  cursor:         "pointer",
 };
 const filterSelectStyle: React.CSSProperties = {
   padding: "7px 32px 7px 12px",

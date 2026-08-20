@@ -20,21 +20,26 @@ import { verifyAccessToken, hashApiKey } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/apiResponse";
 import { MCP_KEY_GLOBAL_SCOPE } from "@/lib/mcpKeyScope";
+import {
+  isMcpClientRequestAllowed,
+  type CredentialType,
+} from "@/lib/authCredentialPolicy";
 
 /**
  * sesnId는 JWT 경로에서만 채워진다(= 로그인·소셜·이메일 인증·토큰 갱신).
  *   - API 키 인증 경로는 세션 개념이 없어 undefined.
- *   - 30분 만료 이전에 배포된 구(舊) AT에도 없을 수 있으므로 optional.
+ *   - JWT 검증은 sesnId를 필수로 확인하므로 SESSION 자격 증명에는 항상 존재한다.
  * 민감 API에서만 존재 여부를 확인해 세션 활성 검증에 사용한다.
  *
  * allowedPrjctId는 MCP 키 중 "프로젝트 고정" 키일 때만 값이 있다.
- *   - undefined: JWT 인증이거나, 전역 MCP 키 → 모든 멤버십 프로젝트 허용
+ *   - undefined: JWT 인증. 전역 MCP 키는 인증 단계에서 거부한다.
  *   - 값 있음  : 해당 프로젝트 외 접근 시 URL 기반 scope 가드로 자동 차단
  *   → 수동 검증 헬퍼(명시적 호출용): src/lib/mcpKeyScope.ts
  */
 export type AuthPayload = {
   mberId: string;
   email:  string;
+  credentialType: CredentialType;
   sesnId?:         string;
   allowedPrjctId?: string;
 };
@@ -104,11 +109,23 @@ export async function requireAuth(request: NextRequest): Promise<AuthPayload | R
 
     const mcpKey = await prisma.tbCmMcpKey.findUnique({
       where: { key_hash: keyHash },
-      include: { member: { select: { mber_id: true, email_addr: true } } },
+      include: {
+        member: {
+          select: {
+            mber_id: true,
+            email_addr: true,
+            mber_sttus_code: true,
+          },
+        },
+      },
     });
 
     // 키가 존재하지 않거나 폐기된 경우
     if (!mcpKey || mcpKey.revoke_dt) {
+      return apiError("INVALID_API_KEY", "유효하지 않은 API 키입니다.", 401);
+    }
+
+    if (mcpKey.member.mber_sttus_code !== "ACTIVE") {
       return apiError("INVALID_API_KEY", "유효하지 않은 API 키입니다.", 401);
     }
 
@@ -136,6 +153,18 @@ export async function requireAuth(request: NextRequest): Promise<AuthPayload | R
       );
     }
 
+    if (!isMcpClientRequestAllowed(
+      request.method,
+      request.nextUrl.pathname,
+      mcpKey.prjct_id,
+    )) {
+      return apiError(
+        "FORBIDDEN_CREDENTIAL_SCOPE",
+        "MCP 키로 호출할 수 없는 API 또는 작업입니다.",
+        403,
+      );
+    }
+
     // last_used_dt 비동기 갱신 — 응답 지연 없이 fire-and-forget
     prisma.tbCmMcpKey.update({
       where: { api_key_id: mcpKey.api_key_id },
@@ -152,6 +181,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthPayload | R
     return {
       mberId: mcpKey.member.mber_id,
       email:  mcpKey.member.email_addr ?? "",
+      credentialType: "MCP_CLIENT",
       // 'ALL' 키는 이미 차단됐으므로 항상 실제 프로젝트 UUID
       allowedPrjctId: mcpKey.prjct_id,
     };
@@ -169,5 +199,6 @@ export async function requireAuth(request: NextRequest): Promise<AuthPayload | R
     mberId: payload.mberId,
     email:  payload.email,
     sesnId: payload.sesnId,
+    credentialType: "SESSION",
   };
 }

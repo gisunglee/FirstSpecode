@@ -44,6 +44,10 @@ export async function POST(request: NextRequest) {
       return apiError("INVALID_TOKEN", "유효하지 않은 인증 링크입니다.", 400);
     }
 
+    if (verification.vrfctn_ty_code !== "REGISTER") {
+      return apiError("INVALID_TOKEN", "유효하지 않은 인증 링크입니다.", 400);
+    }
+
     // 만료 확인
     if (new Date() > verification.expiry_dt) {
       return apiError("TOKEN_EXPIRED", "인증 링크가 만료되었습니다.", 400);

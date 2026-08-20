@@ -58,7 +58,7 @@ export async function requireSystemAdmin(
 
   // ② MCP 키 거부 — 시스템 관리자 권한은 로그인 세션(JWT)에서만 유효
   //    API 키 인증 경로는 sesnId 가 undefined 로 온다.
-  if (!auth.sesnId) {
+  if (auth.credentialType !== "SESSION" || !auth.sesnId) {
     return apiError(
       "FORBIDDEN_ADMIN_REQUIRES_SESSION",
       "시스템 관리자 API 는 로그인 세션에서만 호출 가능합니다.",
@@ -66,22 +66,41 @@ export async function requireSystemAdmin(
     );
   }
 
-  // ③ sys_role_code 조회
-  const member = await prisma.tbCmMember.findUnique({
-    where:  { mber_id: auth.mberId },
-    select: { sys_role_code: true },
+  // ③ 기존 회원 조회를 세션+회원 조회로 교체해 추가 쿼리 없이 세션 무효화와 계정 상태까지 확인
+  const session = await prisma.tbCmMemberSession.findUnique({
+    where: { sesn_id: auth.sesnId },
+    select: {
+      mber_id: true,
+      invald_dt: true,
+      member: {
+        select: {
+          email_addr: true,
+          mber_sttus_code: true,
+          sys_role_code: true,
+        },
+      },
+    },
   });
 
-  if (!member || !isSystemRoleCode(member.sys_role_code)) {
+  if (
+    !session ||
+    session.mber_id !== auth.mberId ||
+    session.invald_dt !== null ||
+    session.member.mber_sttus_code !== "ACTIVE"
+  ) {
+    return apiError("SESSION_INVALIDATED", "유효하지 않은 로그인 세션입니다.", 401);
+  }
+
+  if (!isSystemRoleCode(session.member.sys_role_code)) {
     // 존재 자체를 숨기기 위해 404 가 아닌 403 반환
     return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
   }
 
   return {
     mberId:     auth.mberId,
-    email:      auth.email,
+    email:      session.member.email_addr ?? auth.email,
     sesnId:     auth.sesnId,
-    systemRole: member.sys_role_code,
+    systemRole: session.member.sys_role_code,
     ipAddr:     extractIpAddr(request),
     userAgent:  request.headers.get("user-agent") ?? undefined,
   };

@@ -179,6 +179,10 @@ export const requirementProgressSchema = z.object({
   progress: z.number().int().min(0).max(100),
 }).strict();
 
+export const requirementNameSchema = z.object({
+  name: requiredText("요구사항명을 입력해 주세요."),
+}).strict();
+
 export const taskSortSchema = z.object({
   taskIds: z.array(z.string().min(1)).min(1),
 }).strict();

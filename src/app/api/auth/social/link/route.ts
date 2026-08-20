@@ -55,11 +55,15 @@ export async function POST(request: NextRequest) {
     // 기존 회원 조회
     const member = await prisma.tbCmMember.findUnique({
       where:  { email_addr: email },
-      select: { mber_id: true },
+      select: { mber_id: true, mber_sttus_code: true },
     });
 
     if (!member) {
       return apiError("NOT_FOUND", "회원 정보를 찾을 수 없습니다.", 404);
+    }
+
+    if (member.mber_sttus_code !== "ACTIVE") {
+      return apiError("ACCOUNT_INACTIVE", "접근 권한이 없습니다.", 403);
     }
 
     // 이미 연동된 소셜 계정 확인

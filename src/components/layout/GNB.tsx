@@ -22,6 +22,10 @@ import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "@/store/appStore";
 import { authFetch } from "@/lib/authFetch";
+import { clearAuthTokensAcrossTabs } from "@/lib/authRefreshClient";
+import {
+  readStoredRefreshToken,
+} from "@/lib/authTokenStorage";
 import { usePermissions } from "@/hooks/useMyRole";
 import { ROLE_LABEL } from "@/lib/permissions";
 import type { ProjectOption } from "@/types/layout";
@@ -157,9 +161,7 @@ export default function GNB() {
   // 로그아웃 처리
   async function handleLogout() {
     setProfileOpen(false);
-    const rt = sessionStorage.getItem("refresh_token")
-            ?? localStorage.getItem("lc_refresh_token")
-            ?? "";
+    const rt = readStoredRefreshToken()?.token ?? "";
     try {
       await fetch("/api/auth/logout", {
         method:  "POST",
@@ -169,9 +171,7 @@ export default function GNB() {
     } catch {
       // 서버 오류여도 클라이언트 토큰은 제거
     }
-    sessionStorage.removeItem("access_token");
-    sessionStorage.removeItem("refresh_token");
-    localStorage.removeItem("lc_refresh_token");
+    clearAuthTokensAcrossTabs();
 
     // React Query 캐시 전체 초기화.
     // QueryClient 인스턴스는 앱 수명 동안 유지되므로, 로그아웃 후 재로그인 시

@@ -98,8 +98,9 @@ export async function requirePermission(
       mber_sttus_code: true,
       member: {
         select: {
-          plan_code:     true,
-          sys_role_code: true,
+          plan_code:        true,
+          sys_role_code:    true,
+          mber_sttus_code: true,
         },
       },
       project: {
@@ -122,6 +123,10 @@ export async function requirePermission(
     );
   }
 
+  if (membership && membership.member.mber_sttus_code !== "ACTIVE") {
+    return apiError("ACCOUNT_INACTIVE", "활성 상태의 계정이 아닙니다.", 403);
+  }
+
   // ─── 멤버십이 있는 정상 경로 ───────────────────────────────────────
   if (membership && membership.mber_sttus_code === "ACTIVE") {
     const role = isRoleCode(membership.role_code)           ? membership.role_code           : null;
@@ -131,7 +136,9 @@ export async function requirePermission(
     // 시스템 관리자 권한은 **로그인 세션(JWT)에서만** 유효.
     // MCP 키(auth.sesnId 없음)로는 sys_role_code 가 있어도 적용하지 않는다.
     // → 키 탈취 시 시스템 관리자 권한 우회 차단 (fail-secure)
-    const systemRole = auth.sesnId && isSystemRoleCode(membership.member.sys_role_code)
+    const systemRole = auth.credentialType === "SESSION" &&
+      auth.sesnId &&
+      isSystemRoleCode(membership.member.sys_role_code)
       ? membership.member.sys_role_code
       : null;
 
@@ -147,8 +154,7 @@ export async function requirePermission(
     }
 
     return {
-      mberId: auth.mberId,
-      email:  auth.email,
+      ...auth,
       role,
       job:    job ?? "ETC",
       plan,
@@ -161,18 +167,37 @@ export async function requirePermission(
   //
   // (멤버가 없거나 비활성) 상태에서만 이 분기 진입. API 키 인증일 때는
   // sys_role_code 로 우회 불가하도록 추가 조건(JWT 세션) 검사.
-  if (!auth.sesnId) {
+  if (auth.credentialType !== "SESSION" || !auth.sesnId) {
     // API 키 인증 → 시스템 관리자 우회 금지 (fail-secure)
     return apiError("FORBIDDEN", "프로젝트 멤버가 아닙니다.", 403);
   }
 
-  const admin = await prisma.tbCmMember.findUnique({
-    where:  { mber_id: auth.mberId },
-    select: { sys_role_code: true, plan_code: true },
+  const adminSession = await prisma.tbCmMemberSession.findUnique({
+    where: { sesn_id: auth.sesnId },
+    select: {
+      mber_id: true,
+      invald_dt: true,
+      member: {
+        select: {
+          sys_role_code: true,
+          plan_code: true,
+          mber_sttus_code: true,
+        },
+      },
+    },
   });
 
-  const adminSysRole = isSystemRoleCode(admin?.sys_role_code)
-    ? admin!.sys_role_code
+  if (
+    !adminSession ||
+    adminSession.mber_id !== auth.mberId ||
+    adminSession.invald_dt !== null ||
+    adminSession.member.mber_sttus_code !== "ACTIVE"
+  ) {
+    return apiError("SESSION_INVALIDATED", "유효하지 않은 로그인 세션입니다.", 401);
+  }
+
+  const adminSysRole = isSystemRoleCode(adminSession.member.sys_role_code)
+    ? adminSession.member.sys_role_code
     : null;
 
   if (adminSysRole !== "SUPER_ADMIN") {
@@ -210,7 +235,9 @@ export async function requirePermission(
 
   // 읽기 권한은 VIEWER 로 통과 (hasPermission short-circuit 을 타지 않도록
   // systemRole 을 actor 에 넣지 않는다 — 읽기-쓰기 분리가 핵심)
-  const plan = isPlanCode(admin!.plan_code) ? admin!.plan_code : "FREE";
+  const plan = isPlanCode(adminSession.member.plan_code)
+    ? adminSession.member.plan_code
+    : "FREE";
   const viewerActor = { role: "VIEWER" as const, job: null, plan };
 
   if (!hasPermission(viewerActor, permission)) {
@@ -218,8 +245,7 @@ export async function requirePermission(
   }
 
   return {
-    mberId: auth.mberId,
-    email:  auth.email,
+    ...auth,
     role:   "VIEWER",
     job:    "ETC",
     plan,
