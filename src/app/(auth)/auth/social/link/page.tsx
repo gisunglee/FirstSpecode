@@ -13,7 +13,11 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { storeAuthTokens } from "@/lib/authTokenStorage";
+import { clearStoredRefreshTokens, storeAccessToken } from "@/lib/authTokenStorage";
+import {
+  AUTH_COOKIE_MODE_HEADER,
+  AUTH_COOKIE_MODE_VALUE,
+} from "@/lib/authCookiePolicy";
 
 export default function SocialLinkPage() {
   return (
@@ -48,7 +52,11 @@ function SocialLinkInner() {
     try {
       const res  = await fetch("/api/auth/social/link", {
         method:  "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          [AUTH_COOKIE_MODE_HEADER]: AUTH_COOKIE_MODE_VALUE,
+        },
         body:    JSON.stringify({ socialToken, email }),
       });
       const body = await res.json();
@@ -58,11 +66,12 @@ function SocialLinkInner() {
         return;
       }
 
-      // 토큰 저장 후 대시보드 이동
-      if (!storeAuthTokens(body.data.accessToken, body.data.refreshToken, "session")) {
+      // AT만 탭 저장소에 두고 RT는 HttpOnly 쿠키를 사용한다.
+      if (!storeAccessToken(body.data.accessToken)) {
         setError("브라우저에 로그인 정보를 저장할 수 없습니다.");
         return;
       }
+      clearStoredRefreshTokens();
       router.replace("/dashboard");
 
     } catch {

@@ -9,30 +9,46 @@
  *   - 다중 기기 지원 — 요청에 포함된 RT에 해당하는 기기만 무효화
  *   - 이미 폐기된 RT도 200 반환 (멱등성 보장 — 중복 로그아웃 안전 처리)
  *
- * Body: { refreshToken: string }
+ * Body: {} — HttpOnly RT 쿠키 사용
+ *       { refreshToken: string } — 구형 클라이언트 호환용
  */
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { hashRefreshToken } from "@/lib/auth";
+import {
+  clearRefreshTokenCookie,
+  isTrustedAuthRequest,
+  readRequestRefreshCredential,
+  requestUsesCookieAuthMode,
+} from "@/lib/authRefreshCookie";
 
 export async function POST(request: NextRequest) {
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
+    body = {};
   }
 
-  const { refreshToken } = (body ?? {}) as Record<string, unknown>;
+  const { refreshToken: bodyRefreshToken } = (body ?? {}) as Record<string, unknown>;
+  const cookieMode = requestUsesCookieAuthMode(request);
+  const credential = readRequestRefreshCredential(request, bodyRefreshToken);
 
-  if (!refreshToken || typeof refreshToken !== "string") {
-    return apiError("VALIDATION_ERROR", "Refresh Token이 필요합니다.", 400);
+  if (!isTrustedAuthRequest(
+    request,
+    cookieMode || credential?.source === "cookie",
+  )) {
+    return apiError("CSRF_ERROR", "허용되지 않은 출처의 요청입니다.", 403);
+  }
+
+  if (!credential) {
+    return clearRefreshTokenCookie(apiSuccess({ message: "로그아웃 되었습니다." }));
   }
 
   try {
-    const tokenHash = hashRefreshToken(refreshToken);
+    const tokenHash = hashRefreshToken(credential.token);
 
     // RT 조회 — 없으면 이미 폐기된 것으로 간주 (멱등 처리)
     const stored = await prisma.tbCmRefreshToken.findUnique({
@@ -41,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     if (!stored || stored.revoked_dt !== null) {
       // 이미 로그아웃된 상태 — 정상 처리로 응답 (클라이언트 재시도 안전)
-      return apiSuccess({ message: "로그아웃 되었습니다." });
+      return clearRefreshTokenCookie(apiSuccess({ message: "로그아웃 되었습니다." }));
     }
 
     const now = new Date();
@@ -62,10 +78,12 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    return apiSuccess({ message: "로그아웃 되었습니다." });
+    return clearRefreshTokenCookie(apiSuccess({ message: "로그아웃 되었습니다." }));
 
   } catch (err) {
     console.error("[POST /api/auth/logout] 오류:", err);
+    // DB 폐기에 실패하면 쿠키를 유지해 사용자가 재시도할 수 있게 한다.
+    // 먼저 쿠키를 지우면 서버에 남은 RT를 이후 요청에서 식별할 수 없다.
     return apiError("DB_ERROR", "로그아웃 처리 중 오류가 발생했습니다.", 500);
   }
 }

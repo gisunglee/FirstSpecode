@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import jwt from "jsonwebtoken";
 import {
+  refreshTokenAbsoluteExpiryDate,
+  refreshTokenExpiryDate,
+  refreshTokenRotationExpiryDate,
   signAccessToken,
   signSocialToken,
   verifyAccessToken,
@@ -9,6 +12,17 @@ import {
 } from "../src/lib/auth";
 import { isMcpClientRequestAllowed } from "../src/lib/authCredentialPolicy";
 import {
+  AUTH_COOKIE_MODE_HEADER,
+  AUTH_COOKIE_MODE_VALUE,
+  isCookieAuthMode,
+  isTrustedAuthRequestOrigin,
+  refreshTokenCookieName,
+  refreshTokenCookieOptions,
+  selectRefreshCredential,
+  shouldReturnLegacyRefreshToken,
+} from "../src/lib/authCookiePolicy";
+import {
+  clearStoredRefreshTokens,
   getStoredAccessToken,
   readStoredRefreshToken,
   replaceAuthTokensIfCurrent,
@@ -94,11 +108,14 @@ test("다른 프로젝트와 비프로젝트 API는 차단한다", () => {
 });
 
 test("새 Access Token은 종류와 세션을 포함하고 검증된다", () => {
+  const issuedBefore = Math.floor(Date.now() / 1000);
   const token = signAccessToken({
     mberId: "member-1",
     email: "member@example.com",
     sesnId: "session-1",
   });
+  const issuedAfter = Math.floor(Date.now() / 1000);
+  const decoded = jwt.decode(token);
 
   assert.deepEqual(verifyAccessToken(token), {
     mberId: "member-1",
@@ -106,6 +123,9 @@ test("새 Access Token은 종류와 세션을 포함하고 검증된다", () => 
     sesnId: "session-1",
     tokenType: "ACCESS",
   });
+  assert.ok(decoded && typeof decoded === "object" && typeof decoded.exp === "number");
+  assert.ok(decoded.exp >= issuedBefore + 1_800);
+  assert.ok(decoded.exp <= issuedAfter + 1_800);
 });
 
 test("필수 클레임이 있는 기존 Access Token은 전환 기간에 허용한다", () => {
@@ -234,6 +254,87 @@ test("RT 회전 결과는 요청에 사용한 토큰이 그대로일 때만 저�
   assert.equal(getStoredAccessToken(storage), "access-2");
 });
 
+test("쿠키 승계 후 과거 Web Storage RT를 모두 제거한다", () => {
+  const storage = createMemoryAuthStorage();
+  storeAuthTokens("access-1", "refresh-local", "local", storage);
+  storage.session.setItem("refresh_token", "refresh-session");
+
+  clearStoredRefreshTokens(storage);
+
+  assert.equal(readStoredRefreshToken(undefined, storage), null);
+  assert.equal(getStoredAccessToken(storage), "access-1");
+});
+
+test("새 클라이언트는 쿠키 RT, 기존 클라이언트는 body RT를 우선한다", () => {
+  assert.deepEqual(
+    selectRefreshCredential({
+      cookieToken: "cookie-token",
+      bodyToken: "body-token",
+      cookieMode: true,
+    }),
+    { token: "cookie-token", source: "cookie" },
+  );
+  assert.deepEqual(
+    selectRefreshCredential({
+      cookieToken: "cookie-token",
+      bodyToken: "body-token",
+      cookieMode: false,
+    }),
+    { token: "body-token", source: "body" },
+  );
+});
+
+test("쿠키 인증 응답에는 RT 원문을 반환하지 않는다", () => {
+  assert.equal(shouldReturnLegacyRefreshToken("cookie", true), false);
+  assert.equal(shouldReturnLegacyRefreshToken("cookie", false), false);
+  assert.equal(shouldReturnLegacyRefreshToken("body", true), false);
+  assert.equal(shouldReturnLegacyRefreshToken("body", false), true);
+});
+
+test("HttpOnly RT 쿠키는 운영 보안 속성과 로그인 유지 만료를 구분한다", () => {
+  const expiry = new Date("2026-08-30T00:00:00.000Z");
+  const persistent = refreshTokenCookieOptions("Y", expiry, true);
+  const session = refreshTokenCookieOptions("N", expiry, true);
+
+  assert.equal(refreshTokenCookieName(true), "__Host-specode_rt");
+  assert.equal(persistent.httpOnly, true);
+  assert.equal(persistent.secure, true);
+  assert.equal(persistent.sameSite, "strict");
+  assert.equal(persistent.path, "/");
+  assert.equal(persistent.expires, expiry);
+  assert.equal("expires" in session, false);
+});
+
+test("쿠키 모드 헤더와 정확한 동일 출처만 신뢰한다", () => {
+  const headers = new Headers({ [AUTH_COOKIE_MODE_HEADER]: AUTH_COOKIE_MODE_VALUE });
+  assert.equal(isCookieAuthMode(headers), true);
+
+  assert.equal(isTrustedAuthRequestOrigin({
+    origin: "https://www.specode.co.kr",
+    secFetchSite: "same-origin",
+    requestOrigin: "https://www.specode.co.kr",
+    requireOrigin: true,
+  }), true);
+  assert.equal(isTrustedAuthRequestOrigin({
+    origin: "https://evil.specode.co.kr",
+    secFetchSite: "same-site",
+    requestOrigin: "https://www.specode.co.kr",
+    requireOrigin: true,
+  }), false);
+  assert.equal(isTrustedAuthRequestOrigin({
+    origin: null,
+    secFetchSite: null,
+    requestOrigin: "https://www.specode.co.kr",
+    requireOrigin: true,
+  }), false);
+  assert.equal(isTrustedAuthRequestOrigin({
+    origin: null,
+    secFetchSite: null,
+    requestOrigin: "https://www.specode.co.kr",
+    requireOrigin: false,
+  }), true);
+});
+
 test("방금 폐기된 RT 재요청만 동시성 충돌로 분류한다", () => {
   const now = new Date("2026-08-20T00:00:10.000Z");
 
@@ -245,6 +346,70 @@ test("방금 폐기된 RT 재요청만 동시성 충돌로 분류한다", () => 
     classifyRevokedRefreshTokenUse(new Date("2026-08-20T00:00:04.999Z"), now),
     "REUSE_DETECTED",
   );
+});
+
+test("RT는 마지막 갱신 후 10일까지만 연장한다", () => {
+  const now = new Date("2026-08-20T00:00:00.000Z");
+
+  assert.equal(
+    refreshTokenExpiryDate(now).toISOString(),
+    "2026-08-30T00:00:00.000Z",
+  );
+});
+
+test("RT 회전은 최초 로그인 후 30일 절대 만료를 넘지 않는다", () => {
+  const sessionCreatedAt = new Date("2026-08-01T00:00:00.000Z");
+
+  assert.equal(
+    refreshTokenAbsoluteExpiryDate(sessionCreatedAt).toISOString(),
+    "2026-08-31T00:00:00.000Z",
+  );
+  assert.equal(
+    refreshTokenRotationExpiryDate(
+      sessionCreatedAt,
+      new Date("2026-08-05T00:00:00.000Z"),
+    )?.toISOString(),
+    "2026-08-15T00:00:00.000Z",
+  );
+  assert.equal(
+    refreshTokenRotationExpiryDate(
+      sessionCreatedAt,
+      new Date("2026-08-25T00:00:00.000Z"),
+    )?.toISOString(),
+    "2026-08-31T00:00:00.000Z",
+  );
+});
+
+test("최초 로그인 후 30일 경계부터 RT 회전을 거부한다", () => {
+  const sessionCreatedAt = new Date("2026-08-01T00:00:00.000Z");
+
+  assert.equal(
+    refreshTokenRotationExpiryDate(
+      sessionCreatedAt,
+      new Date("2026-08-31T00:00:00.000Z"),
+    ),
+    null,
+  );
+  assert.equal(
+    refreshTokenRotationExpiryDate(
+      sessionCreatedAt,
+      new Date("2026-09-01T00:00:00.000Z"),
+    ),
+    null,
+  );
+});
+
+test("30일 직전 갱신한 Access Token도 세션 절대 만료를 넘지 않는다", () => {
+  const absoluteExpiry = new Date(Date.now() + 5 * 60 * 1000);
+  const token = signAccessToken({
+    mberId: "member-1",
+    email: "member@example.com",
+    sesnId: "session-1",
+  }, { absoluteExpiry });
+  const decoded = jwt.decode(token);
+
+  assert.ok(decoded && typeof decoded === "object" && typeof decoded.exp === "number");
+  assert.ok(decoded.exp <= Math.floor(absoluteExpiry.getTime() / 1000));
 });
 
 test("동시에 같은 RT를 회전해도 조건부 소비와 새 RT 생성은 한 번만 성공한다", async () => {

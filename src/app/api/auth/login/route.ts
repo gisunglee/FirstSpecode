@@ -10,7 +10,8 @@
  * Body: { email: string, password: string, rememberMe?: boolean }
  *
  * 응답:
- *   200  { data: { accessToken, refreshToken } }
+ *   200  { data: { accessToken } } + HttpOnly RT 쿠키
+ *        (전환 기간의 구형 클라이언트에는 refreshToken 필드도 유지)
  *   401  { code, message, failCount }
  *   403  { code, message }            — 미인증 계정
  *   423  { code, message, lockExpiredAt } — 계정 잠금
@@ -27,6 +28,11 @@ import {
   hashRefreshToken,
   refreshTokenExpiryDate,
 } from "@/lib/auth";
+import {
+  isTrustedAuthRequest,
+  requestUsesCookieAuthMode,
+  setRefreshTokenCookie,
+} from "@/lib/authRefreshCookie";
 
 // 계정 잠금 기준 연속 실패 횟수
 const MAX_FAIL_COUNT = 5;
@@ -40,6 +46,11 @@ const LOGIN_IP_LIMIT       = 20;
 const LOGIN_IP_WINDOW_SEC  = 600; // 10분
 
 export async function POST(request: NextRequest) {
+  const cookieMode = requestUsesCookieAuthMode(request);
+  if (!isTrustedAuthRequest(request, cookieMode)) {
+    return apiError("CSRF_ERROR", "허용되지 않은 출처의 요청입니다.", 403);
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -240,7 +251,11 @@ export async function POST(request: NextRequest) {
 
     const accessToken = signAccessToken({ mberId: member.mber_id, email, sesnId });
 
-    return apiSuccess({ accessToken, refreshToken: refreshTokenRaw });
+    const response = apiSuccess({
+      accessToken,
+      ...(!cookieMode ? { refreshToken: refreshTokenRaw } : {}),
+    });
+    return setRefreshTokenCookie(response, refreshTokenRaw, rtExpiry, autoLoginYn);
 
   } catch (err) {
     console.error("[POST /api/auth/login] 오류:", err);

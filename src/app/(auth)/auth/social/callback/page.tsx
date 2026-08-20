@@ -14,7 +14,11 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { storeAuthTokens } from "@/lib/authTokenStorage";
+import { clearStoredRefreshTokens, storeAccessToken } from "@/lib/authTokenStorage";
+import {
+  AUTH_COOKIE_MODE_HEADER,
+  AUTH_COOKIE_MODE_VALUE,
+} from "@/lib/authCookiePolicy";
 
 export default function SocialCallbackPage() {
   return (
@@ -40,7 +44,11 @@ function SocialCallbackInner() {
 
     fetch("/api/auth/social/callback", {
       method:  "POST",
-      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        [AUTH_COOKIE_MODE_HEADER]: AUTH_COOKIE_MODE_VALUE,
+      },
       body:    JSON.stringify({ code, state }),
     })
       .then(async (res) => {
@@ -50,16 +58,17 @@ function SocialCallbackInner() {
           return;
         }
 
-        const { resultType, accessToken, refreshToken, socialToken, email, provider, redirectTo } = body.data;
+        const { resultType, accessToken, socialToken, email, provider, redirectTo } = body.data;
         // entry=1 — 대시보드의 "로그인 직후 1회" 착지 분기 마커(login/page.tsx와 동일 이유)
         const finalUrl = redirectTo || "/dashboard?entry=1";
 
         if (resultType === "NEW" || resultType === "EXISTING") {
-          // 토큰 저장 후 리다렉트
-          if (!storeAuthTokens(accessToken, refreshToken, "session")) {
+          // AT만 탭 저장소에 두고 RT는 서버가 설정한 HttpOnly 쿠키를 사용한다.
+          if (!storeAccessToken(accessToken)) {
             setError("브라우저에 로그인 정보를 저장할 수 없습니다.");
             return;
           }
+          clearStoredRefreshTokens();
           router.replace(finalUrl);
 
         } else if (resultType === "LINK_REQUIRED") {

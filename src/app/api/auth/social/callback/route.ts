@@ -27,8 +27,18 @@ import {
   hashRefreshToken,
   refreshTokenExpiryDate,
 } from "@/lib/auth";
+import {
+  isTrustedAuthRequest,
+  requestUsesCookieAuthMode,
+  setRefreshTokenCookie,
+} from "@/lib/authRefreshCookie";
 
 export async function POST(request: NextRequest) {
+  const cookieMode = requestUsesCookieAuthMode(request);
+  if (!isTrustedAuthRequest(request, cookieMode)) {
+    return apiError("CSRF_ERROR", "허용되지 않은 출처의 요청입니다.", 403);
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -234,9 +244,16 @@ export async function POST(request: NextRequest) {
       });
 
       const at  = signAccessToken({ mberId: existingSocial.mber_id, email: existingSocial.member.email_addr ?? "", sesnId });
-      const res = NextResponse.json({ data: { resultType: "EXISTING", accessToken: at, refreshToken: rt, redirectTo } });
+      const res = NextResponse.json({
+        data: {
+          resultType: "EXISTING",
+          accessToken: at,
+          ...(!cookieMode ? { refreshToken: rt } : {}),
+          redirectTo,
+        },
+      });
       res.cookies.delete("oauth_state");
-      return res;
+      return setRefreshTokenCookie(res, rt, rtExpiry, "N");
     }
 
     // ── 동일 이메일 기존 계정 조회 ──
@@ -296,9 +313,16 @@ export async function POST(request: NextRequest) {
     });
 
     const at  = signAccessToken({ mberId: newMember.mber_id, email: provdrEmail!, sesnId });
-    const res = NextResponse.json({ data: { resultType: "NEW", accessToken: at, refreshToken: rt, redirectTo } });
+    const res = NextResponse.json({
+      data: {
+        resultType: "NEW",
+        accessToken: at,
+        ...(!cookieMode ? { refreshToken: rt } : {}),
+        redirectTo,
+      },
+    });
     res.cookies.delete("oauth_state");
-    return res;
+    return setRefreshTokenCookie(res, rt, rtExpiry, "N");
 
   } catch (err) {
     console.error("[POST /api/auth/social/callback] 오류:", err);

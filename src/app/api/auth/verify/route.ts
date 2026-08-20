@@ -18,8 +18,18 @@ import {
   hashRefreshToken,
   refreshTokenExpiryDate,
 } from "@/lib/auth";
+import {
+  isTrustedAuthRequest,
+  requestUsesCookieAuthMode,
+  setRefreshTokenCookie,
+} from "@/lib/authRefreshCookie";
 
 export async function POST(request: NextRequest) {
+  const cookieMode = requestUsesCookieAuthMode(request);
+  if (!isTrustedAuthRequest(request, cookieMode)) {
+    return apiError("CSRF_ERROR", "허용되지 않은 출처의 요청입니다.", 403);
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -104,7 +114,11 @@ export async function POST(request: NextRequest) {
 
     const accessToken = signAccessToken({ mberId: mber_id, email: email_addr!, sesnId });
 
-    return apiSuccess({ accessToken, refreshToken: refreshTokenRaw });
+    const response = apiSuccess({
+      accessToken,
+      ...(!cookieMode ? { refreshToken: refreshTokenRaw } : {}),
+    });
+    return setRefreshTokenCookie(response, refreshTokenRaw, refreshExpiry, "N");
   } catch (err) {
     console.error("[POST /api/auth/verify] 오류:", err);
     return apiError("DB_ERROR", "인증 처리 중 오류가 발생했습니다.", 500);

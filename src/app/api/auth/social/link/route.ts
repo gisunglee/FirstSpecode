@@ -19,8 +19,18 @@ import {
   hashRefreshToken,
   refreshTokenExpiryDate,
 } from "@/lib/auth";
+import {
+  isTrustedAuthRequest,
+  requestUsesCookieAuthMode,
+  setRefreshTokenCookie,
+} from "@/lib/authRefreshCookie";
 
 export async function POST(request: NextRequest) {
+  const cookieMode = requestUsesCookieAuthMode(request);
+  if (!isTrustedAuthRequest(request, cookieMode)) {
+    return apiError("CSRF_ERROR", "허용되지 않은 출처의 요청입니다.", 403);
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -110,7 +120,11 @@ export async function POST(request: NextRequest) {
 
     const accessToken = signAccessToken({ mberId: member.mber_id, email, sesnId });
 
-    return apiSuccess({ accessToken, refreshToken: rt });
+    const response = apiSuccess({
+      accessToken,
+      ...(!cookieMode ? { refreshToken: rt } : {}),
+    });
+    return setRefreshTokenCookie(response, rt, rtExpiry, "N");
 
   } catch (err) {
     console.error("[POST /api/auth/social/link] 오류:", err);

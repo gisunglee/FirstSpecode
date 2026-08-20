@@ -23,6 +23,7 @@ import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { requireAuth } from "@/lib/requireAuth";
 import { verifyPassword, verifySocialToken } from "@/lib/auth";
+import { clearRefreshTokenCookie } from "@/lib/authRefreshCookie";
 
 export async function DELETE(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -177,7 +178,7 @@ export async function DELETE(request: NextRequest) {
       });
     });
 
-    return apiSuccess({ message: "탈퇴가 완료되었습니다." });
+    return clearRefreshTokenCookie(apiSuccess({ message: "탈퇴가 완료되었습니다." }));
 
   } catch (err) {
     console.error("[DELETE /api/member/me] 오류:", err);

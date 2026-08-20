@@ -14,7 +14,11 @@
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/apiFetch";
-import { storeAuthTokens } from "@/lib/authTokenStorage";
+import { clearStoredRefreshTokens, storeAccessToken } from "@/lib/authTokenStorage";
+import {
+  AUTH_COOKIE_MODE_HEADER,
+  AUTH_COOKIE_MODE_VALUE,
+} from "@/lib/authCookiePolicy";
 
 const REDIRECT_DELAY_SEC = 3;
 
@@ -45,11 +49,14 @@ function RegisterCompleteInner() {
       return;
     }
 
-    apiFetch<{ data: { accessToken: string; refreshToken: string } }>(
+    apiFetch<{ data: { accessToken: string } }>(
       "/api/auth/verify",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          [AUTH_COOKIE_MODE_HEADER]: AUTH_COOKIE_MODE_VALUE,
+        },
         body: JSON.stringify({ token }),
       }
     )
@@ -57,9 +64,10 @@ function RegisterCompleteInner() {
         // 토큰 저장 (추후 인증 상태 관리 통합 시 교체)
         // apiSuccess()는 { data: T } 구조로 감싸므로 res.data로 접근
         if (typeof window !== "undefined") {
-          if (!storeAuthTokens(res.data.accessToken, res.data.refreshToken, "session")) {
+          if (!storeAccessToken(res.data.accessToken)) {
             throw new Error("브라우저에 로그인 정보를 저장할 수 없습니다.");
           }
+          clearStoredRefreshTokens();
         }
         setStatus("success");
       })

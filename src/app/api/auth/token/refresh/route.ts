@@ -6,9 +6,12 @@
  *   2. 짧은 동시 재요청은 409, 그 이후 폐기 RT 재사용은 세션 전체 강제 종료
  *   3. 저장된 Refresh Token으로 새 AT/RT 발급
  *   4. 기존 RT 조건부 소비와 새 RT INSERT를 원자적으로 처리 (sesn_id 유지)
- *   5. auto_login_yn = 'Y'이면 만료일 10일 연장
+ *   5. 새 RT는 10일 유휴 만료와 최초 로그인 후 30일 절대 만료 중 이른 시각까지만 발급
  *
- * Body: { refreshToken: string }
+ * Body: {} — HttpOnly RT 쿠키 사용
+ *       { refreshToken: string } — 배포 전 Web Storage/구형 클라이언트 승계용
+ * 응답: { data: { accessToken } } + 회전된 HttpOnly RT 쿠키
+ *       (구형 body 클라이언트에만 전환 기간 동안 refreshToken 필드 유지)
  */
 
 import { NextRequest } from "next/server";
@@ -19,8 +22,17 @@ import {
   signAccessToken,
   generateRefreshToken,
   hashRefreshToken,
-  refreshTokenExpiryDate,
+  refreshTokenAbsoluteExpiryDate,
+  refreshTokenRotationExpiryDate,
 } from "@/lib/auth";
+import { shouldReturnLegacyRefreshToken } from "@/lib/authCookiePolicy";
+import {
+  clearRefreshTokenCookie,
+  isTrustedAuthRequest,
+  readRequestRefreshCredential,
+  requestUsesCookieAuthMode,
+  setRefreshTokenCookie,
+} from "@/lib/authRefreshCookie";
 import {
   classifyRevokedRefreshTokenUse,
   RefreshSessionInvalidatedError,
@@ -40,10 +52,26 @@ export async function POST(request: NextRequest) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { refreshToken } = (body ?? {}) as Record<string, unknown>;
+  const { refreshToken: bodyRefreshToken } = (body ?? {}) as Record<string, unknown>;
+  const cookieMode = requestUsesCookieAuthMode(request);
+  const credential = readRequestRefreshCredential(request, bodyRefreshToken);
 
-  if (!refreshToken || typeof refreshToken !== "string") {
-    return apiError("VALIDATION_ERROR", "Refresh Token이 필요합니다.", 400);
+  if (!isTrustedAuthRequest(
+    request,
+    cookieMode || credential?.source === "cookie",
+  )) {
+    return apiError("CSRF_ERROR", "허용되지 않은 출처의 요청입니다.", 403);
+  }
+
+  const invalidRefresh = (code: string, message: string) => {
+    const response = apiError(code, message, 401);
+    return cookieMode || credential?.source === "cookie"
+      ? clearRefreshTokenCookie(response)
+      : response;
+  };
+
+  if (!credential) {
+    return invalidRefresh("INVALID_TOKEN", "유효하지 않은 Refresh Token입니다.");
   }
 
   // IP별 Rate Limit — 봇/브루트포스 방어
@@ -64,7 +92,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const refreshToken = credential.token;
     const tokenHash = hashRefreshToken(refreshToken);
+    const now = new Date();
 
     // 토큰 조회 — revoked/expired 여부와 무관하게 일단 찾는다(도난 탐지 때문).
     const stored = await prisma.tbCmRefreshToken.findUnique({
@@ -75,7 +105,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!stored) {
-      return apiError("INVALID_TOKEN", "유효하지 않은 Refresh Token입니다.", 401);
+      return invalidRefresh("INVALID_TOKEN", "유효하지 않은 Refresh Token입니다.");
     }
 
     // ── 재시도 경쟁과 도난 재사용 구분 ─────────────────────────────────
@@ -83,7 +113,7 @@ export async function POST(request: NextRequest) {
     // 해당 세션의 살아있는 모든 RT를 폐기하고 세션 자체를 invalidate → 공격자와 정상
     // 사용자 모두 재로그인을 강제해 도난 피해를 차단한다.
     if (stored.revoked_dt !== null) {
-      const reuseKind = classifyRevokedRefreshTokenUse(stored.revoked_dt, new Date());
+      const reuseKind = classifyRevokedRefreshTokenUse(stored.revoked_dt, now);
       if (reuseKind === "CONCURRENT_RETRY") {
         return apiError(
           "REFRESH_CONFLICT",
@@ -93,7 +123,6 @@ export async function POST(request: NextRequest) {
       }
 
       if (stored.sesn_id) {
-        const now = new Date();
         await prisma.$transaction(async (tx) => {
           await tx.tbCmRefreshToken.updateMany({
             where: { sesn_id: stored.sesn_id!, revoked_dt: null },
@@ -108,46 +137,51 @@ export async function POST(request: NextRequest) {
       console.warn(
         `[REFRESH_REUSE] Revoked RT reused — mber_id=${stored.mber_id}, sesn_id=${stored.sesn_id ?? "null"}, ip=${ipAddr}`
       );
-      return apiError(
+      return invalidRefresh(
         "TOKEN_REUSE_DETECTED",
-        "보안 이유로 세션이 종료되었습니다. 다시 로그인해 주세요.",
-        401
+        "보안 이유로 세션이 종료되었습니다. 다시 로그인해 주세요."
       );
     }
 
-    if (stored.expiry_dt < new Date()) {
-      return apiError("INVALID_TOKEN", "유효하지 않은 Refresh Token입니다.", 401);
+    if (stored.expiry_dt.getTime() <= now.getTime()) {
+      return invalidRefresh("INVALID_TOKEN", "유효하지 않은 Refresh Token입니다.");
     }
 
     // 비활성 계정 차단
     if (stored.member.mber_sttus_code !== "ACTIVE") {
-      return apiError("UNAUTHORIZED", "접근 권한이 없습니다.", 401);
+      return invalidRefresh("UNAUTHORIZED", "접근 권한이 없습니다.");
     }
 
     if (!stored.sesn_id) {
-      return apiError("INVALID_TOKEN", "유효하지 않은 Refresh Token입니다.", 401);
+      return invalidRefresh("INVALID_TOKEN", "유효하지 않은 Refresh Token입니다.");
     }
 
     // Refresh는 빈도가 낮은 경계이므로 연결 세션의 무효화 여부를 직접 확인한다.
     const session = await prisma.tbCmMemberSession.findUnique({
       where: { sesn_id: stored.sesn_id },
-      select: { mber_id: true, invald_dt: true },
+      select: { mber_id: true, creat_dt: true, invald_dt: true },
     });
     if (
       !session ||
       session.mber_id !== stored.mber_id ||
       session.invald_dt !== null
     ) {
-      return apiError("SESSION_INVALIDATED", "유효하지 않은 로그인 세션입니다.", 401);
+      return invalidRefresh("SESSION_INVALIDATED", "유효하지 않은 로그인 세션입니다.");
     }
 
     const sessionId = stored.sesn_id;
+    const sessionAbsoluteExpiry = refreshTokenAbsoluteExpiryDate(session.creat_dt);
+    const newExpiry = refreshTokenRotationExpiryDate(session.creat_dt, now);
+    // JWT exp는 초 단위다. 1초 미만만 남은 경계 요청은 새 토큰을 만들지 않는다.
+    if (!newExpiry || sessionAbsoluteExpiry.getTime() - now.getTime() < 1_000) {
+      return invalidRefresh(
+        "INVALID_TOKEN",
+        "로그인 유지 기간이 만료되었습니다. 다시 로그인해 주세요."
+      );
+    }
 
     const newRawToken  = generateRefreshToken();
     const newTokenHash = hashRefreshToken(newRawToken);
-    // auto_login_yn = 'Y'이면 만료일을 현재 기준 10일로 연장 (rolling session)
-    const newExpiry    = refreshTokenExpiryDate();
-    const now          = new Date();
 
     // 서명 실패로 DB 회전만 완료되는 상황을 피하려고 트랜잭션 전에 AT를 만든다.
     const accessToken = signAccessToken({
@@ -155,7 +189,7 @@ export async function POST(request: NextRequest) {
       email:  stored.member.email_addr ?? "",
       // 새 AT도 검증된 동일 세션에 묶는다.
       sesnId: sessionId,
-    });
+    }, { absoluteExpiry: sessionAbsoluteExpiry });
 
     try {
       await prisma.$transaction((tx) =>
@@ -178,16 +212,26 @@ export async function POST(request: NextRequest) {
         );
       }
       if (err instanceof RefreshSessionInvalidatedError) {
-        return apiError(
+        return invalidRefresh(
           "SESSION_INVALIDATED",
-          "유효하지 않은 로그인 세션입니다.",
-          401
+          "유효하지 않은 로그인 세션입니다."
         );
       }
       throw err;
     }
 
-    return apiSuccess({ accessToken, refreshToken: newRawToken });
+    const response = apiSuccess({
+      accessToken,
+      ...(shouldReturnLegacyRefreshToken(credential.source, cookieMode)
+        ? { refreshToken: newRawToken }
+        : {}),
+    });
+    return setRefreshTokenCookie(
+      response,
+      newRawToken,
+      newExpiry,
+      stored.auto_login_yn,
+    );
 
   } catch (err) {
     console.error("[POST /api/auth/token/refresh] 오류:", err);

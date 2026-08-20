@@ -24,8 +24,9 @@ import { useAppStore } from "@/store/appStore";
 import { authFetch } from "@/lib/authFetch";
 import { clearAuthTokensAcrossTabs } from "@/lib/authRefreshClient";
 import {
-  readStoredRefreshToken,
-} from "@/lib/authTokenStorage";
+  AUTH_COOKIE_MODE_HEADER,
+  AUTH_COOKIE_MODE_VALUE,
+} from "@/lib/authCookiePolicy";
 import { usePermissions } from "@/hooks/useMyRole";
 import { ROLE_LABEL } from "@/lib/permissions";
 import type { ProjectOption } from "@/types/layout";
@@ -161,15 +162,23 @@ export default function GNB() {
   // 로그아웃 처리
   async function handleLogout() {
     setProfileOpen(false);
-    const rt = readStoredRefreshToken()?.token ?? "";
     try {
-      await fetch("/api/auth/logout", {
+      const response = await fetch("/api/auth/logout", {
         method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ refreshToken: rt }),
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          [AUTH_COOKIE_MODE_HEADER]: AUTH_COOKIE_MODE_VALUE,
+        },
+        body: JSON.stringify({}),
       });
+      if (!response.ok) {
+        toast.error("로그아웃 처리에 실패했습니다. 다시 시도해 주세요.");
+        return;
+      }
     } catch {
-      // 서버 오류여도 클라이언트 토큰은 제거
+      toast.error("서버에 연결하지 못해 로그아웃하지 못했습니다. 다시 시도해 주세요.");
+      return;
     }
     clearAuthTokensAcrossTabs();
 

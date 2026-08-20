@@ -19,10 +19,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/apiFetch";
 import { refreshAccessToken } from "@/lib/authRefreshClient";
 import {
-  readStoredRefreshToken,
-  removeStoredRefreshToken,
-  storeAuthTokens,
+  clearStoredRefreshTokens,
+  storeAccessToken,
 } from "@/lib/authTokenStorage";
+import {
+  AUTH_COOKIE_MODE_HEADER,
+  AUTH_COOKIE_MODE_VALUE,
+} from "@/lib/authCookiePolicy";
 
 const LS_SAVED_EMAIL    = "lc_saved_email";
 
@@ -78,19 +81,13 @@ function LoginInner() {
     const savedEmail = localStorage.getItem(LS_SAVED_EMAIL);
     if (savedEmail) { setEmail(savedEmail); setRememberEmail(true); }
 
-    const storedRT = readStoredRefreshToken("local");
-    if (!storedRT) return;
-
     setIsAutoLogging(true);
     refreshAccessToken("local")
       .then((accessToken) => {
-        if (!accessToken) {
-          removeStoredRefreshToken("local");
-          return;
-        }
+        if (!accessToken) return;
         router.replace(redirectTo);
       })
-      .catch(() => { removeStoredRefreshToken("local"); })
+      .catch(() => {})
       .finally(() => { setIsAutoLogging(false); });
   }, [redirectTo, router]);
 
@@ -105,21 +102,21 @@ function LoginInner() {
     try {
       const res  = await fetch("/api/auth/login", {
         method:  "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          [AUTH_COOKIE_MODE_HEADER]: AUTH_COOKIE_MODE_VALUE,
+        },
         body:    JSON.stringify({ email, password, rememberMe: autoLogin }),
       });
       const body = await res.json();
 
       if (res.ok) {
-        const stored = storeAuthTokens(
-          body.data.accessToken,
-          body.data.refreshToken,
-          autoLogin ? "local" : "session",
-        );
-        if (!stored) {
+        if (!storeAccessToken(body.data.accessToken)) {
           setSubmitError("브라우저에 로그인 정보를 저장할 수 없습니다.");
           return;
         }
+        clearStoredRefreshTokens();
         if (rememberEmail) { localStorage.setItem(LS_SAVED_EMAIL, email); }
         else               { localStorage.removeItem(LS_SAVED_EMAIL); }
         router.replace(redirectTo);

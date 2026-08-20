@@ -29,10 +29,13 @@ const BCRYPT_ROUNDS = 12;
 // 30분: 로그아웃 즉시성과 refresh 빈도 사이의 균형점
 //   - 너무 짧으면 설계 도구 특성상 "생각 시간" 후 복귀할 때마다 갱신 지연(100~200ms)
 //   - 너무 길면 로그아웃 후에도 토큰이 오래 살아있어 보안 리스크
-const ACCESS_TOKEN_EXPIRES = "30m";
+const ACCESS_TOKEN_EXPIRES_SECONDS = 30 * 60;
 
-// 리프레시 토큰 만료 일수
+// 리프레시 토큰은 마지막 갱신 후 10일 동안 유효하되,
+// 최초 로그인 세션 생성 후 30일을 넘겨 연장하지 않는다.
 export const REFRESH_TOKEN_EXPIRES_DAYS = 10;
+export const REFRESH_TOKEN_ABSOLUTE_EXPIRES_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // 인증 메일 토큰 만료 시간 (밀리초)
 export const VERIFY_TOKEN_EXPIRES_MS = 60 * 60 * 1000; // 1시간
@@ -76,12 +79,23 @@ export type AccessTokenPayload = {
 
 /** JWT 액세스 토큰 발급 */
 export function signAccessToken(
-  payload: Omit<AccessTokenPayload, "tokenType">
+  payload: Omit<AccessTokenPayload, "tokenType">,
+  options?: { absoluteExpiry?: Date },
 ): string {
+  const issuedAtSeconds = Math.floor(Date.now() / 1000);
+  const defaultExpirySeconds = issuedAtSeconds + ACCESS_TOKEN_EXPIRES_SECONDS;
+  const expirySeconds = options?.absoluteExpiry
+    ? Math.min(defaultExpirySeconds, Math.floor(options.absoluteExpiry.getTime() / 1000))
+    : defaultExpirySeconds;
+
+  if (expirySeconds <= issuedAtSeconds) {
+    throw new Error("Access Token 절대 만료 시각이 이미 지났습니다.");
+  }
+
   return jwt.sign(
-    { ...payload, tokenType: "ACCESS" },
+    { ...payload, tokenType: "ACCESS", exp: expirySeconds },
     getJwtSecret(),
-    { algorithm: "HS256", expiresIn: ACCESS_TOKEN_EXPIRES }
+    { algorithm: "HS256" }
   );
 }
 
@@ -126,11 +140,30 @@ export function hashRefreshToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-/** 리프레시 토큰 만료 일시 계산 */
-export function refreshTokenExpiryDate(): Date {
-  const d = new Date();
-  d.setDate(d.getDate() + REFRESH_TOKEN_EXPIRES_DAYS);
-  return d;
+/** 리프레시 토큰의 유휴 만료 일시 계산 (마지막 발급 시각 + 10일) */
+export function refreshTokenExpiryDate(now = new Date()): Date {
+  return new Date(now.getTime() + REFRESH_TOKEN_EXPIRES_DAYS * DAY_MS);
+}
+
+/** 로그인 세션의 절대 만료 일시 계산 (최초 세션 생성 시각 + 30일) */
+export function refreshTokenAbsoluteExpiryDate(sessionCreatedAt: Date): Date {
+  return new Date(
+    sessionCreatedAt.getTime() + REFRESH_TOKEN_ABSOLUTE_EXPIRES_DAYS * DAY_MS,
+  );
+}
+
+/** 다음 RT 만료 시각. 절대 만료에 도달했으면 null을 반환한다. */
+export function refreshTokenRotationExpiryDate(
+  sessionCreatedAt: Date,
+  now = new Date(),
+): Date | null {
+  const absoluteExpiry = refreshTokenAbsoluteExpiryDate(sessionCreatedAt);
+  if (absoluteExpiry.getTime() <= now.getTime()) return null;
+
+  const idleExpiry = refreshTokenExpiryDate(now);
+  return idleExpiry.getTime() < absoluteExpiry.getTime()
+    ? idleExpiry
+    : absoluteExpiry;
 }
 
 // ── API 키 (MCP 등 외부 클라이언트 인증용) ────────────────────────

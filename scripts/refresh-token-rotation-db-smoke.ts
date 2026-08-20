@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
+import { refreshTokenRotationExpiryDate } from "../src/lib/auth";
 import {
   RefreshTokenRotationConflictError,
   rotateRefreshTokenAtomically,
@@ -59,6 +60,9 @@ async function main(): Promise<void> {
     const sessionId = "refresh-test-session";
     const tokenId = "refresh-test-token";
     const now = new Date();
+    const sessionCreatedAt = new Date(now.getTime() - 25 * 24 * 60 * 60 * 1000);
+    const cappedExpiry = refreshTokenRotationExpiryDate(sessionCreatedAt, now);
+    assert.ok(cappedExpiry);
 
     await clientA.tbCmMember.create({
       data: {
@@ -71,6 +75,7 @@ async function main(): Promise<void> {
       data: {
         sesn_id: sessionId,
         mber_id: memberId,
+        creat_dt: sessionCreatedAt,
       },
     });
     await clientA.tbCmRefreshToken.create({
@@ -92,7 +97,7 @@ async function main(): Promise<void> {
           sessionId,
           newTokenHash: `rotated-refresh-token-hash-${suffix}`,
           autoLoginYn: "Y",
-          newExpiry: new Date(now.getTime() + 600_000),
+          newExpiry: cappedExpiry,
           now,
         })
       );
@@ -113,12 +118,16 @@ async function main(): Promise<void> {
     const activeTokens = await clientA.tbCmRefreshToken.count({
       where: { sesn_id: sessionId, revoked_dt: null },
     });
+    const activeToken = await clientA.tbCmRefreshToken.findFirstOrThrow({
+      where: { sesn_id: sessionId, revoked_dt: null },
+    });
     const session = await clientA.tbCmMemberSession.findUniqueOrThrow({
       where: { sesn_id: sessionId },
     });
 
     assert.ok(original.revoked_dt);
     assert.equal(activeTokens, 1);
+    assert.equal(activeToken.expiry_dt.toISOString(), cappedExpiry.toISOString());
     assert.equal(session.invald_dt, null);
     console.log("REFRESH_TOKEN_ATOMIC_ROTATION_DB_OK");
   } finally {

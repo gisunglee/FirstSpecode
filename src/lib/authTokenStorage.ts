@@ -1,8 +1,9 @@
 /**
  * 브라우저 인증 토큰 저장소 접근을 한곳에서 관리한다.
  *
- * Access Token은 탭별 sessionStorage에 저장하고, Refresh Token은
- * 로그인 유지 여부에 따라 localStorage 또는 sessionStorage 중 한 곳에만 둔다.
+ * Access Token은 탭별 sessionStorage에 저장한다.
+ * Refresh Token 관련 함수는 HttpOnly 쿠키 전환 전 기존 브라우저 값을 한 번
+ * 승계하고 제거하기 위한 호환 계층이며, 신규 로그인에는 사용하지 않는다.
  */
 
 export const ACCESS_TOKEN_KEY = "access_token";
@@ -75,7 +76,7 @@ export function readStoredRefreshToken(
   return null;
 }
 
-/** 새 로그인 토큰을 저장하며 반대편 RT 저장소의 잔여값을 제거한다. */
+/** @deprecated HttpOnly 쿠키 전환 전 저장값의 테스트·호환 처리에만 사용한다. */
 export function storeAuthTokens(
   accessToken: string,
   refreshToken: string,
@@ -100,7 +101,7 @@ export function storeAuthTokens(
   }
 }
 
-/** 요청에 사용한 RT가 그대로일 때만 회전 결과를 반영한다. */
+/** @deprecated HttpOnly 쿠키 전환 전 회전 로직의 테스트·호환 처리에만 사용한다. */
 export function replaceAuthTokensIfCurrent(
   expectedRefreshToken: string,
   accessToken: string,
@@ -145,6 +146,19 @@ export function removeStoredRefreshToken(
     }
   } catch {
     // 저장소 접근이 차단된 브라우저에서는 제거 실패를 호출부로 전파하지 않는다.
+  }
+}
+
+/** 쿠키 승계가 끝난 뒤 과거 local/session RT를 모두 제거한다. */
+export function clearStoredRefreshTokens(storage?: AuthTokenStorage): void {
+  const target = resolveStorage(storage);
+  if (!target) return;
+
+  try {
+    target.session.removeItem(SESSION_REFRESH_TOKEN_KEY);
+    target.local.removeItem(PERSISTENT_REFRESH_TOKEN_KEY);
+  } catch {
+    // 저장소 접근이 차단된 브라우저에서는 가능한 범위에서만 정리한다.
   }
 }
 

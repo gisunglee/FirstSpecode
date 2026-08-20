@@ -12,6 +12,7 @@
   },
   "include": [
     "src/lib/auth.ts",
+    "src/lib/authCookiePolicy.ts",
     "src/lib/authCredentialPolicy.ts",
     "src/lib/authTokenStorage.ts",
     "src/lib/refreshTokenRotation.ts",

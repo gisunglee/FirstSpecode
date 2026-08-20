@@ -35,6 +35,10 @@ import GlobalSearchDialog from "@/components/search/GlobalSearchDialog";
 import SupportSessionBanner from "@/components/admin/SupportSessionBanner";
 import { useAppStore } from "@/store/appStore";
 import { authFetch } from "@/lib/authFetch";
+import {
+  migrateLegacyRefreshToken,
+  refreshAccessToken,
+} from "@/lib/authRefreshClient";
 import { useTripleClickSidebarToggle } from "@/hooks/useTripleClickSidebarToggle";
 import { useGlobalSearchShortcut } from "@/hooks/useGlobalSearchShortcut";
 
@@ -62,16 +66,32 @@ export default function MainLayout({
   // 인증 상태 — 토큰 확인 전까지 화면 미표시 (레이아웃 flash 방지)
   const [authChecked, setAuthChecked] = useState(false);
 
-  // 마운트 시 access_token 존재 여부로 인증 확인
-  // sessionStorage는 SSR에서 접근 불가 → useEffect(클라이언트 전용)에서 처리
+  // 새 탭은 AT가 없어도 공유 HttpOnly RT 쿠키로 세션을 복원한다.
+  // 기존 Web Storage RT가 남은 브라우저는 백그라운드에서 한 번 쿠키로 승계한다.
   useEffect(() => {
-    const token = sessionStorage.getItem("access_token");
-    if (!token) {
-      // 토큰 없으면 로그인 페이지로 이동
-      router.replace("/auth/login");
-      return;
-    }
-    setAuthChecked(true);
+    let cancelled = false;
+
+    const checkAuth = async () => {
+      const token = sessionStorage.getItem("access_token");
+      if (token) {
+        if (!cancelled) setAuthChecked(true);
+        void migrateLegacyRefreshToken();
+        return;
+      }
+
+      const restoredToken = await refreshAccessToken();
+      if (cancelled) return;
+      if (restoredToken) {
+        setAuthChecked(true);
+        return;
+      }
+
+      const here = window.location.pathname + window.location.search;
+      router.replace(`/auth/login?redirect=${encodeURIComponent(here)}`);
+    };
+
+    void checkAuth();
+    return () => { cancelled = true; };
   }, [router]);
 
   // 마운트/테마 변경 시 data-theme 동기화
@@ -91,6 +111,7 @@ export default function MainLayout({
         .then((r) => r.data),
     staleTime: 0,
     retry: false,
+    enabled: authChecked,
   });
 
   // 미확인 안내가 있으면 모달 표시

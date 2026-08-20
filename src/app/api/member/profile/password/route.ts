@@ -22,6 +22,9 @@ const PASSWORD_POLICY = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\
 export async function PUT(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
+  if (auth.credentialType !== "SESSION" || !auth.sesnId) {
+    return apiError("UNAUTHORIZED", "로그인이 필요합니다.", 401);
+  }
 
   let body: unknown;
   try {
@@ -30,7 +33,7 @@ export async function PUT(request: NextRequest) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { currentPassword, newPassword, currentRefreshToken } = (body ?? {}) as Record<string, unknown>;
+  const { currentPassword, newPassword } = (body ?? {}) as Record<string, unknown>;
 
   if (!newPassword || typeof newPassword !== "string") {
     return apiError("VALIDATION_ERROR", "새 비밀번호를 입력해 주세요.", 400);
@@ -40,14 +43,24 @@ export async function PUT(request: NextRequest) {
   }
 
   try {
-    const member = await prisma.tbCmMember.findUnique({
-      where:  { mber_id: auth.mberId },
-      select: { pswd_hash: true },
+    // 비밀번호 변경은 민감 작업이므로 JWT 서명뿐 아니라 현재 세션과 회원 상태를
+    // 실제 DB에서 확인한다. 기존 회원 조회를 관계 조회로 대체해 쿼리 수는 늘지 않는다.
+    const currentSession = await prisma.tbCmMemberSession.findFirst({
+      where: {
+        sesn_id: auth.sesnId,
+        mber_id: auth.mberId,
+        invald_dt: null,
+        member: { mber_sttus_code: "ACTIVE" },
+      },
+      select: {
+        member: { select: { pswd_hash: true } },
+      },
     });
 
-    if (!member) {
-      return apiError("NOT_FOUND", "회원 정보를 찾을 수 없습니다.", 404);
+    if (!currentSession) {
+      return apiError("SESSION_INVALIDATED", "유효하지 않은 로그인 세션입니다.", 401);
     }
+    const member = currentSession.member;
 
     // 비밀번호가 있는 계정 — 현재 비밀번호 검증
     if (member.pswd_hash) {
@@ -63,11 +76,6 @@ export async function PUT(request: NextRequest) {
     const newHash = await hashPassword(newPassword);
     const now     = new Date();
 
-    // 현재 RT의 hash 값 (클라이언트에서 전달 — 현재 세션 제외용)
-    const currentRtHash = (typeof currentRefreshToken === "string" && currentRefreshToken)
-      ? (await import("@/lib/auth")).hashRefreshToken(currentRefreshToken)
-      : null;
-
     await prisma.$transaction(async (tx) => {
       // 새 비밀번호 저장
       await tx.tbCmMember.update({
@@ -75,37 +83,28 @@ export async function PUT(request: NextRequest) {
         data:  { pswd_hash: newHash, mdfcn_dt: now },
       });
 
-      // 현재 RT 제외 나머지 활성 RT 폐기
+      // AT에 검증된 현재 세션과 연결된 RT를 제외하고 나머지 활성 RT 폐기
       await tx.tbCmRefreshToken.updateMany({
         where: {
           mber_id:    auth.mberId,
           revoked_dt: null,
-          ...(currentRtHash ? { token_hash_val: { not: currentRtHash } } : {}),
+          OR: [
+            { sesn_id: null },
+            { sesn_id: { not: auth.sesnId } },
+          ],
         },
         data: { revoked_dt: now },
       });
 
-      // 현재 세션(현재 RT와 연결된 세션) 제외 나머지 세션 무효화
-      if (currentRtHash) {
-        const currentRt = await tx.tbCmRefreshToken.findUnique({
-          where: { token_hash_val: currentRtHash },
-          select: { sesn_id: true },
-        });
-        await tx.tbCmMemberSession.updateMany({
-          where: {
-            mber_id:   auth.mberId,
-            invald_dt: null,
-            ...(currentRt?.sesn_id ? { sesn_id: { not: currentRt.sesn_id } } : {}),
-          },
-          data: { invald_dt: now },
-        });
-      } else {
-        // currentRefreshToken 없으면 모든 세션 무효화
-        await tx.tbCmMemberSession.updateMany({
-          where: { mber_id: auth.mberId, invald_dt: null },
-          data:  { invald_dt: now },
-        });
-      }
+      // 현재 JWT의 세션을 제외한 나머지 세션 무효화
+      await tx.tbCmMemberSession.updateMany({
+        where: {
+          mber_id:   auth.mberId,
+          invald_dt: null,
+          sesn_id:   { not: auth.sesnId },
+        },
+        data: { invald_dt: now },
+      });
     });
 
     return apiSuccess({ message: "비밀번호가 변경되었습니다." });
