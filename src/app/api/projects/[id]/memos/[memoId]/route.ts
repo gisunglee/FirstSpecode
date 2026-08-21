@@ -1,6 +1,6 @@
 /**
  * GET    /api/projects/[id]/memos/[memoId] — 메모 단건 조회 (조회수 +1)
- * PUT    /api/projects/[id]/memos/[memoId] — 메모 수정 (본인만)
+ * PUT    /api/projects/[id]/memos/[memoId] — 메모 수정 (본인 또는 visblty_code=TEAM_EDIT인 경우 프로젝트 멤버 누구나)
  * DELETE /api/projects/[id]/memos/[memoId] — 메모 삭제 (본인 또는 OWNER/ADMIN)
  */
 
@@ -8,6 +8,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { checkMemoSheetSize } from "@/lib/memoSheetLimits";
 
 type RouteParams = { params: Promise<{ id: string; memoId: string }> };
 
@@ -27,8 +28,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "메모를 찾을 수 없습니다.", 404);
     }
 
-    // 접근 권한 확인: 본인 메모이거나 공유 메모여야 함
-    if (memo.creat_mber_id !== gate.mberId && memo.share_yn !== "Y") {
+    // 접근 권한 확인: 본인 메모이거나 PRIVATE가 아니어야 함
+    if (memo.creat_mber_id !== gate.mberId && memo.visblty_code === "PRIVATE") {
       return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
     }
 
@@ -44,17 +45,23 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       select: { mber_nm: true },
     });
 
+    const isMine = memo.creat_mber_id === gate.mberId;
+
     return apiSuccess({
       memoId:        memo.memo_id,
       subject:       memo.memo_sj,
       content:       memo.memo_cn ?? "",
-      shareYn:       memo.share_yn,
+      memoTyCode:    memo.memo_ty_code,
+      sheetData:     memo.sheet_data,
+      visbltyCode:   memo.visblty_code,
       refTyCode:     memo.ref_ty_code,
       refId:         memo.ref_id,
       viewCnt:       memo.view_cnt + 1,
       creatMberId:   memo.creat_mber_id,
       creatMberName: creator?.mber_nm ?? "",
-      isMine:        memo.creat_mber_id === gate.mberId,
+      isMine,
+      // TEAM_EDIT는 작성자 외 프로젝트 멤버도 수정 가능. 공개범위 자체는 작성자만 변경.
+      canEdit:       isMine || memo.visblty_code === "TEAM_EDIT",
       creatDt:       memo.creat_dt,
       mdfcnDt:       memo.mdfcn_dt,
     });
@@ -75,12 +82,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   if (!memo || memo.prjct_id !== projectId) {
     return apiError("NOT_FOUND", "메모를 찾을 수 없습니다.", 404);
   }
-  // 본인 메모만 수정 가능
-  if (memo.creat_mber_id !== gate.mberId) {
-    return apiError("FORBIDDEN", "본인 메모만 수정할 수 있습니다.", 403);
+  const isMine = memo.creat_mber_id === gate.mberId;
+  // 본인 메모이거나, TEAM_EDIT(전체수정)로 공개된 메모는 프로젝트 멤버 누구나 수정 가능
+  if (!isMine && memo.visblty_code !== "TEAM_EDIT") {
+    return apiError("FORBIDDEN", "수정 권한이 없습니다.", 403);
   }
 
-  let body: { subject?: string; content?: string; shareYn?: string };
+  let body: { subject?: string; content?: string; sheetData?: unknown; visbltyCode?: string };
   try {
     body = await request.json();
   } catch {
@@ -92,13 +100,29 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "제목을 입력해 주세요.", 400);
   }
 
+  // 이미지가 base64로 그대로 jsonb에 들어가므로 우회 방지용으로 서버에서도 검사
+  if (memo.memo_ty_code === "EXCEL" && body.sheetData !== undefined) {
+    const sizeCheck = checkMemoSheetSize(body.sheetData);
+    if (!sizeCheck.ok) {
+      return apiError("VALIDATION_ERROR", sizeCheck.message, 400);
+    }
+  }
+
+  // 공개범위 변경은 작성자만 — TEAM_EDIT로 들어온 타인이 스스로 권한을 넓히지 못하게 함
+  const validVisibility = ["PRIVATE", "TEAM_READ", "TEAM_EDIT"];
+  const visbltyCode = isMine && validVisibility.includes(body.visbltyCode ?? "")
+    ? body.visbltyCode
+    : undefined;
+
   try {
     await prisma.tbDsMemo.update({
       where: { memo_id: memoId },
       data: {
         ...(subject !== undefined && { memo_sj: subject }),
-        ...(body.content !== undefined && { memo_cn: body.content }),
-        ...(body.shareYn !== undefined && { share_yn: body.shareYn === "Y" ? "Y" : "N" }),
+        // memo_ty_code는 작성 시 확정 — 수정 불가. WEB이면 content, EXCEL이면 sheetData만 반영
+        ...(memo.memo_ty_code === "WEB" && body.content !== undefined && { memo_cn: body.content }),
+        ...(memo.memo_ty_code === "EXCEL" && body.sheetData !== undefined && { sheet_data: body.sheetData as object }),
+        ...(visbltyCode !== undefined && { visblty_code: visbltyCode }),
         mdfr_mber_id: gate.mberId,
         mdfcn_dt:     new Date(),
       },

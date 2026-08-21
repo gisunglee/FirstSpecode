@@ -9,17 +9,32 @@ import {
 } from "@/lib/exports/memos-data";
 
 const REF_TYPE_LABEL: Record<string, string> = {
-  FUNCTION:  "기능",
-  AREA:      "영역",
-  SCREEN:    "화면",
-  UNIT_WORK: "단위업무",
+  REQUIREMENT: "요구사항",
+  TASK:        "과업",
+  FUNCTION:    "기능",
+  AREA:        "영역",
+  SCREEN:      "화면",
+  UNIT_WORK:   "단위업무",
+};
+
+const VISIBILITY_LABEL: Record<string, string> = {
+  PRIVATE:   "나만보기",
+  TEAM_READ: "전체조회",
+  TEAM_EDIT: "전체수정",
+};
+
+const MEMO_TYPE_LABEL: Record<string, string> = {
+  WEB:   "웹 에디터",
+  EXCEL: "엑셀형",
 };
 
 const columns: ExcelColumn<MemoListItem>[] = [
   { key: "subject",       header: "제목",        width: 40 },
   { key: "creatMberName", header: "작성자",      width: 16 },
-  { key: "shareYn",       header: "공유 여부",   width: 10,
-    format: (r) => (r.shareYn === "Y" ? "공유" : "비공유") },
+  { key: "memoTyCode",    header: "작성 방식",   width: 12,
+    format: (r) => MEMO_TYPE_LABEL[r.memoTyCode] ?? r.memoTyCode },
+  { key: "visbltyCode",   header: "공개 범위",   width: 12,
+    format: (r) => VISIBILITY_LABEL[r.visbltyCode] ?? r.visbltyCode },
   { key: "refTyCode",     header: "연결 유형",   width: 12,
     format: (r) => (r.refTyCode ? (REF_TYPE_LABEL[r.refTyCode] ?? r.refTyCode) : "") },
   { key: "refName",       header: "연결 대상",   width: 30 },
@@ -35,13 +50,13 @@ export const memosExportConfig: ExportConfig<MemoListItem, { id: string }> = {
   entityKey:    "memos",
   columns,
   fetchData: async ({ req, params, mberId }) => {
-    const url         = new URL(req.url);
-    const refType     = url.searchParams.get("refType")        ?? undefined;
-    const refId       = url.searchParams.get("refId")          ?? undefined;
-    const search      = url.searchParams.get("search")?.trim() ?? undefined;
-    const shareFilter = url.searchParams.get("share")          ?? undefined;
+    const url        = new URL(req.url);
+    const refType    = url.searchParams.get("refType")        ?? undefined;
+    const refId      = url.searchParams.get("refId")          ?? undefined;
+    const search     = url.searchParams.get("search")?.trim() ?? undefined;
+    const visibility = url.searchParams.get("visibility")     ?? undefined;
     return fetchProjectMemos({
-      projectId: params.id, mberId, refType, refId, search, shareFilter,
+      projectId: params.id, mberId, refType, refId, search, visibility,
     });
   },
 };

@@ -28,6 +28,7 @@ import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEdit
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import ColMappingDialog from "@/components/ui/ColMappingDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
+import MemoEntryButton from "@/components/common/MemoEntryButton";
 import AreaAttachFiles from "@/components/ui/AreaAttachFiles";
 import AiTaskFilePicker from "@/components/ui/AiTaskFilePicker";
 import { SelectChevron } from "@/components/ui/SelectChevron";
@@ -462,9 +463,19 @@ function FunctionDetailPageInner() {
         {/* 우측 밀어내기 스페이서 */}
         <div style={{ flex: 1 }} />
 
-        {/* 우: AI 버튼 그룹 + 구분선 + 취소·저장 */}
+        {/* 우: 메모 + AI 버튼 그룹 + 구분선 + 취소·저장 */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <style>{`@keyframes _spin{to{transform:rotate(360deg)}}`}</style>
+
+          {/* 이 기능에 연결된 메모 — 신규 등록 중(functionId 없음)에는 숨김 */}
+          {!isNew && (
+            <MemoEntryButton
+              projectId={projectId}
+              refTyCode="FUNCTION"
+              refId={functionId}
+              refLabel={data?.name}
+            />
+          )}
 
           {/* PRD 다운로드 버튼 */}
           {!isNew && (

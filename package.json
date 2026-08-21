@@ -12,6 +12,7 @@
     "test:db-push": "dotenv -e .env.local -- node scripts/test-prisma-db-push.mjs",
     "db:migrate:drop-baseline": "dotenv -e .env.local -- prisma db execute --schema prisma/schema.prisma --file ddl/20260512-drop-baseline.sql",
     "db:migrate:spec-sync": "dotenv -e .env.local -- prisma db execute --schema prisma/schema.prisma --file prisma/sql/2026-08-17_create_spec_sync_v2.sql",
+    "db:migrate:extend-memo": "dotenv -e .env.local -- prisma db execute --schema prisma/schema.prisma --file prisma/sql/2026-08-19_extend_tb_ds_memo.sql",
     "db:migrate:spec-creator-permissions": "dotenv -e .env.local -- node scripts/run-spec-creator-permissions-migration.mjs",
     "test:ddl": "npx tsx scripts/test-ddl-parser.ts && npx tsx scripts/test-ddl-parser-2.ts",
     "test:codes": "npx tsx scripts/test-codes.ts",
@@ -33,6 +34,7 @@
   "private": true,
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.0",
+    "@fortune-sheet/react": "^1.0.4",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@svar-ui/react-gantt": "^2.7.1",
     "@tailwindcss/postcss": "^4.2.2",

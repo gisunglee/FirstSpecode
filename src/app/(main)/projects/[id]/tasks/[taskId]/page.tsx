@@ -22,6 +22,7 @@ import dynamic from "next/dynamic";
 // TipTap 번들이 초기 로드에 포함되지 않도록 dynamic import
 const RichEditor = dynamic(() => import("@/components/ui/RichEditor"), { ssr: false });
 import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
+import MemoEntryButton from "@/components/common/MemoEntryButton";
 import { SelectChevron } from "@/components/ui/SelectChevron";
 import TextCounter from "@/components/ui/TextCounter";
 import { TEXT_LIMITS } from "@/lib/constants/textLimits";
@@ -276,7 +277,16 @@ function TaskDetailPageInner() {
             {isNew ? "과업 추가" : "과업 수정"}
           </span>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {/* 이 과업에 연결된 메모 — 신규 작성 중(taskId 없음)에는 연결할 대상이 없어 숨김 */}
+          {!isNew && (
+            <MemoEntryButton
+              projectId={projectId}
+              refTyCode="TASK"
+              refId={taskId}
+              refLabel={taskDetail?.name}
+            />
+          )}
           <button
             onClick={() => router.push(`/projects/${projectId}/tasks`)}
             disabled={saveMutation.isPending}

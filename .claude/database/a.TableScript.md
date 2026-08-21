@@ -110,6 +110,16 @@
     * `dsgn_doc_sttus_code` (v): 기능정의서 작성 상태
     * 설계/구현 진척률(%)은 `tb_cm_progress`(`design_rt`/`impl_rt`)에 저장 — 화면·단위업무는
       이 값의 평균 롤업. 테스트 진척률(`test_rt`)은 2026-07-28 3차 개편으로 UI에서 완전히 뺌
+* **`tb_ds_memo`** (메모보드 — 프로젝트 내 자유 메모, 엔티티 연결 선택)
+  * `memo_id` (t, PK) / `prjct_id` (t, FK NN)
+  * `memo_sj` (t, NN, 기본 '') / `memo_cn` (t, nullable): 제목/본문(WEB 타입)
+  * `memo_ty_code` (v10, NN, 기본 WEB): `WEB`(리치텍스트) | `EXCEL`(Fortune-sheet) — 작성 시 확정, 이후 불변
+  * `sheet_data` (jsonb, nullable): EXCEL 타입 워크북 데이터 — `memo_ty_code='EXCEL'`일 때만 값 존재
+  * `visblty_code` (v20, NN, 기본 PRIVATE): `PRIVATE`(나만보기) | `TEAM_READ`(전체조회, 작성자만 수정) | `TEAM_EDIT`(전체수정, 프로젝트 멤버 누구나 수정)
+    * 2026-08-19: 기존 `share_yn`(Y/N) 폐지·대체. 동시수정 충돌은 처리하지 않음(나중 저장이 덮어씀)
+  * `ref_ty_code` (t, nullable) / `ref_id` (t, nullable): 다형 참조 — `REQUIREMENT`(요구사항) / `TASK`(과업) / `UNIT_WORK`(단위업무) / `SCREEN`(화면) / `AREA`(영역) / `FUNCTION`(기능). 둘 다 NULL = 전역 메모
+  * `view_cnt` (i) / `creat_mber_id` (t, NN, 작성자) / `mdfr_mber_id` (t)
+  * 인덱스: `(prjct_id, creat_dt DESC)`, `(prjct_id, ref_ty_code, ref_id)`
 * **`tb_ds_db_table`** & **`tb_ds_db_table_column`** (데이터 모델 설계)
   * 테이블: `tbl_id` (t, PK) / `tbl_physcl_nm` (t) / `tbl_lgcl_nm` (t)
   * 컬럼: `col_id` (t, PK) / `tbl_id` (t, FK) / `col_physcl_nm` (t) / `data_ty_nm` (t)

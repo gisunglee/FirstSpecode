@@ -35,6 +35,7 @@ import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
 import ReleaseDialog from "@/components/common/ReleaseDialog";
 import ReleaseHistoryDialog from "@/components/documents/ReleaseHistoryDialog";
 import ExportMenu from "@/components/common/ExportMenu";
+import MemoEntryButton from "@/components/common/MemoEntryButton";
 import { ReqSaveOptionDialog } from "@/components/common/ReqSaveOptionDialog";
 import { SelectChevron } from "@/components/ui/SelectChevron";
 import { PhaseItem } from "@/components/ui/ProgressTracker";
@@ -700,7 +701,16 @@ function RequirementDetailPageInner() {
 
         <div style={{ flex: 1 }} />
 
-        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+          {/* 이 요구사항에 연결된 메모 — 신규 작성 중(reqId 없음)에는 연결할 대상이 없어 숨김 */}
+          {!isNew && (
+            <MemoEntryButton
+              projectId={projectId}
+              refTyCode="REQUIREMENT"
+              refId={reqId}
+              refLabel={detail?.name}
+            />
+          )}
           {/* 삭제는 서버가 계산한 관리자 권한일 때만 노출 */}
           {canDelete && (
             <button

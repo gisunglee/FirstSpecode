@@ -25,6 +25,7 @@ import { usePermissions } from "@/hooks/useMyRole";
 import { useIdPrefixes } from "@/hooks/useIdPrefixes";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import UwTestSpecMenu from "@/components/test-specs/UwTestSpecMenu";
+import MemoEntryButton from "@/components/common/MemoEntryButton";
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
@@ -870,8 +871,17 @@ function UnitWorkDetailPageInner() {
           </span>
         </div>
 
-        {/* 우: 테스트 명세 + AI 작업 + PRD 다운로드 + 취소·저장 */}
+        {/* 우: 메모 + 테스트 명세 + AI 작업 + PRD 다운로드 + 취소·저장 */}
         <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+          {/* 이 단위업무에 연결된 메모 — 신규 등록 중(unitWorkId 없음)에는 숨김 */}
+          {!isNew && (
+            <MemoEntryButton
+              projectId={projectId}
+              refTyCode="UNIT_WORK"
+              refId={unitWorkId}
+              refLabel={detail?.name}
+            />
+          )}
           {/* 🧪 테스트 명세 드롭다운 — 단위업무에 묶인 단위/통합 명세서 진입 */}
           {!isNew && (
             <UwTestSpecMenu projectId={projectId} unitWorkId={unitWorkId} />

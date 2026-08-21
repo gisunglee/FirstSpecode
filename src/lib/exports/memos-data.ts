@@ -7,7 +7,8 @@ import { prisma } from "@/lib/prisma";
 export type MemoListItem = {
   memoId:        string;
   subject:       string;
-  shareYn:       string;
+  memoTyCode:    string;
+  visbltyCode:   string;
   refTyCode:     string | null;
   refId:         string | null;
   refName:       string;
@@ -15,33 +16,34 @@ export type MemoListItem = {
   creatMberId:   string;
   creatMberName: string;
   isMine:        boolean;
+  canEdit:       boolean;
   creatDt:       Date;
 };
 
 /**
  * fetchProjectMemos — 메모 목록 + 작성자 + 연결 엔티티 이름 조회
  *
- *   - mberId : 인증된 사용자. "내 메모" 식별 + 본인 메모 + 공유 메모 OR 조건 구성
- *   - shareFilter : "mine" | "shared" | undefined(전체 — 본인 + 공유)
+ *   - mberId : 인증된 사용자. "내 메모" 식별 + 본인 메모 + 팀공개 메모 OR 조건 구성
+ *   - visibility : "mine" | "team" | undefined(전체 — 본인 전체 + 타인의 PRIVATE 아닌 것)
  *   - refType + refId : 특정 엔티티에 연결된 메모만
  *   - search : 제목 부분 일치
  */
 export async function fetchProjectMemos(opts: {
-  projectId:    string;
-  mberId:       string;
-  refType?:     string;
-  refId?:       string;
-  search?:      string;
-  shareFilter?: string;
+  projectId:  string;
+  mberId:     string;
+  refType?:   string;
+  refId?:     string;
+  search?:    string;
+  visibility?: string;
 }): Promise<MemoListItem[]> {
-  const { projectId, mberId, refType, refId, search, shareFilter } = opts;
+  const { projectId, mberId, refType, refId, search, visibility } = opts;
 
-  // 조회 범위: 기본은 본인 메모 + 공유 메모(OR)
+  // 조회 범위: 기본은 본인 메모 전체 + 타인의 PRIVATE 아닌 메모(OR)
   const where: Record<string, unknown> = {
     prjct_id: projectId,
     OR: [
       { creat_mber_id: mberId },
-      { share_yn: "Y" },
+      { visblty_code: { not: "PRIVATE" } },
     ],
   };
 
@@ -52,18 +54,25 @@ export async function fetchProjectMemos(opts: {
   if (search) {
     where.memo_sj = { contains: search, mode: "insensitive" };
   }
-  if (shareFilter === "mine") {
+  if (visibility === "mine") {
     delete where.OR;
     where.creat_mber_id = mberId;
-  } else if (shareFilter === "shared") {
+  } else if (visibility === "team") {
     delete where.OR;
-    where.share_yn = "Y";
+    where.visblty_code = { not: "PRIVATE" };
   }
 
+  // select로 필요한 컬럼만 — memo_cn(본문)/sheet_data(표 전체, 이미지 base64 포함)는
+  // 목록 화면에서 전혀 안 쓰는데 select 없이 조회하면 매번 통째로 읽어와 낭비된다
+  // (엑셀형 메모 하나가 최대 1.5MB라 목록에 여러 개 있으면 체감되는 낭비였음).
   const memos = await prisma.tbDsMemo.findMany({
     where,
     orderBy: { creat_dt: "desc" },
     take: 200,
+    select: {
+      memo_id: true, memo_sj: true, memo_ty_code: true, visblty_code: true,
+      ref_ty_code: true, ref_id: true, view_cnt: true, creat_mber_id: true, creat_dt: true,
+    },
   });
 
   // 작성자 이름 일괄 조회
@@ -82,7 +91,8 @@ export async function fetchProjectMemos(opts: {
   return memos.map((m) => ({
     memoId:        m.memo_id,
     subject:       m.memo_sj,
-    shareYn:       m.share_yn,
+    memoTyCode:    m.memo_ty_code,
+    visbltyCode:   m.visblty_code,
     refTyCode:     m.ref_ty_code,
     refId:         m.ref_id,
     refName:       m.ref_id ? (refNameMap.get(m.ref_id) ?? "") : "",
@@ -90,6 +100,8 @@ export async function fetchProjectMemos(opts: {
     creatMberId:   m.creat_mber_id,
     creatMberName: mberMap.get(m.creat_mber_id) ?? "",
     isMine:        m.creat_mber_id === mberId,
+    // TEAM_EDIT는 작성자 외 프로젝트 멤버도 수정 가능
+    canEdit:       m.creat_mber_id === mberId || m.visblty_code === "TEAM_EDIT",
     creatDt:       m.creat_dt,
   }));
 }
@@ -108,6 +120,22 @@ async function resolveRefNames(
   }
 
   const queries: Promise<void>[] = [];
+  if (groups.REQUIREMENT?.length) {
+    queries.push(
+      prisma.tbRqRequirement.findMany({
+        where:  { req_id: { in: groups.REQUIREMENT } },
+        select: { req_id: true, req_nm: true },
+      }).then((rows) => rows.forEach((r) => map.set(r.req_id, r.req_nm))),
+    );
+  }
+  if (groups.TASK?.length) {
+    queries.push(
+      prisma.tbRqTask.findMany({
+        where:  { task_id: { in: groups.TASK } },
+        select: { task_id: true, task_nm: true },
+      }).then((rows) => rows.forEach((r) => map.set(r.task_id, r.task_nm))),
+    );
+  }
   if (groups.FUNCTION?.length) {
     queries.push(
       prisma.tbDsFunction.findMany({

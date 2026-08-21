@@ -38,6 +38,7 @@ import AiTaskHistoryDialog from "@/components/ui/AiTaskHistoryDialog";
 import AiImplementCard from "@/components/ui/AiImplementCard";
 import { SelectChevron } from "@/components/ui/SelectChevron";
 import ExcalidrawDialog from "@/components/ui/ExcalidrawDialog";
+import MemoEntryButton from "@/components/common/MemoEntryButton";
 import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
 import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
 import { useAppStore } from "@/store/appStore";
@@ -739,9 +740,19 @@ function AreaDetailPageInner() {
         {/* 스페이서 */}
         <div style={{ flex: 1 }} />
 
-        {/* 우: AI 버튼 + 구분선 + Excalidraw + 취소·저장 */}
+        {/* 우: 메모 + AI 버튼 + 구분선 + Excalidraw + 취소·저장 */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           <style>{`@keyframes _spin{to{transform:rotate(360deg)}}`}</style>
+
+          {/* 이 영역에 연결된 메모 — 신규 등록 중(areaId 없음)에는 숨김 */}
+          {!isNew && (
+            <MemoEntryButton
+              projectId={projectId}
+              refTyCode="AREA"
+              refId={areaId}
+              refLabel={data?.name}
+            />
+          )}
 
           {/* 디자인 설계 (Excalidraw) */}
           {!isNew && (

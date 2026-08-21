@@ -26,6 +26,7 @@ import { ScreenLayoutEditor, type LayoutRow } from "@/components/ui/ScreenLayout
 import SettingsHistoryDialog from "@/components/ui/SettingsHistoryDialog";
 import AssigneeHistoryDialog from "@/components/ui/AssigneeHistoryDialog";
 import PrdDownloadDialog from "@/components/ui/PrdDownloadDialog";
+import MemoEntryButton from "@/components/common/MemoEntryButton";
 import DesignExamplePopup from "@/components/ui/DesignExamplePopup";
 import { SelectChevron } from "@/components/ui/SelectChevron";
 import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
@@ -397,8 +398,17 @@ function ScreenDetailPageInner() {
             {isNew ? "화면 신규 등록" : `화면 편집 (${detail?.displayId ?? ""})`}
           </span>
         </div>
-        {/* 우: PRD 다운로드 + 삭제·취소·저장 */}
-        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        {/* 우: 메모 + PRD 다운로드 + 삭제·취소·저장 */}
+        <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+          {/* 이 화면에 연결된 메모 — 신규 등록 중(screenId 없음)에는 숨김 */}
+          {!isNew && (
+            <MemoEntryButton
+              projectId={projectId}
+              refTyCode="SCREEN"
+              refId={screenId}
+              refLabel={detail?.name}
+            />
+          )}
           {!isNew && (
             <button
               onClick={() => setPrdOpen(true)}

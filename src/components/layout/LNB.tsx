@@ -28,6 +28,7 @@ import { useAppStore } from "@/store/appStore";
 import { useMyRole, useIsSystemAdmin } from "@/hooks/useMyRole";
 import { getHomePageCookie, setHomePageCookie, clearHomePageCookie } from "@/lib/homePage";
 import { MenuIcon, type MenuIconKey } from "./menuIcons";
+import MemoEntryButton from "@/components/common/MemoEntryButton";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -422,6 +423,14 @@ export default function LNB() {
             </button>
           );
         })}
+
+        {/* 메모 — 사이드바 하단 고정 진입점(전역). 하단 상태바("설계 동기화 완료" 등)와
+            성격이 달라(작업 상태 vs 자유 메모) 레일 쪽에 별도로 둔다. */}
+        {currentProjectId && (
+          <div style={{ marginTop: "auto" }}>
+            <MemoEntryButton projectId={currentProjectId} variant="rail" />
+          </div>
+        )}
       </nav>
 
       {/* ── 우측 서브 패널: 활성 그룹의 메뉴 목록 ──────────────────────────── */}

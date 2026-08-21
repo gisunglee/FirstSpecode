@@ -4,13 +4,15 @@
  * MemoListPage — 메모 목록 (/projects/[id]/memos)
  *
  * 역할:
- *   - 프로젝트 내 메모 목록 조회 (본인 + 공유 메모)
- *   - 검색, 공유 필터
+ *   - 프로젝트 내 메모 목록 조회 (본인 전체 + 팀공개 메모)
+ *   - 검색, 공개범위 필터
+ *   - URL의 refType/refId 쿼리가 있으면 해당 엔티티 연결 메모만 (엔티티 상세화면
+ *     MemoEntryButton의 "창 크게 보기"에서 진입)
  *   - 행 클릭 → 상세 페이지 이동
  */
 
 import { Suspense, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
@@ -20,7 +22,8 @@ import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 type MemoRow = {
   memoId:        string;
   subject:       string;
-  shareYn:       string;
+  memoTyCode:    string;
+  visbltyCode:   string;
   refTyCode:     string | null;
   refId:         string | null;
   refName:       string;
@@ -28,22 +31,36 @@ type MemoRow = {
   creatMberId:   string;
   creatMberName: string;
   isMine:        boolean;
+  canEdit:       boolean;
   creatDt:       string;
 };
 
 // ── 상수 ──────────────────────────────────────────────────────────────────────
 
 const REF_TYPE_LABEL: Record<string, string> = {
-  FUNCTION:  "기능",
-  AREA:      "영역",
-  SCREEN:    "화면",
-  UNIT_WORK: "단위업무",
+  REQUIREMENT: "요구사항",
+  TASK:        "과업",
+  UNIT_WORK:   "단위업무",
+  SCREEN:      "화면",
+  AREA:        "영역",
+  FUNCTION:    "기능",
 };
 
-const SHARE_FILTERS = [
-  { value: "",       label: "전체" },
-  { value: "mine",   label: "내 메모" },
-  { value: "shared", label: "공유 메모" },
+const MEMO_TYPE_LABEL: Record<string, string> = {
+  WEB:   "웹",
+  EXCEL: "엑셀",
+};
+
+const VISIBILITY_LABEL: Record<string, { label: string; bg: string; fg: string }> = {
+  PRIVATE:   { label: "나만보기", bg: "var(--color-bg-muted)",     fg: "var(--color-text-secondary)" },
+  TEAM_READ: { label: "전체조회", bg: "var(--color-info-subtle, #e3f2fd)",    fg: "var(--color-info, #1565c0)" },
+  TEAM_EDIT: { label: "전체수정", bg: "var(--color-success-subtle, #e8f5e9)", fg: "var(--color-success, #2e7d32)" },
+};
+
+const VISIBILITY_FILTERS = [
+  { value: "",     label: "전체" },
+  { value: "mine", label: "내 메모" },
+  { value: "team", label: "팀 공개" },
 ];
 
 // ── 유틸 ──────────────────────────────────────────────────────────────────────
@@ -65,19 +82,25 @@ export default function MemoListPage() {
 
 function MemoListInner() {
   const { id: projectId } = useParams<{ id: string }>();
-  const router = useRouter();
+  const router       = useRouter();
+  const searchParams = useSearchParams();
 
-  const [search, setSearch]           = useState("");
-  const [shareFilter, setShareFilter] = useState("");
+  // 엔티티 상세화면 MemoEntryButton의 "창 크게 보기"에서 진입 시 URL에 실려 옴 — 고정 스코프
+  const refType = searchParams.get("refType") ?? undefined;
+  const refId   = searchParams.get("refId")   ?? undefined;
+
+  const [search, setSearch]     = useState("");
+  const [visFilter, setVisFilter] = useState("");
 
   // ── 데이터 조회 ──
   const queryParams = new URLSearchParams();
   if (search.trim())  queryParams.set("search", search.trim());
-  if (shareFilter)    queryParams.set("share", shareFilter);
+  if (visFilter)       queryParams.set("visibility", visFilter);
+  if (refType && refId) { queryParams.set("refType", refType); queryParams.set("refId", refId); }
   const qs = queryParams.toString();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["memos", projectId, search, shareFilter],
+    queryKey: ["memos", projectId, search, visFilter, refType, refId],
     queryFn: () =>
       authFetch<{ data: { items: MemoRow[] } }>(
         `/api/projects/${projectId}/memos${qs ? `?${qs}` : ""}`
@@ -98,15 +121,30 @@ function MemoListInner() {
         borderBottom: "1px solid var(--color-border)",
         marginBottom: 16,
       }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)", flex: 1 }}>
-          메모
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, gap: 2 }}>
+          <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+            메모
+          </span>
+          {refType && refId && (
+            <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5 }}>
+              <span style={{ padding: "1px 7px", borderRadius: 999, fontWeight: 700, background: "var(--color-accent-subtle, #fde8b8)", color: "var(--color-accent-hover, #d4820a)" }}>
+                {REF_TYPE_LABEL[refType] ?? refType} 연결 메모만 보는 중
+              </span>
+              <button
+                onClick={() => router.push(`/projects/${projectId}/memos`)}
+                style={{ border: "none", background: "none", cursor: "pointer", color: "var(--color-text-tertiary)", textDecoration: "underline", fontSize: 11.5, padding: 0 }}
+              >
+                전체 메모 보기
+              </button>
+            </span>
+          )}
         </div>
         <ExcelDownloadButton
           href={`/api/projects/${projectId}/memos/export${qs ? `?${qs}` : ""}`}
           entityKey="memos"
         />
         <button
-          onClick={() => router.push(`/projects/${projectId}/memos/new`)}
+          onClick={() => router.push(`/projects/${projectId}/memos/new${refType && refId ? `?refType=${refType}&refId=${refId}` : ""}`)}
           style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
         >
           + 새 메모
@@ -123,15 +161,15 @@ function MemoListInner() {
           style={{ width: 220 }}
         />
         <div style={{ display: "flex", gap: 4 }}>
-          {SHARE_FILTERS.map((f) => (
+          {VISIBILITY_FILTERS.map((f) => (
             <button
               key={f.value}
-              onClick={() => setShareFilter(f.value)}
+              onClick={() => setVisFilter(f.value)}
               style={{
                 padding: "5px 12px", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: "pointer",
                 border: "1px solid var(--color-border)",
-                background: shareFilter === f.value ? "var(--color-primary, #1976d2)" : "var(--color-bg-card)",
-                color: shareFilter === f.value ? "#fff" : "var(--color-text-secondary)",
+                background: visFilter === f.value ? "var(--color-primary, #1976d2)" : "var(--color-bg-card)",
+                color: visFilter === f.value ? "#fff" : "var(--color-text-secondary)",
               }}
             >
               {f.label}
@@ -150,7 +188,8 @@ function MemoListInner() {
           <div style={gridHeaderStyle}>
             <div>제목</div>
             <div>연결 대상</div>
-            <div>공유</div>
+            <div>방식</div>
+            <div>공개 범위</div>
             <div>작성자</div>
             <div style={{ textAlign: "center" }}>조회</div>
             <div>작성일</div>
@@ -193,13 +232,19 @@ function MemoListInner() {
                   )}
                 </div>
 
-                {/* 공유 */}
+                {/* 작성 방식 */}
+                <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+                  {MEMO_TYPE_LABEL[m.memoTyCode] ?? m.memoTyCode}
+                </div>
+
+                {/* 공개 범위 */}
                 <div style={{ fontSize: 12 }}>
-                  {m.shareYn === "Y" ? (
-                    <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, background: "#e8f5e9", color: "#2e7d32" }}>공유</span>
-                  ) : (
-                    <span style={{ color: "#ccc" }}>비공개</span>
-                  )}
+                  <span style={{
+                    padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600,
+                    background: VISIBILITY_LABEL[m.visbltyCode]?.bg, color: VISIBILITY_LABEL[m.visbltyCode]?.fg,
+                  }}>
+                    {VISIBILITY_LABEL[m.visbltyCode]?.label ?? m.visbltyCode}
+                  </span>
                 </div>
 
                 {/* 작성자 */}
@@ -227,8 +272,8 @@ function MemoListInner() {
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-// 제목(가변) | 연결대상 | 공유 | 작성자 | 조회 | 작성일
-const GRID_TEMPLATE = "1fr 15% 7% 10% 6% 9%";
+// 제목(가변) | 연결대상 | 방식 | 공개범위 | 작성자 | 조회 | 작성일
+const GRID_TEMPLATE = "1fr 14% 7% 9% 10% 6% 9%";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID_TEMPLATE, gap: 8,
