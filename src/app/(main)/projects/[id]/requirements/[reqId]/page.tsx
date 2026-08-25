@@ -771,8 +771,10 @@ function RequirementDetailPageInner() {
           </div>
         )}
         {/* 2단 레이아웃: 왼쪽(요구사항 내용+기본정보) / 오른쪽(분석메모·상세명세+근거파일)
-            — 화면 폭을 꽉 채우도록 maxWidth 제거, 좌:우 비율 4.5:5.5로 조정(2026-07-29) */}
-        <div style={{ display: "grid", gridTemplateColumns: "4.5fr 5.5fr", gap: 24, alignItems: "start" }}>
+            — 화면 폭을 꽉 채우도록 maxWidth 제거, 좌:우 비율 4.5:5.5로 조정(2026-07-29)
+            minmax(0, Nfr): 트랙 최소폭을 콘텐츠 기준(auto)이 아닌 0으로 고정 —
+            RichEditor 확대/축소로 왼쪽 콘텐츠 높이·구성이 바뀌어도 좌우 비율이 흔들리지 않게 함 */}
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 4.5fr) minmax(0, 5.5fr)", gap: 24, alignItems: "start" }}>
 
           {/* ── 왼쪽 컬럼 ─────────────────────────────────────────────────────── */}
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>

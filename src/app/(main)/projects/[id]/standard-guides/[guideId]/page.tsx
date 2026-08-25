@@ -29,6 +29,11 @@ import {
   GUIDE_CATEGORY_BADGE,
   type GuideCategory,
 } from "@/constants/codes";
+import {
+  getStandardGuideUsages,
+  getStandardGuideWritingHint,
+  type GuideUsageLevel,
+} from "@/lib/standard-guides/usagePolicy";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -280,6 +285,8 @@ function StandardGuideDetailInner() {
           </div>
         )}
 
+        <StandardGuideUsagePanel category={category} useYn={useYn} />
+
         {/* ── 카테고리 · 제목 · 사용여부 카드 (한 줄 3열) ── */}
         {/* 제목을 가변(1fr), 카테고리·사용여부는 고정폭으로 좁게 — 본문 공간을 더 확보 */}
         <div style={contentCardStyle}>
@@ -309,7 +316,7 @@ function StandardGuideDetailInner() {
               />
             </div>
             <div>
-              {/* 사용여부 — Y=사용중(AI 참조), N=미사용(보관만) */}
+              {/* 사용여부 — Y=자동 참조 가능, N=미사용(보관만) */}
               <div style={cardLabelStyle}>사용여부</div>
               <div className="sp-select-wrap">
                 <select
@@ -341,7 +348,7 @@ function StandardGuideDetailInner() {
             // 카테고리/제목/사용여부를 한 줄로 합쳐 상단이 한 줄만큼 줄어든 만큼
             // 본문 영역을 그만큼 더 크게 확보 (rows 20 → 25, 약 +105px)
             rows={25}
-            placeholder="마크다운 형식의 가이드 본문을 작성하세요. AI가 이 내용을 참조해 개발 작업 시 제약을 따릅니다."
+            placeholder="마크다운 형식의 가이드 본문을 작성하세요. AI는 상단에 표시된 참조 범위에서 이 내용을 사용합니다."
           />
         </div>
       </div>
@@ -357,6 +364,52 @@ function StandardGuideDetailInner() {
         onCancel={() => setDeleteOpen(false)}
       />
     </div>
+  );
+}
+
+function usageLevelClass(level: GuideUsageLevel): string {
+  if (level === "ALWAYS") return "is-always";
+  if (level === "CONDITIONAL") return "is-conditional";
+  return "is-none";
+}
+
+function usageLevelLabel(level: GuideUsageLevel): string {
+  if (level === "ALWAYS") return "항상 참조";
+  if (level === "CONDITIONAL") return "관련 UW만";
+  return "참조 안 함";
+}
+
+function StandardGuideUsagePanel(props: { category: GuideCategory; useYn: string }) {
+  const usages = getStandardGuideUsages(props.category, props.useYn);
+  const writingHint = getStandardGuideWritingHint(props.category, props.useYn);
+
+  return (
+    <section className="sp-group sp-guide-usage-panel" aria-labelledby="standard-guide-usage-title">
+      <div className="sp-group-header">
+        <div id="standard-guide-usage-title" className="sp-group-title">
+          AI 참조 범위
+        </div>
+        <span className="sp-badge sp-badge-neutral">현재 설정</span>
+      </div>
+      <div className="sp-group-body">
+        <div className="sp-guide-usage-command-list">
+          {usages.map((usage) => (
+            <div key={usage.key} className="sp-guide-usage-command">
+              <code className="sp-code">{usage.label}</code>
+              <span className={`sp-guide-usage-pill ${usageLevelClass(usage.level)}`}>
+                <span className="sp-guide-usage-dot" aria-hidden="true" />
+                {usageLevelLabel(usage.level)}
+              </span>
+              <span className="sp-guide-usage-command-description">{usage.description}</span>
+            </div>
+          ))}
+        </div>
+        <div className="sp-guide-usage-writing-hint">
+          <strong>작성 도움</strong>
+          <span>{writingHint}</span>
+        </div>
+      </div>
+    </section>
   );
 }
 

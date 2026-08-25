@@ -25,6 +25,10 @@ import {
   GUIDE_CATEGORY_BADGE,
   type GuideCategory,
 } from "@/constants/codes";
+import {
+  getStandardGuideListUsage,
+  type GuideUsageLevel,
+} from "@/lib/standard-guides/usagePolicy";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -52,9 +56,6 @@ const USE_FILTERS: Array<{ value: "" | "Y" | "N"; label: string }> = [
   { value: "Y", label: "사용중" },
   { value: "N", label: "미사용" },
 ];
-
-// /review-uw가 항상 참고하는 카테고리 — 나머지 7종은 제목을 보고 관련 있을 때만 참고
-const AI_MANDATORY_CATEGORIES: readonly GuideCategory[] = ["COMMON", "SECURITY", "ERROR"];
 
 // ── 유틸 ──────────────────────────────────────────────────────────────────────
 
@@ -173,36 +174,7 @@ function StandardGuideListInner() {
         })}
       </div>
 
-      {/* ── AI 참조 안내 배너 — 선택된 카테고리를 /review-uw가 어떻게 쓰는지 안내.
-          COMMON/SECURITY/ERROR는 모든 검토에서 항상 참고, 나머지 7종은 review-uw가
-          제목만 보고 이번 단위업무와 관련 있다고 판단할 때만 골라서 참고한다. COMMON과
-          UI는 실제 코드 위치를 적어두면 AI가 그 파일을 직접 열어보고 검증할 수 있어서
-          예시 문구를 따로 덧붙인다(2026-08-20). ── */}
-      {(() => {
-        const isMandatory = category !== "" && AI_MANDATORY_CATEGORIES.includes(category as GuideCategory);
-        const message = category === ""
-          ? "🤖 표준 가이드는 /review-uw가 참고합니다. 공통 규칙·보안 정책·에러 처리는 모든 검토에서 항상, 나머지 카테고리는 제목을 보고 관련 있을 때만 참고합니다."
-          : category === "COMMON"
-          ? "🤖 AI가 모든 단위업무 검토에서 항상 참고합니다. 자주 참고할 공통 파일·폴더 경로를 적어두면 AI가 직접 열어보고 검증합니다. 예) 공통 유틸: src/lib/utils.ts · 공통 API 응답 포맷: src/lib/apiResponse.ts"
-          : category === "UI"
-          ? "🤖 AI가 제목을 보고 관련 있는 단위업무만 골라 참고합니다. 자주 참고할 디자인 파일·폴더 경로를 적어두면 AI가 직접 열어보고 검증합니다. 예) 디자인 토큰: src/styles/tokens.css · 공통 컴포넌트: src/components/ui/"
-          : isMandatory
-          ? "🤖 AI가 모든 단위업무 검토에서 항상 참고합니다. 체크리스트처럼 간결하게 작성하세요."
-          : "🤖 AI가 제목을 보고 관련 있는 단위업무만 골라 참고합니다. 제목을 구체적으로, 본문은 간결하게 작성하세요.";
-        return (
-          <div style={{
-            margin: "0 24px 14px",
-            padding: "8px 14px",
-            background: "var(--color-info-subtle, #f0f4ff)",
-            border: "1px solid var(--color-info, #3b82f6)",
-            borderRadius: 6,
-            fontSize: 12,
-            color: "var(--color-text-secondary)",
-          }}>
-            {message}
-          </div>
-        );
-      })()}
+      <StandardGuideUsageOverview />
 
       {/* ── 사용여부 세그먼트 + 검색 + 건수 (한 줄) ── */}
       <div style={{
@@ -258,10 +230,11 @@ function StandardGuideListInner() {
           데이터 0건이어도 테이블 구조(테두리 + 컬럼 헤더)는 항상 노출.
           빈 상태는 데이터 영역에만 메시지로 표시 — 다른 목록 페이지와 동일한 표준 패턴 */}
       <div style={{ padding: "0 24px 24px" }}>
-        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-          <div style={gridHeaderStyle}>
+        <div className="sp-guide-table-wrap">
+          <div className="sp-guide-table-grid" style={gridHeaderStyle}>
             <div>카테고리</div>
             <div>제목</div>
+            <div>AI 참조</div>
             <div>사용여부</div>
             <div>작성자</div>
             <div>최근 수정일</div>
@@ -289,6 +262,7 @@ function StandardGuideListInner() {
               return (
                 <div
                   key={g.guideId}
+                  className="sp-guide-table-grid"
                   onClick={() => router.push(`/projects/${projectId}/standard-guides/${g.guideId}`)}
                   style={{
                     ...gridRowStyle,
@@ -317,6 +291,10 @@ function StandardGuideListInner() {
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}>
                     {g.subject || "(제목 없음)"}
+                  </div>
+
+                  <div>
+                    <GuideUsageBadge category={cat} useYn={g.useYn} />
                   </div>
 
                   {/* 사용여부 배지 */}
@@ -365,8 +343,56 @@ function StandardGuideListInner() {
 }
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
-// 카테고리 | 제목(가변) | 사용여부 | 작성자 | 수정일
-const GRID_TEMPLATE = "120px 1fr 90px 12% 14%";
+// 카테고리 | 제목(가변) | AI 참조 | 사용여부 | 작성자 | 수정일
+function usageLevelClass(level: GuideUsageLevel): string {
+  if (level === "ALWAYS") return "is-always";
+  if (level === "CONDITIONAL") return "is-conditional";
+  return "is-none";
+}
+
+function GuideUsageBadge(props: { category: GuideCategory; useYn: string }) {
+  const usage = getStandardGuideListUsage(props.category, props.useYn);
+  return (
+    <span className={`sp-guide-usage-pill ${usageLevelClass(usage.level)}`}>
+      <span className="sp-guide-usage-dot" aria-hidden="true" />
+      {usage.label}
+    </span>
+  );
+}
+
+function StandardGuideUsageOverview() {
+  return (
+    <section className="sp-guide-usage-overview" aria-label="표준 가이드 AI 참조 규칙">
+      <div className="sp-guide-usage-overview-heading">
+        <span aria-hidden="true">AI</span>
+        <div>
+          <strong>가이드마다 자동 참조 범위가 다릅니다.</strong>
+          <p>목록의 배지로 적용 범위를 확인하고, 상세 화면에서 사용 기능별 조건을 확인하세요.</p>
+        </div>
+      </div>
+      <div className="sp-guide-usage-legend">
+        <div className="sp-guide-usage-legend-item">
+          <GuideUsageBadge category="COMMON" useYn="Y" />
+          <span>공통·보안·에러</span>
+        </div>
+        <div className="sp-guide-usage-legend-item">
+          <GuideUsageBadge category="UI" useYn="Y" />
+          <span>UI</span>
+        </div>
+        <div className="sp-guide-usage-legend-item">
+          <GuideUsageBadge category="API" useYn="Y" />
+          <span>API·데이터·인증·파일·배치·리포트</span>
+        </div>
+        <div className="sp-guide-usage-legend-item">
+          <GuideUsageBadge category="COMMON" useYn="N" />
+          <span>미사용 가이드</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const GRID_TEMPLATE = "0.8fr minmax(0, 2fr) 1fr 0.7fr 0.8fr 1fr";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID_TEMPLATE, gap: 8,

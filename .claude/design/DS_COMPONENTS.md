@@ -163,6 +163,27 @@ function toggleSidebar() {
 
 ---
 
+## AI Reference Scope
+
+표준 가이드처럼 AI가 문서를 언제 읽는지 표시할 때 사용한다.
+
+```html
+<span class="sp-guide-usage-pill is-always">
+  <span class="sp-guide-usage-dot"></span>항상 참조
+</span>
+<span class="sp-guide-usage-pill is-conditional">
+  <span class="sp-guide-usage-dot"></span>관련 UW만
+</span>
+<span class="sp-guide-usage-pill is-none">
+  <span class="sp-guide-usage-dot"></span>참조 안 함
+</span>
+```
+
+- 상태 클래스는 `is-always` / `is-conditional` / `is-none`만 사용한다.
+- 색상만으로 의미를 전달하지 않고 상태 문구를 항상 함께 표시한다.
+
+---
+
 ## Inputs — Top Label
 
 ```html

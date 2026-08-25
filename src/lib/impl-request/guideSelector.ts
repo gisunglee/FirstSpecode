@@ -12,8 +12,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { GUIDE_CATEGORY_LABEL, type GuideCategory } from "@/constants/codes";
-
-const MANDATORY_CATEGORIES: readonly GuideCategory[] = ["COMMON", "SECURITY", "ERROR"];
+import { IMPLEMENTATION_ALWAYS_CATEGORIES } from "@/lib/standard-guides/usagePolicy";
 
 /**
  * 프로젝트의 필수 카테고리 표준 가이드를 <표준가이드> 블록으로 반환.
@@ -23,7 +22,7 @@ export async function getMandatoryGuideBlock(projectId: string): Promise<string 
   const guides = await prisma.tbSgStdGuide.findMany({
     where: {
       prjct_id: projectId,
-      guide_ctgry_code: { in: [...MANDATORY_CATEGORIES] },
+      guide_ctgry_code: { in: [...IMPLEMENTATION_ALWAYS_CATEGORIES] },
       use_yn: "Y",
     },
     orderBy: [{ guide_ctgry_code: "asc" }, { mdfcn_dt: "desc" }, { creat_dt: "desc" }],

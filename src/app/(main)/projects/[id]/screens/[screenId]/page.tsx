@@ -969,12 +969,23 @@ function AreaListSection({
       title={`영역 목록 (총 ${areas.length}개)`}
       small
       headerRight={
-        <button
-          onClick={() => router.push(`/projects/${projectId}/areas?screenId=${screenId}`)}
-          style={{ ...secondaryBtnStyle, fontSize: 12, padding: "4px 12px" }}
-        >
-          영역 목록 관리 →
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* 소속 화면이 이미 정해진 컨텍스트이므로 screenId를 쿼리로 넘겨
+              영역 신규 등록 폼의 "소속 화면" 드롭다운을 자동 선택해 둔다.
+              (화면이 많은 프로젝트에서 매번 화면을 다시 고르는 수고를 줄임) */}
+          <button
+            onClick={() => router.push(`/projects/${projectId}/areas/new?screenId=${screenId}`)}
+            style={{ ...primaryBtnStyle, fontSize: 12, padding: "4px 12px" }}
+          >
+            + 영역 추가
+          </button>
+          <button
+            onClick={() => router.push(`/projects/${projectId}/areas?screenId=${screenId}`)}
+            style={{ ...secondaryBtnStyle, fontSize: 12, padding: "4px 12px" }}
+          >
+            영역 목록 관리 →
+          </button>
+        </div>
       }
     >
       {areas.length === 0 ? (

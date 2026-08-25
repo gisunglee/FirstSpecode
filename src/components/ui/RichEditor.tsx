@@ -278,8 +278,12 @@ export default function RichEditor({
         {expanded && <PanelResizeHandle onMouseDown={onPanelResizeStart} />}
 
       {/* ── 툴바 ───────────────────────────────────────────────────────── */}
+      {/* flexShrink:0 필수 — flexDirection:column인 확대 패널 안에서, 아래 에디터 본문 div가
+          flex:1(flex-basis:0)이라 축소 가중치가 0이 되어 패널 높이가 빠듯하면 이 툴바가
+          대신 모든 축소분을 떠안아 한 줄로 짜부라짐(버튼 대부분이 안 보이는 현상)
+          flexWrap:wrap — 가로 스크롤 대신 2행으로 줄바꿈해 모든 버튼이 항상 보이게 함 */}
       {!readOnly && (
-        <div style={{ display: "flex", flexWrap: "nowrap", gap: 2, padding: "6px 8px", borderBottom: "1px solid var(--color-border)", background: "var(--color-bg-muted)", overflowX: "auto" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 2, padding: "6px 8px", borderBottom: "1px solid var(--color-border)", background: "var(--color-bg-muted)", flexShrink: 0 }}>
 
           <ToolBtn active={editor.isActive("heading", { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} title="제목 1">H1</ToolBtn>
           <ToolBtn active={editor.isActive("heading", { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="제목 2">H2</ToolBtn>
@@ -418,6 +422,7 @@ export default function RichEditor({
           color:       counterColor,
           textAlign:   "right",
           fontVariantNumeric: "tabular-nums",
+          flexShrink:  0,
         }}>
           {current.toLocaleString()} / {max.toLocaleString()}
         </div>
