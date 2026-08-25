@@ -31,6 +31,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const task = await prisma.tbRqTask.findFirst({
       where: { task_id: taskId, prjct_id: projectId },
+      include: {
+        requirements: {
+          orderBy: { sort_ordr: "asc" },
+          select: { req_id: true, req_display_id: true, req_nm: true, progrs_rt: true },
+        },
+      },
     });
     if (!task) return apiError("NOT_FOUND", "과업을 찾을 수 없습니다.", 404);
 
@@ -56,6 +62,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       assignMemberId:   task.asign_mber_id  ?? null,
       assignMemberName: assignee ? (assignee.mber_nm || assignee.email_addr || null) : null,
       permissions,
+      requirements: task.requirements.map((r) => ({
+        requirementId: r.req_id,
+        displayId:     r.req_display_id,
+        name:          r.req_nm,
+        progress:      r.progrs_rt,
+      })),
     });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/tasks/${taskId}] DB 오류:`, err);

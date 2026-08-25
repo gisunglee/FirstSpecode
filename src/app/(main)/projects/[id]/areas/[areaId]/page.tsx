@@ -1105,6 +1105,54 @@ function AreaDetailPageInner() {
                 <DocStatusSwitch value={docStatus} onChange={setDocStatus} disabled={!canEdit} />
               </div>
 
+              {/* AR-00074 기능 목록 — 영역:기능은 1:N이라 값을 들고 있는 필드가 아니라
+                  선택 즉시 해당 기능 상세로 이동하는 "바로가기" 콤보로 배치.
+                  화면/단위업무/요구사항 상세의 동일 패턴과 통일(2026-08-25) */}
+              {!isNew && (
+                <div style={formGroupStyle}>
+                  <label style={labelStyle}>기능 목록</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div className="sp-select-wrap" style={{ flex: 1, minWidth: 0 }}>
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value) router.push(`/projects/${projectId}/functions/${e.target.value}`);
+                        }}
+                        className="sp-input"
+                      >
+                        <option value="">
+                          {`기능 선택 (${data?.functions.length ?? 0}개)`}
+                        </option>
+                        {data?.functions.map((fn) => (
+                          <option key={fn.funcId} value={fn.funcId}>
+                            {fn.displayId} {fn.name} · 설{fn.designRt ?? 0}% 구{fn.implRt ?? 0}%
+                          </option>
+                        ))}
+                      </select>
+                      <span className="sp-select-arrow"><SelectChevron /></span>
+                    </div>
+                    {/* 소속 영역이 이미 정해진 컨텍스트이므로 areaId를 쿼리로 넘겨
+                        기능 신규 등록 폼의 "소속 영역" 드롭다운을 자동 선택해 둔다 */}
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/projects/${projectId}/functions/new?areaId=${areaId}`)}
+                      title="기능 추가"
+                      style={{ ...secondaryBtnStyle, flex: "none", padding: "0 10px", height: 34, fontSize: 16, fontWeight: 700, lineHeight: 1 }}
+                    >
+                      +
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/projects/${projectId}/functions?areaId=${areaId}`)}
+                      title="기능 목록 관리"
+                      style={{ ...secondaryBtnStyle, flex: "none", padding: "0 10px", height: 34, fontSize: 12 }}
+                    >
+                      목록 →
+                    </button>
+                  </div>
+                </div>
+              )}
+
             </section>
 
             {/* ── 레이아웃 + 첨부파일 (수정 모드에서만) ── */}
@@ -1131,85 +1179,6 @@ function AreaDetailPageInner() {
             )}
 
             {/* AR-00073 요약 정보 — 삭제됨 */}
-
-            {/* ── AR-00074 기능 목록 ────────────────────────────────────── */}
-            {/* 목록형 카드는 sectionStyle(폼용, 20/24 패딩) 대신 rightSectionStyle(14/16) 사용 —
-                같은 컬럼의 레이아웃 구성·첨부파일 카드, 그리고 화면 편집의 영역 목록 카드와
-                패딩을 맞춰 목록 카드끼리 시각적으로 통일함(2026-07-29) */}
-            {!isNew && (
-              <section style={rightSectionStyle}>
-                {/* marginBottom 제거 — rightSectionStyle의 flex gap(10)이 헤더~표 간격을 이미 담당.
-                    기존엔 marginBottom(8)+gap(16)이 중첩돼 영역 목록 카드보다 간격이 넓었음 */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>기능 목록</span>
-                    <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
-                      총 {data?.functions.length ?? 0}개
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => router.push(`/projects/${projectId}/functions/new?areaId=${areaId}`)}
-                    style={{
-                      padding: "4px 12px", borderRadius: 5, border: "1px solid var(--color-border)",
-                      background: "var(--color-bg-card)", color: "var(--color-primary, #1976d2)",
-                      fontSize: 12, fontWeight: 600, cursor: "pointer",
-                    }}
-                  >
-                    + 추가
-                  </button>
-                </div>
-
-                {!data?.functions.length ? (
-                  <div style={{ padding: "32px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>
-                    등록된 기능이 없습니다.
-                  </div>
-                ) : (
-                  <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-                    <div style={funcGridHeaderStyle}>
-                      <div>기능명</div>
-                      <div style={{ textAlign: "center" }}>설/구</div>
-                    </div>
-                    {data.functions.map((fn, idx) => (
-                      <div
-                        key={fn.funcId}
-                        style={{
-                          ...funcGridRowStyle,
-                          borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-                        }}
-                      >
-                        <div>
-                          <button
-                            onClick={() => router.push(`/projects/${projectId}/functions/${fn.funcId}`)}
-                            style={linkBtnStyle}
-                          >
-                            <span style={{ fontSize: 12, color: "var(--color-text-secondary)", marginRight: 6 }}>
-                              {fn.displayId}
-                            </span>
-                            {fn.name}
-                          </button>
-                        </div>
-                        {/* 배지 스타일 통일(2026-07-29) — 화면 편집의 영역 목록 표와 동일한
-                            "N% N%" 칩 형태로 표시(기존 "(N/N)" 괄호 표기 대체) */}
-                        <div style={{ display: "flex", gap: 3, justifyContent: "center", fontSize: 11 }}>
-                          {[
-                            { val: fn.designRt ?? 0, color: "#1565c0" },
-                            { val: fn.implRt ?? 0, color: "#2e7d32" },
-                          ].map(({ val, color }, i) => (
-                            <span key={i} style={{
-                              color, fontWeight: 600,
-                              background: val === 100 ? `${color}14` : "transparent",
-                              borderRadius: 3, padding: "1px 3px",
-                            }}>
-                              {val}%
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
-            )}
           </div>
 
           {/* 오른쪽 컬럼: 설명 (마크다운) */}
@@ -1562,43 +1531,6 @@ function DocStatusSwitch({
 }
 
 // 순서/우선순위/상태 컬럼 제거 — 기능명, 설/구만 노출(2026-07-29)
-const FUNC_GRID_TEMPLATE = "1fr 100px";
-
-// 패딩을 화면 편집의 영역 목록 표(areaGridHeaderStyle/RowStyle, screens/[screenId]/page.tsx)와
-// 맞춤(8px 14px / 10px 14px) — 같은 성격의 하위 목록 표라 두 페이지에서 다르게 보이지 않도록 통일(2026-07-29)
-const funcGridHeaderStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: FUNC_GRID_TEMPLATE,
-  gap: 12,
-  padding: "8px 14px",
-  background: "var(--color-bg-muted)",
-  fontSize: 12,
-  fontWeight: 600,
-  color: "var(--color-text-secondary)",
-  borderBottom: "1px solid var(--color-border)",
-  alignItems: "center",
-};
-
-const funcGridRowStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: FUNC_GRID_TEMPLATE,
-  gap: 12,
-  padding: "10px 14px",
-  alignItems: "center",
-  background: "var(--color-bg-card)",
-};
-
-const linkBtnStyle: React.CSSProperties = {
-  background: "none",
-  border: "none",
-  cursor: "pointer",
-  color: "var(--color-primary, #1976d2)",
-  fontSize: 14,
-  padding: 0,
-  textAlign: "left",
-  textDecoration: "underline",
-};
-
 const primaryBtnStyle: React.CSSProperties = {
   padding: "8px 20px",
   borderRadius: 6,

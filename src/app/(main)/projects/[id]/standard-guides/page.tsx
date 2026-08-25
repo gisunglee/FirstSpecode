@@ -15,7 +15,7 @@
  *   - authFetch: 토큰 자동 갱신 포함 fetch 래퍼
  */
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
@@ -27,6 +27,8 @@ import {
 } from "@/constants/codes";
 import {
   getStandardGuideListUsage,
+  getStandardGuideUsages,
+  type GuideUsageKey,
   type GuideUsageLevel,
 } from "@/lib/standard-guides/usagePolicy";
 
@@ -84,6 +86,7 @@ function StandardGuideListInner() {
   const [category, setCategory]     = useState<"" | GuideCategory>("");
   const [useFilter, setUseFilter]   = useState<"" | "Y" | "N">("");
   const [search, setSearch]         = useState("");
+  const [usageHelpOpen, setUsageHelpOpen] = useState(false);
 
   // ── 데이터 조회 ──
   const queryParams = new URLSearchParams();
@@ -174,7 +177,7 @@ function StandardGuideListInner() {
         })}
       </div>
 
-      <StandardGuideUsageOverview />
+      <StandardGuideUsageIntro onOpen={() => setUsageHelpOpen(true)} />
 
       {/* ── 사용여부 세그먼트 + 검색 + 건수 (한 줄) ── */}
       <div style={{
@@ -234,7 +237,7 @@ function StandardGuideListInner() {
           <div className="sp-guide-table-grid" style={gridHeaderStyle}>
             <div>카테고리</div>
             <div>제목</div>
-            <div>AI 참조</div>
+            <div>사용 위치</div>
             <div>사용여부</div>
             <div>작성자</div>
             <div>최근 수정일</div>
@@ -338,6 +341,10 @@ function StandardGuideListInner() {
           )}
         </div>
       </div>
+
+      {usageHelpOpen && (
+        <StandardGuideUsageDialog onClose={() => setUsageHelpOpen(false)} />
+      )}
     </div>
   );
 }
@@ -353,42 +360,168 @@ function usageLevelClass(level: GuideUsageLevel): string {
 function GuideUsageBadge(props: { category: GuideCategory; useYn: string }) {
   const usage = getStandardGuideListUsage(props.category, props.useYn);
   return (
-    <span className={`sp-guide-usage-pill ${usageLevelClass(usage.level)}`}>
-      <span className="sp-guide-usage-dot" aria-hidden="true" />
+    <span
+      className={`sp-guide-usage-summary ${usageLevelClass(usage.level)}`}
+      title={usage.description}
+    >
       {usage.label}
     </span>
   );
 }
 
-function StandardGuideUsageOverview() {
+const GUIDE_REFERENCE_COLUMNS: Array<{
+  key: GuideUsageKey;
+  label: string;
+  command: string;
+}> = [
+  { key: "IMPLEMENT_REQUEST", label: "개발", command: "/run-ai-tasks IMP" },
+  { key: "REVIEW_UW", label: "UW 검토", command: "/review-uw UW-XXXXX" },
+  { key: "SYNC_SPECODE", label: "설계 동기화", command: "/sync-specode UW-XXXXX" },
+];
+
+const GUIDE_REFERENCE_ROWS: Array<{ label: string; category: GuideCategory }> = [
+  { label: "공통 · 보안 · 에러", category: "COMMON" },
+  { label: "UI", category: "UI" },
+  { label: "API · 데이터 · 인증 · 파일 · 배치 · 리포트", category: "API" },
+];
+
+function GuideReferenceMark(props: { level: GuideUsageLevel; description: string }) {
+  const mark = props.level === "ALWAYS" ? "O" : props.level === "CONDITIONAL" ? "△" : "—";
+  const label = props.level === "ALWAYS" ? "항상 참조" : props.level === "CONDITIONAL" ? "관련 UW일 때 참조" : "참조 안 함";
+
   return (
-    <section className="sp-guide-usage-overview" aria-label="표준 가이드 AI 참조 규칙">
-      <div className="sp-guide-usage-overview-heading">
-        <span aria-hidden="true">AI</span>
-        <div>
-          <strong>가이드마다 자동 참조 범위가 다릅니다.</strong>
-          <p>목록의 배지로 적용 범위를 확인하고, 상세 화면에서 사용 기능별 조건을 확인하세요.</p>
-        </div>
+    <span
+      className={`sp-guide-reference-mark ${usageLevelClass(props.level)}`}
+      title={props.description}
+      aria-label={label}
+    >
+      <strong aria-hidden="true">{mark}</strong>
+      <span>{props.level === "ALWAYS" ? "항상" : props.level === "CONDITIONAL" ? "관련 시" : ""}</span>
+    </span>
+  );
+}
+
+function StandardGuideUsageIntro(props: { onOpen: () => void }) {
+  return (
+    <section className="sp-guide-reference-intro" aria-label="표준 가이드 활용 안내">
+      <div className="sp-guide-reference-intro-copy">
+        <strong>표준 가이드는 AI 개발과 UW 검토에 사용됩니다.</strong>
+        <span>제목은 적용 대상을 분명하게, 본문은 지킬 규칙만 간결하게 작성하세요.</span>
       </div>
-      <div className="sp-guide-usage-legend">
-        <div className="sp-guide-usage-legend-item">
-          <GuideUsageBadge category="COMMON" useYn="Y" />
-          <span>공통·보안·에러</span>
-        </div>
-        <div className="sp-guide-usage-legend-item">
-          <GuideUsageBadge category="UI" useYn="Y" />
-          <span>UI</span>
-        </div>
-        <div className="sp-guide-usage-legend-item">
-          <GuideUsageBadge category="API" useYn="Y" />
-          <span>API·데이터·인증·파일·배치·리포트</span>
-        </div>
-        <div className="sp-guide-usage-legend-item">
-          <GuideUsageBadge category="COMMON" useYn="N" />
-          <span>미사용 가이드</span>
-        </div>
-      </div>
+      <button type="button" className="sp-btn sp-btn-secondary sp-btn-sm" onClick={props.onOpen}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 11v5" />
+          <path d="M12 8h.01" />
+        </svg>
+        가이드 활용 설명
+      </button>
     </section>
+  );
+}
+
+function StandardGuideUsageMatrix() {
+  return (
+    <div className="sp-guide-reference-table-wrap">
+      <table className="sp-guide-reference-table">
+        <thead>
+          <tr>
+            <th scope="col">가이드 종류</th>
+            {GUIDE_REFERENCE_COLUMNS.map((column) => (
+              <th key={column.key} scope="col">
+                <span>{column.label}</span>
+                <code>{column.command}</code>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {GUIDE_REFERENCE_ROWS.map((row) => {
+            const usages = getStandardGuideUsages(row.category, "Y");
+            return (
+              <tr key={row.category}>
+                <th scope="row">{row.label}</th>
+                {GUIDE_REFERENCE_COLUMNS.map((column) => {
+                  const usage = usages.find((item) => item.key === column.key);
+                  return (
+                    <td key={column.key}>
+                      <GuideReferenceMark
+                        level={usage?.level ?? "NONE"}
+                        description={usage?.description ?? "자동 참조하지 않습니다."}
+                      />
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StandardGuideUsageDialog({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
+  return (
+    <div className="sp-overlay" onMouseDown={onClose}>
+      <section
+        className="sp-modal sp-guide-reference-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="standard-guide-usage-dialog-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header className="sp-modal-header">
+          <div>
+            <h2 id="standard-guide-usage-dialog-title" className="sp-modal-title">가이드 활용 설명</h2>
+            <p className="sp-guide-reference-dialog-subtitle">AI가 표준 가이드를 읽는 작업과 범위입니다.</p>
+          </div>
+          <button
+            type="button"
+            className="sp-modal-close"
+            onClick={onClose}
+            aria-label="가이드 활용 설명 닫기"
+            autoFocus
+          >
+            ×
+          </button>
+        </header>
+
+        <div className="sp-modal-body sp-guide-reference-dialog-body">
+          <div className="sp-guide-reference-points">
+            <div><strong>개발</strong><span>공통·보안·에러 가이드를 사용합니다.</span></div>
+            <div><strong>UW 검토</strong><span>UI·공통·보안·에러는 항상, 나머지는 관련 있을 때 사용합니다.</span></div>
+            <div><strong>설계 동기화</strong><span>현재 표준 가이드를 사용하지 않습니다.</span></div>
+          </div>
+
+          <div>
+            <div className="sp-guide-reference-matrix-heading">
+              <strong>카테고리별 참조표</strong>
+              <span>O 항상 참조 · △ 관련 UW만 참조 · — 참조 안 함</span>
+            </div>
+            <StandardGuideUsageMatrix />
+          </div>
+        </div>
+
+        <footer className="sp-modal-footer">
+          <button type="button" className="sp-btn sp-btn-primary" onClick={onClose}>확인</button>
+        </footer>
+      </section>
+    </div>
   );
 }
 

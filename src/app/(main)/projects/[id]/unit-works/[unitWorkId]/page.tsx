@@ -1212,7 +1212,8 @@ function UnitWorkDetailPageInner() {
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <div style={sectionLabelStyle}>설계 정보</div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                {/* 1행: 계획설계 시작일·종료일 + 공수(우측으로 이동, 2026-08-25) */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1.1fr", gap: 12 }}>
                   <FormField label="계획설계 시작일">
                     <input
                       type="date"
@@ -1231,11 +1232,7 @@ function UnitWorkDetailPageInner() {
                       className="sp-input"
                     />
                   </FormField>
-                </div>
-
-                {/* 계획설계 공수 — 기능 상세 "구현 공수(시간)"와 동일 형식(입력값 옆에 하루 8시간 기준 일수 참고 표시).
-                    설계/구현 진행률 — progress(둘의 평균) 하나만 보여주면 어느 쪽 진행인지 알 수 없어 분리 노출. */}
-                <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 12 }}>
+                  {/* 계획설계 공수 — 기능 상세 "구현 공수(시간)"와 동일 형식(입력값 옆에 하루 8시간 기준 일수 참고 표시) */}
                   <FormField label="계획설계 공수(시간)">
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <input
@@ -1253,6 +1250,11 @@ function UnitWorkDetailPageInner() {
                       )}
                     </div>
                   </FormField>
+                </div>
+
+                {/* 2행: 설계/구현 진행률(공수 자리로 좌측 이동) + 화면 목록(1:N 관계라 선택 즉시
+                    해당 화면 상세로 이동하는 "바로가기" 콤보로 배치, 옆에 소형 + 버튼으로 신규 등록) */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1.1fr", gap: 12 }}>
                   <FormField label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>설계 진행률 (%)<HelpPopover title="설계 진행률" content={"하위 화면 → 영역 → 기능 전체의 설계 진행률을 평균낸 자동 계산값입니다.\n\n계산 방식)\n• 기능별 설계 진행률(각 기능 상세에서 입력)의 평균\n• 하위 기능이 하나도 없으면 0%\n\n직접 입력·수정할 수 없습니다."} /></span>}>
                     <div
                       title="하위 화면·기능의 설계 진행 상황에서 자동 계산됨"
@@ -1267,6 +1269,41 @@ function UnitWorkDetailPageInner() {
                       style={readonlyValueStyle}
                     >
                       {isNew ? "-" : `${detail?.implProgress ?? 0}%`}
+                    </div>
+                  </FormField>
+                  <FormField label="화면 목록">
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div className="sp-select-wrap" style={{ flex: 1, minWidth: 0 }}>
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value) router.push(`/projects/${projectId}/screens/${e.target.value}`);
+                          }}
+                          disabled={isNew}
+                          className="sp-input"
+                        >
+                          <option value="">
+                            {isNew ? "저장 후 이용 가능" : `화면 선택 (${detail?.screens.length ?? 0}개)`}
+                          </option>
+                          {detail?.screens.map((s) => (
+                            <option key={s.screenId} value={s.screenId}>
+                              {s.displayId} {s.name}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="sp-select-arrow"><SelectChevron /></span>
+                      </div>
+                      {/* 소속 단위업무가 이미 정해진 컨텍스트이므로 unitWorkId를 쿼리로 넘겨
+                          화면 신규 등록 폼의 "소속 단위업무" 드롭다운을 자동 선택해 둔다 */}
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/projects/${projectId}/screens/new?unitWorkId=${unitWorkId}`)}
+                        disabled={isNew}
+                        title="화면 추가"
+                        style={{ ...secondaryBtnStyle, flex: "none", padding: "0 10px", height: 34, fontSize: 16, fontWeight: 700, lineHeight: 1, opacity: isNew ? 0.5 : 1, cursor: isNew ? "not-allowed" : "pointer" }}
+                      >
+                        +
+                      </button>
                     </div>
                   </FormField>
                 </div>

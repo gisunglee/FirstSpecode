@@ -43,6 +43,7 @@ type TaskDetail = {
   assignMemberId: string | null;
   assignMemberName: string | null;
   permissions?: SpecContentPermissions;
+  requirements: { requirementId: string; displayId: string; name: string; progress: number }[];
 };
 
 type SaveBody = {
@@ -456,6 +457,54 @@ function TaskDetailPageInner() {
                   style={{ resize: "vertical" }}
                 />
                 <TextCounter field="taskDefinition" value={form.outputInfo} />
+              </FormField>
+
+              {/* 요구사항 목록 — 과업:요구사항은 1:N이라 값을 들고 있는 필드가 아니라
+                  선택 즉시 해당 요구사항 상세로 이동하는 "바로가기" 콤보로 배치.
+                  화면/영역/단위업무 상세의 동일 패턴과 통일(2026-08-25) */}
+              <FormField label="요구사항 목록">
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div className="sp-select-wrap" style={{ flex: 1, minWidth: 0 }}>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) router.push(`/projects/${projectId}/requirements/${e.target.value}`);
+                      }}
+                      disabled={isNew}
+                      className="sp-input"
+                    >
+                      <option value="">
+                        {isNew ? "저장 후 이용 가능" : `요구사항 선택 (${taskDetail?.requirements.length ?? 0}개)`}
+                      </option>
+                      {taskDetail?.requirements.map((r) => (
+                        <option key={r.requirementId} value={r.requirementId}>
+                          {r.displayId} {r.name} · {r.progress}%
+                        </option>
+                      ))}
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
+                  {/* 소속 과업이 이미 정해진 컨텍스트이므로 taskId를 쿼리로 넘겨
+                      요구사항 신규 등록 폼의 "과업" 드롭다운을 자동 선택해 둔다 */}
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/projects/${projectId}/requirements/new?taskId=${taskId}`)}
+                    disabled={isNew}
+                    title="요구사항 추가"
+                    style={{ ...secondaryBtnStyle, flex: "none", padding: "0 10px", height: 34, fontSize: 16, fontWeight: 700, lineHeight: 1, opacity: isNew ? 0.5 : 1, cursor: isNew ? "not-allowed" : "pointer" }}
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/projects/${projectId}/requirements?taskId=${taskId}`)}
+                    disabled={isNew}
+                    title="요구사항 목록 관리"
+                    style={{ ...secondaryBtnStyle, flex: "none", padding: "0 10px", height: 34, fontSize: 12, opacity: isNew ? 0.5 : 1, cursor: isNew ? "not-allowed" : "pointer" }}
+                  >
+                    목록 →
+                  </button>
+                </div>
               </FormField>
             </Section>
           </div>

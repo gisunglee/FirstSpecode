@@ -19,6 +19,7 @@ import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 import { deleteFile } from "@/lib/fileStorage";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { requirementUpdateSchema } from "@/lib/specContentSchemas";
+import { fetchUnitWorkProgress } from "@/lib/pm/progressRollup";
 
 type RouteParams = { params: Promise<{ id: string; reqId: string }> };
 
@@ -32,7 +33,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const req = await prisma.tbRqRequirement.findUnique({
       where:   { req_id: reqId },
-      include: { task: { select: { task_id: true, task_nm: true } } },
+      include: {
+        task: { select: { task_id: true, task_nm: true } },
+        unitWorks: {
+          orderBy: { sort_ordr: "asc" },
+          select: { unit_work_id: true, unit_work_display_id: true, unit_work_nm: true },
+        },
+      },
     });
 
     if (!req || req.prjct_id !== projectId) {
@@ -48,6 +55,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         })
       : null;
     const permissions = await getSpecContentCapabilities(request, projectId, "REQUIREMENT", reqId, gate);
+
+    // 하위 단위업무 설계/구현 진척률 — 단일 소스 롤업 헬퍼(progressRollup.ts) 재사용
+    const uwProgress = await fetchUnitWorkProgress(req.unitWorks.map((u) => u.unit_work_id));
 
     return apiSuccess({
       requirementId:    req.req_id,
@@ -71,6 +81,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       analysisEffort:   req.anls_efrt_val ?? null,
       progress:         req.progrs_rt,
       permissions,
+      unitWorks: req.unitWorks.map((u) => {
+        const p = uwProgress.get(u.unit_work_id) ?? { designRt: 0, implRt: 0 };
+        return {
+          unitWorkId: u.unit_work_id,
+          displayId:  u.unit_work_display_id,
+          name:       u.unit_work_nm,
+          designRt:   p.designRt,
+          implRt:     p.implRt,
+        };
+      }),
     });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/requirements/${reqId}] DB 오류:`, err);

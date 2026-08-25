@@ -375,8 +375,8 @@ function usageLevelClass(level: GuideUsageLevel): string {
 
 function usageLevelLabel(level: GuideUsageLevel): string {
   if (level === "ALWAYS") return "항상 참조";
-  if (level === "CONDITIONAL") return "관련 UW만";
-  return "참조 안 함";
+  if (level === "CONDITIONAL") return "관련할 때 참조";
+  return "사용 안 함";
 }
 
 function StandardGuideUsagePanel(props: { category: GuideCategory; useYn: string }) {

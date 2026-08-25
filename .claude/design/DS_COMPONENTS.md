@@ -167,12 +167,17 @@ function toggleSidebar() {
 
 표준 가이드처럼 AI가 문서를 언제 읽는지 표시할 때 사용한다.
 
+목록 상단에는 `sp-guide-reference-intro`로 짧은 설명과 `가이드 활용 설명` 버튼만
+표시한다. 상세 매핑은 `sp-guide-reference-dialog` 안의 `sp-guide-reference-table`로
+제공한다. `O`는 항상 참조, `△`는 관련 단위업무일 때만 참조, `—`는 참조하지 않음을
+뜻한다. 기호만 두지 말고 제목이나 `aria-label`로 의미를 함께 제공한다.
+
 ```html
 <span class="sp-guide-usage-pill is-always">
   <span class="sp-guide-usage-dot"></span>항상 참조
 </span>
 <span class="sp-guide-usage-pill is-conditional">
-  <span class="sp-guide-usage-dot"></span>관련 UW만
+  <span class="sp-guide-usage-dot"></span>관련할 때 참조
 </span>
 <span class="sp-guide-usage-pill is-none">
   <span class="sp-guide-usage-dot"></span>참조 안 함
@@ -181,6 +186,7 @@ function toggleSidebar() {
 
 - 상태 클래스는 `is-always` / `is-conditional` / `is-none`만 사용한다.
 - 색상만으로 의미를 전달하지 않고 상태 문구를 항상 함께 표시한다.
+- 목록 행의 간단한 사용 위치 문구에는 `sp-guide-usage-summary`를 사용한다.
 
 ---
 

@@ -656,6 +656,52 @@ function ScreenDetailPageInner() {
                   disabled={!canEdit}
                 />
               </FormField>
+
+              {/* 영역 목록 — 하단 별도 카드 대신 콤보 형태로 축소(2026-08-25). 1:N 관계라
+                  선택 즉시 해당 영역 상세로 이동하는 "바로가기" 콤보이며, 옵션에 영역 ID·이름과
+                  설/구 진척률을 함께 노출. 옆의 + 버튼은 영역 신규 등록으로 이동 */}
+              <FormField label="영역 목록">
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div className="sp-select-wrap" style={{ flex: 1, minWidth: 0 }}>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) router.push(`/projects/${projectId}/areas/${e.target.value}`);
+                      }}
+                      disabled={isNew}
+                      className="sp-input"
+                    >
+                      <option value="">
+                        {isNew ? "저장 후 이용 가능" : `영역 선택 (${detail?.areas.length ?? 0}개)`}
+                      </option>
+                      {detail?.areas.map((a) => (
+                        <option key={a.areaId} value={a.areaId}>
+                          {a.displayId} {a.name} · 설{a.designRt}% 구{a.implRt}%
+                        </option>
+                      ))}
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/projects/${projectId}/areas/new?screenId=${screenId}`)}
+                    disabled={isNew}
+                    title="영역 추가"
+                    style={{ ...secondaryBtnStyle, flex: "none", padding: "0 10px", height: 34, fontSize: 16, fontWeight: 700, lineHeight: 1, opacity: isNew ? 0.5 : 1, cursor: isNew ? "not-allowed" : "pointer" }}
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/projects/${projectId}/areas?screenId=${screenId}`)}
+                    disabled={isNew}
+                    title="영역 목록 관리"
+                    style={{ ...secondaryBtnStyle, flex: "none", padding: "0 10px", height: 34, fontSize: 12, opacity: isNew ? 0.5 : 1, cursor: isNew ? "not-allowed" : "pointer" }}
+                  >
+                    목록 →
+                  </button>
+                </div>
+              </FormField>
             </Section>
 
             {/* 레이아웃 에디터 — 기본 정보 아래 */}
@@ -677,15 +723,6 @@ function ScreenDetailPageInner() {
               </div>
             </Section>
 
-            {/* AR-00066 영역 목록 (수정 모드에서만, FID-00148) */}
-            {!isNew && detail && (
-              <AreaListSection
-                areas={detail.areas}
-                projectId={projectId}
-                screenId={screenId}
-                router={router}
-              />
-            )}
           </div>
 
           {/* 오른쪽: 화면 설명 (마크다운) */}
@@ -954,92 +991,6 @@ const SCREEN_HELP: Record<string, { title: string; body: string }> = {
   },
 };
 
-// ── AR-00066 영역 목록 섹션 ───────────────────────────────────────────────────
-
-function AreaListSection({
-  areas, projectId, screenId, router,
-}: {
-  areas: AreaRow[];
-  projectId: string;
-  screenId: string;
-  router: ReturnType<typeof useRouter>;
-}) {
-  return (
-    <Section
-      title={`영역 목록 (총 ${areas.length}개)`}
-      small
-      headerRight={
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* 소속 화면이 이미 정해진 컨텍스트이므로 screenId를 쿼리로 넘겨
-              영역 신규 등록 폼의 "소속 화면" 드롭다운을 자동 선택해 둔다.
-              (화면이 많은 프로젝트에서 매번 화면을 다시 고르는 수고를 줄임) */}
-          <button
-            onClick={() => router.push(`/projects/${projectId}/areas/new?screenId=${screenId}`)}
-            style={{ ...primaryBtnStyle, fontSize: 12, padding: "4px 12px" }}
-          >
-            + 영역 추가
-          </button>
-          <button
-            onClick={() => router.push(`/projects/${projectId}/areas?screenId=${screenId}`)}
-            style={{ ...secondaryBtnStyle, fontSize: 12, padding: "4px 12px" }}
-          >
-            영역 목록 관리 →
-          </button>
-        </div>
-      }
-    >
-      {areas.length === 0 ? (
-        <p style={{ margin: 0, fontSize: 13, color: "#aaa" }}>등록된 영역이 없습니다.</p>
-      ) : (
-        <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
-          {/* 헤더 */}
-          <div style={areaGridHeaderStyle}>
-            <div>영역명</div>
-            <div style={{ textAlign: "center" }}>설/구</div>
-          </div>
-          {/* 행 */}
-          {areas.map((area, idx) => (
-            <div
-              key={area.areaId}
-              style={{
-                ...areaGridRowStyle,
-                borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-              }}
-            >
-              {/* 영역명 클릭 → 영역 상세 (FID-00149) */}
-              <div>
-                <button
-                  onClick={() => router.push(`/projects/${projectId}/areas/${area.areaId}`)}
-                  style={linkBtnStyle}
-                >
-                  <span style={{ fontSize: 12, color: "var(--color-text-secondary)", marginRight: 6 }}>
-                    {area.displayId}
-                  </span>
-                  {area.name}
-                </button>
-              </div>
-              <div style={{ display: "flex", gap: 3, justifyContent: "center", fontSize: 11 }}>
-                {[
-                  { val: area.designRt, color: "#1565c0" },
-                  { val: area.implRt, color: "#2e7d32" },
-                ].map(({ val, color }, i) => (
-                  <span key={i} style={{
-                    color, fontWeight: 600,
-                    background: val === 100 ? `${color}14` : "transparent",
-                    borderRadius: 3, padding: "1px 3px",
-                  }}>
-                    {val}%
-                  </span>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </Section>
-  );
-}
-
 // ── 공통 컴포넌트 ─────────────────────────────────────────────────────────────
 
 function Section({
@@ -1194,30 +1145,6 @@ const inlineIconBtnStyle: React.CSSProperties = {
   lineHeight: 0,
 };
 
-const linkBtnStyle: React.CSSProperties = {
-  background: "none",
-  border: "none",
-  cursor: "pointer",
-  color: "var(--color-primary, #1976d2)",
-  fontSize: 14,
-  padding: 0,
-  textAlign: "left",
-  textDecoration: "underline",
-};
-
-const areaGridHeaderStyle: React.CSSProperties = {
-  display: "grid",
-  // 순서/유형 컬럼 제거 — 영역명, 설/구만 노출(2026-07-29)
-  gridTemplateColumns: "1fr 100px",
-  gap: 12,
-  padding: "8px 14px",
-  background: "var(--color-bg-muted)",
-  fontSize: 12,
-  fontWeight: 600,
-  color: "var(--color-text-secondary)",
-  borderBottom: "1px solid var(--color-border)",
-};
-
 const ghostSmBtnStyle: React.CSSProperties = {
   padding: "3px 9px",
   borderRadius: 5,
@@ -1226,16 +1153,6 @@ const ghostSmBtnStyle: React.CSSProperties = {
   color: "var(--color-text-secondary)",
   fontSize: 12,
   cursor: "pointer",
-};
-
-const areaGridRowStyle: React.CSSProperties = {
-  display: "grid",
-  // 순서/유형 컬럼 제거 — 영역명, 설/구만 노출(2026-07-29)
-  gridTemplateColumns: "1fr 100px",
-  gap: 12,
-  padding: "10px 14px",
-  alignItems: "center",
-  background: "var(--color-bg-card)",
 };
 
 // 설계 양식(예시/템플릿)은 DB(tb_ai_design_template)로 관리 — 공용 훅 useDesignTemplate 사용.

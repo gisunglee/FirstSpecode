@@ -281,7 +281,8 @@ export default function RichEditor({
       {/* flexShrink:0 필수 — flexDirection:column인 확대 패널 안에서, 아래 에디터 본문 div가
           flex:1(flex-basis:0)이라 축소 가중치가 0이 되어 패널 높이가 빠듯하면 이 툴바가
           대신 모든 축소분을 떠안아 한 줄로 짜부라짐(버튼 대부분이 안 보이는 현상)
-          flexWrap:wrap — 가로 스크롤 대신 2행으로 줄바꿈해 모든 버튼이 항상 보이게 함 */}
+          flexWrap:wrap — 버튼 개수가 많지 않아 "더보기" 없이도 2행이면 다 보임.
+          가로 스크롤 대신 필요한 만큼 줄바꿈해서 버튼이 항상 전부 보이게 함 */}
       {!readOnly && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 2, padding: "6px 8px", borderBottom: "1px solid var(--color-border)", background: "var(--color-bg-muted)", flexShrink: 0 }}>
 

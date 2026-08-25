@@ -12,7 +12,7 @@
 
 import { Suspense, useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
@@ -90,6 +90,7 @@ type RequirementDetail = {
   analysisEnd: string | null;
   progress: number;
   permissions?: SpecContentPermissions;
+  unitWorks: { unitWorkId: string; displayId: string; name: string; designRt: number; implRt: number }[];
 };
 
 // 프로젝트 멤버 — 담당자 콤보박스 옵션용
@@ -143,6 +144,7 @@ export default function RequirementDetailPage() {
 function RequirementDetailPageInner() {
   const params = useParams<{ id: string; reqId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const projectId = params.id;
   const reqId = params.reqId;
@@ -150,9 +152,13 @@ function RequirementDetailPageInner() {
   // 표시 ID prefix — 환경설정 기반 placeholder
   const { getPrefix } = useIdPrefixes(projectId);
 
+  // 신규 등록 시 과업 미리 선택 — 과업 상세 "요구사항 목록"의 + 버튼에서 진입 시
+  // 매번 과업을 다시 고르지 않도록 URL ?taskId= 로 초기값 반영 (screenId/unitWorkId와 동일 패턴)
+  const presetTaskId = searchParams.get("taskId") ?? "";
+
   // ── 폼 상태 ────────────────────────────────────────────────────────────────
   const [form, setForm] = useState<SaveBody>({
-    taskId: undefined,
+    taskId: presetTaskId || undefined,
     reqDisplayId: "",
     sortOrder: 0,
     name: "",
@@ -909,8 +915,11 @@ function RequirementDetailPageInner() {
                 </FormField>
               </div>
 
-              {/* 분석 시작일 + 분석 종료일 + 정렬 순서 — 3컬럼 */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+              {/* 분석 시작일 + 분석 종료일 + 정렬 순서 — 3컬럼
+                  minmax(0, 1fr) 필수 — date input은 브라우저 네이티브 최소폭이 커서(안 줄어듦)
+                  일반 1fr(=minmax(auto,1fr))로 두면 두 date 칸이 폭을 다 먹어버리고
+                  "정렬 순서" 칸만 쥐어짜여 라벨이 한 글자씩 세로로 줄바꿈되는 현상이 생김 */}
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)", gap: 16 }}>
                 <FormField label="분석 시작일">
                   <input
                     type="date"
@@ -942,6 +951,54 @@ function RequirementDetailPageInner() {
                   />
                 </FormField>
               </div>
+
+              {/* 단위업무 목록 — 요구사항:단위업무는 1:N이라 값을 들고 있는 필드가 아니라
+                  선택 즉시 해당 단위업무 상세로 이동하는 "바로가기" 콤보로 배치.
+                  과업/화면/영역 상세의 동일 패턴과 통일(2026-08-25) */}
+              <FormField label="단위업무 목록">
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div className="sp-select-wrap" style={{ flex: 1, minWidth: 0 }}>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) router.push(`/projects/${projectId}/unit-works/${e.target.value}`);
+                      }}
+                      disabled={isNew}
+                      className="sp-input"
+                    >
+                      <option value="">
+                        {isNew ? "저장 후 이용 가능" : `단위업무 선택 (${detail?.unitWorks.length ?? 0}개)`}
+                      </option>
+                      {detail?.unitWorks.map((u) => (
+                        <option key={u.unitWorkId} value={u.unitWorkId}>
+                          {u.displayId} {u.name} · 설{u.designRt}% 구{u.implRt}%
+                        </option>
+                      ))}
+                    </select>
+                    <span className="sp-select-arrow"><SelectChevron /></span>
+                  </div>
+                  {/* 소속 요구사항이 이미 정해진 컨텍스트이므로 reqId를 쿼리로 넘겨
+                      단위업무 신규 등록 폼의 "상위 요구사항" 드롭다운을 자동 선택해 둔다 */}
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/projects/${projectId}/unit-works/new?reqId=${reqId}`)}
+                    disabled={isNew}
+                    title="단위업무 추가"
+                    style={{ ...secondaryBtnStyle, flex: "none", padding: "0 10px", height: 34, fontSize: 16, fontWeight: 700, lineHeight: 1, opacity: isNew ? 0.5 : 1, cursor: isNew ? "not-allowed" : "pointer" }}
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/projects/${projectId}/unit-works?reqId=${reqId}`)}
+                    disabled={isNew}
+                    title="단위업무 목록 관리"
+                    style={{ ...secondaryBtnStyle, flex: "none", padding: "0 10px", height: 34, fontSize: 12, opacity: isNew ? 0.5 : 1, cursor: isNew ? "not-allowed" : "pointer" }}
+                  >
+                    목록 →
+                  </button>
+                </div>
+              </FormField>
             </Section>
 
             {/* ── AR-00044 원문·현행화 — 기본 정보 아래로 되돌림(2026-07-29 재조정) ───────── */}
@@ -1090,19 +1147,23 @@ function RequirementDetailPageInner() {
             <Section>
               {/* 상세 명세 (위) */}
               <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                {/* flexWrap:wrap — 폭이 좁으면 우측 버튼 그룹이 통째로 다음 줄로 내려감.
+                    marginLeft:auto는 줄바꿈된 자신의 줄에서도 우측 정렬을 유지함(flex 라인별로 적용되는 스펙 동작).
+                    각 버튼에 whiteSpace:nowrap 필수 — 없으면 폭이 줄어들 때 버튼 "안에서" 글자가
+                    줄바꿈되며 찌그러져 보임(2단 텍스트) — 버튼째로 줄바꿈되는 것과는 다른 현상이라 구분 필요 */}
+                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
                     상세 명세
                     <FieldHelp title="상세 명세" body={SPEC_HELP_BODY} />
                   </span>
                   <MarkdownTabButtons tab={specTab} onTabChange={setSpecTab} />
-                  <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
                     <FontScaleControl />
                     <button
                       type="button"
                       onClick={() => setSpecExampleOpen(true)}
                       disabled={!designTmpl?.exampleCn}
-                      style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: designTmpl?.exampleCn ? "pointer" : "not-allowed", opacity: designTmpl?.exampleCn ? 1 : 0.5 }}
+                      style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: designTmpl?.exampleCn ? "pointer" : "not-allowed", opacity: designTmpl?.exampleCn ? 1 : 0.5, whiteSpace: "nowrap", flexShrink: 0 }}
                     >
                       예시
                     </button>
@@ -1114,7 +1175,7 @@ function RequirementDetailPageInner() {
                         handleChange("detailSpec", applyTemplateVars(designTmpl.templateCn, {}));
                       }}
                       disabled={!designTmpl?.templateCn || !canEdit}
-                      style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: (designTmpl?.templateCn && canEdit) ? "pointer" : "not-allowed", opacity: (designTmpl?.templateCn && canEdit) ? 1 : 0.5 }}
+                      style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: (designTmpl?.templateCn && canEdit) ? "pointer" : "not-allowed", opacity: (designTmpl?.templateCn && canEdit) ? 1 : 0.5, whiteSpace: "nowrap", flexShrink: 0 }}
                     >
                       템플릿 적용
                     </button>
@@ -1122,7 +1183,7 @@ function RequirementDetailPageInner() {
                       <button
                         type="button"
                         onClick={() => setSpecChangeHistOpen(true)}
-                        style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: "pointer" }}
+                        style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
                       >
                         변경이력
                       </button>
@@ -1145,19 +1206,19 @@ function RequirementDetailPageInner() {
 
               {/* 분석 메모 (아래) */}
               <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
                     분석 메모
                     <FieldHelp title="분석 메모" body={ANALYSIS_MEMO_HELP_BODY} />
                   </span>
                   <MarkdownTabButtons tab={analyzeTab} onTabChange={setAnalyzeTab} />
-                  <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
                     <FontScaleControl />
                     {!isNew && (
                       <button
                         type="button"
                         onClick={() => setAnalyChangeHistOpen(true)}
-                        style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: "pointer" }}
+                        style={{ padding: "2px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4, border: "1px solid var(--color-border)", background: "var(--color-bg-muted)", color: "var(--color-text-secondary)", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
                       >
                         변경이력
                       </button>

@@ -16,7 +16,7 @@ export function FontScaleControl() {
   const decrease  = useEditorPrefsStore((s) => s.decreaseFontScale);
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 2 }} title="글자 크기">
+    <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }} title="글자 크기">
       <button
         type="button"
         onClick={decrease}
