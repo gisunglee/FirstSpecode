@@ -118,9 +118,13 @@ export default function MemoEditModal({ projectId, memoId, presetRefType, preset
   );
 }
 
+// border를 shorthand로 두면 FULL 버튼처럼 borderColor만 골라 덮어쓰는 곳에서
+// React가 "리렌더 중 borderColor 제거 시 border와 충돌" 에러를 던진다(실제 재현됨).
+// shorthand/longhand를 섞지 않도록 처음부터 개별 속성으로 선언한다.
 const ctrlBtnStyle: React.CSSProperties = {
   display: "flex", alignItems: "center", gap: 3, fontSize: 11.5, fontWeight: 600,
   padding: "5px 10px", borderRadius: 6, cursor: "pointer",
-  border: "1px solid var(--color-border)", background: "var(--color-bg-elevated)",
+  borderWidth: 1, borderStyle: "solid", borderColor: "var(--color-border)",
+  background: "var(--color-bg-elevated)",
   color: "var(--color-text-secondary)",
 };

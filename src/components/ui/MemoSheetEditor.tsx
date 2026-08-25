@@ -95,6 +95,21 @@ function withCelldata(sheets: Sheet[]): Sheet[] {
   });
 }
 
+// 위로 스크롤 체이닝 우회용 — 시트가 맨 위에 닿았을 때 대신 스크롤시킬, 가장 가까운
+// 스크롤 가능한 조상 요소를 찾는다. 모달(overflowY:auto 래퍼)이든 풀페이지(문서 자체)든
+// 특정 DOM 구조를 가정하지 않고 동작하도록 일반적으로 탐색한다.
+function findScrollableAncestor(el: HTMLElement): HTMLElement | null {
+  let node = el.parentElement;
+  while (node && node !== document.body) {
+    const style = getComputedStyle(node);
+    if ((style.overflowY === "auto" || style.overflowY === "scroll") && node.scrollHeight > node.clientHeight) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return document.scrollingElement as HTMLElement | null;
+}
+
 export type MemoSheetEditorHandle = {
   // 저장 시점에 호출 — 편집 중인 셀을 커밋시키고 그 결과를 가져온다(비동기)
   getData: () => Promise<Sheet[]>;
@@ -140,20 +155,44 @@ export default function MemoSheetEditor({ initialValue, readOnly = false, height
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // fortune-sheet#767 우회 — 위로 휠 스크롤할 때만 개입, 라이브러리 자체 스크롤바 DOM에
-  // 직접 scrollTop을 써서 그 네이티브 onScroll 경로로 정상 반영시키고, 버그 있는 라이브러리
-  // 자체 wheel 핸들러는 stopImmediatePropagation으로 막는다.
+  // fortune-sheet#767 우회 + 스크롤 체이닝 — 시트 안에 그 방향으로 여지가 있으면 항상
+  // 우리가 직접 scrollbarY.scrollTop을 밀어준다. 위로는 라이브러리 자체 버그(#767) 때문에
+  // 원래도 직접 밀어줘야 했는데, 아래로는 라이브러리 자체 휠 핸들러에 맡겨뒀더니 위로
+  // 스크롤할 때와 다르게 뚝뚝 끊기는(부드럽지 않은) 느낌이 실제로 있었다 — 그래서 방향
+  // 상관없이 항상 같은 방식(raw deltaY를 그대로 scrollTop에 더함)으로 통일해 체감 속도를
+  // 맞춘다. 시트가 그 방향으로 더 이상 여지가 없을 때(맨 위/맨 아래)만, 라이브러리
+  // 핸들러가 이어서 돌며 무조건 preventDefault를 호출해 마우스가 시트 위에 있는 동안은
+  // 바깥(모달/페이지) 스크롤이 전혀 먹지 않는 문제를 우회하려고, 가장 가까운 스크롤 가능한
+  // 조상(모달 래퍼 또는 없으면 문서 자체)을 대신 스크롤시켜 자연스러운 체이닝을 흉내낸다.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     function handleWheelCapture(e: WheelEvent) {
-      if (e.deltaY >= 0) return; // 아래로/가로 스크롤은 정상 동작이라 건드리지 않음
-      const scrollbarY = container?.querySelector<HTMLElement>(".luckysheet-scrollbar-y");
-      if (!scrollbarY || scrollbarY.scrollTop <= 0) return;
+      if (e.deltaY === 0) return; // 가로 스크롤은 건드리지 않음
+      if (!container) return; // 중첩 함수라 TS가 위쪽 널 체크의 좁혀짐을 못 이어받아 재확인
+      const scrollbarY = container.querySelector<HTMLElement>(".luckysheet-scrollbar-y");
+      if (!scrollbarY) return;
+
+      const maxSheetScrollTop = scrollbarY.scrollHeight - scrollbarY.clientHeight;
+      const hasRoomInSheet = e.deltaY < 0 ? scrollbarY.scrollTop > 0 : scrollbarY.scrollTop < maxSheetScrollTop;
+
+      if (hasRoomInSheet) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        scrollbarY.scrollTop = Math.min(maxSheetScrollTop, Math.max(0, scrollbarY.scrollTop + e.deltaY));
+        return;
+      }
+
+      // 시트가 그 방향으로 이미 끝(맨 위/맨 아래) — 바깥 스크롤 컨테이너로 체이닝
+      const outer = findScrollableAncestor(container);
+      if (!outer) return;
+      const maxOuterScrollTop = outer.scrollHeight - outer.clientHeight;
+      const hasRoomOutside = e.deltaY < 0 ? outer.scrollTop > 0 : outer.scrollTop < maxOuterScrollTop;
+      if (!hasRoomOutside) return; // 바깥도 이미 끝이면 그대로 둔다
       e.preventDefault();
       e.stopImmediatePropagation();
-      scrollbarY.scrollTop = Math.max(0, scrollbarY.scrollTop + e.deltaY);
+      outer.scrollTop = Math.min(maxOuterScrollTop, Math.max(0, outer.scrollTop + e.deltaY));
     }
 
     container.addEventListener("wheel", handleWheelCapture, { capture: true, passive: false });
@@ -161,7 +200,15 @@ export default function MemoSheetEditor({ initialValue, readOnly = false, height
   }, []);
 
   return (
-    <div ref={containerRef} style={{ height, border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
+    // transform으로 별도 GPU 컴포지팅 레이어를 강제해 overflow:hidden 클리핑을 시트 캔버스와
+    // 같은 레이어에서 동기화한다 — 위로 스크롤 우회 코드(위 useEffect)가 scrollTop을 강제로
+    // 밀어붙일 때, 클리핑 레이어와 캔버스 페인트가 한 프레임 어긋나면서 컨테이너 경계
+    // 안쪽 상단에 이전 프레임의 잔상 행이 겹쳐 보이는 현상이 실제로 있었다(스크롤을
+    // 빠르게 위로 올릴 때 재현됨). translateZ(0)로 레이어를 분리하면 사라진다.
+    <div
+      ref={containerRef}
+      style={{ height, border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden", transform: "translateZ(0)" }}
+    >
       <Workbook
         ref={wbRef}
         data={initialData}
