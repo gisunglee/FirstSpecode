@@ -64,7 +64,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const gate = await requirePermission(request, projectId, "code.create");
   if (gate instanceof Response) return gate;
 
-  let body: { cmCode?: string; codeNm?: string; codeDc?: string; sortOrdr?: number; globalUnique?: boolean };
+  let body: { cmCode?: string; codeNm?: string; codeDc?: string; sortOrdr?: number; globalUnique?: boolean; useYn?: string };
   try {
     body = await request.json();
   } catch {
@@ -75,6 +75,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const codeNm = body.codeNm?.trim();
   if (!cmCode) return apiError("VALIDATION_ERROR", "코드를 입력해 주세요.", 400);
   if (!codeNm) return apiError("VALIDATION_ERROR", "코드명을 입력해 주세요.", 400);
+
+  // useYn: "Y" | "N" 만 허용. 미지정 시 기본 "Y" (기존 호환)
+  if (body.useYn !== undefined && body.useYn !== "Y" && body.useYn !== "N") {
+    return apiError("VALIDATION_ERROR", "useYn 은 'Y' 또는 'N' 만 허용됩니다.", 400);
+  }
+  const useYn = body.useYn === "N" ? "N" : "Y";
 
   // 코드 형식 검증: 영문대소문자, 숫자, _, :, - 만 허용
   if (!/^[A-Za-z0-9_:\-]+$/.test(cmCode)) {
@@ -121,7 +127,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         code_nm: codeNm,
         code_dc: body.codeDc?.trim() || null,
         sort_ordr: sortOrdr,
-        use_yn: "Y",
+        use_yn: useYn,
         creat_mber_id: gate.mberId,
       },
     });

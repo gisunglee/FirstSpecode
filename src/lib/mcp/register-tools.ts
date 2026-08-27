@@ -18,9 +18,9 @@
  *   [설계-표준양식] get_design_template (요구사항/단위업무/화면/영역/기능 description 작성 표준 양식 —
  *                    설계 내용을 논의하거나 description을 작성하기 전에 반드시 먼저 호출할 것)
  *   [DB]           list_db_tables, get_db_table, create_db_table, update_db_table, get_db_table_usage, get_db_column_usage
- *   [공통코드/기준정보] list_code_groups, create_code_group, list_codes, create_code,
- *                    list_standard_info, create_standard_info (등록만 제공 — 삭제는 등록자/PM/PL/
- *                    관리자만 가능한 동적 조건이라 웹 UI 전용, 수정도 이번 범위 밖)
+ *   [공통코드/기준정보] list_code_groups, create_code_group, list_codes, create_code, update_code,
+ *                    list_standard_info, create_standard_info (삭제는 등록자/PM/PL/관리자만
+ *                    가능한 동적 조건이라 웹 UI 전용 — MCP엔 미등록. 그룹 수정 도구는 없음)
  *   [스펙 동기화]   UW 실행 시작·구조화 결과 제출·실행/항목 조회 (적용은 웹 전용)
  *   [AS-IS 온보딩] create_asis_question, list_asis_questions(조건 필수), answer_asis_question
  *   [표준 가이드]  search_standard_guides, get_standard_guide (프로젝트 코딩/디자인 표준 문서 —
@@ -1120,9 +1120,10 @@ export function registerTools(
   // ═══════════════════════════════════════════════════════════════
   // 11. 공통코드 / 기준 정보 (Code / Standard Info)
   // ═══════════════════════════════════════════════════════════════
-  // 등록(create)만 제공한다. 삭제는 등록자 또는 PM/PL/관리자만 가능한 동적 조건이라
-  // (requireCodeDelete/requireStandardInfoDelete 참고) MCP DELETE 미지원 정책과
-  // 별개로도 웹 UI 채널에서만 처리한다. 수정(update)도 이번 범위에는 없음.
+  // 삭제는 등록자 또는 PM/PL/관리자만 가능한 동적 조건이라(requireCodeDelete/
+  // requireStandardInfoDelete 참고) MCP DELETE 미지원 정책과 별개로도 웹 UI 채널에서만
+  // 처리한다. 코드(개별 항목) 수정은 update_code로 제공하되, 그룹·기준정보 수정 도구는
+  // 아직 없음 — 필요해지면 추가 검토.
 
   server.tool(
     "list_code_groups",
@@ -1151,6 +1152,7 @@ export function registerTools(
       grpCode:    z.string().describe("그룹 코드 (필수, 프로젝트 내 유니크)"),
       grpCodeNm:  z.string().describe("그룹 코드명 (필수, 프로젝트 내 유니크)"),
       grpCodeDc:  z.string().optional().describe("그룹 설명"),
+      useYn:      z.string().optional().describe("사용 여부. 허용값: Y | N (미지정 시 Y)"),
     },
     async ({ projectId, ...body }) => {
       try {
@@ -1195,12 +1197,42 @@ export function registerTools(
       codeDc:       z.string().optional().describe("코드 설명"),
       sortOrdr:     z.number().optional().describe("정렬순서 (미지정 시 마지막+1 자동 계산)"),
       globalUnique: z.boolean().optional().describe("true면 같은 프로젝트 내 다른 그룹과도 코드값 중복을 금지합니다"),
+      useYn:        z.string().optional().describe("사용 여부. 허용값: Y | N (미지정 시 Y)"),
     },
     async ({ projectId, grpCode, ...body }) => {
       try {
         const data = await specodeFetch(
           `/api/projects/${projectId}/code-groups/${grpCode}/codes`,
           { method: "POST", body: JSON.stringify(body) }
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  server.tool(
+    "update_code",
+    "공통코드 수정 — 코드값/코드명/설명/정렬순서/사용여부를 수정합니다. " +
+      "OWNER/ADMIN만 가능합니다(등록자 예외 없음). 등록 시 잘못 들어간 사용여부(useYn)를 " +
+      "바로잡을 때도 이 도구를 사용하세요",
+    {
+      projectId:    z.string().describe("프로젝트 ID"),
+      grpCode:      z.string().describe("그룹 코드 (선행: list_code_groups로 조회)"),
+      codeId:       z.number().describe("코드 ID (선행: list_codes로 조회한 codeId)"),
+      cmCode:       z.string().optional().describe("코드값 (영문/숫자/_/:/- 만 허용, 그룹 내 유니크)"),
+      codeNm:       z.string().optional().describe("코드명"),
+      codeDc:       z.string().optional().describe("코드 설명"),
+      useYn:        z.string().optional().describe("사용 여부. 허용값: Y | N"),
+      sortOrdr:     z.number().optional().describe("정렬순서"),
+      globalUnique: z.boolean().optional().describe("true면 cmCode 변경 시 같은 프로젝트 내 다른 그룹과도 중복을 금지합니다"),
+    },
+    async ({ projectId, grpCode, codeId, ...body }) => {
+      try {
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/code-groups/${grpCode}/codes/${codeId}`,
+          { method: "PUT", body: JSON.stringify(body) }
         );
         return textResult(data);
       } catch (err) {

@@ -77,7 +77,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const gate = await requirePermission(request, projectId, "code.create");
   if (gate instanceof Response) return gate;
 
-  let body: { grpCode?: string; grpCodeNm?: string; grpCodeDc?: string };
+  let body: { grpCode?: string; grpCodeNm?: string; grpCodeDc?: string; useYn?: string };
   try {
     body = await request.json();
   } catch {
@@ -88,6 +88,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const grpCodeNm = body.grpCodeNm?.trim();
   if (!grpCode) return apiError("VALIDATION_ERROR", "그룹 코드를 입력해 주세요.", 400);
   if (!grpCodeNm) return apiError("VALIDATION_ERROR", "그룹 코드명을 입력해 주세요.", 400);
+
+  // useYn: "Y" | "N" 만 허용. 미지정 시 기본 "Y" (기존 호환)
+  if (body.useYn !== undefined && body.useYn !== "Y" && body.useYn !== "N") {
+    return apiError("VALIDATION_ERROR", "useYn 은 'Y' 또는 'N' 만 허용됩니다.", 400);
+  }
+  const useYn = body.useYn === "N" ? "N" : "Y";
 
   try {
     // 같은 프로젝트 내 중복 체크
@@ -107,7 +113,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         grp_code: grpCode,
         grp_code_nm: grpCodeNm,
         grp_code_dc: body.grpCodeDc?.trim() || null,
-        use_yn: "Y",
+        use_yn: useYn,
         creat_mber_id: gate.mberId,
       },
     });
