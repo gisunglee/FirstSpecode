@@ -1235,15 +1235,17 @@ model TbCmStandardInfo {
 }
 
 model TbCmCodeGroup {
-  grp_code    String      @db.VarChar(100)
-  grp_code_nm String      @db.VarChar(100)
-  grp_code_dc String?     @db.VarChar(4000)
-  use_yn      String      @default("Y") @db.Char(1)
-  creat_dt    DateTime    @default(now())
-  mdfcn_dt    DateTime    @default(now())
-  grp_code_id Int         @id @default(autoincrement())
-  prjct_id    String      @db.VarChar(36)
-  codes       TbCmCode[]
+  grp_code      String      @db.VarChar(100)
+  grp_code_nm   String      @db.VarChar(100)
+  grp_code_dc   String?     @db.VarChar(4000)
+  use_yn        String      @default("Y") @db.Char(1)
+  creat_dt      DateTime    @default(now())
+  mdfcn_dt      DateTime    @default(now())
+  grp_code_id   Int         @id @default(autoincrement())
+  prjct_id      String      @db.VarChar(36)
+  creat_mber_id String?     // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
+  mdfcn_mber_id String?     // 최종 수정자 회원 ID — 등록자 삭제 예외 판정 및 감사 추적
+  codes         TbCmCode[]
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
   // 자식 tb_cm_code 는 grp_code_id FK 가 이미 CASCADE 라 자동 따라 정리됨
   project     TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_cm_code_group_prjct_fk")
@@ -1255,17 +1257,19 @@ model TbCmCodeGroup {
 }
 
 model TbCmCode {
-  code_nm     String        @db.VarChar(100)
-  code_dc     String?       @db.VarChar(4000)
-  use_yn      String        @default("Y") @db.Char(1)
-  sort_ordr   Int           @default(0)
-  creat_dt    DateTime      @default(now())
-  mdfcn_dt    DateTime      @default(now())
-  cm_code     String        @db.VarChar(100)
-  cm_code_id  Int           @id @default(autoincrement())
-  prjct_id    String        @db.VarChar(36)
-  grp_code_id Int
-  group       TbCmCodeGroup @relation(fields: [grp_code_id], references: [grp_code_id], onDelete: Cascade)
+  code_nm       String        @db.VarChar(100)
+  code_dc       String?       @db.VarChar(4000)
+  use_yn        String        @default("Y") @db.Char(1)
+  sort_ordr     Int           @default(0)
+  creat_dt      DateTime      @default(now())
+  mdfcn_dt      DateTime      @default(now())
+  cm_code       String        @db.VarChar(100)
+  cm_code_id    Int           @id @default(autoincrement())
+  prjct_id      String        @db.VarChar(36)
+  grp_code_id   Int
+  creat_mber_id String?       // 생성자 회원 ID — FK 미설정(퇴장 멤버 기록 보존)
+  mdfcn_mber_id String?       // 최종 수정자 회원 ID — 등록자 삭제 예외 판정 및 감사 추적
+  group         TbCmCodeGroup @relation(fields: [grp_code_id], references: [grp_code_id], onDelete: Cascade)
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
   // group cascade 와 중복돼 보이지만 양쪽 다 삭제 경로를 보장 (직접 prjct_id 컬럼이 있어 무결성 보호)
   project     TbPjProject   @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_cm_code_prjct_fk")

@@ -17,7 +17,11 @@
  *     raw SQL group by 로 최적화 여지가 있다. 현재는 가독성 우선.
  */
 
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "./prisma";
+
+// Prisma TransactionClient — tx 와 prisma 모두 허용 (dbTableRevision.ts 와 동일 관례)
+type DbClient = PrismaClient | Prisma.TransactionClient;
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -60,6 +64,26 @@ export type TableUsageDetail = {
   usedBy:      TableUsedBy[];
   columnUsage: Record<string, ColumnUsageStat>; // key = col_id
 };
+
+// ── 컬럼 삭제 시 고아 매핑 정리 ──────────────────────────────────────────────
+
+/**
+ * tb_ds_col_mapping.col_id 는 tb_ds_db_table_column 에 대한 FK 관계/cascade 가
+ * 걸려 있지 않다 (파일 상단 설계 의도 참고). 그래서 컬럼을 지울 때 이 함수로
+ * 먼저 참조 매핑을 정리하지 않으면, 지워진 col_id 를 가리키는 매핑 행이 그대로
+ * 남아 기능의 컬럼 매핑 그리드에 컬럼명이 빈 "유령 행"으로 나타난다.
+ *
+ * 호출 규칙: 컬럼을 삭제하는 트랜잭션 안에서, 컬럼 deleteMany 이전(또는 이후,
+ * FK 가 없어 순서 무관)에 지워질 col_id 목록을 넘겨 호출한다.
+ */
+export async function deleteOrphanedColMappings(
+  db:     DbClient,
+  colIds: string[]
+): Promise<number> {
+  if (colIds.length === 0) return 0;
+  const result = await db.tbDsColMapping.deleteMany({ where: { col_id: { in: colIds } } });
+  return result.count;
+}
 
 // ── 목록용: 테이블별 인사이트 배치 집계 ─────────────────────────────────────
 

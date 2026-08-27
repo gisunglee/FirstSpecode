@@ -32,6 +32,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
+import { requireStandardInfoDelete } from "@/lib/requireStandardInfoDelete";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 type RouteParams = { params: Promise<{ id: string; stdInfoId: string }> };
@@ -162,7 +163,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, stdInfoId } = await params;
 
-  const gate = await requirePermission(request, projectId, "content.delete");
+  // 권한: standardInfo.delete (OWNER/ADMIN 역할 또는 PM/PL 직무) 또는 이 항목의 등록자
+  const gate = await requireStandardInfoDelete(request, projectId, async () => {
+    const r = await prisma.tbCmStandardInfo.findUnique({
+      where:  { std_info_id: stdInfoId },
+      select: { creat_mber_id: true, prjct_id: true, del_yn: true },
+    });
+    return r && r.prjct_id === projectId && r.del_yn === "N" ? r.creat_mber_id : null;
+  });
   if (gate instanceof Response) return gate;
 
   try {

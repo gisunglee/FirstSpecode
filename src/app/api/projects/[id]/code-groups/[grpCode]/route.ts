@@ -15,6 +15,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
+import { requireCodeDelete } from "@/lib/requireCodeDelete";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 type RouteParams = { params: Promise<{ id: string; grpCode: string }> };
@@ -66,6 +67,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         ...(body.grpCodeNm !== undefined ? { grp_code_nm: body.grpCodeNm.trim() } : {}),
         ...(body.grpCodeDc !== undefined ? { grp_code_dc: body.grpCodeDc.trim() || null } : {}),
         ...(body.useYn !== undefined ? { use_yn: body.useYn } : {}),
+        mdfcn_mber_id: gate.mberId,
         mdfcn_dt: new Date(),
       },
     });
@@ -80,7 +82,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, grpCode } = await params;
 
-  const gate = await requirePermission(request, projectId, "code.write");
+  // 권한: code.delete (OWNER/ADMIN 역할 또는 PM/PL 직무) 또는 이 그룹의 등록자
+  const gate = await requireCodeDelete(request, projectId, async () => {
+    const g = await prisma.tbCmCodeGroup.findUnique({
+      where:  { prjct_id_grp_code: { prjct_id: projectId, grp_code: grpCode } },
+      select: { creat_mber_id: true },
+    });
+    return g?.creat_mber_id ?? null;
+  });
   if (gate instanceof Response) return gate;
 
   try {

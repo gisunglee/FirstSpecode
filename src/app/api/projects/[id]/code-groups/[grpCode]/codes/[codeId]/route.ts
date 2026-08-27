@@ -9,6 +9,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
+import { requireCodeDelete } from "@/lib/requireCodeDelete";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 type RouteParams = { params: Promise<{ id: string; grpCode: string; codeId: string }> };
@@ -67,6 +68,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         ...(body.codeDc !== undefined ? { code_dc: body.codeDc.trim() || null } : {}),
         ...(body.useYn !== undefined ? { use_yn: body.useYn } : {}),
         ...(body.sortOrdr !== undefined ? { sort_ordr: body.sortOrdr } : {}),
+        mdfcn_mber_id: gate.mberId,
         mdfcn_dt: new Date(),
       },
     });
@@ -85,7 +87,14 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "유효하지 않은 코드 ID입니다.", 400);
   }
 
-  const gate = await requirePermission(request, projectId, "code.write");
+  // 권한: code.delete (OWNER/ADMIN 역할 또는 PM/PL 직무) 또는 이 코드의 등록자
+  const gate = await requireCodeDelete(request, projectId, async () => {
+    const c = await prisma.tbCmCode.findUnique({
+      where:  { cm_code_id: codeId },
+      select: { creat_mber_id: true, prjct_id: true },
+    });
+    return c && c.prjct_id === projectId ? c.creat_mber_id : null;
+  });
   if (gate instanceof Response) return gate;
 
   try {

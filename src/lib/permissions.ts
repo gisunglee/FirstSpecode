@@ -125,8 +125,12 @@ export const PERMISSIONS = {
 
   // ── DB 표준 (DBA 직무가 ADMIN 없이도 다룰 수 있는 혼합 예시) ──────
   // db.table.write: 스키마 수정 — OWNER/ADMIN 또는 DBA/DEV 직무 (개발 단계 유연성)
+  // db.table.delete: 테이블 삭제 — write 보다 좁게. OWNER/ADMIN 또는 PM/PL/DBA 직무만.
+  //   이 매트릭스로 통과 못 하더라도 "본인이 해당 테이블 담당자(asign_mber_id)" 인 경우엔
+  //   라우트 레벨에서 별도 분기로 허용 (requirement.update 담당자 예외와 동일 관례).
   // db.standard.manage: DB 표준 관리 — OWNER/ADMIN 또는 DBA 직무만 (더 엄격)
   "db.table.write":     { roles: ["OWNER", "ADMIN"], jobs: ["DBA", "DEV"] },
+  "db.table.delete":    { roles: ["OWNER", "ADMIN"], jobs: ["PM", "PL", "DBA"] },
   "db.standard.manage": { roles: ["OWNER", "ADMIN"], jobs: ["DBA"] },
 
   // ── AI ─────────────────────────────────────────────────────────
@@ -147,8 +151,20 @@ export const PERMISSIONS = {
   "apiKey.manage":      { roles: ["OWNER", "ADMIN"] },
 
   // ── 공통코드 / 기준 정보 ─────────────────────────────────────────
+  // code.create: 등록 — content.create 와 동일 관례로 MEMBER 까지 개방 (등록 문턱을 낮춤)
+  // code.write : 수정 — 기존 그대로 OWNER/ADMIN 전용 유지 (이번 변경 범위 아님)
+  // code.delete: 삭제 — OWNER/ADMIN 역할 또는 PM/PL 직무. 이 매트릭스로 통과 못 하더라도
+  //   "본인이 등록한 항목(creat_mber_id)" 이면 라우트 레벨에서 별도 분기로 허용
+  //   (db.table.delete 담당자 예외와 동일 관례 — requireCodeDelete 참고)
   "code.read":          { roles: ["OWNER", "ADMIN", "MEMBER", "VIEWER"] },
+  "code.create":        { roles: ["OWNER", "ADMIN", "MEMBER"] },
   "code.write":         { roles: ["OWNER", "ADMIN"] },
+  "code.delete":        { roles: ["OWNER", "ADMIN"], jobs: ["PM", "PL"] },
+
+  // standardInfo.delete: 기준 정보 삭제 — code.delete 와 동일 관례.
+  //   OWNER/ADMIN 역할 또는 PM/PL 직무, 또는 본인이 등록한 항목(creat_mber_id).
+  //   등록(content.create)·수정(content.update)은 기존 그대로 — 삭제만 좁게 분리.
+  "standardInfo.delete": { roles: ["OWNER", "ADMIN"], jobs: ["PM", "PL"] },
 
   // ── 업무일지 / 주간보고 ──────────────────────────────────────────
   // 업무일지(work-logs) 본인 작성/조회는 content.create·content.read 로 충분

@@ -1,16 +1,17 @@
 /**
- * POST /api/projects/[id]/db-tables/bulk — DDL 일괄 등록
+ * POST   /api/projects/[id]/db-tables/bulk — DDL 일괄 등록
+ * DELETE /api/projects/[id]/db-tables/bulk — 일괄 삭제
  *
- * 역할:
+ * POST 역할:
  *   - FE 에서 `@/lib/ddlParser` 로 파싱·사용자 편집을 마친 여러 테이블을 받아 한 번에 생성
  *   - 테이블 단위 트랜잭션 (테이블 + 컬럼 + CREATE 이력을 한 덩어리로)
  *   - 테이블 간에는 독립 — 한 건 실패가 다른 건을 막지 않음 (부분 성공 허용)
  *   - 물리명 중복은 skip 으로 응답 (덮어쓰기 미지원 — 기획안 1차 범위)
  *
- * 권한:
- *   db.table.write (기존 POST 와 동일)
+ * POST 권한:
+ *   db.table.write
  *
- * Body:
+ * POST Body:
  *   {
  *     tables: [
  *       {
@@ -24,7 +25,7 @@
  *     ]
  *   }
  *
- * Response:
+ * POST Response:
  *   {
  *     data: {
  *       created: [{ tblPhysclNm, tblId }],
@@ -32,13 +33,35 @@
  *       failed:  [{ tblPhysclNm, reason }],   // 예외
  *     }
  *   }
+ *
+ * DELETE 역할:
+ *   - 여러 테이블을 한 번에 삭제 (컬럼 + col_mapping cascade, DELETE 이력 기록)
+ *   - 테이블 단위 트랜잭션 + 부분 성공 (POST 와 동일 패턴)
+ *   - 테이블별 권한: db.table.delete 매트릭스 통과 못 해도 그 테이블의 담당자면 허용
+ *     (requireDbTableDelete 와 동일 관례 — 멤버십 조회는 한 번만, 대조는 테이블마다)
+ *
+ * DELETE 권한:
+ *   db.table.delete 또는 테이블별 담당자
+ *
+ * DELETE Body:
+ *   { tableIds: string[] }
+ *
+ * DELETE Response:
+ *   {
+ *     data: {
+ *       deleted: [{ tblPhysclNm, tblId }],
+ *       failed:  [{ tblPhysclNm, tblId, reason }],  // 권한 없음/존재하지 않음/예외
+ *     }
+ *   }
  */
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
+import { requireDbTableDeleteBase } from "@/lib/requireDbTableDelete";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { captureTableSnapshot, recordRevision } from "@/lib/dbTableRevision";
+import { deleteOrphanedColMappings } from "@/lib/dbTableUsage";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -171,4 +194,96 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   return apiSuccess({ created, skipped, failed }, 200);
+}
+
+// ── DELETE: 일괄 삭제 ────────────────────────────────────────────────────────
+
+type DeletedItem     = { tblPhysclNm: string; tblId: string };
+type DeleteFailedItem = { tblPhysclNm: string; tblId: string; reason: string };
+
+// 한 번에 처리할 수 있는 최대 건수 — POST(등록) 와 동일 상한 (서버·DB 부하 방어)
+const MAX_BULK_DELETE = 100;
+
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  const { id: projectId } = await params;
+
+  // 멤버십 + db.table.delete 매트릭스 조건만 먼저 판정 (담당자 대조는 테이블별로 아래에서)
+  const base = await requireDbTableDeleteBase(request, projectId);
+  if (base instanceof Response) return base;
+
+  let body: unknown;
+  try { body = await request.json(); } catch {
+    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
+  }
+
+  const { tableIds } = (body ?? {}) as { tableIds?: string[] };
+  if (!Array.isArray(tableIds) || tableIds.length === 0) {
+    return apiError("VALIDATION_ERROR", "삭제할 테이블이 없습니다.", 400);
+  }
+  if (tableIds.length > MAX_BULK_DELETE) {
+    return apiError("VALIDATION_ERROR", `한 번에 최대 ${MAX_BULK_DELETE}개까지 삭제할 수 있습니다.`, 400);
+  }
+
+  const deleted: DeletedItem[]      = [];
+  const failed:  DeleteFailedItem[] = [];
+
+  // 대상 테이블 일괄 조회 — 프로젝트 소속 검증 + 담당자 대조용 asign_mber_id 포함
+  const tables = await prisma.tbDsDbTable.findMany({
+    where:  { tbl_id: { in: tableIds }, prjct_id: projectId },
+    select: { tbl_id: true, tbl_physcl_nm: true, asign_mber_id: true },
+  });
+  const tableMap = new Map(tables.map((t) => [t.tbl_id, t]));
+
+  for (const tblId of tableIds) {
+    const table = tableMap.get(tblId);
+    if (!table) {
+      failed.push({ tblPhysclNm: "(알 수 없음)", tblId, reason: "테이블을 찾을 수 없습니다." });
+      continue;
+    }
+
+    const allowed = base.matrixOK || table.asign_mber_id === base.mberId;
+    if (!allowed) {
+      failed.push({
+        tblPhysclNm: table.tbl_physcl_nm,
+        tblId,
+        reason: "삭제 권한이 없습니다 (담당자 또는 PM/PL/DBA/관리자만 가능).",
+      });
+      continue;
+    }
+
+    // 테이블 단위 트랜잭션 — 이력 기록 → 매핑/컬럼/테이블 삭제 (POST 와 동일 패턴)
+    try {
+      await prisma.$transaction(async (tx) => {
+        const before = await captureTableSnapshot(tx, tblId);
+
+        await recordRevision(tx, {
+          projectId,
+          tblId,
+          chgTypeCode: "DELETE",
+          before,
+          after:       null,
+          chgMberId:   base.mberId,
+        });
+
+        const colIds = (
+          await tx.tbDsDbTableColumn.findMany({ where: { tbl_id: tblId }, select: { col_id: true } })
+        ).map((c) => c.col_id);
+        await deleteOrphanedColMappings(tx, colIds);
+
+        await tx.tbDsDbTableColumn.deleteMany({ where: { tbl_id: tblId } });
+        await tx.tbDsDbTable.delete({ where: { tbl_id: tblId } });
+      });
+
+      deleted.push({ tblPhysclNm: table.tbl_physcl_nm, tblId });
+    } catch (err) {
+      console.error(`[DELETE /db-tables/bulk] ${table.tbl_physcl_nm} 삭제 실패:`, err);
+      failed.push({
+        tblPhysclNm: table.tbl_physcl_nm,
+        tblId,
+        reason: err instanceof Error ? err.message : "알 수 없는 오류",
+      });
+    }
+  }
+
+  return apiSuccess({ deleted, failed }, 200);
 }

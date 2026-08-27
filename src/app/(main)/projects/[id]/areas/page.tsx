@@ -73,6 +73,11 @@ function AreasPageInner() {
 
   // 화면 필터 (URL ?screenId=xxx 로 초기화 — 브레드크럼에서 진입 시 자동 적용)
   const [screenFilter, setScreenFilter] = useState(searchParams.get("screenId") ?? "");
+  // 단위업무 필터
+  const [unitWorkFilter, setUnitWorkFilter] = useState("");
+  // 영역명 텍스트 검색 — 입력값과 실제 적용값을 분리해 Enter를 눌러야 검색이 반영되도록 함
+  const [nameSearchInput, setNameSearchInput] = useState("");
+  const [nameSearch, setNameSearch] = useState("");
 
   // 삭제 다이얼로그 상태
   const [deleteTarget, setDeleteTarget] = useState<AreaRow | null>(null);
@@ -105,10 +110,16 @@ function AreasPageInner() {
     new Map(allItems.filter((a) => a.screenId).map((a) => [a.screenId, a.screenName])).entries()
   ).map(([id, name]) => ({ id: id!, name }));
 
-  // 필터 적용
-  const items = screenFilter
-    ? allItems.filter((a) => a.screenId === screenFilter)
-    : allItems;
+  // 단위업무 드롭다운 옵션 — items에서 중복 제거하여 추출
+  const unitWorkOptions = Array.from(
+    new Map(allItems.filter((a) => a.unitWorkId).map((a) => [a.unitWorkId, a.unitWorkName])).entries()
+  ).map(([id, name]) => ({ id: id!, name: name! }));
+
+  // 필터 적용 — 화면/단위업무 드롭다운 필터 + 영역명 텍스트 검색(대소문자 무시)
+  const items = allItems
+    .filter((a) => (screenFilter ? a.screenId === screenFilter : true))
+    .filter((a) => (unitWorkFilter ? a.unitWorkId === unitWorkFilter : true))
+    .filter((a) => (nameSearch ? a.name.toLowerCase().includes(nameSearch.toLowerCase()) : true));
 
   // ── 순서 변경 뮤테이션 ──────────────────────────────────────────────────────
   const sortMutation = useMutation({
@@ -256,6 +267,25 @@ function AreasPageInner() {
             총 {items.length}건
           </span>
           <div style={{ flex: 1 }} />
+          <input
+            value={nameSearchInput}
+            onChange={(e) => setNameSearchInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") setNameSearch(nameSearchInput.trim());
+            }}
+            placeholder="영역명 검색 (Enter)"
+            style={nameSearchInputStyle}
+          />
+          <select
+            value={unitWorkFilter}
+            onChange={(e) => setUnitWorkFilter(e.target.value)}
+            style={filterSelectStyle}
+          >
+            <option value="">단위업무 전체</option>
+            {unitWorkOptions.map((opt) => (
+              <option key={opt.id} value={opt.id}>{opt.name}</option>
+            ))}
+          </select>
           <select
             value={screenFilter}
             onChange={(e) => setScreenFilter(e.target.value)}
@@ -719,6 +749,17 @@ const linkBtnStyle: React.CSSProperties = {
   padding: 0,
   textAlign: "left",
   textDecoration: "none",
+};
+
+const nameSearchInputStyle: React.CSSProperties = {
+  padding: "7px 12px",
+  borderRadius: 6,
+  border: "1px solid var(--color-border)",
+  fontSize: 13,
+  background: "var(--color-bg-card)",
+  color: "var(--color-text-primary)",
+  outline: "none",
+  minWidth: 180,
 };
 
 const filterSelectStyle: React.CSSProperties = {

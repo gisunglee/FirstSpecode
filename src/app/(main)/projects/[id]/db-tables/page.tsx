@@ -21,6 +21,8 @@ import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 // 매핑 인사이트 Phase 2 — IO 프로필 아이콘, 커버리지 텍스트 배지
 import { IoProfileIcon, CoverageText } from "@/components/db-table/TableInsightBadges";
 import type { IoProfile } from "@/lib/dbTableUsage";
+import { BulkDeleteTableConfirmDialog, type BulkDeleteItem } from "@/components/db-table/DbTableDialogs";
+import type { TableUsageResponse } from "@/components/db-table/TableUsageSection";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -119,6 +121,13 @@ function DbTablesPageInner() {
   // ── DDL 일괄 등록 모달 ──────────────────────────────────────────────────────
   const [bulkOpen, setBulkOpen] = useState(false);
 
+  // ── 일괄 삭제 ────────────────────────────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  // 삭제 확인창을 열 때 선택된 테이블들의 사용 현황을 미리 조회해 담아둔다 (탐색 중 화면 이탈 방지)
+  const [deleteItems, setDeleteItems] = useState<BulkDeleteItem[]>([]);
+  const [usageLoading, setUsageLoading] = useState(false);
+
   // ── 목록 조회 ────────────────────────────────────────────────────────────────
   // 프로필 로드 전에는 쿼리 지연 → 첫 렌더 플리커 방지
   const { data: rows = [], isLoading } = useQuery<DbTableRow[]>({
@@ -148,6 +157,38 @@ function DbTablesPageInner() {
     },
     onError: (err: Error) => toast.error(err.message),
   });
+
+  // ── 일괄 삭제 뮤테이션 ────────────────────────────────────────────────────────
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      authFetch<{ data: { deleted: { tblId: string }[]; failed: { tblPhysclNm: string; reason: string }[] } }>(
+        `/api/projects/${projectId}/db-tables/bulk`,
+        { method: "DELETE", body: JSON.stringify({ tableIds: ids }) }
+      ),
+    onSuccess: (res) => {
+      const { deleted, failed } = res.data;
+      qc.invalidateQueries({ queryKey: ["db-tables", projectId] });
+      setDeleteDialogOpen(false);
+      setSelectedIds(new Set());
+      if (deleted.length > 0) toast.success(`테이블 ${deleted.length}개가 삭제되었습니다.`);
+      if (failed.length > 0) {
+        toast.error(
+          `${failed.length}개는 삭제하지 못했습니다: ` +
+          failed.map((f) => `${f.tblPhysclNm}(${f.reason})`).join(", ")
+        );
+      }
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // 체크박스 토글 — 이벤트 버블링으로 행 클릭(상세 이동)이 같이 발동하지 않도록 호출부에서 stopPropagation
+  function toggleSelect(tblId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(tblId)) next.delete(tblId); else next.add(tblId);
+      return next;
+    });
+  }
 
   // 검색어 + 인사이트 필터를 동시에 적용
   // 인사이트 필터는 "관점 전환" 이므로 검색과 교집합으로 동작
@@ -185,6 +226,43 @@ function DbTablesPageInner() {
   function handleCreate() {
     if (!newPhysNm.trim()) { toast.error("물리 테이블명을 입력해 주세요."); return; }
     createMutation.mutate({ tblPhysclNm: newPhysNm, tblLgclNm: newLgclNm, tblDc: newDc });
+  }
+
+  // 현재 화면(검색/필터 적용 후)에 보이는 행 기준 전체 선택/해제
+  const allFilteredSelected = filtered.length > 0 && filtered.every((r) => selectedIds.has(r.tblId));
+  function toggleSelectAll() {
+    setSelectedIds((prev) => {
+      if (allFilteredSelected) return new Set();
+      return new Set(filtered.map((r) => r.tblId));
+    });
+  }
+
+  // 선택 삭제 버튼 클릭 — 각 테이블의 사용 현황을 미리 조회해 확인창에 표시
+  async function openDeleteDialog() {
+    const targets = rows.filter((r) => selectedIds.has(r.tblId));
+    if (targets.length === 0) return;
+
+    setUsageLoading(true);
+    setDeleteDialogOpen(true);
+    try {
+      const results = await Promise.all(
+        targets.map((t) =>
+          authFetch<{ data: TableUsageResponse }>(`/api/projects/${projectId}/db-tables/${t.tblId}/usage`)
+            .then((r) => r.data.usedBy)
+            .catch(() => undefined) // 조회 실패 시 undefined — 다이얼로그가 "확인 불가"로 별도 표시
+        )
+      );
+      setDeleteItems(
+        targets.map((t, i) => ({
+          tblId:       t.tblId,
+          tblPhysclNm: t.tblPhysclNm,
+          colCount:    t.columnCount,
+          usedBy:      results[i],
+        }))
+      );
+    } finally {
+      setUsageLoading(false);
+    }
   }
 
   return (
@@ -305,6 +383,13 @@ function DbTablesPageInner() {
 
           {/* 헤더 행 */}
           <div style={headerRowStyle}>
+            <input
+              type="checkbox"
+              checked={allFilteredSelected}
+              onChange={toggleSelectAll}
+              style={{ cursor: "pointer" }}
+              aria-label="전체 선택"
+            />
             <span>물리 테이블명</span>
             <span>논리 테이블명</span>
             <span>설명</span>
@@ -329,6 +414,8 @@ function DbTablesPageInner() {
           {/* 신규 등록 인라인 폼 */}
           {creating && (
             <div style={{ ...dataRowStyle, background: "rgba(103,80,164,0.04)", borderTop: "none" }}>
+              {/* 체크박스 자리 — 신규 등록 행은 선택 대상 아님 */}
+              <div />
               <input
                 id="new-phys-nm"
                 value={newPhysNm}
@@ -394,6 +481,16 @@ function DbTablesPageInner() {
                 onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-table-hover)")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-bg-card)")}
               >
+                {/* 체크박스 — 행 클릭(상세 이동)으로 이벤트가 번지지 않도록 stopPropagation */}
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(row.tblId)}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={() => toggleSelect(row.tblId)}
+                  style={{ cursor: "pointer" }}
+                  aria-label={`${row.tblPhysclNm} 선택`}
+                />
+
                 {/* 물리명 — AI 태스크 페이지 기준에 맞춰 파랑/굵게/monospace 제거,
                     다른 데이터 셀과 동일한 13px primary 일반 텍스트로 통일 */}
                 <span style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
@@ -465,20 +562,42 @@ function DbTablesPageInner() {
             ))
           )}
         </div>
+
+        {/* 선택 삭제 버튼 — 하나 이상 선택했을 때만 표시, 목록 하단 우측 정렬 */}
+        {selectedIds.size > 0 && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+            <button
+              type="button"
+              onClick={openDeleteDialog}
+              disabled={usageLoading}
+              style={deleteBtnStyle}
+            >
+              {usageLoading ? "확인 중..." : `선택 삭제 (${selectedIds.size})`}
+            </button>
+          </div>
+        )}
       </div>
 
+      <BulkDeleteTableConfirmDialog
+        open={deleteDialogOpen}
+        projectId={projectId}
+        items={deleteItems}
+        onClose={() => setDeleteDialogOpen(false)}
+        onConfirm={() => bulkDeleteMutation.mutate([...selectedIds])}
+        busy={bulkDeleteMutation.isPending}
+      />
     </div>
   );
 }
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-// 물리 / 논리 / 설명 / 담당자 / 컬럼수 / 활용률 / 기능연결 / IO / 등록·수정일
+// 체크박스 / 물리 / 논리 / 설명 / 담당자 / 컬럼수 / 활용률 / 기능연결 / IO / 등록·수정일
 // 설명(1fr)이 남는 공간을 모두 흡수하므로, 뒤 6개 고정폭 컬럼을 실제 표시 내용(숫자·짧은
 // 배지·YYYY-MM-DD)에 딱 맞게 타이트하게 줄이면 그만큼이 자동으로 설명 폭에 더해진다(2026-07-28).
 // 물리/논리 테이블명: 긴 식별자(tb_ai_design_template 등)와 한글 논리명에 여유를 주기 위해 +20% 확장
 const GRID =
-  "minmax(192px,264px) minmax(144px,216px) 1fr 52px 48px 84px 48px 36px 82px";
+  "20px minmax(192px,264px) minmax(144px,216px) 1fr 52px 48px 84px 48px 36px 82px";
 
 const headerRowStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID,
@@ -553,5 +672,13 @@ const cancelBtnStyle: React.CSSProperties = {
   border: "1px solid var(--color-border)",
   background: "transparent", color: "var(--color-text-secondary)",
   fontSize: 11, cursor: "pointer",
+};
+
+// 선택 삭제 버튼 — 단건 상세 페이지의 삭제 버튼과 동일한 위험 색상
+const deleteBtnStyle: React.CSSProperties = {
+  padding: "6px 16px", borderRadius: 6,
+  border: "none",
+  background: "#fdecea", color: "#e53935",
+  fontSize: 12, fontWeight: 600, cursor: "pointer",
 };
 

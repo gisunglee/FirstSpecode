@@ -60,7 +60,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, grpCode } = await params;
 
-  const gate = await requirePermission(request, projectId, "code.write");
+  // 등록은 MEMBER 까지 개방 (content.create 와 동일 관례) — 수정/삭제는 별도 권한
+  const gate = await requirePermission(request, projectId, "code.create");
   if (gate instanceof Response) return gate;
 
   let body: { cmCode?: string; codeNm?: string; codeDc?: string; sortOrdr?: number; globalUnique?: boolean };
@@ -121,6 +122,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         code_dc: body.codeDc?.trim() || null,
         sort_ordr: sortOrdr,
         use_yn: "Y",
+        creat_mber_id: gate.mberId,
       },
     });
 

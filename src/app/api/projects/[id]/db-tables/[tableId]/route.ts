@@ -13,8 +13,10 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
+import { requireDbTableDelete } from "@/lib/requireDbTableDelete";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { captureTableSnapshot, recordRevision } from "@/lib/dbTableRevision";
+import { deleteOrphanedColMappings } from "@/lib/dbTableUsage";
 
 type RouteParams = { params: Promise<{ id: string; tableId: string }> };
 
@@ -181,7 +183,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         });
       }
 
-      // 전달되지 않은 기존 컬럼 삭제
+      // 전달되지 않은 기존 컬럼 삭제 — tb_ds_col_mapping 은 col_id 를 FK 없이
+      // 참조만 하므로, 먼저 지워질 컬럼을 가리키는 매핑을 정리해야 유령 행이 안 남는다
+      const removedCols = await tx.tbDsDbTableColumn.findMany({
+        where: {
+          tbl_id: tableId,
+          ...(incomingIds.length > 0 ? { col_id: { notIn: incomingIds } } : {}),
+        },
+        select: { col_id: true },
+      });
+      await deleteOrphanedColMappings(tx, removedCols.map((c) => c.col_id));
+
       await tx.tbDsDbTableColumn.deleteMany({
         where: {
           tbl_id: tableId,
@@ -246,7 +258,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, tableId } = await params;
 
-  const gate = await requirePermission(request, projectId, "db.table.write");
+  // 권한: db.table.delete (OWNER/ADMIN 역할 또는 PM/PL/DBA 직무) 또는 이 테이블의 담당자
+  const gate = await requireDbTableDelete(request, projectId, async () => {
+    const t = await prisma.tbDsDbTable.findUnique({
+      where:  { tbl_id: tableId },
+      select: { asign_mber_id: true, prjct_id: true },
+    });
+    return t && t.prjct_id === projectId ? t.asign_mber_id : null;
+  });
   if (gate instanceof Response) return gate;
 
   try {
@@ -255,7 +274,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "테이블을 찾을 수 없습니다.", 404);
     }
 
-    // 트랜잭션: 삭제 직전 스냅샷 → DELETE 이력 기록 → 컬럼/테이블 삭제
+    // 트랜잭션: 삭제 직전 스냅샷 → DELETE 이력 기록 → 매핑/컬럼/테이블 삭제
     await prisma.$transaction(async (tx) => {
       const before = await captureTableSnapshot(tx, tableId);
 
@@ -269,7 +288,13 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         chgMberId:   gate.mberId,
       });
 
-      // 컬럼 먼저 삭제 후 테이블 삭제 (cascade 미설정 대비)
+      // 이 테이블 컬럼들을 가리키는 col_mapping 정리 (FK 없어 방치하면 유령 행으로 남음)
+      // → 컬럼 삭제 → 테이블 삭제 순 (cascade 미설정 대비)
+      const colIds = (
+        await tx.tbDsDbTableColumn.findMany({ where: { tbl_id: tableId }, select: { col_id: true } })
+      ).map((c) => c.col_id);
+      await deleteOrphanedColMappings(tx, colIds);
+
       await tx.tbDsDbTableColumn.deleteMany({ where: { tbl_id: tableId } });
       await tx.tbDsDbTable.delete({ where: { tbl_id: tableId } });
     });
