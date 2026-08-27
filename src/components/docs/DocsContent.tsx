@@ -26,6 +26,7 @@ import remarkGfm from "remark-gfm";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { ReactNode } from "react";
+import { authFetchRaw } from "@/lib/authFetch";
 
 // API 응답 타입 — /api/docs/[section]/[page] 와 동일 구조
 type DocsAttachment = {
@@ -388,11 +389,10 @@ function AuthImage({ src, alt }: { src: string; alt: string }) {
   const [failed,  setFailed]  = useState<boolean>(false);
 
   useEffect(() => {
-    const at = typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
     let url = "";
     let cancelled = false;
 
-    fetch(src, { headers: at ? { Authorization: `Bearer ${at}` } : {} })
+    authFetchRaw(src)
       .then((r) => (r.ok ? r.blob() : null))
       .then((blob) => {
         if (cancelled) return;
@@ -448,14 +448,7 @@ function AuthImage({ src, alt }: { src: string; alt: string }) {
 // <a href> 직접 클릭은 토큰을 못 붙이므로 fetch 로 받아 blob 만들고 임시 anchor 클릭.
 async function downloadAuthFile(url: string, suggestedFileName: string) {
   try {
-    const at =
-      typeof window !== "undefined"
-        ? (sessionStorage.getItem("access_token") ?? "")
-        : "";
-
-    const res = await fetch(url, {
-      headers: at ? { Authorization: `Bearer ${at}` } : {},
-    });
+    const res = await authFetchRaw(url);
     if (!res.ok) {
       // 서버 에러 메시지 우선 노출
       const err = await res.json().catch(() => ({})) as { message?: string };

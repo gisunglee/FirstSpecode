@@ -8,6 +8,7 @@
 import {
   clearAuthTokens,
   clearStoredRefreshTokens,
+  getStoredAccessToken,
   readStoredRefreshToken,
   storeAccessToken,
   type RefreshTokenStorageKind,
@@ -16,6 +17,7 @@ import {
   AUTH_COOKIE_MODE_HEADER,
   AUTH_COOKIE_MODE_VALUE,
 } from "@/lib/authCookiePolicy";
+import { shouldRefreshAccessToken } from "@/lib/authSessionPolicy";
 
 const REFRESH_LOCK_NAME = "specode-auth-refresh-v2";
 const REFRESH_CHANNEL_NAME = "specode-auth-refresh-v2";
@@ -285,6 +287,18 @@ export async function refreshAccessToken(
   })();
 
   return refreshPromise;
+}
+
+/**
+ * 현재 AT가 충분히 남아 있으면 그대로 사용하고, 없거나 만료가 임박했을 때만 회전한다.
+ * 모든 화면의 초기 인증 확인과 API 요청이 같은 기준을 사용하도록 제공하는 진입점이다.
+ */
+export async function ensureFreshAccessToken(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+
+  const currentToken = getStoredAccessToken();
+  if (!shouldRefreshAccessToken(currentToken)) return currentToken;
+  return refreshAccessToken();
 }
 
 /** 배포 전 Web Storage RT가 남은 브라우저만 백그라운드에서 쿠키로 승계한다. */

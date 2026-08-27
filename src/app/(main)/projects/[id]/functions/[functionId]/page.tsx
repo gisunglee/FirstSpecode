@@ -20,7 +20,7 @@ import { createPortal } from "react-dom";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, authFetchRaw } from "@/lib/authFetch";
 import { usePermissions } from "@/hooks/useMyRole";
 import { useIdPrefixes } from "@/hooks/useIdPrefixes";
 import { renderMarkdown } from "@/lib/renderMarkdown";
@@ -391,11 +391,9 @@ function FunctionDetailPageInner() {
       fd.append("comment", commentCn.trim());
       aiPickedFiles.forEach((f) => fd.append("files", f));
 
-      const at = typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
-      const res = await fetch(`/api/projects/${projectId}/functions/${functionId}/ai`, {
+      const res = await authFetchRaw(`/api/projects/${projectId}/functions/${functionId}/ai`, {
         method: "POST",
         body: fd,
-        headers: at ? { Authorization: `Bearer ${at}` } : {},
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));

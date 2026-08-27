@@ -35,6 +35,12 @@ import {
   RefreshTokenRotationConflictError,
   rotateRefreshTokenAtomically,
 } from "../src/lib/refreshTokenRotation";
+import {
+  ACCESS_TOKEN_EXPIRES_SECONDS,
+  ACCESS_TOKEN_REFRESH_LEEWAY_SECONDS,
+  accessTokenExpiresAtMs,
+  shouldRefreshAccessToken,
+} from "../src/lib/authSessionPolicy";
 
 const PROJECT_ID = "project-1";
 const JWT_SECRET = "test-only-secret-with-sufficient-length";
@@ -126,6 +132,23 @@ test("새 Access Token은 종류와 세션을 포함하고 검증된다", () => 
   assert.ok(decoded && typeof decoded === "object" && typeof decoded.exp === "number");
   assert.ok(decoded.exp >= issuedBefore + 1_800);
   assert.ok(decoded.exp <= issuedAfter + 1_800);
+});
+
+test("서버 발급 시간과 브라우저 선제 갱신 기준은 단일 정책을 사용한다", () => {
+  assert.equal(ACCESS_TOKEN_EXPIRES_SECONDS, 30 * 60);
+  assert.equal(ACCESS_TOKEN_REFRESH_LEEWAY_SECONDS, 2 * 60);
+
+  const token = jwt.sign(
+    { mberId: "member-1", email: "member@example.com", sesnId: "session-1" },
+    JWT_SECRET,
+    { algorithm: "HS256", expiresIn: "10m" },
+  );
+  const expiresAtMs = accessTokenExpiresAtMs(token);
+  assert.ok(expiresAtMs !== null);
+  assert.equal(shouldRefreshAccessToken(token, expiresAtMs - 121_000), false);
+  assert.equal(shouldRefreshAccessToken(token, expiresAtMs - 120_000), true);
+  assert.equal(shouldRefreshAccessToken("broken-token"), true);
+  assert.equal(shouldRefreshAccessToken(""), true);
 });
 
 test("필수 클레임이 있는 기존 Access Token은 전환 기간에 허용한다", () => {

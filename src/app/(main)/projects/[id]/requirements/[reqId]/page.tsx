@@ -15,7 +15,7 @@ import { createPortal } from "react-dom";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, authFetchRaw } from "@/lib/authFetch";
 import { usePermissions } from "@/hooks/useMyRole";
 import { useIdPrefixes } from "@/hooks/useIdPrefixes";
 import { bumpMinorVersion } from "@/lib/exports/version";
@@ -557,24 +557,16 @@ function RequirementDetailPageInner() {
     const selectedFiles = e.target.files;
     if (!selectedFiles || selectedFiles.length === 0) return;
 
-    // authFetch는 Content-Type: application/json을 강제하므로
-    // 파일 업로드는 직접 fetch 사용 (브라우저가 multipart boundary 자동 설정)
-    const at =
-      typeof window !== "undefined"
-        ? (sessionStorage.getItem("access_token") ?? "")
-        : "";
-
     const formData = new FormData();
     for (const file of Array.from(selectedFiles)) {
       formData.append("files", file);
     }
 
     try {
-      const res = await fetch(
+      const res = await authFetchRaw(
         `/api/projects/${projectId}/requirements/${reqId}/files`,
         {
           method: "POST",
-          headers: at ? { Authorization: `Bearer ${at}` } : {},
           body: formData,
         }
       );
@@ -598,15 +590,10 @@ function RequirementDetailPageInner() {
   async function handleExportDocx() {
     if (!detail) return;
 
-    const at =
-      typeof window !== "undefined"
-        ? (sessionStorage.getItem("access_token") ?? "")
-        : "";
-
     setIsExporting(true);
     try {
       const url = `/api/projects/${projectId}/requirements/${reqId}/export/docx`;
-      const res = await fetch(url, { headers: at ? { Authorization: `Bearer ${at}` } : {} });
+      const res = await authFetchRaw(url);
 
       if (!res.ok) {
         // 에러 응답은 JSON — 메시지 추출해서 사용자에게 노출
@@ -643,14 +630,9 @@ function RequirementDetailPageInner() {
 
   // ── 파일 다운로드 ───────────────────────────────────────────────────────────
   function handleDownload(file: AttachedFile) {
-    const at =
-      typeof window !== "undefined"
-        ? (sessionStorage.getItem("access_token") ?? "")
-        : "";
-
     // <a> 태그를 동적 생성하여 다운로드 트리거
     const url = `/api/projects/${projectId}/requirements/${reqId}/files/${file.fileId}/download`;
-    fetch(url, { headers: at ? { Authorization: `Bearer ${at}` } : {} })
+    authFetchRaw(url)
       .then((res) => res.blob())
       .then((blob) => {
         const a = document.createElement("a");

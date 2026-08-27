@@ -26,7 +26,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, authFetchRaw } from "@/lib/authFetch";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 
@@ -597,14 +597,8 @@ async function uploadFile(
   fd.append("file", file);
   fd.append("kind", kind);
 
-  const at =
-    typeof window !== "undefined"
-      ? (sessionStorage.getItem("access_token") ?? "")
-      : "";
-
-  const res = await fetch(`/api/admin/docs/pages/${pageId}/files`, {
+  const res = await authFetchRaw(`/api/admin/docs/pages/${pageId}/files`, {
     method:  "POST",
-    headers: at ? { Authorization: `Bearer ${at}` } : {},
     body:    fd,
   });
 

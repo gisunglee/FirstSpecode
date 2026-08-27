@@ -26,7 +26,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, authFetchRaw } from "@/lib/authFetch";
 
 // ── 타입 ────────────────────────────────────────────────────────────────────
 
@@ -53,10 +53,9 @@ function useAuthBlobUrl(src: string) {
   const [blobUrl, setBlobUrl] = useState("");
 
   useEffect(() => {
-    const at = typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
     let objectUrl = "";
 
-    fetch(src, { headers: at ? { Authorization: `Bearer ${at}` } : {} })
+    authFetchRaw(src)
       .then((r) => (r.ok ? r.blob() : null))
       .then((blob) => {
         if (blob) {
@@ -201,10 +200,7 @@ export default function AiTaskAttachmentsDialog({ projectId, taskId, onClose }: 
   // (href 직접 지정은 헤더를 못 붙여서 401 발생)
   async function handleDownload(fileId: string, fileName: string) {
     try {
-      const at = typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
-      const res = await fetch(`${basePath}/files/${fileId}/view`, {
-        headers: at ? { Authorization: `Bearer ${at}` } : {},
-      });
+      const res = await authFetchRaw(`${basePath}/files/${fileId}/view`);
       if (!res.ok) throw new Error(`다운로드 실패 (${res.status})`);
       const blob = await res.blob();
 

@@ -21,6 +21,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
+import { ACCESS_TOKEN_EXPIRES_SECONDS } from "./authSessionPolicy";
 
 // bcrypt 라운드 수 — 높을수록 안전하지만 느림 (12 = 약 250ms)
 const BCRYPT_ROUNDS = 12;
@@ -29,8 +30,6 @@ const BCRYPT_ROUNDS = 12;
 // 30분: 로그아웃 즉시성과 refresh 빈도 사이의 균형점
 //   - 너무 짧으면 설계 도구 특성상 "생각 시간" 후 복귀할 때마다 갱신 지연(100~200ms)
 //   - 너무 길면 로그아웃 후에도 토큰이 오래 살아있어 보안 리스크
-const ACCESS_TOKEN_EXPIRES_SECONDS = 30 * 60;
-
 // 리프레시 토큰은 마지막 갱신 후 10일 동안 유효하되,
 // 최초 로그인 세션 생성 후 30일을 넘겨 연장하지 않는다.
 export const REFRESH_TOKEN_EXPIRES_DAYS = 10;

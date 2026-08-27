@@ -18,7 +18,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, authFetchRaw } from "@/lib/authFetch";
 import { addDaysStr, mmddRange, computeProjectWeekIndex } from "@/lib/weekUtil";
 import type { IssueListResponse } from "@/types/issue";
 import { ISSUE_CATEGORY_LABEL, ISSUE_STATUS_LABEL } from "@/types/issue";
@@ -61,10 +61,7 @@ export default function PrintPreviewModal({
     if (!weeklyReportId) return;
     setDownloading(true);
     try {
-      const at = typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
-      const res = await fetch(`/api/projects/${projectId}/weekly-reports/${weeklyReportId}/xlsx`, {
-        headers: at ? { Authorization: `Bearer ${at}` } : {},
-      });
+      const res = await authFetchRaw(`/api/projects/${projectId}/weekly-reports/${weeklyReportId}/xlsx`);
       if (!res.ok) return;
       const disposition = res.headers.get("content-disposition") ?? "";
       const m = disposition.match(/filename\*=UTF-8''([^;]+)/i);

@@ -14,6 +14,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { authFetchRaw } from "@/lib/authFetch";
 
 export default function EmailVerifyPage() {
   return (
@@ -46,10 +47,8 @@ function EmailVerifyInner() {
   const handleResend = async () => {
     setResending(true);
     try {
-      const at  = sessionStorage.getItem("access_token") ?? "";
-      const res = await fetch("/api/member/profile/email/resend", {
+      const res = await authFetchRaw("/api/member/profile/email/resend", {
         method:  "POST",
-        headers: { Authorization: `Bearer ${at}` },
       });
       const body = await res.json();
       if (!res.ok) { toast.error(body.message ?? "재발송 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."); return; }

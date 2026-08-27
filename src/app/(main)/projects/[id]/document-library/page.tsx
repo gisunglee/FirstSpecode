@@ -25,7 +25,7 @@ import { Suspense, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, authFetchRaw } from "@/lib/authFetch";
 import { usePermissions } from "@/hooks/useMyRole";
 import { buildDocxFilename, filenameSafe } from "@/lib/exports/filename";
 import {
@@ -204,17 +204,13 @@ function DocumentLibraryInner() {
     id: string,
     fallbackName: string,
   ) {
-    const at = typeof window !== "undefined"
-      ? (sessionStorage.getItem("access_token") ?? "")
-      : "";
-
     const url = kind === "REQ"
       ? `/api/projects/${projectId}/requirements/${id}/export/docx`
       : `/api/projects/${projectId}/unit-works/${id}/export/docx`;
 
     setSingleBusyId(`${kind}:${id}`);
     try {
-      const res = await fetch(url, { headers: at ? { Authorization: `Bearer ${at}` } : {} });
+      const res = await authFetchRaw(url);
       if (!res.ok) {
         let msg = `요청 실패 (${res.status})`;
         try { const err = await res.json(); if (err?.message) msg = err.message; }
@@ -288,10 +284,6 @@ function DocumentLibraryInner() {
     format:   ArtifactFormatSpec,
     options:  Record<string, boolean>,
   ) {
-    const at = typeof window !== "undefined"
-      ? (sessionStorage.getItem("access_token") ?? "")
-      : "";
-
     const queryString = Object.keys(options).length > 0
       ? "?" + new URLSearchParams(
           Object.entries(options).map(([k, v]) => [k, String(v)])
@@ -301,9 +293,7 @@ function DocumentLibraryInner() {
     const busyKey = `${artifact.key}:${format.type}`;
     setArtifactBusyKey(busyKey);
     try {
-      const res = await fetch(format.apiPath(projectId) + queryString, {
-        headers: at ? { Authorization: `Bearer ${at}` } : {},
-      });
+      const res = await authFetchRaw(format.apiPath(projectId) + queryString);
       if (!res.ok) {
         let msg = `요청 실패 (${res.status})`;
         try { const err = await res.json(); if (err?.message) msg = err.message; }
@@ -341,19 +331,14 @@ function DocumentLibraryInner() {
       return;
     }
 
-    const at = typeof window !== "undefined"
-      ? (sessionStorage.getItem("access_token") ?? "")
-      : "";
-
     setZipBusy(true);
     try {
-      const res = await fetch(
+      const res = await authFetchRaw(
         `/api/projects/${projectId}/document-library/zip`,
         {
           method: "POST",
           headers: {
             "Content-Type":  "application/json",
-            ...(at ? { Authorization: `Bearer ${at}` } : {}),
           },
           body: JSON.stringify({
             reqIds:      Array.from(selectedReqIds),

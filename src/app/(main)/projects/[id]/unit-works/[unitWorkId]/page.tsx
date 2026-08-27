@@ -20,7 +20,7 @@ import { createPortal } from "react-dom";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, authFetchRaw } from "@/lib/authFetch";
 import { usePermissions } from "@/hooks/useMyRole";
 import { useIdPrefixes } from "@/hooks/useIdPrefixes";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
@@ -298,14 +298,10 @@ function UnitWorkDetailPageInner() {
   async function handleExportDocx() {
     if (!detail) return;
 
-    const at = typeof window !== "undefined"
-      ? (sessionStorage.getItem("access_token") ?? "")
-      : "";
-
     setIsExporting(true);
     try {
       const url = `/api/projects/${projectId}/unit-works/${unitWorkId}/export/docx`;
-      const res = await fetch(url, { headers: at ? { Authorization: `Bearer ${at}` } : {} });
+      const res = await authFetchRaw(url);
 
       if (!res.ok) {
         let msg = `요청 실패 (${res.status})`;
@@ -426,11 +422,9 @@ function UnitWorkDetailPageInner() {
       fd.append("coment_cn", form.comment.trim());
       aiPickedFiles.forEach((f) => fd.append("files", f));
 
-      const at = typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
-      const res = await fetch(`/api/projects/${projectId}/unit-works/${unitWorkId}/ai`, {
+      const res = await authFetchRaw(`/api/projects/${projectId}/unit-works/${unitWorkId}/ai`, {
         method: "POST",
         body: fd,
-        headers: at ? { Authorization: `Bearer ${at}` } : {},
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));

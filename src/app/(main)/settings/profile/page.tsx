@@ -20,6 +20,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import McpKeyManager from "@/components/mcp-keys/McpKeyManager";
+import { authFetchRaw } from "@/lib/authFetch";
 
 // ─── 타입 ────────────────────────────────────────────────────────────────
 // 2026-04-24 탭 정리: 4개 → 2개
@@ -34,18 +35,6 @@ interface ProfileData {
   profileImage: string | null;
   hasPassword:  boolean;
   hasSocialAccounts: { google: boolean; github: boolean };
-}
-
-// ─── 공통 헬퍼: AT 포함 fetch ────────────────────────────────────────────
-function authFetch(url: string, options?: RequestInit): Promise<Response> {
-  const at = sessionStorage.getItem("access_token") ?? "";
-  return fetch(url, {
-    ...options,
-    headers: {
-      ...(options?.headers ?? {}),
-      Authorization: `Bearer ${at}`,
-    },
-  });
 }
 
 // ─── 페이지 진입점 (Suspense 래핑) ───────────────────────────────────────
@@ -86,7 +75,7 @@ function ProfileSettingsInner() {
   const fetchProfile = useCallback(async () => {
     setLoading(true);
     try {
-      const res  = await authFetch("/api/member/profile");
+      const res  = await authFetchRaw("/api/member/profile");
       const body = await res.json();
       if (!res.ok) {
         if (res.status === 401) { router.push("/auth/login"); return; }
@@ -291,7 +280,7 @@ function BasicTab({ profile, onRefresh }: { profile: ProfileData; onRefresh: () 
     if (!name.trim()) { toast.error("이름을 입력해 주세요."); return; }
     setNameSaving(true);
     try {
-      const res  = await authFetch("/api/member/profile/name", {
+      const res  = await authFetchRaw("/api/member/profile/name", {
         method:  "PUT",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ name }),
@@ -323,7 +312,7 @@ function BasicTab({ profile, onRefresh }: { profile: ProfileData; onRefresh: () 
 
     const form = new FormData();
     form.append("image", file);
-    const res  = await authFetch("/api/member/profile/image", { method: "PUT", body: form });
+    const res  = await authFetchRaw("/api/member/profile/image", { method: "PUT", body: form });
     const body = await res.json();
     if (!res.ok) { toast.error(body.message ?? "이미지 업로드에 실패했습니다."); return; }
     setImgUrl(body.data.imageUrl);
@@ -339,7 +328,7 @@ function BasicTab({ profile, onRefresh }: { profile: ProfileData; onRefresh: () 
     if (!newEmail.trim()) { toast.error("이메일을 입력해 주세요."); return; }
     setEmailSending(true);
     try {
-      const res  = await authFetch("/api/member/profile/email/change", {
+      const res  = await authFetchRaw("/api/member/profile/email/change", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ newEmail }),
@@ -468,10 +457,9 @@ function SecurityTab({ hasPassword }: { hasPassword: boolean }) {
 
     setSaving(true);
     try {
-      const at = sessionStorage.getItem("access_token") ?? "";
-      const res = await fetch("/api/member/profile/password", {
+      const res = await authFetchRaw("/api/member/profile/password", {
         method:  "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${at}` },
+        headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
           currentPassword:     hasPassword ? currentPw : undefined,
           newPassword:         newPw,
@@ -575,10 +563,7 @@ function SocialTab({
   const handleLink = async (provider: "google" | "github") => {
     setLoading(provider);
     try {
-      const at  = sessionStorage.getItem("access_token") ?? "";
-      const res = await fetch(`/api/auth/social/${provider}/authorize?action=add`, {
-        headers: { Authorization: `Bearer ${at}` },
-      });
+      const res = await authFetchRaw(`/api/auth/social/${provider}/authorize?action=add`);
       const body = await res.json();
       if (!res.ok) { toast.error(body.message ?? "연동 요청에 실패했습니다."); return; }
       window.location.href = body.data.url;
@@ -591,10 +576,9 @@ function SocialTab({
   const handleUnlink = async (provider: "google" | "github") => {
     setLoading(provider);
     try {
-      const at  = sessionStorage.getItem("access_token") ?? "";
-      const res = await fetch("/api/member/social/unlink", {
+      const res = await authFetchRaw("/api/member/social/unlink", {
         method:  "DELETE",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${at}` },
+        headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ provider }),
       });
       const body = await res.json();

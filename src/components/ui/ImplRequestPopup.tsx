@@ -19,7 +19,7 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, authFetchRaw } from "@/lib/authFetch";
 import { renderMarkdown } from "@/lib/renderMarkdown";
 import AiTaskFilePicker from "@/components/ui/AiTaskFilePicker";
 
@@ -215,11 +215,9 @@ export default function ImplRequestPopup({ projectId, entryType, entryId, functi
         fd.append("promptMd",    promptMd);
         pickedFiles.forEach((f) => fd.append("files", f));
 
-        const at  = typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
-        const res = await fetch(`/api/projects/${projectId}/impl-request/submit`, {
+        const res = await authFetchRaw(`/api/projects/${projectId}/impl-request/submit`, {
           method:  "POST",
           body:    fd,
-          headers: at ? { Authorization: `Bearer ${at}` } : {},
         });
         if (!res.ok) {
           const json = await res.json().catch(() => ({}));

@@ -14,7 +14,7 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, authFetchRaw } from "@/lib/authFetch";
 
 // ── 타입 ────────────────────────────────────────────────────────────────────
 
@@ -40,10 +40,9 @@ function useAuthBlobUrl(src: string) {
   const [blobUrl, setBlobUrl] = useState("");
 
   useEffect(() => {
-    const at = typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
     let objectUrl = "";
 
-    fetch(src, { headers: at ? { Authorization: `Bearer ${at}` } : {} })
+    authFetchRaw(src)
       .then((r) => (r.ok ? r.blob() : null))
       .then((blob) => {
         if (blob) {
@@ -132,12 +131,10 @@ export default function AreaAttachFiles({ basePath }: Props) {
     mutationFn: async (fileList: File[]) => {
       const formData = new FormData();
       fileList.forEach((f) => formData.append("files", f));
-      // authFetch는 Content-Type: application/json을 강제하므로 raw fetch 사용
-      const at  = typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
-      const res = await fetch(`${basePath}/files`, {
+      // multipart 요청은 Content-Type을 브라우저가 boundary와 함께 설정해야 한다.
+      const res = await authFetchRaw(`${basePath}/files`, {
         method:  "POST",
         body:    formData,
-        headers: at ? { Authorization: `Bearer ${at}` } : {},
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));

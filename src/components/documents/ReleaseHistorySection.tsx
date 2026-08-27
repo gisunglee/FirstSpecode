@@ -26,7 +26,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, authFetchRaw } from "@/lib/authFetch";
 import type { ReleaseDocKind } from "@/components/common/ReleaseDialog";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────
@@ -74,12 +74,8 @@ async function downloadReleaseFile(
   releaseId: string,
   format:    "docx" | "xlsx",
 ) {
-  const at = typeof window !== "undefined"
-    ? (sessionStorage.getItem("access_token") ?? "")
-    : "";
-
   const url = `/api/projects/${projectId}/documents/release/${releaseId}/${format}`;
-  const res = await fetch(url, { headers: at ? { Authorization: `Bearer ${at}` } : {} });
+  const res = await authFetchRaw(url);
 
   if (!res.ok) {
     let msg = `다운로드 실패 (${res.status})`;

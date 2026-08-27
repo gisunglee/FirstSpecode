@@ -15,6 +15,7 @@
     "src/lib/authCookiePolicy.ts",
     "src/lib/authCredentialPolicy.ts",
     "src/lib/authTokenStorage.ts",
+    "src/lib/authSessionPolicy.ts",
     "src/lib/refreshTokenRotation.ts",
     "scripts/auth-security-policy.test.ts"
   ]

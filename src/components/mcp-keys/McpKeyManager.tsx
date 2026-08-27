@@ -25,20 +25,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-
-// ── 로컬 fetch 헬퍼 ───────────────────────────────────────────────────────────
-// 이 컴포넌트는 res.ok 분기 + res.json() 패턴을 사용하므로
-// throw 패턴인 글로벌 authFetch 대신 Response 반환 헬퍼 유지
-function authFetch(url: string, options?: RequestInit): Promise<Response> {
-  const at = sessionStorage.getItem("access_token") ?? "";
-  return fetch(url, {
-    ...options,
-    headers: {
-      ...(options?.headers ?? {}),
-      Authorization: `Bearer ${at}`,
-    },
-  });
-}
+import { authFetchRaw } from "@/lib/authFetch";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 interface ProjectOption {
@@ -93,7 +80,7 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
   // 키 목록 조회
   const fetchKeys = useCallback(async () => {
     try {
-      const res = await authFetch("/api/auth/mcp-keys");
+      const res = await authFetchRaw("/api/auth/mcp-keys");
       if (res.ok) {
         const body = await res.json();
         setKeys(body.data?.items ?? []);
@@ -105,7 +92,7 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
   // 프로젝트 옵션 로드 — scope 드롭다운 데이터 소스
   const fetchProjects = useCallback(async () => {
     try {
-      const res = await authFetch("/api/projects/my");
+      const res = await authFetchRaw("/api/projects/my");
       if (res.ok) {
         const body = await res.json();
         const items: ProjectOption[] = body.data?.items ?? [];
@@ -135,7 +122,7 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
 
     setCreating(true);
     try {
-      const res = await authFetch("/api/auth/mcp-keys", {
+      const res = await authFetchRaw("/api/auth/mcp-keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -203,7 +190,7 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
   const handleRevoke = async (keyId: string, keyName: string) => {
     if (!confirm(`"${keyName}" 키를 폐기하시겠습니까?\n폐기 후 이 키로는 인증할 수 없습니다.`)) return;
     try {
-      const res = await authFetch(`/api/auth/mcp-keys/${keyId}`, { method: "DELETE" });
+      const res = await authFetchRaw(`/api/auth/mcp-keys/${keyId}`, { method: "DELETE" });
       if (res.ok) {
         toast.success("MCP 키가 폐기되었습니다.");
         fetchKeys();

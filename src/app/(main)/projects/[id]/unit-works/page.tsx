@@ -800,9 +800,19 @@ function UnitWorksPageInner() {
                 ) : "미정"}
               </div>
 
-              {/* 화면수 */}
-              <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
-                {uw.screenCount}
+              {/* 화면수 — 클릭 시 이 단위업무로 필터된 화면 목록으로 이동. 0건이면 갈 곳이 없으므로 비활성 텍스트만 표시 */}
+              <div style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                {uw.screenCount > 0 ? (
+                  <button
+                    onClick={() => router.push(`/projects/${projectId}/screens?unitWorkId=${uw.unitWorkId}`)}
+                    title="이 단위업무의 화면 목록으로 이동"
+                    style={{ ...linkBtnStyle, fontSize: 13, textAlign: "center" }}
+                  >
+                    {uw.screenCount}
+                  </button>
+                ) : (
+                  <span style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>{uw.screenCount}</span>
+                )}
               </div>
 
               {/* AI 구현 — 스냅샷 경유 IMPLEMENT 태스크 최신 1건.

@@ -633,9 +633,19 @@ function ScreensPageInner() {
                     ) : "미정"}
                   </div>
 
-                  {/* 영역 수 */}
-                  <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
-                    {screen.areaCount}
+                  {/* 영역 수 — 클릭 시 이 화면으로 필터된 영역 목록으로 이동. 0건이면 갈 곳이 없으므로 비활성 텍스트만 표시 */}
+                  <div style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                    {screen.areaCount > 0 ? (
+                      <button
+                        onClick={() => router.push(`/projects/${projectId}/areas?screenId=${screen.screenId}`)}
+                        title="이 화면의 영역 목록으로 이동"
+                        style={{ ...linkBtnStyle, fontSize: 13, textAlign: "center" }}
+                      >
+                        {screen.areaCount}
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>{screen.areaCount}</span>
+                    )}
                   </div>
 
                   {/* 정렬순서 */}

@@ -451,9 +451,19 @@ function AreasPageInner() {
                   {area.sortOrder}
                 </div>
 
-                {/* 기능 수 */}
-                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
-                  {area.functionCount}
+                {/* 기능 수 — 클릭 시 이 영역으로 필터된 기능 목록으로 이동. 0건이면 갈 곳이 없으므로 비활성 텍스트만 표시 */}
+                <div style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                  {area.functionCount > 0 ? (
+                    <button
+                      onClick={() => router.push(`/projects/${projectId}/functions?areaId=${area.areaId}`)}
+                      title="이 영역의 기능 목록으로 이동"
+                      style={{ ...linkBtnStyle, fontSize: 13, textAlign: "center" }}
+                    >
+                      {area.functionCount}
+                    </button>
+                  ) : (
+                    <span style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>{area.functionCount}</span>
+                  )}
                 </div>
 
                 {/* 예상공수 — D/H 형식 */}

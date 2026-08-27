@@ -15,6 +15,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { clearStoredRefreshTokens, storeAccessToken } from "@/lib/authTokenStorage";
+import { authFetchRaw } from "@/lib/authFetch";
 import {
   AUTH_COOKIE_MODE_HEADER,
   AUTH_COOKIE_MODE_VALUE,
@@ -79,14 +80,9 @@ function SocialCallbackInner() {
 
         } else if (resultType === "ADD_SOCIAL") {
           // 이미 로그인한 회원의 소셜 추가 연동 — AT + socialToken으로 연동 API 호출
-          const at = sessionStorage.getItem("access_token");
-          if (!at) {
-            setError("로그인 세션이 만료되었습니다. 다시 로그인해 주세요.");
-            return;
-          }
-          const linkRes = await fetch("/api/member/social/link", {
+          const linkRes = await authFetchRaw("/api/member/social/link", {
             method:  "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${at}` },
+            headers: { "Content-Type": "application/json" },
             body:    JSON.stringify({ provider, socialToken }),
           });
           const linkBody = await linkRes.json();

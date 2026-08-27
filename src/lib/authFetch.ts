@@ -14,9 +14,12 @@
  */
 
 import { toast } from "sonner";
-import { apiFetch } from "@/lib/apiFetch";
-import { refreshAccessToken } from "@/lib/authRefreshClient";
-import { clearAuthTokens, getStoredAccessToken } from "@/lib/authTokenStorage";
+import {
+  clearAuthTokensAcrossTabs,
+  ensureFreshAccessToken,
+  refreshAccessToken,
+} from "@/lib/authRefreshClient";
+import { getStoredAccessToken } from "@/lib/authTokenStorage";
 
 // ── 전역 상태 (메모리) ────────────────────────────────────────────────────────
 // 동시 다발 401 → 로그인 페이지 이동을 한 번만 트리거하기 위한 플래그
@@ -38,7 +41,7 @@ function redirectToLogin(reason: "expired" | "unauthorized"): void {
   redirectTriggered = true;
 
   // 토큰 정리 — 잔여 토큰으로 다음 요청이 또 401 받지 않도록
-  clearAuthTokens();
+  clearAuthTokensAcrossTabs();
 
   // 사용자 안내 — 만료와 비로그인 케이스를 구분해 메시지 차별화
   toast.info(
@@ -57,60 +60,104 @@ function redirectToLogin(reason: "expired" | "unauthorized"): void {
   }, 800);
 }
 
-export async function authFetch<T>(url: string, options?: RequestInit): Promise<T> {
-  // SSR 환경에서는 sessionStorage 접근 불가 — 빈 문자열로 처리
-  // 1. 초기 요청 시도
-  const at = getStoredAccessToken();
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options?.headers ?? {}),
-    ...(at ? { Authorization: `Bearer ${at}` } : {}),
-  } as Record<string, string>;
+type AuthErrorBody = {
+  code?: unknown;
+  message?: unknown;
+};
 
-  try {
-    const response = await fetch(url, { ...options, headers });
+const RECOVERABLE_SESSION_CODES = new Set([
+  "TOKEN_EXPIRED",
+  "UNAUTHORIZED",
+  "SESSION_INVALIDATED",
+]);
 
-    // 2. 401 처리 — 코드별 분기
-    if (response.status === 401) {
-      const errorBody = await response.clone().json().catch(() => ({}));
+function isRecoverableSessionError(body: AuthErrorBody): boolean {
+  return typeof body.code === "string" && RECOVERABLE_SESSION_CODES.has(body.code);
+}
 
-      if (errorBody.code === "TOKEN_EXPIRED") {
-        // AT 만료 → RT로 갱신 시도
-        const newAT = await refreshAccessToken();
-        if (newAT) {
-          // 갱신 성공 시 새 토큰으로 헤더 교체 후 재시도
-          headers["Authorization"] = `Bearer ${newAT}`;
-          return apiFetch<T>(url, { ...options, headers });
-        }
-        // 갱신 실패 → 로그인 페이지로 이동
-        redirectToLogin("expired");
-        throw new Error("세션이 만료되었습니다. 다시 로그인해 주세요.");
-      }
+async function readAuthError(response: Response): Promise<AuthErrorBody> {
+  return response.clone().json().catch(() => ({})) as Promise<AuthErrorBody>;
+}
 
-      if (errorBody.code === "UNAUTHORIZED") {
-        // 토큰이 아예 없거나 검증 실패 — 갱신 시도 의미 없음, 즉시 로그인 이동
-        redirectToLogin("unauthorized");
-        throw new Error(errorBody.message || "로그인이 필요합니다.");
-      }
-
-      // INVALID_API_KEY 등 그 외 401은 UI 흐름이 아니므로 일반 에러로 throw
-    }
-
-    // 3. 정상 응답 또는 갱신 불필요 시 일반 apiFetch와 동일하게 결과 반환
-    if (!response.ok) {
-      let msg = `요청 실패 (${response.status})`;
-      try {
-        const err = await response.json();
-        if (err.message) msg = err.message;
-      } catch {}
-      throw new Error(msg);
-    }
-
-    return response.json() as Promise<T>;
-  } catch (err) {
-    // 이미 갱신 후 재시도 중 발생한 에러는 상위로 전파
-    throw err;
+function requestHeaders(
+  options: RequestInit | undefined,
+  accessToken: string | null,
+  jsonDefault: boolean,
+): Headers {
+  const headers = new Headers(options?.headers);
+  if (jsonDefault && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
   }
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+  else headers.delete("Authorization");
+  return headers;
+}
+
+/**
+ * 인증 요청의 단일 실행 경로.
+ *
+ * 1) 만료 2분 전 또는 AT 부재 시 RT 쿠키로 선제 복원
+ * 2) 서버 401은 다른 탭의 최신 AT 또는 RT 회전으로 한 번만 복구
+ * 3) 최종 실패일 때만 전체 탭을 정리하고 로그인 화면으로 이동
+ */
+async function authenticatedRequest(
+  url: string,
+  options: RequestInit | undefined,
+  jsonDefault: boolean,
+): Promise<Response> {
+  let accessToken = await ensureFreshAccessToken();
+  let response = await fetch(url, {
+    ...options,
+    headers: requestHeaders(options, accessToken, jsonDefault),
+  });
+
+  if (response.status !== 401) return response;
+
+  let errorBody = await readAuthError(response);
+  if (!isRecoverableSessionError(errorBody)) return response;
+
+  // 다른 요청/탭이 이미 갱신했다면 불필요한 RT 회전 없이 최신 AT로 먼저 재시도한다.
+  const storedToken = getStoredAccessToken();
+  const recoveredToken = storedToken && storedToken !== accessToken
+    ? storedToken
+    : await refreshAccessToken();
+
+  if (recoveredToken) {
+    accessToken = recoveredToken;
+    response = await fetch(url, {
+      ...options,
+      headers: requestHeaders(options, accessToken, jsonDefault),
+    });
+    if (response.status !== 401) return response;
+
+    errorBody = await readAuthError(response);
+    if (!isRecoverableSessionError(errorBody)) return response;
+  }
+
+  const reason = errorBody.code === "UNAUTHORIZED" ? "unauthorized" : "expired";
+  redirectToLogin(reason);
+  const message = typeof errorBody.message === "string"
+    ? errorBody.message
+    : reason === "expired"
+      ? "세션이 만료되었습니다. 다시 로그인해 주세요."
+      : "로그인이 필요합니다.";
+  throw new Error(message);
+}
+
+export async function authFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  const response = await authenticatedRequest(url, options, true);
+  if (!response.ok) {
+    let message = `요청 실패 (${response.status})`;
+    try {
+      const errorBody = await response.json();
+      if (typeof errorBody?.message === "string") message = errorBody.message;
+    } catch {
+      // JSON 오류 본문이 아니면 상태 코드 기반 기본 메시지를 사용한다.
+    }
+    throw new Error(message);
+  }
+
+  return response.json() as Promise<T>;
 }
 
 /**
@@ -126,37 +173,5 @@ export async function authFetch<T>(url: string, options?: RequestInit): Promise<
  *   const blob = await res.blob();
  */
 export async function authFetchRaw(url: string, options?: RequestInit): Promise<Response> {
-  const at = getStoredAccessToken();
-  // Blob 다운로드는 Content-Type 을 강제하지 않는다 (서버가 정함).
-  // authFetch 가 Content-Type: application/json 을 강제하던 것과 다른 점.
-  const headers = {
-    ...(options?.headers ?? {}),
-    ...(at ? { Authorization: `Bearer ${at}` } : {}),
-  } as Record<string, string>;
-
-  const response = await fetch(url, { ...options, headers });
-
-  // 401 처리 — authFetch 와 동일한 분기
-  if (response.status === 401) {
-    const errorBody = await response.clone().json().catch(() => ({}));
-
-    if (errorBody.code === "TOKEN_EXPIRED") {
-      const newAT = await refreshAccessToken();
-      if (newAT) {
-        headers["Authorization"] = `Bearer ${newAT}`;
-        // 재시도는 fetch 직접 호출 — 또 한번 401 이 오면 갱신 루프 방지를 위해 여기서 끝
-        return fetch(url, { ...options, headers });
-      }
-      redirectToLogin("expired");
-      throw new Error("세션이 만료되었습니다. 다시 로그인해 주세요.");
-    }
-
-    if (errorBody.code === "UNAUTHORIZED") {
-      redirectToLogin("unauthorized");
-      throw new Error(errorBody.message || "로그인이 필요합니다.");
-    }
-  }
-
-  // 그 외(2xx/4xx/5xx)는 호출자가 res.ok 와 res.json/blob 으로 처리
-  return response;
+  return authenticatedRequest(url, options, false);
 }

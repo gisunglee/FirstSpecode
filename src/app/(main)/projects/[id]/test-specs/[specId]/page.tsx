@@ -19,7 +19,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, authFetchRaw } from "@/lib/authFetch";
 import { SelectChevron } from "@/components/ui/SelectChevron";
 import ImportCheckMasterDialog, { type CheckMasterItem } from "@/components/test-specs/ImportCheckMasterDialog";
 import TestRunPanel from "@/components/test-specs/TestRunPanel";
@@ -301,12 +301,7 @@ function TestSpecInner() {
   async function downloadXlsx(kind: "spec" | "result") {
     setXlsxBusyKind(kind);
     try {
-      const at = typeof window !== "undefined"
-        ? (sessionStorage.getItem("access_token") ?? "")
-        : "";
-      const res = await fetch(`/api/projects/${projectId}/test-specs/${specId}/xlsx?kind=${kind}`, {
-        headers: at ? { Authorization: `Bearer ${at}` } : {},
-      });
+      const res = await authFetchRaw(`/api/projects/${projectId}/test-specs/${specId}/xlsx?kind=${kind}`);
       if (!res.ok) {
         let msg = `요청 실패 (${res.status})`;
         try { const err = await res.json(); if (err?.message) msg = err.message; } catch { /* ignore */ }

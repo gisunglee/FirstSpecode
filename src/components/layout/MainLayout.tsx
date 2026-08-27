@@ -36,9 +36,10 @@ import SupportSessionBanner from "@/components/admin/SupportSessionBanner";
 import { useAppStore } from "@/store/appStore";
 import { authFetch } from "@/lib/authFetch";
 import {
+  ensureFreshAccessToken,
   migrateLegacyRefreshToken,
-  refreshAccessToken,
 } from "@/lib/authRefreshClient";
+import { AUTH_SESSION_CHECK_INTERVAL_MS } from "@/lib/authSessionPolicy";
 import { useTripleClickSidebarToggle } from "@/hooks/useTripleClickSidebarToggle";
 import { useGlobalSearchShortcut } from "@/hooks/useGlobalSearchShortcut";
 
@@ -72,27 +73,56 @@ export default function MainLayout({
     let cancelled = false;
 
     const checkAuth = async () => {
-      const token = sessionStorage.getItem("access_token");
-      if (token) {
-        if (!cancelled) setAuthChecked(true);
-        void migrateLegacyRefreshToken();
-        return;
-      }
-
-      const restoredToken = await refreshAccessToken();
-      if (cancelled) return;
-      if (restoredToken) {
+      const hadAccessToken = !!sessionStorage.getItem("access_token");
+      const accessToken = await ensureFreshAccessToken();
+      if (accessToken) {
+        if (cancelled) return;
         setAuthChecked(true);
+        if (hadAccessToken) {
+          // 배포 전 Web Storage RT가 남은 경우에만 쿠키로 승계한다.
+          // 화면 진입은 현재 AT로 먼저 허용하고 승계는 백그라운드에서 처리한다.
+          void migrateLegacyRefreshToken();
+        }
         return;
       }
 
-      const here = window.location.pathname + window.location.search;
-      router.replace(`/auth/login?redirect=${encodeURIComponent(here)}`);
+      if (hadAccessToken) {
+        // 손상되거나 만료된 AT의 복원도 실패했으므로 로그인 화면으로 보낸다.
+        sessionStorage.removeItem("access_token");
+      }
+
+      if (!cancelled) {
+        const here = window.location.pathname + window.location.search;
+        router.replace(`/auth/login?redirect=${encodeURIComponent(here)}`);
+      }
     };
 
     void checkAuth();
     return () => { cancelled = true; };
   }, [router]);
+
+  // 열린 화면은 같은 1분 주기로 세션을 확인한다. 실제 RT 회전은 AT 만료 2분 전부터만
+  // 일어나며, 백그라운드 탭에서 타이머가 지연돼도 포커스 복귀 시 즉시 다시 확인한다.
+  useEffect(() => {
+    if (!authChecked) return;
+
+    const maintainSession = () => {
+      if (document.visibilityState === "visible") {
+        void ensureFreshAccessToken();
+      }
+    };
+    const handleVisibilityChange = () => maintainSession();
+
+    const timer = window.setInterval(maintainSession, AUTH_SESSION_CHECK_INTERVAL_MS);
+    window.addEventListener("focus", maintainSession);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", maintainSession);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [authChecked]);
 
   // 마운트/테마 변경 시 data-theme 동기화
   useEffect(() => {

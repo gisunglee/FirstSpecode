@@ -15,6 +15,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { authFetchRaw } from "@/lib/authFetch";
 
 export default function EmailCompletePage() {
   return (
@@ -37,7 +38,7 @@ function EmailCompleteInner() {
       return;
     }
 
-    fetch(`/api/member/profile/email/complete?token=${encodeURIComponent(token)}`)
+    authFetchRaw(`/api/member/profile/email/complete?token=${encodeURIComponent(token)}`)
       .then(async (res) => {
         const body = await res.json();
 

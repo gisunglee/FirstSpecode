@@ -21,7 +21,7 @@
 import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, authFetchRaw } from "@/lib/authFetch";
 import { ARTF_DIV, ARTF_FMT } from "@/constants/planStudio";
 import AiTaskFilePicker from "@/components/ui/AiTaskFilePicker";
 
@@ -114,13 +114,11 @@ export default function PlanStudioAIRequestPopup({
       fd.append("contexts",    JSON.stringify(contexts));
       files.forEach((f) => fd.append("files", f));
 
-      const at = typeof window !== "undefined" ? (sessionStorage.getItem("access_token") ?? "") : "";
-      const res = await fetch(
+      const res = await authFetchRaw(
         `/api/projects/${projectId}/plan-studios/${planStudioId}/artifacts/${artfId}/generate`,
         {
           method:  "POST",
           body:    fd,
-          headers: at ? { Authorization: `Bearer ${at}` } : {},
         },
       );
       if (!res.ok) {

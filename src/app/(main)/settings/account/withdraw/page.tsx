@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, authFetchRaw } from "@/lib/authFetch";
 import { clearAuthTokensAcrossTabs } from "@/lib/authRefreshClient";
 import { useAppStore } from "@/store/appStore";
 import { useQueryClient } from "@tanstack/react-query";
@@ -88,10 +88,9 @@ function WithdrawInner() {
   const handleWithdraw = async (password?: string, socialToken?: string) => {
     setWithdrawing(true);
     try {
-      const at  = sessionStorage.getItem("access_token") ?? "";
-      const res = await fetch("/api/member/me", {
+      const res = await authFetchRaw("/api/member/me", {
         method:  "DELETE",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${at}` },
+        headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
           ...(password    ? { password }    : {}),
           ...(socialToken ? { socialToken } : {}),
@@ -117,10 +116,7 @@ function WithdrawInner() {
 
   // ── 소셜 재인증 시작 ──────────────────────────────────────────────────
   const handleSocialReauth = async (provider: "google" | "github") => {
-    const at  = sessionStorage.getItem("access_token") ?? "";
-    const res = await fetch(`/api/auth/social/${provider}/authorize?action=withdraw`, {
-      headers: { Authorization: `Bearer ${at}` },
-    });
+    const res = await authFetchRaw(`/api/auth/social/${provider}/authorize?action=withdraw`);
     const body = await res.json();
     if (!res.ok) { toast.error(body.message ?? "소셜 인증 요청에 실패했습니다."); return; }
     window.location.href = body.data.url;

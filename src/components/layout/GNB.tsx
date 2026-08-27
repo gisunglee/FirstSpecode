@@ -140,10 +140,11 @@ export default function GNB() {
   useEffect(() => {
     const m = pathname.match(/^\/projects\/([^/]+)/);
     const urlPrjctId = m?.[1];
-    if (urlPrjctId && urlPrjctId !== currentProjectId) {
+    const selectedProjectId = useAppStore.getState().currentProjectId;
+    if (urlPrjctId && urlPrjctId !== selectedProjectId) {
       setCurrentProjectId(urlPrjctId);
     }
-  }, [pathname, currentProjectId, setCurrentProjectId]);
+  }, [pathname, setCurrentProjectId]);
 
   // 드롭다운 외부 클릭 시 닫기
   useEffect(() => {
@@ -210,7 +211,6 @@ export default function GNB() {
   //   → 프로젝트 무관 경로(`/dashboard`, `/settings/profile`, `/projects` 등)는
   //     URL을 건드리지 않는다 — 사용자의 현재 맥락을 유지.
   function handleSelectProject(id: string) {
-    setCurrentProjectId(id);
     setDropdownOpen(false);
 
     // /projects/{uuid} 로 시작하는 경우에만 URL 재작성
@@ -218,7 +218,13 @@ export default function GNB() {
     if (match) {
       const section = match[1] ?? "";  // "/screens" 등, 없으면 빈 문자열
       router.push(`/projects/${id}${section}`);
+      return;
     }
+
+    // 프로젝트 경로 밖에서는 URL이 프로젝트 컨텍스트를 표현하지 않으므로
+    // 선택값을 전역 상태에 바로 반영한다. 프로젝트 경로 안에서는 위 navigation이
+    // 완료된 뒤 URL → state effect가 반영해야 이전 URL이 새 선택을 되돌리지 않는다.
+    setCurrentProjectId(id);
   }
 
   return (
