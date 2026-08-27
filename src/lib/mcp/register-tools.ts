@@ -18,6 +18,9 @@
  *   [설계-표준양식] get_design_template (요구사항/단위업무/화면/영역/기능 description 작성 표준 양식 —
  *                    설계 내용을 논의하거나 description을 작성하기 전에 반드시 먼저 호출할 것)
  *   [DB]           list_db_tables, get_db_table, create_db_table, update_db_table, get_db_table_usage, get_db_column_usage
+ *   [공통코드/기준정보] list_code_groups, create_code_group, list_codes, create_code,
+ *                    list_standard_info, create_standard_info (등록만 제공 — 삭제는 등록자/PM/PL/
+ *                    관리자만 가능한 동적 조건이라 웹 UI 전용, 수정도 이번 범위 밖)
  *   [스펙 동기화]   UW 실행 시작·구조화 결과 제출·실행/항목 조회 (적용은 웹 전용)
  *   [AS-IS 온보딩] create_asis_question, list_asis_questions(조건 필수), answer_asis_question
  *   [표준 가이드]  search_standard_guides, get_standard_guide (프로젝트 코딩/디자인 표준 문서 —
@@ -1115,7 +1118,144 @@ export function registerTools(
   );
 
   // ═══════════════════════════════════════════════════════════════
-  // 11. 구현-설계 동기화 V2 (Spec Sync)
+  // 11. 공통코드 / 기준 정보 (Code / Standard Info)
+  // ═══════════════════════════════════════════════════════════════
+  // 등록(create)만 제공한다. 삭제는 등록자 또는 PM/PL/관리자만 가능한 동적 조건이라
+  // (requireCodeDelete/requireStandardInfoDelete 참고) MCP DELETE 미지원 정책과
+  // 별개로도 웹 UI 채널에서만 처리한다. 수정(update)도 이번 범위에는 없음.
+
+  server.tool(
+    "list_code_groups",
+    "공통코드 그룹 목록 조회 — 프로젝트에 등록된 코드 그룹과 하위 코드 수/DB 컬럼 매핑 수를 반환합니다",
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+      search:    z.string().optional().describe("그룹 코드/그룹명 검색어"),
+      useYn:     z.string().optional().describe("사용 여부 필터. 허용값: Y | N"),
+    },
+    async ({ projectId, search, useYn }) => {
+      try {
+        const qs = buildQs({ search, useYn });
+        const data = await specodeFetch(`/api/projects/${projectId}/code-groups${qs}`);
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  server.tool(
+    "create_code_group",
+    "공통코드 그룹 생성 — 새 코드 그룹을 등록합니다. 그룹 코드/그룹명은 프로젝트 내 유니크해야 합니다",
+    {
+      projectId:  z.string().describe("프로젝트 ID"),
+      grpCode:    z.string().describe("그룹 코드 (필수, 프로젝트 내 유니크)"),
+      grpCodeNm:  z.string().describe("그룹 코드명 (필수, 프로젝트 내 유니크)"),
+      grpCodeDc:  z.string().optional().describe("그룹 설명"),
+    },
+    async ({ projectId, ...body }) => {
+      try {
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/code-groups`,
+          { method: "POST", body: JSON.stringify(body) }
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  server.tool(
+    "list_codes",
+    "공통코드 목록 조회 — 지정 그룹에 속한 코드 목록을 정렬순서대로 반환합니다",
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+      grpCode:   z.string().describe("그룹 코드 (선행: list_code_groups로 조회)"),
+    },
+    async ({ projectId, grpCode }) => {
+      try {
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/code-groups/${grpCode}/codes`
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  server.tool(
+    "create_code",
+    "공통코드 생성 — 지정 그룹에 새 코드를 등록합니다. 코드는 영문/숫자/_/:/- 만 허용됩니다",
+    {
+      projectId:    z.string().describe("프로젝트 ID"),
+      grpCode:      z.string().describe("그룹 코드 (선행: list_code_groups로 조회)"),
+      cmCode:       z.string().describe("코드값 (필수, 영문/숫자/_/:/- 만 허용, 그룹 내 유니크)"),
+      codeNm:       z.string().describe("코드명 (필수)"),
+      codeDc:       z.string().optional().describe("코드 설명"),
+      sortOrdr:     z.number().optional().describe("정렬순서 (미지정 시 마지막+1 자동 계산)"),
+      globalUnique: z.boolean().optional().describe("true면 같은 프로젝트 내 다른 그룹과도 코드값 중복을 금지합니다"),
+    },
+    async ({ projectId, grpCode, ...body }) => {
+      try {
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/code-groups/${grpCode}/codes`,
+          { method: "POST", body: JSON.stringify(body) }
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  server.tool(
+    "list_standard_info",
+    "기준 정보 목록 조회 — 프로젝트별 기준값(key-value) 목록을 업무 카테고리·코드 순으로 반환합니다",
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+    },
+    async ({ projectId }) => {
+      try {
+        const data = await specodeFetch(`/api/projects/${projectId}/standard-info`);
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  server.tool(
+    "create_standard_info",
+    "기준 정보 생성 — 새 기준값을 등록합니다. (프로젝트, 기준코드, 시작일) 조합이 유니크해야 합니다",
+    {
+      projectId:     z.string().describe("프로젝트 ID"),
+      stdInfoCode:   z.string().describe("기준 정보 코드 (필수, 6자 이내)"),
+      stdBgngDe:     z.string().describe("기준 시작 일자 (필수, YYYYMMDD 8자리)"),
+      stdEndDe:      z.string().optional().describe("기준 종료 일자 (YYYYMMDD 8자리, 시작일 이상)"),
+      stdInfoNm:     z.string().describe("기준 정보명 (필수)"),
+      bizCtgryNm:    z.string().describe("업무 카테고리명 (필수, 100자 이내, 자유 텍스트)"),
+      stdDataTyCode: z.string().describe("자료 유형 코드 (필수, 6자 이내)"),
+      mainStdVal:    z.string().optional().describe("주 기준값"),
+      subStdVal:     z.string().optional().describe("보조 기준값"),
+      stdInfoDc:     z.string().optional().describe("기준 정보 설명"),
+      useYn:         z.string().optional().describe("사용 여부. 허용값: Y | N (기본 Y)"),
+    },
+    async ({ projectId, ...body }) => {
+      try {
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/standard-info`,
+          { method: "POST", body: JSON.stringify(body) }
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  // ═══════════════════════════════════════════════════════════════
+  // 12. 구현-설계 동기화 V2 (Spec Sync)
   // ═══════════════════════════════════════════════════════════════
   // 실행과 분석 결과 제출·조회만 제공한다. 실제 설계 반영은 근거를 본 사람이
   // 웹 화면에서 승인해야 하므로 MCP에 decision/apply 도구를 등록하지 않는다.
@@ -1222,7 +1362,7 @@ export function registerTools(
   );
 
   // ═══════════════════════════════════════════════════════════════
-  // 12. AS-IS 온보딩 — 미해결 질문 (AS-IS Question Tracking)
+  // 13. AS-IS 온보딩 — 미해결 질문 (AS-IS Question Tracking)
   // ═══════════════════════════════════════════════════════════════
   // 2차 사업(기존 시스템 위 증축) 프로젝트를 온보딩할 때, 소스 분석이나 대화로
   // 확인 못한 사실을 추적하는 용도. tb_ds_review_request(동료 피어리뷰)와는
@@ -1310,7 +1450,7 @@ export function registerTools(
   );
 
   // ═══════════════════════════════════════════════════════════════
-  // 13. 표준 가이드 (Standard Guide)
+  // 14. 표준 가이드 (Standard Guide)
   // ═══════════════════════════════════════════════════════════════
   // 프로젝트별 코딩/디자인 표준 문서 저장소(tb_sg_std_guide). UW-00030 PRD에서부터
   // AI가 참고 기준으로 쓰는 걸 목적으로 설계됐다 — /review-uw의 code-quality/
@@ -1365,7 +1505,7 @@ export function registerTools(
   );
 
   // ═══════════════════════════════════════════════════════════════
-  // 14. 워커 커맨드 배포 (Worker Command Distribution)
+  // 15. 워커 커맨드 배포 (Worker Command Distribution)
   // ═══════════════════════════════════════════════════════════════
   // SPECODE를 이용하는 고객사도 /run-ai-tasks, /sync-specode, /onboard-asis,
   // /review-uw 같은 로컬 커맨드(및 그 서브에이전트)가 있어야 각 기능을 쓸 수
