@@ -7,12 +7,16 @@
  *   - 사이드바 접힘 상태 — localStorage 영속화
  *   - 전역 "내 담당" 모드 — DB 저장(tb_cm_member.asignee_view_mode)
  *     persist 안 함(서버가 원천). GNB가 프로필 로드 시 초기화
+ *   - 전역 "단위업무 고정" — 브라우저 세션 한정(persist 안 함, 새로고침하면 해제).
+ *     화면/영역/기능 목록을 하나의 단위업무로 제한해서 보고 싶을 때 GNB에서 설정.
+ *     프로젝트 전환 시 자동 해제(다른 프로젝트의 단위업무 ID라 의미가 없어짐).
  *
  * 사용 위치:
- *   - GNB: 프로젝트 전환, 테마 전환, 내 담당 모드 토글
+ *   - GNB: 프로젝트 전환, 테마 전환, 내 담당 모드 토글, 단위업무 고정
  *   - LNB: 사이드바 접힘/펼침
  *   - StatusBar: 현재 프로젝트 ID 기반 데이터 폴링
  *   - 5개 목록 페이지: myAssigneeMode 구독으로 필터 자동 적용
+ *   - 화면/영역/기능 목록: pinnedUnitWorkId 구독으로 필터 자동 적용
  */
 
 import { create } from "zustand";
@@ -33,6 +37,9 @@ type AppState = {
   breadcrumb: BreadcrumbItem[];
   // 전역 "내 담당" 모드 — 담당자 있는 모든 목록 페이지에 적용
   myAssigneeMode: AssigneeMode;
+  // 전역 "단위업무 고정" — 화면/영역/기능 목록을 이 단위업무로 제한. null = 고정 없음(전체 보기)
+  pinnedUnitWorkId: string | null;
+  pinnedUnitWorkName: string | null;
   // 프로필 로드 완료 플래그 — 프로필에서 myAssigneeMode를 받아오기 전까지
   //   각 목록 페이지가 useQuery를 지연시켜 플리커를 방지
   _hasLoadedProfile: boolean;
@@ -52,6 +59,8 @@ type AppActions = {
   toggleSidebar: () => void;
   setBreadcrumb: (items: BreadcrumbItem[]) => void;
   setMyAssigneeMode: (mode: AssigneeMode) => void;
+  setPinnedUnitWork: (id: string, name: string) => void;
+  clearPinnedUnitWork: () => void;
   setHasLoadedProfile: (loaded: boolean) => void;
   setGlobalSearchOpen: (open: boolean) => void;
   toggleGlobalSearch: () => void;
@@ -68,13 +77,23 @@ export const useAppStore = create<AppState & AppActions>()(
       sidebarCollapsed: false,
       breadcrumb: [],
       myAssigneeMode: "all",
+      pinnedUnitWorkId: null,
+      pinnedUnitWorkName: null,
       _hasLoadedProfile: false,
       globalSearchOpen: false,
       tripleClickToggleEnabled: false,
 
-      setCurrentProjectId: (id) => set({ currentProjectId: id }),
+      // 프로젝트가 실제로 바뀔 때만 고정 단위업무 해제 — 다른 프로젝트의 unitWorkId는
+      // 이 프로젝트에 존재하지 않으므로 그대로 들고 있으면 목록이 전부 0건으로 보임
+      setCurrentProjectId: (id) => {
+        const prev = get().currentProjectId;
+        if (id === prev) return;
+        set({ currentProjectId: id, pinnedUnitWorkId: null, pinnedUnitWorkName: null });
+      },
       setBreadcrumb: (items) => set({ breadcrumb: items }),
       setMyAssigneeMode: (mode) => set({ myAssigneeMode: mode }),
+      setPinnedUnitWork: (id, name) => set({ pinnedUnitWorkId: id, pinnedUnitWorkName: name }),
+      clearPinnedUnitWork: () => set({ pinnedUnitWorkId: null, pinnedUnitWorkName: null }),
       setHasLoadedProfile: (loaded) => set({ _hasLoadedProfile: loaded }),
       setGlobalSearchOpen: (open) => set({ globalSearchOpen: open }),
       toggleGlobalSearch: () => set((s) => ({ globalSearchOpen: !s.globalSearchOpen })),

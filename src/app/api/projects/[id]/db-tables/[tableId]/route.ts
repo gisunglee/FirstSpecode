@@ -1,13 +1,23 @@
 /**
  * GET    /api/projects/[id]/db-tables/[tableId] — DB 테이블 상세 (테이블 정보 + 컬럼 목록)
  * PUT    /api/projects/[id]/db-tables/[tableId] — DB 테이블 수정 + 컬럼 전체 교체
+ * PATCH  /api/projects/[id]/db-tables/[tableId] — 상태(신규/기존/데디케이트)만 경량 변경
  * DELETE /api/projects/[id]/db-tables/[tableId] — DB 테이블 삭제 (컬럼 cascade)
  *
  * PUT body:
- *   { tblPhysclNm, tblLgclNm, tblDc,
+ *   { tblPhysclNm, tblLgclNm, tblDc, tblSttusCode?,
  *     columns: [{ colId?, colPhysclNm, colLgclNm, dataTyNm, colDc, sortOrdr }] }
  *   - colId 있으면 update, 없으면 insert
  *   - 전달되지 않은 기존 컬럼은 삭제
+ *
+ * PATCH body:
+ *   { tblSttusCode: "DEPRECATED" }
+ *   - 컬럼은 전혀 건드리지 않는 경량 엔드포인트. 삭제 확인창의 "상태만 변경"(데디케이트) 액션 전용.
+ *   - 권한도 삭제와 동일(db.table.delete)하게 취급 — "이제 안 쓴다"는 선언은 삭제만큼 신중해야 함.
+ *   - DEPRECATED로만 제한한다 — NEW/EXISTING으로 되돌리거나 재분류하는 건 삭제 권한과는
+ *     성격이 다른(덜 위험한) 작업이라, 그건 PUT(테이블 상세 편집 폼, db.table.write)으로만 한다.
+ *     그렇지 않으면 "삭제 권한 있는 사람 = 상태 마음대로 바꿀 수 있는 사람"이 되어버려
+ *     나중에 상태 재분류만 더 넓게 허용하고 싶을 때 이 게이트를 통째로 다시 설계해야 한다.
  */
 
 import { NextRequest } from "next/server";
@@ -17,6 +27,7 @@ import { requireDbTableDelete } from "@/lib/requireDbTableDelete";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { captureTableSnapshot, recordRevision } from "@/lib/dbTableRevision";
 import { deleteOrphanedColMappings } from "@/lib/dbTableUsage";
+import { isDbTableStatusCode } from "@/lib/dbTableStatus";
 
 type RouteParams = { params: Promise<{ id: string; tableId: string }> };
 
@@ -54,6 +65,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       tblPhysclNm:      table.tbl_physcl_nm,
       tblLgclNm:        table.tbl_lgcl_nm  ?? "",
       tblDc:            table.tbl_dc       ?? "",
+      tblSttusCode:     table.tbl_sttus_code,
       creatDt:          table.creat_dt.toISOString(),
       mdfcnDt:          table.mdfcn_dt?.toISOString() ?? null,
       // 담당자 — mber_nm 우선, 없으면 email, 둘 다 없으면 null
@@ -99,16 +111,20 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { tblPhysclNm, tblLgclNm, tblDc, columns, assignMemberId } = body as {
-    tblPhysclNm?:    string;
-    tblLgclNm?:      string;
-    tblDc?:          string;
-    columns?:        ColumnInput[];
+  const { tblPhysclNm, tblLgclNm, tblDc, columns, assignMemberId, tblSttusCode } = body as {
+    tblPhysclNm?:   string;
+    tblLgclNm?:     string;
+    tblDc?:         string;
+    columns?:       ColumnInput[];
     assignMemberId?: string;
+    tblSttusCode?:  string;
   };
 
   if (!tblPhysclNm?.trim()) {
     return apiError("VALIDATION_ERROR", "물리 테이블명은 필수입니다.", 400);
+  }
+  if (tblSttusCode !== undefined && !isDbTableStatusCode(tblSttusCode)) {
+    return apiError("VALIDATION_ERROR", "유효하지 않은 상태값입니다.", 400);
   }
 
   try {
@@ -154,12 +170,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       await tx.tbDsDbTable.update({
         where: { tbl_id: tableId },
         data: {
-          tbl_physcl_nm: tblPhysclNm.trim(),
-          tbl_lgcl_nm:   tblLgclNm !== undefined ? (tblLgclNm?.trim() || null) : existing.tbl_lgcl_nm,
-          tbl_dc:        tblDc !== undefined ? (tblDc?.trim() || null) : existing.tbl_dc,
-          asign_mber_id: nextAssignee,
-          mdfcn_mber_id: gate.mberId,
-          mdfcn_dt:      new Date(),
+          tbl_physcl_nm:  tblPhysclNm.trim(),
+          tbl_lgcl_nm:    tblLgclNm !== undefined ? (tblLgclNm?.trim() || null) : existing.tbl_lgcl_nm,
+          tbl_dc:         tblDc !== undefined ? (tblDc?.trim() || null) : existing.tbl_dc,
+          tbl_sttus_code: tblSttusCode !== undefined ? tblSttusCode : existing.tbl_sttus_code,
+          asign_mber_id:  nextAssignee,
+          mdfcn_mber_id:  gate.mberId,
+          mdfcn_dt:       new Date(),
         },
       });
 
@@ -303,5 +320,69 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   } catch (err) {
     console.error(`[DELETE /api/projects/${projectId}/db-tables/${tableId}] DB 오류:`, err);
     return apiError("DB_ERROR", "DB 테이블 삭제에 실패했습니다.", 500);
+  }
+}
+
+// ── PATCH ─────────────────────────────────────────────────────────────────────
+
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  const { id: projectId, tableId } = await params;
+
+  // 권한: db.table.delete 와 동일 게이트 재사용 — 삭제 확인창에서 갈라지는 액션이라
+  // "완전 삭제"만큼 신중해야 함(담당자 예외도 동일하게 적용)
+  const gate = await requireDbTableDelete(request, projectId, async () => {
+    const t = await prisma.tbDsDbTable.findUnique({
+      where:  { tbl_id: tableId },
+      select: { asign_mber_id: true, prjct_id: true },
+    });
+    return t && t.prjct_id === projectId ? t.asign_mber_id : null;
+  });
+  if (gate instanceof Response) return gate;
+
+  let body: unknown;
+  try { body = await request.json(); } catch {
+    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
+  }
+
+  const { tblSttusCode } = body as { tblSttusCode?: string };
+  // DEPRECATED 로만 제한 — NEW/EXISTING 재분류는 db.table.write(PUT)로만 허용
+  if (tblSttusCode !== "DEPRECATED") {
+    return apiError("VALIDATION_ERROR", "이 엔드포인트는 데디케이트로 변경할 때만 사용합니다.", 400);
+  }
+
+  try {
+    const existing = await prisma.tbDsDbTable.findUnique({ where: { tbl_id: tableId } });
+    if (!existing || existing.prjct_id !== projectId) {
+      return apiError("NOT_FOUND", "테이블을 찾을 수 없습니다.", 404);
+    }
+
+    // PUT과 달리 컬럼은 전혀 건드리지 않는다 — 상태 필드 하나만 바꾸는 경량 트랜잭션
+    await prisma.$transaction(async (tx) => {
+      const before = await captureTableSnapshot(tx, tableId);
+
+      await tx.tbDsDbTable.update({
+        where: { tbl_id: tableId },
+        data: {
+          tbl_sttus_code: tblSttusCode,
+          mdfcn_mber_id:  gate.mberId,
+          mdfcn_dt:       new Date(),
+        },
+      });
+
+      const after = await captureTableSnapshot(tx, tableId);
+      await recordRevision(tx, {
+        projectId,
+        tblId:       tableId,
+        chgTypeCode: "UPDATE",
+        before,
+        after,
+        chgMberId:   gate.mberId,
+      });
+    });
+
+    return apiSuccess({ tblId: tableId, tblSttusCode });
+  } catch (err) {
+    console.error(`[PATCH /api/projects/${projectId}/db-tables/${tableId}] DB 오류:`, err);
+    return apiError("DB_ERROR", "DB 테이블 상태 변경에 실패했습니다.", 500);
   }
 }

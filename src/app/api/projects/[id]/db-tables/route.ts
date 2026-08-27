@@ -13,6 +13,7 @@ import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { captureTableSnapshot, recordRevision } from "@/lib/dbTableRevision";
 import { fetchProjectDbTables } from "@/lib/exports/db-tables-data";
+import { isDbTableStatusCode } from "@/lib/dbTableStatus";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -48,15 +49,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { tblPhysclNm, tblLgclNm, tblDc, assignMemberId } = body as {
+  const { tblPhysclNm, tblLgclNm, tblDc, assignMemberId, tblSttusCode } = body as {
     tblPhysclNm?:    string;
     tblLgclNm?:      string;
     tblDc?:          string;
     assignMemberId?: string;
+    tblSttusCode?:   string;
   };
 
   if (!tblPhysclNm?.trim()) {
     return apiError("VALIDATION_ERROR", "물리 테이블명은 필수입니다.", 400);
+  }
+  if (tblSttusCode !== undefined && !isDbTableStatusCode(tblSttusCode)) {
+    return apiError("VALIDATION_ERROR", "유효하지 않은 상태값입니다.", 400);
   }
 
   try {
@@ -69,6 +74,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           tbl_lgcl_nm:   tblLgclNm?.trim() || null,
           tbl_dc:        tblDc?.trim()     || null,
           asign_mber_id: assignMemberId?.trim() || null,
+          ...(tblSttusCode !== undefined ? { tbl_sttus_code: tblSttusCode } : {}),
         },
       });
 

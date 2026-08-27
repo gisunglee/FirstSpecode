@@ -51,14 +51,18 @@ export type FunctionListItem = {
 export async function fetchProjectFunctions(opts: {
   projectId:       string;
   areaId?:         string;
+  unitWorkId?:     string;
   assigneeFilter?: string;
 }): Promise<FunctionListItem[]> {
-  const { projectId, areaId, assigneeFilter } = opts;
+  const { projectId, areaId, unitWorkId, assigneeFilter } = opts;
 
   const functions = await prisma.tbDsFunction.findMany({
     where: {
       prjct_id: projectId,
       ...(areaId ? { area_id: areaId } : {}),
+      // 영역→화면→단위업무 관계 필터 — 이미 화면명/단위업무명 표시를 위해 조인해두었던
+      // 관계를 그대로 재사용(추가 조인 없음)
+      ...(unitWorkId ? { area: { screen: { unitWork: { unit_work_id: unitWorkId } } } } : {}),
       ...(assigneeFilter ? { asign_mber_id: assigneeFilter } : {}),
     },
     include: {

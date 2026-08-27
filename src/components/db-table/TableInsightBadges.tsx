@@ -19,6 +19,7 @@
  */
 
 import type { IoProfile } from "@/lib/dbTableUsage";
+import { DB_TABLE_STATUS_LABEL, isDbTableStatusCode, type DbTableStatusCode } from "@/lib/dbTableStatus";
 
 // ── 공통 상수 ────────────────────────────────────────────────────────────────
 
@@ -167,6 +168,35 @@ export function RefTypeBadge({ refType, sizeMode = "md" }: { refType: string; si
       fontSize, fontWeight: 700,
     }}>
       {m.label}
+    </span>
+  );
+}
+
+// ── 테이블 상태 배지 (신규/기존/데디케이트) ──────────────────────────────────
+
+/**
+ * 상태별 시각 매핑.
+ *   - NEW(신규)        → info    (파랑, "새로 생겼다"는 정보성 알림)
+ *   - EXISTING(기존)   → 중립     (특별히 강조할 이유 없는 기본 상태)
+ *   - DEPRECATED(데디케이트) → warning (곧 정리될 대상이라는 주의 신호)
+ */
+const DB_TABLE_STATUS_META: Record<DbTableStatusCode, { bg: string; fg: string }> = {
+  NEW:        { bg: "var(--color-info-subtle)",   fg: "var(--color-info)" },
+  EXISTING:   { bg: "var(--color-bg-muted)",       fg: "var(--color-text-secondary)" },
+  DEPRECATED: { bg: "var(--color-warning-subtle)", fg: "var(--color-warning)" },
+};
+
+export function DbTableStatusBadge({ code }: { code: string }) {
+  const known = isDbTableStatusCode(code);
+  const label = known ? DB_TABLE_STATUS_LABEL[code] : code;
+  const m = known ? DB_TABLE_STATUS_META[code] : { bg: "var(--color-bg-muted)", fg: "var(--color-text-secondary)" };
+  return (
+    <span style={{
+      display: "inline-block", padding: "2px 8px", borderRadius: 10,
+      background: m.bg, color: m.fg,
+      fontSize: 11, fontWeight: 700, whiteSpace: "nowrap",
+    }}>
+      {label}
     </span>
   );
 }

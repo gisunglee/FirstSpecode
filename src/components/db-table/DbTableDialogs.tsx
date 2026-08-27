@@ -15,13 +15,8 @@
  *   - 색상은 semantic 토큰만 사용 (3테마 자동 대응)
  */
 
-import { useEffect, useState } from "react";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import type { TableUsageResponse } from "./TableUsageSection";
-
-// 영향도(매핑 참조)가 있는 삭제는 실수 클릭 방지를 위해 재확인 문구를 한 번 더 보여준다.
-const IMPACT_RECONFIRM_TEXT =
-  "정말로 삭제하시겠습니까? 기능에 정의되어 있는 매핑도 함께 삭제됩니다.";
 
 // ── 공용 스타일 ──────────────────────────────────────────────────────────────
 
@@ -50,6 +45,22 @@ const cancelBtnStyle: React.CSSProperties = {
   background: "transparent",
   color: "var(--color-text-secondary)",
   fontSize: 13, cursor: "pointer",
+};
+
+// "완전 삭제" — 기존 삭제 버튼과 동일한 위험 색상
+const deleteBtnStyleDialog: React.CSSProperties = {
+  padding: "6px 16px", borderRadius: 6, border: "none",
+  background: "var(--color-error)", color: "#fff",
+  fontSize: 13, fontWeight: 600, cursor: "pointer",
+};
+
+// "데디케이트로 변경" — 되돌릴 수 있는 액션이라 삭제보다 약한 warning 톤(테두리만)으로 구분
+const deprecateBtnStyle: React.CSSProperties = {
+  padding: "6px 16px", borderRadius: 6,
+  border: "1px solid var(--color-warning-border)",
+  background: "transparent",
+  color: "var(--color-warning)",
+  fontSize: 13, fontWeight: 600, cursor: "pointer",
 };
 
 // ── 1. 논리 컬럼명 누락 경고 ─────────────────────────────────────────────────
@@ -96,7 +107,7 @@ export function LgclNameWarnDialog({ open, missing, onClose, onConfirm, busy }: 
   );
 }
 
-// ── 2. 테이블 삭제 확인 (영향도 경고 포함) ──────────────────────────────────
+// ── 2. 테이블 삭제 확인 (영향도 경고 + 데디케이트 갈림길) ────────────────────
 
 type ImpactCounts = {
   functionCount: number;
@@ -105,34 +116,33 @@ type ImpactCounts = {
 };
 
 type DeleteConfirmProps = {
-  open:       boolean;
-  tableName:  string;            // 물리명 (code 태그로 표시)
-  colCount:   number;             // 하위 컬럼 수
-  impact?:    ImpactCounts;        // 매핑 영향도 (있으면 경고 표시)
-  onClose:    () => void;
-  onConfirm:  () => void;
-  busy?:      boolean;
+  open:         boolean;
+  tableName:    string;             // 물리명 (code 태그로 표시)
+  colCount:     number;              // 하위 컬럼 수
+  impact?:      ImpactCounts;         // 매핑 영향도 (있으면 경고 표시)
+  isDeprecated: boolean;              // 이미 "데디케이트" 상태인 테이블인지
+  onClose:      () => void;
+  // 아직 데디케이트 전 + 영향도가 있을 때만 노출되는 "상태만 바꾸기" 선택지
+  onDeprecate:  () => void;
+  onDelete:     () => void;
+  deleting?:    boolean;
+  deprecating?: boolean;
 };
 
 export function DeleteTableConfirmDialog({
-  open, tableName, colCount, impact, onClose, onConfirm, busy,
+  open, tableName, colCount, impact, isDeprecated,
+  onClose, onDeprecate, onDelete, deleting, deprecating,
 }: DeleteConfirmProps) {
   useEscapeKey(onClose, open);
-
-  // 영향도가 있는 삭제는 버튼 한 번 더 눌러야 실제로 삭제되도록 재확인 단계를 둔다
-  // (다이얼로그는 open=false 여도 언마운트되지 않으므로 닫힐 때 되돌려 둠)
-  const [reconfirm, setReconfirm] = useState(false);
-  useEffect(() => { if (!open) setReconfirm(false); }, [open]);
-
   if (!open) return null;
+
+  const busy = !!deleting || !!deprecating;
 
   // 매핑 참조가 하나라도 있는지 (없으면 영향도 경고 박스 자체를 숨김)
   const hasImpact = impact && (impact.functionCount + impact.areaCount + impact.screenCount) > 0;
-
-  function handleDeleteClick() {
-    if (hasImpact && !reconfirm) { setReconfirm(true); return; }
-    onConfirm();
-  }
+  // 아직 데디케이트 전 + 영향이 있을 때만 "완전 삭제" 대신 "상태만 바꾸기"를 고를 수 있게 함.
+  // 이미 데디케이트된 테이블이면 이번이 최종 정리이므로 갈림길 없이 바로 완전 삭제로 간다.
+  const showFork = hasImpact && !isDeprecated;
 
   return (
     <div style={backdropStyle} onClick={onClose}>
@@ -171,15 +181,16 @@ export function DeleteTableConfirmDialog({
               {impact.screenCount > 0 && <li>화면 <strong>{impact.screenCount}</strong>개</li>}
             </ul>
             <div style={{ marginTop: 6, fontSize: 11, color: "var(--color-text-secondary)" }}>
-              삭제 시 해당 산출물의 컬럼 매핑이 끊어집니다. 계속 진행하시겠습니까?
+              {showFork
+                ? "완전히 지우는 대신, 일단 \"데디케이트\"로 표시만 해두고 나중에 정리할 수도 있습니다."
+                : "삭제 시 해당 산출물의 컬럼 매핑이 끊어집니다. 계속 진행하시겠습니까?"}
             </div>
           </div>
         )}
 
-        {/* 재확인 문구 — 삭제 버튼을 한 번 눌러 영향도를 인지했을 때만 표시 */}
-        {hasImpact && reconfirm && (
-          <p style={{ margin: "10px 0 0", fontSize: 12, fontWeight: 700, color: "var(--color-error)" }}>
-            ⚠ {IMPACT_RECONFIRM_TEXT}
+        {isDeprecated && (
+          <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--color-text-secondary)" }}>
+            이미 데디케이트 상태인 테이블입니다. 삭제하면 완전히 제거됩니다.
           </p>
         )}
 
@@ -187,17 +198,23 @@ export function DeleteTableConfirmDialog({
           <button type="button" style={cancelBtnStyle} onClick={onClose} disabled={busy}>
             취소
           </button>
+          {showFork && (
+            <button
+              type="button"
+              style={deprecateBtnStyle}
+              onClick={onDeprecate}
+              disabled={busy}
+            >
+              {deprecating ? "변경 중..." : "데디케이트로 변경"}
+            </button>
+          )}
           <button
             type="button"
-            style={{
-              padding: "6px 16px", borderRadius: 6, border: "none",
-              background: "var(--color-error)", color: "#fff",
-              fontSize: 13, fontWeight: 600, cursor: "pointer",
-            }}
-            onClick={handleDeleteClick}
+            style={deleteBtnStyleDialog}
+            onClick={onDelete}
             disabled={busy}
           >
-            {busy ? "삭제 중..." : reconfirm ? "네, 삭제합니다" : "삭제"}
+            {deleting ? "삭제 중..." : showFork ? "완전 삭제" : "삭제"}
           </button>
         </div>
       </div>
@@ -206,15 +223,23 @@ export function DeleteTableConfirmDialog({
 }
 
 // ── 3. 목록 일괄 삭제 확인 (테이블별 사용처 링크 포함) ──────────────────────
+//
+// 선택한 테이블을 두 그룹으로 나눈다:
+//   - 즉시 삭제 대상: 이미 "데디케이트" 상태이거나, 영향도(사용처)가 0인 테이블
+//   - 개별 확인 필요: 아직 데디케이트 전인데 지금 기능에서 쓰고 있는 테이블
+//     (사용처 조회 자체가 실패한 경우도 안전하게 이쪽으로 분류)
+// 뒤쪽 그룹은 이번 일괄삭제에서 건너뛴다 — 상세 페이지에서 하나씩 열어
+// "데디케이트로 변경" 또는 "완전 삭제"를 개별로 선택해야 한다.
 
 type UsedByItem = TableUsageResponse["usedBy"][number];
 
 export type BulkDeleteItem = {
-  tblId:       string;
-  tblPhysclNm: string;
-  colCount:    number;
+  tblId:        string;
+  tblPhysclNm:  string;
+  colCount:     number;
+  isDeprecated: boolean;
   // 사용처 조회 실패 시 undefined — "확인 불가" 로 별도 표시 (없음과 구분)
-  usedBy?:     UsedByItem[];
+  usedBy?:      UsedByItem[];
 };
 
 type BulkDeleteConfirmProps = {
@@ -222,7 +247,8 @@ type BulkDeleteConfirmProps = {
   projectId: string;
   items:     BulkDeleteItem[];
   onClose:   () => void;
-  onConfirm: () => void;
+  // 즉시 삭제 대상의 tblId 목록만 전달됨 (개별 확인 필요 그룹은 제외)
+  onDelete:  (tblIds: string[]) => void;
   busy?:     boolean;
 };
 
@@ -239,44 +265,88 @@ function refDetailHref(projectId: string, refType: string, refId: string): strin
   return null;
 }
 
+function isBulkItemImmediate(it: BulkDeleteItem): boolean {
+  if (it.isDeprecated) return true;
+  if (it.usedBy === undefined) return false; // 확인 실패 → 개별 확인으로 보냄
+  return it.usedBy.length === 0;
+}
+
+// 즉시 삭제 대상 / 개별 확인 필요 대상으로 한 번에 나눔 (동일 판정을 두 번 filter 하지 않도록)
+function splitBulkItems(items: BulkDeleteItem[]): { immediate: BulkDeleteItem[]; needsReview: BulkDeleteItem[] } {
+  const immediate: BulkDeleteItem[] = [];
+  const needsReview: BulkDeleteItem[] = [];
+  for (const it of items) {
+    (isBulkItemImmediate(it) ? immediate : needsReview).push(it);
+  }
+  return { immediate, needsReview };
+}
+
+// 사용처 목록 (기능/영역/화면 + 링크) — 즉시 삭제 대상 중 데디케이트+영향 있는 항목과
+// 개별 확인 필요 항목이 동일한 형태로 보여준다
+function UsedByList({ projectId, usedBy, color }: { projectId: string; usedBy: UsedByItem[]; color: string }) {
+  return (
+    <ul style={{ margin: "2px 0 0", paddingLeft: 18, fontSize: 12, color, lineHeight: 1.6 }}>
+      {usedBy.map((u) => {
+        const href = refDetailHref(projectId, u.refType, u.refId);
+        const label = `[${REF_TYPE_LABEL[u.refType] ?? u.refType}] ${u.refName}`;
+        return (
+          <li key={`${u.refType}-${u.refId}`}>
+            {href ? (
+              <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: "inherit" }}>
+                {label}
+              </a>
+            ) : label}
+            {" "}
+            <span style={{ color: "var(--color-text-secondary)" }}>({u.colCount}개 컬럼 사용)</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function BulkDeleteTableConfirmDialog({
-  open, projectId, items, onClose, onConfirm, busy,
+  open, projectId, items, onClose, onDelete, busy,
 }: BulkDeleteConfirmProps) {
   useEscapeKey(onClose, open);
-
-  // 영향도가 있는 삭제는 버튼 한 번 더 눌러야 실제로 삭제되도록 재확인 단계를 둔다
-  const [reconfirm, setReconfirm] = useState(false);
-  useEffect(() => { if (!open) setReconfirm(false); }, [open]);
-
   if (!open) return null;
 
-  const totalColCount   = items.reduce((sum, it) => sum + it.colCount, 0);
-  const itemsWithImpact = items.filter((it) => it.usedBy && it.usedBy.length > 0);
-  const usageUnchecked  = items.some((it) => it.usedBy === undefined);
-  const hasImpact       = itemsWithImpact.length > 0;
-
-  function handleDeleteClick() {
-    if (hasImpact && !reconfirm) { setReconfirm(true); return; }
-    onConfirm();
-  }
+  const { immediate: immediateItems, needsReview: needsReviewItems } = splitBulkItems(items);
+  const totalColCount = immediateItems.reduce((sum, it) => sum + it.colCount, 0);
 
   return (
     <div style={backdropStyle} onClick={onClose}>
       <div style={{ ...dialogStyle, maxWidth: 560, maxHeight: "80vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
         <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700 }}>
-          테이블 {items.length}개를 삭제하시겠습니까?
+          {needsReviewItems.length > 0
+            ? `테이블 ${items.length}개 중 ${immediateItems.length}개를 지금 삭제합니다.`
+            : `테이블 ${items.length}개를 삭제하시겠습니까?`}
         </p>
 
-        {/* 선택된 테이블 목록 */}
-        <ul style={{ margin: "0 0 6px", paddingLeft: 18, fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.7 }}>
-          {items.map((it) => (
-            <li key={it.tblId}>
-              <code style={{ fontFamily: "monospace", background: "var(--color-bg-muted)", padding: "1px 6px", borderRadius: 4 }}>
-                {it.tblPhysclNm}
-              </code>
-            </li>
-          ))}
-        </ul>
+        {immediateItems.length > 0 && (
+          <>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", marginTop: 6 }}>
+              즉시 삭제됨
+            </div>
+            <ul style={{ margin: "2px 0 6px", paddingLeft: 18, fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.7 }}>
+              {immediateItems.map((it) => (
+                <li key={it.tblId}>
+                  <code style={{ fontFamily: "monospace", background: "var(--color-bg-muted)", padding: "1px 6px", borderRadius: 4 }}>
+                    {it.tblPhysclNm}
+                  </code>
+                  {it.isDeprecated && (
+                    <span style={{ marginLeft: 6, fontSize: 11, color: "var(--color-text-tertiary)" }}>(데디케이트)</span>
+                  )}
+                  {/* 이미 데디케이트라 즉시 삭제 대상이지만, 여전히 쓰이고 있으면 그 사실은 보여줌
+                      (단건 삭제 확인창이 isDeprecated 여도 영향도 박스는 항상 보여주는 것과 동일 원칙) */}
+                  {it.usedBy && it.usedBy.length > 0 && (
+                    <UsedByList projectId={projectId} usedBy={it.usedBy} color="var(--color-text-tertiary)" />
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
 
         {totalColCount > 0 && (
           <p style={{ margin: 0, fontSize: 12, color: "var(--color-error)" }}>
@@ -284,14 +354,8 @@ export function BulkDeleteTableConfirmDialog({
           </p>
         )}
 
-        {usageUnchecked && (
-          <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--color-text-tertiary)" }}>
-            일부 테이블은 사용처 확인에 실패했습니다. 삭제 전 개별 확인을 권장합니다.
-          </p>
-        )}
-
-        {/* 매핑 영향도 경고 — 참조가 있는 테이블만 */}
-        {itemsWithImpact.length > 0 && (
+        {/* 개별 확인이 필요해 이번 일괄삭제에서 제외되는 그룹 — 왜 빠지는지 이유를 함께 보여줌 */}
+        {needsReviewItems.length > 0 && (
           <div style={{
             marginTop: 14, padding: "10px 12px",
             background:   "var(--color-warning-subtle)",
@@ -299,63 +363,44 @@ export function BulkDeleteTableConfirmDialog({
             borderRadius: 6,
           }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: "var(--color-warning)", marginBottom: 6 }}>
-              ⚠ 다음 테이블은 현재 설계 산출물에서 참조 중입니다
+              ⚠ 개별 확인이 필요해 이번엔 건너뜁니다 ({needsReviewItems.length}개)
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {itemsWithImpact.map((it) => (
+              {needsReviewItems.map((it) => (
                 <div key={it.tblId}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: "var(--color-warning)" }}>
                     <code style={{ fontFamily: "monospace" }}>{it.tblPhysclNm}</code>
                   </div>
-                  <ul style={{ margin: "2px 0 0", paddingLeft: 18, fontSize: 12, color: "var(--color-warning)", lineHeight: 1.6 }}>
-                    {it.usedBy!.map((u) => {
-                      const href = refDetailHref(projectId, u.refType, u.refId);
-                      const label = `[${REF_TYPE_LABEL[u.refType] ?? u.refType}] ${u.refName}`;
-                      return (
-                        <li key={`${u.refType}-${u.refId}`}>
-                          {href ? (
-                            <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: "inherit" }}>
-                              {label}
-                            </a>
-                          ) : label}
-                          {" "}
-                          <span style={{ color: "var(--color-text-secondary)" }}>({u.colCount}개 컬럼 사용)</span>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                  {it.usedBy === undefined ? (
+                    <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
+                      사용처 확인에 실패했습니다.
+                    </div>
+                  ) : (
+                    <UsedByList projectId={projectId} usedBy={it.usedBy} color="var(--color-warning)" />
+                  )}
                 </div>
               ))}
             </div>
             <div style={{ marginTop: 8, fontSize: 11, color: "var(--color-text-secondary)" }}>
-              삭제 시 위 산출물의 컬럼 매핑도 함께 삭제됩니다. 계속 진행하시겠습니까?
+              삭제하려면 이 테이블을 열어서 개별로 확인해 주세요 (그대로 두거나 데디케이트로 바꿀 수 있습니다).
             </div>
           </div>
         )}
 
-        {/* 재확인 문구 — 삭제 버튼을 한 번 눌러 영향도를 인지했을 때만 표시 */}
-        {hasImpact && reconfirm && (
-          <p style={{ margin: "10px 0 0", fontSize: 12, fontWeight: 700, color: "var(--color-error)" }}>
-            ⚠ {IMPACT_RECONFIRM_TEXT}
-          </p>
-        )}
-
         <div style={footerStyle}>
           <button type="button" style={cancelBtnStyle} onClick={onClose} disabled={busy}>
-            취소
+            {immediateItems.length > 0 ? "취소" : "닫기"}
           </button>
-          <button
-            type="button"
-            style={{
-              padding: "6px 16px", borderRadius: 6, border: "none",
-              background: "var(--color-error)", color: "#fff",
-              fontSize: 13, fontWeight: 600, cursor: "pointer",
-            }}
-            onClick={handleDeleteClick}
-            disabled={busy}
-          >
-            {busy ? "삭제 중..." : reconfirm ? "네, 삭제합니다" : `삭제 (${items.length}개)`}
-          </button>
+          {immediateItems.length > 0 && (
+            <button
+              type="button"
+              style={deleteBtnStyleDialog}
+              onClick={() => onDelete(immediateItems.map((it) => it.tblId))}
+              disabled={busy}
+            >
+              {busy ? "삭제 중..." : `삭제 (${immediateItems.length}개)`}
+            </button>
+          )}
         </div>
       </div>
     </div>

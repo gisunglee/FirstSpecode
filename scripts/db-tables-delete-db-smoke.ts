@@ -12,6 +12,10 @@
  *   4. PUT [tableId] — 컬럼 제거 시 그 컬럼의 col_mapping도 함께 정리되는지
  *   5. DELETE bulk — 여러 테이블을 한 번에, 허용/거부가 섞여도 부분 성공하는지
  *   6. GET usage — 매핑된 테이블의 사용처(함수명)가 제대로 조회되는지
+ *   7. PATCH [tableId] — 상태만 데디케이트로 변경, 컬럼은 전혀 건드리지 않는지
+ *   8. PATCH [tableId] — 삭제와 동일 권한 게이트(매트릭스 또는 담당자)를 쓰는지
+ *   9. POST db-tables — 신규 등록 시 고른 상태가 (컬럼 0개인 경우에도) 실제로 저장되는지
+ *  10. PATCH [tableId] — DEPRECATED 외 값은 거부(신규/기존 재분류는 PUT 전용)하는지
  */
 
 import assert from "node:assert/strict";
@@ -55,7 +59,7 @@ function pushTemporarySchema(): void {
 
 function req(
   pathname: string,
-  method: "GET" | "PUT" | "DELETE",
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   token: string,
   body?: Record<string, unknown>,
 ): NextRequest {
@@ -80,6 +84,7 @@ async function main(): Promise<void> {
     const routeTable = await import("../src/app/api/projects/[id]/db-tables/[tableId]/route");
     const routeUsage = await import("../src/app/api/projects/[id]/db-tables/[tableId]/usage/route");
     const routeBulk  = await import("../src/app/api/projects/[id]/db-tables/bulk/route");
+    const routeList  = await import("../src/app/api/projects/[id]/db-tables/route");
 
     // ── 시드: 프로젝트 + 멤버 2명 (OWNER / 권한 없는 MEMBER) ──────────────
     const project = await testDb.tbPjProject.create({ data: { prjct_nm: "스모크 테스트" } });
@@ -281,6 +286,76 @@ async function main(): Promise<void> {
     assert.equal(await testDb.tbDsDbTable.count({ where: { tbl_id: tableDevOwns.tbl_id } }), 0);
     assert.equal(await testDb.tbDsDbTable.count({ where: { tbl_id: tableDevNoAccess.tbl_id } }), 1);
     console.log("  [OK] DELETE bulk — 담당 테이블만 삭제되고 권한 없는 테이블은 부분 실패로 보고됨");
+
+    // ═══ 8. PATCH [tableId] — 상태만 데디케이트로 변경, 컬럼은 그대로 ═══
+    const tableForPatch = await testDb.tbDsDbTable.create({
+      data: { prjct_id: project.prjct_id, tbl_physcl_nm: "tb_smoke_patch" },
+    });
+    const patchCol = await testDb.tbDsDbTableColumn.create({
+      data: { tbl_id: tableForPatch.tbl_id, col_physcl_nm: "untouched_col" },
+    });
+
+    // dev(권한 없음, 담당자 아님)가 시도하면 삭제와 동일하게 403
+    const patchDeniedRes = await routeTable.PATCH(
+      req(`/api/projects/${project.prjct_id}/db-tables/${tableForPatch.tbl_id}`, "PATCH", devToken, {
+        tblSttusCode: "DEPRECATED",
+      }),
+      { params: Promise.resolve({ id: project.prjct_id, tableId: tableForPatch.tbl_id }) },
+    );
+    assert.equal(patchDeniedRes.status, 403);
+    assert.equal(
+      (await testDb.tbDsDbTable.findUniqueOrThrow({ where: { tbl_id: tableForPatch.tbl_id } })).tbl_sttus_code,
+      "EXISTING",
+      "권한 없는 상태 변경은 실제로 반영되면 안 됨",
+    );
+    console.log("  [OK] PATCH — 삭제와 동일 권한 게이트 사용 (권한 없는 사용자는 403)");
+
+    // owner가 데디케이트로 변경 — 컬럼/매핑은 전혀 건드리지 않아야 함
+    const patchRes = await routeTable.PATCH(
+      req(`/api/projects/${project.prjct_id}/db-tables/${tableForPatch.tbl_id}`, "PATCH", ownerToken, {
+        tblSttusCode: "DEPRECATED",
+      }),
+      { params: Promise.resolve({ id: project.prjct_id, tableId: tableForPatch.tbl_id }) },
+    );
+    assert.equal(patchRes.status, 200);
+    const patched = await testDb.tbDsDbTable.findUniqueOrThrow({ where: { tbl_id: tableForPatch.tbl_id } });
+    assert.equal(patched.tbl_sttus_code, "DEPRECATED");
+    assert.equal(
+      await testDb.tbDsDbTableColumn.count({ where: { col_id: patchCol.col_id } }),
+      1,
+      "PATCH는 상태 필드 하나만 바꿔야 함 — 컬럼이 지워지면 안 됨",
+    );
+    // 이력에도 남는지 (같은 recordRevision 경로 재사용 확인)
+    const patchRevisionCount = await testDb.tbDsDbTableRevision.count({
+      where: { tbl_id: tableForPatch.tbl_id, chg_type_code: "UPDATE" },
+    });
+    assert.ok(patchRevisionCount >= 1, "상태 변경도 리비전 이력에 남아야 함");
+    console.log("  [OK] PATCH — 상태만 바뀌고 컬럼은 그대로, 리비전 이력도 기록됨");
+
+    // ═══ 9. POST db-tables — 컬럼 0개로 등록해도 고른 상태가 저장되는지 ═══
+    // (신규 등록 폼에서 컬럼 없이 저장하면 상태 선택이 조용히 사라지던 버그 회귀 방지)
+    const createRes = await routeList.POST(
+      req(`/api/projects/${project.prjct_id}/db-tables`, "POST", ownerToken, {
+        tblPhysclNm: "tb_smoke_new_no_cols",
+        tblSttusCode: "NEW",
+      }),
+      { params: Promise.resolve({ id: project.prjct_id }) },
+    );
+    assert.equal(createRes.status, 201);
+    const createBody = await createRes.json();
+    const created = await testDb.tbDsDbTable.findUniqueOrThrow({ where: { tbl_id: createBody.data.tblId } });
+    assert.equal(created.tbl_sttus_code, "NEW", "컬럼 0개로 등록해도 고른 상태가 그대로 저장돼야 함");
+    console.log("  [OK] POST db-tables — 컬럼 없이 등록해도 상태 선택이 유실되지 않음");
+
+    // ═══ 10. PATCH [tableId] — DEPRECATED 외 값은 거부 (신규/기존 재분류는 PUT 전용) ═══
+    const patchRejectNewRes = await routeTable.PATCH(
+      req(`/api/projects/${project.prjct_id}/db-tables/${created.tbl_id}`, "PATCH", ownerToken, {
+        tblSttusCode: "NEW",
+      }),
+      { params: Promise.resolve({ id: project.prjct_id, tableId: created.tbl_id }) },
+    );
+    assert.equal(patchRejectNewRes.status, 400, "PATCH는 DEPRECATED 외 값을 거부해야 함 (재분류는 PUT 전용)");
+    console.log("  [OK] PATCH — DEPRECATED 외 상태값은 거부됨 (신규/기존 재분류는 PUT으로만)");
 
     console.log("DB_TABLES_DELETE_DB_SMOKE_OK");
   } finally {

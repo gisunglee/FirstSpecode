@@ -18,9 +18,10 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
 export type TableSnapshotFields = {
-  tbl_physcl_nm: string;
-  tbl_lgcl_nm:   string | null;
-  tbl_dc:        string | null;
+  tbl_physcl_nm:  string;
+  tbl_lgcl_nm:    string | null;
+  tbl_dc:         string | null;
+  tbl_sttus_code: string;
 };
 
 export type ColumnSnapshotFields = {
@@ -72,9 +73,10 @@ export async function captureTableSnapshot(
   const row = await db.tbDsDbTable.findUnique({
     where: { tbl_id: tblId },
     select: {
-      tbl_physcl_nm: true,
-      tbl_lgcl_nm:   true,
-      tbl_dc:        true,
+      tbl_physcl_nm:  true,
+      tbl_lgcl_nm:    true,
+      tbl_dc:         true,
+      tbl_sttus_code: true,
       columns: {
         orderBy: { sort_ordr: "asc" },
         select: {
@@ -93,9 +95,10 @@ export async function captureTableSnapshot(
 
   return {
     table: {
-      tbl_physcl_nm: row.tbl_physcl_nm,
-      tbl_lgcl_nm:   row.tbl_lgcl_nm,
-      tbl_dc:        row.tbl_dc,
+      tbl_physcl_nm:  row.tbl_physcl_nm,
+      tbl_lgcl_nm:    row.tbl_lgcl_nm,
+      tbl_dc:         row.tbl_dc,
+      tbl_sttus_code: row.tbl_sttus_code,
     },
     columns: row.columns,
   };
@@ -105,7 +108,7 @@ export async function captureTableSnapshot(
 
 // 테이블/컬럼의 비교 대상 필드 목록 — 필드 추가 시 여기만 고치면 됨
 const TABLE_FIELDS: Array<keyof TableSnapshotFields> = [
-  "tbl_physcl_nm", "tbl_lgcl_nm", "tbl_dc",
+  "tbl_physcl_nm", "tbl_lgcl_nm", "tbl_dc", "tbl_sttus_code",
 ];
 
 const COLUMN_FIELDS: Array<keyof Omit<ColumnSnapshotFields, "col_id">> = [

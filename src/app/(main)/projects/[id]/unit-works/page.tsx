@@ -89,6 +89,10 @@ function UnitWorksPageInner() {
   // URL 쿼리 ?reqId=xxx 로 초기화 (상세 페이지 브레드크럼에서 진입 시 해당 요구사항으로 자동 필터)
   const searchParams = useSearchParams();
   const [filterReqId, setFilterReqId] = useState(searchParams.get("reqId") ?? "");
+  // 단위업무 고정 — GNB 전역 상태. 목록 각 행의 핀 아이콘으로 바로 고정/해제 가능
+  const pinnedUnitWorkId    = useAppStore((s) => s.pinnedUnitWorkId);
+  const setPinnedUnitWork   = useAppStore((s) => s.setPinnedUnitWork);
+  const clearPinnedUnitWork = useAppStore((s) => s.clearPinnedUnitWork);
   // 담당자 필터 — 전역 appStore.myAssigneeMode 구독
   // GNB 토글과 양방향 바인딩 + URL ?assignedTo=me 진입 시 1회 state 반영
   const filterAssignedTo    = useAppStore((s) => s.myAssigneeMode);
@@ -664,18 +668,22 @@ function UnitWorksPageInner() {
                 {uw.sortOrder}
               </div>
 
-              {/* 요구사항 (클릭 → 요구사항 상세, 행 클릭과 분리). 좁은 폭에서는 ellipsis */}
+              {/* 요구사항 (클릭 → 요구사항 상세, 행 클릭과 분리). 같은 요구사항이 연속되면 첫 행에만 표시(2026-08-27).
+                  드래그 순서 변경은 items 배열 데이터만 갱신하고 이 idx-1 비교는 매 렌더마다 새로 계산되므로
+                  순서를 바꿔도 그룹 첫 행 판정이 항상 최신 순서 기준으로 다시 맞춰짐 — 드래그와 별개 로직. */}
               <div
                 onClick={(e) => e.stopPropagation()}
                 style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                 title={uw.reqName}
               >
-                <button
-                  onClick={() => router.push(`/projects/${projectId}/requirements/${uw.reqId}`)}
-                  style={linkBtnStyle}
-                >
-                  {uw.reqName}
-                </button>
+                {items[idx - 1]?.reqId === uw.reqId ? null : (
+                  <button
+                    onClick={() => router.push(`/projects/${projectId}/requirements/${uw.reqId}`)}
+                    style={linkBtnStyle}
+                  >
+                    {uw.reqName}
+                  </button>
+                )}
               </div>
 
               {/* 단위업무명 — flex 자식 중 name 만 ellipsis(min-width:0).
@@ -740,6 +748,21 @@ function UnitWorksPageInner() {
                         <PencilIcon />
                       </button>
                     )}
+                    {/* 단위업무 고정 — GNB 전역 상태 토글. 화면/영역/기능 목록이 이 단위업무로 제한됨 */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (pinnedUnitWorkId === uw.unitWorkId) clearPinnedUnitWork();
+                        else setPinnedUnitWork(uw.unitWorkId, uw.name);
+                      }}
+                      title={pinnedUnitWorkId === uw.unitWorkId ? "단위업무 고정 해제" : "이 단위업무로 고정 — 화면/영역/기능 목록을 여기로 제한"}
+                      style={{
+                        ...editIconBtnStyle,
+                        color: pinnedUnitWorkId === uw.unitWorkId ? "var(--color-brand)" : "var(--color-text-tertiary)",
+                      }}
+                    >
+                      📌
+                    </button>
                   </>
                 )}
               </div>
@@ -806,9 +829,9 @@ function UnitWorksPageInner() {
                   <button
                     onClick={() => router.push(`/projects/${projectId}/screens?unitWorkId=${uw.unitWorkId}`)}
                     title="이 단위업무의 화면 목록으로 이동"
-                    style={{ ...linkBtnStyle, fontSize: 13, textAlign: "center" }}
+                    style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer" }}
                   >
-                    {uw.screenCount}
+                    <span className="sp-badge" style={countBadgeStyle}>{uw.screenCount}</span>
                   </button>
                 ) : (
                   <span style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>{uw.screenCount}</span>
@@ -1002,6 +1025,14 @@ function implStatusBadgeStyle(status: string): React.CSSProperties {
     whiteSpace: "nowrap",
   };
 }
+
+// 클릭 가능한 하위 항목 수(화면수/영역수/기능수) 배지 — 숫자만 있으면 클릭 가능 여부가
+// 눈에 안 띈다는 피드백으로 회색 배지를 둘러서 "클릭할 수 있는 값"임을 표시(2026-08-27)
+const countBadgeStyle: React.CSSProperties = {
+  display: "inline-block", padding: "2px 8px", borderRadius: 10,
+  fontSize: 12, fontWeight: 600,
+  background: "var(--color-bg-muted)", color: "var(--color-text-secondary)",
+};
 
 // 요청 일시 — MM-DD HH:mm 단축 포맷
 function formatRequestedAt(iso: string): string {

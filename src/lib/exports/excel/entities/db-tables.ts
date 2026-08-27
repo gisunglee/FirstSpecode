@@ -7,6 +7,7 @@ import {
   fetchProjectDbTables,
   type DbTableListItem,
 } from "@/lib/exports/db-tables-data";
+import { DB_TABLE_STATUS_LABEL, isDbTableStatusCode } from "@/lib/dbTableStatus";
 
 const IO_PROFILE_LABEL: Record<string, string> = {
   READ_HEAVY:  "조회 위주",
@@ -32,6 +33,8 @@ const columns: ExcelColumn<DbTableListItem>[] = [
   { key: "tblDc",        header: "설명",         width: 40 },
   { key: "assignee",     header: "담당자",       width: 16,
     format: (r) => r.assignMemberName ?? "" },
+  { key: "tblSttusCode", header: "상태",         width: 12,
+    format: (r) => isDbTableStatusCode(r.tblSttusCode) ? DB_TABLE_STATUS_LABEL[r.tblSttusCode] : r.tblSttusCode },
   { key: "columnCount",  header: "컬럼 수",      width: 10 },
   { key: "functionCount", header: "사용 기능 수", width: 12 },
   { key: "usedColCount", header: "사용 컬럼 수", width: 12 },

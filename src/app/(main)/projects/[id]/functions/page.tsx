@@ -25,6 +25,7 @@ import { authFetch } from "@/lib/authFetch";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import { usePermissions } from "@/hooks/useMyRole";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
+import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -96,6 +97,9 @@ function FunctionsPageInner() {
   const [screenFilter, setScreenFilter] = useState("");
   const [areaFilter, setAreaFilter] = useState("");
   const [memberFilter, setMemberFilter] = useState("");
+  // GNB "단위업무 고정" — 고정되어 있으면 페이지 자체 드롭다운보다 우선 적용되고 드롭다운은 숨김
+  const pinnedUnitWorkId = useAppStore((s) => s.pinnedUnitWorkId);
+  const effectiveUnitWorkFilter = pinnedUnitWorkId || unitWorkFilter;
 
   function handleUnitWorkChange(val: string) {
     setUnitWorkFilter(val);
@@ -142,7 +146,7 @@ function FunctionsPageInner() {
   const screenOptions = Array.from(
     new Map(
       items
-        .filter((f) => f.screenId && (!unitWorkFilter || f.unitWorkId === unitWorkFilter))
+        .filter((f) => f.screenId && (!effectiveUnitWorkFilter || f.unitWorkId === effectiveUnitWorkFilter))
         .map((f) => [f.screenId, `${f.screenDisplayId ?? ""} ${f.screenName}`.trim()])
     ).entries()
   ).map(([id, name]) => ({ id: id!, name }));
@@ -168,7 +172,7 @@ function FunctionsPageInner() {
   // 클라이언트 필터링
   const filteredItems = items.filter(
     (f) =>
-      (!unitWorkFilter || f.unitWorkId === unitWorkFilter) &&
+      (!effectiveUnitWorkFilter || f.unitWorkId === effectiveUnitWorkFilter) &&
       (!screenFilter || f.screenId === screenFilter) &&
       (!areaFilter || f.areaId === areaFilter) &&
       (!memberFilter || f.assignMemberId === memberFilter)
@@ -348,16 +352,24 @@ function FunctionsPageInner() {
           총 {filteredItems.length}건{filteredItems.length !== items.length && ` (전체 ${items.length}건)`}
         </span>
         <div style={{ flex: 1 }} />
-        <select
-          value={unitWorkFilter}
-          onChange={(e) => handleUnitWorkChange(e.target.value)}
-          style={filterSelectStyle}
-        >
-          <option value="">단위업무 전체</option>
-          {unitWorkOptions.map((o) => (
-            <option key={o.id} value={o.id}>{o.name}</option>
-          ))}
-        </select>
+        {/* GNB에서 단위업무가 고정되어 있으면 이 드롭다운은 숨김 — 고정을 여기서 다시
+            바꿀 수 있으면 "고정"의 의미가 흐려짐. 해제는 GNB 칩의 ×로만. */}
+        {pinnedUnitWorkId ? (
+          <span style={{ fontSize: 12, color: "var(--color-text-tertiary)", whiteSpace: "nowrap" }}>
+            🔒 GNB에서 단위업무 고정됨
+          </span>
+        ) : (
+          <select
+            value={unitWorkFilter}
+            onChange={(e) => handleUnitWorkChange(e.target.value)}
+            style={filterSelectStyle}
+          >
+            <option value="">단위업무 전체</option>
+            {unitWorkOptions.map((o) => (
+              <option key={o.id} value={o.id}>{o.name}</option>
+            ))}
+          </select>
+        )}
         <select
           value={screenFilter}
           onChange={(e) => { setScreenFilter(e.target.value); setAreaFilter(""); }}

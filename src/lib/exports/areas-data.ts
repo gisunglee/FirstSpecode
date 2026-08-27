@@ -38,13 +38,17 @@ export type AreaListItem = {
 export async function fetchProjectAreas(opts: {
   projectId: string;
   screenId?: string;
+  unitWorkId?: string;
 }): Promise<AreaListItem[]> {
-  const { projectId, screenId } = opts;
+  const { projectId, screenId, unitWorkId } = opts;
 
   const areas = await prisma.tbDsArea.findMany({
     where: {
       prjct_id: projectId,
       ...(screenId ? { scrn_id: screenId } : {}),
+      // 화면→단위업무 관계로 필터 — 이미 화면명/단위업무명 표시를 위해 조인해두었던
+      // 관계를 그대로 재사용(추가 조인 없음)
+      ...(unitWorkId ? { screen: { unitWork: { unit_work_id: unitWorkId } } } : {}),
     },
     orderBy: [
       { screen: { unitWork: { sort_ordr: "asc" } } },

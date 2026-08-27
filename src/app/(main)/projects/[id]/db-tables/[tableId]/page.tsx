@@ -31,6 +31,7 @@ import AddDdlDialog from "@/components/db-table/AddDdlDialog";
 import { LgclNameWarnDialog, DeleteTableConfirmDialog } from "@/components/db-table/DbTableDialogs";
 // ParsedCol 타입만 사용 (파싱 자체는 AddDdlDialog 내부가 담당)
 import { type ParsedCol } from "@/lib/ddlParser";
+import { DB_TABLE_STATUS_CODES, DB_TABLE_STATUS_LABEL, isDbTableStatusCode, type DbTableStatusCode } from "@/lib/dbTableStatus";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,7 @@ type DbTableDetail = {
   // 담당자 — 서버 join으로 내려옴
   assignMemberId: string | null;
   assignMemberName: string | null;
+  tblSttusCode: string;
   columns: {
     colId: string;
     colPhysclNm: string;
@@ -117,6 +119,8 @@ function DbTableDetailPageInner() {
   const [dc, setDc] = useState("");
   // 담당자 — "" = 미지정 (서버에서 null 처리)
   const [assignMemberId, setAssignMemberId] = useState("");
+  // 상태 — 신규/기존/데디케이트. 신규 등록 폼에서는 사람이 아직 안 고른 상태이므로 중립값(기존)에서 시작
+  const [sttusCode, setSttusCode] = useState<DbTableStatusCode>("EXISTING");
   // 담당자 변경 이력 팝업 상태 — 다른 엔티티와 동일한 공용 AssigneeHistoryDialog 사용
   const [assigneeHistoryOpen, setAssigneeHistoryOpen] = useState(false);
   const [cols, setCols] = useState<ColDraft[]>([]);
@@ -173,6 +177,7 @@ function DbTableDetailPageInner() {
       setLgclNm(data.tblLgclNm);
       setDc(data.tblDc);
       setAssignMemberId(data.assignMemberId ?? "");
+      setSttusCode(isDbTableStatusCode(data.tblSttusCode) ? data.tblSttusCode : "EXISTING");
       setCols(data.columns.map((c) => ({
         _key: nextKey(),
         colId: c.colId,
@@ -198,14 +203,17 @@ function DbTableDetailPageInner() {
       if (isNew) {
         const res = await authFetch<{ data: { tblId: string } }>(
           `/api/projects/${projectId}/db-tables`,
-          { method: "POST", body: JSON.stringify({ tblPhysclNm: physNm, tblLgclNm: lgclNm, tblDc: dc, assignMemberId }) }
+          {
+            method: "POST",
+            body: JSON.stringify({ tblPhysclNm: physNm, tblLgclNm: lgclNm, tblDc: dc, assignMemberId, tblSttusCode: sttusCode }),
+          }
         );
         const newTblId = res.data.tblId;
         if (cols.length > 0) {
           await authFetch(`/api/projects/${projectId}/db-tables/${newTblId}`, {
             method: "PUT",
             body: JSON.stringify({
-              tblPhysclNm: physNm, tblLgclNm: lgclNm, tblDc: dc, assignMemberId,
+              tblPhysclNm: physNm, tblLgclNm: lgclNm, tblDc: dc, assignMemberId, tblSttusCode: sttusCode,
               columns: cols.map((c) => ({
                 colPhysclNm: c.colPhysclNm, colLgclNm: c.colLgclNm,
                 dataTyNm: c.dataTyNm, colDc: c.colDc,
@@ -219,7 +227,7 @@ function DbTableDetailPageInner() {
         await authFetch(`/api/projects/${projectId}/db-tables/${tableId}`, {
           method: "PUT",
           body: JSON.stringify({
-            tblPhysclNm: physNm, tblLgclNm: lgclNm, tblDc: dc, assignMemberId,
+            tblPhysclNm: physNm, tblLgclNm: lgclNm, tblDc: dc, assignMemberId, tblSttusCode: sttusCode,
             columns: cols.map((c) => ({
               colId: c.colId, colPhysclNm: c.colPhysclNm, colLgclNm: c.colLgclNm,
               dataTyNm: c.dataTyNm, colDc: c.colDc,
@@ -336,6 +344,23 @@ function DbTableDetailPageInner() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  // "완전 삭제" 대신 상태만 데디케이트로 바꾸는 경량 액션 — 컬럼/매핑은 그대로 둔다
+  const deprecateMutation = useMutation({
+    mutationFn: () =>
+      authFetch(`/api/projects/${projectId}/db-tables/${tableId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ tblSttusCode: "DEPRECATED" }),
+      }),
+    onSuccess: () => {
+      setSttusCode("DEPRECATED");
+      setDeleteConfirm(false);
+      qc.invalidateQueries({ queryKey: ["db-tables", projectId] });
+      qc.invalidateQueries({ queryKey: ["db-table", projectId, tableId] });
+      toast.success("데디케이트 상태로 변경되었습니다.");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   if (!isNew && isLoading) {
     return <div style={{ padding: "40px 32px", color: "#888" }}>로딩 중...</div>;
   }
@@ -399,8 +424,8 @@ function DbTableDetailPageInner() {
               </div>
             )}
           </div>
-          {/* 3컬럼: 물리 테이블명 / 논리 테이블명 / 담당자 */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px 20px" }}>
+          {/* 4컬럼: 물리 테이블명 / 논리 테이블명 / 담당자 / 상태 */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px 20px" }}>
             <div style={formGroupStyle}>
               <label style={labelStyle}>물리 테이블명 *</label>
               <input
@@ -454,6 +479,22 @@ function DbTableDetailPageInner() {
                       {m.name ?? m.email}
                       {m.memberId === myMemberId ? " (나)" : ""}
                     </option>
+                  ))}
+                </select>
+                <span className="sp-select-arrow"><SelectChevron /></span>
+              </div>
+            </div>
+            {/* 상태 — 신규/기존/데디케이트, 전부 수동 지정 (자동 분류 없음) */}
+            <div style={formGroupStyle}>
+              <label style={labelStyle}>상태</label>
+              <div className="sp-select-wrap">
+                <select
+                  value={sttusCode}
+                  onChange={(e) => setSttusCode(e.target.value as DbTableStatusCode)}
+                  className="sp-input"
+                >
+                  {DB_TABLE_STATUS_CODES.map((code) => (
+                    <option key={code} value={code}>{DB_TABLE_STATUS_LABEL[code]}</option>
                   ))}
                 </select>
                 <span className="sp-select-arrow"><SelectChevron /></span>
@@ -789,9 +830,12 @@ function DbTableDetailPageInner() {
           areaCount: usageData.summary.areaCount,
           screenCount: usageData.summary.screenCount,
         } : undefined}
+        isDeprecated={sttusCode === "DEPRECATED"}
         onClose={() => setDeleteConfirm(false)}
-        onConfirm={() => deleteMutation.mutate()}
-        busy={deleteMutation.isPending}
+        onDeprecate={() => deprecateMutation.mutate()}
+        onDelete={() => deleteMutation.mutate()}
+        deleting={deleteMutation.isPending}
+        deprecating={deprecateMutation.isPending}
       />
     </div>
   );

@@ -24,6 +24,7 @@ import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import { type AiTaskStatus, AI_TASK_STATUS_LABEL, AI_TASK_STATUS_BADGE } from "@/constants/codes";
 import { usePermissions } from "@/hooks/useMyRole";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
+import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,9 @@ function AreasPageInner() {
   const [screenFilter, setScreenFilter] = useState(searchParams.get("screenId") ?? "");
   // 단위업무 필터
   const [unitWorkFilter, setUnitWorkFilter] = useState("");
+  // GNB "단위업무 고정" — 고정되어 있으면 페이지 자체 드롭다운보다 우선 적용되고 드롭다운은 숨김
+  const pinnedUnitWorkId = useAppStore((s) => s.pinnedUnitWorkId);
+  const effectiveUnitWorkFilter = pinnedUnitWorkId || unitWorkFilter;
   // 영역명 텍스트 검색 — 입력값과 실제 적용값을 분리해 Enter를 눌러야 검색이 반영되도록 함
   const [nameSearchInput, setNameSearchInput] = useState("");
   const [nameSearch, setNameSearch] = useState("");
@@ -118,8 +122,15 @@ function AreasPageInner() {
   // 필터 적용 — 화면/단위업무 드롭다운 필터 + 영역명 텍스트 검색(대소문자 무시)
   const items = allItems
     .filter((a) => (screenFilter ? a.screenId === screenFilter : true))
-    .filter((a) => (unitWorkFilter ? a.unitWorkId === unitWorkFilter : true))
+    .filter((a) => (effectiveUnitWorkFilter ? a.unitWorkId === effectiveUnitWorkFilter : true))
     .filter((a) => (nameSearch ? a.name.toLowerCase().includes(nameSearch.toLowerCase()) : true));
+
+  // 드래그 정렬 안전장치 — 영역명 검색이 걸려 있으면 같은 화면의 영역 일부만 보이는 상태가
+  // 될 수 있어(예: 화면 하나의 영역 5개 중 2개만 검색어에 매칭), 이때 드래그로 순서를 바꾸면
+  // 화면에 안 보이는 나머지 영역들의 sortOrder와 충돌한다. 화면/단위업무 드롭다운 필터는 화면
+  // 단위로 통째로 보이거나 안 보이거나이므로 안전하지만, 텍스트 검색은 부분 매칭이라 위험 —
+  // 검색어가 있는 동안은 드래그 자체를 막는다.
+  const dragDisabled = nameSearch !== "";
 
   // ── 순서 변경 뮤테이션 ──────────────────────────────────────────────────────
   const sortMutation = useMutation({
@@ -276,16 +287,24 @@ function AreasPageInner() {
             placeholder="영역명 검색 (Enter)"
             style={nameSearchInputStyle}
           />
-          <select
-            value={unitWorkFilter}
-            onChange={(e) => setUnitWorkFilter(e.target.value)}
-            style={filterSelectStyle}
-          >
-            <option value="">단위업무 전체</option>
-            {unitWorkOptions.map((opt) => (
-              <option key={opt.id} value={opt.id}>{opt.name}</option>
-            ))}
-          </select>
+          {/* GNB에서 단위업무가 고정되어 있으면 이 드롭다운은 숨김 — 고정을 여기서 다시
+              바꿀 수 있으면 "고정"의 의미가 흐려짐. 해제는 GNB 칩의 ×로만. */}
+          {pinnedUnitWorkId ? (
+            <span style={{ fontSize: 12, color: "var(--color-text-tertiary)", whiteSpace: "nowrap" }}>
+              🔒 GNB에서 단위업무 고정됨
+            </span>
+          ) : (
+            <select
+              value={unitWorkFilter}
+              onChange={(e) => setUnitWorkFilter(e.target.value)}
+              style={filterSelectStyle}
+            >
+              <option value="">단위업무 전체</option>
+              {unitWorkOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.name}</option>
+              ))}
+            </select>
+          )}
           <select
             value={screenFilter}
             onChange={(e) => setScreenFilter(e.target.value)}
@@ -326,7 +345,7 @@ function AreasPageInner() {
             items.map((area, idx) => (
               <div
                 key={area.areaId}
-                draggable={editingNameId !== area.areaId}
+                draggable={!dragDisabled && editingNameId !== area.areaId}
                 onDragStart={() => handleDragStart(idx)}
                 onDragEnter={() => handleDragEnter(idx)}
                 onDragEnd={handleDragEnd}
@@ -342,8 +361,17 @@ function AreasPageInner() {
                   paddingLeft: 13,
                 }}
               >
-                {/* 드래그 핸들 */}
-                <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>☰</div>
+                {/* 드래그 핸들 — 영역명 검색 중엔 그룹 일부만 보여서 순서 저장 시 sortOrder가
+                    꼬일 수 있으므로(dragDisabled) 흐리게 표시하고 grab 커서를 뗀다 */}
+                <div
+                  title={dragDisabled ? "검색 중에는 순서를 변경할 수 없습니다" : undefined}
+                  style={{
+                    cursor: dragDisabled ? "not-allowed" : "grab",
+                    color: dragDisabled ? "var(--color-text-tertiary)" : "#aaa",
+                    opacity: dragDisabled ? 0.4 : 1,
+                    userSelect: "none", paddingLeft: 4,
+                  }}
+                >☰</div>
 
                 {/* 단위업무명 — 같은 unitWorkId이면 첫 행에만 표시, 클릭 시 단위업무 상세로 이동 */}
                 <div
@@ -457,9 +485,9 @@ function AreasPageInner() {
                     <button
                       onClick={() => router.push(`/projects/${projectId}/functions?areaId=${area.areaId}`)}
                       title="이 영역의 기능 목록으로 이동"
-                      style={{ ...linkBtnStyle, fontSize: 13, textAlign: "center" }}
+                      style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer" }}
                     >
-                      {area.functionCount}
+                      <span className="sp-badge" style={countBadgeStyle}>{area.functionCount}</span>
                     </button>
                   ) : (
                     <span style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>{area.functionCount}</span>
@@ -699,6 +727,14 @@ function implStatusBadgeStyle(status: string): React.CSSProperties {
     whiteSpace: "nowrap",
   };
 }
+
+// 클릭 가능한 하위 항목 수(기능수) 배지 — 숫자만 있으면 클릭 가능 여부가 눈에 안 띈다는
+// 피드백으로 회색 배지를 둘러서 "클릭할 수 있는 값"임을 표시(2026-08-27)
+const countBadgeStyle: React.CSSProperties = {
+  display: "inline-block", padding: "2px 8px", borderRadius: 10,
+  fontSize: 12, fontWeight: 600,
+  background: "var(--color-bg-muted)", color: "var(--color-text-secondary)",
+};
 
 function formatRequestedAt(iso: string): string {
   const d = new Date(iso);

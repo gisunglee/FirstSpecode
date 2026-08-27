@@ -17,7 +17,8 @@
  *   [설계-트리]    get_design_tree (배치 조회 — 단위업무 ID 1~20개 필수, "전체 조회" 미지원)
  *   [설계-표준양식] get_design_template (요구사항/단위업무/화면/영역/기능 description 작성 표준 양식 —
  *                    설계 내용을 논의하거나 description을 작성하기 전에 반드시 먼저 호출할 것)
- *   [DB]           list_db_tables, get_db_table, create_db_table, update_db_table, get_db_table_usage, get_db_column_usage
+ *   [DB]           list_db_tables, get_db_table, create_db_table, update_db_table, deprecate_db_table,
+ *                    get_db_table_usage, get_db_column_usage
  *   [공통코드/기준정보] list_code_groups, create_code_group, list_codes, create_code, update_code,
  *                    list_standard_info, create_standard_info (삭제는 등록자/PM/PL/관리자만
  *                    가능한 동적 조건이라 웹 UI 전용 — MCP엔 미등록. 그룹 수정 도구는 없음)
@@ -55,6 +56,7 @@ import { z } from "zod";
 import type { SpecodeFetch } from "@/lib/mcp/api-client";
 import { getWorkerCommandFiles, WORKER_COMMAND_SETUP_GUIDE } from "@/lib/mcp/workerCommandFiles";
 import { syncResultSubmissionSchema } from "@/lib/spec-sync/contracts";
+import { DB_TABLE_STATUS_CODES } from "@/lib/dbTableStatus";
 
 // ─── 공통 헬퍼 ──────────────────────────────────────────────────
 
@@ -1049,6 +1051,9 @@ export function registerTools(
       tblLgclNm: z.string().optional().describe("논리 테이블명"),
       tblDc: z.string().optional().describe("테이블 설명"),
       assignMemberId: z.string().optional().describe("담당자 회원 ID"),
+      tblSttusCode: z.enum(DB_TABLE_STATUS_CODES).optional()
+        .describe("상태 (NEW=신규/EXISTING=기존/DEPRECATED=데디케이트, 전부 수동 지정). " +
+          "데디케이트로만 바꿀 거면 컬럼 걱정 없는 deprecate_db_table을 대신 쓰세요"),
       columns: z
         .array(
           z.object({
@@ -1067,6 +1072,29 @@ export function registerTools(
         const data = await specodeFetch(
           `/api/projects/${projectId}/db-tables/${tableId}`,
           { method: "PUT", body: JSON.stringify(body) }
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  server.tool(
+    "deprecate_db_table",
+    "DB 테이블을 '데디케이트'(폐기 예정) 상태로 표시합니다. update_db_table과 달리 컬럼은 " +
+      "전혀 건드리지 않는 경량 액션 — 컬럼 목록을 몰라도, 또는 실수로 빠뜨려도 안전합니다. " +
+      "완전 삭제가 아니라 '이제 안 쓴다'는 표시만 남기며, 목록에서 흐리게 표시됩니다. " +
+      "되돌리거나 신규/기존으로 재분류하려면 update_db_table을 쓰세요",
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+      tableId:   z.string().describe("테이블 ID"),
+    },
+    async ({ projectId, tableId }) => {
+      try {
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/db-tables/${tableId}`,
+          { method: "PATCH", body: JSON.stringify({ tblSttusCode: "DEPRECATED" }) }
         );
         return textResult(data);
       } catch (err) {

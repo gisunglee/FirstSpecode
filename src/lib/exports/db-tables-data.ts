@@ -10,6 +10,7 @@ export type DbTableListItem = {
   tblPhysclNm:      string;
   tblLgclNm:        string;
   tblDc:            string;
+  tblSttusCode:     string;
   creatDt:          string;
   mdfcnDt:          string | null;
   assignMemberId:   string | null;
@@ -63,6 +64,7 @@ export async function fetchProjectDbTables(opts: {
       tblPhysclNm:      t.tbl_physcl_nm,
       tblLgclNm:        t.tbl_lgcl_nm  ?? "",
       tblDc:            t.tbl_dc       ?? "",
+      tblSttusCode:     t.tbl_sttus_code,
       creatDt:          t.creat_dt.toISOString(),
       mdfcnDt:          t.mdfcn_dt?.toISOString() ?? null,
       assignMemberId:   t.asign_mber_id ?? null,

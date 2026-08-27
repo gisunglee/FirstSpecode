@@ -19,7 +19,7 @@ import { useAppStore } from "@/store/appStore";
 import DdlBulkImportDialog from "@/components/ui/DdlBulkImportDialog";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 // 매핑 인사이트 Phase 2 — IO 프로필 아이콘, 커버리지 텍스트 배지
-import { IoProfileIcon, CoverageText } from "@/components/db-table/TableInsightBadges";
+import { IoProfileIcon, CoverageText, DbTableStatusBadge } from "@/components/db-table/TableInsightBadges";
 import type { IoProfile } from "@/lib/dbTableUsage";
 import { BulkDeleteTableConfirmDialog, type BulkDeleteItem } from "@/components/db-table/DbTableDialogs";
 import type { TableUsageResponse } from "@/components/db-table/TableUsageSection";
@@ -31,6 +31,8 @@ type DbTableRow = {
   tblPhysclNm: string;
   tblLgclNm: string;
   tblDc: string;
+  // 신규/기존/데디케이트 — 전부 수동 지정
+  tblSttusCode: string;
   creatDt: string;
   // 수정일 — 아직 수정된 적 없으면 null (서버가 mdfcn_dt를 내려줌)
   mdfcnDt: string | null;
@@ -169,7 +171,10 @@ function DbTablesPageInner() {
       const { deleted, failed } = res.data;
       qc.invalidateQueries({ queryKey: ["db-tables", projectId] });
       setDeleteDialogOpen(false);
-      setSelectedIds(new Set());
+      // 삭제된 것만 선택 해제 — 개별 확인이 필요해 건너뛴 항목은 계속 체크된 채로 남겨서
+      // 사용자가 어떤 걸 마저 처리해야 하는지 목록에서 바로 알 수 있게 함
+      const deletedIds = new Set(deleted.map((d) => d.tblId));
+      setSelectedIds((prev) => new Set([...prev].filter((id) => !deletedIds.has(id))));
       if (deleted.length > 0) toast.success(`테이블 ${deleted.length}개가 삭제되었습니다.`);
       if (failed.length > 0) {
         toast.error(
@@ -254,10 +259,11 @@ function DbTablesPageInner() {
       );
       setDeleteItems(
         targets.map((t, i) => ({
-          tblId:       t.tblId,
-          tblPhysclNm: t.tblPhysclNm,
-          colCount:    t.columnCount,
-          usedBy:      results[i],
+          tblId:        t.tblId,
+          tblPhysclNm:  t.tblPhysclNm,
+          colCount:     t.columnCount,
+          isDeprecated: t.tblSttusCode === "DEPRECATED",
+          usedBy:       results[i],
         }))
       );
     } finally {
@@ -394,6 +400,7 @@ function DbTablesPageInner() {
             <span>논리 테이블명</span>
             <span>설명</span>
             <span>담당자</span>
+            <span style={{ textAlign: "center" }} title="신규/기존/데디케이트 — 전부 수동 지정">상태</span>
             <span style={{ textAlign: "center" }}>컬럼 수</span>
             {/* Phase 2 — 컬럼 활용률 */}
             <span style={{ textAlign: "center" }} title="매핑된 컬럼 비율 (usedColCount / columnCount)">
@@ -436,8 +443,9 @@ function DbTablesPageInner() {
                 placeholder="설명 (선택)"
                 style={inlineInputStyle}
               />
-              {/* 담당자 / 컬럼수 / 활용률 / 기능 연결 / IO / 등록일 자리 — 인라인 등록 시에는 모두 비움
-                  (신규 테이블은 매핑이 없으므로 인사이트 값은 모두 기본값) */}
+              {/* 담당자 / 상태 / 컬럼수 / 활용률 / 기능 연결 / IO / 등록일 자리 — 인라인 등록 시에는 모두 비움
+                  (신규 테이블은 매핑이 없으므로 인사이트 값은 모두 기본값, 상태는 저장 후 상세에서 지정) */}
+              <div />
               <div />
               <div />
               <div />
@@ -477,6 +485,9 @@ function DbTablesPageInner() {
                   ...dataRowStyle,
                   borderTop: idx === 0 && !creating ? "none" : "1px solid var(--color-border)",
                   cursor: "pointer",
+                  // 데디케이트(폐기 예정) 테이블은 목록에서 지우지 않고 흐리게 남겨 둔다 —
+                  // 존재는 계속 보이되, 더 이상 정상 취급하지 않는다는 걸 시각적으로 구분
+                  opacity: row.tblSttusCode === "DEPRECATED" ? 0.55 : 1,
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-table-hover)")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "var(--color-bg-card)")}
@@ -492,8 +503,12 @@ function DbTablesPageInner() {
                 />
 
                 {/* 물리명 — AI 태스크 페이지 기준에 맞춰 파랑/굵게/monospace 제거,
-                    다른 데이터 셀과 동일한 13px primary 일반 텍스트로 통일 */}
-                <span style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
+                    다른 데이터 셀과 동일한 13px primary 일반 텍스트로 통일.
+                    데디케이트 테이블은 이름에 취소선을 그어 "정리 대상"임을 표시 */}
+                <span style={{
+                  fontSize: 13, color: "var(--color-text-primary)",
+                  textDecoration: row.tblSttusCode === "DEPRECATED" ? "line-through" : "none",
+                }}>
                   {row.tblPhysclNm}
                 </span>
 
@@ -517,6 +532,11 @@ function DbTablesPageInner() {
                   title={row.assignMemberName ?? undefined}
                 >
                   {row.assignMemberName ?? "-"}
+                </span>
+
+                {/* 상태 배지 — 신규/기존/데디케이트 */}
+                <span style={{ textAlign: "center" }}>
+                  <DbTableStatusBadge code={row.tblSttusCode} />
                 </span>
 
                 {/* 컬럼 수 */}
@@ -583,7 +603,7 @@ function DbTablesPageInner() {
         projectId={projectId}
         items={deleteItems}
         onClose={() => setDeleteDialogOpen(false)}
-        onConfirm={() => bulkDeleteMutation.mutate([...selectedIds])}
+        onDelete={(ids) => bulkDeleteMutation.mutate(ids)}
         busy={bulkDeleteMutation.isPending}
       />
     </div>
@@ -592,12 +612,12 @@ function DbTablesPageInner() {
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-// 체크박스 / 물리 / 논리 / 설명 / 담당자 / 컬럼수 / 활용률 / 기능연결 / IO / 등록·수정일
-// 설명(1fr)이 남는 공간을 모두 흡수하므로, 뒤 6개 고정폭 컬럼을 실제 표시 내용(숫자·짧은
+// 체크박스 / 물리 / 논리 / 설명 / 담당자 / 상태 / 컬럼수 / 활용률 / 기능연결 / IO / 등록·수정일
+// 설명(1fr)이 남는 공간을 모두 흡수하므로, 뒤 7개 고정폭 컬럼을 실제 표시 내용(숫자·짧은
 // 배지·YYYY-MM-DD)에 딱 맞게 타이트하게 줄이면 그만큼이 자동으로 설명 폭에 더해진다(2026-07-28).
 // 물리/논리 테이블명: 긴 식별자(tb_ai_design_template 등)와 한글 논리명에 여유를 주기 위해 +20% 확장
 const GRID =
-  "20px minmax(192px,264px) minmax(144px,216px) 1fr 52px 48px 84px 48px 36px 82px";
+  "20px minmax(192px,264px) minmax(144px,216px) 1fr 52px 64px 48px 84px 48px 36px 82px";
 
 const headerRowStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID,

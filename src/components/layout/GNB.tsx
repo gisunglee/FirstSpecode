@@ -52,6 +52,11 @@ export default function GNB() {
   const myAssigneeMode      = useAppStore((s) => s.myAssigneeMode);
   const setMyAssigneeMode   = useAppStore((s) => s.setMyAssigneeMode);
   const setHasLoadedProfile = useAppStore((s) => s.setHasLoadedProfile);
+  // 전역 "단위업무 고정" — 세션 한정(persist 안 함). 화면/영역/기능 목록에 적용
+  const pinnedUnitWorkId    = useAppStore((s) => s.pinnedUnitWorkId);
+  const pinnedUnitWorkName  = useAppStore((s) => s.pinnedUnitWorkName);
+  const setPinnedUnitWork   = useAppStore((s) => s.setPinnedUnitWork);
+  const clearPinnedUnitWork = useAppStore((s) => s.clearPinnedUnitWork);
   // 전역 검색 — 돋보기 버튼 클릭 시 GlobalSearchDialog 오픈
   const setGlobalSearchOpen = useAppStore((s) => s.setGlobalSearchOpen);
   // 사이드바 "<" 버튼 3연타 접기 모드 — 기본 꺼짐(클릭 1번으로 즉시 토글)
@@ -61,6 +66,11 @@ export default function GNB() {
   // 프로젝트 드롭다운 열림 상태
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // 단위업무 고정 드롭다운 — 열림 상태 + 검색어
+  const [pinDropdownOpen, setPinDropdownOpen] = useState(false);
+  const [pinSearch, setPinSearch] = useState("");
+  const pinRef = useRef<HTMLDivElement>(null);
 
   // 프로필 드롭다운 열림 상태
   const [profileOpen, setProfileOpen] = useState(false);
@@ -75,6 +85,22 @@ export default function GNB() {
       ),
     staleTime: 60 * 1000, // 1분
   });
+
+  // 단위업무 고정 드롭다운용 목록 — 현재 프로젝트의 단위업무 전체 (검색은 클라이언트에서)
+  const { data: unitWorksForPin = [] } = useQuery<Array<{ unitWorkId: string; displayId: string; name: string }>>({
+    queryKey: ["unit-works-for-pin", currentProjectId],
+    queryFn: () =>
+      authFetch<{ data: { items: Array<{ unitWorkId: string; displayId: string; name: string }> } }>(
+        `/api/projects/${currentProjectId}/unit-works`
+      ).then((res) => res.data.items ?? []),
+    enabled: !!currentProjectId,
+    staleTime: 60 * 1000,
+  });
+  const filteredUnitWorksForPin = pinSearch.trim()
+    ? unitWorksForPin.filter((uw) =>
+        uw.name.toLowerCase().includes(pinSearch.toLowerCase()) ||
+        uw.displayId.toLowerCase().includes(pinSearch.toLowerCase()))
+    : unitWorksForPin;
 
   // 내 프로필 조회 — 아바타 이니셜/이름/이메일/플랜 표시용
   // (프로필 설정 페이지에서 이미 동일 API 사용 → 캐시 공유)
@@ -154,6 +180,9 @@ export default function GNB() {
       }
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
         setProfileOpen(false);
+      }
+      if (pinRef.current && !pinRef.current.contains(e.target as Node)) {
+        setPinDropdownOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -354,6 +383,124 @@ export default function GNB() {
             </div>
           )}
         </div>
+
+        {/* 단위업무 고정 — 화면/영역/기능 목록을 하나의 단위업무로 제한해서 봄.
+            프로젝트가 선택된 상태에서만 의미가 있으므로 currentProjectId 있을 때만 노출. */}
+        {currentProjectId && (
+          <>
+            <span className="sp-menu-sep" />
+            <div ref={pinRef} style={{ position: "relative" }}>
+              {pinnedUnitWorkId ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                  <button
+                    className="sp-menu-item"
+                    onClick={() => setPinDropdownOpen((o) => !o)}
+                    title="다른 단위업무로 변경"
+                    style={{
+                      display: "flex", alignItems: "center", gap: 6,
+                      background: "var(--color-brand-subtle)",
+                      color: "var(--color-brand)",
+                      border: "1px solid var(--color-brand-border)",
+                      maxWidth: 200,
+                    }}
+                  >
+                    <span aria-hidden="true" style={{ fontSize: 11 }}>🔒</span>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {pinnedUnitWorkName}
+                    </span>
+                  </button>
+                  <button
+                    className="sp-menu-item"
+                    onClick={() => clearPinnedUnitWork()}
+                    title="단위업무 고정 해제"
+                    style={{ padding: "2px 7px", color: "var(--color-text-tertiary)" }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="sp-menu-item"
+                  onClick={() => setPinDropdownOpen((o) => !o)}
+                  title="단위업무 고정 — 화면·영역·기능 목록을 하나의 단위업무로 제한해서 봅니다"
+                  style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--color-text-secondary)" }}
+                >
+                  <span aria-hidden="true" style={{ fontSize: 11 }}>📌</span>
+                  단위업무 고정
+                </button>
+              )}
+
+              {pinDropdownOpen && (
+                <div style={{
+                  position: "absolute", top: "calc(100% + 4px)", left: 0,
+                  width: 280, maxHeight: 360,
+                  display: "flex", flexDirection: "column",
+                  background: "var(--color-bg-card)",
+                  border: "1px solid var(--color-border-strong)",
+                  borderRadius: "var(--radius-card)",
+                  boxShadow: "var(--shadow-md)",
+                  zIndex: 100, overflow: "hidden",
+                }}>
+                  <input
+                    autoFocus
+                    value={pinSearch}
+                    onChange={(e) => setPinSearch(e.target.value)}
+                    placeholder="단위업무 검색..."
+                    style={{
+                      margin: 8, padding: "6px 10px",
+                      borderRadius: "var(--radius-sm)",
+                      border: "1px solid var(--color-border)",
+                      background: "var(--color-bg-elevated)",
+                      color: "var(--color-text-primary)",
+                      fontSize: "var(--text-sm)",
+                      outline: "none",
+                    }}
+                  />
+                  <div style={{ overflowY: "auto", padding: "0 0 4px" }}>
+                    {pinnedUnitWorkId && (
+                      <button
+                        onClick={() => { clearPinnedUnitWork(); setPinDropdownOpen(false); setPinSearch(""); }}
+                        style={{
+                          display: "block", width: "100%", padding: "7px 14px",
+                          fontSize: "var(--text-md)", color: "var(--color-text-secondary)",
+                          background: "none", border: "none", cursor: "pointer", textAlign: "left",
+                        }}
+                      >
+                        전체 보기 (고정 해제)
+                      </button>
+                    )}
+                    {filteredUnitWorksForPin.length === 0 ? (
+                      <div style={{ padding: "10px 14px", fontSize: "var(--text-sm)", color: "var(--color-text-tertiary)" }}>
+                        검색 결과가 없습니다.
+                      </div>
+                    ) : (
+                      filteredUnitWorksForPin.map((uw) => (
+                        <button
+                          key={uw.unitWorkId}
+                          onClick={() => { setPinnedUnitWork(uw.unitWorkId, uw.name); setPinDropdownOpen(false); setPinSearch(""); }}
+                          style={{
+                            display: "flex", width: "100%", alignItems: "center", gap: 8,
+                            padding: "7px 14px", fontSize: "var(--text-md)",
+                            color: uw.unitWorkId === pinnedUnitWorkId ? "var(--color-brand)" : "var(--color-text-secondary)",
+                            background: uw.unitWorkId === pinnedUnitWorkId ? "var(--color-brand-subtle)" : "transparent",
+                            border: "none", cursor: "pointer", textAlign: "left",
+                          }}
+                        >
+                          <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>
+                            {uw.displayId}
+                          </span>
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {uw.name}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
         {/* 브레드크럼 — 페이지가 동적으로 설정, 프로젝트 셀렉터 바로 옆 */}
         {breadcrumb.length > 0 && (

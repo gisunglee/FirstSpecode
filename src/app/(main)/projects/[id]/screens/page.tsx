@@ -140,6 +140,9 @@ function ScreensPageInner() {
   // ── 단위업무 필터 (URL ?unitWorkId=xxx 로 초기화 — 브레드크럼에서 진입 시 자동 적용) ──
   const searchParams = useSearchParams();
   const [unitWorkFilter, setUnitWorkFilter] = useState(searchParams.get("unitWorkId") ?? "");
+  // GNB "단위업무 고정" — 고정되어 있으면 페이지 자체 필터보다 우선 적용되고 드롭다운은 숨김
+  const pinnedUnitWorkId = useAppStore((s) => s.pinnedUnitWorkId);
+  const effectiveUnitWorkFilter = pinnedUnitWorkId || unitWorkFilter;
   // 담당자 필터 — 전역 appStore.myAssigneeMode 구독 (GNB 토글과 양방향 바인딩)
   const filterAssignedTo = useAppStore((s) => s.myAssigneeMode);
   const setMyAssigneeMode = useAppStore((s) => s.setMyAssigneeMode);
@@ -219,8 +222,8 @@ function ScreensPageInner() {
   ).map(([id, name]) => ({ id: id!, name }));
 
   // 필터 적용
-  const filtered = unitWorkFilter
-    ? allItems.filter((s) => s.unitWorkId === unitWorkFilter)
+  const filtered = effectiveUnitWorkFilter
+    ? allItems.filter((s) => s.unitWorkId === effectiveUnitWorkFilter)
     : allItems;
 
   // 뷰 모드별 정렬
@@ -358,7 +361,12 @@ function ScreensPageInner() {
             entityKey="screens"
           />
           <button
-            onClick={() => router.push(`/projects/${projectId}/screens/new`)}
+            onClick={() => {
+              const url = pinnedUnitWorkId
+                ? `/projects/${projectId}/screens/new?unitWorkId=${pinnedUnitWorkId}`
+                : `/projects/${projectId}/screens/new`;
+              router.push(url);
+            }}
             style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
           >
             + 신규 등록
@@ -403,16 +411,24 @@ function ScreensPageInner() {
               내 담당
             </button>
           </div>
-          <select
-            value={unitWorkFilter}
-            onChange={(e) => setUnitWorkFilter(e.target.value)}
-            style={filterSelectStyle}
-          >
-            <option value="">단위업무 전체</option>
-            {unitWorkOptions.map((opt) => (
-              <option key={opt.id} value={opt.id}>{opt.name}</option>
-            ))}
-          </select>
+          {/* GNB에서 단위업무가 고정되어 있으면 이 드롭다운은 숨김 — 고정을 여기서 다시
+              바꿀 수 있으면 "고정"의 의미가 흐려짐. 해제는 GNB 칩의 ×로만. */}
+          {pinnedUnitWorkId ? (
+            <span style={{ fontSize: 12, color: "var(--color-text-tertiary)", whiteSpace: "nowrap" }}>
+              🔒 GNB에서 단위업무 고정됨
+            </span>
+          ) : (
+            <select
+              value={unitWorkFilter}
+              onChange={(e) => setUnitWorkFilter(e.target.value)}
+              style={filterSelectStyle}
+            >
+              <option value="">단위업무 전체</option>
+              {unitWorkOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.name}</option>
+              ))}
+            </select>
+          )}
 
           {/* 뷰 모드 토글 — 정렬순(기본) / 분류순(대·중·소 텍스트 정렬) */}
           <div style={segmentGroupStyle}>
@@ -639,9 +655,9 @@ function ScreensPageInner() {
                       <button
                         onClick={() => router.push(`/projects/${projectId}/areas?screenId=${screen.screenId}`)}
                         title="이 화면의 영역 목록으로 이동"
-                        style={{ ...linkBtnStyle, fontSize: 13, textAlign: "center" }}
+                        style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer" }}
                       >
-                        {screen.areaCount}
+                        <span className="sp-badge" style={countBadgeStyle}>{screen.areaCount}</span>
                       </button>
                     ) : (
                       <span style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>{screen.areaCount}</span>
@@ -815,6 +831,14 @@ function typeBadgeStyle(type: string): React.CSSProperties {
     color: c.color,
   };
 }
+
+// 클릭 가능한 하위 항목 수(영역수) 배지 — 숫자만 있으면 클릭 가능 여부가 눈에 안 띈다는
+// 피드백으로 회색 배지를 둘러서 "클릭할 수 있는 값"임을 표시(2026-08-27)
+const countBadgeStyle: React.CSSProperties = {
+  display: "inline-block", padding: "2px 8px", borderRadius: 10,
+  fontSize: 12, fontWeight: 600,
+  background: "var(--color-bg-muted)", color: "var(--color-text-secondary)",
+};
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 

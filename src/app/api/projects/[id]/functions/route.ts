@@ -2,7 +2,7 @@
  * GET  /api/projects/[id]/functions — 기능 목록 조회 (FID-00167)
  * POST /api/projects/[id]/functions — 기능 생성 + 이력 (FID-00172)
  *
- * GET Query: areaId? (선택적 영역 필터)
+ * GET Query: areaId? (선택적 영역 필터), unitWorkId? (선택적 단위업무 필터 — GNB 단위업무 고정)
  */
 
 import { NextRequest } from "next/server";
@@ -23,15 +23,16 @@ type RouteParams = { params: Promise<{ id: string }> };
 // ─── GET: 기능 목록 조회 ─────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id: projectId } = await params;
-  const url    = new URL(request.url);
-  const areaId = url.searchParams.get("areaId") ?? undefined;
+  const url        = new URL(request.url);
+  const areaId     = url.searchParams.get("areaId") ?? undefined;
+  const unitWorkId = url.searchParams.get("unitWorkId") ?? undefined;
 
   const gate = await requirePermission(request, projectId, "content.read");
   if (gate instanceof Response) return gate;
 
   try {
     // 데이터 조회+가공 로직은 service 로 분리 — export 라우트와 동일 결과 보장
-    const items = await fetchProjectFunctions({ projectId, areaId });
+    const items = await fetchProjectFunctions({ projectId, areaId, unitWorkId });
     return apiSuccess({ items, totalCount: items.length });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/functions] DB 오류:`, err);
