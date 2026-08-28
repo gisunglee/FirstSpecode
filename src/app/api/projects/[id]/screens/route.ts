@@ -17,6 +17,7 @@ import { screenCreateSchema } from "@/lib/specContentSchemas";
 import { listMeaningfulFields } from "@/lib/specContentFieldPolicy";
 import { requireSpecCreateFields } from "@/lib/specContentWritePolicy";
 import { fetchProjectScreens } from "@/lib/exports/screens-data";
+import { applyTemplateVars } from "@/lib/templateVars";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -93,6 +94,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       select:  { sort_ordr: true },
     });
 
+    // 템플릿 플레이스홀더({{displayId}}/{{name}}) 안전망 — MCP 등 "템플릿 삽입" 버튼을
+    // 거치지 않는 경로로 저장될 때도 실제 값으로 치환되도록 저장 직전에 한 번 더 통과시킴.
+    const trimmedDescription = description?.trim() || null;
+    const newDescription = trimmedDescription
+      ? applyTemplateVars(trimmedDescription, { displayId, name: name.trim() })
+      : trimmedDescription;
+
     const screen = await prisma.$transaction(async (tx) => {
       const created = await tx.tbDsScreen.create({
         data: {
@@ -100,7 +108,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           unit_work_id:    unitWorkId || null,
           scrn_display_id: displayId,
           scrn_nm:         name.trim(),
-          scrn_dc:         description?.trim() || null,
+          scrn_dc:         newDescription,
           layer_data_dc:   layoutData || null,
           scrn_ty_code:    type || "LIST",
           ctgry_l_nm:      categoryL?.trim() || null,

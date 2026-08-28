@@ -15,6 +15,7 @@ import { requirementCreateSchema } from "@/lib/specContentSchemas";
 import { listMeaningfulFields } from "@/lib/specContentFieldPolicy";
 import { requireSpecCreateFields } from "@/lib/specContentWritePolicy";
 import { fetchProjectRequirements } from "@/lib/exports/requirements-data";
+import { applyTemplateVars } from "@/lib/templateVars";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -97,6 +98,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       select: { sort_ordr: true },
     });
 
+    // 템플릿 플레이스홀더({{displayId}}/{{name}}) 안전망 — MCP 등 "템플릿 삽입" 버튼을
+    // 거치지 않는 경로로 저장될 때도 실제 값으로 치환되도록 저장 직전에 한 번 더 통과시킴.
+    // 요구사항 표준 양식엔 이 토큰이 없어 오늘은 no-op이지만, 다른 계층과 동일하게 맞춰둔다.
+    const trimmedDetailSpec = detailSpec?.trim() || null;
+    const newDetailSpec = trimmedDetailSpec
+      ? applyTemplateVars(trimmedDetailSpec, { displayId, name: name.trim() })
+      : trimmedDetailSpec;
+
     const req = await prisma.tbRqRequirement.create({
       data: {
         prjct_id:       projectId,
@@ -109,7 +118,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         orgnl_cn:       originalContent?.trim() || null,
         curncy_cn:      currentContent?.trim() || null,
         analy_cn:       analysisMemo?.trim() || null,
-        spec_cn:        detailSpec?.trim() || null,
+        spec_cn:        newDetailSpec,
         sort_ordr:      (maxSort?.sort_ordr ?? 0) + 1,
         creat_mber_id:  gate.mberId,
       },

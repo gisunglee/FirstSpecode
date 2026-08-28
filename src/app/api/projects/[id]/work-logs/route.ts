@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
+import { normalizeWeekNarrative } from "@/lib/workLogWeekNarrative";
 import type { WorkLog, WorkLogTypeCode, WorkLogItemRefType } from "@/types/workLog";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -78,25 +79,38 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       : [];
     const nameMap = new Map(members.map((m) => [m.mber_id, m.mber_nm || m.email_addr || null]));
 
-    const items: WorkLog[] = rows.map((r) => ({
-      workLogId: r.work_log_id,
-      mberId:    r.creat_mber_id,
-      mberNm:    nameMap.get(r.creat_mber_id) ?? null,
-      logTyCode: r.log_ty_code as WorkLogTypeCode,
-      logDt:     r.log_dt.toISOString().slice(0, 10),
-      noteCn:    r.note_cn,
-      resultCn:  r.result_cn,
-      items: r.items.map((it) => ({
-        itemId:    it.item_id,
-        itemCn:    it.item_cn,
-        refTyCode: (it.ref_ty_code as WorkLogItemRefType | null) ?? null,
-        refId:     it.ref_id,
-        doneYn:    it.done_yn as "Y" | "N",
-        sortOrdr:  it.sort_ordr,
-      })),
-      creatDt: r.creat_dt.toISOString(),
-      mdfcnDt: r.mdfcn_dt ? r.mdfcn_dt.toISOString() : null,
-    }));
+    const items: WorkLog[] = rows.map((r) => {
+      // 수정 전 UI가 차주 계획을 result_cn에 저장한 레코드는 읽는 단계에서 의미를 복구한다.
+      // DB 원문을 즉시 일괄 변경하지 않아도 업무일지·업무 리포트가 같은 값을 보게 한다.
+      const narrative = r.log_ty_code === "WEEK"
+        ? normalizeWeekNarrative({
+            noteCn: r.note_cn,
+            resultCn: r.result_cn,
+            logDt: r.log_dt,
+            savedAt: r.mdfcn_dt ?? r.creat_dt,
+          })
+        : { noteCn: r.note_cn, resultCn: r.result_cn };
+
+      return {
+        workLogId: r.work_log_id,
+        mberId:    r.creat_mber_id,
+        mberNm:    nameMap.get(r.creat_mber_id) ?? null,
+        logTyCode: r.log_ty_code as WorkLogTypeCode,
+        logDt:     r.log_dt.toISOString().slice(0, 10),
+        noteCn:    narrative.noteCn,
+        resultCn:  narrative.resultCn,
+        items: r.items.map((it) => ({
+          itemId:    it.item_id,
+          itemCn:    it.item_cn,
+          refTyCode: (it.ref_ty_code as WorkLogItemRefType | null) ?? null,
+          refId:     it.ref_id,
+          doneYn:    it.done_yn as "Y" | "N",
+          sortOrdr:  it.sort_ordr,
+        })),
+        creatDt: r.creat_dt.toISOString(),
+        mdfcnDt: r.mdfcn_dt ? r.mdfcn_dt.toISOString() : null,
+      };
+    });
 
     return apiSuccess({ items });
   } catch (err) {

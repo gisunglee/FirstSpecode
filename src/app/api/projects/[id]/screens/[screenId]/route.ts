@@ -23,6 +23,7 @@ import {
 import { isCreatorWindowConflict, lockAndAssertCreatorWindow } from "@/lib/specContentWriteConcurrency";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { screenUpdateSchema } from "@/lib/specContentSchemas";
+import { applyTemplateVars } from "@/lib/templateVars";
 
 type RouteParams = { params: Promise<{ id: string; screenId: string }> };
 
@@ -198,7 +199,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       if (!targetUnitWork) return apiError("NOT_FOUND", "단위업무를 찾을 수 없습니다.", 404);
     }
 
-    const newDescription = description?.trim() || null;
+    // 템플릿 플레이스홀더({{displayId}}/{{name}}) 안전망 — MCP 등 "템플릿 삽입" 버튼을
+    // 거치지 않는 경로로 저장될 때도 실제 값으로 치환되도록 저장 직전에 한 번 더 통과시킴.
+    const finalDisplayId = displayId?.trim() || existing.scrn_display_id;
+    const finalName = name?.trim() || existing.scrn_nm;
+    const trimmedDescription = description?.trim() || null;
+    const newDescription = trimmedDescription
+      ? applyTemplateVars(trimmedDescription, { displayId: finalDisplayId, name: finalName })
+      : trimmedDescription;
     const oldDescription = existing.scrn_dc ?? null;
 
     // 담당자 변경 감지 — 값이 실제로 바뀌었을 때만 이력 저장 (no-op 스킵)
@@ -232,8 +240,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         where: { scrn_id: screenId },
         data:  {
           unit_work_id:    unitWorkId !== undefined ? (unitWorkId || null) : existing.unit_work_id,
-          scrn_display_id: displayId?.trim() || existing.scrn_display_id,
-          scrn_nm:         name?.trim() || existing.scrn_nm,
+          scrn_display_id: finalDisplayId,
+          scrn_nm:         finalName,
           scrn_dc:       description !== undefined ? newDescription : existing.scrn_dc,
           coment_cn:     comment !== undefined ? (comment?.trim() || null) : existing.coment_cn,
           layer_data_dc: layoutData !== undefined ? (layoutData ?? null) : existing.layer_data_dc,
@@ -261,8 +269,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           chg_rsn_cn:    "화면 수정",
           snapshot_data: {
             screenId:  screenId,
-            displayId: displayId?.trim() || existing.scrn_display_id,
-            name:      name?.trim() || existing.scrn_nm,
+            displayId: finalDisplayId,
+            name:      finalName,
             type:      type || existing.scrn_ty_code,
             categoryL: categoryL?.trim() || null,
           },

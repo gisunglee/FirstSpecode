@@ -107,6 +107,65 @@ export function LgclNameWarnDialog({ open, missing, onClose, onConfirm, busy }: 
   );
 }
 
+// ── 1-B. 컬럼 제거 매핑 영향도 확인 ──────────────────────────────────────────
+
+export type ColumnRemovalImpact = {
+  columnCount:   number; // 제거되는 컬럼 수
+  functionCount: number;
+  areaCount:     number;
+  screenCount:   number;
+};
+
+type ColumnRemovalWarnProps = {
+  open:      boolean;
+  impact:    ColumnRemovalImpact | null;
+  onClose:   () => void;
+  onConfirm: () => void; // 영향도 무시하고 컬럼+매핑 삭제 진행
+  busy?:     boolean;
+};
+
+export function ColumnRemovalWarnDialog({ open, impact, onClose, onConfirm, busy }: ColumnRemovalWarnProps) {
+  useEscapeKey(onClose, open);
+  if (!open || !impact) return null;
+
+  return (
+    <div style={backdropStyle} onClick={onClose}>
+      <div style={dialogStyle} onClick={(e) => e.stopPropagation()}>
+        <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700 }}>제거된 컬럼이 다른 곳에서 쓰이고 있습니다</p>
+        <p style={{ margin: "0 0 6px", fontSize: 13, color: "var(--color-text-secondary)" }}>
+          목록에서 뺀 컬럼 <strong>{impact.columnCount}개</strong>를 저장하면 그 컬럼과 컬럼 매핑이 함께 삭제됩니다.
+        </p>
+        <div style={{
+          marginTop: 10, padding: "10px 12px",
+          background:   "var(--color-warning-subtle)",
+          border:       "1px solid var(--color-warning-border)",
+          borderRadius: 6,
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--color-warning)", marginBottom: 4 }}>
+            ⚠ 이 컬럼들은 현재 다음 설계 산출물에서 참조 중입니다
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "var(--color-warning)", lineHeight: 1.6 }}>
+            {impact.functionCount > 0 && <li>기능 <strong>{impact.functionCount}</strong>개</li>}
+            {impact.areaCount > 0 && <li>영역 <strong>{impact.areaCount}</strong>개</li>}
+            {impact.screenCount > 0 && <li>화면 <strong>{impact.screenCount}</strong>개</li>}
+          </ul>
+          <div style={{ marginTop: 6, fontSize: 11, color: "var(--color-text-secondary)" }}>
+            계속 저장하면 저 산출물들의 컬럼 매핑이 끊어집니다. 계속 진행하시겠습니까?
+          </div>
+        </div>
+        <div style={footerStyle}>
+          <button type="button" style={cancelBtnStyle} onClick={onClose} disabled={busy}>
+            취소
+          </button>
+          <button type="button" style={deleteBtnStyleDialog} onClick={onConfirm} disabled={busy}>
+            {busy ? "저장 중..." : "매핑 끊고 저장"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── 2. 테이블 삭제 확인 (영향도 경고 + 데디케이트 갈림길) ────────────────────
 
 type ImpactCounts = {

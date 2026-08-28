@@ -16,6 +16,7 @@
  *   8. PATCH [tableId] — 삭제와 동일 권한 게이트(매트릭스 또는 담당자)를 쓰는지
  *   9. POST db-tables — 신규 등록 시 고른 상태가 (컬럼 0개인 경우에도) 실제로 저장되는지
  *  10. PATCH [tableId] — DEPRECATED 외 값은 거부(신규/기존 재분류는 PUT 전용)하는지
+ *  11. PUT — 컬럼 상태: 신규 컬럼은 서버가 NEW 자동 부여, 기존 컬럼 데디케이트 토글이 다른 필드를 안 건드리는지
  */
 
 import assert from "node:assert/strict";
@@ -356,6 +357,53 @@ async function main(): Promise<void> {
     );
     assert.equal(patchRejectNewRes.status, 400, "PATCH는 DEPRECATED 외 값을 거부해야 함 (재분류는 PUT 전용)");
     console.log("  [OK] PATCH — DEPRECATED 외 상태값은 거부됨 (신규/기존 재분류는 PUT으로만)");
+
+    // ═══ 11. PUT — 컬럼 상태(신규/데디케이트) ═══
+    const tableForColStatus = await testDb.tbDsDbTable.create({
+      data: { prjct_id: project.prjct_id, tbl_physcl_nm: "tb_smoke_col_status" },
+    });
+    const existingCol = await testDb.tbDsDbTableColumn.create({
+      data: { tbl_id: tableForColStatus.tbl_id, col_physcl_nm: "old_col" },
+    });
+
+    // 11-a. 신규 컬럼(colId 없음)은 클라이언트가 뭘 보내든 서버가 무조건 NEW로 부여
+    const addColRes = await routeTable.PUT(
+      req(`/api/projects/${project.prjct_id}/db-tables/${tableForColStatus.tbl_id}`, "PUT", ownerToken, {
+        tblPhysclNm: "tb_smoke_col_status",
+        columns: [
+          { colId: existingCol.col_id, colPhysclNm: "old_col" },
+          { colPhysclNm: "brand_new_col", colSttusCode: "DEPRECATED" }, // 무시되고 NEW로 강제되어야 함
+        ],
+      }),
+      { params: Promise.resolve({ id: project.prjct_id, tableId: tableForColStatus.tbl_id }) },
+    );
+    assert.equal(addColRes.status, 200);
+    const colsAfterAdd = await testDb.tbDsDbTableColumn.findMany({
+      where: { tbl_id: tableForColStatus.tbl_id },
+      orderBy: { sort_ordr: "asc" },
+    });
+    const newCol = colsAfterAdd.find((c) => c.col_physcl_nm === "brand_new_col");
+    assert.equal(newCol?.col_sttus_code, "NEW", "신규 컬럼은 클라이언트 값과 무관하게 NEW로 강제되어야 함");
+    const oldColAfter = colsAfterAdd.find((c) => c.col_id === existingCol.col_id);
+    assert.equal(oldColAfter?.col_sttus_code, "EXISTING", "colSttusCode를 안 보낸 기존 컬럼은 그대로 유지되어야 함");
+    console.log("  [OK] PUT — 신규 컬럼은 NEW 자동 부여, 값 안 보낸 기존 컬럼은 그대로");
+
+    // 11-b. 기존 컬럼을 데디케이트로 토글 — 다른 필드는 그대로여야 함
+    const deprecateColRes = await routeTable.PUT(
+      req(`/api/projects/${project.prjct_id}/db-tables/${tableForColStatus.tbl_id}`, "PUT", ownerToken, {
+        tblPhysclNm: "tb_smoke_col_status",
+        columns: [
+          { colId: existingCol.col_id, colPhysclNm: "old_col", colSttusCode: "DEPRECATED" },
+          { colId: newCol!.col_id, colPhysclNm: "brand_new_col" },
+        ],
+      }),
+      { params: Promise.resolve({ id: project.prjct_id, tableId: tableForColStatus.tbl_id }) },
+    );
+    assert.equal(deprecateColRes.status, 200);
+    const oldColFinal = await testDb.tbDsDbTableColumn.findUniqueOrThrow({ where: { col_id: existingCol.col_id } });
+    assert.equal(oldColFinal.col_sttus_code, "DEPRECATED");
+    assert.equal(oldColFinal.col_physcl_nm, "old_col", "상태 토글이 다른 필드를 건드리면 안 됨");
+    console.log("  [OK] PUT — 기존 컬럼 데디케이트 토글 정상 반영, 다른 필드 영향 없음");
 
     console.log("DB_TABLES_DELETE_DB_SMOKE_OK");
   } finally {

@@ -5,10 +5,13 @@
  * DELETE /api/projects/[id]/db-tables/[tableId] — DB 테이블 삭제 (컬럼 cascade)
  *
  * PUT body:
- *   { tblPhysclNm, tblLgclNm, tblDc, tblSttusCode?,
+ *   { tblPhysclNm, tblLgclNm, tblDc, tblSttusCode?, confirmColumnRemoval?,
  *     columns: [{ colId?, colPhysclNm, colLgclNm, dataTyNm, colDc, sortOrdr }] }
  *   - colId 있으면 update, 없으면 insert
- *   - 전달되지 않은 기존 컬럼은 삭제
+ *   - 전달되지 않은 기존 컬럼은 삭제 대상
+ *   - 삭제 대상 컬럼에 컬럼 매핑(tb_ds_col_mapping)이 걸려있으면, confirmColumnRemoval 이
+ *     true 가 아닌 한 실제로 지우지 않고 { needsConfirmation: true, impact } 를 반환한다
+ *     (아무 것도 커밋되지 않음 — 클라이언트가 영향도를 보여주고 재확인 후 true 로 재요청)
  *
  * PATCH body:
  *   { tblSttusCode: "DEPRECATED" }
@@ -72,14 +75,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       assignMemberId:   table.asign_mber_id ?? null,
       assignMemberName: assignee ? (assignee.mber_nm || assignee.email_addr || null) : null,
       columns: table.columns.map((c) => ({
-        colId:       c.col_id,
-        colPhysclNm: c.col_physcl_nm,
-        colLgclNm:   c.col_lgcl_nm   ?? "",
-        dataTyNm:    c.data_ty_nm    ?? "",
-        colDc:       c.col_dc        ?? "",
-        refGrpCode:  c.ref_grp_code  ?? "",
-        sortOrdr:    c.sort_ordr,
-        mdfcnDt:     c.mdfcn_dt?.toISOString() ?? null,
+        colId:        c.col_id,
+        colPhysclNm:  c.col_physcl_nm,
+        colLgclNm:    c.col_lgcl_nm   ?? "",
+        dataTyNm:     c.data_ty_nm    ?? "",
+        colDc:        c.col_dc        ?? "",
+        refGrpCode:   c.ref_grp_code  ?? "",
+        colSttusCode: c.col_sttus_code,
+        sortOrdr:     c.sort_ordr,
+        mdfcnDt:      c.mdfcn_dt?.toISOString() ?? null,
       })),
     });
   } catch (err) {
@@ -91,13 +95,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 // ── PUT ───────────────────────────────────────────────────────────────────────
 
 type ColumnInput = {
-  colId?:      string;
-  colPhysclNm: string;
-  colLgclNm?:  string;
-  dataTyNm?:   string;
-  colDc?:      string;
-  refGrpCode?: string;
-  sortOrdr?:   number;
+  colId?:        string;
+  colPhysclNm:   string;
+  colLgclNm?:    string;
+  dataTyNm?:     string;
+  colDc?:        string;
+  refGrpCode?:   string;
+  // 기존 컬럼(colId 있음)은 NEW/EXISTING/DEPRECATED 셋 다 자유롭게 지정 가능(배지 클릭 순환).
+  // 신규 컬럼(colId 없음)은 클라이언트가 뭘 보내든 무시하고 서버가 무조건 NEW로 강제한다
+  // (컬럼 추가 시점의 기본값일 뿐 — 아래 upsert 참고)
+  colSttusCode?: string;
+  sortOrdr?:     number;
 };
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
@@ -111,13 +119,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { tblPhysclNm, tblLgclNm, tblDc, columns, assignMemberId, tblSttusCode } = body as {
+  const { tblPhysclNm, tblLgclNm, tblDc, columns, assignMemberId, tblSttusCode, confirmColumnRemoval } = body as {
     tblPhysclNm?:   string;
     tblLgclNm?:     string;
     tblDc?:         string;
     columns?:       ColumnInput[];
     assignMemberId?: string;
     tblSttusCode?:  string;
+    confirmColumnRemoval?: boolean;
   };
 
   if (!tblPhysclNm?.trim()) {
@@ -135,6 +144,44 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const colList: ColumnInput[] = columns ?? [];
     const incomingIds = colList.map((c) => c.colId).filter(Boolean) as string[];
+
+    // 제거될 컬럼 목록 — 트랜잭션 시작 전에 먼저 계산해 매핑 영향도를 확인한다.
+    // (실제 삭제는 트랜잭션 안에서 이 목록을 그대로 재사용 — 아래 참고)
+    const removedCols = await prisma.tbDsDbTableColumn.findMany({
+      where: {
+        tbl_id: tableId,
+        ...(incomingIds.length > 0 ? { col_id: { notIn: incomingIds } } : {}),
+      },
+      select: { col_id: true },
+    });
+    const removedColIds = removedCols.map((c) => c.col_id);
+
+    // 제거될 컬럼에 다른 기능/영역/화면이 매핑으로 쓰고 있으면, 확인 없이 조용히
+    // 지우지 않는다 — 사용자가 영향도를 보고 confirmColumnRemoval=true 로 재요청해야
+    // 실제 삭제가 진행된다. 여기서 걸리면 아무 것도 커밋하지 않고 즉시 반환.
+    if (removedColIds.length > 0 && !confirmColumnRemoval) {
+      const impactedMappings = await prisma.tbDsColMapping.findMany({
+        where:  { col_id: { in: removedColIds } },
+        select: { ref_ty_code: true, ref_id: true },
+      });
+      const funcIds = new Set<string>();
+      const areaIds = new Set<string>();
+      const scrnIds = new Set<string>();
+      for (const m of impactedMappings) {
+        if      (m.ref_ty_code === "FUNCTION") funcIds.add(m.ref_id);
+        else if (m.ref_ty_code === "AREA")     areaIds.add(m.ref_id);
+        else if (m.ref_ty_code === "SCREEN")   scrnIds.add(m.ref_id);
+      }
+      const impact = {
+        columnCount:   removedColIds.length,
+        functionCount: funcIds.size,
+        areaCount:     areaIds.size,
+        screenCount:   scrnIds.size,
+      };
+      if (impact.functionCount + impact.areaCount + impact.screenCount > 0) {
+        return apiSuccess({ needsConfirmation: true, impact });
+      }
+    }
 
     // 담당자 변경 감지 — 값이 실제로 바뀌었을 때만 별도 이력 저장 (no-op 스킵)
     // tb_ds_design_change 재사용 (다른 엔티티와 동일 패턴)
@@ -201,21 +248,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       }
 
       // 전달되지 않은 기존 컬럼 삭제 — tb_ds_col_mapping 은 col_id 를 FK 없이
-      // 참조만 하므로, 먼저 지워질 컬럼을 가리키는 매핑을 정리해야 유령 행이 안 남는다
-      const removedCols = await tx.tbDsDbTableColumn.findMany({
-        where: {
-          tbl_id: tableId,
-          ...(incomingIds.length > 0 ? { col_id: { notIn: incomingIds } } : {}),
-        },
-        select: { col_id: true },
-      });
-      await deleteOrphanedColMappings(tx, removedCols.map((c) => c.col_id));
+      // 참조만 하므로, 먼저 지워질 컬럼을 가리키는 매핑을 정리해야 유령 행이 안 남는다.
+      // removedColIds 는 트랜잭션 시작 전에 이미 계산 + 영향도 확인까지 끝난 목록 (위 참고).
+      await deleteOrphanedColMappings(tx, removedColIds);
 
       await tx.tbDsDbTableColumn.deleteMany({
-        where: {
-          tbl_id: tableId,
-          ...(incomingIds.length > 0 ? { col_id: { notIn: incomingIds } } : {}),
-        },
+        where: { col_id: { in: removedColIds } },
       });
 
       // 컬럼 upsert (순서 유지, 수정자·수정일시 포함)
@@ -223,29 +261,37 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       for (let i = 0; i < colList.length; i++) {
         const c = colList[i]!;
         if (c.colId) {
+          // 기존 컬럼 — colSttusCode 는 배지 클릭 순환(신규/기존/데디케이트)으로 온 값.
+          // 유효하지 않거나 안 보내면 건드리지 않는다 (undefined → Prisma가 필드 자체를 스킵).
+          const sttus = c.colSttusCode !== undefined && isDbTableStatusCode(c.colSttusCode)
+            ? c.colSttusCode
+            : undefined;
           await tx.tbDsDbTableColumn.update({
             where: { col_id: c.colId },
             data: {
-              col_physcl_nm: c.colPhysclNm.trim(),
-              col_lgcl_nm:   c.colLgclNm?.trim()   || null,
-              data_ty_nm:    c.dataTyNm?.trim()     || null,
-              col_dc:        c.colDc?.trim()         || null,
-              ref_grp_code:  c.refGrpCode?.trim()    || null,
-              sort_ordr:     i + 1,
-              mdfcn_mber_id: gate.mberId,
-              mdfcn_dt:      now,
+              col_physcl_nm:  c.colPhysclNm.trim(),
+              col_lgcl_nm:    c.colLgclNm?.trim()   || null,
+              data_ty_nm:     c.dataTyNm?.trim()     || null,
+              col_dc:         c.colDc?.trim()         || null,
+              ref_grp_code:   c.refGrpCode?.trim()    || null,
+              ...(sttus !== undefined ? { col_sttus_code: sttus } : {}),
+              sort_ordr:      i + 1,
+              mdfcn_mber_id:  gate.mberId,
+              mdfcn_dt:       now,
             },
           });
         } else {
+          // 신규 컬럼 — 사람이 매번 상태를 고를 필요 없이 무조건 NEW (클라이언트 값은 무시)
           await tx.tbDsDbTableColumn.create({
             data: {
-              tbl_id:        tableId,
-              col_physcl_nm: c.colPhysclNm.trim(),
-              col_lgcl_nm:   c.colLgclNm?.trim()   || null,
-              data_ty_nm:    c.dataTyNm?.trim()     || null,
-              col_dc:        c.colDc?.trim()         || null,
-              ref_grp_code:  c.refGrpCode?.trim()    || null,
-              sort_ordr:     i + 1,
+              tbl_id:         tableId,
+              col_physcl_nm:  c.colPhysclNm.trim(),
+              col_lgcl_nm:    c.colLgclNm?.trim()   || null,
+              data_ty_nm:     c.dataTyNm?.trim()     || null,
+              col_dc:         c.colDc?.trim()         || null,
+              ref_grp_code:   c.refGrpCode?.trim()    || null,
+              col_sttus_code: "NEW",
+              sort_ordr:      i + 1,
             },
           });
         }

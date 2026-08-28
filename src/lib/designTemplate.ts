@@ -17,6 +17,11 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
+import { applyTemplateVars } from "@/lib/templateVars";
+
+// 치환 함수 본체는 서버(API route)도 같이 쓰는 @/lib/templateVars로 옮겨졌다.
+// 기존 5계층 상세 페이지들이 이 파일에서 import하고 있어 이름 그대로 재노출한다.
+export { applyTemplateVars };
 
 // 설계 양식의 대상 계층 — API 라우트 입력값 검증에도 재사용
 // (route 파일들이 각자 VALID_REF_TYPES를 재선언하던 중복 제거)
@@ -32,21 +37,6 @@ export type ResolvedDesignTemplate = {
   exampleCn:  string;
   templateCn: string;
 };
-
-/**
- * 템플릿 본문의 플레이스홀더({{displayId}}, {{name}})를 실제 값으로 치환.
- *
- * 신뢰 경계: 템플릿 본문은 운영자가 관리 UI에서 작성한 마크다운이므로 신뢰 가능.
- * XSS는 렌더 단계(marked + CSS scope)에서 처리하므로 여기선 단순 replaceAll.
- */
-export function applyTemplateVars(
-  template: string,
-  vars: { displayId?: string | null; name?: string | null },
-): string {
-  return template
-    .replaceAll("{{displayId}}", vars.displayId ?? "")
-    .replaceAll("{{name}}",      vars.name      ?? "");
-}
 
 /**
  * 해당 계층의 "현재 프로젝트에서 활성인 설계 양식" 1건을 조회하는 React Query 훅.

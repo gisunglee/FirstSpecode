@@ -176,14 +176,16 @@ export function RefTypeBadge({ refType, sizeMode = "md" }: { refType: string; si
 
 /**
  * 상태별 시각 매핑.
- *   - NEW(신규)        → info    (파랑, "새로 생겼다"는 정보성 알림)
- *   - EXISTING(기존)   → 중립     (특별히 강조할 이유 없는 기본 상태)
- *   - DEPRECATED(데디케이트) → warning (곧 정리될 대상이라는 주의 신호)
+ *   - NEW(신규)        → success 솔리드 채움 (다른 두 상태와 달리 옅은 배경이 아니라 꽉 채운
+ *     녹색 — 목록에서 "새로 생긴 것"이 한눈에 튀어 보여야 한다는 요청 반영. 빨강은 이미
+ *     삭제 등 위험 액션에 쓰는 색이라 신규엔 안 맞고, 초록이 "새로 추가됨"의 관례적 의미와도 맞음)
+ *   - EXISTING(기존)   → 중립 (특별히 강조할 이유 없는 기본 상태, 옅은 배경 유지)
+ *   - DEPRECATED(데디케이트) → warning (곧 정리될 대상이라는 주의 신호, 옅은 배경 유지)
  */
 const DB_TABLE_STATUS_META: Record<DbTableStatusCode, { bg: string; fg: string }> = {
-  NEW:        { bg: "var(--color-info-subtle)",   fg: "var(--color-info)" },
-  EXISTING:   { bg: "var(--color-bg-muted)",       fg: "var(--color-text-secondary)" },
-  DEPRECATED: { bg: "var(--color-warning-subtle)", fg: "var(--color-warning)" },
+  NEW:        { bg: "var(--color-success)",        fg: "var(--color-text-inverse)" },
+  EXISTING:   { bg: "var(--color-bg-muted)",        fg: "var(--color-text-secondary)" },
+  DEPRECATED: { bg: "var(--color-warning-subtle)",  fg: "var(--color-warning)" },
 };
 
 export function DbTableStatusBadge({ code }: { code: string }) {

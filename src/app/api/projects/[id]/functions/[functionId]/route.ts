@@ -20,6 +20,7 @@ import {
 import { isCreatorWindowConflict, lockAndAssertCreatorWindow } from "@/lib/specContentWriteConcurrency";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { functionUpdateSchema } from "@/lib/specContentSchemas";
+import { applyTemplateVars } from "@/lib/templateVars";
 
 type RouteParams = { params: Promise<{ id: string; functionId: string }> };
 
@@ -204,7 +205,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       if (!targetArea) return apiError("NOT_FOUND", "영역을 찾을 수 없습니다.", 404);
     }
 
-    const newDescription = description?.trim() || null;
+    // 템플릿 플레이스홀더({{displayId}}/{{name}}) 안전망 — MCP 등 "템플릿 삽입" 버튼을
+    // 거치지 않는 경로로 저장될 때도 실제 값으로 치환되도록 저장 직전에 한 번 더 통과시킴.
+    const finalDisplayId = displayId?.trim() || existing.func_display_id;
+    const finalName = name?.trim() || existing.func_nm;
+    const trimmedDescription = description?.trim() || null;
+    const newDescription = trimmedDescription
+      ? applyTemplateVars(trimmedDescription, { displayId: finalDisplayId, name: finalName })
+      : trimmedDescription;
     const oldDescription = existing.func_dc ?? null;
 
     await prisma.$transaction(async (tx) => {
@@ -216,8 +224,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           ...(areaId !== undefined
             ? { area: areaId ? { connect: { area_id: areaId } } : { disconnect: true } }
             : {}),
-          func_display_id: displayId?.trim() || existing.func_display_id,
-          func_nm:       name?.trim() || existing.func_nm,
+          func_display_id: finalDisplayId,
+          func_nm:       finalName,
           func_ty_code:  type || existing.func_ty_code,
           func_dc:       description !== undefined ? newDescription : existing.func_dc,
           coment_cn:     commentCn !== undefined ? (commentCn.trim() || null) : existing.coment_cn,
@@ -241,7 +249,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           snapshot_data: {
             funcId:    functionId,
             displayId: existing.func_display_id,
-            name:      name?.trim() || existing.func_nm,
+            name:      finalName,
             type:      type || existing.func_ty_code,
           },
           chg_mber_id: gate.mberId,

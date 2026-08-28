@@ -206,7 +206,7 @@ INSERT INTO tb_ai_design_template (
 | | |
 
 ## 6. 참조 테이블
-- <TABLE_SCRIPT:>',
+- <TABLE_SCRIPT:테이블물리명>',
   'Y', 'Y', 0, NULL
 ) ON CONFLICT (dsgn_tmpl_id) DO NOTHING;
 

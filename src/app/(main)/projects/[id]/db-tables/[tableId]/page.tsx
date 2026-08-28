@@ -28,10 +28,11 @@ import CodeGroupSelect, { type CodeGroupOption } from "@/components/db-table/Cod
 // 리팩토링 — ADD DDL 팝업 분리 (파싱 단계 / 확인 단계 JSX + 자체 상태 캡슐화)
 import AddDdlDialog from "@/components/db-table/AddDdlDialog";
 // 리팩토링 — 경량 확인 다이얼로그 2종 (논리명 경고, 삭제 확인+영향도)
-import { LgclNameWarnDialog, DeleteTableConfirmDialog } from "@/components/db-table/DbTableDialogs";
+import { LgclNameWarnDialog, DeleteTableConfirmDialog, ColumnRemovalWarnDialog, type ColumnRemovalImpact } from "@/components/db-table/DbTableDialogs";
 // ParsedCol 타입만 사용 (파싱 자체는 AddDdlDialog 내부가 담당)
 import { type ParsedCol } from "@/lib/ddlParser";
 import { DB_TABLE_STATUS_CODES, DB_TABLE_STATUS_LABEL, isDbTableStatusCode, type DbTableStatusCode } from "@/lib/dbTableStatus";
+import { DbTableStatusBadge } from "@/components/db-table/TableInsightBadges";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,9 @@ type ColDraft = {
   dataTyNm: string;
   colDc: string;
   refGrpCode: string;
+  // 컬럼을 새로 추가하면 서버가 NEW를 기본값으로 부여(프론트는 낙관적으로 즉시 표시).
+  // 그 이후엔 배지를 클릭해 신규/기존/데디케이트 세 값을 자유롭게 순환 선택할 수 있다.
+  colSttusCode: DbTableStatusCode;
 };
 
 type DbTableDetail = {
@@ -63,6 +67,7 @@ type DbTableDetail = {
     dataTyNm: string;
     colDc: string;
     refGrpCode: string;
+    colSttusCode: string;
     sortOrdr: number;
     mdfcnDt: string | null;
   }[];
@@ -186,6 +191,7 @@ function DbTableDetailPageInner() {
         dataTyNm: c.dataTyNm,
         colDc: c.colDc,
         refGrpCode: c.refGrpCode,
+        colSttusCode: isDbTableStatusCode(c.colSttusCode) ? c.colSttusCode : "EXISTING",
       })));
     }
   }, [data]);
@@ -198,8 +204,15 @@ function DbTableDetailPageInner() {
   }, [setBreadcrumb]);
 
   // ── 저장 뮤테이션 ────────────────────────────────────────────────────────────
+  // 컬럼 제거로 매핑이 끊기는 경우, 서버가 커밋 없이 needsConfirmation 을 돌려준다 —
+  // 그 경우 저장을 완료 처리하지 않고 ColumnRemovalWarnDialog 로 사용자 확인을 받은 뒤
+  // confirmColumnRemoval: true 로 재요청한다.
+  type SaveResult =
+    | { kind: "saved"; tblId: string }
+    | { kind: "needsConfirmation"; impact: ColumnRemovalImpact };
+
   const saveMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (opts?: { confirmColumnRemoval?: boolean }): Promise<SaveResult> => {
       if (isNew) {
         const res = await authFetch<{ data: { tblId: string } }>(
           `/api/projects/${projectId}/db-tables`,
@@ -210,6 +223,7 @@ function DbTableDetailPageInner() {
         );
         const newTblId = res.data.tblId;
         if (cols.length > 0) {
+          // 새 테이블은 기존 컬럼이 없어 제거될 컬럼도 없음 — 영향도 확인 불필요
           await authFetch(`/api/projects/${projectId}/db-tables/${newTblId}`, {
             method: "PUT",
             body: JSON.stringify({
@@ -218,27 +232,42 @@ function DbTableDetailPageInner() {
                 colPhysclNm: c.colPhysclNm, colLgclNm: c.colLgclNm,
                 dataTyNm: c.dataTyNm, colDc: c.colDc,
                 refGrpCode: c.refGrpCode || undefined,
+                colSttusCode: c.colSttusCode,
               })),
             }),
           });
         }
-        return newTblId;
+        return { kind: "saved", tblId: newTblId };
       } else {
-        await authFetch(`/api/projects/${projectId}/db-tables/${tableId}`, {
-          method: "PUT",
-          body: JSON.stringify({
-            tblPhysclNm: physNm, tblLgclNm: lgclNm, tblDc: dc, assignMemberId, tblSttusCode: sttusCode,
-            columns: cols.map((c) => ({
-              colId: c.colId, colPhysclNm: c.colPhysclNm, colLgclNm: c.colLgclNm,
-              dataTyNm: c.dataTyNm, colDc: c.colDc,
-              refGrpCode: c.refGrpCode || undefined,
-            })),
-          }),
-        });
-        return tableId;
+        const res = await authFetch<{ data: { needsConfirmation?: boolean; impact?: ColumnRemovalImpact } }>(
+          `/api/projects/${projectId}/db-tables/${tableId}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({
+              tblPhysclNm: physNm, tblLgclNm: lgclNm, tblDc: dc, assignMemberId, tblSttusCode: sttusCode,
+              confirmColumnRemoval: opts?.confirmColumnRemoval ?? false,
+              columns: cols.map((c) => ({
+                colId: c.colId, colPhysclNm: c.colPhysclNm, colLgclNm: c.colLgclNm,
+                dataTyNm: c.dataTyNm, colDc: c.colDc,
+                refGrpCode: c.refGrpCode || undefined,
+                colSttusCode: c.colSttusCode,
+              })),
+            }),
+          }
+        );
+        if (res.data.needsConfirmation && res.data.impact) {
+          return { kind: "needsConfirmation", impact: res.data.impact };
+        }
+        return { kind: "saved", tblId: tableId };
       }
     },
-    onSuccess: (savedId) => {
+    onSuccess: (result) => {
+      if (result.kind === "needsConfirmation") {
+        setColRemovalImpact(result.impact);
+        setColRemovalWarnOpen(true);
+        return; // 아직 저장되지 않음 — 성공 토스트/이동 없이 확인 대기
+      }
+      const savedId = result.tblId;
       qc.invalidateQueries({ queryKey: ["db-tables", projectId] });
       qc.invalidateQueries({ queryKey: ["db-table", projectId, savedId] });
       // 컬럼 삭제/추가는 매핑 유효성에 영향 → 사용 현황도 함께 갱신
@@ -249,10 +278,15 @@ function DbTableDetailPageInner() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  // 컬럼 제거 매핑 영향도 확인 다이얼로그 상태
+  const [colRemovalWarnOpen, setColRemovalWarnOpen] = useState(false);
+  const [colRemovalImpact, setColRemovalImpact] = useState<ColumnRemovalImpact | null>(null);
+
   // ── 컬럼 조작 ───────────────────────────────────────────────────────────────
   function addColumns(count: number) {
-    const newCols = Array.from({ length: count }, () => ({
+    const newCols: ColDraft[] = Array.from({ length: count }, () => ({
       _key: nextKey(), colPhysclNm: "", colLgclNm: "", dataTyNm: "", colDc: "", refGrpCode: "",
+      colSttusCode: "NEW",
     }));
     setCols((prev) => [...prev, ...newCols]);
   }
@@ -263,6 +297,19 @@ function DbTableDetailPageInner() {
 
   function updateCol(key: string, field: keyof ColDraft, value: string) {
     setCols((prev) => prev.map((c) => c._key === key ? { ...c, [field]: value } : c));
+  }
+
+  // 상태 배지 클릭 — 신규 → 기존 → 데디케이트 → 신규 순환. 컬럼을 새로 추가하면 서버가
+  // NEW를 기본으로 부여하지만, 그 뒤로는 세 값 다 사람이 자유롭게 고를 수 있다.
+  const COL_STATUS_CYCLE: Record<DbTableStatusCode, DbTableStatusCode> = {
+    NEW: "EXISTING", EXISTING: "DEPRECATED", DEPRECATED: "NEW",
+  };
+  function cycleColStatus(key: string) {
+    setCols((prev) => prev.map((c) => {
+      if (c._key !== key) return c;
+      const next = COL_STATUS_CYCLE[c.colSttusCode];
+      return { ...c, colSttusCode: next };
+    }));
   }
 
   // ── 드래그앤드롭 ────────────────────────────────────────────────────────────
@@ -296,6 +343,7 @@ function DbTableDetailPageInner() {
       dataTyNm: p.dataTyNm,
       colDc: "",
       refGrpCode: "",
+      colSttusCode: "NEW",
     }));
     setCols((prev) => [...prev, ...newCols]);
   }
@@ -320,7 +368,7 @@ function DbTableDetailPageInner() {
       return;
     }
 
-    saveMutation.mutate();
+    saveMutation.mutate(undefined);
   }
 
   // ── 삭제 ────────────────────────────────────────────────────────────────────
@@ -593,6 +641,7 @@ function DbTableDetailPageInner() {
                   ?
                 </button>
               </div>
+              <div style={{ textAlign: "center" }} title="신규/기존/데디케이트 — 배지를 클릭하면 순서대로 바뀝니다">상태</div>
               <div />
             </div>
 
@@ -664,6 +713,17 @@ function DbTableDetailPageInner() {
                         options={codeGroups ?? []}
                         onChange={(v) => updateCol(col._key, "refGrpCode", v)}
                       />
+                      {/* 상태 배지 — 클릭하면 데디케이트 on/off 토글 (신규는 서버가 자동 부여, 사람이 못 고름) */}
+                      <div style={{ display: "flex", justifyContent: "center" }}>
+                        <button
+                          type="button"
+                          onClick={() => cycleColStatus(col._key)}
+                          title="클릭하면 신규 → 기존 → 데디케이트 순으로 바뀝니다"
+                          style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+                        >
+                          <DbTableStatusBadge code={col.colSttusCode} />
+                        </button>
+                      </div>
                       {/* 액션 버튼 세트 — 사용처 보기(저장된 컬럼만) + 삭제
                         · 사용처 버튼은 col.colId 있을 때만 의미 있음
                         · 매핑이 있는 컬럼은 강조색(🔎), 미사용은 연한 회색 아이콘 */}
@@ -817,7 +877,15 @@ function DbTableDetailPageInner() {
         open={lgclWarnOpen}
         missing={lgclWarnCount}
         onClose={() => setLgclWarnOpen(false)}
-        onConfirm={() => { setLgclWarnOpen(false); saveMutation.mutate(); }}
+        onConfirm={() => { setLgclWarnOpen(false); saveMutation.mutate(undefined); }}
+        busy={saveMutation.isPending}
+      />
+
+      <ColumnRemovalWarnDialog
+        open={colRemovalWarnOpen}
+        impact={colRemovalImpact}
+        onClose={() => { setColRemovalWarnOpen(false); setColRemovalImpact(null); }}
+        onConfirm={() => { setColRemovalWarnOpen(false); saveMutation.mutate({ confirmColumnRemoval: true }); }}
         busy={saveMutation.isPending}
       />
       {/* ── 삭제 확인 다이얼로그 (분리 컴포넌트, Phase 2 영향도 경고 포함) ── */}
@@ -845,8 +913,8 @@ function DbTableDetailPageInner() {
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-// 핸들 / 물리명 / 논리명 / 데이터타입 / 설명 / 공통코드 / 액션(사용처+삭제)
-const COL_GRID = "28px 1fr 1fr 140px 1fr 160px 64px";
+// 핸들 / 물리명 / 논리명 / 데이터타입 / 설명 / 공통코드 / 상태(신규/기존/데디케이트) / 액션(사용처+삭제)
+const COL_GRID = "28px 1fr 1fr 140px 1fr 160px 76px 64px";
 
 const sectionStyle: React.CSSProperties = {
   background: "var(--color-bg-card)",

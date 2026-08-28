@@ -950,7 +950,10 @@ export function registerTools(
       "작성하기 전에 반드시 먼저 호출하세요. 반환된 예시(exampleCn)·빈 템플릿(templateCn) 구조를 " +
       "따라 내용을 작성하고, 표준 양식에 맞추겠다는 점 또는 양식을 채우는 데 필요한 " +
       "추가 정보를 사용자에게 먼저 알린 뒤 진행하세요. 프로젝트 전용 양식이 있으면 " +
-      "공통 양식보다 우선 적용됩니다. 해당 계층에 등록된 양식이 없으면 data가 null입니다.",
+      "공통 양식보다 우선 적용됩니다. 해당 계층에 등록된 양식이 없으면 data가 null입니다. " +
+      "주의: <TABLE_SCRIPT:테이블물리명> 형식으로 표기된 항목(단위업무 '참조 테이블' 등)은 " +
+      "리터럴 문법입니다 — 괄호 안 테이블물리명만 실제 값으로 바꾸고 <TABLE_SCRIPT: ... > 태그 " +
+      "자체는 절대 풀어쓰지 말고 그대로 유지하세요. 구현요청 생성 시 실제 DDL로 자동 치환됩니다.",
     {
       projectId: z.string().describe("프로젝트 ID"),
       refType: z
@@ -1043,7 +1046,11 @@ export function registerTools(
     "DB 테이블 정보와 컬럼을 갱신합니다. columns는 부분 추가가 아니라 전체 교체입니다 " +
       "— 이 목록에 없는 기존 컬럼은 삭제됩니다. 컬럼을 추가할 때도 반드시 기존 컬럼 " +
       "전체를 함께 전달하세요 (먼저 get_db_table로 현재 컬럼 목록을 조회한 뒤, 거기에 " +
-      "새 컬럼을 더해서 호출하는 방식을 권장합니다)",
+      "새 컬럼을 더해서 호출하는 방식을 권장합니다). " +
+      "제거되는 컬럼에 다른 기능/영역/화면의 컬럼 매핑이 걸려있으면 서버가 아무것도 " +
+      "저장하지 않고 { needsConfirmation: true, impact } 를 반환합니다 — 이 응답을 받으면 " +
+      "confirmColumnRemoval을 임의로 true로 재요청하지 말고, impact 내용(영향받는 기능/영역/" +
+      "화면 수)을 그대로 사용자에게 보여준 뒤 사용자가 명시적으로 진행을 원할 때만 다시 호출하세요",
     {
       projectId: z.string().describe("프로젝트 ID"),
       tableId: z.string().describe("테이블 ID"),
@@ -1062,10 +1069,16 @@ export function registerTools(
             colLgclNm: z.string().optional().describe("논리 컬럼명"),
             dataTyNm: z.string().optional().describe("데이터 타입"),
             colDc: z.string().optional().describe("컬럼 설명"),
+            colSttusCode: z.enum(DB_TABLE_STATUS_CODES).optional()
+              .describe("컬럼 상태 (NEW/EXISTING/DEPRECATED) — 신규 컬럼(colId 생략)은 서버가 무조건 " +
+                "NEW로 자동 부여하므로 여기 값은 무시됩니다. 기존 컬럼(colId 지정)은 세 값 다 지정 가능"),
           })
         )
         .optional()
         .describe("전체 컬럼 목록 (부분 아님 — 전체 교체). 생략하면 기존 컬럼 전체 삭제됨에 주의"),
+      confirmColumnRemoval: z.boolean().optional()
+        .describe("이전 호출이 needsConfirmation을 반환했고, 사용자가 impact 내용을 보고 진행을 " +
+          "명시적으로 승인했을 때만 true로 재요청하세요. 기본값 false"),
     },
     async ({ projectId, tableId, ...body }) => {
       try {

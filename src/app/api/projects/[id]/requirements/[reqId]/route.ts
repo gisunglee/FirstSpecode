@@ -20,6 +20,7 @@ import { deleteFile } from "@/lib/fileStorage";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { requirementUpdateSchema } from "@/lib/specContentSchemas";
 import { fetchUnitWorkProgress } from "@/lib/pm/progressRollup";
+import { applyTemplateVars } from "@/lib/templateVars";
 
 type RouteParams = { params: Promise<{ id: string; reqId: string }> };
 
@@ -173,7 +174,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const newOrgnlCn   = originalContent?.trim() || null;
     const newCurncyCn  = currentContent?.trim() || null;
     const newAnalyCn   = analysisMemo?.trim() || null;
-    const newSpecCn    = detailSpec?.trim() || null;
+    // 템플릿 플레이스홀더({{displayId}}/{{name}}) 안전망 — MCP 등 "템플릿 삽입" 버튼을
+    // 거치지 않는 경로로 저장될 때도 실제 값으로 치환되도록 저장 직전에 한 번 더 통과시킴.
+    const trimmedSpecCn = detailSpec?.trim() || null;
+    const finalReqDisplayId = reqDisplayId?.trim() || existing.req_display_id;
+    const newSpecCn    = trimmedSpecCn
+      ? applyTemplateVars(trimmedSpecCn, { displayId: finalReqDisplayId, name: name.trim() })
+      : trimmedSpecCn;
     const oldAnalyCn   = existing.analy_cn ?? null;
     const oldSpecCn    = existing.spec_cn ?? null;
 
@@ -210,7 +217,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         data:  {
           // taskId가 명시적으로 전달된 경우만 변경 (undefined면 기존 값 유지)
           task_id:        taskId !== undefined ? (taskId || null) : existing.task_id,
-          req_display_id: reqDisplayId?.trim() || existing.req_display_id,
+          req_display_id: finalReqDisplayId,
           req_nm:         name.trim(),
           priort_code:    priority,
           src_code:       source,

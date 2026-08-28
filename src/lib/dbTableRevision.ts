@@ -25,13 +25,14 @@ export type TableSnapshotFields = {
 };
 
 export type ColumnSnapshotFields = {
-  col_id:        string;
-  col_physcl_nm: string;
-  col_lgcl_nm:   string | null;
-  data_ty_nm:    string | null;
-  col_dc:        string | null;
-  ref_grp_code:  string | null;
-  sort_ordr:     number;
+  col_id:         string;
+  col_physcl_nm:  string;
+  col_lgcl_nm:    string | null;
+  data_ty_nm:     string | null;
+  col_dc:         string | null;
+  ref_grp_code:   string | null;
+  col_sttus_code: string;
+  sort_ordr:      number;
 };
 
 export type TableSnapshot = {
@@ -80,13 +81,14 @@ export async function captureTableSnapshot(
       columns: {
         orderBy: { sort_ordr: "asc" },
         select: {
-          col_id:        true,
-          col_physcl_nm: true,
-          col_lgcl_nm:   true,
-          data_ty_nm:    true,
-          col_dc:        true,
-          ref_grp_code:  true,
-          sort_ordr:     true,
+          col_id:         true,
+          col_physcl_nm:  true,
+          col_lgcl_nm:    true,
+          data_ty_nm:     true,
+          col_dc:         true,
+          ref_grp_code:   true,
+          col_sttus_code: true,
+          sort_ordr:      true,
         },
       },
     },
@@ -112,7 +114,7 @@ const TABLE_FIELDS: Array<keyof TableSnapshotFields> = [
 ];
 
 const COLUMN_FIELDS: Array<keyof Omit<ColumnSnapshotFields, "col_id">> = [
-  "col_physcl_nm", "col_lgcl_nm", "data_ty_nm", "col_dc", "ref_grp_code", "sort_ordr",
+  "col_physcl_nm", "col_lgcl_nm", "data_ty_nm", "col_dc", "ref_grp_code", "col_sttus_code", "sort_ordr",
 ];
 
 /**

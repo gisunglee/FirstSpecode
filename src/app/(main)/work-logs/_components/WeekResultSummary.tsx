@@ -1,15 +1,15 @@
 "use client";
 
 /**
- * WeekResultSummary — "OO 주 실적 작성" / "OO 주 계획 작성" 카드
+ * WeekResultSummary — "OO 주 실적 작성" / "OO 주 계획 작성" 서술 카드
  *
- * WEEK 로그의 result_cn만 다루는 자유서술 텍스트 카드다 — 계획(WeekChecklistSummary,
- * 체크리스트)과 분리해서 "계획 카드 옆에 서술 카드"로 나란히 보여주기 위해 예전
- * WeekPlanRow의 WeekCard에서 이 섹션만 떼어냈다(2026-07-24).
+ * WEEK 로그의 자유서술 텍스트를 다룬다. 실적은 result_cn, 계획은 note_cn에 저장한다.
+ * 계획(WeekChecklistSummary, 체크리스트)과 분리해서 "계획 카드 옆에 서술 카드"로
+ * 나란히 보여주기 위해 예전 WeekPlanRow의 WeekCard에서 이 섹션만 떼어냈다(2026-07-24).
  *
  * mode(2026-07-24h) — "다음 주" 인스턴스에 "결과 요약"이라는 제목을 그대로 쓰면 아직
- * 일어나지도 않은 주의 결과를 요약하라는 뜻이 돼 말이 안 된다는 지적. 저장하는 DB 컬럼
- * (result_cn)과 API는 그대로 두고, 화면 제목/안내문만 인스턴스별로 다르게 표시한다:
+ * 일어나지도 않은 주의 결과를 요약하라는 뜻이 돼 말이 안 된다는 지적. 인스턴스별로
+ * 제목뿐 아니라 저장 필드도 계획/실적 의미에 맞게 분리한다:
  *   - "result"(이번 주) — "{label} 실적 작성" — 이미 지난/진행 중인 주라 실제 실적 서술
  *   - "plan"  (다음 주) — "{label} 계획 작성" — 아직 안 온 주라 계획 서술
  *
@@ -23,6 +23,10 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
 import { invalidateWorkLogQueries, WEEK_SUMMARY_CARD_HEIGHT } from "@/lib/weekUtil";
+import {
+  buildWeekNarrativeUpdate,
+  getWeekNarrativeValue,
+} from "@/lib/workLogWeekNarrative";
 import type { WorkLogResponse } from "@/types/workLog";
 import EmptyHighlightTextarea from "./EmptyHighlightTextarea";
 
@@ -40,7 +44,7 @@ export default function WeekResultSummary({
 }) {
   const modeLabel = mode === "result" ? "실적" : "계획";
   const queryClient = useQueryClient();
-  const [resultCn, setResultCn] = useState("");
+  const [contentCn, setContentCn] = useState("");
 
   const queryKey = ["work-log", "WEEK", projectId, monday];
   const { data, isLoading } = useQuery({
@@ -52,21 +56,28 @@ export default function WeekResultSummary({
     enabled: !!projectId,
   });
   const weekLog = data?.items?.[0] ?? null;
+  const narrativeFields = {
+    noteCn: weekLog?.noteCn ?? null,
+    resultCn: weekLog?.resultCn ?? null,
+  };
+  const savedContentCn = getWeekNarrativeValue(mode, narrativeFields);
 
   useEffect(() => {
-    setResultCn(weekLog?.resultCn ?? "");
-  }, [weekLog?.resultCn, monday]);
+    setContentCn(savedContentCn);
+  }, [savedContentCn, monday, mode]);
 
   const saveMutation = useMutation({
-    mutationFn: () =>
-      authFetch(`/api/projects/${projectId}/work-logs`, {
+    mutationFn: () => {
+      const update = buildWeekNarrativeUpdate(mode, contentCn, narrativeFields);
+      return authFetch(`/api/projects/${projectId}/work-logs`, {
         method: "PUT",
-        body: JSON.stringify({ logTyCode: "WEEK", logDt: monday, noteCn: weekLog?.noteCn ?? "", resultCn }),
-      }),
+        body: JSON.stringify({ logTyCode: "WEEK", logDt: monday, ...update }),
+      });
+    },
     onSuccess: () => invalidateWorkLogQueries(queryClient),
   });
 
-  const isDirty = resultCn !== (weekLog?.resultCn ?? "");
+  const isDirty = contentCn !== savedContentCn;
 
   return (
     <div
@@ -87,8 +98,8 @@ export default function WeekResultSummary({
             rows={8}
             fill
             message={`${label} ${modeLabel}을 입력해 주세요.`}
-            value={resultCn}
-            onChange={setResultCn}
+            value={contentCn}
+            onChange={setContentCn}
           />
           {isDirty && (
             <div style={{ textAlign: "right" }}>

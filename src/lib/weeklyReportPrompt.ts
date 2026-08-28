@@ -11,6 +11,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { addDaysStr } from "@/lib/weekUtil";
+import { normalizeWeekNarrative } from "@/lib/workLogWeekNarrative";
 
 export type WeeklyReportPromptResult = {
   finalReqCn:   string;
@@ -94,11 +95,27 @@ export async function buildWeeklyReportPrompt(
     // ── 주간 자기 입력 — 본인이 직접 적은 계획/결과 ──
     const thisWeek = thisWeekByMember.get(mberId);
     const nextWeek = nextWeekByMember.get(mberId);
+    const thisWeekNarrative = thisWeek
+      ? normalizeWeekNarrative({
+          noteCn: thisWeek.note_cn,
+          resultCn: thisWeek.result_cn,
+          logDt: thisWeek.log_dt,
+          savedAt: thisWeek.mdfcn_dt ?? thisWeek.creat_dt,
+        })
+      : null;
+    const nextWeekNarrative = nextWeek
+      ? normalizeWeekNarrative({
+          noteCn: nextWeek.note_cn,
+          resultCn: nextWeek.result_cn,
+          logDt: nextWeek.log_dt,
+          savedAt: nextWeek.mdfcn_dt ?? nextWeek.creat_dt,
+        })
+      : null;
     const weekPart: string[] = [];
-    if (thisWeek?.note_cn?.trim())   weekPart.push(`이번주 계획: ${thisWeek.note_cn.trim()}`);
-    if (thisWeek?.result_cn?.trim()) weekPart.push(`이번주 결과: ${thisWeek.result_cn.trim()}`);
+    if (thisWeekNarrative?.noteCn?.trim())   weekPart.push(`이번주 계획: ${thisWeekNarrative.noteCn.trim()}`);
+    if (thisWeekNarrative?.resultCn?.trim()) weekPart.push(`이번주 결과: ${thisWeekNarrative.resultCn.trim()}`);
     if (thisWeek?.items?.length)     weekPart.push(`중요업무: ${thisWeek.items.map((i) => i.item_cn).join(", ")}`);
-    if (nextWeek?.note_cn?.trim())   weekPart.push(`다음주 계획: ${nextWeek.note_cn.trim()}`);
+    if (nextWeekNarrative?.noteCn?.trim())   weekPart.push(`다음주 계획: ${nextWeekNarrative.noteCn.trim()}`);
     if (weekPart.length > 0) {
       logLines.push(`[주간 자기 입력]`);
       for (const line of weekPart) logLines.push(`- ${line}`);

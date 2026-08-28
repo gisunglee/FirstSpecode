@@ -22,6 +22,7 @@ import {
 import { isCreatorWindowConflict, lockAndAssertCreatorWindow } from "@/lib/specContentWriteConcurrency";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { areaUpdateSchema } from "@/lib/specContentSchemas";
+import { applyTemplateVars } from "@/lib/templateVars";
 
 type RouteParams = { params: Promise<{ id: string; areaId: string }> };
 
@@ -217,7 +218,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       if (!targetScreen) return apiError("NOT_FOUND", "화면을 찾을 수 없습니다.", 404);
     }
 
-    const newDescription = description?.trim() || null;
+    // 템플릿 플레이스홀더({{displayId}}/{{name}}) 안전망 — MCP 등 "템플릿 삽입" 버튼을
+    // 거치지 않는 경로로 저장될 때도 실제 값으로 치환되도록 저장 직전에 한 번 더 통과시킴.
+    const finalDisplayId = displayId?.trim() || existing.area_display_id;
+    const trimmedDescription = description?.trim() || null;
+    const newDescription = trimmedDescription
+      ? applyTemplateVars(trimmedDescription, { displayId: finalDisplayId, name: name.trim() })
+      : trimmedDescription;
 
     // 수정 + 설계 변경 이력 (트랜잭션)
     await prisma.$transaction(async (tx) => {
@@ -226,7 +233,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         where: { area_id: areaId },
         data: {
           scrn_id:      screenId !== undefined ? (screenId || null) : existing.scrn_id,
-          area_display_id: displayId?.trim() || existing.area_display_id,
+          area_display_id: finalDisplayId,
           area_nm:      name.trim(),
           // 유형 — 미전송 시 기존값 유지 (부분 수정 안전, displayFormCode와 동일 패턴)
           area_ty_code: type || existing.area_ty_code,
@@ -253,7 +260,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           chg_rsn_cn:    "영역 수정",
           snapshot_data: {
             areaId:    areaId,
-            displayId: displayId?.trim() || existing.area_display_id,
+            displayId: finalDisplayId,
             name:      name.trim(),
             type:      type || "LIST",
           },

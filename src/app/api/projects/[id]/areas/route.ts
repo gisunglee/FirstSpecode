@@ -17,6 +17,7 @@ import { areaCreateSchema } from "@/lib/specContentSchemas";
 import { listMeaningfulFields } from "@/lib/specContentFieldPolicy";
 import { requireSpecCreateFields } from "@/lib/specContentWritePolicy";
 import { fetchProjectAreas } from "@/lib/exports/areas-data";
+import { applyTemplateVars } from "@/lib/templateVars";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -90,6 +91,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     });
     const nextSort = sortOrder ?? (maxSort._max.sort_ordr ?? 0) + 1;
 
+    // 템플릿 플레이스홀더({{displayId}}/{{name}}) 안전망 — MCP 등 "템플릿 삽입" 버튼을
+    // 거치지 않는 경로로 저장될 때도 실제 값으로 치환되도록 저장 직전에 한 번 더 통과시킴.
+    const trimmedDescription = description?.trim() || null;
+    const newDescription = trimmedDescription
+      ? applyTemplateVars(trimmedDescription, { displayId, name: name.trim() })
+      : trimmedDescription;
+
     const area = await prisma.$transaction(async (tx) => {
       const created = await tx.tbDsArea.create({
         data: {
@@ -101,7 +109,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           area_ty_code:   type || "LIST",
           // 표시 형태 — 미전송 시 STATIC(고정) 기본
           display_form_code: displayFormCode || "STATIC",
-          area_dc:        description?.trim() || null,
+          area_dc:        newDescription,
           sort_ordr:      nextSort,
           creat_mber_id:  gate.mberId,
         },

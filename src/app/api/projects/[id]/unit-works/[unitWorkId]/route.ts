@@ -23,6 +23,7 @@ import {
 import { isCreatorWindowConflict, lockAndAssertCreatorWindow } from "@/lib/specContentWriteConcurrency";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { unitWorkUpdateSchema } from "@/lib/specContentSchemas";
+import { applyTemplateVars } from "@/lib/templateVars";
 
 type RouteParams = { params: Promise<{ id: string; unitWorkId: string }> };
 
@@ -180,7 +181,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const fieldError = requireSpecChangedFields(gate, "UNIT_WORK", changedFields);
     if (fieldError) return fieldError;
 
-    const newDescription = description?.trim() || null;
+    // 템플릿 플레이스홀더({{displayId}}/{{name}}) 안전망 — MCP 등 "템플릿 삽입" 버튼을
+    // 거치지 않는 경로로 저장될 때도 실제 값으로 치환되도록 저장 직전에 한 번 더 통과시킴.
+    const finalDisplayId = displayId?.trim() || existing.unit_work_display_id;
+    const trimmedDescription = description?.trim() || null;
+    const newDescription = trimmedDescription
+      ? applyTemplateVars(trimmedDescription, { displayId: finalDisplayId, name: name.trim() })
+      : trimmedDescription;
 
     // 담당자 변경 감지 — 값이 실제로 바뀌었을 때만 이력 저장 (no-op 스킵)
     // SettingsHistoryDialog의 itemName과 정확히 일치해야 필터됨
@@ -191,7 +198,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // 공통 update data — 미전송 필드는 기존 값 유지
     const updateData = {
-      unit_work_display_id: displayId?.trim() || existing.unit_work_display_id,
+      unit_work_display_id: finalDisplayId,
       unit_work_nm:  name.trim(),
       unit_work_dc:  description !== undefined ? newDescription : existing.unit_work_dc,
       coment_cn:     comment !== undefined ? (comment?.trim() || null) : existing.coment_cn,
