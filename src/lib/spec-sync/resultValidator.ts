@@ -36,16 +36,31 @@ export function validateSyncResult(
     snapshot.targets.map((target) => [targetKey(target), target]),
   );
   const findingKeys = new Set<string>();
-  const implementationTargetKeys = new Set<string>();
   const proposals = new Map<string, DerivedProposal>();
 
-  for (const finding of analysis.implementation.items) {
+  const evaluatedTargetKeys = new Set<string>();
+  for (const evaluatedTarget of analysis.implementation.evaluatedTargets) {
+    const key = targetKey(evaluatedTarget);
+    if (!targets.has(key)) {
+      throw new Error(`실행 UW snapshot에 없는 점검 대상입니다: ${key}`);
+    }
+    assertUnique(evaluatedTargetKeys, key);
+  }
+  const missingTargets = [...targets.keys()].filter(
+    (key) => !evaluatedTargetKeys.has(key),
+  );
+  if (missingTargets.length > 0) {
+    throw new Error(
+      `점검 완료 표시가 누락된 설계 대상이 있습니다: ${missingTargets.slice(0, 20).join(", ")}`,
+    );
+  }
+
+  for (const finding of analysis.implementation.issues) {
     const key = targetKey(finding);
     const target = targets.get(key);
     if (!target) {
       throw new Error(`실행 UW snapshot에 없는 구현 정합성 대상입니다: ${key}`);
     }
-    implementationTargetKeys.add(key);
     assertUnique(findingKeys, `IMPLEMENTATION:${key}`);
     if (finding.proposal) {
       if (targetKey(finding.proposal) !== key) {
@@ -58,16 +73,7 @@ export function validateSyncResult(
     }
   }
 
-  const missingTargets = [...targets.keys()].filter(
-    (key) => !implementationTargetKeys.has(key),
-  );
-  if (missingTargets.length > 0) {
-    throw new Error(
-      `구현 판정이 누락된 설계 대상이 있습니다: ${missingTargets.slice(0, 20).join(", ")}`,
-    );
-  }
-
-  for (const finding of analysis.designCoverage.items) {
+  for (const finding of analysis.designCoverage.issues) {
     const semanticKey = [
       finding.resultCode,
       finding.targetType ?? "NONE",
@@ -175,8 +181,8 @@ function validateSourceEvidence(analysis: SyncAnalysisPayload) {
   }
 
   const findings = [
-    ...analysis.implementation.items,
-    ...analysis.designCoverage.items,
+    ...analysis.implementation.issues,
+    ...analysis.designCoverage.issues,
   ];
   for (const finding of findings) {
     for (const evidence of finding.evidence) {
@@ -202,7 +208,7 @@ function validateSourceEvidence(analysis: SyncAnalysisPayload) {
     const needsRuntimeEvidence =
       "importance" in finding
         ? finding.resultCode !== "UNKNOWN"
-        : ["MATCH", "MISMATCH"].includes(finding.resultCode);
+        : finding.resultCode === "MISMATCH";
     if (
       needsRuntimeEvidence &&
       finding.evidence.length > 0 &&

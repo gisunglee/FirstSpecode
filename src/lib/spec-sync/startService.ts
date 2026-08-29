@@ -9,10 +9,6 @@ import {
 } from "./contracts";
 import { loadDesignSnapshot } from "./designContext";
 import { SpecSyncError } from "./errors";
-import {
-  buildSourceDiscoveryPrompt,
-  buildSyncAnalysisPrompt,
-} from "./prompts";
 
 export async function startSyncRun(input: {
   projectId: string;
@@ -98,13 +94,8 @@ function formatStartResponse(run: {
     status: run.sync_sttus_code,
     unitWorkDisplayId: run.unit_work_display_id,
     designSnapshotHash: run.design_snapshot_hash,
+    targetCount: snapshot.targets.length,
     designSnapshot: snapshot,
-    sourceDiscoveryPrompt: buildSourceDiscoveryPrompt(snapshot),
-    analysisPromptTemplate: buildSyncAnalysisPrompt({
-      mode,
-      snapshot,
-      sourceScope: "로컬 탐색 뒤 확정한 sourceScope JSON을 여기에 사용",
-    }),
   };
 }
 

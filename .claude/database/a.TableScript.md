@@ -180,11 +180,12 @@
   * `sync_mode_code`: `CHECK | DEEP_SYNC`
   * `sync_sttus_code`: `RUNNING | NEEDS_INPUT | NEEDS_REVIEW | COMPLETED | FAILED | CANCELLED`
   * `design_snapshot_data`, `design_snapshot_hash`: 실행 시점 의미 설계와 canonical SHA-256
-  * `source_scope_data`: 로컬에서 확정한 관련 파일·심볼 범위
+  * `source_scope_data`: 로컬에서 확정한 관련 파일·심볼과 분석 시작 시점 원문 SHA-256
+  * `analysis_summary_data`: 점검 대상·정상·문제·결정 대기 건수와 두 축 요약
   * 두 독립 verdict: 구현 정합성 `PASS | FAIL | UNKNOWN`, 설계 커버리지
     `CLEAR | GAP_CANDIDATE | UNKNOWN`
   * `client_submission_key`: 같은 로컬 요청의 네트워크 재시도 중복 방지
-* **`tb_sp_sync_item`** (항목별 분석·사람 결정)
+* **`tb_sp_sync_item`** (문제 항목별 분석·사람 결정 — 정상 항목은 저장하지 않음)
   * `sync_item_id` (t, PK), `sync_run_id` (t, FK CASCADE)
   * `finding_ty_code`: `IMPLEMENTATION | DESIGN_COVERAGE`
   * 구현 결과와 커버리지 결과는 서로 다른 축으로 저장
@@ -193,6 +194,7 @@
   * 자동 적용 대상은 네 설명 필드만 허용:
     `UNIT_WORK.unit_work_dc`, `SCREEN.scrn_dc`, `AREA.area_dc`, `FUNCTION.func_dc`
   * `item_sttus_code`: `INFORMATIONAL | PENDING | APPLIED | REJECTED | DEFERRED | DESIGN_CHANGED`
+    (`INFORMATIONAL`은 전환 전 결과 호환용이며 신규 실행은 문제를 `PENDING`으로만 생성)
   * APPLY는 대상 행 잠금과 exact hash 재검사를 통과한 경우에만 수행하고
     `tb_ds_design_change`와 연결한다.
 

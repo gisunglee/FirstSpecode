@@ -6,6 +6,10 @@ import { apiError, apiSuccess } from "@/lib/apiResponse";
 import { requirePermission } from "@/lib/requirePermission";
 import { specSyncApiError } from "@/lib/spec-sync/api";
 import { loadDesignSnapshot } from "@/lib/spec-sync/designContext";
+import {
+  isSyncIssueResult,
+  normalizeSyncSummary,
+} from "@/lib/spec-sync/summary";
 
 type RouteParams = { params: Promise<{ id: string; runId: string }> };
 
@@ -44,6 +48,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    const summary = normalizeSyncSummary(run.analysis_summary_data, run.items);
+    const issueItems = run.items.filter((item) =>
+      isSyncIssueResult(item.result_code),
+    );
+
     return apiSuccess({
       syncRunId: run.sync_run_id,
       projectId: run.prjct_id,
@@ -54,7 +63,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       status: run.sync_sttus_code,
       designSnapshotHash: run.design_snapshot_hash,
       sourceScope: run.source_scope_data,
-      summary: run.analysis_summary_data,
+      summary,
       implementationVerdict: run.implementation_verdict_code,
       designCoverageVerdict: run.design_coverage_verdict_code,
       failure: run.failure_cn,
@@ -62,7 +71,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       createdAt: run.creat_dt.toISOString(),
       analyzedAt: run.analyzed_dt?.toISOString() ?? null,
       completedAt: run.compl_dt?.toISOString() ?? null,
-      items: run.items.map((item) => ({
+      items: issueItems.map((item) => ({
         syncItemId: item.sync_item_id,
         findingType: item.finding_ty_code,
         resultCode: item.result_code,

@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { usePermissions } from "@/hooks/useMyRole";
 import {
-  InfoBox,
   ResultSection,
   SummaryCell,
 } from "../_components/SyncResultSection";
@@ -142,12 +141,14 @@ export default function SpecSyncDetailPage() {
             <SummaryCell label="모드" value={data.mode === "CHECK" ? "기본 점검" : "정밀 동기화"} />
             <SummaryCell label="구현 정합성" value={verdictLabel(data.implementationVerdict)} />
             <SummaryCell label="설계 커버리지" value={verdictLabel(data.designCoverageVerdict)} />
+            <SummaryCell label="점검 대상" value={`${data.summary.evaluatedTargetCount}건`} />
+            <SummaryCell label="구현 정상" value={`${data.summary.normalTargetCount}건`} />
+            <SummaryCell label="문제" value={`${data.summary.issueCount}건`} />
             <SummaryCell label="요청일" value={formatDate(data.createdAt)} />
           </div>
-          {data.summary ? (
-            <div className="sp-reconcile-evidence-grid sp-reconcile-action-top">
-              <InfoBox title="구현 정합성 요약" copy={data.summary.implementation ?? "요약 없음"} />
-              <InfoBox title="설계 커버리지 요약" copy={data.summary.designCoverage ?? "요약 없음"} />
+          {data.summary.normalTargetCount > 0 ? (
+            <div className="sp-reconcile-notice is-info sp-reconcile-action-top">
+              구현 정상 {data.summary.normalTargetCount}건은 상세 표시를 생략하고 점검 완료 수에만 반영했습니다.
             </div>
           ) : null}
           {data.failure ? <div className="sp-reconcile-notice is-error">{data.failure}</div> : null}
@@ -164,7 +165,8 @@ export default function SpecSyncDetailPage() {
 
       <ResultSection
         title="1. 설계대로 구현됐는지"
-        description="현재 설계의 각 항목이 소스에 포함되어 있는지 확인한 결과입니다."
+        description="설계와 다르거나 구현 여부를 확인할 수 없는 문제만 표시합니다."
+        emptyTitle="구현 정합성 문제가 없습니다."
         items={implementationItems}
         canReview={canReview}
         canApply={canApply}
@@ -181,6 +183,7 @@ export default function SpecSyncDetailPage() {
             ? "사용자 기능·보안·업무 규칙·데이터 변경처럼 중요한 누락 후보만 표시합니다."
             : "관련 소스를 역설계해 중요 누락과 일반 누락을 함께 표시합니다."
         }
+        emptyTitle="검토할 설계 누락 후보가 없습니다."
         items={coverageItems}
         canReview={canReview}
         canApply={canApply}

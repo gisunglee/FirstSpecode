@@ -13,6 +13,7 @@ type Decision = "APPLY" | "REJECT" | "DEFER";
 export function ResultSection(props: {
   title: string;
   description: string;
+  emptyTitle: string;
   items: SyncItem[];
   canReview: boolean;
   canApply: boolean;
@@ -30,7 +31,7 @@ export function ResultSection(props: {
         <p className="sp-reconcile-subtitle">{props.description}</p>
         {props.items.length === 0 ? (
           <div className="sp-empty">
-            <div className="sp-empty-title">보고된 항목이 없습니다.</div>
+            <div className="sp-empty-title">{props.emptyTitle}</div>
           </div>
         ) : (
           <div className="sp-reconcile-item-list sp-reconcile-action-top">
@@ -103,7 +104,7 @@ function SyncItemCard(props: {
           />
           <InfoBox
             title="소스에서 확인한 사실"
-            copy={item.sourceFact ?? "확인하지 못함"}
+            copy={item.sourceFact ?? "소스 사실을 확정하지 못했습니다."}
             fact
           />
         </div>

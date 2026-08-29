@@ -1,77 +1,105 @@
 ---
-description: 현재 소스와 지정 UW 설계를 비교하고, 검토 가능한 결과를 SPECODE에 제출합니다.
+description: 현재 소스와 지정 UW 설계를 비교하고 문제 항목만 SPECODE에 제출합니다.
 argument-hint: UW-XXXXX [--deep]
-allowed-tools: Read, Grep, Glob, Bash, AskUserQuestion, mcp__specode__list_projects, mcp__specode__start_spec_sync, mcp__specode__submit_spec_sync_result, mcp__specode__get_design_template
+allowed-tools: Read, Grep, Glob, Bash, AskUserQuestion, mcp__specode__get_design_template
 ---
 
-# /sync-specode — 현재 소스를 SPECODE 설계와 비교
+# /sync-specode — 현재 소스와 SPECODE 설계 비교
 
-이 명령은 Git diff나 과거 기준선을 사용하지 않는다. 실행할 때마다 지정한 UW의 현재 설계와
-현재 저장소의 관련 소스를 직접 비교한다. 분석 결과만 제출하며 설계 적용은 웹에서 사람이 한다.
+이 명령은 Git diff나 과거 기준선을 사용하지 않는다. 실행할 때마다 지정 UW의 현재 설계 전체와
+현재 저장소의 관련 소스를 비교한다. 정상 항목은 로컬에서 확인만 하고, 사람이 검토할 문제와
+설계 수정안만 서버에 제출한다. 설계 적용은 SPECODE 웹에서 사람이 한다.
 
-## 1. 실행 범위 확인
+## 1. 인자와 실행 대상 확인
 
-`$ARGUMENTS`에서 `UW-XXXXX`를 찾는다.
+`$ARGUMENTS`에서 `UW-XXXXX`를 찾는다. UW가 없으면 전체 프로젝트를 실행하지 말고
+“단위업무별 실행이 범위와 정확도가 가장 좋습니다. 동기화할 UW 번호를 알려주세요.”라고 묻는다.
+`--deep`이 없으면 `CHECK`, 있으면 `DEEP_SYNC`다.
 
-- UW가 없으면 바로 전체 프로젝트를 분석하지 않는다. “단위업무별 실행이 범위와 정확도가 가장
-  좋습니다. 동기화할 UW 번호를 알려주세요.”라고 질문한다.
-- `--deep`이 없으면 `CHECK`, 있으면 `DEEP_SYNC`다.
-- `DEEP_SYNC`는 관련 프로그램을 더 넓게 역설계하므로 시간과 검토량이 커진다고 알리고 확인한다.
-- 프로젝트가 하나면 그 ID를 사용한다. 여러 개면 사용자에게 선택받는다.
+다음 명령으로 프로젝트 범위를 먼저 확인한다.
 
-## 2. 실행 생성과 소스 범위 확정
+```bash
+node .claude/commands/sync_specode.mjs context UW-XXXXX CHECK
+```
 
-`start_spec_sync(projectId, unitWorkRef, mode, clientSubmissionKey)`를 호출한다.
-`clientSubmissionKey`는 현재 세션에서 재호출해도 같은 값이 되도록 임의의 고유 문자열을 쓴다.
+출력된 **프로젝트명·프로젝트 ID·UW·모드**를 그대로 보여주고 진행 여부를 확인한다. 프로젝트가
+하나여도 생략하지 않는다. `DEEP_SYNC`라면 관련 프로그램을 더 넓게 역설계해 시간과 검토량이
+커진다는 점도 함께 알린다. 사용자가 승인하기 전에는 실행을 만들지 않는다.
 
-응답의 `sourceDiscoveryPrompt`와 `designSnapshot`을 기준으로 현재 저장소를 검색한다.
+## 2. 실행 생성과 설계 읽기
 
-1. URL/API path/테이블명/화면·기능 이름과 ID를 검색한다.
-2. 발견한 route/component/service/repository/query의 import·호출 관계를 따라간다.
-3. 같은 업무 폴더의 route 등록, 메뉴와 인접 entrypoint도 확인한다.
-4. 테스트는 근거 보조로만 표시하고 generated/vendor/build/secret은 제외한다.
-5. 실제 실행 경로나 UW 소속이 불확실하면 추측하지 말고 사용자에게 관련 경로를 질문한다.
+현재 실행만의 `.claude/tmp/spec-sync-<고유값>` 폴더를 정하고 다음을 실행한다.
 
-질문에 답을 받지 못하면 `NEEDS_INPUT` 결과를 제출하고 종료한다. 확정했다면 저장소 상대 경로만으로
-`sourceScope`를 만든다.
+```bash
+node .claude/commands/sync_specode.mjs start \
+  UW-XXXXX CHECK ".claude/tmp/spec-sync-<고유값>"
+```
 
-## 3. 모드별 분석
+helper는 큰 설계 응답을 대화에 출력하지 않고 다음처럼 나눠 저장한다.
 
-응답의 `analysisPromptTemplate`에서 sourceScope 자리표시자를 방금 확정한 `sourceScope` JSON으로
-바꾸고, 그 프롬프트를 분석의 최종 지시로 사용한다. 아래 규칙은 이를 사람이 확인하기 위한 요약이다.
+- `manifest.json`: 프로젝트·UW·모드·실행 ID·대상 수
+- `discovery.json`: 요구사항·API·DB 참조와 설계 대상 색인
+- `targets/*.json`: 화면·영역·기능·UW별 실제 설계 설명
+
+`manifest.json`과 `discovery.json`을 먼저 읽는다. 대상 설명은 `targets/*.json`을 5~10건씩 읽어
+한 번 읽은 파일을 불필요하게 다시 읽지 않는다.
+
+## 3. 관련 소스 범위 확정
+
+설계의 URL/API path/테이블명/화면·기능 이름과 ID를 검색하고, 발견한 route/component/service/
+repository/query의 import·호출 관계를 따라간다. 같은 업무 폴더의 route 등록·메뉴·인접
+entrypoint도 확인한다. test는 보조 근거로만 쓰고 generated/vendor/build/secret은 제외한다.
+
+실행 경로나 UW 소속이 불확실하면 추측하지 말고 사용자에게 관련 경로를 질문한다. 답을 받지
+못하면 `NEEDS_INPUT`으로 제출하고 종료한다.
+
+확정한 저장소 상대 경로를 `source-scope.json`에 쓴 뒤 분석 **전에** 고정한다.
+
+```bash
+node .claude/commands/sync_specode.mjs hash-scope \
+  ".claude/tmp/spec-sync-<고유값>/source-scope.json" \
+  ".claude/tmp/spec-sync-<고유값>/source-scope-hashed.json"
+```
+
+`source-scope-hashed.json`을 이후 결과의 `analysis.sourceScope`로 그대로 사용한다.
+
+## 4. 분석 규칙
 
 ### CHECK — 기본
 
-- 설계 target 각각을 `MATCH | MISMATCH | NOT_IMPLEMENTED | UNKNOWN`으로 판정한다.
-- 소스에 기능이 더 많다는 이유로 구현 실패로 판정하지 않는다.
-- 소스에만 있는 동작 중 사용자 기능, 권한·보안, 핵심 업무 규칙, 데이터 변경, 공개 API,
-  중요 검증·트랜잭션·실패 처리만 `IMPORTANT_GAP_CANDIDATE`로 별도 보고한다.
-- 일반 구현 세부와 보통 수준의 추가 동작은 결과에 넣지 않는다.
+- 모든 설계 target을 실제로 확인한다.
+- 문제가 있는 target만 `MISMATCH | NOT_IMPLEMENTED | UNKNOWN`으로 상세 작성한다.
+- 소스에 기능이 더 많다는 이유만으로 구현 실패로 판정하지 않는다.
+- 소스에만 있는 사용자 기능, 권한·보안, 핵심 업무 규칙, 데이터 변경, 공개 API,
+  중요 검증·트랜잭션·실패 처리만 `IMPORTANT_GAP_CANDIDATE`로 보고한다.
+- 일반 구현 세부사항과 보통 수준의 추가 동작은 결과에 넣지 않는다.
 
-### DEEP_SYNC — 별도 검증 기능
+### DEEP_SYNC — 별도 정밀 기능
 
 - 관련 소스의 사용자 동작, 권한·업무 규칙, 입출력, 데이터 변경, 외부 계약, 예외를 역설계한다.
-- 중요 누락과 일반 누락을 모두 보고한다.
-- 신규 화면·영역·기능이 필요하면 `STRUCTURE_GAP`으로 남기고 자동 proposal을 만들지 않는다.
-- 프레임워크 boilerplate/helper/logging/refactoring은 `IMPLEMENTATION_DETAIL`이다.
+- 중요 누락과 일반 누락을 `IMPORTANT_GAP_CANDIDATE | GAP_CANDIDATE`로 보고한다.
+- 신규 화면·영역·기능이 필요하면 `STRUCTURE_GAP`으로 남기고 자동 수정안을 만들지 않는다.
+- boilerplate/helper/logging/refactoring과 UW 범위 밖 내용은 결과에 넣지 않는다.
 
-두 모드 모두 구현 정합성과 설계 커버리지를 독립 판정한다. 구현이 PASS여도 중요한 설계 누락
-후보가 함께 있을 수 있다. 과거 실행 결정을 근거로 이번 분석을 생략하거나 결과를 숨기지 않는다.
-테스트 코드만으로 현재 구현을 확정하지 않는다. 구현 수정안은 `MISMATCH`, 커버리지 수정안은
-누락 후보에만 만들며 `NOT_IMPLEMENTED`, `UNKNOWN`, 정보성 항목에는 만들지 않는다.
+테스트 코드만으로 현재 구현을 확정하지 않는다. 과거 실행 결정을 근거로 이번 분석을 생략하지
+않는다. 근거 또는 UW 소속이 불확실하면 `UNKNOWN`으로 남긴다.
 
-## 4. 결과 계약
+## 5. 문제 전용 결과 작성
 
-`resultStatus=ANALYZED`일 때 아래 구조를 정확히 만든다. 모든 설계 target은 implementation.items에
-정확히 한 번 들어가야 한다. `proposal`에는 TO-BE만 넣고 AS-IS/hash는 만들지 않는다.
+`resultStatus=ANALYZED` 결과는 다음 원칙을 지킨다.
 
-`proposal` 텍스트를 작성하기 전에는 대상 `targetType`(REQUIREMENT/UNIT_WORK/SCREEN/AREA/
-FUNCTION)에 해당하는 refType으로 `get_design_template(projectId, refType)`을 호출해서
-표준 양식(`templateCn`/`exampleCn`)을 확인하고, 그 표·섹션 구조를 그대로 따라 작성한다 —
-자유 서식으로 제안하지 않는다. 웹에서 사람이 그대로 승인하면 설계 description에 반영되므로,
-새로 등록하는 것과 동일한 기준을 적용한다. 이번 실행에서 같은 refType은 한 번만 조회해서
-재사용하고, `targetField`가 이미 표준 양식을 따르는 기존 값이면(부분 수정) 그 구조를 깨지
-않는 선에서 해당 부분만 고친 전체 텍스트를 proposal로 만든다.
+1. `implementation.evaluatedTargets`에는 `discovery.json`의 모든 target을 유형·ID·필드만 넣는다.
+2. `implementation.issues`에는 문제 target만 넣는다. `MATCH` 상세 결과는 절대 넣지 않는다.
+3. `designCoverage.issues`에는 실제 검토할 누락·구조·불확실 항목만 넣는다.
+4. evidence는 초안에서 `path/symbol/startLine/endLine`만 작성한다. snippet과 hash는 helper가 만든다.
+5. 확인된 `MISMATCH`와 기존 대상의 누락 후보는 안전할 때 설계 수정안을 함께 만든다. 불일치나
+   누락은 명확하지만 올바른 TO-BE를 확정할 수 없으면 판정은 유지하고 `proposal: null`로 둔다.
+
+수정안을 만들기 전에는 대상 refType으로 `get_design_template(projectId, refType)`을 호출한다.
+같은 refType은 실행 중 한 번만 조회한다. 표준 양식의 표·섹션 구조를 유지하면서 잘못되거나
+부족한 부분을 고친 **전체 TO-BE 설명**을 `proposal.proposedValue`로 만든다. 기존 target에 연결한
+설계 누락 후보도 같은 방식으로 수정안을 만들 수 있다. 신규 구조나 안전한 전체 설명을 확정할
+수 없는 문제는 proposal을 만들지 않는다. 수정안이 없는 문제도 웹에서 거부·보류할 수 있다.
 
 ```json
 {
@@ -81,70 +109,87 @@ FUNCTION)에 해당하는 refType으로 `get_design_template(projectId, refType)
     "sourceScope": {
       "status": "CONFIRMED",
       "files": [
-        { "path": "src/...", "symbols": ["POST"], "kind": "PRIMARY", "reason": "..." }
+        {
+          "path": "src/...",
+          "symbols": ["save"],
+          "kind": "PRIMARY",
+          "reason": "실행 경로",
+          "contentHash": "hash-scope helper가 만든 sha256"
+        }
       ],
       "userConfirmed": false,
       "confirmationNote": null
     },
     "implementation": {
-      "verdict": "PASS",
-      "summary": "...",
-      "items": [
+      "verdict": "FAIL",
+      "summary": "문제만 요약",
+      "evaluatedTargets": [
+        { "targetType": "FUNCTION", "targetId": "uuid", "targetField": "func_dc" }
+      ],
+      "issues": [
         {
           "targetType": "FUNCTION",
           "targetId": "uuid",
           "targetField": "func_dc",
-          "resultCode": "MATCH",
-          "designStatement": "...",
-          "sourceFact": "...",
-          "reason": "...",
+          "resultCode": "MISMATCH",
+          "designStatement": "현재 설계 내용",
+          "sourceFact": "소스에서 확인한 현재 동작",
+          "reason": "차이의 이유",
           "evidence": [
-            {
-              "path": "src/...",
-              "symbol": "POST",
-              "startLine": 10,
-              "endLine": 15,
-              "snippet": "줄 범위의 원문 그대로",
-              "snippetHash": "sha256 lowercase hex",
-              "redacted": false
-            }
+            { "path": "src/...", "symbol": "save", "startLine": 10, "endLine": 15 }
           ],
           "confidence": "HIGH",
-          "proposal": null
+          "proposal": {
+            "targetType": "FUNCTION",
+            "targetId": "uuid",
+            "targetField": "func_dc",
+            "proposedValue": "표준 양식에 맞춘 전체 TO-BE 설명"
+          }
         }
       ]
     },
-    "designCoverage": {
-      "verdict": "CLEAR",
-      "summary": "...",
-      "items": []
-    }
+    "designCoverage": { "verdict": "CLEAR", "summary": "중요 누락 없음", "issues": [] }
   }
 }
 ```
 
-구현 verdict는 MISMATCH/NOT_IMPLEMENTED가 하나라도 있으면 `FAIL`, 그것 없이 UNKNOWN이 있으면
-`UNKNOWN`, 나머지는 `PASS`다. 커버리지 verdict는 중요/일반/구조 누락이 있으면
-`GAP_CANDIDATE`, 그것 없이 UNKNOWN이 있으면 `UNKNOWN`, 나머지는 `CLEAR`다.
+구현 verdict는 문제에 `MISMATCH/NOT_IMPLEMENTED`가 있으면 `FAIL`, 그것 없이 `UNKNOWN`만 있으면
+`UNKNOWN`, 문제가 없으면 `PASS`다. 커버리지 verdict는 누락·구조 후보가 있으면
+`GAP_CANDIDATE`, 그것 없이 `UNKNOWN`만 있으면 `UNKNOWN`, 문제가 없으면 `CLEAR`다.
+두 `summary`는 각각 1~2문장, 500자 이내로 작성한다. target별 판정·코드 근거·긴 설명을
+나열하지 말고 건수와 핵심 결론만 적는다. 상세 내용은 `issues`에만 둔다.
 
-evidence snippet은 지정 줄의 실제 원문과 정확히 같아야 한다. 인식 가능한 credential이 포함되면
-검증기의 결정적 마스킹 값으로 바꾸고 `redacted=true`로 제출한다. 다른 근거로 대체할 수 있으면
-비밀값이 없는 줄을 우선하고, 검증할 수 없으면 UNKNOWN으로 둔다.
-사용자가 소스 범위를 확인했다면 `userConfirmed=true`와 함께 확인 내용을 `confirmationNote`에 남긴다.
+## 6. 결정적 근거 생성과 제출
 
-## 5. 로컬 검증 후 제출
-
-결과 JSON을 OS 임시 파일에 저장하고 다음 검증기를 실행한다.
+초안을 `draft-result.json`에 저장하고 helper로 최종 제출 파일을 만든다.
 
 ```bash
-node .claude/commands/validate_specode_sync.mjs --repo . --input "<임시 JSON 경로>"
+node .claude/commands/sync_specode.mjs prepare \
+  ".claude/tmp/spec-sync-<고유값>/draft-result.json" \
+  ".claude/tmp/spec-sync-<고유값>/final-result.json"
 ```
 
-검증 실패를 고친 뒤 `submit_spec_sync_result(projectId, runId, result)`를 호출한다. 임시 파일은
-성공·실패와 무관하게 삭제한다. 서버는 target 소속, 결과 모순, evidence, proposal을 다시 검증한다.
+helper는 지정 행의 실제 원문을 읽어 snippet·hash·credential 마스킹을 만들고, 분석 시작 때의
+모든 소스 hash가 현재와 같은지 검사한다. `분석 중 소스가 변경되었습니다`가 나오면 해당 파일과
+영향 target만 다시 읽고 판정한 뒤 source scope hash를 새로 고정한다. 전체 파일을 무조건 다시
+읽지 않는다.
 
-마지막에 실행 ID, 두 verdict, 검토 대기 수와 다음 웹 경로를 알려준다.
+검증이 끝나면 큰 JSON을 MCP 인자로 다시 전달하지 말고 파일을 직접 전송한다.
+
+```bash
+node .claude/commands/sync_specode.mjs submit \
+  "<manifest.json의 syncRunId>" \
+  ".claude/tmp/spec-sync-<고유값>/final-result.json"
+```
+
+성공 후 실행 ID, 두 verdict, 문제 수와 웹 경로를 알려준다.
 
 `/projects/{projectId}/spec-reconciliations/{runId}`
 
-웹 검토자가 항목별로 적용·거부·보류한다. 이 명령과 MCP에서는 설계를 직접 적용하지 않는다.
+마지막으로 이 실행의 작업 폴더만 정리한다.
+
+```bash
+node .claude/commands/sync_specode.mjs cleanup ".claude/tmp/spec-sync-<고유값>"
+```
+
+웹 검토자가 문제 항목별로 적용·거부·보류한다. 명령과 helper는 설계를 직접 수정하지 않는다.

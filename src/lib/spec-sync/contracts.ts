@@ -28,6 +28,7 @@ export type {
   SyncTargetField,
   SyncTargetType,
 } from "./designContracts";
+export { syncDecisionSchema } from "./decisionContracts";
 export {
   confirmedSourceScopeSchema,
   evidenceSchema,
@@ -66,17 +67,30 @@ export const proposalSchema = z
     }
   });
 
+export const evaluatedTargetSchema = z
+  .object({
+    targetType: syncTargetTypeSchema,
+    targetId: z.string().trim().min(1).max(36),
+    targetField: syncTargetFieldSchema,
+  })
+  .superRefine((target, context) => {
+    if (TARGET_FIELDS[target.targetType] !== target.targetField) {
+      context.addIssue({
+        code: "custom",
+        path: ["targetField"],
+        message: "점검 대상 유형과 필드가 일치하지 않습니다.",
+      });
+    }
+  });
+
 export const implementationFindingSchema = z
   .object({
     targetType: syncTargetTypeSchema,
     targetId: z.string().trim().min(1).max(36),
     targetField: syncTargetFieldSchema,
-    resultCode: z.enum([
-      "MATCH",
-      "MISMATCH",
-      "NOT_IMPLEMENTED",
-      "UNKNOWN",
-    ]),
+    // 정상(MATCH)은 상세 결과로 보내지 않는다. evaluatedTargets로 점검 완료만 증명하고
+    // 서버에는 사람이 확인할 문제만 저장한다.
+    resultCode: z.enum(["MISMATCH", "NOT_IMPLEMENTED", "UNKNOWN"]),
     designStatement: z.string().max(20_000),
     sourceFact: z.string().max(20_000).nullable().default(null),
     reason: z.string().trim().min(1).max(20_000),
@@ -92,14 +106,18 @@ export const implementationFindingSchema = z
         message: "대상 유형과 필드가 일치하지 않습니다.",
       });
     }
-    if (
-      ["MATCH", "MISMATCH"].includes(finding.resultCode) &&
-      finding.evidence.length === 0
-    ) {
+    if (finding.resultCode === "MISMATCH" && finding.evidence.length === 0) {
       context.addIssue({
         code: "custom",
         path: ["evidence"],
-        message: "MATCH와 MISMATCH에는 코드 근거가 필요합니다.",
+        message: "MISMATCH에는 코드 근거가 필요합니다.",
+      });
+    }
+    if (finding.resultCode === "MISMATCH" && !finding.sourceFact?.trim()) {
+      context.addIssue({
+        code: "custom",
+        path: ["sourceFact"],
+        message: "MISMATCH에는 소스에서 확인한 사실이 필요합니다.",
       });
     }
     if (finding.resultCode !== "MISMATCH" && finding.proposal) {
@@ -117,8 +135,6 @@ export const designCoverageFindingSchema = z
       "IMPORTANT_GAP_CANDIDATE",
       "GAP_CANDIDATE",
       "STRUCTURE_GAP",
-      "IMPLEMENTATION_DETAIL",
-      "OUT_OF_SCOPE",
       "UNKNOWN",
     ]),
     importance: importanceSchema,
@@ -174,33 +190,34 @@ export const syncAnalysisPayloadSchema = z
     sourceScope: confirmedSourceScopeSchema,
     implementation: z.object({
       verdict: z.enum(["PASS", "FAIL", "UNKNOWN"]),
-      summary: z.string().max(10_000),
-      items: z.array(implementationFindingSchema).max(5_000),
+      summary: z.string().trim().min(1).max(500),
+      evaluatedTargets: z.array(evaluatedTargetSchema).min(1).max(5_000),
+      issues: z.array(implementationFindingSchema).max(5_000),
     }),
     designCoverage: z.object({
       verdict: z.enum(["CLEAR", "GAP_CANDIDATE", "UNKNOWN"]),
-      summary: z.string().max(10_000),
-      items: z.array(designCoverageFindingSchema).max(5_000),
+      summary: z.string().trim().min(1).max(500),
+      issues: z.array(designCoverageFindingSchema).max(5_000),
     }),
   })
   .superRefine((result, context) => {
     if (
       result.mode === "CHECK" &&
-      result.designCoverage.items.some(
+      result.designCoverage.issues.some(
         (item) => item.resultCode === "GAP_CANDIDATE",
       )
     ) {
       context.addIssue({
         code: "custom",
-        path: ["designCoverage", "items"],
+        path: ["designCoverage", "issues"],
         message: "CHECK는 일반 GAP_CANDIDATE를 반환하지 않습니다.",
       });
     }
 
-    const hasImplementationFailure = result.implementation.items.some((item) =>
+    const hasImplementationFailure = result.implementation.issues.some((item) =>
       ["MISMATCH", "NOT_IMPLEMENTED"].includes(item.resultCode),
     );
-    const hasImplementationUnknown = result.implementation.items.some(
+    const hasImplementationUnknown = result.implementation.issues.some(
       (item) => item.resultCode === "UNKNOWN",
     );
     const expectedImplementationVerdict = hasImplementationFailure
@@ -216,14 +233,14 @@ export const syncAnalysisPayloadSchema = z
       });
     }
 
-    const hasCoverageGap = result.designCoverage.items.some((item) =>
+    const hasCoverageGap = result.designCoverage.issues.some((item) =>
       [
         "IMPORTANT_GAP_CANDIDATE",
         "GAP_CANDIDATE",
         "STRUCTURE_GAP",
       ].includes(item.resultCode),
     );
-    const hasCoverageUnknown = result.designCoverage.items.some(
+    const hasCoverageUnknown = result.designCoverage.issues.some(
       (item) => item.resultCode === "UNKNOWN",
     );
     const expectedCoverageVerdict = hasCoverageGap
@@ -255,18 +272,3 @@ export const syncResultSubmissionSchema = z.discriminatedUnion("resultStatus", [
     errorMessage: z.string().trim().min(1).max(10_000),
   }),
 ]);
-
-export const syncDecisionSchema = z
-  .object({
-    decision: z.enum(["APPLY", "REJECT", "DEFER"]),
-    reason: z.string().trim().max(4_000).default(""),
-  })
-  .superRefine((decision, context) => {
-    if (decision.decision !== "APPLY" && !decision.reason) {
-      context.addIssue({
-        code: "custom",
-        path: ["reason"],
-        message: "거부와 보류에는 사유가 필요합니다.",
-      });
-    }
-  });

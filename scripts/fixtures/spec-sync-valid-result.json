@@ -9,17 +9,32 @@
           "path": "scripts/fixtures/spec-sync-source.ts",
           "symbols": ["add"],
           "kind": "PRIMARY",
-          "reason": "검증기 fixture"
+          "reason": "검증기 fixture",
+          "contentHash": "254adcb50cf6367f665961fb89d42fcd4c346e0528642438220f8c0529626e6b"
         }
       ],
       "userConfirmed": false,
       "confirmationNote": null
     },
     "implementation": {
-      "verdict": "PASS",
-      "summary": "fixture",
-      "items": [
+      "verdict": "FAIL",
+      "summary": "fixture 불일치 한 건",
+      "evaluatedTargets": [
         {
+          "targetType": "FUNCTION",
+          "targetId": "fixture-function",
+          "targetField": "func_dc"
+        }
+      ],
+      "issues": [
+        {
+          "targetType": "FUNCTION",
+          "targetId": "fixture-function",
+          "targetField": "func_dc",
+          "resultCode": "MISMATCH",
+          "designStatement": "두 수를 뺀다.",
+          "sourceFact": "두 수를 더한다.",
+          "reason": "연산이 다르다.",
           "evidence": [
             {
               "path": "scripts/fixtures/spec-sync-source.ts",
@@ -30,10 +45,21 @@
               "snippetHash": "018e76cf040d6a6ce02580219aa95f4cbda4dbfa247d707d5b8def35168ce3e8",
               "redacted": false
             }
-          ]
+          ],
+          "confidence": "HIGH",
+          "proposal": {
+            "targetType": "FUNCTION",
+            "targetId": "fixture-function",
+            "targetField": "func_dc",
+            "proposedValue": "두 수를 더한다."
+          }
         }
       ]
     },
-    "designCoverage": { "verdict": "CLEAR", "summary": "fixture", "items": [] }
+    "designCoverage": {
+      "verdict": "CLEAR",
+      "summary": "fixture 누락 없음",
+      "issues": []
+    }
   }
 }

@@ -83,6 +83,12 @@ export async function submitSyncResult(input: {
   const pendingCount = itemData.filter(
     (item) => item.item_sttus_code === "PENDING",
   ).length;
+  const evaluatedTargetCount =
+    validated.analysis.implementation.evaluatedTargets.length;
+  const implementationIssueCount =
+    validated.analysis.implementation.issues.length;
+  const coverageIssueCount = validated.analysis.designCoverage.issues.length;
+  const normalTargetCount = evaluatedTargetCount - implementationIssueCount;
   const completed = pendingCount === 0;
   const now = new Date();
 
@@ -125,7 +131,11 @@ export async function submitSyncResult(input: {
         analysis_summary_data: {
           implementation: validated.analysis.implementation.summary,
           designCoverage: validated.analysis.designCoverage.summary,
-          itemCount: itemData.length,
+          evaluatedTargetCount,
+          normalTargetCount,
+          issueCount: itemData.length,
+          implementationIssueCount,
+          coverageIssueCount,
           pendingCount,
         },
         implementation_verdict_code:

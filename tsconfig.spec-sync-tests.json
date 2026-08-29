@@ -12,10 +12,11 @@
   },
   "include": [
     "src/lib/spec-sync/contracts.ts",
+    "src/lib/spec-sync/decisionContracts.ts",
     "src/lib/spec-sync/hash.ts",
     "src/lib/spec-sync/itemFactory.ts",
-    "src/lib/spec-sync/prompts.ts",
     "src/lib/spec-sync/resultValidator.ts",
+    "src/lib/spec-sync/summary.ts",
     "scripts/spec-sync-contract.test.ts"
   ]
 }

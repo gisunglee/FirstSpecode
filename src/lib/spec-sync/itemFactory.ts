@@ -15,7 +15,7 @@ export function buildItemData(
   );
   const items: Prisma.TbSpSyncItemCreateManyInput[] = [];
 
-  for (const finding of analysis.implementation.items) {
+  for (const finding of analysis.implementation.issues) {
     const key = targetKey(finding);
     const target = targets.get(key)!;
     const proposal = proposals.get(`IMPLEMENTATION:${key}`);
@@ -23,7 +23,7 @@ export function buildItemData(
       sync_run_id: runId,
       finding_ty_code: "IMPLEMENTATION",
       result_code: finding.resultCode,
-      importance_code: finding.resultCode === "MATCH" ? "DETAIL" : "HIGH",
+      importance_code: finding.resultCode === "UNKNOWN" ? "NORMAL" : "HIGH",
       target_ref_ty_code: finding.targetType,
       target_ref_id: finding.targetId,
       target_field_nm: finding.targetField,
@@ -37,12 +37,11 @@ export function buildItemData(
       before_value_cn: proposal?.beforeValue ?? null,
       before_hash: proposal?.beforeHash ?? null,
       proposed_value_cn: proposal?.proposedValue ?? null,
-      item_sttus_code:
-        finding.resultCode === "MATCH" ? "INFORMATIONAL" : "PENDING",
+      item_sttus_code: "PENDING",
     });
   }
 
-  for (const finding of analysis.designCoverage.items) {
+  for (const finding of analysis.designCoverage.issues) {
     const semanticKey = coverageKey(finding);
     const proposal = proposals.get(`COVERAGE:${semanticKey}`);
     const target =
@@ -55,9 +54,6 @@ export function buildItemData(
             }),
           )
         : null;
-    const informational = ["IMPLEMENTATION_DETAIL", "OUT_OF_SCOPE"].includes(
-      finding.resultCode,
-    );
     items.push({
       sync_run_id: runId,
       finding_ty_code: "DESIGN_COVERAGE",
@@ -76,7 +72,7 @@ export function buildItemData(
       before_value_cn: proposal?.beforeValue ?? null,
       before_hash: proposal?.beforeHash ?? null,
       proposed_value_cn: proposal?.proposedValue ?? null,
-      item_sttus_code: informational ? "INFORMATIONAL" : "PENDING",
+      item_sttus_code: "PENDING",
     });
   }
 

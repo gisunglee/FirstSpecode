@@ -2,7 +2,7 @@
 
 > 대상 단위업무: UW-00036
 > 확정일: 2026-08-17
-> 상태: V2 코드·DB 전환 완료 · 실제 Claude Code Shadow 승인 전 · 기능 flag OFF
+> 상태: V2 코드·DB 전환 완료 · 실제 고객 저장소 재검증 전
 > 대체 대상: Git baseline/Diff/provider 중심 V1 전체
 
 ---
@@ -161,6 +161,8 @@ Claude Code에 UW 번호만 넘기지 않는다.
 UW 모듈 경계 안의 entrypoint와 업무 로직을 더 넓게 훑는다.
 
 저장소 전체 내용을 한 프롬프트에 넣지 않는다. 검색으로 범위를 좁힌 후 현재 내용을 읽는다.
+설계 snapshot도 한 번에 반복 전달하지 않는다. manifest와 탐색 정보만 먼저 읽고, 대상 설계는
+5~10건 단위 파일로 나눠 읽는다.
 
 ### 5.3 사용자 확인 조건
 
@@ -207,8 +209,10 @@ UW 모듈 경계 안의 entrypoint와 업무 로직을 더 넓게 훑는다.
 - 결과 대상이 실행 UW 계층에 속하는지 검증
 - 경로가 저장소 안에 있는지 로컬 helper에서 검증
 - secret·vendor·build·generated 경로 차단
-- 근거 path·line·snippet·hash를 로컬 파일과 대조
+- 분석 시작 시 관련 파일의 원문 hash 고정 및 제출 직전 재검증
+- AI는 근거의 path·line만 지정하고, snippet·hash·redaction은 로컬 helper가 원문에서 생성
 - JSON schema와 중복 항목 검증
+- 모든 설계 target의 점검 완료 여부와 문제 target의 상세 결과를 분리해 검증
 - AI가 반환한 `confidence`만으로 자동 적용하지 않음
 
 ---
@@ -224,17 +228,28 @@ UW 모듈 경계 안의 entrypoint와 업무 로직을 더 넓게 훑는다.
       {
         "path": "src/app/api/example/route.ts",
         "symbols": ["POST"],
+        "kind": "PRIMARY",
+        "contentHash": "64자리 sha256",
         "reason": "설계의 POST /api/example과 직접 연결"
       }
     ]
   },
   "implementation": {
     "verdict": "PASS",
-    "items": []
+    "summary": "모든 설계 대상을 확인했고 구현 불일치가 없습니다.",
+    "evaluatedTargets": [
+      {
+        "targetType": "FUNCTION",
+        "targetId": "설계 대상 UUID",
+        "targetField": "func_dc"
+      }
+    ],
+    "issues": []
   },
   "designCoverage": {
     "verdict": "GAP_CANDIDATE",
-    "items": [
+    "summary": "중요한 설계 누락 후보가 있습니다.",
+    "issues": [
       {
         "resultCode": "IMPORTANT_GAP_CANDIDATE",
         "sourceFact": "빼기와 나누기 동작이 사용자 API로 제공된다.",
@@ -252,6 +267,8 @@ UW 모듈 경계 안의 entrypoint와 업무 로직을 더 넓게 훑는다.
           }
         ],
         "proposal": {
+          "targetType": "FUNCTION",
+          "targetId": "기존 대상 UUID",
           "targetField": "func_dc",
           "proposedValue": "변경 후 전체 설명"
         }
@@ -261,8 +278,12 @@ UW 모듈 경계 안의 entrypoint와 업무 로직을 더 넓게 훑는다.
 }
 ```
 
-서버에는 전체 소스와 전체 Diff를 저장하지 않는다. 다른 검토자가 판단할 수 있는 최소한의
-redacted snippet과 경로·심볼·행·hash만 저장한다.
+모든 설계 target은 `evaluatedTargets`에 한 번씩 있어야 한다. 정상 target은 별도 상세 결과를
+보내거나 저장하지 않는다. `issues`에는 불일치·미구현·판단 불가·설계 누락 후보만 넣는다.
+
+서버에는 전체 소스와 전체 Diff를 저장하지 않는다. 다른 검토자가 문제를 판단할 수 있는
+최소한의 redacted snippet과 경로·심볼·행·hash만 저장한다. snippet은 AI가 재작성하지 않고
+로컬 helper가 지정된 행의 원문에서 결정적으로 만든다.
 
 ---
 
@@ -271,9 +292,12 @@ redacted snippet과 경로·심볼·행·hash만 저장한다.
 ### 8.1 소스 변경
 
 - 결과는 명시된 분석 시점의 소스에 대한 판단이다.
-- 분석 후 소스가 변경됐는지 SPECODE가 추적하거나 적용을 막지 않는다.
-- source hash, project fingerprint, source baseline을 만들지 않는다.
-- 최신 점검이 필요하면 사용자가 다시 실행한다.
+- 관련 소스 범위를 확정할 때 파일별 원문 SHA-256을 기록한다.
+- 제출 직전 로컬 helper가 같은 파일을 다시 계산한다. 하나라도 달라지면 제출하지 않고 변경된
+  파일만 다시 읽어 해당 판정을 갱신한다.
+- 이 hash는 한 번의 분석이 같은 소스 상태를 사용했는지 보장하는 장치다. 과거 변경 추적,
+  Git baseline, Diff 생성, 다음 실행의 분석 생략에는 사용하지 않는다.
+- 서버는 검증된 파일 hash를 source scope 이력으로 저장하지만 소스 원문은 저장하지 않는다.
 
 ### 8.2 설계 변경
 
@@ -301,9 +325,11 @@ AI가 `before_value`와 `before_hash`를 정하지 않는다. 서버가 분석 �
 - 변경 후 설명 전체 값을 만들 수 있음
 - 구조 생성·삭제·이동이 필요하지 않음
 
-조건을 만족하지 않으면 분석 결과만 저장하고 자동 적용 가능한 수정안은 만들지 않는다.
-특히 `MATCH | NOT_IMPLEMENTED | UNKNOWN | STRUCTURE_GAP | IMPLEMENTATION_DETAIL | OUT_OF_SCOPE`에는
-자동 적용안을 만들지 않는다.
+확인된 기존 대상의 `MISMATCH`와 기존 대상에 연결한 `*_GAP_CANDIDATE`는 안전할 때 표준 설계
+양식에 맞춘 수정안을 함께 제출한다. 불일치나 누락은 명확하지만 올바른 TO-BE 전체 설명을
+확정할 수 없으면 판정은 유지하고 수정안만 생략한다. 이 항목은 거부·보류할 수 있지만 적용할
+수는 없다. `NOT_IMPLEMENTED | UNKNOWN | STRUCTURE_GAP`에는 자동 적용안을 만들지 않는다.
+`MATCH | IMPLEMENTATION_DETAIL | OUT_OF_SCOPE`는 상세 결과 자체를 제출하지 않는다.
 
 승인 시 처리:
 
@@ -344,7 +370,7 @@ AI가 `before_value`와 `before_hash`를 정하지 않는다. 서버가 분석 �
 
 ### 9.2 `tb_sp_sync_item`
 
-비교 결과와 항목별 결정을 저장한다.
+사람이 검토할 문제와 항목별 결정을 저장한다. 정상 항목은 저장하지 않는다.
 
 - `sync_item_id`, `sync_run_id`
 - `finding_ty_code`: `DESIGN_CONFORMANCE | DESIGN_GAP_CANDIDATE`
@@ -354,8 +380,12 @@ AI가 `before_value`와 `before_hash`를 정하지 않는다. 서버가 분석 �
 - `design_statement_cn`, `source_fact_cn`, `reason_cn`
 - `source_evidence_data`, `confidence_code`
 - 제안이 있을 때만 `before_value_cn`, `before_hash`, `proposed_value_cn`
-- `item_sttus_code`: `INFORMATIONAL | PENDING | APPLIED | REJECTED | DEFERRED | DESIGN_CHANGED`
+- 신규 문제 항목의 `item_sttus_code`: `PENDING | APPLIED | REJECTED | DEFERRED | DESIGN_CHANGED`
 - 결정자·결정사유·결정일·`design_change_id`·감사 컬럼
+
+기존 `INFORMATIONAL` 값은 전환 전 이력 호환을 위해 DB 허용값에 남을 수 있지만, 새 실행에서는
+생성하지 않고 상세 화면에서도 정상·구현 세부 항목을 숨긴다. run 요약에는 점검 대상 수,
+정상 수, 문제 수만 저장해 전체 점검 여부를 확인한다.
 
 ### 9.3 만들지 않는 것
 
@@ -379,8 +409,12 @@ POST /api/worker/spec-syncs/{runId}/result
 POST /api/worker/spec-syncs/{runId}/cancel
 ```
 
-- 실행 생성은 UW snapshot과 모드별 결과 schema를 반환한다.
-- 결과 제출은 로컬 검증을 통과한 source scope·분석 결과를 한 번에 받는다.
+- 실행 생성은 프로젝트·UW 확인 정보와 중복 없는 UW snapshot을 반환한다. 로컬 helper는 이를
+  manifest·탐색 정보·소규모 target 파일로 분해한다.
+- 결과 제출은 로컬 검증을 통과한 source scope와 문제 중심 분석 결과를 받는다. 정상은
+  `evaluatedTargets`로만 증명한다.
+- Claude Code가 큰 결과 JSON을 MCP 파라미터로 다시 전달하지 않도록 로컬 helper가 파일을
+  직접 Worker API로 제출한다.
 - 소스 범위 질문은 Claude Code 터미널에서 처리한다. 별도 웹 범위 확인 흐름은 만들지 않는다.
 
 ### 10.2 Web API
@@ -388,15 +422,19 @@ POST /api/worker/spec-syncs/{runId}/cancel
 ```text
 GET  /api/projects/{id}/spec-syncs
 GET  /api/projects/{id}/spec-syncs/{runId}
+POST /api/projects/{id}/spec-syncs/{runId}/result
 POST /api/projects/{id}/spec-syncs/{runId}/items/{itemId}/decision
 ```
+
+Web/MCP 인증 흐름은 `.../{runId}/result`, 프로젝트 Worker key 흐름은
+`/api/worker/spec-syncs/{runId}/result`로 같은 결과 계약을 제출한다.
 
 `decision`은 `APPLY | REJECT | DEFER`만 받는다. `APPLY`는 before hash 검사와 설계 변경 이력을
 한 트랜잭션으로 처리한다.
 
 서버는 `item_sttus_code=PENDING`인 항목에만 결정을 허용한다. `APPLY`에는 수정안이 반드시
 있어야 하지만, 자동 적용할 수 없는 `STRUCTURE_GAP` 같은 항목은 수정안 없이도
-`REJECT/DEFER`할 수 있다. `INFORMATIONAL`, 이미 결정된 항목, 수정안 없는 항목의 `APPLY`는
+`REJECT/DEFER`할 수 있다. 과거 `INFORMATIONAL`, 이미 결정된 항목, 수정안 없는 항목의 `APPLY`는
 `409 INVALID_ITEM_STATE`로 거부한다.
 
 ### 10.3 HTTP MCP
@@ -418,8 +456,10 @@ MCP에는 설계 적용 도구를 제공하지 않는다. 적용은 웹에서 �
 
 - 목록: UW, 모드, 두 축의 요약, 상태, 요청자, 분석시각
 - 상세 상단: `구현 정합성`과 `설계 커버리지`를 별도 카드로 표시
-- 상세 본문: 불일치, 중요한 누락 후보, 일반 누락 후보, 판단 불가
+- 상세 본문: 불일치, 미구현, 중요한 누락 후보, 일반 누락 후보, 판단 불가만 표시
 - 항목: 설계 내용, 소스 사실, 이유, redacted 근거, AS-IS/TO-BE, 결정
+- 정상 항목은 카드로 나열하지 않고 상단의 `점검 대상 / 정상 / 문제` 수로만 표시
+- AI 실행 요약은 1~2문장·500자 이하로 제한하고, 상세 상단에는 원문 박스를 반복 표시하지 않음
 - 제거: Git provider, Source baseline, checkpoint, Diff, batch, gate, 증거 보관 정리
 
 ---
@@ -481,13 +521,17 @@ hash 함수를 별도로 둔다.
 ```text
 src/lib/spec-sync/contracts.ts        모드별 입력·결과 Zod schema
 src/lib/spec-sync/designContext.ts    UW 전체 설계 snapshot
-src/lib/spec-sync/prompts.ts          CHECK/DEEP_SYNC 분리 프롬프트
 src/lib/spec-sync/resultValidator.ts  대상·근거·중복·제안 검증
+src/lib/spec-sync/summary.ts          신규·기존 run 요약 정규화
 src/lib/spec-sync/targetRegistry.ts   UW 소속 검증·행 잠금을 포함해 새로 구현
 src/lib/spec-sync/applySyncItem.ts    exact hash 검사와 단일 항목 적용
 .claude/commands/sync-specode.md       새 사용자 명령
 .claude/commands/sync_specode.mjs      시작·검증·결과 제출 helper
+.claude/commands/spec_sync_local.mjs   파일 hash·근거 생성·직접 제출 공통 모듈
 ```
+
+분석 프롬프트는 실제로 배포되는 `.claude/commands/sync-specode.md` 한 곳에서 관리한다. 서버에
+같은 프롬프트 복사본을 두지 않는다.
 
 기존 V1 테이블은 새 이름으로 재활용하지 않는다. 상태와 의미가 달라 조건문과 nullable 컬럼만
 남게 되므로 `tb_sp_sync_run`, `tb_sp_sync_item`을 새로 만들고 전환 완료 후 제거한다.
@@ -498,13 +542,15 @@ src/lib/spec-sync/applySyncItem.ts    exact hash 검사와 단일 항목 적용
 
 ## 13. 구현 전 Shadow 검증 게이트
 
-DB·API·화면부터 만들지 않는다. 실제 UW 5~10건을 로컬 파일과 JSON으로 먼저 검증한다.
-첫 게이트는 `CHECK`만 대상으로 한다. 코드 구현이 먼저 끝났더라도 실제 운영 접수는
-`SPEC_SYNC_ENABLED=false`로 차단하고, CHECK Shadow 승인 뒤에만 활성화한다. `DEEP_SYNC`는
-별도 Shadow 게이트를 통과하기 전까지 `SPEC_SYNC_DEEP_ENABLED=false`로 유지한다.
+운영 활성화 전에 실제 고객 프로젝트의 대표 UW와 통제된 변형 사례를 검증한다. 현재 품질이
+확인된 실제 대상은 `운영시스템 구축(2차) / UW-00011 일정관리` 한 건뿐이므로, 이를 실제 사례로
+사용하고 별도의 테스트 복제본에 불일치·미구현·중요 누락·범위 불명확 변형을 만든다. 존재하지
+않는 고객 UW를 실사례로 꾸미지 않으며, 서로 다른 실제 UW가 확보되면 표본에 순차 추가한다.
+첫 게이트는 `CHECK`만 대상으로 한다. 별도 기능 flag는 두지 않으며, 운영 배포와 고객 저장소
+명령 재설치는 CHECK Shadow 승인 절차로 통제한다. `DEEP_SYNC`는 별도 Shadow 게이트를 통과한
+범위에서만 사용한다.
 
-표본에는 화면 중심, API 중심, 공통 모듈, path 정보 부족, 알려진 불일치, 알려진 중요 설계
-누락을 포함한다.
+표본에는 정상, 알려진 불일치, 미구현, 중요 설계 누락, path 정보 부족을 포함한다.
 
 통과 조건:
 
@@ -513,10 +559,15 @@ DB·API·화면부터 만들지 않는다. 실제 UW 5~10건을 로컬 파일과
 3. 설계에는 없는 일반 구현 세부사항을 기본 점검에서 대량 누락으로 보고하지 않는다.
 4. 범위가 불명확한 사례는 질문하거나 `UNKNOWN`으로 남긴다.
 5. 사람이 결과를 실제 검토할 수 있다고 승인한다.
+6. 정상 target은 상세 제출·DB item·화면 카드가 0건이고 수치로만 집계된다.
+7. start 응답에 같은 snapshot·prompt가 중복되지 않고, snippet·hash는 helper가 생성하며,
+   최종 제출 파일은 MCP 파라미터가 아닌 Worker API로 직접 전송된다.
+8. 실행별 start payload·최종 payload·소요 token을 기록해 최초 UW-00011 실행의 약
+   40만~45만 token보다 실질적으로 감소했음을 확인하고 사용자가 비용을 승인한다.
 
 하나라도 실패하면 프롬프트·탐색·결과 계약을 수정해 Shadow 검증부터 다시 한다.
 
-`DEEP_SYNC` 활성화 게이트는 같은 표본 중 복잡한 3~5건으로 별도 수행한다.
+`DEEP_SYNC` 활성화 게이트는 UW-00011 테스트 복제본의 복잡한 변형부터 별도 수행한다.
 
 1. 소스 업무 동작 목록에서 중요한 동작이 누락되지 않는다.
 2. 구현 세부사항을 일반 설계 누락으로 대량 보고하지 않는다.
@@ -532,7 +583,7 @@ DB·API·화면부터 만들지 않는다. 실제 UW 5~10건을 로컬 파일과
 3. 새 `/sync-specode`와 결과 제출 helper를 연결한다.
 4. 기존 URL의 목록·상세 화면을 V2로 교체한다.
 5. MCP·Worker command 배포 목록·권한을 V2 계약으로 교체한다.
-6. `DEEP_SYNC` Shadow 검증을 통과한 뒤 기능 flag를 활성화한다.
+6. `DEEP_SYNC` Shadow 검증을 통과한 뒤 운영 사용 범위에 포함한다.
 7. V1 신규 접수 경로를 중지하고 V1 소스·API·UI를 모두 삭제한다.
 8. V1 데이터 보존이 필요하면 일회성 JSON으로 내보낸 뒤 런타임 archive 기능은 만들지 않는다.
 9. V1 Prisma 모델·DDL을 제거하고 `a.TableScript.md`와 프로젝트 문서를 갱신한다.

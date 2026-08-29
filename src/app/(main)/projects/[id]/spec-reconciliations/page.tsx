@@ -16,7 +16,9 @@ type SyncRunRow = {
   implementationVerdict: string | null;
   designCoverageVerdict: string | null;
   requesterName: string;
-  itemCount: number;
+  evaluatedTargetCount: number;
+  normalTargetCount: number;
+  issueCount: number;
   pendingCount: number;
   createdAt: string;
 };
@@ -131,7 +133,7 @@ export default function SpecReconciliationsPage() {
                 <th>구현 정합성</th>
                 <th>설계 커버리지</th>
                 <th>상태</th>
-                <th>항목</th>
+                <th>문제</th>
                 <th>요청자</th>
                 <th>요청일</th>
               </tr>
@@ -164,7 +166,12 @@ export default function SpecReconciliationsPage() {
                       {STATUS_LABEL[row.status] ?? row.status}
                     </span>
                   </td>
-                  <td>{row.pendingCount}/{row.itemCount} 검토</td>
+                  <td>
+                    <div className="sp-reconcile-table-title">문제 {row.issueCount}건</div>
+                    <div className="sp-reconcile-table-subtitle">
+                      결정 대기 {row.pendingCount}건 · 구현 정상 {row.normalTargetCount}건
+                    </div>
+                  </td>
                   <td>{row.requesterName}</td>
                   <td>{formatDate(row.createdAt)}</td>
                 </tr>

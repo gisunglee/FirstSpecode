@@ -27,7 +27,8 @@ const nextConfig: NextConfig = {
       "./.claude/commands/run-ai-tasks.md",
       "./.claude/commands/task_complete.mjs",
       "./.claude/commands/sync-specode.md",
-      "./.claude/commands/validate_specode_sync.mjs",
+      "./.claude/commands/sync_specode.mjs",
+      "./.claude/commands/spec_sync_local.mjs",
     ],
   },
 

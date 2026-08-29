@@ -33,7 +33,15 @@ export async function POST(request: NextRequest) {
       memberId: auth.mberId,
       clientSubmissionKey: body.clientSubmissionKey,
     });
-    return apiSuccess(run, 201);
+    return apiSuccess(
+      {
+        ...run,
+        projectId: auth.prjctId,
+        projectName: auth.prjctNm ?? "(프로젝트명 미상)",
+        requesterName: auth.mberNm ?? auth.email ?? "(사용자명 미상)",
+      },
+      201,
+    );
   } catch (error) {
     return specSyncApiError(error);
   }

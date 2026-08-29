@@ -7,6 +7,7 @@ import { apiSuccess } from "@/lib/apiResponse";
 import { requirePermission } from "@/lib/requirePermission";
 import { specSyncApiError } from "@/lib/spec-sync/api";
 import { startSyncRun } from "@/lib/spec-sync/service";
+import { normalizeSyncSummary } from "@/lib/spec-sync/summary";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -93,7 +94,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         creat_dt: true,
         analyzed_dt: true,
         compl_dt: true,
-        items: { select: { item_sttus_code: true } },
+        analysis_summary_data: true,
+        items: {
+          select: {
+            finding_ty_code: true,
+            result_code: true,
+            item_sttus_code: true,
+          },
+        },
       },
     });
 
@@ -114,27 +122,35 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     );
 
     return apiSuccess({
-      items: runs.map((run) => ({
-        syncRunId: run.sync_run_id,
-        unitWorkId: run.unit_work_id,
-        unitWorkDisplayId: run.unit_work_display_id,
-        unitWorkName: run.unit_work_nm,
-        mode: run.sync_mode_code,
-        status: run.sync_sttus_code,
-        implementationVerdict: run.implementation_verdict_code,
-        designCoverageVerdict: run.design_coverage_verdict_code,
-        requesterId: run.req_mber_id,
-        requesterName: run.req_mber_id
-          ? memberNames.get(run.req_mber_id) ?? run.req_mber_id
-          : "알 수 없음",
-        itemCount: run.items.length,
-        pendingCount: run.items.filter(
-          (item) => item.item_sttus_code === "PENDING",
-        ).length,
-        createdAt: run.creat_dt.toISOString(),
-        analyzedAt: run.analyzed_dt?.toISOString() ?? null,
-        completedAt: run.compl_dt?.toISOString() ?? null,
-      })),
+      items: runs.map((run) => {
+        const summary = normalizeSyncSummary(
+          run.analysis_summary_data,
+          run.items,
+        );
+        return {
+          syncRunId: run.sync_run_id,
+          unitWorkId: run.unit_work_id,
+          unitWorkDisplayId: run.unit_work_display_id,
+          unitWorkName: run.unit_work_nm,
+          mode: run.sync_mode_code,
+          status: run.sync_sttus_code,
+          implementationVerdict: run.implementation_verdict_code,
+          designCoverageVerdict: run.design_coverage_verdict_code,
+          requesterId: run.req_mber_id,
+          requesterName: run.req_mber_id
+            ? memberNames.get(run.req_mber_id) ?? run.req_mber_id
+            : "알 수 없음",
+          evaluatedTargetCount: summary.evaluatedTargetCount,
+          normalTargetCount: summary.normalTargetCount,
+          issueCount: summary.issueCount,
+          // 기존 목록 소비자 호환용 별칭. 이제 item은 문제 항목만 뜻한다.
+          itemCount: summary.issueCount,
+          pendingCount: summary.pendingCount,
+          createdAt: run.creat_dt.toISOString(),
+          analyzedAt: run.analyzed_dt?.toISOString() ?? null,
+          completedAt: run.compl_dt?.toISOString() ?? null,
+        };
+      }),
     });
   } catch (error) {
     return specSyncApiError(error);

@@ -35,11 +35,13 @@
 
 - `src/lib/spec-sync/contracts.ts`: 두 축 결과와 모드별 제한 계약
 - `src/lib/spec-sync/hash.ts`: exact/canonical hash 분리
-- `src/lib/spec-sync/prompts.ts`: discovery/CHECK/DEEP_SYNC 프롬프트 분리
+- `src/lib/spec-sync/prompts.ts`: 당시 discovery/CHECK/DEEP_SYNC 프롬프트 분리
+  (첫 실사용 뒤 중복 context를 없애기 위해 라운드 8에서 삭제)
 - `src/lib/spec-sync/resultValidator.ts`: snapshot target 검증과 AS-IS 서버 파생
 - `scripts/spec-sync-contract.test.ts`: 계약 테스트 10개
 - `npm run test:spec-sync`: 10/10 통과
-- 실제 UW 5건의 기대 판정은 `md/SPEC_SYNC_CHECK_SHADOW_REPORT.md`에 기록
+- SPECODE 제품 내부 UW 5건의 계약 회귀 기대 판정은
+  `md/SPEC_SYNC_CHECK_SHADOW_REPORT.md`에 기록
 
 게이트 판정:
 
@@ -111,8 +113,8 @@
 2. 최초 점검에서 놓쳤던 V1 전용 설정을 찾았다. 프로젝트 설정 27건과 시스템 template 3건이며,
    전환 SQL과 사후 점검에 제거 조건을 추가했다.
 3. V2 DDL의 결과 축·상태·target shape·decision state 제약을 구현 계약과 맞췄다.
-4. 실제 Claude Code Shadow 승인이 없으므로 `SPEC_SYNC_ENABLED=false`,
-   `SPEC_SYNC_DEEP_ENABLED=false`를 기본값으로 두었다. 과거 결정은 분석 생략에 사용하지 않는다.
+4. 당시에는 실제 Claude Code Shadow 승인 전 실행을 막는 별도 게이트를 두었지만, 이후 제거했다.
+   현재는 기능 flag 없이 배포·명령 재설치·운영 검증 절차로 통제한다.
 
 검증 결과:
 
@@ -157,3 +159,45 @@
 3. 격리된 임시 PostgreSQL schema에 전체 `prisma db push`를 실행하고 diff 0을 확인한 뒤 삭제했다.
 4. 운영 DB에서도 `npm run db:push`가 변경 없이 정상 종료되고 Prisma diff가 0임을 확인했다.
 5. DB 점검 스크립트에 FK 5개 검사를 추가해 같은 부분 적용 실패를 재발 시 탐지하도록 했다.
+
+## 라운드 8 — 첫 실사용 비용·가독성 개선
+
+상태: 통과
+
+첫 `UW-00011` 실행에서 확인한 사실:
+
+1. start 응답이 같은 설계 snapshot을 세 필드에 반복해 context를 불필요하게 키웠다.
+2. 정상 `MATCH`까지 31개 상세 항목과 코드 snippet으로 제출해 token·저장량·검토 화면을 키웠다.
+3. 분석 중 소스가 바뀌어 파일 재독이 반복됐지만 한 실행의 소스 상태를 고정하는 검사가 없었다.
+4. 최종 JSON을 MCP 인자로 다시 전달해 이미 읽은 snippet을 한 번 더 context에 싣고 있었다.
+
+수정:
+
+1. start 응답은 snapshot 한 벌만 반환하고 helper가 manifest·탐색 정보·5~10개 target 묶음으로
+   분리한다. 서버와 명령에 중복된 분석 프롬프트도 제거했다.
+2. 모든 설계 target은 `evaluatedTargets`로 점검 완료를 증명하되, 상세 `issues`와 DB item은
+   불일치·미구현·판단 불가·설계 누락 후보만 생성한다.
+3. 관련 파일은 분석 시작 시 SHA-256을 고정하고 제출 직전 다시 계산한다. 바뀐 파일이 있으면
+   제출을 막고 해당 판정을 다시 확인한다.
+4. AI는 evidence의 path·line만 작성하고 helper가 원문 snippet·redaction·hash를 생성한다.
+   helper가 결과 파일을 Worker API로 직접 제출한다.
+5. 실행 전에 Worker key의 프로젝트명·ID, UW, 모드를 사용자에게 확인한다.
+6. 목록·상세 화면은 `점검 대상 / 정상 / 문제` 수와 문제 카드만 표시하고, 전환 전 정상·정보
+   item도 상세 응답에서 숨긴다.
+
+운영 검증 기준:
+
+- 실제 고객 사례는 현재 확인된 `운영시스템 구축(2차) / UW-00011 일정관리`를 사용한다.
+- 나머지는 격리된 테스트 복제본에 통제된 변형을 만들어 확인한다. 내부 SPECODE UW 5건의
+  기대 답안은 계약 회귀 fixture이지 고객 실사용 5건으로 계산하지 않는다.
+- 최초 실행의 약 40만~45만 token과 start/final payload를 기준으로 개선 수치를 기록하고,
+  사람이 품질과 비용을 승인한 뒤 운영 사용 범위를 넓힌다.
+
+재검증:
+
+- `npm run test:spec-sync`: 계약·helper·전환 테스트 27/27 및 최종 파일 검증 통과
+- `npm run typecheck`: 통과
+- `npm run build`: Next.js 16 production build 통과
+- `npm run test:spec-sync:db`: V2 구조 점검과 rollback smoke test 통과
+- 기존 첫 실행 31개 item은 `MATCH 28 / MISMATCH 3`으로 확인했고, 새 조회 계약에서는
+  구현 정상 28건은 수치만, 문제 3건만 상세 표시된다.

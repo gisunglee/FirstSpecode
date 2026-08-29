@@ -45,8 +45,13 @@ export type SyncRunDetail = {
   summary: {
     implementation?: string;
     designCoverage?: string;
-    pendingCount?: number;
-  } | null;
+    evaluatedTargetCount: number;
+    normalTargetCount: number;
+    issueCount: number;
+    implementationIssueCount: number;
+    coverageIssueCount: number;
+    pendingCount: number;
+  };
   implementationVerdict: string | null;
   designCoverageVerdict: string | null;
   failure: string | null;

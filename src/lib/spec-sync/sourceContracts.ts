@@ -2,11 +2,17 @@
 
 import { z } from "zod";
 
-export const sourceScopeFileSchema = z.object({
+const sourceScopeFileBaseSchema = z.object({
   path: z.string().trim().min(1).max(1_000),
   symbols: z.array(z.string().trim().min(1).max(500)).max(100).default([]),
   kind: z.enum(["PRIMARY", "SUPPORTING", "TEST"]),
   reason: z.string().trim().min(1).max(2_000),
+});
+
+// 분석을 시작할 때 고정한 파일 원문 hash다. 제출 직전 로컬 helper가 다시 계산해
+// 중간에 바뀐 소스를 과거 판단과 섞어 제출하지 못하게 한다.
+export const sourceScopeFileSchema = sourceScopeFileBaseSchema.extend({
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/i),
 });
 
 export const confirmedSourceScopeSchema = z
@@ -28,7 +34,8 @@ export const confirmedSourceScopeSchema = z
 
 export const needsInputSourceScopeSchema = z.object({
   status: z.literal("NEEDS_INPUT"),
-  files: z.array(sourceScopeFileSchema).max(1_000).default([]),
+  // 질문 단계에서는 아직 범위가 확정되지 않았으므로 hash를 요구하지 않는다.
+  files: z.array(sourceScopeFileBaseSchema).max(1_000).default([]),
   questions: z.array(z.string().trim().min(1).max(2_000)).min(1).max(10),
 });
 

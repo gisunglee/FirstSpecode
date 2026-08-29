@@ -54,7 +54,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { SpecodeFetch } from "@/lib/mcp/api-client";
-import { getWorkerCommandFiles, WORKER_COMMAND_SETUP_GUIDE } from "@/lib/mcp/workerCommandFiles";
+import {
+  getWorkerCommandFiles,
+  WORKER_COMMAND_REMOVE_PATHS,
+  WORKER_COMMAND_SETUP_GUIDE,
+} from "@/lib/mcp/workerCommandFiles";
 import { syncResultSubmissionSchema } from "@/lib/spec-sync/contracts";
 import { DB_TABLE_STATUS_CODES } from "@/lib/dbTableStatus";
 
@@ -1336,7 +1340,8 @@ export function registerTools(
   server.tool(
     "start_spec_sync",
     "지정 UW의 현재 설계 snapshot을 만들고 구현-설계 비교 실행을 시작합니다. " +
-      "기본 CHECK는 설계 구현 여부와 중요한 설계 누락 후보만 확인합니다.",
+      "기본 CHECK는 설계 구현 여부와 중요한 설계 누락 후보만 확인합니다. " +
+      "대용량 로컬 실행은 배포된 sync_specode.mjs helper 사용을 권장합니다.",
     {
       projectId: z.string().describe("프로젝트 ID"),
       unitWorkRef: z.string().describe("단위업무 UUID 또는 UW-XXXXX 표시 ID"),
@@ -1366,8 +1371,8 @@ export function registerTools(
 
   server.tool(
     "submit_spec_sync_result",
-    "로컬 저장소에서 탐색·검증한 구조화 결과를 저장합니다. " +
-      "설계는 수정하지 않고 웹 검토 대기 항목만 만듭니다.",
+    "로컬 저장소에서 탐색·검증한 문제 전용 결과를 저장합니다. " +
+      "정상 대상은 evaluatedTargets로 점검 완료만 확인하고, 문제만 웹 검토 항목으로 만듭니다.",
     {
       projectId: z.string().describe("프로젝트 ID"),
       runId: z.string().describe("start_spec_sync에서 받은 실행 ID"),
@@ -1594,13 +1599,18 @@ export function registerTools(
       "서브에이전트를 설치할 때 사용합니다. 사용자가 'SPECODE MCP 연결하고 " +
       "관련 커맨드 설치해줘' 같은 요청을 하면 이 도구를 호출하세요. 반환된 " +
       "files 배열의 각 항목을 path 그대로(디렉터리 구조 포함) 로컬 프로젝트에 " +
-      "저장하세요. setupGuide에 이어서 해야 할 .env.local 설정과 사용법이 " +
+      "저장하고, 기존 설치라면 removePaths에 명시된 폐기 파일만 삭제하세요. " +
+      "setupGuide에 이어서 해야 할 .env.local 설정과 사용법이 " +
       "안내되어 있습니다.",
     {},
     async () => {
       try {
         const files = getWorkerCommandFiles();
-        return textResult({ files, setupGuide: WORKER_COMMAND_SETUP_GUIDE });
+        return textResult({
+          files,
+          removePaths: WORKER_COMMAND_REMOVE_PATHS,
+          setupGuide: WORKER_COMMAND_SETUP_GUIDE,
+        });
       } catch (err) {
         return errorResult(err);
       }
