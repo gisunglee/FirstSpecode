@@ -9,7 +9,6 @@ import {
 } from "./contracts";
 import { loadDesignSnapshot } from "./designContext";
 import { SpecSyncError } from "./errors";
-import { assertSyncModeEnabled } from "./modeGate";
 import {
   buildSourceDiscoveryPrompt,
   buildSyncAnalysisPrompt,
@@ -23,7 +22,6 @@ export async function startSyncRun(input: {
   clientSubmissionKey?: string | null;
 }) {
   const mode = syncModeSchema.parse(input.mode ?? "CHECK");
-  assertSyncModeEnabled(mode);
   const clientSubmissionKey = input.clientSubmissionKey?.trim() || null;
 
   if (clientSubmissionKey) {

@@ -8,7 +8,6 @@ import {
 } from "../src/lib/spec-sync/contracts";
 import { hashCanonicalValue, hashExactText } from "../src/lib/spec-sync/hash";
 import { buildItemData } from "../src/lib/spec-sync/itemFactory";
-import { assertSyncModeEnabled } from "../src/lib/spec-sync/modeGate";
 import {
   buildSourceDiscoveryPrompt,
   buildSyncAnalysisPrompt,
@@ -162,39 +161,6 @@ test("CHECK와 DEEP_SYNC는 서로 다른 분석 지시를 사용한다", () => 
   );
   assert.notEqual(check, deep);
   assert.match(buildSourceDiscoveryPrompt(snapshot), /인접 entrypoint/);
-});
-
-test("CHECK와 DEEP_SYNC는 Shadow 승인 flag를 각각 요구한다", () => {
-  assert.throws(
-    () =>
-      assertSyncModeEnabled("CHECK", {
-        syncEnabled: "false",
-        deepEnabled: "false",
-      }),
-    (error: unknown) =>
-      error instanceof Error && error.message.includes("SPEC_SYNC_ENABLED"),
-  );
-  assert.doesNotThrow(() =>
-    assertSyncModeEnabled("CHECK", {
-      syncEnabled: "true",
-      deepEnabled: "false",
-    }),
-  );
-  assert.throws(
-    () =>
-      assertSyncModeEnabled("DEEP_SYNC", {
-        syncEnabled: "true",
-        deepEnabled: "false",
-      }),
-    (error: unknown) =>
-      error instanceof Error && error.message.includes("DEEP_SYNC"),
-  );
-  assert.doesNotThrow(() =>
-    assertSyncModeEnabled("DEEP_SYNC", {
-      syncEnabled: "true",
-      deepEnabled: "true",
-    }),
-  );
 });
 
 test("구현 PASS와 중요 설계 누락 후보를 동시에 보존한다", () => {

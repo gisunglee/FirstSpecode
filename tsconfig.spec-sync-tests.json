@@ -14,7 +14,6 @@
     "src/lib/spec-sync/contracts.ts",
     "src/lib/spec-sync/hash.ts",
     "src/lib/spec-sync/itemFactory.ts",
-    "src/lib/spec-sync/modeGate.ts",
     "src/lib/spec-sync/prompts.ts",
     "src/lib/spec-sync/resultValidator.ts",
     "scripts/spec-sync-contract.test.ts"
