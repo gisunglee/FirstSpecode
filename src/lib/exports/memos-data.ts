@@ -9,6 +9,7 @@ export type MemoListItem = {
   subject:       string;
   memoTyCode:    string;
   visbltyCode:   string;
+  purposeCode:   string;
   refTyCode:     string | null;
   refId:         string | null;
   refName:       string;
@@ -27,6 +28,7 @@ export type MemoListItem = {
  *   - visibility : "mine" | "team" | undefined(전체 — 본인 전체 + 타인의 PRIVATE 아닌 것)
  *   - refType + refId : 특정 엔티티에 연결된 메모만
  *   - search : 제목 부분 일치
+ *   - purpose : 용도 구분(GENERAL/MEETING) — 회의록 메뉴는 이 값을 MEETING으로 고정해 진입
  */
 export async function fetchProjectMemos(opts: {
   projectId:  string;
@@ -35,8 +37,9 @@ export async function fetchProjectMemos(opts: {
   refId?:     string;
   search?:    string;
   visibility?: string;
+  purpose?:   string;
 }): Promise<MemoListItem[]> {
-  const { projectId, mberId, refType, refId, search, visibility } = opts;
+  const { projectId, mberId, refType, refId, search, visibility, purpose } = opts;
 
   // 조회 범위: 기본은 본인 메모 전체 + 타인의 PRIVATE 아닌 메모(OR)
   const where: Record<string, unknown> = {
@@ -54,6 +57,9 @@ export async function fetchProjectMemos(opts: {
   if (search) {
     where.memo_sj = { contains: search, mode: "insensitive" };
   }
+  if (purpose) {
+    where.memo_purps_code = purpose;
+  }
   if (visibility === "mine") {
     delete where.OR;
     where.creat_mber_id = mberId;
@@ -70,7 +76,7 @@ export async function fetchProjectMemos(opts: {
     orderBy: { creat_dt: "desc" },
     take: 200,
     select: {
-      memo_id: true, memo_sj: true, memo_ty_code: true, visblty_code: true,
+      memo_id: true, memo_sj: true, memo_ty_code: true, visblty_code: true, memo_purps_code: true,
       ref_ty_code: true, ref_id: true, view_cnt: true, creat_mber_id: true, creat_dt: true,
     },
   });
@@ -93,6 +99,7 @@ export async function fetchProjectMemos(opts: {
     subject:       m.memo_sj,
     memoTyCode:    m.memo_ty_code,
     visbltyCode:   m.visblty_code,
+    purposeCode:   m.memo_purps_code,
     refTyCode:     m.ref_ty_code,
     refId:         m.ref_id,
     refName:       m.ref_id ? (refNameMap.get(m.ref_id) ?? "") : "",

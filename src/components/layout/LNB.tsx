@@ -238,7 +238,11 @@ export default function LNB() {
           // 문서실 — 요구사항 명세서·프로그램사양서 일람·일괄 다운로드 (프로젝트별)
           { label: "문서실",    href: p("/document-library"),  icon: "i_library" },
           { label: "리뷰 요청", href: p("/reviews"),           icon: "i_review" },
-          { label: "메모",      href: p("/memos"),             icon: "i_memo" },
+          // 메모/회의록은 같은 테이블(tb_ds_memo)을 구분(memo_purps_code)으로 필터링해
+          // 진입하는 메뉴다 — 각자 자기 구분만 기본으로 보이도록 둘 다 purpose를 고정한다.
+          // (목록 화면의 "구분" 필터 칩으로 언제든 "전체"로 바꿔 볼 수 있음)
+          { label: "메모",      href: p("/memos?purpose=GENERAL"), icon: "i_memo" },
+          { label: "회의록",    href: p("/memos?purpose=MEETING"), icon: "i_memo" },
         ],
       },
       {

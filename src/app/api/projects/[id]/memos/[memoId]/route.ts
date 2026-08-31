@@ -54,6 +54,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       memoTyCode:    memo.memo_ty_code,
       sheetData:     memo.sheet_data,
       visbltyCode:   memo.visblty_code,
+      purposeCode:   memo.memo_purps_code,
       refTyCode:     memo.ref_ty_code,
       refId:         memo.ref_id,
       viewCnt:       memo.view_cnt + 1,
@@ -88,7 +89,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("FORBIDDEN", "수정 권한이 없습니다.", 403);
   }
 
-  let body: { subject?: string; content?: string; sheetData?: unknown; visbltyCode?: string };
+  let body: { subject?: string; content?: string; sheetData?: unknown; visbltyCode?: string; purposeCode?: string };
   try {
     body = await request.json();
   } catch {
@@ -114,6 +115,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     ? body.visbltyCode
     : undefined;
 
+  // 용도 구분(일반/회의록)은 공개범위와 달리 권한 확장 문제가 없으므로 편집 가능한
+  // 사람(본인 또는 TEAM_EDIT) 누구나 변경 가능
+  const validPurpose = ["GENERAL", "MEETING"];
+  const purposeCode = validPurpose.includes(body.purposeCode ?? "") ? body.purposeCode : undefined;
+
   try {
     await prisma.tbDsMemo.update({
       where: { memo_id: memoId },
@@ -123,6 +129,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         ...(memo.memo_ty_code === "WEB" && body.content !== undefined && { memo_cn: body.content }),
         ...(memo.memo_ty_code === "EXCEL" && body.sheetData !== undefined && { sheet_data: body.sheetData as object }),
         ...(visbltyCode !== undefined && { visblty_code: visbltyCode }),
+        ...(purposeCode !== undefined && { memo_purps_code: purposeCode }),
         mdfr_mber_id: gate.mberId,
         mdfcn_dt:     new Date(),
       },

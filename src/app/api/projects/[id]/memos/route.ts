@@ -28,13 +28,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const refId     = url.searchParams.get("refId") ?? undefined;
   const search    = url.searchParams.get("search")?.trim() ?? undefined;
   const visibility = url.searchParams.get("visibility") ?? undefined; // "mine" | "team" | undefined(전체)
+  const purpose   = url.searchParams.get("purpose") ?? undefined;     // "GENERAL" | "MEETING" | undefined(전체)
 
   try {
     // 데이터 조회+가공 로직은 service 로 분리 — export 라우트와 동일 결과 보장
     const items = await fetchProjectMemos({
       projectId,
       mberId: gate.mberId,
-      refType, refId, search, visibility,
+      refType, refId, search, visibility, purpose,
     });
     return apiSuccess({ items });
   } catch (err) {
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   let body: {
     subject?: string; content?: string; sheetData?: unknown;
-    memoTyCode?: string; visbltyCode?: string; refTyCode?: string; refId?: string;
+    memoTyCode?: string; visbltyCode?: string; purposeCode?: string; refTyCode?: string; refId?: string;
   };
   try {
     body = await request.json();
@@ -87,18 +88,22 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const validVisibility = ["PRIVATE", "TEAM_READ", "TEAM_EDIT"];
   const visbltyCode = validVisibility.includes(body.visbltyCode ?? "") ? body.visbltyCode! : "PRIVATE";
 
+  const validPurpose = ["GENERAL", "MEETING"];
+  const purposeCode = validPurpose.includes(body.purposeCode ?? "") ? body.purposeCode! : "GENERAL";
+
   try {
     const memo = await prisma.tbDsMemo.create({
       data: {
-        prjct_id:      projectId,
-        memo_sj:       subject,
-        memo_cn:       memoTyCode === "WEB" ? (body.content ?? "") : null,
-        memo_ty_code:  memoTyCode,
-        sheet_data:    memoTyCode === "EXCEL" ? (body.sheetData as object) : undefined,
-        visblty_code:  visbltyCode,
-        ref_ty_code:   body.refTyCode ?? null,
-        ref_id:        body.refId ?? null,
-        creat_mber_id: gate.mberId,
+        prjct_id:        projectId,
+        memo_sj:         subject,
+        memo_cn:         memoTyCode === "WEB" ? (body.content ?? "") : null,
+        memo_ty_code:    memoTyCode,
+        sheet_data:      memoTyCode === "EXCEL" ? (body.sheetData as object) : undefined,
+        visblty_code:    visbltyCode,
+        memo_purps_code: purposeCode,
+        ref_ty_code:     body.refTyCode ?? null,
+        ref_id:          body.refId ?? null,
+        creat_mber_id:   gate.mberId,
       },
     });
 

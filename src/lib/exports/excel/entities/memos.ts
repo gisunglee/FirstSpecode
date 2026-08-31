@@ -28,9 +28,16 @@ const MEMO_TYPE_LABEL: Record<string, string> = {
   EXCEL: "엑셀형",
 };
 
+const PURPOSE_LABEL: Record<string, string> = {
+  GENERAL: "메모",
+  MEETING: "회의록",
+};
+
 const columns: ExcelColumn<MemoListItem>[] = [
   { key: "subject",       header: "제목",        width: 40 },
   { key: "creatMberName", header: "작성자",      width: 16 },
+  { key: "purposeCode",   header: "구분",        width: 10,
+    format: (r) => PURPOSE_LABEL[r.purposeCode] ?? r.purposeCode },
   { key: "memoTyCode",    header: "작성 방식",   width: 12,
     format: (r) => MEMO_TYPE_LABEL[r.memoTyCode] ?? r.memoTyCode },
   { key: "visbltyCode",   header: "공개 범위",   width: 12,
@@ -55,8 +62,9 @@ export const memosExportConfig: ExportConfig<MemoListItem, { id: string }> = {
     const refId      = url.searchParams.get("refId")          ?? undefined;
     const search     = url.searchParams.get("search")?.trim() ?? undefined;
     const visibility = url.searchParams.get("visibility")     ?? undefined;
+    const purpose    = url.searchParams.get("purpose")        ?? undefined;
     return fetchProjectMemos({
-      projectId: params.id, mberId, refType, refId, search, visibility,
+      projectId: params.id, mberId, refType, refId, search, visibility, purpose,
     });
   },
 };

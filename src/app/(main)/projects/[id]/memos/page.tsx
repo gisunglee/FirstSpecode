@@ -24,6 +24,7 @@ type MemoRow = {
   subject:       string;
   memoTyCode:    string;
   visbltyCode:   string;
+  purposeCode:   string;
   refTyCode:     string | null;
   refId:         string | null;
   refName:       string;
@@ -49,6 +50,17 @@ const REF_TYPE_LABEL: Record<string, string> = {
 const MEMO_TYPE_LABEL: Record<string, string> = {
   WEB:   "웹",
   EXCEL: "엑셀",
+};
+
+const PURPOSE_FILTERS = [
+  { value: "",        label: "전체" },
+  { value: "GENERAL", label: "메모" },
+  { value: "MEETING", label: "회의록" },
+];
+
+const PURPOSE_LABEL: Record<string, { label: string; bg: string; fg: string }> = {
+  GENERAL: { label: "메모",   bg: "var(--color-bg-muted)",         fg: "var(--color-text-secondary)" },
+  MEETING: { label: "회의록", bg: "var(--color-success-subtle)",   fg: "var(--color-success)" },
 };
 
 const VISIBILITY_LABEL: Record<string, { label: string; bg: string; fg: string }> = {
@@ -91,16 +103,19 @@ function MemoListInner() {
 
   const [search, setSearch]     = useState("");
   const [visFilter, setVisFilter] = useState("");
+  // "회의록" 좌측 메뉴에서 진입하면 URL에 purpose=MEETING이 실려 옴 — 그 값을 초기 필터로 사용
+  const [purposeFilter, setPurposeFilter] = useState(searchParams.get("purpose") ?? "");
 
   // ── 데이터 조회 ──
   const queryParams = new URLSearchParams();
   if (search.trim())  queryParams.set("search", search.trim());
   if (visFilter)       queryParams.set("visibility", visFilter);
+  if (purposeFilter)   queryParams.set("purpose", purposeFilter);
   if (refType && refId) { queryParams.set("refType", refType); queryParams.set("refId", refId); }
   const qs = queryParams.toString();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["memos", projectId, search, visFilter, refType, refId],
+    queryKey: ["memos", projectId, search, visFilter, purposeFilter, refType, refId],
     queryFn: () =>
       authFetch<{ data: { items: MemoRow[] } }>(
         `/api/projects/${projectId}/memos${qs ? `?${qs}` : ""}`
@@ -123,7 +138,7 @@ function MemoListInner() {
       }}>
         <div style={{ display: "flex", flexDirection: "column", flex: 1, gap: 2 }}>
           <span style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
-            메모
+            {purposeFilter === "MEETING" ? "회의록" : "메모"}
           </span>
           {refType && refId && (
             <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5 }}>
@@ -144,7 +159,13 @@ function MemoListInner() {
           entityKey="memos"
         />
         <button
-          onClick={() => router.push(`/projects/${projectId}/memos/new${refType && refId ? `?refType=${refType}&refId=${refId}` : ""}`)}
+          onClick={() => {
+            const newQs = new URLSearchParams();
+            if (refType && refId) { newQs.set("refType", refType); newQs.set("refId", refId); }
+            if (purposeFilter)     newQs.set("purpose", purposeFilter);
+            const s = newQs.toString();
+            router.push(`/projects/${projectId}/memos/new${s ? `?${s}` : ""}`);
+          }}
           style={{ ...primaryBtnStyle, fontSize: 12, padding: "5px 14px" }}
         >
           + 새 메모
@@ -160,6 +181,22 @@ function MemoListInner() {
           className="sp-input"
           style={{ width: 220 }}
         />
+        <div style={{ display: "flex", gap: 4 }}>
+          {PURPOSE_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setPurposeFilter(f.value)}
+              style={{
+                padding: "5px 12px", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                border: "1px solid var(--color-border)",
+                background: purposeFilter === f.value ? "var(--color-primary, #1976d2)" : "var(--color-bg-card)",
+                color: purposeFilter === f.value ? "#fff" : "var(--color-text-secondary)",
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
         <div style={{ display: "flex", gap: 4 }}>
           {VISIBILITY_FILTERS.map((f) => (
             <button
@@ -187,6 +224,7 @@ function MemoListInner() {
           {/* 헤더 행 */}
           <div style={gridHeaderStyle}>
             <div>제목</div>
+            <div>구분</div>
             <div>연결 대상</div>
             <div>방식</div>
             <div>공개 범위</div>
@@ -213,6 +251,16 @@ function MemoListInner() {
                 {/* 제목 */}
                 <div style={{ fontWeight: 500, fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {m.subject || "(제목 없음)"}
+                </div>
+
+                {/* 구분 */}
+                <div style={{ fontSize: 12 }}>
+                  <span style={{
+                    padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600,
+                    background: PURPOSE_LABEL[m.purposeCode]?.bg, color: PURPOSE_LABEL[m.purposeCode]?.fg,
+                  }}>
+                    {PURPOSE_LABEL[m.purposeCode]?.label ?? m.purposeCode}
+                  </span>
                 </div>
 
                 {/* 연결 대상 */}
@@ -272,8 +320,8 @@ function MemoListInner() {
 
 // ── 스타일 ────────────────────────────────────────────────────────────────────
 
-// 제목(가변) | 연결대상 | 방식 | 공개범위 | 작성자 | 조회 | 작성일
-const GRID_TEMPLATE = "1fr 14% 7% 9% 10% 6% 9%";
+// 제목(가변) | 구분 | 연결대상 | 방식 | 공개범위 | 작성자 | 조회 | 작성일
+const GRID_TEMPLATE = "1fr 8% 13% 7% 9% 10% 6% 9%";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID_TEMPLATE, gap: 8,

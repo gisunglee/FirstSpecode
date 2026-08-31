@@ -33,6 +33,7 @@ type MemoDetail = {
   memoTyCode:    string;
   sheetData:     unknown;
   visbltyCode:   string;
+  purposeCode:   string;
   refTyCode:     string | null;
   refId:         string | null;
   viewCnt:       number;
@@ -59,6 +60,11 @@ const VISIBILITY_OPTIONS: { value: string; label: string }[] = [
   { value: "TEAM_EDIT", label: "전체수정" },
 ];
 
+const PURPOSE_OPTIONS: { value: string; label: string }[] = [
+  { value: "GENERAL", label: "메모" },
+  { value: "MEETING", label: "회의록" },
+];
+
 function formatDate(iso: string): string {
   const d = new Date(iso);
   return `${d.getFullYear()}. ${String(d.getMonth() + 1).padStart(2, "0")}. ${String(d.getDate()).padStart(2, "0")}. ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -69,6 +75,7 @@ type Props = {
   memoId:         string; // "new" 또는 실제 id
   presetRefType?: string;
   presetRefId?:   string;
+  presetPurpose?: string; // 신규 작성 시 구분 기본값(예: "회의록" 메뉴에서 진입하면 "MEETING")
   onBack:         () => void;                     // 뒤로/취소
   onSaved?:       (savedMemoId: string) => void;   // 저장 성공 후
   onDeleted?:     () => void;                      // 삭제 성공 후
@@ -82,9 +89,11 @@ type Props = {
 };
 
 export default function MemoDetailPanel({
-  projectId, memoId, presetRefType, presetRefId,
+  projectId, memoId, presetRefType, presetRefId, presetPurpose,
   onBack, onSaved, onDeleted,
-  compact = false, sheetHeight = 480, richMinHeight = 240, headerExtra,
+  // 풀페이지(비compact) 기본값 — 엑셀은 17행→25행 보이도록, 웹 에디터는 기존 대비
+  // 두 배로 키워달라는 피드백 반영(compact/모달은 자기 폭·높이에 맞춰 별도로 계산해 넘김)
+  compact = false, sheetHeight = 660, richMinHeight = 576, headerExtra,
 }: Props) {
   const queryClient = useQueryClient();
   const isNew = memoId === "new";
@@ -102,7 +111,13 @@ export default function MemoDetailPanel({
   // 데이터가 준비된 후에야 처음으로 마운트되므로 항상 올바른 값으로 초기화된다.
   const [memoTyCode, setMemoTyCode]   = useState<"WEB" | "EXCEL" | null>(null);
   const [visbltyCode, setVisbltyCode] = useState("PRIVATE");
+  const [purposeCode, setPurposeCode] = useState(
+    presetPurpose === "MEETING" ? "MEETING" : "GENERAL",
+  );
   const [refTyCode, setRefTyCode]     = useState<string | null>(presetRefType ?? null);
+  // 제목/구분/공개범위 카드 접기 — 편집기(엑셀/웹) 영역을 넓게 쓰고 싶을 때 위쪽 메타 영역을
+  // 접어둘 수 있게. compact(모달)는 이미 한 줄로 압축돼 있어 이 기능이 필요 없음(풀페이지 전용).
+  const [metaCollapsed, setMetaCollapsed] = useState(false);
   const [refId, setRefId]             = useState<string | null>(presetRefId ?? null);
   // MemoSheetEditor가 마운트 후 onReady로 넘겨주는 핸들 — ref prop이 next/dynamic을
   // 거치며 제대로 안 붙는 문제가 있어 콜백 방식으로 받는다(MemoSheetEditor.tsx 주석 참고)
@@ -122,6 +137,7 @@ export default function MemoDetailPanel({
       setSheetData(Array.isArray(data.sheetData) ? (data.sheetData as Sheet[]) : null);
       setMemoTyCode(data.memoTyCode === "EXCEL" ? "EXCEL" : "WEB");
       setVisbltyCode(data.visbltyCode);
+      setPurposeCode(data.purposeCode);
       setRefTyCode(data.refTyCode);
       setRefId(data.refId);
     }
@@ -133,7 +149,7 @@ export default function MemoDetailPanel({
   const canChangeVisibility = isNew || (data?.isMine ?? false);
 
   const saveMutation = useMutation({
-    mutationFn: (body: { subject: string; content?: string; sheetData?: Sheet[]; memoTyCode?: string; visbltyCode: string; refTyCode?: string; refId?: string }) =>
+    mutationFn: (body: { subject: string; content?: string; sheetData?: Sheet[]; memoTyCode?: string; visbltyCode: string; purposeCode: string; refTyCode?: string; refId?: string }) =>
       isNew
         ? authFetch<{ data: { memoId: string } }>(`/api/projects/${projectId}/memos`, {
             method: "POST",
@@ -182,6 +198,7 @@ export default function MemoDetailPanel({
     saveMutation.mutate({
       subject: subject.trim(),
       visbltyCode,
+      purposeCode,
       ...(isNew ? { memoTyCode: memoTyCode! } : {}),
       ...(memoTyCode === "WEB" ? { content } : {}),
       ...(memoTyCode === "EXCEL" ? { sheetData: currentSheetData } : {}),
@@ -221,7 +238,9 @@ export default function MemoDetailPanel({
             </button>
           )}
           <span style={{ fontSize: compact ? 13.5 : 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
-            {isNew ? "새 메모" : "메모 상세"}
+            {isNew
+              ? (purposeCode === "MEETING" ? "새 회의록" : "새 메모")
+              : (purposeCode === "MEETING" ? "회의록 상세" : "메모 상세")}
           </span>
         </div>
 
@@ -264,6 +283,11 @@ export default function MemoDetailPanel({
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 {data && (
                   <>
+                    {data.purposeCode === "MEETING" && (
+                      <span className="sp-badge" style={{ display: "inline-flex", alignItems: "center", padding: "2px 9px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "var(--color-success-subtle)", color: "var(--color-success)" }}>
+                        회의록
+                      </span>
+                    )}
                     <span className="sp-badge" style={{
                       display: "inline-flex", alignItems: "center",
                       padding: "2px 9px", borderRadius: 20, fontSize: 11, fontWeight: 700,
@@ -328,6 +352,30 @@ export default function MemoDetailPanel({
                 )}
               </div>
 
+              {canEdit && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>구분</span>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {PURPOSE_OPTIONS.map((o) => (
+                      <button
+                        key={o.value}
+                        onClick={() => setPurposeCode(o.value)}
+                        className="sp-badge"
+                        style={{
+                          padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+                          border: "1px solid", cursor: "pointer",
+                          ...(purposeCode === o.value
+                            ? { background: "var(--color-success-subtle)", color: "var(--color-success)", borderColor: "var(--color-success-border)" }
+                            : { background: "var(--color-bg-elevated)", color: "var(--color-text-secondary)", borderColor: "var(--color-border)" }),
+                        }}
+                      >
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {canChangeVisibility && (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                   <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>공개범위</span>
@@ -359,6 +407,17 @@ export default function MemoDetailPanel({
         {data && (
           <div style={titleCardStyle}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              {/* 구분 배지 */}
+              {data.purposeCode === "MEETING" && (
+                <span className="sp-badge" style={{
+                  display: "inline-flex", alignItems: "center",
+                  padding: "3px 11px", borderRadius: 20, fontSize: 12, fontWeight: 700,
+                  background: "var(--color-success-subtle)", color: "var(--color-success)",
+                }}>
+                  회의록
+                </span>
+              )}
+
               {/* 공개범위 배지 */}
               <span className="sp-badge" style={{
                 display: "inline-flex", alignItems: "center",
@@ -402,9 +461,27 @@ export default function MemoDetailPanel({
           </div>
         )}
 
-        {/* ── 제목 카드 ── */}
+        {/* ── 제목 카드 — 접기 가능(편집기 영역을 넓게 쓰고 싶을 때) ── */}
         <div style={contentCardStyle}>
-          <div style={cardLabelStyle}>제목</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: metaCollapsed ? 0 : 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+              <span style={{ ...cardLabelStyle, marginBottom: 0 }}>제목</span>
+              {metaCollapsed && (
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {subject || "(제목 없음)"}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => setMetaCollapsed((v) => !v)}
+              style={{ flexShrink: 0, border: "none", background: "none", cursor: "pointer", color: "var(--color-text-tertiary)", fontSize: 11, textDecoration: "underline" }}
+            >
+              {metaCollapsed ? "펼치기 ▾" : "접기 ▴"}
+            </button>
+          </div>
+
+          {!metaCollapsed && (
+          <>
           {canEdit ? (
             <input
               value={subject}
@@ -420,6 +497,31 @@ export default function MemoDetailPanel({
           ) : (
             <div style={{ fontSize: 15, fontWeight: 600, color: "var(--color-text-primary)" }}>
               {subject || "(제목 없음)"}
+            </div>
+          )}
+
+          {/* 구분 선택 — 공개범위와 달리 권한 확장 문제가 없어 편집 가능한 사람 누구나 변경 가능 */}
+          {canEdit && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>구분</span>
+              <div style={{ display: "flex", gap: 4 }}>
+                {PURPOSE_OPTIONS.map((o) => (
+                  <button
+                    key={o.value}
+                    onClick={() => setPurposeCode(o.value)}
+                    className="sp-badge"
+                    style={{
+                      padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700,
+                      border: "1px solid", cursor: "pointer",
+                      ...(purposeCode === o.value
+                        ? { background: "var(--color-success-subtle)", color: "var(--color-success)", borderColor: "var(--color-success-border)" }
+                        : { background: "var(--color-bg-elevated)", color: "var(--color-text-secondary)", borderColor: "var(--color-border)" }),
+                    }}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -446,6 +548,8 @@ export default function MemoDetailPanel({
                 ))}
               </div>
             </div>
+          )}
+          </>
           )}
         </div>
         </>

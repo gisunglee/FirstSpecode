@@ -117,6 +117,10 @@
   * `sheet_data` (jsonb, nullable): EXCEL 타입 워크북 데이터 — `memo_ty_code='EXCEL'`일 때만 값 존재
   * `visblty_code` (v20, NN, 기본 PRIVATE): `PRIVATE`(나만보기) | `TEAM_READ`(전체조회, 작성자만 수정) | `TEAM_EDIT`(전체수정, 프로젝트 멤버 누구나 수정)
     * 2026-08-19: 기존 `share_yn`(Y/N) 폐지·대체. 동시수정 충돌은 처리하지 않음(나중 저장이 덮어씀)
+  * `memo_purps_code` (v20, NN, 기본 GENERAL): `GENERAL`(일반) | `MEETING`(회의록)
+    * 2026-08-31 추가. 회의록을 별도 게시판/테이블로 만들지 않고 메모를 용도로만 구분하기
+      위한 필드 — LNB "회의록" 메뉴는 `/memos?purpose=MEETING`으로 이 값을 필터링해 진입한다
+      (참석자·액션아이템 등 구조화된 집계가 필요 없다고 합의되어 자유서식 그대로 재사용)
   * `ref_ty_code` (t, nullable) / `ref_id` (t, nullable): 다형 참조 — `REQUIREMENT`(요구사항) / `TASK`(과업) / `UNIT_WORK`(단위업무) / `SCREEN`(화면) / `AREA`(영역) / `FUNCTION`(기능). 둘 다 NULL = 전역 메모
   * `view_cnt` (i) / `creat_mber_id` (t, NN, 작성자) / `mdfr_mber_id` (t)
   * 인덱스: `(prjct_id, creat_dt DESC)`, `(prjct_id, ref_ty_code, ref_id)`

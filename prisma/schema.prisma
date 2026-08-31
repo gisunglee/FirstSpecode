@@ -1399,21 +1399,24 @@ model TbDsPlanStudioCtxt {
 // 3단계 공개범위(visblty_code)로 교체 — PRIVATE(나만보기)/TEAM_READ(전체조회, 작성자만
 // 수정)/TEAM_EDIT(전체수정, 프로젝트 멤버 누구나 수정 가능). 동시수정 충돌은 처리하지
 // 않음(나중 저장이 덮어씀 — 합의된 범위).
+// 2026-08-31: memo_purps_code(용도 구분: GENERAL/MEETING) 추가 — 회의록을 별도
+// 게시판으로 만들지 않고 기존 메모를 재사용하기 위한 분류 필드(신규 테이블 아님).
 model TbDsMemo {
-  memo_id       String    @id @default(uuid())
-  prjct_id      String
-  memo_sj       String    @default("")
-  memo_cn       String?
-  memo_ty_code  String    @default("WEB") @db.VarChar(10)
-  sheet_data    Json?
-  visblty_code  String    @default("PRIVATE") @db.VarChar(20)
-  ref_ty_code   String?
-  ref_id        String?
-  view_cnt      Int       @default(0)
-  creat_mber_id String
-  creat_dt      DateTime  @default(now())
-  mdfr_mber_id  String?
-  mdfcn_dt      DateTime?
+  memo_id         String    @id @default(uuid())
+  prjct_id        String
+  memo_sj         String    @default("")
+  memo_cn         String?
+  memo_ty_code    String    @default("WEB") @db.VarChar(10)
+  sheet_data      Json?
+  visblty_code    String    @default("PRIVATE") @db.VarChar(20)
+  memo_purps_code String    @default("GENERAL") @db.VarChar(20)
+  ref_ty_code     String?
+  ref_id          String?
+  view_cnt        Int       @default(0)
+  creat_mber_id   String
+  creat_dt        DateTime  @default(now())
+  mdfr_mber_id    String?
+  mdfcn_dt        DateTime?
 
   // 프로젝트 삭제 시 자동 정리 (2026-05-06 P2 보강)
   project TbPjProject @relation(fields: [prjct_id], references: [prjct_id], onDelete: Cascade, map: "tb_ds_memo_prjct_fk")
