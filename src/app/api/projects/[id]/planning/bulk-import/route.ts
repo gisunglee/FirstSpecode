@@ -329,8 +329,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
               // 수정 — 인수기준은 기존 삭제 후 재생성 (순서 보장, 단순화)
               const existing = await tx.tbRqUserStory.findUnique({
                 where: { story_id: storyInput.systemId },
+                include: { requirement: { select: { prjct_id: true } } },
               });
-              if (!existing) {
+              if (!existing || existing.requirement.prjct_id !== projectId) {
                 result.skipped.stories++;
                 continue;
               }

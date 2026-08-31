@@ -11,6 +11,13 @@ import { randomUUID } from "crypto";
 
 type RouteParams = { params: Promise<{ id: string; reviewId: string }> };
 
+async function reviewBelongsToProject(projectId: string, reviewId: string): Promise<boolean> {
+  return Boolean(await prisma.tb_ds_review_request.findFirst({
+    where: { review_id: reviewId, prjct_id: projectId },
+    select: { review_id: true },
+  }));
+}
+
 // ─── GET: 코멘트 목록 ────────────────────────────────────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, reviewId } = await params;
@@ -19,6 +26,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   if (gate instanceof Response) return gate;
 
   try {
+    if (!await reviewBelongsToProject(projectId, reviewId)) {
+      return apiError("NOT_FOUND", "리뷰 요청을 찾을 수 없습니다.", 404);
+    }
+
     const comments = await prisma.tb_ds_review_comment.findMany({
       where:   { review_id: reviewId },
       orderBy: { creat_dt: "asc" },
@@ -56,6 +67,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   const gate = await requirePermission(request, projectId, "content.create");
   if (gate instanceof Response) return gate;
+
+  if (!await reviewBelongsToProject(projectId, reviewId)) {
+    return apiError("NOT_FOUND", "리뷰 요청을 찾을 수 없습니다.", 404);
+  }
 
   let body: unknown;
   try { body = await request.json(); } catch {

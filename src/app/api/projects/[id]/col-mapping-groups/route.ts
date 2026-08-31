@@ -13,6 +13,10 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { checkRole } from "@/lib/checkRole";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import {
+  isProjectEntityRefType,
+  projectEntityBelongsToProject,
+} from "@/lib/projectEntityScope";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -29,6 +33,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   if (!refType || !refId) {
     return apiError("VALIDATION_ERROR", "refType, refId 파라미터가 필요합니다.", 400);
   }
+  if (!isProjectEntityRefType(refType)) {
+    return apiError("VALIDATION_ERROR", "지원하지 않는 refType입니다.", 400);
+  }
 
   const membership = await prisma.tbPjProjectMember.findUnique({
     where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
@@ -38,6 +45,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
+    if (!await projectEntityBelongsToProject(projectId, refType, refId)) {
+      return apiError("NOT_FOUND", "대상을 찾을 수 없습니다.", 404);
+    }
+
     const groups = await prisma.tbDsColMappingGroup.findMany({
       where:   { ref_ty_code: refType, ref_id: refId },
       orderBy: { sort_ordr: "asc" },
@@ -82,11 +93,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (!refType || !refId) {
     return apiError("VALIDATION_ERROR", "refType, refId 가 필요합니다.", 400);
   }
+  if (!isProjectEntityRefType(refType)) {
+    return apiError("VALIDATION_ERROR", "지원하지 않는 refType입니다.", 400);
+  }
   if (!grpNm || !grpNm.trim()) {
     return apiError("VALIDATION_ERROR", "그룹 이름이 필요합니다.", 400);
   }
 
   try {
+    if (!await projectEntityBelongsToProject(projectId, refType, refId)) {
+      return apiError("NOT_FOUND", "대상을 찾을 수 없습니다.", 404);
+    }
+
     // 같은 ref 안에서 가장 큰 sort_ordr 다음 순번으로 추가
     const last = await prisma.tbDsColMappingGroup.findFirst({
       where:   { ref_ty_code: refType, ref_id: refId },

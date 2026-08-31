@@ -16,6 +16,10 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { checkRole } from "@/lib/checkRole";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import {
+  isProjectEntityRefType,
+  projectEntityBelongsToProject,
+} from "@/lib/projectEntityScope";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -33,6 +37,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   if (!refType || !refId) {
     return apiError("VALIDATION_ERROR", "refType, refId 파라미터가 필요합니다.", 400);
   }
+  if (!isProjectEntityRefType(refType)) {
+    return apiError("VALIDATION_ERROR", "지원하지 않는 refType입니다.", 400);
+  }
 
   const membership = await prisma.tbPjProjectMember.findUnique({
     where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
@@ -42,6 +49,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
+    if (!await projectEntityBelongsToProject(projectId, refType, refId)) {
+      return apiError("NOT_FOUND", "대상을 찾을 수 없습니다.", 404);
+    }
+    if (grpId) {
+      const group = await prisma.tbDsColMappingGroup.findFirst({
+        where: { grp_id: grpId, ref_ty_code: refType, ref_id: refId },
+        select: { grp_id: true },
+      });
+      if (!group) return apiError("NOT_FOUND", "매핑 그룹을 찾을 수 없습니다.", 404);
+    }
+
     const mappings = await prisma.tbDsColMapping.findMany({
       where:   { ref_ty_code: refType, ref_id: refId, ...(grpId ? { grp_id: grpId } : {}) },
       orderBy: { sort_ordr: "asc" },
@@ -52,7 +70,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const colIds = mappings.map((m) => m.col_id).filter(Boolean) as string[];
     const columns = colIds.length > 0
       ? await prisma.tbDsDbTableColumn.findMany({
-          where:   { col_id: { in: colIds } },
+          where:   { col_id: { in: colIds }, table: { prjct_id: projectId } },
           include: { table: { select: { tbl_id: true, tbl_physcl_nm: true, tbl_lgcl_nm: true } } },
         })
       : [];
@@ -123,6 +141,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (!refType || !refId) {
     return apiError("VALIDATION_ERROR", "refType, refId 가 필요합니다.", 400);
   }
+  if (!isProjectEntityRefType(refType)) {
+    return apiError("VALIDATION_ERROR", "지원하지 않는 refType입니다.", 400);
+  }
   if (!grpId) {
     return apiError("VALIDATION_ERROR", "grpId 가 필요합니다.", 400);
   }
@@ -131,6 +152,27 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
+    if (!await projectEntityBelongsToProject(projectId, refType, refId)) {
+      return apiError("NOT_FOUND", "대상을 찾을 수 없습니다.", 404);
+    }
+
+    const group = await prisma.tbDsColMappingGroup.findFirst({
+      where: { grp_id: grpId, ref_ty_code: refType, ref_id: refId },
+      select: { grp_id: true },
+    });
+    if (!group) return apiError("NOT_FOUND", "매핑 그룹을 찾을 수 없습니다.", 404);
+
+    const colIds = [...new Set(items.map((item) => item.colId).filter(Boolean))];
+    if (colIds.length !== items.length) {
+      return apiError("VALIDATION_ERROR", "컬럼 ID가 비어 있거나 중복되었습니다.", 400);
+    }
+    const projectColumnCount = await prisma.tbDsDbTableColumn.count({
+      where: { col_id: { in: colIds }, table: { prjct_id: projectId } },
+    });
+    if (projectColumnCount !== colIds.length) {
+      return apiError("VALIDATION_ERROR", "현재 프로젝트에 속하지 않는 컬럼이 포함되어 있습니다.", 400);
+    }
+
     // 같은 그룹(grpId)의 매핑만 삭제 후 재삽입 — 다른 그룹은 건드리지 않음
     await prisma.$transaction([
       prisma.tbDsColMapping.deleteMany({ where: { ref_ty_code: refType, ref_id: refId, grp_id: grpId } }),

@@ -23,6 +23,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { checkRole } from "@/lib/checkRole";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { projectEntityBelongsToProject } from "@/lib/projectEntityScope";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -65,8 +66,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   if (!refTable || !refId) {
     return apiError("VALIDATION_ERROR", "refTable과 refId는 필수입니다.", 400);
   }
+  if (refTable !== "tb_ds_function") {
+    return apiError("VALIDATION_ERROR", "지원하지 않는 refTable입니다.", 400);
+  }
 
   try {
+    if (!await projectEntityBelongsToProject(projectId, "FUNCTION", refId)) {
+      return apiError("NOT_FOUND", "기능을 찾을 수 없습니다.", 404);
+    }
+
     // @@unique([ref_tbl_nm, ref_id]) 인덱스로 조회
     const row = await prisma.tbCmProgress.findUnique({
       where: { ref_tbl_nm_ref_id: { ref_tbl_nm: refTable, ref_id: refId } },
@@ -75,6 +83,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // 레코드가 없으면 0으로 초기화된 기본값 반환 (첫 접근 시에도 정상 응답)
     if (!row) {
       return apiSuccess({ designRt: 0, implRt: 0 });
+    }
+
+    if (row.prjct_id !== projectId) {
+      return apiError("NOT_FOUND", "진행률 정보를 찾을 수 없습니다.", 404);
     }
 
     return apiSuccess(toResponse(row));
@@ -109,6 +121,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   if (!refTable || !refId) {
     return apiError("VALIDATION_ERROR", "refTable과 refId는 필수입니다.", 400);
   }
+  if (refTable !== "tb_ds_function") {
+    return apiError("VALIDATION_ERROR", "지원하지 않는 refTable입니다.", 400);
+  }
 
   let body: unknown;
   try { body = await request.json(); } catch {
@@ -125,6 +140,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   if (implRt   !== undefined && !isValidRate(implRt))   return apiError("VALIDATION_ERROR", "implRt는 0~100 정수여야 합니다.", 400);
 
   try {
+    if (!await projectEntityBelongsToProject(projectId, "FUNCTION", refId)) {
+      return apiError("NOT_FOUND", "기능을 찾을 수 없습니다.", 404);
+    }
+
+    const existing = await prisma.tbCmProgress.findUnique({
+      where: { ref_tbl_nm_ref_id: { ref_tbl_nm: refTable, ref_id: refId } },
+      select: { prjct_id: true },
+    });
+    if (existing && existing.prjct_id !== projectId) {
+      return apiError("NOT_FOUND", "진행률 정보를 찾을 수 없습니다.", 404);
+    }
+
     // upsert — (ref_tbl_nm, ref_id) 기준 없으면 생성, 있으면 수정
     const row = await prisma.tbCmProgress.upsert({
       where: { ref_tbl_nm_ref_id: { ref_tbl_nm: refTable, ref_id: refId } },

@@ -11,12 +11,23 @@
  *   <div dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }} />
  *
  * 보안:
- *   이 앱은 인증된 사용자가 본인 데이터를 편집하는 내부 도구이므로
- *   XSS 위험이 낮음. 외부 사용자 입력을 노출하는 공개 페이지 추가 시
- *   DOMPurify 등으로 sanitize 레이어 추가 필요.
+ *   marked는 원본 HTML도 통과시키므로 변환 결과를 반드시 DOMPurify로 정화한다.
+ *   이미 HTML인 RichEditor 결과는 sanitizeHtml()을 사용한다.
  */
 
 import { marked } from "marked";
+import DOMPurify from "isomorphic-dompurify";
+import type { Config } from "dompurify";
+
+// 편집 문서에 필요하지 않고 실행·화면 위장에 악용될 수 있는 요소는 명시적으로 제거한다.
+// 일반 서식(style 속성 포함)은 유지해 기존 RichEditor/Markdown 표현의 호환성을 보존한다.
+const SAFE_HTML_CONFIG: Config = {
+  FORBID_TAGS: [
+    "script", "iframe", "object", "embed", "form", "input", "button",
+    "textarea", "select", "option", "meta", "link", "base",
+  ],
+  FORBID_ATTR: ["srcdoc"],
+};
 
 // ── marked 전역 옵션 ────────────────────────────────────────────────────────
 // gfm: true  → GitHub Flavored Markdown (표, 취소선, 체크박스 등)
@@ -50,7 +61,16 @@ export function renderMarkdown(md: string | null | undefined): string {
     }
   );
 
-  return html;
+  return sanitizeHtml(html);
+}
+
+/**
+ * RichEditor 결과처럼 이미 HTML인 사용자 입력을 DOM에 넣기 전에 정화한다.
+ * Markdown 변환 여부와 무관하게 모든 dangerouslySetInnerHTML 경계에서 재사용한다.
+ */
+export function sanitizeHtml(html: string | null | undefined): string {
+  if (!html?.trim()) return "";
+  return DOMPurify.sanitize(html, SAFE_HTML_CONFIG) as string;
 }
 
 /**

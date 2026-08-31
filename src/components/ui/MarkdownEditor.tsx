@@ -11,7 +11,7 @@
  */
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { renderMarkdown } from "@/lib/renderMarkdown";
+import { renderMarkdown, sanitizeHtml } from "@/lib/renderMarkdown";
 import {
   TEXT_LIMITS, countChars,
   type TextLimitField,
@@ -121,7 +121,7 @@ export default function MarkdownEditor({
           const wrapper = document.createElement("div");
           wrapper.className = "mermaid-rendered";
           wrapper.style.cssText = "overflow-x:auto;padding:12px 0;text-align:center";
-          wrapper.innerHTML = svg;
+          wrapper.innerHTML = sanitizeHtml(svg);
           (preEl ?? codeEl).replaceWith(wrapper);
         } catch (err) {
           // 개별 블록 에러 — 원본 유지, 에러 메시지 추가

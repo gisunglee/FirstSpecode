@@ -15,6 +15,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
+import { sanitizeHtml } from "@/lib/renderMarkdown";
 import dynamic from "next/dynamic";
 // TipTap 번들이 초기 로드에 포함되지 않도록 dynamic import
 const RichEditor = dynamic(() => import("@/components/ui/RichEditor"), { ssr: false });
@@ -386,7 +387,7 @@ function ReviewDetailPageInner() {
               <div
                 className="sp-markdown"
                 style={{ padding: "14px 16px", background: "var(--color-bg-muted)", borderRadius: 6, minHeight: 80, lineHeight: 1.7 }}
-                dangerouslySetInnerHTML={{ __html: data.reviewCn || "<p style='color:#aaa'>내용 없음</p>" }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(data.reviewCn) || "<p>내용 없음</p>" }}
               />
             )}
           </div>
@@ -432,7 +433,7 @@ function ReviewDetailPageInner() {
               <div
                 className="sp-markdown"
                 style={{ padding: "14px 16px", background: "var(--color-bg-muted)", borderRadius: 6, minHeight: 60, lineHeight: 1.7 }}
-                dangerouslySetInnerHTML={{ __html: data.resultCn }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(data.resultCn) }}
               />
             ) : (
               <div style={{ padding: "32px 0", textAlign: "center", color: "#bbb", fontSize: 13 }}>
@@ -548,7 +549,7 @@ function CommentItem({
         <div
           className="sp-markdown"
           style={{ fontSize: 13 }}
-          dangerouslySetInnerHTML={{ __html: comment.content }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(comment.content) }}
         />
       )}
     </div>

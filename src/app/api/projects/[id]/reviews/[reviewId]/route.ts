@@ -92,7 +92,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("NOT_FOUND", "리뷰 요청을 찾을 수 없습니다.", 404);
   }
 
-  const isAdmin     = checkRole(membership.role_code, ["OWNER", "ADMIN"]);
+  const isAdmin     = checkRole(membership.role_code, ["OWNER", "ADMIN"]) === null;
   const isRequester = review.req_mber_id  === auth.mberId;
   const isReviewer  = review.revwr_mber_id === auth.mberId;
 
@@ -200,7 +200,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     return apiError("NOT_FOUND", "리뷰 요청을 찾을 수 없습니다.", 404);
   }
 
-  const isAdmin     = checkRole(membership.role_code, ["OWNER", "ADMIN"]);
+  const isAdmin     = checkRole(membership.role_code, ["OWNER", "ADMIN"]) === null;
   const isRequester = review.req_mber_id === auth.mberId;
 
   if (!isAdmin && !isRequester) {

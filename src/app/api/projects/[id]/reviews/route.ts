@@ -84,6 +84,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (!revwrMemberId?.trim()) return apiError("VALIDATION_ERROR", "답변자를 선택해 주세요.", 400);
 
   try {
+    const reviewerMembership = await prisma.tbPjProjectMember.findUnique({
+      where: {
+        prjct_id_mber_id: { prjct_id: projectId, mber_id: revwrMemberId },
+      },
+      select: { mber_sttus_code: true },
+    });
+    if (!reviewerMembership || reviewerMembership.mber_sttus_code !== "ACTIVE") {
+      return apiError("VALIDATION_ERROR", "검토자는 현재 프로젝트의 활성 멤버여야 합니다.", 400);
+    }
+
     const review = await prisma.tb_ds_review_request.create({
       data: {
         review_id:         randomUUID(),

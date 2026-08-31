@@ -16,6 +16,11 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { checkRole } from "@/lib/checkRole";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import {
+  isProjectEntityRefType,
+  projectEntityBelongsToProject,
+  type ProjectEntityRefType,
+} from "@/lib/projectEntityScope";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -58,7 +63,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", `refType은 ${validTypes.join(", ")} 중 하나여야 합니다.`, 400);
   }
 
+  // includes()는 TypeScript 타입을 좁히지 않으므로 공통 타입 가드로 한 번 더 확정한다.
+  if (!isProjectEntityRefType(refType)) {
+    return apiError("VALIDATION_ERROR", "지원하지 않는 refType입니다.", 400);
+  }
+
   try {
+    if (!await projectEntityBelongsToProject(projectId, refType, refId)) {
+      return apiError("NOT_FOUND", "대상을 찾을 수 없습니다.", 404);
+    }
+
     // ── ① unitWorkId 역추적 + 선택 경로 수집 ────────────────────────────────
     const { unitWorkId, pathIds } = await resolveUnitWork(refType, refId);
 
@@ -67,8 +81,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     // ── ② 단위업무 하위 전체 트리 조회 ──────────────────────────────────────
-    const uw = await prisma.tbDsUnitWork.findUnique({
-      where: { unit_work_id: unitWorkId },
+    const uw = await prisma.tbDsUnitWork.findFirst({
+      where: { unit_work_id: unitWorkId, prjct_id: projectId },
       include: {
         screens: {
           orderBy: { sort_ordr: "asc" },
@@ -136,7 +150,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // ── unitWorkId 역추적 — refType별 상위 체인 ID도 함께 수집 ──────────────────
 async function resolveUnitWork(
-  refType: string,
+  refType: ProjectEntityRefType,
   refId: string
 ): Promise<{ unitWorkId: string | null; pathIds: string[] }> {
   switch (refType) {

@@ -24,7 +24,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
-import { renderMarkdown } from "@/lib/renderMarkdown";
+import { renderMarkdown, sanitizeHtml } from "@/lib/renderMarkdown";
 import { ARTF_DIV, ARTF_FMT, DIV_BADGE_COLOR, AI_STATUS_BADGE } from "@/constants/planStudio";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import PlanStudioAIRequestPopup from "@/components/ui/PlanStudioAIRequestPopup";
@@ -218,9 +218,9 @@ function DetailInner() {
         const src = stripOuterCodeFence(artfCn, ["mermaid"]);
         // Mermaid는 같은 ID를 두 번 렌더링하면 에러 → 유니크 ID
         const { svg } = await mermaid.render(`mm-${Date.now()}`, src);
-        if (mermaidRef.current) mermaidRef.current.innerHTML = svg;
+        if (mermaidRef.current) mermaidRef.current.innerHTML = sanitizeHtml(svg);
       } catch (err) {
-        if (mermaidRef.current) mermaidRef.current.innerHTML = `<pre style="color:#e53935">Mermaid 렌더링 오류:\n${err}</pre>`;
+        if (mermaidRef.current) mermaidRef.current.textContent = `Mermaid 렌더링 오류: ${String(err)}`;
       }
     })();
   }, [viewFmtCode, viewMode, artfCn, theme]);
@@ -235,9 +235,9 @@ function DetailInner() {
         mermaid.initialize({ startOnLoad: false, theme: isDark ? "dark" : "default" });
         const src = stripOuterCodeFence(artfCn, ["mermaid"]);
         const { svg } = await mermaid.render(`mm-full-${Date.now()}`, src);
-        if (fullMermaidRef.current) fullMermaidRef.current.innerHTML = svg;
+        if (fullMermaidRef.current) fullMermaidRef.current.innerHTML = sanitizeHtml(svg);
       } catch (err) {
-        if (fullMermaidRef.current) fullMermaidRef.current.innerHTML = `<pre style="color:#e53935">Mermaid 렌더링 오류:\n${err}</pre>`;
+        if (fullMermaidRef.current) fullMermaidRef.current.textContent = `Mermaid 렌더링 오류: ${String(err)}`;
       }
     })();
   }, [fullSizeOpen, viewFmtCode, fullSizeMode, artfCn, theme]);
@@ -1009,7 +1009,7 @@ function DetailInner() {
               ) : reqDetailTab === "current" ? (
                 // 현행화 — HTML (웹 에디터 출력물)
                 reqDetailData.currentContent ? (
-                  <div className="sp-markdown" style={{ fontSize: 14, lineHeight: 1.8, color: "var(--color-text-primary)" }} dangerouslySetInnerHTML={{ __html: reqDetailData.currentContent }} />
+                  <div className="sp-markdown" style={{ fontSize: 14, lineHeight: 1.8, color: "var(--color-text-primary)" }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(reqDetailData.currentContent) }} />
                 ) : (
                   <div style={{ color: "#aaa", fontSize: 13 }}>현행화 내용이 없습니다.</div>
                 )
@@ -1064,7 +1064,7 @@ function DetailInner() {
               ) : viewFmtCode === "MERMAID" ? (
                 <div ref={fullMermaidRef} />
               ) : viewFmtCode === "HTML" ? (
-                <iframe srcDoc={stripOuterCodeFence(artfCn, ["html"])} sandbox="allow-same-origin allow-scripts" style={{ width: "100%", height: "100%", border: "1px solid var(--color-border)", borderRadius: 6 }} />
+                <iframe srcDoc={stripOuterCodeFence(artfCn, ["html"])} sandbox="allow-scripts" style={{ width: "100%", height: "100%", border: "1px solid var(--color-border)", borderRadius: 6 }} />
               ) : null}
             </div>
           </div>

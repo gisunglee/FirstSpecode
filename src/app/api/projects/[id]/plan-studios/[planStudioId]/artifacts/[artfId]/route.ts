@@ -25,9 +25,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const artf = await prisma.tbDsPlanStudioArtf.findUnique({
       where: { artf_id: artfId },
-      include: { contexts: { orderBy: { sort_ordr: "asc" } } },
+      include: {
+        contexts: { orderBy: { sort_ordr: "asc" } },
+        planStudio: { select: { prjct_id: true } },
+      },
     });
-    if (!artf || artf.plan_studio_id !== planStudioId) {
+    if (!artf || artf.plan_studio_id !== planStudioId || artf.planStudio.prjct_id !== projectId) {
       return apiError("NOT_FOUND", "산출물을 찾을 수 없습니다.", 404);
     }
 
@@ -38,13 +41,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const [reqs, refArtfs] = await Promise.all([
       reqIds.length
         ? prisma.tbRqRequirement.findMany({
-            where: { req_id: { in: reqIds } },
+            where: { req_id: { in: reqIds }, prjct_id: projectId },
             select: { req_id: true, req_display_id: true, req_nm: true },
           })
         : [],
       artfIds.length
         ? prisma.tbDsPlanStudioArtf.findMany({
-            where: { artf_id: { in: artfIds } },
+            where: { artf_id: { in: artfIds }, planStudio: { prjct_id: projectId } },
             include: { planStudio: { select: { plan_studio_display_id: true } } },
           })
         : [],
@@ -114,8 +117,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const existing = await prisma.tbDsPlanStudioArtf.findUnique({ where: { artf_id: artfId } });
-    if (!existing || existing.plan_studio_id !== planStudioId) {
+    const existing = await prisma.tbDsPlanStudioArtf.findUnique({
+      where: { artf_id: artfId },
+      include: { planStudio: { select: { prjct_id: true } } },
+    });
+    if (!existing || existing.plan_studio_id !== planStudioId || existing.planStudio.prjct_id !== projectId) {
       return apiError("NOT_FOUND", "산출물을 찾을 수 없습니다.", 404);
     }
 
@@ -167,8 +173,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   if (gate instanceof Response) return gate;
 
   try {
-    const existing = await prisma.tbDsPlanStudioArtf.findUnique({ where: { artf_id: artfId } });
-    if (!existing || existing.plan_studio_id !== planStudioId) {
+    const existing = await prisma.tbDsPlanStudioArtf.findUnique({
+      where: { artf_id: artfId },
+      include: { planStudio: { select: { prjct_id: true } } },
+    });
+    if (!existing || existing.plan_studio_id !== planStudioId || existing.planStudio.prjct_id !== projectId) {
       return apiError("NOT_FOUND", "산출물을 찾을 수 없습니다.", 404);
     }
 

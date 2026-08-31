@@ -10,6 +10,10 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { checkRole } from "@/lib/checkRole";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import {
+  isProjectEntityRefType,
+  projectEntityBelongsToProject,
+} from "@/lib/projectEntityScope";
 
 type RouteParams = { params: Promise<{ id: string; groupId: string }> };
 
@@ -41,6 +45,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
+    const target = await prisma.tbDsColMappingGroup.findUnique({ where: { grp_id: groupId } });
+    if (
+      !target ||
+      !isProjectEntityRefType(target.ref_ty_code) ||
+      !await projectEntityBelongsToProject(projectId, target.ref_ty_code, target.ref_id)
+    ) {
+      return apiError("NOT_FOUND", "매핑 그룹을 찾을 수 없습니다.", 404);
+    }
+
     const group = await prisma.tbDsColMappingGroup.update({
       where: { grp_id: groupId },
       data: {
@@ -77,6 +90,12 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const target = await prisma.tbDsColMappingGroup.findUnique({ where: { grp_id: groupId } });
     if (!target) {
       return apiError("NOT_FOUND", "그룹을 찾을 수 없습니다.", 404);
+    }
+    if (
+      !isProjectEntityRefType(target.ref_ty_code) ||
+      !await projectEntityBelongsToProject(projectId, target.ref_ty_code, target.ref_id)
+    ) {
+      return apiError("NOT_FOUND", "매핑 그룹을 찾을 수 없습니다.", 404);
     }
     const siblingCount = await prisma.tbDsColMappingGroup.count({
       where: { ref_ty_code: target.ref_ty_code, ref_id: target.ref_id },

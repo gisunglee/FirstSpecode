@@ -18,9 +18,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
   const { id: projectId, reviewId, commentId } = await params;
 
-  const [membership, comment] = await Promise.all([
+  const [membership, review, comment] = await Promise.all([
     prisma.tbPjProjectMember.findUnique({
       where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
+    }),
+    prisma.tb_ds_review_request.findFirst({
+      where: { review_id: reviewId, prjct_id: projectId },
+      select: { review_id: true },
     }),
     prisma.tb_ds_review_comment.findUnique({ where: { coment_id: commentId } }),
   ]);
@@ -28,7 +32,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   if (!membership || membership.mber_sttus_code !== "ACTIVE") {
     return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
   }
-  if (!comment || comment.review_id !== reviewId) {
+  if (!review || !comment || comment.review_id !== reviewId) {
     return apiError("NOT_FOUND", "코멘트를 찾을 수 없습니다.", 404);
   }
 
@@ -69,9 +73,13 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   const { id: projectId, reviewId, commentId } = await params;
 
-  const [membership, comment] = await Promise.all([
+  const [membership, review, comment] = await Promise.all([
     prisma.tbPjProjectMember.findUnique({
       where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
+    }),
+    prisma.tb_ds_review_request.findFirst({
+      where: { review_id: reviewId, prjct_id: projectId },
+      select: { review_id: true },
     }),
     prisma.tb_ds_review_comment.findUnique({ where: { coment_id: commentId } }),
   ]);
@@ -79,11 +87,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   if (!membership || membership.mber_sttus_code !== "ACTIVE") {
     return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
   }
-  if (!comment || comment.review_id !== reviewId) {
+  if (!review || !comment || comment.review_id !== reviewId) {
     return apiError("NOT_FOUND", "코멘트를 찾을 수 없습니다.", 404);
   }
 
-  const isAdmin = checkRole(membership.role_code, ["OWNER", "ADMIN"]);
+  const isAdmin = checkRole(membership.role_code, ["OWNER", "ADMIN"]) === null;
   if (!isAdmin && comment.write_mber_id !== auth.mberId) {
     return apiError("FORBIDDEN", "본인이 작성한 코멘트만 삭제할 수 있습니다.", 403);
   }
