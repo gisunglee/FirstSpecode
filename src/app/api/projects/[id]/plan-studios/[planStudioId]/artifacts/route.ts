@@ -10,6 +10,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { planStudioContextsBelongToProject } from "@/lib/planStudioContextScope";
 
 type RouteParams = { params: Promise<{ id: string; planStudioId: string }> };
 
@@ -40,6 +41,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const studio = await prisma.tbDsPlanStudio.findUnique({ where: { plan_studio_id: planStudioId } });
   if (!studio || studio.prjct_id !== projectId) {
     return apiError("NOT_FOUND", "기획실을 찾을 수 없습니다.", 404);
+  }
+  if (!await planStudioContextsBelongToProject(projectId, body.contexts ?? [])) {
+    return apiError("VALIDATION_ERROR", "현재 프로젝트에 속하지 않는 컨텍스트가 포함되어 있습니다.", 400);
   }
 
   try {

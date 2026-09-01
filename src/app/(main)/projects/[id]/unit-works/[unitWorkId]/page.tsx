@@ -1247,8 +1247,10 @@ function UnitWorkDetailPageInner() {
                 </div>
 
                 {/* 2행: 설계/구현 진행률(공수 자리로 좌측 이동) + 화면 목록(1:N 관계라 선택 즉시
-                    해당 화면 상세로 이동하는 "바로가기" 콤보로 배치, 옆에 소형 + 버튼으로 신규 등록) */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1.1fr", gap: 12 }}>
+                    해당 화면 상세로 이동하는 "바로가기" 콤보로 배치, 옆에 소형 + 버튼으로 신규 등록,
+                    "목록 →" 버튼으로 화면 목록 화면 이동 — 화면/영역 상세와 동일 패턴, 2026-08-31).
+                    진행률 두 칸은 읽기전용 퍼센트 값이라 폭이 크게 필요 없어 화면 목록 쪽에 더 줌 */}
+                <div style={{ display: "grid", gridTemplateColumns: "0.8fr 0.8fr 1.5fr", gap: 12 }}>
                   <FormField label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>설계 진행률 (%)<HelpPopover title="설계 진행률" content={"하위 화면 → 영역 → 기능 전체의 설계 진행률을 평균낸 자동 계산값입니다.\n\n계산 방식)\n• 기능별 설계 진행률(각 기능 상세에서 입력)의 평균\n• 하위 기능이 하나도 없으면 0%\n\n직접 입력·수정할 수 없습니다."} /></span>}>
                     <div
                       title="하위 화면·기능의 설계 진행 상황에서 자동 계산됨"
@@ -1297,6 +1299,15 @@ function UnitWorkDetailPageInner() {
                         style={{ ...secondaryBtnStyle, flex: "none", padding: "0 10px", height: 34, fontSize: 16, fontWeight: 700, lineHeight: 1, opacity: isNew ? 0.5 : 1, cursor: isNew ? "not-allowed" : "pointer" }}
                       >
                         +
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/projects/${projectId}/screens?unitWorkId=${unitWorkId}`)}
+                        disabled={isNew}
+                        title="화면 목록 관리"
+                        style={{ ...secondaryBtnStyle, flex: "none", padding: "0 10px", height: 34, fontSize: 12, opacity: isNew ? 0.5 : 1, cursor: isNew ? "not-allowed" : "pointer" }}
+                      >
+                        목록 →
                       </button>
                     </div>
                   </FormField>

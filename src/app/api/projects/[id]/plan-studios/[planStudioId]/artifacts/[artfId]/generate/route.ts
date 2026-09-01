@@ -22,6 +22,7 @@ import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { buildPrompt } from "@/lib/plan-studio/prompt-builder";
 import { AI_TASK_REF_TY_ARTF } from "@/constants/planStudio";
 import { parseAiRequest, saveAiTaskAttachments } from "@/lib/aiTaskAttach";
+import { planStudioContextsBelongToProject } from "@/lib/planStudioContextScope";
 
 type RouteParams = { params: Promise<{ id: string; planStudioId: string; artfId: string }> };
 
@@ -83,9 +84,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   try {
     // 존재 확인
-    const existing = await prisma.tbDsPlanStudioArtf.findUnique({ where: { artf_id: artfId } });
-    if (!existing || existing.plan_studio_id !== planStudioId) {
+    const existing = await prisma.tbDsPlanStudioArtf.findUnique({
+      where: { artf_id: artfId },
+      include: { planStudio: { select: { prjct_id: true } } },
+    });
+    if (
+      !existing ||
+      existing.plan_studio_id !== planStudioId ||
+      existing.planStudio.prjct_id !== projectId
+    ) {
       return apiError("NOT_FOUND", "산출물을 찾을 수 없습니다. 삭제되었을 수 있습니다.", 404);
+    }
+    if (!await planStudioContextsBelongToProject(projectId, contexts)) {
+      return apiError("VALIDATION_ERROR", "현재 프로젝트에 속하지 않는 컨텍스트가 포함되어 있습니다.", 400);
     }
 
     // [1단계] 저장 — coment_cn 은 더 이상 entity 에 쓰지 않음 (일회성 → tb_ai_task 한 곳에)

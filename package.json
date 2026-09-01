@@ -23,6 +23,7 @@
     "test:spec-sync": "tsc -p tsconfig.spec-sync-tests.json && node --test tmp/spec-sync-tests/scripts/spec-sync-contract.test.js scripts/spec-sync-migration.test.mjs scripts/spec-sync-helper.test.mjs && node .claude/commands/sync_specode.mjs validate scripts/fixtures/spec-sync-valid-result.json",
     "test:auth-security": "tsc -p tsconfig.auth-security-tests.json && node --test tmp/auth-security-tests/scripts/auth-security-policy.test.js",
     "test:security-boundaries": "tsx --test scripts/security-boundary.test.ts",
+    "test:project-boundary:db": "dotenv -e .env.local -- tsx scripts/project-boundary-db-smoke.ts",
     "test:work-log": "npx tsx --test scripts/work-log-week-narrative.test.ts",
     "test:auth-security:db": "dotenv -e .env.local -- npx tsx scripts/refresh-token-rotation-db-smoke.ts",
     "test:auth-cookie:db": "dotenv -e .env.local -- npx tsx scripts/auth-cookie-db-smoke.ts",
