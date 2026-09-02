@@ -16,9 +16,10 @@
 import { toast } from "sonner";
 import {
   clearAuthTokensAcrossTabs,
-  ensureFreshAccessToken,
-  refreshAccessToken,
+  ensureFreshAccessTokenResult,
+  refreshAccessTokenResult,
 } from "@/lib/authRefreshClient";
+import type { AccessTokenRefreshResult } from "@/lib/authRefreshPolicy";
 import { getStoredAccessToken } from "@/lib/authTokenStorage";
 
 // ── 전역 상태 (메모리) ────────────────────────────────────────────────────────
@@ -105,7 +106,10 @@ async function authenticatedRequest(
   options: RequestInit | undefined,
   jsonDefault: boolean,
 ): Promise<Response> {
-  let accessToken = await ensureFreshAccessToken();
+  const initialRefresh = await ensureFreshAccessTokenResult();
+  let accessToken = initialRefresh.status === "success"
+    ? initialRefresh.accessToken
+    : getStoredAccessToken() || null;
   let response = await fetch(url, {
     ...options,
     headers: requestHeaders(options, accessToken, jsonDefault),
@@ -118,12 +122,12 @@ async function authenticatedRequest(
 
   // 다른 요청/탭이 이미 갱신했다면 불필요한 RT 회전 없이 최신 AT로 먼저 재시도한다.
   const storedToken = getStoredAccessToken();
-  const recoveredToken = storedToken && storedToken !== accessToken
-    ? storedToken
-    : await refreshAccessToken();
+  const recovery: AccessTokenRefreshResult = storedToken && storedToken !== accessToken
+    ? { status: "success", accessToken: storedToken }
+    : await refreshAccessTokenResult();
 
-  if (recoveredToken) {
-    accessToken = recoveredToken;
+  if (recovery.status === "success") {
+    accessToken = recovery.accessToken;
     response = await fetch(url, {
       ...options,
       headers: requestHeaders(options, accessToken, jsonDefault),
@@ -132,6 +136,12 @@ async function authenticatedRequest(
 
     errorBody = await readAuthError(response);
     if (!isRecoverableSessionError(errorBody)) return response;
+  }
+
+  // 네트워크·충돌·서버 일시 오류는 세션 종료가 아니다. 로그인 화면으로 보내거나
+  // 다른 탭의 인증 정보를 지우지 않고, 현재 화면에서 다음 요청의 재시도를 허용한다.
+  if (recovery.status === "transient") {
+    throw new Error("로그인 상태를 확인하는 중 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
   }
 
   const reason = errorBody.code === "UNAUTHORIZED" ? "unauthorized" : "expired";

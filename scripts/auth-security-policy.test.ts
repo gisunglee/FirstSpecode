@@ -41,6 +41,7 @@ import {
   accessTokenExpiresAtMs,
   shouldRefreshAccessToken,
 } from "../src/lib/authSessionPolicy";
+import { classifyRefreshFailure } from "../src/lib/authRefreshPolicy";
 
 const PROJECT_ID = "project-1";
 const JWT_SECRET = "test-only-secret-with-sufficient-length";
@@ -149,6 +150,14 @@ test("서버 발급 시간과 브라우저 선제 갱신 기준은 단일 정책
   assert.equal(shouldRefreshAccessToken(token, expiresAtMs - 120_000), true);
   assert.equal(shouldRefreshAccessToken("broken-token"), true);
   assert.equal(shouldRefreshAccessToken(""), true);
+});
+
+test("Refresh 인증 거부만 세션 종료로, 일시 오류는 재시도 대상으로 분류한다", () => {
+  assert.equal(classifyRefreshFailure(401), "terminal");
+  assert.equal(classifyRefreshFailure(409), "transient");
+  assert.equal(classifyRefreshFailure(429), "transient");
+  assert.equal(classifyRefreshFailure(500), "transient");
+  assert.equal(classifyRefreshFailure(503), "transient");
 });
 
 test("필수 클레임이 있는 기존 Access Token은 전환 기간에 허용한다", () => {

@@ -37,6 +37,7 @@ import { useAppStore } from "@/store/appStore";
 import { authFetch } from "@/lib/authFetch";
 import {
   ensureFreshAccessToken,
+  ensureFreshAccessTokenResult,
   migrateLegacyRefreshToken,
 } from "@/lib/authRefreshClient";
 import { AUTH_SESSION_CHECK_INTERVAL_MS } from "@/lib/authSessionPolicy";
@@ -74,8 +75,16 @@ export default function MainLayout({
 
     const checkAuth = async () => {
       const hadAccessToken = !!sessionStorage.getItem("access_token");
-      const accessToken = await ensureFreshAccessToken();
-      if (accessToken) {
+      let result = await ensureFreshAccessTokenResult();
+
+      // 다중 탭 RT 회전 충돌이나 짧은 네트워크 지연은 한 번 더 확인한다.
+      if (result.status === "transient") {
+        await new Promise((resolve) => window.setTimeout(resolve, 300));
+        if (cancelled) return;
+        result = await ensureFreshAccessTokenResult();
+      }
+
+      if (result.status === "success") {
         if (cancelled) return;
         setAuthChecked(true);
         if (hadAccessToken) {
@@ -83,6 +92,13 @@ export default function MainLayout({
           // 화면 진입은 현재 AT로 먼저 허용하고 승계는 백그라운드에서 처리한다.
           void migrateLegacyRefreshToken();
         }
+        return;
+      }
+
+      // 이미 AT가 있던 화면은 일시적인 갱신 실패만으로 로그아웃시키지 않는다.
+      // API 요청과 1분 유지 타이머가 다음 갱신을 다시 시도한다.
+      if (result.status === "transient" && hadAccessToken) {
+        if (!cancelled) setAuthChecked(true);
         return;
       }
 

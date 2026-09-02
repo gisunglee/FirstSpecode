@@ -18,6 +18,10 @@ import {
   AUTH_COOKIE_MODE_VALUE,
 } from "@/lib/authCookiePolicy";
 import { shouldRefreshAccessToken } from "@/lib/authSessionPolicy";
+import {
+  classifyRefreshFailure,
+  type AccessTokenRefreshResult,
+} from "@/lib/authRefreshPolicy";
 
 const REFRESH_LOCK_NAME = "specode-auth-refresh-v2";
 const REFRESH_CHANNEL_NAME = "specode-auth-refresh-v2";
@@ -46,7 +50,7 @@ type RefreshApiBody = {
 
 type LockAttempt =
   | { acquired: false }
-  | { acquired: true; accessToken: string | null };
+  | { acquired: true; result: AccessTokenRefreshResult };
 
 type PeerResult = {
   accessToken: string;
@@ -57,7 +61,7 @@ type PeerResult = {
 const tabId = globalThis.crypto?.randomUUID?.()
   ?? `tab-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-let refreshPromise: Promise<string | null> | null = null;
+let refreshPromise: Promise<AccessTokenRefreshResult> | null = null;
 let refreshChannel: BroadcastChannel | null = null;
 let listenersInitialized = false;
 let latestPeerResult: PeerResult | null = null;
@@ -194,7 +198,7 @@ async function requestTokenRotation(
   requiredKind: RefreshTokenStorageKind | undefined,
   startedAt: number,
   allowConflictRetry = true,
-): Promise<string | null> {
+): Promise<AccessTokenRefreshResult> {
   // 과거 저장값은 쿠키가 없는 기존 사용자 승계에만 사용한다.
   const legacyToken = readStoredRefreshToken(requiredKind)?.token;
   const response = await fetch("/api/auth/token/refresh", {
@@ -212,7 +216,9 @@ async function requestTokenRotation(
   if (!response.ok) {
     if (response.status === 409 && body.code === "REFRESH_CONFLICT") {
       const peerAccessToken = await waitForPeerResult(startedAt);
-      if (peerAccessToken) return peerAccessToken;
+      if (peerAccessToken) {
+        return { status: "success", accessToken: peerAccessToken };
+      }
 
       // Web Locks 미지원 브라우저에서 승자 응답의 Set-Cookie만 적용되고
       // 탭 메시지를 놓친 경우, 공유된 후속 쿠키로 한 번만 재시도한다.
@@ -221,20 +227,22 @@ async function requestTokenRotation(
       }
     }
     if (response.status === 401) clearStoredRefreshTokens();
-    return null;
+    return { status: classifyRefreshFailure(response.status) };
   }
 
   const accessToken = body.data?.accessToken;
-  if (typeof accessToken !== "string" || !storeAccessToken(accessToken)) return null;
+  if (typeof accessToken !== "string" || !storeAccessToken(accessToken)) {
+    return { status: "transient" };
+  }
 
   clearStoredRefreshTokens();
   publishRefreshResult(accessToken);
-  return accessToken;
+  return { status: "success", accessToken };
 }
 
 async function coordinateAcrossTabs(
   requiredKind: RefreshTokenStorageKind | undefined,
-): Promise<string | null> {
+): Promise<AccessTokenRefreshResult> {
   const startedAt = Date.now();
   if (typeof navigator === "undefined" || !navigator.locks) {
     return requestTokenRotation(requiredKind, startedAt);
@@ -248,16 +256,18 @@ async function coordinateAcrossTabs(
         if (!lock) return { acquired: false };
         return {
           acquired: true,
-          accessToken: await requestTokenRotation(requiredKind, startedAt),
+          result: await requestTokenRotation(requiredKind, startedAt),
         };
       },
     );
 
-    if (immediate.acquired) return immediate.accessToken;
+    if (immediate.acquired) return immediate.result;
 
     return navigator.locks.request(REFRESH_LOCK_NAME, async () => {
       const peerAccessToken = await waitForPeerResult(startedAt, LOCK_HANDOFF_WAIT_MS);
-      if (peerAccessToken) return peerAccessToken;
+      if (peerAccessToken) {
+        return { status: "success", accessToken: peerAccessToken } as AccessTokenRefreshResult;
+      }
 
       // 승자 메시지를 놓쳤어도 HttpOnly 쿠키는 브라우저 전체에 공유되어 있다.
       return requestTokenRotation(requiredKind, Date.now());
@@ -271,16 +281,24 @@ async function coordinateAcrossTabs(
 export async function refreshAccessToken(
   requiredKind?: RefreshTokenStorageKind,
 ): Promise<string | null> {
+  const result = await refreshAccessTokenResult(requiredKind);
+  return result.status === "success" ? result.accessToken : null;
+}
+
+/** 로그인 이동 여부를 호출부가 안전하게 판단할 수 있도록 갱신 실패 종류까지 반환한다. */
+export async function refreshAccessTokenResult(
+  requiredKind?: RefreshTokenStorageKind,
+): Promise<AccessTokenRefreshResult> {
   if (refreshPromise) return refreshPromise;
 
   refreshPromise = (async () => {
     try {
-      if (typeof window === "undefined") return null;
+      if (typeof window === "undefined") return { status: "transient" };
       ensureCoordinationListeners();
       return coordinateAcrossTabs(requiredKind);
     } catch (err) {
       console.warn("[authRefresh] 로그인 세션 갱신에 실패했습니다.", err);
-      return null;
+      return { status: "transient" };
     } finally {
       refreshPromise = null;
     }
@@ -294,11 +312,18 @@ export async function refreshAccessToken(
  * 모든 화면의 초기 인증 확인과 API 요청이 같은 기준을 사용하도록 제공하는 진입점이다.
  */
 export async function ensureFreshAccessToken(): Promise<string | null> {
-  if (typeof window === "undefined") return null;
+  const result = await ensureFreshAccessTokenResult();
+  return result.status === "success" ? result.accessToken : null;
+}
+
+export async function ensureFreshAccessTokenResult(): Promise<AccessTokenRefreshResult> {
+  if (typeof window === "undefined") return { status: "transient" };
 
   const currentToken = getStoredAccessToken();
-  if (!shouldRefreshAccessToken(currentToken)) return currentToken;
-  return refreshAccessToken();
+  if (!shouldRefreshAccessToken(currentToken)) {
+    return { status: "success", accessToken: currentToken };
+  }
+  return refreshAccessTokenResult();
 }
 
 /** 배포 전 Web Storage RT가 남은 브라우저만 백그라운드에서 쿠키로 승계한다. */
