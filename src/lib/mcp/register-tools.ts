@@ -61,6 +61,7 @@ import {
 } from "@/lib/mcp/workerCommandFiles";
 import { syncResultSubmissionSchema } from "@/lib/spec-sync/contracts";
 import { DB_TABLE_STATUS_CODES } from "@/lib/dbTableStatus";
+import { DESIGN_TEMPLATE_MCP_PLACEHOLDER_GUIDANCE } from "@/lib/templateVars";
 
 // ─── 공통 헬퍼 ──────────────────────────────────────────────────
 
@@ -303,7 +304,8 @@ export function registerTools(
   server.tool(
     "create_requirement",
     "요구사항 생성 — 새 요구사항을 등록합니다. displayId(REQ-NNNNN)는 자동 채번됩니다. 과업에 소속시키려면 taskId를 전달하세요 (선행: list_tasks 또는 get_planning_tree로 taskId 조회). " +
-      "originalContent/detailSpec 등 설명 내용을 작성하기 전에 get_design_template(refType=REQUIREMENT)로 표준 양식을 먼저 확인하세요.",
+      "originalContent/detailSpec 등 설명 내용을 작성하기 전에 get_design_template(refType=REQUIREMENT)로 표준 양식을 먼저 확인하세요. " +
+      DESIGN_TEMPLATE_MCP_PLACEHOLDER_GUIDANCE,
     {
       projectId: z.string().describe("프로젝트 ID"),
       name: z.string().describe("요구사항명 (필수)"),
@@ -541,7 +543,8 @@ export function registerTools(
   server.tool(
     "create_unit_work",
     "단위업무 생성 — 새 단위업무를 등록합니다. displayId(UW-NNNNN)는 자동 채번됩니다. 선행: list_requirements로 reqId를 조회하세요 (상위 요구사항 필수). 담당자·일정 지정은 OWNER/ADMIN 또는 PM/PL만 가능합니다. " +
-      "description을 작성하기 전에 get_design_template(refType=UNIT_WORK)로 표준 양식을 먼저 확인하세요.",
+      "description을 작성하기 전에 get_design_template(refType=UNIT_WORK)로 표준 양식을 먼저 확인하세요. " +
+      DESIGN_TEMPLATE_MCP_PLACEHOLDER_GUIDANCE,
     {
       projectId: z.string().describe("프로젝트 ID"),
       reqId: z.string().describe("상위 요구사항 ID (필수). list_requirements에서 조회 가능"),
@@ -645,7 +648,8 @@ export function registerTools(
   server.tool(
     "create_screen",
     "화면 생성 — 새 화면을 등록합니다. 단위업무에 소속시키려면 unitWorkId를 전달하세요 (선행: list_unit_works로 조회). " +
-      "description을 작성하기 전에 get_design_template(refType=SCREEN)로 표준 양식을 먼저 확인하세요.",
+      "description을 작성하기 전에 get_design_template(refType=SCREEN)로 표준 양식을 먼저 확인하세요. " +
+      DESIGN_TEMPLATE_MCP_PLACEHOLDER_GUIDANCE,
     {
       projectId: z.string().describe("프로젝트 ID"),
       name: z.string().describe("화면명 (필수)"),
@@ -751,7 +755,8 @@ export function registerTools(
   server.tool(
     "create_area",
     "영역 생성 — 새 영역을 등록합니다. 화면에 소속시키려면 screenId를 전달하세요 (선행: list_screens로 조회). 정렬 순서 지정은 OWNER/ADMIN 또는 PM/PL만 가능합니다. " +
-      "description을 작성하기 전에 get_design_template(refType=AREA)로 표준 양식을 먼저 확인하세요.",
+      "description을 작성하기 전에 get_design_template(refType=AREA)로 표준 양식을 먼저 확인하세요. " +
+      DESIGN_TEMPLATE_MCP_PLACEHOLDER_GUIDANCE,
     {
       projectId: z.string().describe("프로젝트 ID"),
       name: z.string().describe("영역명 (필수)"),
@@ -849,7 +854,8 @@ export function registerTools(
   server.tool(
     "create_function",
     "기능 생성 — 새 기능을 등록합니다. 영역에 소속시키려면 areaId를 전달하세요 (선행: list_areas로 조회). 복잡도·공수·담당자·정렬 지정은 OWNER/ADMIN 또는 PM/PL만 가능합니다. " +
-      "description을 작성하기 전에 get_design_template(refType=FUNCTION)로 표준 양식을 먼저 확인하세요.",
+      "description을 작성하기 전에 get_design_template(refType=FUNCTION)로 표준 양식을 먼저 확인하세요. " +
+      DESIGN_TEMPLATE_MCP_PLACEHOLDER_GUIDANCE,
     {
       projectId: z.string().describe("프로젝트 ID"),
       name: z.string().describe("기능명 (필수)"),
@@ -955,6 +961,7 @@ export function registerTools(
       "따라 내용을 작성하고, 표준 양식에 맞추겠다는 점 또는 양식을 채우는 데 필요한 " +
       "추가 정보를 사용자에게 먼저 알린 뒤 진행하세요. 프로젝트 전용 양식이 있으면 " +
       "공통 양식보다 우선 적용됩니다. 해당 계층에 등록된 양식이 없으면 data가 null입니다. " +
+      DESIGN_TEMPLATE_MCP_PLACEHOLDER_GUIDANCE + " " +
       "주의: <TABLE_SCRIPT:테이블물리명> 형식으로 표기된 항목(단위업무 '참조 테이블' 등)은 " +
       "리터럴 문법입니다 — 괄호 안 테이블물리명만 실제 값으로 바꾸고 <TABLE_SCRIPT: ... > 태그 " +
       "자체는 절대 풀어쓰지 말고 그대로 유지하세요. 구현요청 생성 시 실제 DDL로 자동 치환됩니다.",

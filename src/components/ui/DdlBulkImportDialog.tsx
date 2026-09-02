@@ -7,6 +7,7 @@
  *   - 사용자가 여러 CREATE TABLE 이 포함된 DDL 스크립트를 붙여넣으면
  *   - 공용 파서(`@/lib/ddlParser`)로 파싱 → 미리보기 표시
  *   - 사용자가 테이블/컬럼 논리명을 인라인 편집 가능
+ *   - 신규/기존 상태를 행마다 스위치로 토글 (기본값 신규)
  *   - 중복 물리명은 자동 체크 해제 + 경고 배지
  *   - 선택한 건만 `/api/projects/[id]/db-tables/bulk` 로 일괄 등록
  *
@@ -25,6 +26,7 @@ import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { parseDdlScript, type ParsedTable, type ParsedCol } from "@/lib/ddlParser";
+import { DB_TABLE_STATUS_LABEL, type DbTableStatusCode } from "@/lib/dbTableStatus";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -37,14 +39,17 @@ type Props = {
 
 // 미리보기에서 사용자 편집이 반영된 상태 — 파싱 결과 + 체크 + 수정된 논리명
 type Draft = {
-  tblPhysclNm: string;
-  tblLgclNm:   string;      // 편집 가능
-  columns:     DraftCol[];
-  rawBlock:    string;
-  errors:      string[];
-  checked:     boolean;
-  expanded:    boolean;     // 컬럼 목록 펼침 여부
-  duplicate:   boolean;     // 기존 테이블과 물리명 중복
+  tblPhysclNm:  string;
+  tblLgclNm:    string;      // 편집 가능
+  columns:      DraftCol[];
+  rawBlock:     string;
+  errors:       string[];
+  checked:      boolean;
+  expanded:     boolean;     // 컬럼 목록 펼침 여부
+  duplicate:    boolean;     // 기존 테이블과 물리명 중복
+  // 신규/기존 — DDL로 들어오는 테이블은 대부분 새로 만드는 것이라 기본값은 NEW.
+  // 이미 있는 스키마를 문서화 목적으로 옮겨 적는 경우엔 사용자가 EXISTING으로 바꿀 수 있다.
+  tblSttusCode: DbTableStatusCode;
 };
 
 type DraftCol = ParsedCol;  // 같은 shape. 논리명/타입 모두 편집 가능
@@ -89,14 +94,15 @@ export default function DdlBulkImportDialog({ projectId, existingPhysNms, onClos
     const next: Draft[] = parsed.map((t) => {
       const duplicate = existingSet.has(t.tblPhysclNm.toLowerCase());
       return {
-        tblPhysclNm: t.tblPhysclNm,
-        tblLgclNm:   t.tblLgclNm,
-        columns:     t.columns.map((c) => ({ ...c })),
-        rawBlock:    t.rawBlock,
-        errors:      t.errors,
-        checked:     !duplicate,
-        expanded:    false,
+        tblPhysclNm:  t.tblPhysclNm,
+        tblLgclNm:    t.tblLgclNm,
+        columns:      t.columns.map((c) => ({ ...c })),
+        rawBlock:     t.rawBlock,
+        errors:       t.errors,
+        checked:      !duplicate,
+        expanded:     false,
         duplicate,
+        tblSttusCode: "NEW" as DbTableStatusCode,
       };
     });
     setDrafts(next);
@@ -148,8 +154,9 @@ export default function DdlBulkImportDialog({ projectId, existingPhysNms, onClos
         method: "POST",
         body: JSON.stringify({
           tables: tables.map((t) => ({
-            tblPhysclNm: t.tblPhysclNm,
-            tblLgclNm:   t.tblLgclNm,
+            tblPhysclNm:  t.tblPhysclNm,
+            tblLgclNm:    t.tblLgclNm,
+            tblSttusCode: t.tblSttusCode,
             columns: t.columns.map((c) => ({
               colPhysclNm: c.colPhysclNm,
               colLgclNm:   c.colLgclNm,
@@ -324,6 +331,7 @@ export default function DdlBulkImportDialog({ projectId, existingPhysNms, onClos
                   onToggleCheck={() => patchDraft(tIdx, { checked: !d.checked })}
                   onToggleExpand={() => patchDraft(tIdx, { expanded: !d.expanded })}
                   onChangeLgclNm={(v) => patchDraft(tIdx, { tblLgclNm: v })}
+                  onToggleStatus={() => patchDraft(tIdx, { tblSttusCode: d.tblSttusCode === "NEW" ? "EXISTING" : "NEW" })}
                   onChangeCol={(cIdx, patch) => patchCol(tIdx, cIdx, patch)}
                 />
               ))}
@@ -392,12 +400,13 @@ export default function DdlBulkImportDialog({ projectId, existingPhysNms, onClos
 // ── 서브 컴포넌트: 테이블 행 + 펼침 시 컬럼 편집표 ───────────────────────────
 
 function TableRow({
-  draft, onToggleCheck, onToggleExpand, onChangeLgclNm, onChangeCol,
+  draft, onToggleCheck, onToggleExpand, onChangeLgclNm, onToggleStatus, onChangeCol,
 }: {
   draft:          Draft;
   onToggleCheck:  () => void;
   onToggleExpand: () => void;
   onChangeLgclNm: (v: string) => void;
+  onToggleStatus: () => void;
   onChangeCol:    (cIdx: number, patch: Partial<DraftCol>) => void;
 }) {
   const hasError = draft.errors.length > 0;
@@ -439,12 +448,29 @@ function TableRow({
         <span style={{ textAlign: "center", fontSize: 11 }}>
           {draft.duplicate ? (
             <span style={badgeStyle("#e65100", "rgba(230,81,0,0.12)")}>이미 존재</span>
-          ) : hasError ? (
-            <span style={badgeStyle("#c62828", "rgba(198,40,40,0.12)")} title={draft.errors.join("\n")}>
-              ⚠ 경고
-            </span>
           ) : (
-            <span style={badgeStyle("#1565c0", "rgba(21,101,192,0.12)")}>신규</span>
+            // 신규/기존 스위치 — 셀렉트 박스 대신 클릭 한 번으로 토글.
+            // 기본은 신규(NEW)이며, 이미 있는 스키마를 옮겨 적는 경우에만 기존으로 바꾼다.
+            <button
+              type="button"
+              onClick={onToggleStatus}
+              disabled={!draft.checked}
+              title={hasError ? `클릭하여 신규/기존 전환\n\n파싱 경고:\n${draft.errors.join("\n")}` : "클릭하여 신규/기존 전환"}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                background: "none", border: "none", padding: 0,
+                cursor: draft.checked ? "pointer" : "not-allowed",
+                opacity: draft.checked ? 1 : 0.5,
+              }}
+            >
+              <span className={`sp-toggle-track${draft.tblSttusCode === "NEW" ? " is-on" : ""}`} />
+              <span style={{
+                fontSize: 11, fontWeight: 700,
+                color: hasError ? "#c62828" : (draft.tblSttusCode === "NEW" ? "#1565c0" : "var(--color-text-secondary)"),
+              }}>
+                {hasError ? "⚠ " : ""}{DB_TABLE_STATUS_LABEL[draft.tblSttusCode]}
+              </span>
+            </button>
           )}
         </span>
         <button
@@ -527,7 +553,7 @@ const secondaryBtnStyle: React.CSSProperties = {
   fontSize: 13, cursor: "pointer",
 };
 
-const PREVIEW_GRID = "28px minmax(160px, 220px) 1fr 60px 80px 28px";
+const PREVIEW_GRID = "28px minmax(160px, 220px) 1fr 60px 100px 28px";
 
 const previewHeaderStyle: React.CSSProperties = {
   display: "grid",

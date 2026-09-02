@@ -60,10 +60,12 @@ UW(단위업무) 구현을 병렬 검토하고 종합 리포트를 출력한다.
 ### 1단계: 서버에서 설계 조회
 
 `mcp__specode__list_unit_works($PROJECT_ID)`에서 `displayId`가 `$UW`와 일치하는 항목을
-찾는다.
+찾는다. **정확히 1건 일치할 때만** 다음 단계로 진행한다 — 임의로 하나를 골라 진행하지 않는다.
 
-- 없으면 "SPECODE에 해당 UW가 없습니다: {UW}" 출력 후 종료.
-- 있으면 그 `unitWorkId`로 `mcp__specode__get_design_tree($PROJECT_ID, [unitWorkId])`를
+- 0건이면 "SPECODE에 해당 UW가 없습니다: {UW}" 출력 후 종료.
+- 2건 이상이면(중복 등록) "SPECODE에 {UW}가 {N}건 중복 등록되어 있습니다. 하나만 남기고
+  정리한 뒤 다시 실행해주세요." 출력 후 종료.
+- 정확히 1건이면 그 `unitWorkId`로 `mcp__specode__get_design_tree($PROJECT_ID, [unitWorkId])`를
   호출해서 화면>영역>기능 전체 계층과 각 레벨의 설명(description)을 확보한다. 이 결과가
   `$DESIGN_TREE`다.
 - `$DESIGN_TREE`의 화면 목록이 비어 있으면(화면 없는 순수 백엔드 UW 등), `prd-compliance-reviewer`
@@ -290,7 +292,9 @@ description 포함)다. 로컬 PRD 파일은 없으니 이 설계 트리를 기�
 ## 주의사항 (체크리스트)
 
 - [ ] UW 번호 없으면 사용법만 출력하고 종료
+- [ ] 인자가 2개 이상(중복 지정)이면 사용법만 출력하고 종료
 - [ ] 프로젝트 확인(하나면 자동, 여러 개면 질문) 후 진행
+- [ ] `displayId` 일치가 2건 이상이면(서버에 UW 중복 등록) 임의로 고르지 않고 안내 후 종료
 - [ ] SPECODE 서버에서 설계 트리 조회(`get_design_tree`) 후 에이전트 호출 — 로컬 PRD 파일 사용 금지
 - [ ] 설계 트리는 오케스트레이터가 1번만 조회해서 프롬프트로 전달 (중복 조회 금지)
 - [ ] 코드 품질/UI 디자인 기준 문서는 `search_standard_guides`/`get_standard_guide`로 매번

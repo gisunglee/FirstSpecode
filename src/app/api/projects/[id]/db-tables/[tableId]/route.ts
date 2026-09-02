@@ -1,7 +1,7 @@
 /**
  * GET    /api/projects/[id]/db-tables/[tableId] — DB 테이블 상세 (테이블 정보 + 컬럼 목록)
  * PUT    /api/projects/[id]/db-tables/[tableId] — DB 테이블 수정 + 컬럼 전체 교체
- * PATCH  /api/projects/[id]/db-tables/[tableId] — 상태(신규/기존/데디케이트)만 경량 변경
+ * PATCH  /api/projects/[id]/db-tables/[tableId] — 상태(신규/기존/데디케이트)만 경량 변경 (컬럼 안 건드림)
  * DELETE /api/projects/[id]/db-tables/[tableId] — DB 테이블 삭제 (컬럼 cascade)
  *
  * PUT body:
@@ -14,13 +14,15 @@
  *     (아무 것도 커밋되지 않음 — 클라이언트가 영향도를 보여주고 재확인 후 true 로 재요청)
  *
  * PATCH body:
- *   { tblSttusCode: "DEPRECATED" }
- *   - 컬럼은 전혀 건드리지 않는 경량 엔드포인트. 삭제 확인창의 "상태만 변경"(데디케이트) 액션 전용.
- *   - 권한도 삭제와 동일(db.table.delete)하게 취급 — "이제 안 쓴다"는 선언은 삭제만큼 신중해야 함.
- *   - DEPRECATED로만 제한한다 — NEW/EXISTING으로 되돌리거나 재분류하는 건 삭제 권한과는
- *     성격이 다른(덜 위험한) 작업이라, 그건 PUT(테이블 상세 편집 폼, db.table.write)으로만 한다.
- *     그렇지 않으면 "삭제 권한 있는 사람 = 상태 마음대로 바꿀 수 있는 사람"이 되어버려
- *     나중에 상태 재분류만 더 넓게 허용하고 싶을 때 이 게이트를 통째로 다시 설계해야 한다.
+ *   { tblSttusCode: "NEW" | "EXISTING" | "DEPRECATED" }
+ *   - 컬럼은 전혀 건드리지 않는 경량 엔드포인트. 목록 화면의 상태 배지 클릭(순환 토글),
+ *     삭제 확인창의 "상태만 변경"(데디케이트) 액션 전용.
+ *   - 목표 상태에 따라 권한을 다르게 매긴다 (PUT 없이 컬럼 전체를 안 건드리고 상태만
+ *     바꾸는 짧은 경로이므로, 위험도가 다른 두 케이스를 하나의 게이트로 뭉치지 않는다):
+ *       · DEPRECATED로 전환      → db.table.delete 와 동일 게이트(담당자 예외 포함).
+ *         "이제 안 쓴다"는 선언은 삭제만큼 신중해야 하므로 삭제와 동급 권한 요구.
+ *       · NEW/EXISTING으로 전환  → db.table.write. 스키마가 새 것인지 기존 것인지
+ *         재분류하는 건 삭제만큼 위험하지 않은 일상적 작업이라 더 가벼운 권한으로 충분.
  */
 
 import { NextRequest } from "next/server";
@@ -374,26 +376,32 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, tableId } = await params;
 
-  // 권한: db.table.delete 와 동일 게이트 재사용 — 삭제 확인창에서 갈라지는 액션이라
-  // "완전 삭제"만큼 신중해야 함(담당자 예외도 동일하게 적용)
-  const gate = await requireDbTableDelete(request, projectId, async () => {
-    const t = await prisma.tbDsDbTable.findUnique({
-      where:  { tbl_id: tableId },
-      select: { asign_mber_id: true, prjct_id: true },
-    });
-    return t && t.prjct_id === projectId ? t.asign_mber_id : null;
-  });
-  if (gate instanceof Response) return gate;
-
   let body: unknown;
   try { body = await request.json(); } catch {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
   const { tblSttusCode } = body as { tblSttusCode?: string };
-  // DEPRECATED 로만 제한 — NEW/EXISTING 재분류는 db.table.write(PUT)로만 허용
-  if (tblSttusCode !== "DEPRECATED") {
-    return apiError("VALIDATION_ERROR", "이 엔드포인트는 데디케이트로 변경할 때만 사용합니다.", 400);
+  if (!isDbTableStatusCode(tblSttusCode)) {
+    return apiError("VALIDATION_ERROR", "유효하지 않은 상태값입니다.", 400);
+  }
+
+  // 목표 상태에 따라 권한 게이트를 분기 (파일 상단 PATCH 설명 참고)
+  let mberId: string;
+  if (tblSttusCode === "DEPRECATED") {
+    const gate = await requireDbTableDelete(request, projectId, async () => {
+      const t = await prisma.tbDsDbTable.findUnique({
+        where:  { tbl_id: tableId },
+        select: { asign_mber_id: true, prjct_id: true },
+      });
+      return t && t.prjct_id === projectId ? t.asign_mber_id : null;
+    });
+    if (gate instanceof Response) return gate;
+    mberId = gate.mberId;
+  } else {
+    const gate = await requirePermission(request, projectId, "db.table.write");
+    if (gate instanceof Response) return gate;
+    mberId = gate.mberId;
   }
 
   try {
@@ -410,7 +418,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         where: { tbl_id: tableId },
         data: {
           tbl_sttus_code: tblSttusCode,
-          mdfcn_mber_id:  gate.mberId,
+          mdfcn_mber_id:  mberId,
           mdfcn_dt:       new Date(),
         },
       });
@@ -422,7 +430,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         chgTypeCode: "UPDATE",
         before,
         after,
-        chgMberId:   gate.mberId,
+        chgMberId:   mberId,
       });
     });
 

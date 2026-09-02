@@ -25,6 +25,8 @@
     "test:security-boundaries": "tsx --test scripts/security-boundary.test.ts",
     "test:project-boundary:db": "dotenv -e .env.local -- tsx scripts/project-boundary-db-smoke.ts",
     "test:work-log": "npx tsx --test scripts/work-log-week-narrative.test.ts",
+    "test:template-vars": "npx tsx --test scripts/template-vars.test.ts",
+    "test:requirement-history": "npx tsx --test scripts/requirement-history-version.test.ts",
     "test:auth-security:db": "dotenv -e .env.local -- npx tsx scripts/refresh-token-rotation-db-smoke.ts",
     "test:auth-cookie:db": "dotenv -e .env.local -- npx tsx scripts/auth-cookie-db-smoke.ts",
     "test:spec-sync:db": "dotenv -e .env.local -- node scripts/check-spec-sync-db.mjs --expect-v2 && dotenv -e .env.local -- node scripts/spec-sync-db-smoke.mjs",

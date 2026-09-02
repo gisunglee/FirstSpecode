@@ -391,6 +391,7 @@ function RequirementDetailPageInner() {
       } else {
         // 수정 후 → 현재 페이지 그대로 (캐시 갱신으로 최신 데이터 반영)
         queryClient.invalidateQueries({ queryKey: ["requirement", projectId, reqId] });
+        queryClient.invalidateQueries({ queryKey: ["req-history", projectId, reqId] });
       }
     },
     onError: (err: Error) => toast.error(err.message),
@@ -416,9 +417,10 @@ function RequirementDetailPageInner() {
       authFetch<{ data: { items: HistoryItem[]; totalCount: number } }>(
         `/api/projects/${projectId}/requirements/${reqId}/history`
       ).then((r) => r.data),
-    enabled: !isNew && historyOpen,
+    enabled: !isNew,
   });
   const historyItems = historyData?.items ?? [];
+  const canCompareHistory = historyItems.length >= 2;
 
   // ── 요구사항 삭제 뮤테이션 ───────────────────────────────────────────────────
   const reqDeleteMutation = useMutation({
@@ -1248,7 +1250,10 @@ function RequirementDetailPageInner() {
               <span style={{ fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>변경 이력</span>
               <button type="button" onClick={() => setHistoryOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#888" }}>×</button>
             </div>
-            <div style={{ marginBottom: 12, fontSize: 13, color: "var(--color-text-secondary)" }}>총 {historyItems.length}건</div>
+            <div style={{ marginBottom: 12, fontSize: 13, color: "var(--color-text-secondary)" }}>
+              총 {historyItems.length}건
+              {historyItems.length === 1 && " · 변경 이력이 2건 이상일 때 Diff할 수 있습니다."}
+            </div>
             <div style={{ flex: 1, overflowY: "auto" }}>
               {historyItems.length === 0 ? (
                 <p style={{ color: "#aaa", fontSize: 13 }}>변경 이력이 없습니다.</p>
@@ -1266,7 +1271,16 @@ function RequirementDetailPageInner() {
                       <div style={{ fontSize: 12, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.changerEmail || "-"}</div>
                       <div style={{ fontSize: 12, color: "var(--color-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.comment || "-"}</div>
                       <div style={{ display: "flex", gap: 4 }}>
-                        <button onClick={() => setDiffTarget(item)} style={{ ...histGhostBtn }}>Diff</button>
+                        <button
+                          onClick={() => setDiffTarget(item)}
+                          disabled={!canCompareHistory}
+                          title={canCompareHistory ? "버전 비교" : "비교하려면 변경 이력이 2건 이상 필요합니다."}
+                          style={{
+                            ...histGhostBtn,
+                            opacity: canCompareHistory ? 1 : 0.45,
+                            cursor: canCompareHistory ? "pointer" : "not-allowed",
+                          }}
+                        >Diff</button>
                         <button onClick={() => setDeleteTarget(item)} style={{ ...histGhostBtn, color: "#e53935", borderColor: "#e53935" }}>삭제</button>
                       </div>
                     </div>
@@ -1665,6 +1679,7 @@ function ReqDiffViewerPopup({
   const prevItem = items[initialIdx + 1];
   const [v1Id, setV1Id] = useState<string>(prevItem?.historyId ?? items[items.length - 1]?.historyId ?? "");
   const [v2Id, setV2Id] = useState<string>(initialItem.historyId);
+  const hasComparableVersions = items.length >= 2;
   const sameSelected = v1Id === v2Id;
 
   const { data, isLoading } = useQuery({
@@ -1673,7 +1688,7 @@ function ReqDiffViewerPopup({
       authFetch<{ data: DiffResult }>(
         `/api/projects/${projectId}/requirements/${reqId}/history/diff?v1=${v1Id}&v2=${v2Id}`
       ).then((r) => r.data),
-    enabled: !!v1Id && !!v2Id && !sameSelected,
+    enabled: hasComparableVersions && !!v1Id && !!v2Id && !sameSelected,
   });
 
   const selStyle: React.CSSProperties = { padding: "5px 10px", borderRadius: 5, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-primary)", fontSize: 12 };
@@ -1704,7 +1719,8 @@ function ReqDiffViewerPopup({
 
         {/* 본문 */}
         <div style={{ flex: 1, overflowY: "auto" }}>
-          {sameSelected && <div style={{ padding: "16px 0", textAlign: "center", color: "#f57c00", fontSize: 13 }}>서로 다른 버전을 선택해 주세요.</div>}
+          {!hasComparableVersions && <div style={{ padding: "16px 0", textAlign: "center", color: "#f57c00", fontSize: 13 }}>비교하려면 변경 이력이 2건 이상 필요합니다.</div>}
+          {hasComparableVersions && sameSelected && <div style={{ padding: "16px 0", textAlign: "center", color: "#f57c00", fontSize: 13 }}>서로 다른 버전을 선택해 주세요.</div>}
           {isLoading && !sameSelected && <div style={{ padding: "16px 0", textAlign: "center", color: "#888", fontSize: 13 }}>로딩 중...</div>}
           {data && !sameSelected && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

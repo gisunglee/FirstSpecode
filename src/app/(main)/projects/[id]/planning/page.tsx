@@ -1036,6 +1036,7 @@ function TaskDetailPanel({ projectId, taskId, displayId, onSaved }: { projectId:
 // ── 요구사항 상세 패널 ────────────────────────────────────────────────────────
 
 function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: string; reqId: string; displayId: string; onSaved: () => void }) {
+  const queryClient = useQueryClient();
   // 표시 ID prefix — 환경설정 기반 placeholder
   const { getPrefix } = useIdPrefixes(projectId);
   const [name,           setName]           = useState("");
@@ -1140,7 +1141,12 @@ function ReqDetailPanel({ projectId, reqId, displayId, onSaved }: { projectId: s
           ...opts,
         }),
       }),
-    onSuccess: () => { toast.success("저장되었습니다."); setSaveDialogOpen(false); onSaved(); },
+    onSuccess: () => {
+      toast.success("저장되었습니다.");
+      setSaveDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["req-history", projectId, reqId] });
+      onSaved();
+    },
     onError:   (err: Error) => toast.error(err.message),
   });
 

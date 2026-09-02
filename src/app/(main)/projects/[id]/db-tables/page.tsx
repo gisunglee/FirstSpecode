@@ -21,6 +21,7 @@ import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 // 매핑 인사이트 Phase 2 — IO 프로필 아이콘, 커버리지 텍스트 배지
 import { IoProfileIcon, CoverageText, DbTableStatusBadge } from "@/components/db-table/TableInsightBadges";
 import type { IoProfile } from "@/lib/dbTableUsage";
+import { isDbTableStatusCode, type DbTableStatusCode } from "@/lib/dbTableStatus";
 import { BulkDeleteTableConfirmDialog, type BulkDeleteItem } from "@/components/db-table/DbTableDialogs";
 import type { TableUsageResponse } from "@/components/db-table/TableUsageSection";
 
@@ -64,6 +65,12 @@ type InsightFilter = "all" | "unused" | "low" | "hot" | "stale";
 const LOW_COVERAGE_THRESHOLD = 30;
 const HOT_FUNCTION_THRESHOLD = 5;
 const STALE_DAYS = 90;
+
+// 목록의 상태 배지 클릭 — 신규 → 기존 → 데디케이트 → 신규 순환.
+// 상세 페이지의 컬럼 상태 배지(COL_STATUS_CYCLE)와 동일한 순환 관례.
+const TABLE_STATUS_CYCLE: Record<DbTableStatusCode, DbTableStatusCode> = {
+  NEW: "EXISTING", EXISTING: "DEPRECATED", DEPRECATED: "NEW",
+};
 
 // ── 페이지 래퍼 ──────────────────────────────────────────────────────────────
 
@@ -185,6 +192,33 @@ function DbTablesPageInner() {
     },
     onError: (err: Error) => toast.error(err.message),
   });
+
+  // ── 상태 배지 클릭 순환 (신규/기존/데디케이트) ──────────────────────────────────
+  // PATCH는 컬럼을 안 건드리는 경량 엔드포인트라 목록에서 바로 호출 가능
+  // (PUT은 컬럼 전체 교체라 목록에 없는 컬럼 데이터를 함께 안 보내면 전부 삭제됨 — 위험).
+  // 서버 응답을 기다리지 않고 목록을 먼저 낙관적으로 갱신 → 실패하면 재조회로 되돌림.
+  const statusMutation = useMutation({
+    mutationFn: ({ tblId, tblSttusCode }: { tblId: string; tblSttusCode: DbTableStatusCode }) =>
+      authFetch(`/api/projects/${projectId}/db-tables/${tblId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ tblSttusCode }),
+      }),
+    onError: (err: Error) => {
+      toast.error("상태 변경 실패: " + err.message);
+      qc.invalidateQueries({ queryKey: ["db-tables", projectId] });
+    },
+  });
+
+  function cycleStatus(e: React.MouseEvent, row: DbTableRow) {
+    e.stopPropagation();
+    const current = isDbTableStatusCode(row.tblSttusCode) ? row.tblSttusCode : "EXISTING";
+    const next = TABLE_STATUS_CYCLE[current];
+    qc.setQueryData<DbTableRow[]>(
+      ["db-tables", projectId, filterAssignedTo],
+      (prev) => prev?.map((r) => (r.tblId === row.tblId ? { ...r, tblSttusCode: next } : r))
+    );
+    statusMutation.mutate({ tblId: row.tblId, tblSttusCode: next });
+  }
 
   // 체크박스 토글 — 이벤트 버블링으로 행 클릭(상세 이동)이 같이 발동하지 않도록 호출부에서 stopPropagation
   function toggleSelect(tblId: string) {
@@ -400,7 +434,7 @@ function DbTablesPageInner() {
             <span>논리 테이블명</span>
             <span>설명</span>
             <span>담당자</span>
-            <span style={{ textAlign: "center" }} title="신규/기존/데디케이트 — 전부 수동 지정">상태</span>
+            <span style={{ textAlign: "center" }} title="신규/기존/데디케이트 — 전부 수동 지정. 배지를 클릭하면 순환 변경">상태</span>
             <span style={{ textAlign: "center" }}>컬럼 수</span>
             {/* Phase 2 — 컬럼 활용률 */}
             <span style={{ textAlign: "center" }} title="매핑된 컬럼 비율 (usedColCount / columnCount)">
@@ -534,9 +568,16 @@ function DbTablesPageInner() {
                   {row.assignMemberName ?? "-"}
                 </span>
 
-                {/* 상태 배지 — 신규/기존/데디케이트 */}
+                {/* 상태 배지 — 클릭 시 신규 → 기존 → 데디케이트 순환 */}
                 <span style={{ textAlign: "center" }}>
-                  <DbTableStatusBadge code={row.tblSttusCode} />
+                  <button
+                    type="button"
+                    onClick={(e) => cycleStatus(e, row)}
+                    title="클릭하여 상태 변경 (신규 → 기존 → 데디케이트 순환)"
+                    style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+                  >
+                    <DbTableStatusBadge code={row.tblSttusCode} />
+                  </button>
                 </span>
 
                 {/* 컬럼 수 */}

@@ -21,6 +21,10 @@ import { parseJsonBody } from "@/lib/parseJsonBody";
 import { requirementUpdateSchema } from "@/lib/specContentSchemas";
 import { fetchUnitWorkProgress } from "@/lib/pm/progressRollup";
 import { applyTemplateVars } from "@/lib/templateVars";
+import {
+  buildRequirementHistoryVersionPlan,
+  INITIAL_REQUIREMENT_HISTORY_COMMENT,
+} from "@/lib/requirementHistoryVersion";
 
 type RouteParams = { params: Promise<{ id: string; reqId: string }> };
 
@@ -173,6 +177,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const newOrgnlCn   = originalContent?.trim() || null;
     const newCurncyCn  = currentContent?.trim() || null;
+    const nextOrgnlCn  = originalContent !== undefined ? newOrgnlCn : existing.orgnl_cn;
+    const nextCurncyCn = currentContent !== undefined ? newCurncyCn : existing.curncy_cn;
     const newAnalyCn   = analysisMemo?.trim() || null;
     // 템플릿 플레이스홀더({{displayId}}/{{name}}) 안전망 — MCP 등 "템플릿 삽입" 버튼을
     // 거치지 않는 경로로 저장될 때도 실제 값으로 치환되도록 저장 직전에 한 번 더 통과시킴.
@@ -222,8 +228,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           priort_code:    priority,
           src_code:       source,
           rfp_page_no:    rfpPage !== undefined ? (rfpPage?.trim() || null) : existing.rfp_page_no,
-          orgnl_cn:       originalContent !== undefined ? newOrgnlCn : existing.orgnl_cn,
-          curncy_cn:      currentContent !== undefined ? newCurncyCn : existing.curncy_cn,
+          orgnl_cn:       nextOrgnlCn,
+          curncy_cn:      nextCurncyCn,
           analy_cn:       analysisMemo !== undefined ? newAnalyCn : existing.analy_cn,
           spec_cn:        detailSpec !== undefined ? newSpecCn : existing.spec_cn,
           asign_mber_id:  nextAssignee,
@@ -265,29 +271,38 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           select:  { vrsn_no: true },
         });
 
-        if (!lastHistory) {
-          nextVersion = "V1.0";
-        } else {
-          const parts = lastHistory.vrsn_no.replace("V", "").split(".");
-          const major = parseInt(parts[0] ?? "1", 10);
-          const minor = parseInt(parts[1] ?? "0", 10);
+        const versionPlan = buildRequirementHistoryVersionPlan(
+          lastHistory?.vrsn_no ?? null,
+          versionMode,
+        );
+        nextVersion = versionPlan.nextVersion;
+        const historySavedAt = new Date();
 
-          if (versionMode === "major") {
-            nextVersion = `V${major + 1}.0`;
-          } else {
-            // minor (기본)
-            nextVersion = `V${major}.${minor + 1}`;
-          }
+        // 첫 이력 저장 때는 수정 전 내용을 V1.0 기준본으로 먼저 남긴다.
+        // 그래야 사용자가 선택한 V1.1/V2.0과 즉시 Diff할 수 있다.
+        if (versionPlan.baselineVersion) {
+          await tx.tbRqRequirementHistory.create({
+            data: {
+              req_id:         reqId,
+              vrsn_no:        versionPlan.baselineVersion,
+              orgnl_cn:       existing.orgnl_cn,
+              curncy_cn:      existing.curncy_cn,
+              vrsn_coment_cn: INITIAL_REQUIREMENT_HISTORY_COMMENT,
+              chg_mber_id:    gate.mberId,
+              creat_dt:       new Date(historySavedAt.getTime() - 1),
+            },
+          });
         }
 
         await tx.tbRqRequirementHistory.create({
           data: {
             req_id:         reqId,
             vrsn_no:        nextVersion,
-            orgnl_cn:       newOrgnlCn,
-            curncy_cn:      newCurncyCn,
+            orgnl_cn:       nextOrgnlCn,
+            curncy_cn:      nextCurncyCn,
             vrsn_coment_cn: versionComment?.trim() || null,
             chg_mber_id:    gate.mberId,
+            creat_dt:       historySavedAt,
           },
         });
       }

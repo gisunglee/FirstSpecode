@@ -15,9 +15,10 @@
  *   {
  *     tables: [
  *       {
- *         tblPhysclNm: "tb_xxx",
- *         tblLgclNm:   "회원",
- *         tblDc?:       "회원 정보 저장 테이블",
+ *         tblPhysclNm:   "tb_xxx",
+ *         tblLgclNm:     "회원",
+ *         tblDc?:        "회원 정보 저장 테이블",
+ *         tblSttusCode?: "NEW" | "EXISTING" | "DEPRECATED",  // 생략/무효값이면 NEW
  *         columns: [
  *           { colPhysclNm, colLgclNm?, dataTyNm?, colDc? }
  *         ]
@@ -62,6 +63,7 @@ import { requireDbTableDeleteBase } from "@/lib/requireDbTableDelete";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { captureTableSnapshot, recordRevision } from "@/lib/dbTableRevision";
 import { deleteOrphanedColMappings } from "@/lib/dbTableUsage";
+import { isDbTableStatusCode } from "@/lib/dbTableStatus";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -73,10 +75,12 @@ type BulkColumnInput = {
 };
 
 type BulkTableInput = {
-  tblPhysclNm: string;
-  tblLgclNm?:  string;
-  tblDc?:      string;
-  columns?:    BulkColumnInput[];
+  tblPhysclNm:   string;
+  tblLgclNm?:    string;
+  tblDc?:        string;
+  // 신규/기존 — 넘어오지 않거나 유효하지 않으면 NEW로 취급 (DDL 등록은 대부분 신규 테이블이므로)
+  tblSttusCode?: string;
+  columns?:      BulkColumnInput[];
 };
 
 type CreatedItem = { tblPhysclNm: string; tblId: string };
@@ -142,10 +146,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const tblId = await prisma.$transaction(async (tx) => {
         const row = await tx.tbDsDbTable.create({
           data: {
-            prjct_id:      projectId,
-            tbl_physcl_nm: physNm,
-            tbl_lgcl_nm:   t.tblLgclNm?.trim() || null,
-            tbl_dc:        t.tblDc?.trim()     || null,
+            prjct_id:       projectId,
+            tbl_physcl_nm:  physNm,
+            tbl_lgcl_nm:    t.tblLgclNm?.trim() || null,
+            tbl_dc:         t.tblDc?.trim()     || null,
+            tbl_sttus_code: isDbTableStatusCode(t.tblSttusCode) ? t.tblSttusCode : "NEW",
           },
         });
 
