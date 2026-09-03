@@ -178,8 +178,14 @@ export default function LNB() {
           { label: "화면",      href: p("/screens"),    icon: "i_screen" },
           { label: "영역",      href: p("/areas"),      icon: "i_area", indent: true },
           { label: "기능",      href: p("/functions"),  icon: "i_function", dividerAfter: true },
-          // DB 테이블은 화면/영역/기능 계층과 성격이 달라(설계 산출물 아님) 위아래 모두 구분(2026-07-29)
-          { label: "DB 테이블", href: p("/db-tables"),  icon: "i_dbTable", dividerAfter: true },
+          // DB 테이블은 화면/영역/기능 계층과 성격이 달라(설계 산출물 아님) 위로 구분(2026-07-29).
+          // 공통코드·기준 정보는 "공통 설계" 그룹에서 이관(2026-08-28) — DB 테이블과 같은
+          // "산출물이 참조하는 기준 데이터" 성격이라 바로 아래로 묶음.
+          { label: "DB 테이블", href: p("/db-tables"),      icon: "i_dbTable" },
+          { label: "공통코드",  href: p("/common-codes"),   icon: "i_commonCode" },
+          { label: "기준 정보", href: p("/standard-info"),  icon: "i_referenceInfo", dividerAfter: true },
+          // 표준 가이드는 성격이 또 달라(작성 규칙 문서) 별도 구분선 아래
+          { label: "표준 가이드", href: p("/standard-guides"), icon: "i_standardGuide" },
         ],
       },
       {
@@ -197,12 +203,9 @@ export default function LNB() {
         key: "common",
         label: "공통 설계",
         icon: "g_common",
-        // A군: 프로젝트 콘텐츠 자체(내가 만들 시스템의 재료)
-        items: [
-          { label: "표준 가이드", href: p("/standard-guides"), icon: "i_standardGuide" },
-          { label: "공통코드",    href: p("/common-codes"),    icon: "i_commonCode" },
-          { label: "기준 정보",   href: p("/standard-info"),   icon: "i_referenceInfo" },
-        ],
+        // 2026-08-28: 하위 항목(표준 가이드/공통코드/기준 정보) 전부 "설계" 그룹으로 이관.
+        // 메뉴 자체는 당장 그대로 유지 — 서브메뉴 없는 빈 상태 (의도적, 추후 재배치 검토용)
+        items: [],
       },
       {
         key: "ai",

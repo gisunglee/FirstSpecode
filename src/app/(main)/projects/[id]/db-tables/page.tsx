@@ -21,9 +21,10 @@ import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 // 매핑 인사이트 Phase 2 — IO 프로필 아이콘, 커버리지 텍스트 배지
 import { IoProfileIcon, CoverageText, DbTableStatusBadge } from "@/components/db-table/TableInsightBadges";
 import type { IoProfile } from "@/lib/dbTableUsage";
-import { isDbTableStatusCode, type DbTableStatusCode } from "@/lib/dbTableStatus";
+import { DB_TABLE_STATUS_CODES, DB_TABLE_STATUS_LABEL, isDbTableStatusCode, type DbTableStatusCode } from "@/lib/dbTableStatus";
 import { BulkDeleteTableConfirmDialog, type BulkDeleteItem } from "@/components/db-table/DbTableDialogs";
 import type { TableUsageResponse } from "@/components/db-table/TableUsageSection";
+import { SelectChevron } from "@/components/ui/SelectChevron";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
@@ -103,6 +104,13 @@ function DbTablesPageInner() {
   //   · low:    컬럼이 있는데 커버리지 < 30% (설계 누락 의심)
   //   · hot:    기능 연결 수가 임계치 이상 (핵심 테이블)
   const [insightFilter, setInsightFilter] = useState<InsightFilter>("all");
+
+  // 담당자 필터 — 특정 멤버 하나를 골라서 보기 ("" = 전체). GNB 전역 전체/내담당 토글과는
+  // 별개 — 저건 "내 것만" 빠르게 보는 용도, 이건 PM 등이 특정 멤버 담당분을 보는 용도.
+  const [assigneeFilterId, setAssigneeFilterId] = useState("");
+
+  // 상태 필터 — 신규/기존/데디케이트. 콤보박스 대신 인사이트 필터와 같은 배지 버튼 스타일.
+  const [statusFilter, setStatusFilter] = useState<"ALL" | DbTableStatusCode>("ALL");
 
   // 담당자 필터 — 전역 appStore.myAssigneeMode 구독 (GNB 토글과 양방향 바인딩)
   const filterAssignedTo = useAppStore((s) => s.myAssigneeMode);
@@ -229,15 +237,32 @@ function DbTablesPageInner() {
     });
   }
 
-  // 검색어 + 인사이트 필터를 동시에 적용
-  // 인사이트 필터는 "관점 전환" 이므로 검색과 교집합으로 동작
+  // 담당자 드롭다운 옵션 — 이미 불러온 rows에서 실제로 담당자가 지정된 멤버만 추출
+  // (전체 프로젝트 멤버 목록을 따로 조회할 필요 없음 — 목록에 없는 담당자는 필터할 이유도 없음)
+  const assigneeOptions = Array.from(
+    new Map(
+      rows
+        .filter((r): r is DbTableRow & { assignMemberId: string } => !!r.assignMemberId)
+        .map((r) => [r.assignMemberId, r.assignMemberName ?? r.assignMemberId] as const)
+    ).entries()
+  ).sort((a, b) => a[1].localeCompare(b[1], "ko"));
+
+  // 검색어 + 담당자 + 상태 + 인사이트 필터를 모두 동시에 적용 (전부 교집합/AND)
   const filtered = rows.filter((r) => {
     // 1) 검색어
     const q = search.toLowerCase();
     if (q && !r.tblPhysclNm.toLowerCase().includes(q) && !r.tblLgclNm.toLowerCase().includes(q)) {
       return false;
     }
-    // 2) 인사이트 필터
+    // 2) 담당자 (특정 멤버 선택 시)
+    if (assigneeFilterId && r.assignMemberId !== assigneeFilterId) {
+      return false;
+    }
+    // 3) 상태 (신규/기존/데디케이트)
+    if (statusFilter !== "ALL" && r.tblSttusCode !== statusFilter) {
+      return false;
+    }
+    // 4) 인사이트 필터
     if (insightFilter === "unused") {
       // 매핑이 전혀 없는 테이블 (IO 분류 기준) — 정리 대상 후보
       return r.ioProfile === "NONE";
@@ -362,6 +387,45 @@ function DbTablesPageInner() {
             className="sp-input"
             style={{ width: 280 }}
           />
+
+          {/* 담당자 필터 — 특정 멤버 선택. 옵션이 실제 데이터 기반이라 콤보박스가 적합 */}
+          <div className="sp-select-wrap" style={{ width: 140 }}>
+            <select
+              value={assigneeFilterId}
+              onChange={(e) => setAssigneeFilterId(e.target.value)}
+              className="sp-input"
+            >
+              <option value="">담당자 전체</option>
+              {assigneeOptions.map(([id, name]) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
+            </select>
+            <span className="sp-select-arrow"><SelectChevron /></span>
+          </div>
+
+          {/* 상태 필터 칩 — 콤보박스 대신 인사이트 필터와 같은 배지 버튼 스타일 */}
+          <div style={{ display: "inline-flex", gap: 4 }}>
+            {([{ key: "ALL", label: "상태 전체" }, ...DB_TABLE_STATUS_CODES.map((code) => ({ key: code, label: DB_TABLE_STATUS_LABEL[code] }))] as const).map((chip) => {
+              const active = statusFilter === chip.key;
+              return (
+                <button
+                  key={chip.key}
+                  type="button"
+                  onClick={() => setStatusFilter(chip.key)}
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: 999,
+                    border: `1px solid ${active ? "var(--color-primary, #1976d2)" : "var(--color-border)"}`,
+                    background: active ? "var(--color-primary, #1976d2)" : "var(--color-bg-card)",
+                    color: active ? "#fff" : "var(--color-text-primary)",
+                    fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
+          </div>
 
           {/* 인사이트 필터 칩 — Phase 2
               전체/미사용/저활용/핫 · 검색/담당자 필터와 교집합으로 동작 */}
