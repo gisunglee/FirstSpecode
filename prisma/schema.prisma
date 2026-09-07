@@ -19,7 +19,7 @@ model TbCmMember {
   plan_expire_dt      DateTime? // 유료 플랜 만료일 (NULL=무료/무제한)
   asignee_view_mode   String                     @default("all") // 전역 담당자 필터 모드: all | me
   /// 시스템 역할: "SUPER_ADMIN" = 전역 관리자 / null = 일반 사용자.
-  /// DB UPDATE로만 설정. UI/API 로는 변경 불가 (탈취 시 권한 연쇄 상승 차단).
+  /// 로그인 세션 기반 시스템 관리자 API로만 변경. 일반 사용자/MCP API에서는 변경 불가.
   sys_role_code       String?                    @db.VarChar(20)
   join_dt             DateTime                   @default(now())
   mdfcn_dt            DateTime?

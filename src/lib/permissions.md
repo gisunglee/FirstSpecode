@@ -1,6 +1,6 @@
 # 권한 시스템 — 개발자 레퍼런스
 
-> **업데이트**: 2026-04-21
+> **업데이트**: 2026-09-06
 > **관련 PRD**: `md/prd/UW-00010_역할 관리.md`, `md/prd/UW-00011_역할별 접근 권한 제어.md`
 
 ---
@@ -33,9 +33,13 @@
 |---|---|---|---|
 | **역할** | `RoleCode` | `tb_pj_project_member.role_code` | `OWNER` / `ADMIN` / `MEMBER` / `VIEWER` |
 | **직무** | `JobCode`  | `tb_pj_project_member.job_title_code` | `PM` / `PL` / `DBA` / `DEV` / `DESIGNER` / `QA` / `ETC` |
-| **플랜** | `PlanCode` | `tb_cm_member.plan_code`              | `FREE` / `PRO` / `TEAM` / `ENTERPRISE` |
+| **플랜** | `PlanCode` | `tb_cm_member.plan_code`, `plan_expire_dt` | `FREE` / `PRO` / `TEAM` / `ENTERPRISE` |
 
 멤버당 역할 1개 + 직무 1개. 복수 권한 없음.
+
+유료 플랜은 `resolveEffectivePlan()`으로 실효 플랜을 계산한다. `plan_expire_dt`가
+현재 시각과 같거나 과거면 권한 판정에서는 `FREE`로 취급하며, 만료일이 `NULL`이면
+기존 정책대로 무기한 플랜이다. API와 프론트 권한 표시는 이 실효 플랜을 사용한다.
 
 ---
 

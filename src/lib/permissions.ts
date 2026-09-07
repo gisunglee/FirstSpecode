@@ -48,7 +48,8 @@ export const JOB_LABEL: Record<JobCode, string> = {
 // SYSTEM_ROLE 은 SaaS 플랫폼 자체의 전역 역할 — 모든 프로젝트·사용자에
 // 대한 관리 권한을 별도의 컬럼(tb_cm_member.sys_role_code)에서 관리한다.
 //
-// DB UPDATE 로만 설정. UI/API 로는 바꿀 수 없다 (권한 연쇄 상승 차단).
+// 로그인 세션 기반 시스템 관리자 API에서만 변경할 수 있다.
+// 일반 사용자 API와 MCP 키 경로에서는 변경 불가 (권한 연쇄 상승 차단).
 export const SYSTEM_ROLE_CODES = ["SUPER_ADMIN"] as const;
 export type  SystemRoleCode    = (typeof SYSTEM_ROLE_CODES)[number];
 
@@ -60,6 +61,21 @@ export const SYSTEM_ROLE_LABEL: Record<SystemRoleCode, string> = {
 
 export const PLAN_CODES = ["FREE", "PRO", "TEAM", "ENTERPRISE"] as const;
 export type  PlanCode   = (typeof PLAN_CODES)[number];
+
+/**
+ * 저장된 플랜과 만료일로 현재 시점의 실효 플랜을 계산한다.
+ * 유료 플랜의 만료일이 지났으면 권한 판정에서는 FREE로 취급한다.
+ * 만료일이 null이면 기존 정책대로 무기한 플랜으로 본다.
+ */
+export function resolveEffectivePlan(
+  planCode: unknown,
+  planExpireDt: Date | null | undefined,
+  now = new Date(),
+): PlanCode {
+  const normalized = isPlanCode(planCode) ? planCode : "FREE";
+  if (normalized === "FREE" || !planExpireDt) return normalized;
+  return planExpireDt.getTime() <= now.getTime() ? "FREE" : normalized;
+}
 
 // 플랜 계층 — 숫자가 클수록 상위 (requiresPlan 비교에 사용)
 const PLAN_RANK: Record<PlanCode, number> = {

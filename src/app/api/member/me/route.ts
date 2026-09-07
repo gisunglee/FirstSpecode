@@ -24,6 +24,7 @@ import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { requireAuth } from "@/lib/requireAuth";
 import { verifyPassword, verifySocialToken } from "@/lib/auth";
 import { clearRefreshTokenCookie } from "@/lib/authRefreshCookie";
+import { isSystemAdminWithdrawalBlocked } from "@/lib/memberLifecyclePolicy";
 
 export async function DELETE(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -41,7 +42,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const member = await prisma.tbCmMember.findUnique({
       where:  { mber_id: auth.mberId },
-      select: { pswd_hash: true, mber_sttus_code: true },
+      select: { pswd_hash: true, mber_sttus_code: true, sys_role_code: true },
     });
 
     if (!member) {
@@ -49,6 +50,15 @@ export async function DELETE(request: NextRequest) {
     }
     if (member.mber_sttus_code === "WITHDRAWN") {
       return apiError("ALREADY_WITHDRAWN", "이미 탈퇴한 계정입니다.", 400);
+    }
+    // 시스템 관리자는 역할을 먼저 다른 관리자에게 해임받아야 탈퇴할 수 있다.
+    // 역할 API의 자기 해임 차단을 탈퇴로 우회해 마지막 관리자가 사라지는 사고를 방지한다.
+    if (isSystemAdminWithdrawalBlocked(member.sys_role_code)) {
+      return apiError(
+        "SYSTEM_ADMIN_WITHDRAWAL_BLOCKED",
+        "시스템 관리자 역할을 해임한 뒤 탈퇴할 수 있습니다. 다른 시스템 관리자에게 요청해 주세요.",
+        409,
+      );
     }
 
     // ── 본인 확인 ────────────────────────────────────────────────────────

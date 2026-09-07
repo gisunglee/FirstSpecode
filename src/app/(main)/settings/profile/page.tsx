@@ -34,6 +34,7 @@ interface ProfileData {
   email:        string;
   profileImage: string | null;
   hasPassword:  boolean;
+  isSystemAdmin: boolean;
   hasSocialAccounts: { google: boolean; github: boolean };
 }
 
@@ -156,17 +157,23 @@ function ProfileSettingsInner() {
             </div>
             {/* 회원 탈퇴 — 위험 액션이라 카드 맨 아래 작게 우측 정렬로 표시 (잘 안 보이도록 의도) */}
             <div style={{ marginTop: 32, paddingTop: 14, borderTop: "1px solid var(--color-border)", display: "flex", justifyContent: "flex-end" }}>
-              <Link
-                href="/settings/account/withdraw"
-                style={{
-                  fontSize: "var(--text-xs)",
-                  color: "var(--color-text-tertiary)",
-                  textDecoration: "underline",
-                  textUnderlineOffset: 2,
-                }}
-              >
-                회원 탈퇴
-              </Link>
+              {profile.isSystemAdmin ? (
+                <span style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>
+                  시스템 관리자는 역할 해임 후 탈퇴할 수 있습니다.
+                </span>
+              ) : (
+                <Link
+                  href="/settings/account/withdraw"
+                  style={{
+                    fontSize: "var(--text-xs)",
+                    color: "var(--color-text-tertiary)",
+                    textDecoration: "underline",
+                    textUnderlineOffset: 2,
+                  }}
+                >
+                  회원 탈퇴
+                </Link>
+              )}
             </div>
           </>
         )}

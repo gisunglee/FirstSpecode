@@ -11,6 +11,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { requireSystemAdmin } from "@/lib/requireSystemAdmin";
+import { resolveEffectivePlan } from "@/lib/permissions";
 
 // 한 번에 로드 가능한 최대 개수 — 더 큰 쿼리는 인위적으로 제한
 const PAGE_SIZE_MAX = 200;
@@ -53,12 +54,15 @@ export async function GET(request: NextRequest) {
           email_addr:      true,
           mber_nm:         true,
           plan_code:       true,
+          plan_expire_dt:  true,
           mber_sttus_code: true,
           sys_role_code:   true,
           join_dt:         true,
           wthdrw_dt:       true,
           _count: {
-            select: { projectMembers: true },
+            select: {
+              projectMembers: { where: { mber_sttus_code: "ACTIVE" } },
+            },
           },
         },
         orderBy: { join_dt: "desc" },
@@ -74,6 +78,8 @@ export async function GET(request: NextRequest) {
         email:          m.email_addr,
         name:           m.mber_nm,
         plan:           m.plan_code,
+        effectivePlan:  resolveEffectivePlan(m.plan_code, m.plan_expire_dt),
+        planExpiresAt:  m.plan_expire_dt?.toISOString() ?? null,
         status:         m.mber_sttus_code,
         isSystemAdmin:  m.sys_role_code === "SUPER_ADMIN",
         joinedAt:       m.join_dt.toISOString(),

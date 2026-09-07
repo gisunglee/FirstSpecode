@@ -58,3 +58,20 @@ test("리뷰 관리자 판정과 댓글 부모 프로젝트 경계를 유지한�
   assert.match(comment, /review_id: reviewId, prjct_id: projectId/);
   assert.match(comments, /review_id: reviewId, prjct_id: projectId/);
 });
+
+test("관리자 사용자 조치는 데이터 삭제 없이 세션·키 폐기와 감사를 수행한다", () => {
+  const access = source("src/app/api/admin/users/[id]/access/route.ts");
+  const systemRole = source("src/app/api/admin/users/[id]/system-role/route.ts");
+  const withdrawal = source("src/app/api/member/me/route.ts");
+  const userList = source("src/app/api/admin/users/route.ts");
+
+  assert.equal(/\.delete(?:Many)?\s*\(/.test(access), false);
+  assert.match(access, /tbCmRefreshToken\.updateMany/);
+  assert.match(access, /tbCmMemberSession\.updateMany/);
+  assert.match(access, /tbCmMcpKey\.updateMany/);
+  assert.match(access, /tbSysAdminAudit\.create/);
+  assert.match(systemRole, /tbCmRefreshToken\.updateMany/);
+  assert.match(systemRole, /tbCmMemberSession\.updateMany/);
+  assert.match(withdrawal, /isSystemAdminWithdrawalBlocked/);
+  assert.match(userList, /projectMembers: \{ where: \{ mber_sttus_code: "ACTIVE" \} \}/);
+});

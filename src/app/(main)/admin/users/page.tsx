@@ -6,7 +6,7 @@
  * 역할:
  *   - 검색·상태 필터·페이지네이션으로 전체 회원 탐색
  *   - 시스템 관리자(SUPER_ADMIN) 배지 노출
- *   - 사용자 강제 변경(정지 해제 등)은 후속 PR — 여기는 조회만.
+ *   - 상세 화면에서 계정 정지·잠금 해제·세션 및 MCP 키 폐기 수행.
  *
  * 설계:
  *   - 상태 필터는 MEMBER_STATUS 상수로 유지보수 용이
@@ -23,6 +23,8 @@ type UserItem = {
   email:         string | null;
   name:          string | null;
   plan:          string;
+  effectivePlan: string;
+  planExpiresAt: string | null;
   status:        string;
   isSystemAdmin: boolean;
   joinedAt:      string;
@@ -100,6 +102,21 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
+      {query.isError && (
+        <div
+          style={{
+            padding: "var(--space-4)",
+            border: "1px solid var(--color-error-border)",
+            borderRadius: "var(--radius-md)",
+            background: "var(--color-error-subtle)",
+            color: "var(--color-error)",
+            fontSize: "var(--text-sm)",
+          }}
+        >
+          {query.error.message}
+        </div>
+      )}
+
       {/* 테이블 */}
       <div
         style={{
@@ -125,7 +142,7 @@ export default function AdminUsersPage() {
             {query.isLoading && (
               <tr><Td colSpan={7} align="center">불러오는 중…</Td></tr>
             )}
-            {!query.isLoading && items.length === 0 && (
+            {!query.isLoading && !query.isError && items.length === 0 && (
               <tr><Td colSpan={7} align="center" muted>조건에 맞는 사용자가 없습니다.</Td></tr>
             )}
             {items.map((u) => (
@@ -139,7 +156,9 @@ export default function AdminUsersPage() {
                   </Link>
                 </Td>
                 <Td>{u.name ?? <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}</Td>
-                <Td>{u.plan}</Td>
+                <Td>
+                  {u.plan === u.effectivePlan ? u.plan : `${u.effectivePlan} (${u.plan} 만료)`}
+                </Td>
                 <Td><StatusBadge status={u.status} /></Td>
                 <Td>
                   {u.isSystemAdmin ? (

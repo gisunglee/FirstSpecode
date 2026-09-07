@@ -34,6 +34,10 @@
  *   일으키지 못하도록 delete_* 도구를 일괄 제거했다. 삭제는 UI(웹) 채널에서만 가능하며,
  *   API DELETE 라우트는 그대로 유지된다.
  *
+ * 정책 — 시스템 관리자 사용자 조치 미등록:
+ *   /api/admin/users/[id]/access 및 /system-role은 로그인 세션 전용 고위험 운영 기능이다.
+ *   MCP 키 인증은 서버에서 거부하며, 계정 정지·세션/키 폐기·관리자 임명은 도구로 노출하지 않는다.
+ *
  * 정책 — 대시보드 summary 미등록:
  *   /api/projects/[id]/dashboard/manage-summary 와 /me-summary 는 의도적으로 등록하지 않는다.
  *   화면 첫 페인트용 집계 응답이라 AI 가 사용해도 의미가 없고(개별 list_* 도구로 동일 정보를

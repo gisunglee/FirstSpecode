@@ -4,6 +4,7 @@
  * 동작:
  *   - body.role === "SUPER_ADMIN" → 임명 (sys_role_code = 'SUPER_ADMIN')
  *   - body.role === null          → 해임 (sys_role_code = NULL) + 대상자의 모든 활성 지원 세션 종료
+ *   - 임명/해임 공통             → 대상자의 로그인 세션·Refresh Token 종료 후 재로그인 요구
  *   - body.reason 필수 (감사 로그의 사유)
  *
  * 보안 규칙:
@@ -20,6 +21,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { requireSystemAdmin } from "@/lib/requireSystemAdmin";
+import { canGrantSystemAdmin } from "@/lib/memberLifecyclePolicy";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -76,6 +78,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       email_addr:    true,
       mber_nm:       true,
       sys_role_code: true,
+      mber_sttus_code: true,
     },
   });
 
@@ -94,15 +97,35 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     });
   }
 
+  if (wantIsAdmin && !canGrantSystemAdmin(target.mber_sttus_code)) {
+    return apiError(
+      "ACCOUNT_INACTIVE",
+      "활성 상태의 사용자만 시스템 관리자로 임명할 수 있습니다.",
+      409,
+    );
+  }
+
   // 감사 memo 에 스냅샷 포함 — 나중에 대상자 이메일이 바뀌거나 탈퇴해도 해석 가능
   const targetSnapshot = target.email_addr ?? target.mber_nm ?? target.mber_id;
-  const memoWithSnapshot = `[대상: ${targetSnapshot}] ${reason.trim()}`;
+  const memoWithSnapshot = `[대상: ${targetSnapshot}] ${reason.trim().slice(0, 500)}`;
+  const now = new Date();
 
   await prisma.$transaction(async (tx) => {
     // ① 역할 변경
     await tx.tbCmMember.update({
       where: { mber_id: targetMberId },
-      data:  { sys_role_code: role },
+      data:  { sys_role_code: role, mdfcn_dt: now },
+    });
+
+    // 기존 일반 세션이 관리자 권한으로 즉시 승격되거나, 해임 뒤 남는 것을 막는다.
+    // 대상자는 새 역할로 다시 로그인해야 한다.
+    await tx.tbCmRefreshToken.updateMany({
+      where: { mber_id: targetMberId, revoked_dt: null },
+      data:  { revoked_dt: now },
+    });
+    await tx.tbCmMemberSession.updateMany({
+      where: { mber_id: targetMberId, invald_dt: null },
+      data:  { invald_dt: now },
     });
 
     // ② 해임인 경우: 대상자의 모든 활성 지원 세션 즉시 종료
@@ -114,7 +137,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           ended_dt:      null,
           expires_dt:    { gt: new Date() },
         },
-        data: { ended_dt: new Date() },
+        data: { ended_dt: now },
       });
     }
 
@@ -126,8 +149,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         target_type:   "USER",
         target_id:     targetMberId,
         memo:          memoWithSnapshot,
-        ip_addr:       gate.ipAddr    ?? null,
-        user_agent:    gate.userAgent ?? null,
+        ip_addr:       gate.ipAddr?.slice(0, 45)     ?? null,
+        user_agent:    gate.userAgent?.slice(0, 255) ?? null,
       },
     });
   });

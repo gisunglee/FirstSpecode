@@ -14,7 +14,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
-import { isRoleCode, isJobCode, isPlanCode } from "@/lib/permissions";
+import { isRoleCode, isJobCode, resolveEffectivePlan } from "@/lib/permissions";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       role_code:       true,
       job_title_code:  true,
       mber_sttus_code: true,
-      member: { select: { plan_code: true } },
+      member: { select: { plan_code: true, plan_expire_dt: true } },
     },
   });
 
@@ -43,7 +43,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   // 구 7-role 데이터가 마이그레이션 전이면 role_code 가 허용 외일 수 있음
   const myRole = isRoleCode(membership.role_code)       ? membership.role_code       : "MEMBER";
   const myJob  = isJobCode (membership.job_title_code)  ? membership.job_title_code  : "ETC";
-  const myPlan = isPlanCode(membership.member.plan_code) ? membership.member.plan_code : "FREE";
+  const myPlan = resolveEffectivePlan(
+    membership.member.plan_code,
+    membership.member.plan_expire_dt,
+  );
 
   return apiSuccess({ myRole, myJob, myPlan });
 }

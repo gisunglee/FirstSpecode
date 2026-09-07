@@ -38,7 +38,7 @@ import {
   explainPermission,
   isRoleCode,
   isJobCode,
-  isPlanCode,
+  resolveEffectivePlan,
   isSystemRoleCode,
   type Permission,
   type RoleCode,
@@ -99,6 +99,7 @@ export async function requirePermission(
       member: {
         select: {
           plan_code:        true,
+          plan_expire_dt:   true,
           sys_role_code:    true,
           mber_sttus_code: true,
         },
@@ -131,7 +132,10 @@ export async function requirePermission(
   if (membership && membership.mber_sttus_code === "ACTIVE") {
     const role = isRoleCode(membership.role_code)           ? membership.role_code           : null;
     const job  = isJobCode (membership.job_title_code)      ? membership.job_title_code      : null;
-    const plan = isPlanCode(membership.member.plan_code)    ? membership.member.plan_code    : "FREE";
+    const plan = resolveEffectivePlan(
+      membership.member.plan_code,
+      membership.member.plan_expire_dt,
+    );
 
     // 시스템 관리자 권한은 **로그인 세션(JWT)에서만** 유효.
     // MCP 키(auth.sesnId 없음)로는 sys_role_code 가 있어도 적용하지 않는다.
@@ -181,6 +185,7 @@ export async function requirePermission(
         select: {
           sys_role_code: true,
           plan_code: true,
+          plan_expire_dt: true,
           mber_sttus_code: true,
         },
       },
@@ -235,9 +240,10 @@ export async function requirePermission(
 
   // 읽기 권한은 VIEWER 로 통과 (hasPermission short-circuit 을 타지 않도록
   // systemRole 을 actor 에 넣지 않는다 — 읽기-쓰기 분리가 핵심)
-  const plan = isPlanCode(adminSession.member.plan_code)
-    ? adminSession.member.plan_code
-    : "FREE";
+  const plan = resolveEffectivePlan(
+    adminSession.member.plan_code,
+    adminSession.member.plan_expire_dt,
+  );
   const viewerActor = { role: "VIEWER" as const, job: null, plan };
 
   if (!hasPermission(viewerActor, permission)) {

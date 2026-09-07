@@ -39,6 +39,8 @@ export const AUDIT_ACTION_TYPES = [
   "USER_SUSPEND",
   "USER_UNSUSPEND",
   "USER_UNLOCK",
+  "USER_FORCE_LOGOUT",
+  "USER_MCP_KEYS_REVOKE",
   "PROJECT_TRANSFER_OWNER",
   // 어드민이 /admin/cleanup 에서 soft-deleted 프로젝트를 영구 삭제 실행한 기록.
   // memo 에 "executed=N (expired=E, retained=R)" 형식으로 처리량을 적재한다.

@@ -11,6 +11,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { requireAuth } from "@/lib/requireAuth";
+import { resolveEffectivePlan } from "@/lib/permissions";
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -25,6 +26,7 @@ export async function GET(request: NextRequest) {
         profl_img_url:     true,
         pswd_hash:         true,
         plan_code:         true,   // 시스템 플랜 (FREE/PRO/TEAM/ENTERPRISE) — GNB 프로필 배지용
+        plan_expire_dt:    true,
         asignee_view_mode: true,   // 전역 담당자 필터 모드 (all | me) — GNB 토글 상태
         sys_role_code:     true,   // 시스템 역할 (SUPER_ADMIN | null) — /admin 메뉴 노출 판별
         socialAccounts: {
@@ -45,7 +47,7 @@ export async function GET(request: NextRequest) {
       name:             member.mber_nm ?? "",
       email:            member.email_addr ?? "",
       profileImage:     member.profl_img_url ?? null,
-      plan:             member.plan_code ?? "FREE",
+      plan:             resolveEffectivePlan(member.plan_code, member.plan_expire_dt),
       assigneeViewMode: member.asignee_view_mode ?? "all",
       // sys_role_code 는 "SUPER_ADMIN" 또는 null — 프론트는 boolean 으로 단순화해서 사용
       isSystemAdmin:    member.sys_role_code === "SUPER_ADMIN",

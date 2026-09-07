@@ -17,7 +17,10 @@
     "src/lib/authTokenStorage.ts",
     "src/lib/authSessionPolicy.ts",
     "src/lib/authRefreshPolicy.ts",
+    "src/lib/memberLifecyclePolicy.ts",
+    "src/lib/permissions.ts",
     "src/lib/refreshTokenRotation.ts",
-    "scripts/auth-security-policy.test.ts"
+    "scripts/auth-security-policy.test.ts",
+    "scripts/admin-user-policy.test.ts"
   ]
 }
