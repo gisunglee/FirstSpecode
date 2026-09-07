@@ -4,7 +4,7 @@
  * RichEditor — TipTap 기반 WYSIWYG 웹에디터
  *
  * 역할:
- *   - 볼드·이탤릭·밑줄·헤딩·목록·코드블록·표·인용 등 서식 지원
+ *   - 볼드·이탤릭·밑줄·취소선·헤딩·목록·코드블록·표·인용 등 서식 지원
  *   - 클립보드 이미지 붙여넣기 → Canvas 리사이즈(max 800px, JPEG 82%) → base64 저장
  *   - 이미지 선택 시 우하단 핸들로 크기 조절 (ResizableImage)
  *
@@ -295,6 +295,8 @@ export default function RichEditor({
           <ToolBtn active={editor.isActive("bold")}      onClick={() => editor.chain().focus().toggleBold().run()}      title="굵게 (Ctrl+B)"><b>B</b></ToolBtn>
           <ToolBtn active={editor.isActive("italic")}    onClick={() => editor.chain().focus().toggleItalic().run()}    title="기울임 (Ctrl+I)"><i>I</i></ToolBtn>
           <ToolBtn active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()} title="밑줄 (Ctrl+U)"><u>U</u></ToolBtn>
+          {/* 취소선 — StarterKit에 Strike mark가 기본 포함되어 있어 별도 확장 없이 동작함 */}
+          <ToolBtn active={editor.isActive("strike")}    onClick={() => editor.chain().focus().toggleStrike().run()}    title="취소선 (Ctrl+Shift+S)"><s>S</s></ToolBtn>
           <ToolBtn active={editor.isActive("code")}      onClick={() => editor.chain().focus().toggleCode().run()}      title="인라인 코드">`c`</ToolBtn>
 
           {/* 글자색 — 팝오버로 프리셋 색상 선택. onMouseDown에서 preventDefault로 에디터
