@@ -20,7 +20,7 @@ import { usePermissions } from "@/hooks/useMyRole";
 import { useIdPrefixes } from "@/hooks/useIdPrefixes";
 import { bumpMinorVersion } from "@/lib/exports/version";
 import { buildDocxFilename } from "@/lib/exports/filename";
-import { renderMarkdown } from "@/lib/renderMarkdown";
+import { renderMarkdown, sanitizeHtml } from "@/lib/renderMarkdown";
 import { useAppStore } from "@/store/appStore";
 import { useDesignTemplate, applyTemplateVars } from "@/lib/designTemplate";
 import dynamic from "next/dynamic";
@@ -1545,11 +1545,16 @@ function formatFileSize(bytes: number): string {
 // TipTap(RichEditor)은 HTML로 저장하므로 \n split이 무의미.
 // HTML을 블록 태그(<p>, <li>, <h1~6> 등) 단위로 분리 → 블록 LCS diff →
 // 변경된 블록 내에서는 단어 단위 diff로 변경 부분만 하이라이트.
+//
+// 글자는 같고 서식(취소선·글자색·굵게 등)만 바뀐 블록은 텍스트 비교로는
+// 잡히지 않으므로, 텍스트가 같아도 HTML이 다르면 "fmt"(서식 변경)로 분류한다.
+// 사용자가 "협의로 제외" 표시로 취소선을 긋는 경우가 대표적이라, 이게 Diff에
+// 안 보이면 이력 기능의 목적을 잃는다.
 
 type DiffBlock = {
-  text: string;                           // HTML 태그 제거된 텍스트
-  html: string;                           // 원본 HTML 블록
-  type: "same" | "del" | "add" | "mod";   // mod: 부분 변경
+  text: string;                                   // HTML 태그 제거된 텍스트
+  html: string;                                   // 원본 HTML 블록
+  type: "same" | "del" | "add" | "mod" | "fmt";   // mod: 부분 변경, fmt: 서식만 변경
   wordDiff?: { text: string; type: "same" | "del" | "add" }[];
 };
 
@@ -1638,9 +1643,11 @@ function computeDiff(oldHtml: string, newHtml: string): { left: DiffBlock[]; rig
 
   while (i > 0 || j > 0) {
     if (i > 0 && j > 0 && oldTexts[i - 1] === newTexts[j - 1]) {
-      // 완전 동일
-      tL.push({ text: oldTexts[i - 1], html: oldBlocks[i - 1], type: "same" });
-      tR.push({ text: newTexts[j - 1], html: newBlocks[j - 1], type: "same" });
+      // 텍스트 동일 — HTML까지 같으면 완전 동일, HTML만 다르면 서식 변경(fmt)
+      // splitHtmlBlocks 가 태그 사이 공백을 이미 정리했으므로 문자열 비교로 충분함
+      const blockType: DiffBlock["type"] = oldBlocks[i - 1] === newBlocks[j - 1] ? "same" : "fmt";
+      tL.push({ text: oldTexts[i - 1], html: oldBlocks[i - 1], type: blockType });
+      tR.push({ text: newTexts[j - 1], html: newBlocks[j - 1], type: blockType });
       i--; j--;
     } else if (i > 0 && j > 0 && dp[i - 1][j - 1] >= dp[i - 1][j] && dp[i - 1][j - 1] >= dp[i][j - 1]) {
       // 같은 위치인데 내용이 다름 → 부분 변경 (단어 diff)
@@ -1739,6 +1746,21 @@ function ReqDiffViewerPopup({
   );
 }
 
+// 저장된 HTML 블록을 서식 그대로 렌더링 (취소선·글자색·굵게 등 보존)
+// - 사용자 입력 HTML이므로 dangerouslySetInnerHTML 앞에서 반드시 sanitizeHtml 로 정화한다.
+// - <p> 기본 여백이 Diff 줄 간격을 흔들지 않도록 자식 블록 여백을 0으로 고정한다.
+function DiffHtmlBlock({ html }: { html: string }) {
+  const safe = sanitizeHtml(html);
+  if (!safe) return <>{" "}</>;
+  return (
+    <div
+      style={{ display: "inline-block", width: "100%", verticalAlign: "top" }}
+      className="sp-diff-html-block"
+      dangerouslySetInnerHTML={{ __html: safe }}
+    />
+  );
+}
+
 // 단어 diff 블록 렌더링 (삭제 측 / 추가 측 공용)
 function WordDiffSpans({ words, side }: {
   words: { text: string; type: "same" | "del" | "add" }[];
@@ -1774,7 +1796,24 @@ function ReqDiffSection({ label, leftText, rightText, leftVersion, rightVersion 
       return <div style={{ minHeight: "1.6em" }}>{" "}</div>;
     }
     if (d.type === "same") {
-      return <div style={{ padding: "2px 0" }}>{d.text}</div>;
+      // 변경 없는 블록도 저장된 서식(취소선·색상 등) 그대로 보여준다.
+      // 텍스트만 찍으면 사용자가 에디터에서 준 서식이 Diff에서 전부 사라진다.
+      return <div style={{ padding: "2px 0" }}><DiffHtmlBlock html={d.html} /></div>;
+    }
+    if (d.type === "fmt") {
+      // 글자는 같고 서식만 바뀐 블록: 노란 배경 + "서식" 배지로 표시하고,
+      // 좌우 모두 실제 서식을 렌더링해 무엇이 바뀌었는지 눈으로 비교할 수 있게 한다.
+      // Diff 자체의 빨간 취소선(삭제 표시)과 사용자가 그은 취소선이 헷갈리지 않도록
+      // 이 블록에는 Diff 색상을 입히지 않고 배지로만 구분한다.
+      return (
+        <div style={{ padding: "2px 0", background: "var(--color-warning-subtle)", display: "flex", alignItems: "flex-start", gap: 6 }}>
+          <span style={{
+            flexShrink: 0, marginTop: 2, padding: "0 5px", fontSize: 10, fontWeight: 600, lineHeight: "16px", borderRadius: 3,
+            border: "1px solid var(--color-warning-border)", color: "var(--color-warning)", background: "var(--color-bg-card)",
+          }}>서식</span>
+          <div style={{ flex: 1, minWidth: 0 }}><DiffHtmlBlock html={d.html} /></div>
+        </div>
+      );
     }
     if (d.type === "mod" && d.wordDiff) {
       // 부분 변경: 블록 배경 연하게 + 변경 단어만 진하게
@@ -1788,13 +1827,15 @@ function ReqDiffSection({ label, leftText, rightText, leftVersion, rightVersion 
       );
     }
     // 전체 삭제 or 전체 추가
+    // 추가된 블록(우측)은 실제 서식으로 보여주고, 삭제된 블록(좌측)은 Diff의
+    // 빨간 취소선이 사용자 서식과 겹치면 안 되므로 텍스트만 보여준다.
     return (
       <div style={{
         padding: "2px 0",
         background: side === "del" ? "rgba(229,57,53,0.12)" : "rgba(46,125,50,0.12)",
         color: side === "del" ? "#c62828" : "#2e7d32",
         textDecoration: side === "del" ? "line-through" : "none",
-      }}>{d.text}</div>
+      }}>{side === "add" ? <DiffHtmlBlock html={d.html} /> : d.text}</div>
     );
   }
 

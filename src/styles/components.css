@@ -1109,6 +1109,16 @@ body {
   background: rgba(198, 40, 40, 0.08);
 }
 
+/* 요구사항 이력 Diff — 저장된 HTML 블록을 서식 그대로 렌더링하는 컨테이너
+   <p>/<li> 등의 기본 여백이 Diff 줄 간격을 흔들지 않도록 여백만 0으로 고정한다.
+   취소선·글자색·굵게 같은 인라인 서식은 그대로 보여야 하므로 건드리지 않는다. */
+.sp-diff-html-block > * {
+  margin: 0;
+}
+.sp-diff-html-block li {
+  margin-left: 1.2em;
+}
+
 /* ── RichEditor (TipTap) ────────────────────────────────────────────────── */
 /* EditorContent 내부 ProseMirror 컨테이너 스타일 */
 .sp-rich-editor .ProseMirror {
