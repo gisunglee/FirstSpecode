@@ -17,7 +17,8 @@ import {
   AUTH_COOKIE_MODE_HEADER,
   AUTH_COOKIE_MODE_VALUE,
 } from "@/lib/authCookiePolicy";
-import { shouldRefreshAccessToken } from "@/lib/authSessionPolicy";
+import { notifySessionExpired } from "@/lib/authSessionEvents";
+import { accessTokenMemberId, shouldRefreshAccessToken } from "@/lib/authSessionPolicy";
 import {
   classifyRefreshFailure,
   type AccessTokenRefreshResult,
@@ -103,10 +104,18 @@ function receiveRefreshMessage(value: unknown): void {
     const ageMs = Date.now() - value.createdAt;
     if (ageMs < -1_000 || ageMs > MESSAGE_MAX_AGE_MS) return;
 
+    // 토큰을 지우기 전에 이 탭이 쓰던 계정을 기억해 둔다 (복구 후 계정 일치 확인용)
+    const previousMemberId = accessTokenMemberId(getStoredAccessToken());
     clearAuthTokens();
-    if (!window.location.pathname.startsWith("/auth/")) {
-      window.location.href = "/auth/login";
-    }
+    if (window.location.pathname.startsWith("/auth/")) return;
+
+    // 다른 탭의 로그아웃/세션 종료 — 이 탭은 화면을 떠나지 않고 재로그인 모달만 띄운다.
+    // (예전처럼 즉시 이동하면 이 탭에서 작성 중인 내용이 통보 없이 사라졌다)
+    if (notifySessionExpired({ reason: "cleared", previousMemberId })) return;
+
+    // 모달 호스트(MainLayout)가 없는 화면만 폴백 이동 — 원위치 복귀용 redirect 보존
+    const here = window.location.pathname + window.location.search;
+    window.location.href = `/auth/login?redirect=${encodeURIComponent(here)}`;
     return;
   }
 

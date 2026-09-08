@@ -8,6 +8,7 @@
  *   - 마운트 시 저장된 테마를 document.documentElement에 반영
  *   - 마운트 시 미인증 상태면 /auth/login 으로 리다이렉트
  *   - 마운트 시 미확인 제거 안내 이력 조회 → 있으면 모달 표시 (PID-00027)
+ *   - 세션 만료 시 화면 유지 + 재로그인 모달 표시 (SessionExpiredModal)
  *
  * 레이아웃 구조:
  *   <html data-theme="...">
@@ -33,6 +34,7 @@ import LNB from "./LNB";
 import StatusBar from "./StatusBar";
 import GlobalSearchDialog from "@/components/search/GlobalSearchDialog";
 import SupportSessionBanner from "@/components/admin/SupportSessionBanner";
+import SessionExpiredModal from "@/components/auth/SessionExpiredModal";
 import { useAppStore } from "@/store/appStore";
 import { authFetch } from "@/lib/authFetch";
 import {
@@ -227,6 +229,10 @@ export default function MainLayout({
 
       {/* 전역 검색 다이얼로그 — GNB 돋보기/Ctrl+K 로 토글. 내부에서 open 상태 구독 */}
       <GlobalSearchDialog />
+
+      {/* 세션 만료 재로그인 모달 — authFetch/다른 탭 AUTH_CLEARED 알림을 구독.
+          화면을 떠나지 않고 그 자리에서 재로그인 → 작성 중인 내용 보존 */}
+      <SessionExpiredModal />
 
       {/* PID-00027 제거 안내 모달 */}
       {modalVisible && notices.length > 0 && (

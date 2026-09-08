@@ -14,8 +14,16 @@ export const ACCESS_TOKEN_REFRESH_LEEWAY_SECONDS = 2 * 60;
 /** 열린 화면에서 세션 상태를 확인하는 단일 주기: 1분. */
 export const AUTH_SESSION_CHECK_INTERVAL_MS = 60 * 1000;
 
-/** JWT payload의 exp를 밀리초 시각으로 읽는다. 서명 검증은 서버가 담당한다. */
-export function accessTokenExpiresAtMs(token: string): number | null {
+type DecodedAccessTokenPayload = {
+  exp?: unknown;
+  mberId?: unknown;
+};
+
+/**
+ * JWT payload 를 서명 검증 없이 읽는다 (브라우저 전용 힌트 용도).
+ * 서명 검증은 서버가 담당하므로 여기서 읽은 값으로 권한을 판단하면 안 된다.
+ */
+function decodeAccessTokenPayload(token: string): DecodedAccessTokenPayload | null {
   try {
     const parts = token.split(".");
     if (parts.length !== 3 || !parts[1]) return null;
@@ -26,14 +34,34 @@ export function accessTokenExpiresAtMs(token: string): number | null {
       .padEnd(Math.ceil(parts[1].length / 4) * 4, "=");
     const binary = globalThis.atob(base64);
     const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-    const payload = JSON.parse(new TextDecoder().decode(bytes)) as { exp?: unknown };
-
-    return typeof payload.exp === "number" && Number.isFinite(payload.exp)
-      ? payload.exp * 1000
-      : null;
+    return JSON.parse(new TextDecoder().decode(bytes)) as DecodedAccessTokenPayload;
   } catch {
     return null;
   }
+}
+
+/** JWT payload의 exp를 밀리초 시각으로 읽는다. 서명 검증은 서버가 담당한다. */
+export function accessTokenExpiresAtMs(token: string): number | null {
+  const payload = decodeAccessTokenPayload(token);
+  if (!payload) return null;
+
+  return typeof payload.exp === "number" && Number.isFinite(payload.exp)
+    ? payload.exp * 1000
+    : null;
+}
+
+/**
+ * JWT payload의 mberId 를 읽는다 — 세션 복구 후 "같은 계정인지" 확인하는 힌트 전용.
+ * 공유 RT 쿠키 특성상 다른 탭에서 다른 계정으로 로그인하면 이 탭도 그 계정의 AT 를
+ * 받게 되므로, 화면(이전 계정 데이터)과 토큰(새 계정)이 어긋나는 것을 잡아내는 데 쓴다.
+ */
+export function accessTokenMemberId(token: string): string | null {
+  const payload = decodeAccessTokenPayload(token);
+  if (!payload) return null;
+
+  return typeof payload.mberId === "string" && payload.mberId.length > 0
+    ? payload.mberId
+    : null;
 }
 
 /** 토큰이 없거나 손상됐거나 갱신 여유 구간에 들어오면 true. */
