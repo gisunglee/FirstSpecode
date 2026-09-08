@@ -258,8 +258,11 @@ export default function GNB() {
 
   return (
     <header className="sp-menubar" style={{ justifyContent: "space-between", paddingLeft: "12px", paddingRight: "12px" }}>
-      {/* 좌측: 로고 + 프로젝트 셀렉터 + 브레드크럼 */}
-      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+      {/* 좌측: 로고 + 프로젝트 셀렉터 + 브레드크럼
+          좁은 화면에서 프로젝트명·단위업무명이 여러 줄로 접히지 않도록 컨테이너는
+          minWidth 0 으로 줄어들 수 있게 하고, 각 텍스트는 nowrap + ellipsis 로 한 줄만 보인다.
+          overflow hidden 은 걸지 않는다 — 드롭다운(position: absolute)이 잘려 버림. */}
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0, flex: "1 1 auto" }}>
         {/* 로고 */}
         <Link
           href="/dashboard"
@@ -272,6 +275,8 @@ export default function GNB() {
             fontWeight: 700,
             fontSize: "var(--text-md)",
             letterSpacing: "0.04em",
+            whiteSpace: "nowrap",
+            flexShrink: 0,
           }}
         >
           <span
@@ -293,20 +298,25 @@ export default function GNB() {
         </Link>
 
         {/* 구분선 */}
-        <span className="sp-menu-sep" />
+        <span className="sp-menu-sep" style={{ flexShrink: 0 }} />
 
         {/* 프로젝트 셀렉터 드롭다운 */}
-        <div ref={dropdownRef} style={{ position: "relative" }}>
+        <div ref={dropdownRef} style={{ position: "relative", minWidth: 0 }}>
+          {/* 프로젝트명은 길어질 수 있으므로 한 줄 말줄임(최대 260px). 전체 이름은 title 툴팁으로 확인.
+              약어 칩과 ▾ 화살표는 flexShrink 0 으로 항상 보이게 유지 */}
           <button
             className="sp-menu-item"
             onClick={() => setDropdownOpen((o) => !o)}
-            style={{ display: "flex", alignItems: "center", gap: 6 }}
+            title={currentProject?.prjct_nm}
+            style={{ display: "flex", alignItems: "center", gap: 6, maxWidth: 260, minWidth: 0, whiteSpace: "nowrap" }}
           >
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span>{currentProject?.prjct_nm ?? "프로젝트 선택"}</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+                {currentProject?.prjct_nm ?? "프로젝트 선택"}
+              </span>
               <ProjectAbbrChip value={currentProject?.prjct_abrv} />
             </span>
-            <span style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>
+            <span style={{ fontSize: 10, color: "var(--color-text-tertiary)", flexShrink: 0 }}>
               ▾
             </span>
           </button>
@@ -388,24 +398,25 @@ export default function GNB() {
             프로젝트가 선택된 상태에서만 의미가 있으므로 currentProjectId 있을 때만 노출. */}
         {currentProjectId && (
           <>
-            <span className="sp-menu-sep" />
-            <div ref={pinRef} style={{ position: "relative" }}>
+            <span className="sp-menu-sep" style={{ flexShrink: 0 }} />
+            <div ref={pinRef} style={{ position: "relative", minWidth: 0 }}>
               {pinnedUnitWorkId ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 2, minWidth: 0 }}>
+                  {/* 고정된 단위업무명 — 한 줄 말줄임(최대 200px). 전체 이름은 title 툴팁으로 확인 */}
                   <button
                     className="sp-menu-item"
                     onClick={() => setPinDropdownOpen((o) => !o)}
-                    title="다른 단위업무로 변경"
+                    title={`${pinnedUnitWorkName ?? ""}\n(클릭: 다른 단위업무로 변경)`}
                     style={{
                       display: "flex", alignItems: "center", gap: 6,
                       background: "var(--color-brand-subtle)",
                       color: "var(--color-brand)",
                       border: "1px solid var(--color-brand-border)",
-                      maxWidth: 200,
+                      maxWidth: 200, minWidth: 0, whiteSpace: "nowrap",
                     }}
                   >
-                    <span aria-hidden="true" style={{ fontSize: 11 }}>🔒</span>
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span aria-hidden="true" style={{ fontSize: 11, flexShrink: 0 }}>🔒</span>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
                       {pinnedUnitWorkName}
                     </span>
                   </button>
@@ -413,7 +424,7 @@ export default function GNB() {
                     className="sp-menu-item"
                     onClick={() => clearPinnedUnitWork()}
                     title="단위업무 고정 해제"
-                    style={{ padding: "2px 7px", color: "var(--color-text-tertiary)" }}
+                    style={{ padding: "2px 7px", color: "var(--color-text-tertiary)", flexShrink: 0 }}
                   >
                     ×
                   </button>
@@ -423,7 +434,7 @@ export default function GNB() {
                   className="sp-menu-item"
                   onClick={() => setPinDropdownOpen((o) => !o)}
                   title="단위업무 고정 — 화면·영역·기능 목록을 하나의 단위업무로 제한해서 봅니다"
-                  style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--color-text-secondary)" }}
+                  style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}
                 >
                   <span aria-hidden="true" style={{ fontSize: 11 }}>📌</span>
                   단위업무 고정
@@ -505,8 +516,9 @@ export default function GNB() {
         {/* 브레드크럼 — 페이지가 동적으로 설정, 프로젝트 셀렉터 바로 옆 */}
         {breadcrumb.length > 0 && (
           <>
-            <span className="sp-menu-sep" />
-            <nav style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+            <span className="sp-menu-sep" style={{ flexShrink: 0 }} />
+            {/* 브레드크럼 항목은 각자 maxWidth+ellipsis 로 잘리므로 nav 자체는 줄어들지 않게 */}
+            <nav style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, flexShrink: 0 }}>
               {breadcrumb.map((item, i) => {
                 const isLast = i === breadcrumb.length - 1;
                 return (
@@ -525,8 +537,8 @@ export default function GNB() {
         )}
       </div>
 
-      {/* 우측: 사용자 식별 칩 + 테마 스위처 + 유틸리티 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      {/* 우측: 사용자 식별 칩 + 테마 스위처 + 유틸리티 — 공간 부족 시 좌측 텍스트가 잘리고 우측은 유지 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
         {/* 사용자 식별 칩 — "이지성 · 소유자" 형식.
             아바타 hover/클릭 없이도 즉시 "내가 누구로 어느 역할인지" 인지 가능.
             좁은 화면에서는 잘리지 않도록 max-width + ellipsis. 프로필 미로드 시 미노출. */}

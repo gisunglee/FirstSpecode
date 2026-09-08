@@ -236,7 +236,9 @@ async function requestTokenRotation(
       }
     }
     if (response.status === 401) clearStoredRefreshTokens();
-    return { status: classifyRefreshFailure(response.status) };
+    // 어떤 응답으로 세션 종료를 판정했는지 모달에서 볼 수 있게 남긴다 (사용자 문의 대응용)
+    const detail = `refresh ${response.status} ${typeof body.code === "string" ? body.code : "?"}`;
+    return { status: classifyRefreshFailure(response.status), detail };
   }
 
   const accessToken = body.data?.accessToken;
@@ -307,7 +309,7 @@ export async function refreshAccessTokenResult(
       return coordinateAcrossTabs(requiredKind);
     } catch (err) {
       console.warn("[authRefresh] 로그인 세션 갱신에 실패했습니다.", err);
-      return { status: "transient" };
+      return { status: "transient", detail: "refresh network-error" };
     } finally {
       refreshPromise = null;
     }

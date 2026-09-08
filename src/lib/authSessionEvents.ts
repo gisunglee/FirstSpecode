@@ -26,6 +26,8 @@ export type SessionExpiredEvent = {
    * (공유 RT 쿠키라 다른 탭에서 다른 계정으로 로그인하면 이 탭도 그 계정이 된다).
    */
   previousMemberId: string | null;
+  /** 진단용 — 어떤 응답 조합으로 종료를 판정했는지 (모달 하단에 작게 표시) */
+  detail?: string;
 };
 
 type SessionExpiredListener = (event: SessionExpiredEvent) => void;

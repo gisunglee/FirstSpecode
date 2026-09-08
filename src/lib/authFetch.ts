@@ -41,7 +41,7 @@ type SessionEndReason = "expired" | "unauthorized";
  *   2) SessionExpiredModal 이 마운트돼 있으면 모달 표시 → 재로그인 후 저장 재시도
  *   3) 모달 호스트가 없는 화면(예외적)에서만 로그인 페이지 이동 폴백
  */
-function handleSessionEnded(reason: SessionEndReason): void {
+function handleSessionEnded(reason: SessionEndReason, detail: string): void {
   if (typeof window === "undefined") return;
   // 로그인 화면 자체에서의 401 은 무한 루프 방지를 위해 무시
   if (window.location.pathname.startsWith("/auth/")) return;
@@ -52,7 +52,7 @@ function handleSessionEnded(reason: SessionEndReason): void {
   // 잔여 토큰으로 다음 요청이 또 401 받지 않도록 정리
   clearAuthTokensAcrossTabs();
 
-  if (notifySessionExpired({ reason, previousMemberId })) return;
+  if (notifySessionExpired({ reason, previousMemberId, detail })) return;
 
   redirectToLogin(reason);
 }
@@ -166,7 +166,11 @@ async function authenticatedRequest(
   }
 
   const reason: SessionEndReason = errorBody.code === "UNAUTHORIZED" ? "unauthorized" : "expired";
-  handleSessionEnded(reason);
+  // 진단용 — 어떤 경로로 종료를 판정했는지 (API 401 코드 + 복구 시도 결과)
+  const recoveryDetail = recovery.status === "success"
+    ? "재시도도 401"
+    : (recovery.detail ?? "refresh terminal");
+  handleSessionEnded(reason, `API 401 ${String(errorBody.code)} → ${recoveryDetail}`);
 
   // 호출부(mutation onError 등)가 토스트로 보여줄 메시지 — 작성 내용은 남아 있으니
   // "다시 로그인 후 저장을 다시 누르라"는 행동 지침을 담는다.

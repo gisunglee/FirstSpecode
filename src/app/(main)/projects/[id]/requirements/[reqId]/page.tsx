@@ -1571,8 +1571,56 @@ function splitHtmlBlocks(html: string): string[] {
 }
 
 // HTML 태그 제거 → 순수 텍스트 (비교용)
+// - 따옴표 표기(&quot;)와 연속 공백은 저장 경로에 따라 달라질 수 있는 노이즈라서
+//   정리하지 않으면 글자가 같은 문단이 "부분 변경"으로 잡힌다.
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").trim();
+  return html
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// HTML 블록을 "눈에 보이는 서식"만 남긴 정규형으로 변환 (서식 변경 판정용)
+// - 저장 시점·경로(AI/MCP 입력, 마크다운 변환, TipTap 재저장)에 따라 같은 모양의
+//   문단도 공백 표기, &nbsp; 같은 문자 표기, 속성 순서가 달라질 수 있다.
+//   이런 차이까지 "서식 변경"으로 잡으면 바뀐 게 없는 문단에도 배지가 붙는다.
+// - 그래서 태그 이름 + style 속성(공백 제거) + 공백을 합친 텍스트만 남기고 비교한다.
+//   취소선(<s>), 굵게(<strong>), 밑줄(<u>), 글자색(style="color:...")은 모두 태그나
+//   style 로 표현되므로 이 정규형에서도 차이가 유지된다.
+// - DOMParser 는 브라우저 전용이므로 SSR 단계에서는 원본을 그대로 돌려준다.
+//   (Diff 팝업은 사용자 클릭 후 클라이언트에서만 열리므로 실제로는 항상 브라우저 경로)
+function normalizeBlockHtml(html: string): string {
+  if (typeof window === "undefined" || typeof DOMParser === "undefined") return html;
+
+  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, "text/html");
+  const out: string[] = [];
+
+  function walk(node: Node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      // nbsp → 일반 공백, 연속 공백은 하나로. 문단 양끝 공백은 서식이 아니므로 제거.
+      const text = (node.textContent ?? "").replace(/ /g, " ").replace(/\s+/g, " ").trim();
+      if (text) out.push(text);
+      return;
+    }
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as Element;
+      const tag = el.tagName.toLowerCase();
+      // style 만 서식으로 인정. 공백·끝 세미콜론 차이는 무시.
+      const style = (el.getAttribute("style") ?? "").replace(/\s+/g, "").replace(/;$/, "");
+      out.push(style ? `<${tag} style=${style}>` : `<${tag}>`);
+      el.childNodes.forEach(walk);
+      out.push(`</${tag}>`);
+    }
+  }
+
+  doc.body.childNodes.forEach(walk);
+  return out.join("");
 }
 
 // 단어 단위 LCS diff
@@ -1643,9 +1691,11 @@ function computeDiff(oldHtml: string, newHtml: string): { left: DiffBlock[]; rig
 
   while (i > 0 || j > 0) {
     if (i > 0 && j > 0 && oldTexts[i - 1] === newTexts[j - 1]) {
-      // 텍스트 동일 — HTML까지 같으면 완전 동일, HTML만 다르면 서식 변경(fmt)
-      // splitHtmlBlocks 가 태그 사이 공백을 이미 정리했으므로 문자열 비교로 충분함
-      const blockType: DiffBlock["type"] = oldBlocks[i - 1] === newBlocks[j - 1] ? "same" : "fmt";
+      // 텍스트 동일 — 보이는 서식까지 같으면 완전 동일, 서식만 다르면 서식 변경(fmt)
+      // 원본 문자열을 그대로 비교하면 공백·문자 표기 차이도 서식 변경으로 잡히므로
+      // normalizeBlockHtml 로 정규화한 뒤 비교한다.
+      const blockType: DiffBlock["type"] =
+        normalizeBlockHtml(oldBlocks[i - 1]) === normalizeBlockHtml(newBlocks[j - 1]) ? "same" : "fmt";
       tL.push({ text: oldTexts[i - 1], html: oldBlocks[i - 1], type: blockType });
       tR.push({ text: newTexts[j - 1], html: newBlocks[j - 1], type: blockType });
       i--; j--;

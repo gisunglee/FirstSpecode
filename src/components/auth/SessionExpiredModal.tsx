@@ -64,11 +64,14 @@ export default function SessionExpiredModal() {
   const [socialOpening, setSocialOpening] = useState(false);
   const [checking,     setChecking]     = useState(false);
   const [error,        setError]        = useState("");
+  // 진단용 — 종료 판정 근거 (사용자 문의 시 캡처해서 전달받는 용도)
+  const [detail,       setDetail]       = useState("");
 
   // ── 세션 종료 알림 구독 ─────────────────────────────────────────────────────
   useEffect(() => {
     return subscribeSessionExpired((event) => {
       setReason(event.reason);
+      setDetail(event.detail ?? (event.reason === "cleared" ? "다른 탭의 AUTH_CLEARED 알림" : ""));
       // 동시 다발 알림(여러 API 401)에서 첫 알림의 계정을 유지 — 뒤 알림은 이미 지워져 null
       setPrevMemberId((prev) => prev ?? event.previousMemberId);
       setError("");
@@ -289,6 +292,12 @@ export default function SessionExpiredModal() {
               </p>
             )}
           </div>
+
+          {detail && (
+            <p style={{ margin: 0, padding: "0 16px 8px", fontSize: "var(--text-xs)", color: "var(--color-text-disabled)", fontFamily: "var(--font-mono)" }}>
+              사유: {detail}
+            </p>
+          )}
 
           <div className="sp-modal-footer">
             <button
