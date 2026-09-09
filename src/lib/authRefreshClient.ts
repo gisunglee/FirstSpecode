@@ -19,6 +19,7 @@ import {
 } from "@/lib/authCookiePolicy";
 import { notifySessionExpired } from "@/lib/authSessionEvents";
 import { accessTokenMemberId, shouldRefreshAccessToken } from "@/lib/authSessionPolicy";
+import { tokenExpiryLabel, traceAuth } from "@/lib/authTrace";
 import {
   classifyRefreshFailure,
   type AccessTokenRefreshResult,
@@ -104,6 +105,8 @@ function receiveRefreshMessage(value: unknown): void {
     const ageMs = Date.now() - value.createdAt;
     if (ageMs < -1_000 || ageMs > MESSAGE_MAX_AGE_MS) return;
 
+    traceAuth("peer-auth-cleared", { ageMs });
+
     // 토큰을 지우기 전에 이 탭이 쓰던 계정을 기억해 둔다 (복구 후 계정 일치 확인용)
     const previousMemberId = accessTokenMemberId(getStoredAccessToken());
     clearAuthTokens();
@@ -121,9 +124,20 @@ function receiveRefreshMessage(value: unknown): void {
 
   if (!isRefreshSuccessMessage(value) || value.sourceId === tabId) return;
   const ageMs = Date.now() - value.createdAt;
-  if (ageMs < -1_000 || ageMs > MESSAGE_MAX_AGE_MS) return;
+  if (ageMs < -1_000 || ageMs > MESSAGE_MAX_AGE_MS) {
+    // 얼려졌던(frozen) 탭이 깨어나며 밀린 메시지를 한꺼번에 받는 경우 — 오래된 토큰은 버린다
+    traceAuth("peer-token-ignored", { reason: "stale-message", ageMs });
+    return;
+  }
+  // 메시지는 최근이어도 담긴 토큰이 이미 만료라면 현재 토큰을 덮어쓰지 않는다.
+  // (지금 가진 토큰이 더 새로울 수 있고, 만료 토큰으로 바꾸면 다음 요청이 401 이 된다)
+  if (shouldRefreshAccessToken(value.accessToken)) {
+    traceAuth("peer-token-ignored", { reason: "expired-token", exp: tokenExpiryLabel(value.accessToken) });
+    return;
+  }
   if (!storeAccessToken(value.accessToken)) return;
 
+  traceAuth("peer-token-stored", { ageMs, exp: tokenExpiryLabel(value.accessToken) });
   clearStoredRefreshTokens();
   rememberPeerResult(value);
 }
@@ -221,11 +235,17 @@ async function requestTokenRotation(
     body: JSON.stringify(legacyToken ? { refreshToken: legacyToken } : {}),
   });
   const body = await response.json().catch(() => ({})) as RefreshApiBody;
+  traceAuth("rotate-response", {
+    status: response.status,
+    code: typeof body.code === "string" ? body.code : null,
+    legacyBody: !!legacyToken,
+  });
 
   if (!response.ok) {
     if (response.status === 409 && body.code === "REFRESH_CONFLICT") {
       const peerAccessToken = await waitForPeerResult(startedAt);
       if (peerAccessToken) {
+        traceAuth("conflict-peer", { exp: tokenExpiryLabel(peerAccessToken) });
         return { status: "success", accessToken: peerAccessToken };
       }
 
@@ -256,8 +276,10 @@ async function coordinateAcrossTabs(
 ): Promise<AccessTokenRefreshResult> {
   const startedAt = Date.now();
   if (typeof navigator === "undefined" || !navigator.locks) {
+    traceAuth("refresh-start", { branch: "no-locks", storedExp: tokenExpiryLabel(getStoredAccessToken()) });
     return requestTokenRotation(requiredKind, startedAt);
   }
+  traceAuth("refresh-start", { storedExp: tokenExpiryLabel(getStoredAccessToken()) });
 
   try {
     const immediate: LockAttempt = await navigator.locks.request(
@@ -272,19 +294,26 @@ async function coordinateAcrossTabs(
       },
     );
 
-    if (immediate.acquired) return immediate.result;
+    if (immediate.acquired) {
+      traceAuth("lock-immediate", { status: immediate.result.status });
+      return immediate.result;
+    }
 
+    traceAuth("lock-wait");
     return navigator.locks.request(REFRESH_LOCK_NAME, async () => {
       const peerAccessToken = await waitForPeerResult(startedAt, LOCK_HANDOFF_WAIT_MS);
       if (peerAccessToken) {
+        traceAuth("lock-wait-peer", { exp: tokenExpiryLabel(peerAccessToken) });
         return { status: "success", accessToken: peerAccessToken } as AccessTokenRefreshResult;
       }
 
       // 승자 메시지를 놓쳤어도 HttpOnly 쿠키는 브라우저 전체에 공유되어 있다.
+      traceAuth("lock-wait-rotate");
       return requestTokenRotation(requiredKind, Date.now());
     });
-  } catch {
+  } catch (err) {
     // Web Locks 실패 시에도 서버 CAS가 같은 RT의 이중 소비를 차단한다.
+    traceAuth("lock-error", { err: err instanceof Error ? err.name : String(err) });
     return requestTokenRotation(requiredKind, startedAt);
   }
 }

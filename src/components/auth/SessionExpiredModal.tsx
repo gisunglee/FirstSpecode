@@ -37,6 +37,7 @@ import {
   AUTH_COOKIE_MODE_HEADER,
   AUTH_COOKIE_MODE_VALUE,
 } from "@/lib/authCookiePolicy";
+import { formatAuthTrace, readAuthTrace } from "@/lib/authTrace";
 
 // 로그인 페이지(/auth/login)가 "아이디 저장"으로 쓰는 키와 동일 — 이메일 자동 채움용
 const LS_SAVED_EMAIL = "lc_saved_email";
@@ -66,12 +67,18 @@ export default function SessionExpiredModal() {
   const [error,        setError]        = useState("");
   // 진단용 — 종료 판정 근거 (사용자 문의 시 캡처해서 전달받는 용도)
   const [detail,       setDetail]       = useState("");
+  // 진단용 — 이 탭의 최근 인증 판단 기록 (authTrace). 모달이 열릴 때 스냅샷을 찍어 둔다
+  const [trace,        setTrace]        = useState("");
 
   // ── 세션 종료 알림 구독 ─────────────────────────────────────────────────────
   useEffect(() => {
     return subscribeSessionExpired((event) => {
       setReason(event.reason);
       setDetail(event.detail ?? (event.reason === "cleared" ? "다른 탭의 AUTH_CLEARED 알림" : ""));
+      const snapshot = formatAuthTrace(readAuthTrace());
+      setTrace(snapshot);
+      // 콘솔에도 남겨 DevTools 에서 복사할 수 있게 한다
+      if (snapshot) console.warn("[auth] 세션 종료 판정 직전 기록:\n" + snapshot);
       // 동시 다발 알림(여러 API 401)에서 첫 알림의 계정을 유지 — 뒤 알림은 이미 지워져 null
       setPrevMemberId((prev) => prev ?? event.previousMemberId);
       setError("");
@@ -297,6 +304,16 @@ export default function SessionExpiredModal() {
             <p style={{ margin: 0, padding: "0 16px 8px", fontSize: "var(--text-xs)", color: "var(--color-text-disabled)", fontFamily: "var(--font-mono)" }}>
               사유: {detail}
             </p>
+          )}
+          {trace && (
+            <details style={{ margin: 0, padding: "0 16px 8px" }}>
+              <summary style={{ cursor: "pointer", fontSize: "var(--text-xs)", color: "var(--color-text-disabled)" }}>
+                자세히 (판단 기록)
+              </summary>
+              <pre style={{ margin: "var(--space-2) 0 0", maxHeight: 160, overflow: "auto", fontSize: "var(--text-xs)", lineHeight: 1.4, color: "var(--color-text-tertiary)", fontFamily: "var(--font-mono)", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                {trace}
+              </pre>
+            </details>
           )}
 
           <div className="sp-modal-footer">

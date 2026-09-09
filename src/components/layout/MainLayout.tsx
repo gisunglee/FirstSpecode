@@ -43,6 +43,8 @@ import {
   migrateLegacyRefreshToken,
 } from "@/lib/authRefreshClient";
 import { AUTH_SESSION_CHECK_INTERVAL_MS } from "@/lib/authSessionPolicy";
+import { getStoredAccessToken } from "@/lib/authTokenStorage";
+import { tokenExpiryLabel, traceAuth } from "@/lib/authTrace";
 import { useTripleClickSidebarToggle } from "@/hooks/useTripleClickSidebarToggle";
 import { useGlobalSearchShortcut } from "@/hooks/useGlobalSearchShortcut";
 
@@ -125,9 +127,10 @@ export default function MainLayout({
     if (!authChecked) return;
 
     const maintainSession = () => {
-      if (document.visibilityState === "visible") {
-        void ensureFreshAccessToken();
-      }
+      if (document.visibilityState !== "visible") return;
+      // 진단: 갱신 판단 근거(현재 AT 남은 시간)를 남긴다 — 세션 만료 모달의 "자세히"에서 확인
+      traceAuth("maintain", { storedExp: tokenExpiryLabel(getStoredAccessToken()) });
+      void ensureFreshAccessToken();
     };
     const handleVisibilityChange = () => maintainSession();
 
