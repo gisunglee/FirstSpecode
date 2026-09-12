@@ -26,6 +26,9 @@
  *   [AS-IS 온보딩] create_asis_question, list_asis_questions(조건 필수), answer_asis_question
  *   [표준 가이드]  search_standard_guides, get_standard_guide (프로젝트 코딩/디자인 표준 문서 —
  *                    /review-uw의 code-quality/ui-design 리뷰어가 기준 문서로 사용)
+ *   [QA-테스트]    list_test_specs, get_test_spec, list_check_masters, get_test_template,
+ *                    create_test_spec, import_check_masters, upsert_test_cases
+ *                    (명세서 작성까지만 — 회차·합부 판정·결함·증적은 도구 없음)
  *   [워커 배포]    get_worker_command_files (/run-ai-tasks, /sync-specode, /onboard-asis,
  *                    /review-uw 커맨드를 고객 로컬에 설치할 파일 내용 제공)
  *
@@ -41,6 +44,15 @@
  *   MCP에서는 어떤 엔티티도 삭제할 수 없다. AI가 한 번의 잘못된 호출로 cascade 삭제를
  *   일으키지 못하도록 delete_* 도구를 일괄 제거했다. 삭제는 UI(웹) 채널에서만 가능하며,
  *   API DELETE 라우트는 그대로 유지된다.
+ *   테스트 케이스도 같은 원칙이다 — 웹 UI의 PUT /test-specs/[specId]는 "요청에 없는
+ *   case는 DELETE" 정책이라 일부만 보내는 MCP가 쓰면 나머지가 지워진다. 그래서 MCP는
+ *   그 라우트를 쓰지 않고 추가·수정만 하는 /cases 경로를 따로 쓴다.
+ *
+ * 정책 — 테스트 결과 미등록:
+ *   회차 생성·합부 판정(PASS/FAIL)·결함 등록·증적 첨부는 도구로 노출하지 않는다.
+ *   테스트를 실제로 수행하지 않고 결과를 기록하면 그 기록 전체의 신뢰도가 사라진다.
+ *   AI가 만들 수 있는 것은 "무엇을 테스트할지"(명세)까지이고, "어땠는지"(결과)는
+ *   테스트를 수행한 사람이 웹에서 입력한다. 상세 규칙은 test-policy.ts 참조.
  *
  * 정책 — 시스템 관리자 사용자 조치 미등록:
  *   /api/admin/users/[id]/access 및 /system-role은 로그인 세션 전용 고위험 운영 기능이다.
@@ -80,6 +92,12 @@ import {
   DESIGN_WRITE_POLICY_POINTER,
   checkDesignAgreement,
 } from "@/lib/mcp/design-policy";
+import {
+  TEST_CASE_GRANULARITY_POINTER,
+  TEST_CASE_NO_DELETE_POINTER,
+  TEST_OPEN_ROUND_POINTER,
+  TEST_WRITE_POLICY_POINTER,
+} from "@/lib/mcp/test-policy";
 
 // ─── 공통 헬퍼 ──────────────────────────────────────────────────
 
@@ -1672,7 +1690,265 @@ export function registerTools(
   );
 
   // ═══════════════════════════════════════════════════════════════
-  // 15. 워커 커맨드 배포 (Worker Command Distribution)
+  // 15. QA — 테스트 명세서 (Test Spec)
+  // ═══════════════════════════════════════════════════════════════
+  // 범위는 "명세서 작성"까지다. 회차 생성·합부 판정·결함 등록·증적 첨부 도구는
+  // 의도적으로 등록하지 않는다 — 테스트를 실제로 수행하지 않고 결과를 기록하면
+  // 그 기록 전체의 신뢰도가 사라진다. 결과 입력은 웹 화면에서 수행자가 직접 한다.
+  //
+  // 케이스 쓰기가 전용 라우트(/cases, /cases/import-checks)를 쓰는 이유:
+  //   웹 UI 가 쓰는 PUT /test-specs/[specId] 는 "요청에 없는 case 는 DELETE" 정책이라
+  //   일부만 보내는 MCP 가 쓰면 나머지 케이스가 통째로 지워진다. MCP 는 어떤 엔티티도
+  //   삭제할 수 없다는 정책(delete_* 일괄 제거)에 맞춰, 삭제가 일어날 수 없는 경로를
+  //   따로 둔다. 케이스 삭제는 웹 채널 전용이다.
+
+  server.tool(
+    "list_test_specs",
+    "테스트 명세서 목록 조회 — 프로젝트의 단위/통합 테스트 명세서를 반환합니다. " +
+      "kind 로 종류를, unitWorkId 로 특정 단위업무에 연결된 것만 걸러낼 수 있습니다. " +
+      "명세서를 새로 만들기 전에 이미 같은 대상의 명세서가 있는지 먼저 확인하세요 — " +
+      "중복 생성보다 기존 명세서에 케이스를 추가하는 편이 낫습니다. " +
+      "목록에는 케이스 본문이 없으므로 내용이 필요하면 get_test_spec 으로 개별 조회하세요.",
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+      kind: z
+        .enum(["UNIT", "INTEGRATION"])
+        .optional()
+        .describe("테스트 종류 필터. UNIT=단위 테스트, INTEGRATION=통합 테스트. 생략 시 전체"),
+      unitWorkId: z.string().optional().describe("이 단위업무에 연결된 명세서만 조회"),
+    },
+    async ({ projectId, kind, unitWorkId }) => {
+      try {
+        const qs = buildQs({ kind, unitWorkId });
+        const data = await specodeFetch(`/api/projects/${projectId}/test-specs${qs}`);
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.tool(
+    "get_test_spec",
+    "테스트 명세서 상세 조회 — 연결된 단위업무·화면, 모든 테스트 케이스, 회차 요약을 반환합니다. " +
+      "케이스를 수정하려면 이 도구로 먼저 조회해 testCaseId 를 확보하세요. " +
+      "케이스를 추가할 때도 먼저 조회해서 같은 내용이 이미 있는지 확인하는 것이 좋습니다. " +
+      "rounds 는 round_no 오름차순이며 isLatest=true 인 항목이 최신 회차입니다. " +
+      "openRoundNos 는 진행중인 회차 번호 목록으로, 비어 있지 않으면 케이스를 고치기 전에 " +
+      "사용자에게 영향을 알려야 합니다. 결과·결함 상세는 MCP 로 조회하지 않습니다 — 웹 화면에서 봅니다.",
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+      testSpecId: z.string().describe("테스트 명세서 ID (list_test_specs 의 testSpecId)"),
+    },
+    async ({ projectId, testSpecId }) => {
+      try {
+        const data = await specodeFetch(`/api/projects/${projectId}/test-specs/${testSpecId}`);
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.tool(
+    "list_check_masters",
+    "공통 점검 마스터 목록 조회 — 모든 명세서가 공유하는 재사용 체크리스트 풀입니다. " +
+      "시스템 공통 항목과 이 프로젝트 전용 항목을 함께 반환합니다. " +
+      "CHECKLIST 케이스는 직접 지어내지 말고 이 목록에서 골라 import_check_masters 로 " +
+      "가져오세요 — 매번 새로 쓰면 화면마다 문장이 달라집니다. " +
+      "카테고리 예: INIT_SCREEN(초기화면) | QUERY(조회) | INPUT_QUERY(입력및조회) | " +
+      "INPUT(입력) | SECURITY(보안) | ETC(기타).",
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+      ctgry: z.string().optional().describe("카테고리 필터 (생략 시 전체)"),
+    },
+    async ({ projectId, ctgry }) => {
+      try {
+        const qs = buildQs({ ctgry });
+        const data = await specodeFetch(`/api/projects/${projectId}/check-masters${qs}`);
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.tool(
+    "get_test_template",
+    "테스트 명세서 표준 양식 조회 — 명세서 개요(testSpecDc)와 케이스 문장을 작성하기 전에 " +
+      "반드시 먼저 호출하세요. 반환된 예시(exampleCn)·빈 템플릿(templateCn) 구조를 따라 " +
+      "작성하고, 표준 양식에 맞추겠다는 점 또는 양식을 채우는 데 필요한 추가 정보를 " +
+      "사용자에게 먼저 알린 뒤 진행하세요. 프로젝트 전용 양식이 있으면 공통 양식보다 우선 " +
+      "적용됩니다. 등록된 양식이 없으면 data 가 null 입니다 — 그때도 아래 기준은 지키세요. " +
+      TEST_CASE_GRANULARITY_POINTER,
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+    },
+    async ({ projectId }) => {
+      try {
+        const qs = buildQs({ refType: "TEST_SPEC" });
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/design-templates/resolve${qs}`
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.tool(
+    "create_test_spec",
+    "테스트 명세서 생성 — 케이스 없이 헤더(대상·이름·개요)만 만듭니다. 케이스는 생성 후 " +
+      "import_check_masters(공통 점검)와 upsert_test_cases(기능 시나리오)로 채우세요. " +
+      "선행: list_unit_works 또는 list_screens 로 테스트 대상 ID를 확보하고, " +
+      "get_design_tree 로 그 대상의 설계를 읽고, get_test_template 로 표준 양식을 확인하세요. " +
+      "UNIT(단위)은 보통 화면 단위, INTEGRATION(통합)은 단위업무 단위로 만듭니다. " +
+      "단위업무·화면 중 최소 한 종류를 1개 이상 연결해야 합니다. " +
+      TEST_WRITE_POLICY_POINTER,
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+      testKindCode: z
+        .enum(["UNIT", "INTEGRATION"])
+        .describe("테스트 종류. UNIT=단위 테스트(주로 화면 단위), INTEGRATION=통합 테스트(주로 단위업무 단위)"),
+      testSpecNm: z.string().describe("명세서명 (필수)"),
+      testSpecDc: z
+        .string()
+        .optional()
+        .describe("명세서 개요 — get_test_template 의 templateCn 구조를 따라 작성 (마크다운)"),
+      unitWorkIds: z.array(z.string()).optional().describe("연결할 단위업무 ID 목록 (list_unit_works 로 조회)"),
+      screenIds: z.array(z.string()).optional().describe("연결할 화면 ID 목록 (list_screens 로 조회)"),
+      asignMemberId: z.string().optional().describe("담당자(테스트 책임자) 회원 ID (list_members 로 조회)"),
+      displayId: z.string().optional().describe("표시 ID (생략 시 TS-NNNNN 자동 채번)"),
+      ...DESIGN_AGREEMENT_FIELDS,
+    },
+    async ({ projectId, userAgreement, discussionSummary, ...body }) => {
+      const blocked = agreementGate({ userAgreement, discussionSummary });
+      if (blocked) return blocked;
+      try {
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/test-specs`,
+          { method: "POST", body: JSON.stringify(body) }
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.tool(
+    "import_check_masters",
+    "공통 점검 가져오기 — 선택한 마스터 항목을 CHECKLIST 케이스로 복사합니다. " +
+      "문장은 서버가 마스터 원문을 그대로 복사하므로 내용을 바꿔 쓸 수 없습니다 — " +
+      "이것이 프로젝트 전체에서 공통 점검 문장을 동일하게 유지하는 방법입니다. " +
+      "선행: list_check_masters 로 checkId 를 확보하세요. " +
+      "해당 화면에 없는 기능의 점검 항목(예: 검색이 없는 화면의 검색 점검)은 빼지 말고 " +
+      "naCheckIds 에 담아 해당없음으로 표시하세요 — 검토했고 해당 없음과 빠뜨림은 다릅니다. " +
+      "이미 같은 문장이 있으면 자동으로 건너뜁니다. " +
+      TEST_OPEN_ROUND_POINTER + " " +
+      TEST_WRITE_POLICY_POINTER,
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+      testSpecId: z.string().describe("테스트 명세서 ID"),
+      checkIds: z.array(z.string()).describe("가져올 공통 점검 항목 ID 목록 (list_check_masters 의 checkId)"),
+      naCheckIds: z
+        .array(z.string())
+        .optional()
+        .describe("그중 해당없음(N/A)으로 표시할 항목 ID 목록. checkIds 에 포함된 것만 인정됩니다"),
+      ...DESIGN_AGREEMENT_FIELDS,
+    },
+    async ({ projectId, testSpecId, userAgreement, discussionSummary, ...body }) => {
+      const blocked = agreementGate({ userAgreement, discussionSummary });
+      if (blocked) return blocked;
+      try {
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/test-specs/${testSpecId}/cases/import-checks`,
+          { method: "POST", body: JSON.stringify(body) }
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.tool(
+    "upsert_test_cases",
+    "테스트 케이스 추가·수정 — testCaseId 가 있으면 수정, 없으면 추가합니다. " +
+      "직접 작성하는 것은 ctgryCode=FUNCTIONAL 기능 시나리오뿐입니다 — " +
+      "CHECKLIST 는 지어내지 말고 import_check_masters 로 가져오세요. " +
+      "케이스는 SPECODE 에 등록된 설계(화면·영역·기능)에서 나와야 합니다. 설계에 없는 동작을 " +
+      "추측해서 예상결과로 적으면 그 케이스는 영원히 불합격합니다. " +
+      TEST_CASE_GRANULARITY_POINTER + " " +
+      TEST_CASE_NO_DELETE_POINTER + " " +
+      TEST_OPEN_ROUND_POINTER + " " +
+      TEST_WRITE_POLICY_POINTER,
+    {
+      projectId: z.string().describe("프로젝트 ID"),
+      testSpecId: z.string().describe("테스트 명세서 ID"),
+      cases: z
+        .array(
+          z.object({
+            testCaseId: z
+              .string()
+              .optional()
+              .describe("기존 케이스 ID — 있으면 수정, 없으면 신규 추가 (get_test_spec 으로 조회)"),
+            caseNo: z
+              .number()
+              .optional()
+              .describe("명세서 내 일련번호. 생략 시 기존 최대값 다음 번호로 자동 부여"),
+            ctgryCode: z
+              .enum(["CHECKLIST", "FUNCTIONAL"])
+              .describe("FUNCTIONAL=기능 시나리오(직접 작성). CHECKLIST=공통 점검(직접 작성 금지 — import_check_masters 사용)"),
+            grpNm: z
+              .string()
+              .optional()
+              .describe("구분(그룹명) — 화면 안의 기능 묶음 이름. 예: 회원 등록, 권한 변경. FUNCTIONAL 에만 사용(CHECKLIST 는 무시됨)"),
+            scenarioCn: z
+              .string()
+              .describe("테스트 내용 — 무엇을 하는가를 행위로. 예: 필수값(이메일)을 비운 채 [저장]을 누른다"),
+            expectedCn: z
+              .string()
+              .describe("예상 결과 — 화면에서 관측 가능하게. 예: 저장되지 않고 이메일 입력란 아래에 필수 항목입니다 가 표시된다. 에러가 난다 / 정상 동작한다 같은 판정 불가 문장 금지"),
+            preconditionCn: z
+              .string()
+              .optional()
+              .describe("전제조건 — 재현에 꼭 필요할 때만. 로그인 상태처럼 모든 케이스에 공통인 것은 반복하지 마세요"),
+            testDataCn: z.string().optional().describe("테스트 데이터. 예: 이메일 a@b.com / 비번 Test1234!"),
+            testAccountCn: z.string().optional().describe("테스트 계정. 예: OWNER 계정 / MEMBER 계정"),
+            priortCode: z.enum(["HIGH", "MEDIUM", "LOW"]).optional().describe("우선순위. 기본 MEDIUM"),
+            applicableYn: z
+              .enum(["Y", "N"])
+              .optional()
+              .describe("해당 여부. N=이 화면에는 해당 없음(결과 입력 비활성). 기본 Y"),
+            remarkCn: z.string().optional().describe("비고"),
+            aiGenYn: z
+              .enum(["Y", "N"])
+              .optional()
+              .describe("AI 가 문장을 생성했으면 Y. 정직하게 표시하세요 — 사람이 검수할 대상을 구분하는 값입니다"),
+          })
+        )
+        .describe("추가·수정할 케이스 목록 (1~100건). 보내지 않은 기존 케이스는 그대로 유지됩니다"),
+      ...DESIGN_AGREEMENT_FIELDS,
+    },
+    async ({ projectId, testSpecId, userAgreement, discussionSummary, ...body }) => {
+      const blocked = agreementGate({ userAgreement, discussionSummary });
+      if (blocked) return blocked;
+      try {
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/test-specs/${testSpecId}/cases`,
+          { method: "POST", body: JSON.stringify(body) }
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  // ═══════════════════════════════════════════════════════════════
+  // 16. 워커 커맨드 배포 (Worker Command Distribution)
   // ═══════════════════════════════════════════════════════════════
   // SPECODE를 이용하는 고객사도 /run-ai-tasks, /sync-specode, /onboard-asis,
   // /review-uw 같은 로컬 커맨드(및 그 서브에이전트)가 있어야 각 기능을 쓸 수

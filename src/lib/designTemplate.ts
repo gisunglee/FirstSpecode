@@ -25,7 +25,11 @@ export { applyTemplateVars };
 
 // 설계 양식의 대상 계층 — API 라우트 입력값 검증에도 재사용
 // (route 파일들이 각자 VALID_REF_TYPES를 재선언하던 중복 제거)
-export const DESIGN_REF_TYPES = ["REQUIREMENT", "UNIT_WORK", "SCREEN", "AREA", "FUNCTION"] as const;
+//
+// TEST_SPEC 은 설계 5계층이 아니라 QA 산출물(테스트 명세서)이지만, 양식의 성격
+// ("예시 + 빈 템플릿을 시스템 공통/프로젝트 전용으로 관리")이 완전히 같아서 같은
+// 테이블·같은 resolve 경로를 쓴다. 별도 테이블을 만들면 관리 화면이 두 벌이 된다.
+export const DESIGN_REF_TYPES = ["REQUIREMENT", "UNIT_WORK", "SCREEN", "AREA", "FUNCTION", "TEST_SPEC"] as const;
 export type DesignRefType = (typeof DESIGN_REF_TYPES)[number];
 
 /** /resolve 응답 타입 */

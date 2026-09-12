@@ -3,11 +3,16 @@
  *   — 테스트 명세서(단위/통합) 운영 양식 Excel 다운로드
  *
  * 시트:
- *   표지 · 변경 이력 · 테스트케이스 · 증적(추후)
+ *   명세서(?kind=spec)   표지 · 변경 이력 · 테스트케이스
+ *   결과서(?kind=result) 표지 · 변경 이력(회차 목록) · 테스트케이스(회차별 판정 요약)
+ *                        · N차 결과(회차마다 1시트) · 증적(추후)
  *
  * 결과·결함 매핑:
- *   - 명세서의 가장 최근 회차(round_no 최대) 결과 1세트만 사용 — 운영 템플릿이 1회차 컬럼 구조
- *   - 회차가 없으면 결과·결함 컬럼은 빈 칸으로 출력 (명세 자체 다운로드는 가능)
+ *   - 결과서는 수행한 **모든 회차**를 각각 시트로 출력한다. 회차를 하나만 싣던 이전
+ *     방식은 재테스트 기록이 사라져 감리 대응이 되지 않았다.
+ *   - 회차가 없으면 회차 시트 없이 명세만 출력 (결과서 다운로드 자체는 가능)
+ *   - 회차 생성 후 추가된 케이스는 그 회차에 결과 row 가 없어 해당 회차 시트에서 제외된다.
+ *     회차별 대상 건수를 시트 상단과 변경 이력에 함께 표기해 누락으로 오해되지 않게 한다.
  *   - 결함은 여러 건이면 본문은 "1. ... 2. ..." 로 결합, 조치일자/조치결과는 조치 완료된 첫 결함의 값
  *
  * 권한: content.export — 시스템 관리자 지원 세션 자동 차단
@@ -20,6 +25,7 @@ import { apiError } from "@/lib/apiResponse";
 import {
   buildTestSpecXlsx,
   type TestSpecXlsxCase,
+  type TestSpecXlsxRound,
   type TestSpecDocKind,
 } from "@/lib/exports/xlsx/test-spec";
 import { filenameSafe } from "@/lib/exports/filename";
@@ -37,6 +43,12 @@ const RESULT_LABEL: Record<string, string> = {
   FAIL:    "부적합",
   NA:      "N/A",
   BLOCKED: "차단",
+};
+
+// 회차 상태 코드 → 한글 라벨
+const ROUND_STATUS_LABEL: Record<string, string> = {
+  IN_PROGRESS: "진행중",
+  DONE:        "완료",
 };
 
 // Date → 'YYYY-MM-DD'
@@ -85,9 +97,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             orderBy: { sort_ordr: "asc" },
           },
           cases:   { orderBy: [{ ctgry_code: "asc" }, { case_no: "asc" }] },
+          // 결과서는 모든 회차를 시트로 출력하므로 take 제한 없이 오름차순 전부 가져온다.
+          // (명세서일 때는 아래에서 rounds 를 빈 배열로 버린다 — 쿼리 분기보다 단순)
           rounds: {
-            orderBy: { round_no: "desc" },
-            take:    1,
+            orderBy: { round_no: "asc" },
             include: {
               results: {
                 include: { defects: { orderBy: { creat_dt: "asc" } } },
@@ -110,16 +123,22 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "테스트 명세서를 찾을 수 없습니다.", 404);
     }
 
-    // ③ result 인덱스 — testCaseId → result(+defects)
+    // ③ 출력 대상 회차 결정
+    //    명세서(spec)는 설계 시점 산출물이라 결과를 싣지 않는다 — 회차를 통째로 버린다.
+    //    결과서(result)는 수행한 모든 회차를 각각 시트로 출력한다.
+    const rounds = docKind === "result" ? spec.rounds : [];
+
+    // 회차 → (케이스ID → 결과) 인덱스. 회차마다 하나씩 만들어 둔다.
     //    (담당자 이름 조회는 표지에서 사용 안 함 — 사용자 양식 따라 시스템명/단계/테스트ID 3행만 노출)
-    const latestRound = spec.rounds[0];
-    const resultByCaseId = new Map<
-      string,
-      { result_code: string; test_dt: Date | null; defects: { defect_cn: string; fix_dt: Date | null; fix_cn: string | null }[] }
-    >();
-    if (latestRound) {
-      for (const r of latestRound.results) {
-        resultByCaseId.set(r.test_case_id, {
+    type ResultEntry = {
+      result_code: string;
+      test_dt:     Date | null;
+      defects:     { defect_cn: string; fix_dt: Date | null; fix_cn: string | null }[];
+    };
+    const resultIndexByRound: Map<string, ResultEntry>[] = rounds.map((rd) => {
+      const map = new Map<string, ResultEntry>();
+      for (const r of rd.results) {
+        map.set(r.test_case_id, {
           result_code: r.result_code,
           test_dt:     r.test_dt,
           defects:     r.defects.map((d) => ({
@@ -129,14 +148,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           })),
         });
       }
-    }
+      return map;
+    });
 
-    // ④ 케이스 → 출력 케이스로 매핑
+    // ④ 케이스 → 출력 케이스 매핑
+    //    resultIndex 를 주면 그 회차의 결과가 채워지고, 주지 않으면 명세 정보만 담긴다.
     const toCase = (
       c: typeof spec.cases[number],
       idx: number,
+      resultIndex?: Map<string, ResultEntry>,
     ): TestSpecXlsxCase => {
-      const res = resultByCaseId.get(c.test_case_id);
+      const res = resultIndex?.get(c.test_case_id);
       // 조치 완료된(fix_dt 또는 fix_cn 보유) 첫 결함 — 1조치 컬럼 단순화
       const fixed = res?.defects.find((d) => d.fix_dt || (d.fix_cn?.trim()));
       return {
@@ -152,14 +174,55 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       };
     };
 
+    // ⑤ "테스트케이스" 조망 시트용 — 명세 기준 전체 케이스 + 회차별 판정만 부착.
+    //    그 회차에 결과 row 가 없으면(회차 시작 후 추가된 케이스) 빈 문자열로 둔다.
+    const verdictsOf = (caseId: string): string[] =>
+      resultIndexByRound.map((idx) => {
+        const res = idx.get(caseId);
+        return res ? (RESULT_LABEL[res.result_code] ?? res.result_code) : "";
+      });
+
     const checklist:  TestSpecXlsxCase[] = [];
     const functional: TestSpecXlsxCase[] = [];
     spec.cases.forEach((c) => {
-      if (c.ctgry_code === "CHECKLIST") {
-        checklist.push(toCase(c, checklist.length));
-      } else {
-        functional.push(toCase(c, functional.length));
+      const target = c.ctgry_code === "CHECKLIST" ? checklist : functional;
+      target.push({
+        ...toCase(c, target.length),
+        roundVerdicts: verdictsOf(c.test_case_id),
+      });
+    });
+
+    // ⑥ 회차별 상세 시트용 — 그 회차가 실제로 다룬 케이스만 (결과 row 가 있는 것만).
+    //    회차 생성 시점에 존재하던 케이스만 결과 row 를 가지므로, 회차마다 건수가 다를 수 있다.
+    const xlsxRounds: TestSpecXlsxRound[] = rounds.map((rd, i) => {
+      const resultIndex = resultIndexByRound[i];
+      const rdChecklist:  TestSpecXlsxCase[] = [];
+      const rdFunctional: TestSpecXlsxCase[] = [];
+      const summary: Record<string, number> = {};
+
+      for (const c of spec.cases) {
+        // 이 회차에 결과가 없는 케이스는 이 회차의 산출물이 아니다 — 건너뛴다
+        const res = resultIndex.get(c.test_case_id);
+        if (!res) continue;
+
+        const target = c.ctgry_code === "CHECKLIST" ? rdChecklist : rdFunctional;
+        target.push(toCase(c, target.length, resultIndex));
+
+        const label = RESULT_LABEL[res.result_code] ?? res.result_code;
+        summary[label] = (summary[label] ?? 0) + 1;
       }
+
+      return {
+        roundNo:     rd.round_no,
+        envirLabel:  rd.envir_code,
+        bldVrsnNm:   rd.bld_vrsn_nm ?? "",
+        bgngDate:    ymd(rd.bgng_dt),
+        endDate:     ymd(rd.end_dt),
+        statusLabel: ROUND_STATUS_LABEL[rd.sttus_code] ?? rd.sttus_code,
+        checklist:   rdChecklist,
+        functional:  rdFunctional,
+        summary,
+      };
     });
 
     // ⑤ 상단 박스용 텍스트
@@ -213,6 +276,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       subtitle,
       checklist,
       functional,
+      rounds: xlsxRounds,
     });
 
     // ⑧ 파일명 — "[<ABBR>_]<문서종류>_<표시ID>_<테스트명>.xlsx"

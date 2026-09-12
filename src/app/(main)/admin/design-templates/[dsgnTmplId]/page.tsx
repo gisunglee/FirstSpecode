@@ -27,7 +27,7 @@ import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEdit
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
-type DesignRefType = "REQUIREMENT" | "UNIT_WORK" | "SCREEN" | "AREA" | "FUNCTION";
+type DesignRefType = "REQUIREMENT" | "UNIT_WORK" | "SCREEN" | "AREA" | "FUNCTION" | "TEST_SPEC";
 
 type LinkedPromptTemplate = {
   tmplId:     string;
@@ -62,6 +62,7 @@ const REF_TYPE_OPTIONS: { value: DesignRefType; label: string }[] = [
   { value: "SCREEN",      label: "화면" },
   { value: "AREA",        label: "영역" },
   { value: "FUNCTION",    label: "기능" },
+  { value: "TEST_SPEC",   label: "테스트 명세" },
 ];
 
 // ── 페이지 래퍼 ───────────────────────────────────────────────────────────────

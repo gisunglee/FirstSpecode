@@ -1,5 +1,5 @@
 /**
- * GET    /api/projects/[id]/test-specs/[specId] — 테스트 명세서 상세 (cases 포함)
+ * GET    /api/projects/[id]/test-specs/[specId] — 테스트 명세서 상세 (cases + 회차 요약 포함)
  * PUT    /api/projects/[id]/test-specs/[specId] — 명세서 메타 + cases 일괄 저장
  * DELETE /api/projects/[id]/test-specs/[specId] — 명세서 삭제 (cases·rounds·results CASCADE)
  *
@@ -25,6 +25,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
+import { syncInProgressRoundResults } from "@/lib/qa/roundResultSync";
 
 type RouteParams = { params: Promise<{ id: string; specId: string }> };
 
@@ -56,6 +57,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           orderBy: { sort_ordr: "asc" },
         },
         cases: { orderBy: [{ case_no: "asc" }, { sort_ordr: "asc" }] },
+        // 회차 요약 — 본문(결과)은 빼고 헤더만. "지금 몇 차가 돌고 있나" 를
+        // 케이스를 고치기 전에 알 수 있어야 한다(특히 MCP 로 케이스를 추가할 때).
+        rounds: {
+          orderBy: { round_no: "asc" },
+          select: {
+            round_id:    true,
+            round_no:    true,
+            envir_code:  true,
+            bld_vrsn_nm: true,
+            sttus_code:  true,
+            bgng_dt:     true,
+            end_dt:      true,
+            _count:      { select: { results: true } },
+          },
+        },
       },
     });
     if (!spec) return apiError("NOT_FOUND", "테스트 명세서를 찾을 수 없습니다.", 404);
@@ -95,6 +111,22 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
                        aiGenYn:        c.ai_gen_yn,
                        sortOrdr:       c.sort_ordr,
                      })),
+      // 회차 목록 — round_no 오름차순. 마지막 항목이 최신 회차다.
+      rounds:        spec.rounds.map((r, i, arr) => ({
+                       roundId:     r.round_id,
+                       roundNo:     r.round_no,
+                       envirCode:   r.envir_code,
+                       bldVrsnNm:   r.bld_vrsn_nm,
+                       sttusCode:   r.sttus_code,
+                       bgngDt:      r.bgng_dt,
+                       endDt:       r.end_dt,
+                       resultCount: r._count.results,
+                       // 오름차순 정렬이므로 마지막 항목이 최신 회차.
+                       // 호출부(특히 AI)가 순서를 따로 해석하지 않아도 되게 명시한다.
+                       isLatest:    i === arr.length - 1,
+                     })),
+      // 진행중(IN_PROGRESS) 회차 번호들 — 케이스를 추가하면 즉시 영향받는 회차
+      openRoundNos:  spec.rounds.filter((r) => r.sttus_code === "IN_PROGRESS").map((r) => r.round_no),
       createdAt:     spec.creat_dt,
       updatedAt:     spec.mdfcn_dt,
     });
@@ -276,6 +308,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           });
         }
       }
+
+      // 4) 진행중 회차에 새 케이스의 결과행을 열어 준다.
+      //    회차 생성 시점에만 결과행을 만들기 때문에, 회차를 시작한 뒤 여기서 추가한
+      //    케이스는 결과 입력 화면에 나타나지 않는다(합부를 기록할 방법이 없어진다).
+      //    완료된 회차는 확정 기록이라 건드리지 않는다 — 헬퍼가 IN_PROGRESS 만 채운다.
+      await syncInProgressRoundResults(tx, { projectId, testSpecId: specId });
     });
 
     return apiSuccess({ testSpecId: specId });

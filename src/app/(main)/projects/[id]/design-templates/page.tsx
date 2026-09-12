@@ -25,7 +25,7 @@ import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
-type DesignRefType = "REQUIREMENT" | "UNIT_WORK" | "SCREEN" | "AREA" | "FUNCTION";
+type DesignRefType = "REQUIREMENT" | "UNIT_WORK" | "SCREEN" | "AREA" | "FUNCTION" | "TEST_SPEC";
 
 type TemplateRow = {
   dsgnTmplId:  string;
@@ -52,6 +52,7 @@ const REF_TYPE_LABELS: Record<DesignRefType, string> = {
   SCREEN:      "화면",
   AREA:        "영역",
   FUNCTION:    "기능",
+  TEST_SPEC:   "테스트 명세",
 };
 
 // 계층별 색상 — semantic 토큰에 매핑해 3테마(dark/light/dark-purple) 자동 대응.
@@ -63,6 +64,7 @@ const REF_TYPE_COLORS: Record<DesignRefType, { bg: string; color: string }> = {
   SCREEN:      { bg: "var(--color-info-subtle)",    color: "var(--color-info)"    },
   AREA:        { bg: "var(--color-brand-subtle)",   color: "var(--color-brand)"   },
   FUNCTION:    { bg: "var(--color-success-subtle)", color: "var(--color-success)" },
+  TEST_SPEC:   { bg: "var(--color-bg-muted)",       color: "var(--color-text-secondary)" },
 };
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────

@@ -25,7 +25,7 @@ import { authFetch } from "@/lib/authFetch";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────────
 
-type DesignRefType = "REQUIREMENT" | "UNIT_WORK" | "SCREEN" | "AREA" | "FUNCTION";
+type DesignRefType = "REQUIREMENT" | "UNIT_WORK" | "SCREEN" | "AREA" | "FUNCTION" | "TEST_SPEC";
 
 type TemplateRow = {
   dsgnTmplId:  string;
@@ -54,6 +54,7 @@ const REF_TYPE_LABELS: Record<DesignRefType, string> = {
   SCREEN:      "화면",
   AREA:        "영역",
   FUNCTION:    "기능",
+  TEST_SPEC:   "테스트 명세",
 };
 
 const REF_TYPE_COLORS: Record<DesignRefType, { bg: string; color: string }> = {
@@ -62,6 +63,7 @@ const REF_TYPE_COLORS: Record<DesignRefType, { bg: string; color: string }> = {
   SCREEN:      { bg: "var(--color-info-subtle)",    color: "var(--color-info)"    },
   AREA:        { bg: "var(--color-brand-subtle)",   color: "var(--color-brand)"   },
   FUNCTION:    { bg: "var(--color-success-subtle)", color: "var(--color-success)" },
+  TEST_SPEC:   { bg: "var(--color-bg-muted)",       color: "var(--color-text-secondary)" },
 };
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────

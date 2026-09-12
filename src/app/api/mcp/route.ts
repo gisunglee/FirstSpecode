@@ -34,6 +34,12 @@ import { registerTools } from "@/lib/mcp/register-tools";
 import { createSpecodeFetch } from "@/lib/mcp/api-client";
 import { requireAuth } from "@/lib/requireAuth";
 import { SPECODE_MCP_INSTRUCTIONS } from "@/lib/mcp/design-policy";
+import { SPECODE_TEST_INSTRUCTIONS } from "@/lib/mcp/test-policy";
+
+// 설계 규칙 + 테스트 명세 규칙을 이어 붙인 최종 instructions.
+// 두 정책을 별도 모듈로 두는 이유 — 서로 다른 도구군에 적용되고 따로 개정되므로
+// 한 파일에 합치면 어느 쪽을 고치는지 헷갈린다. 합치는 지점은 여기 한 곳뿐이다.
+const MCP_INSTRUCTIONS = `${SPECODE_MCP_INSTRUCTIONS}\n\n${SPECODE_TEST_INSTRUCTIONS}`;
 
 // ─── 핸들러 팩토리 ─────────────────────────────────────────────
 // mcp-handler의 serverSetup 콜백은 요청당 호출되므로 여기서 요청 스코프
@@ -52,11 +58,12 @@ function buildHandler(bearerToken: string) {
         version: "1.0.0",
       },
 
-      // 설계 작업 행동 규칙 — initialize 응답으로 클라이언트에 전달된다.
+      // 설계·테스트 작업 행동 규칙 — initialize 응답으로 클라이언트에 전달된다.
       // SPECODE는 클라우드 배포라 고객 저장소의 CLAUDE.md를 고칠 수 없다.
-      // 설계 품질 규칙(영역 과분할 금지, 본문에 변경 경위 금지, 쓰기 전 합의)을
+      // 설계 품질 규칙(영역 과분할 금지, 본문에 변경 경위 금지, 쓰기 전 합의)과
+      // 테스트 명세 규칙(케이스 과분할 금지, 공통점검 창작 금지, 결과는 사람이 입력)을
       // 여기 실어 보내야 모든 고객에게 동일하게 적용된다.
-      instructions: SPECODE_MCP_INSTRUCTIONS,
+      instructions: MCP_INSTRUCTIONS,
     },
     {
       // 기본 경로 — /api 하위 모든 MCP 요청을 이 핸들러로 라우팅
