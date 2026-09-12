@@ -121,6 +121,25 @@ DB는 `create_db_table` → `update_db_table`). **bulk 등록 도구는 쓰지 �
 이전에 넣은 컬럼이 사라진다 — 한 테이블의 컬럼은 한 번에 전부 모아서 한 번만
 호출한다.
 
+### 합의 필드 (단위업무·화면·영역·기능 전용)
+
+`create_unit_work`/`create_screen`/`create_area`/`create_function` 과 대응하는
+`update_*` 도구는 `userAgreement` 와 `discussionSummary` 를 **필수**로 받는다.
+사용자와 합의 없이 설계를 먼저 등록하는 것을 막는 서버측 게이트다.
+
+이 명령은 7번 대화에서 사용자와 등록 범위를 확정한 뒤에만 8번 등록으로 넘어오므로,
+여기서는 다음과 같이 전달한다:
+
+- `userAgreement`: `"AGREED"`
+- `discussionSummary`: 이번 회차에서 무엇을 확정했는지 구체적으로.
+  예: `"AS-IS 온보딩 1회차 — 회원관리 화면 3개와 영역 구성을 사용자와 확정"`
+
+7번 대화를 건너뛰었거나 사용자가 확정하지 않은 항목은 `"AGREED"` 로 넘기지 않는다.
+확정되지 않았으면 등록 대상이 아니다 — 9번으로 보내 질문으로 남긴다.
+
+`create_db_table`/`update_db_table`/`create_asis_question` 등 나머지 도구에는
+이 필드가 없다.
+
 ## 9. 미확인 사항 → 질문 등록
 
 7번 대화로도 못 정한 것 중, 2차 설계에 영향을 줄 만큼 중요한 것만 남긴다. 사소한 건

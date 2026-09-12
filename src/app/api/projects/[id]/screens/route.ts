@@ -53,7 +53,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   const parsed = await parseJsonBody(request, screenCreateSchema);
   if (parsed instanceof Response) return parsed;
-  const { unitWorkId, displayId: inputDisplayId, name, description, layoutData, type, categoryL, categoryM, categoryS } = parsed.data;
+  const { unitWorkId, displayId: inputDisplayId, name, description, assignMemberId, layoutData, type, categoryL, categoryM, categoryS } = parsed.data;
   const fieldError = requireSpecCreateFields(gate, "SCREEN", listMeaningfulFields(parsed.data));
   if (fieldError) return fieldError;
 
@@ -114,6 +114,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           ctgry_l_nm:      categoryL?.trim() || null,
           ctgry_m_nm:      categoryM?.trim() || null,
           ctgry_s_nm:      categoryS?.trim() || null,
+          // 담당자 미지정이면 만든 사람으로 채운다.
+          // 담당자 없는 일감이 떠다니면 관리가 안 된다 — 일단 만든 사람 앞으로
+          // 걸어두고, 실제 담당자가 정해지면 재배정하거나 항목을 정리하게 한다.
+          asign_mber_id:   assignMemberId || gate.mberId,
           sort_ordr:       (maxSort?.sort_ordr ?? 0) + 1,
           creat_mber_id:   gate.mberId,
         },

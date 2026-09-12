@@ -94,6 +94,7 @@ export const screenCreateSchema = z.object({
   displayId: optionalText,
   name: requiredText("화면명을 입력해 주세요."),
   description: optionalText,
+  assignMemberId: optionalNullableText,
   layoutData: optionalText,
   type: optionalText,
   categoryL: optionalText,

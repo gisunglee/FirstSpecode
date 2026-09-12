@@ -112,7 +112,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           priort_code:     priority || "MEDIUM",
           cmplx_code:      complexity || "MEDIUM",
           impl_efrt_val:   effort?.trim() || null,
-          asign_mber_id:   assignMemberId || null,
+          // 담당자 미지정이면 만든 사람으로 채운다 (단위업무·화면 생성과 동일 규칙).
+          // 담당자 없는 일감이 떠다니면 관리가 안 된다 — 일단 만든 사람 앞으로
+          // 걸어두고, 실제 담당자가 정해지면 재배정하거나 항목을 정리하게 한다.
+          asign_mber_id:   assignMemberId || gate.mberId,
           sort_ordr:       nextSort,
           creat_mber_id:   gate.mberId,
         },

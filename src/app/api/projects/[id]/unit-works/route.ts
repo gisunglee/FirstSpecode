@@ -107,7 +107,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         unit_work_display_id: displayId,
         unit_work_nm:         name.trim(),
         unit_work_dc:         newDescription,
-        asign_mber_id:        assignMemberId || null,
+        // 담당자 미지정이면 만든 사람으로 채운다 (화면·기능 생성과 동일 규칙).
+        // 담당자 없는 일감이 떠다니면 관리가 안 된다 — 일단 만든 사람 앞으로
+        // 걸어두고, 실제 담당자가 정해지면 재배정하거나 항목을 정리하게 한다.
+        asign_mber_id:        assignMemberId || gate.mberId,
         plan_dsgn_bgng_de:    startDate?.trim() || null,
         plan_dsgn_end_de:     endDate?.trim() || null,
         sort_ordr:            (maxSort?.sort_ordr ?? 0) + 1,

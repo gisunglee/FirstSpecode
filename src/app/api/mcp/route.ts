@@ -33,6 +33,7 @@ import { createMcpHandler } from "mcp-handler";
 import { registerTools } from "@/lib/mcp/register-tools";
 import { createSpecodeFetch } from "@/lib/mcp/api-client";
 import { requireAuth } from "@/lib/requireAuth";
+import { SPECODE_MCP_INSTRUCTIONS } from "@/lib/mcp/design-policy";
 
 // ─── 핸들러 팩토리 ─────────────────────────────────────────────
 // mcp-handler의 serverSetup 콜백은 요청당 호출되므로 여기서 요청 스코프
@@ -50,6 +51,12 @@ function buildHandler(bearerToken: string) {
         name:    "specode-mcp",
         version: "1.0.0",
       },
+
+      // 설계 작업 행동 규칙 — initialize 응답으로 클라이언트에 전달된다.
+      // SPECODE는 클라우드 배포라 고객 저장소의 CLAUDE.md를 고칠 수 없다.
+      // 설계 품질 규칙(영역 과분할 금지, 본문에 변경 경위 금지, 쓰기 전 합의)을
+      // 여기 실어 보내야 모든 고객에게 동일하게 적용된다.
+      instructions: SPECODE_MCP_INSTRUCTIONS,
     },
     {
       // 기본 경로 — /api 하위 모든 MCP 요청을 이 핸들러로 라우팅

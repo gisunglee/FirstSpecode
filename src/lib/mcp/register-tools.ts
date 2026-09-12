@@ -29,6 +29,14 @@
  *   [워커 배포]    get_worker_command_files (/run-ai-tasks, /sync-specode, /onboard-asis,
  *                    /review-uw 커맨드를 고객 로컬에 설치할 파일 내용 제공)
  *
+ * 정책 — 설계 5계층 쓰기는 사용자 합의 필수:
+ *   요구사항·단위업무·화면·영역·기능의 create_ 및 update_ 10개 도구는
+ *   userAgreement(AGREED|NOT_DISCUSSED) + discussionSummary 를 필수로 받고,
+ *   NOT_DISCUSSED 면 MCP 핸들러 단계에서 차단한다(API 호출 안 함).
+ *   AI가 사용자와 논의 없이 설계를 먼저 등록해 단위와 방향이 사용자 통제를
+ *   벗어나는 것을 막기 위함. 두 필드는 게이트 판정에만 쓰고 API로 넘기지 않으므로
+ *   웹 UI·API 라우트는 영향을 받지 않는다. 상세 규칙은 design-policy.ts 참조.
+ *
  * 정책 — DELETE 미지원:
  *   MCP에서는 어떤 엔티티도 삭제할 수 없다. AI가 한 번의 잘못된 호출로 cascade 삭제를
  *   일으키지 못하도록 delete_* 도구를 일괄 제거했다. 삭제는 UI(웹) 채널에서만 가능하며,
@@ -66,6 +74,12 @@ import {
 import { syncResultSubmissionSchema } from "@/lib/spec-sync/contracts";
 import { DB_TABLE_STATUS_CODES } from "@/lib/dbTableStatus";
 import { DESIGN_TEMPLATE_MCP_PLACEHOLDER_GUIDANCE } from "@/lib/templateVars";
+import {
+  AREA_GRANULARITY_POINTER,
+  DESIGN_AGREEMENT_FIELDS,
+  DESIGN_WRITE_POLICY_POINTER,
+  checkDesignAgreement,
+} from "@/lib/mcp/design-policy";
 
 // ─── 공통 헬퍼 ──────────────────────────────────────────────────
 
@@ -79,6 +93,26 @@ function errorResult(err: unknown) {
   const message = err instanceof Error ? err.message : String(err);
   return {
     content: [{ type: "text" as const, text: `❌ 오류: ${message}` }],
+    isError: true,
+  };
+}
+
+/**
+ * 설계 5계층 쓰기 게이트 — 사용자 합의가 없으면 API를 호출하지 않고 차단한다.
+ *
+ * 통과하면 null, 막히면 그대로 반환할 MCP 결과를 돌려준다. 호출부는
+ *   const blocked = agreementGate(args); if (blocked) return blocked;
+ * 형태로 쓴다. 판정이 MCP 핸들러 안에서만 일어나므로 웹 UI·API 라우트는
+ * 이 규칙의 영향을 받지 않는다.
+ */
+function agreementGate(args: {
+  userAgreement: "AGREED" | "NOT_DISCUSSED";
+  discussionSummary: string;
+}) {
+  const reason = checkDesignAgreement(args);
+  if (!reason) return null;
+  return {
+    content: [{ type: "text" as const, text: `⛔ ${reason}` }],
     isError: true,
   };
 }
@@ -309,7 +343,8 @@ export function registerTools(
     "create_requirement",
     "요구사항 생성 — 새 요구사항을 등록합니다. displayId(REQ-NNNNN)는 자동 채번됩니다. 과업에 소속시키려면 taskId를 전달하세요 (선행: list_tasks 또는 get_planning_tree로 taskId 조회). " +
       "originalContent/detailSpec 등 설명 내용을 작성하기 전에 get_design_template(refType=REQUIREMENT)로 표준 양식을 먼저 확인하세요. " +
-      DESIGN_TEMPLATE_MCP_PLACEHOLDER_GUIDANCE,
+      DESIGN_TEMPLATE_MCP_PLACEHOLDER_GUIDANCE + " " +
+      DESIGN_WRITE_POLICY_POINTER,
     {
       projectId: z.string().describe("프로젝트 ID"),
       name: z.string().describe("요구사항명 (필수)"),
@@ -321,8 +356,12 @@ export function registerTools(
       currentContent: z.string().optional().describe("현행화 내용"),
       analysisMemo: z.string().optional().describe("분석 메모"),
       detailSpec: z.string().optional().describe("상세 명세"),
+      ...DESIGN_AGREEMENT_FIELDS,
     },
-    async ({ projectId, ...body }) => {
+    // userAgreement/discussionSummary는 게이트 판정에만 쓰고 API로 넘기지 않는다
+    async ({ projectId, userAgreement, discussionSummary, ...body }) => {
+      const blocked = agreementGate({ userAgreement, discussionSummary });
+      if (blocked) return blocked;
       try {
         const data = await specodeFetch(
           `/api/projects/${projectId}/requirements`,
@@ -338,7 +377,8 @@ export function registerTools(
   server.tool(
     "update_requirement",
     "요구사항 수정 — OWNER/ADMIN·PM/PL, 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다. " +
-      "originalContent/detailSpec 등 설명 내용을 작성하기 전에 get_design_template(refType=REQUIREMENT)로 표준 양식을 먼저 확인하세요.",
+      "originalContent/detailSpec 등 설명 내용을 작성하기 전에 get_design_template(refType=REQUIREMENT)로 표준 양식을 먼저 확인하세요. " +
+      DESIGN_WRITE_POLICY_POINTER,
     {
       projectId: z.string().describe("프로젝트 ID"),
       requirementId: z.string().describe("요구사항 ID"),
@@ -355,8 +395,11 @@ export function registerTools(
       analysisEnd: z.string().optional().describe("분석 종료일 (YYYY-MM-DD)"),
       analysisEffort: z.string().optional().describe("분석 공수"),
       progress: z.number().optional().describe("분석 진행률 (0~100)"),
+      ...DESIGN_AGREEMENT_FIELDS,
     },
-    async ({ projectId, requirementId, ...body }) => {
+    async ({ projectId, requirementId, userAgreement, discussionSummary, ...body }) => {
+      const blocked = agreementGate({ userAgreement, discussionSummary });
+      if (blocked) return blocked;
       try {
         const data = await specodeFetch(
           `/api/projects/${projectId}/requirements/${requirementId}`,
@@ -548,17 +591,21 @@ export function registerTools(
     "create_unit_work",
     "단위업무 생성 — 새 단위업무를 등록합니다. displayId(UW-NNNNN)는 자동 채번됩니다. 선행: list_requirements로 reqId를 조회하세요 (상위 요구사항 필수). 담당자·일정 지정은 OWNER/ADMIN 또는 PM/PL만 가능합니다. " +
       "description을 작성하기 전에 get_design_template(refType=UNIT_WORK)로 표준 양식을 먼저 확인하세요. " +
-      DESIGN_TEMPLATE_MCP_PLACEHOLDER_GUIDANCE,
+      DESIGN_TEMPLATE_MCP_PLACEHOLDER_GUIDANCE + " " +
+      DESIGN_WRITE_POLICY_POINTER,
     {
       projectId: z.string().describe("프로젝트 ID"),
       reqId: z.string().describe("상위 요구사항 ID (필수). list_requirements에서 조회 가능"),
       name: z.string().describe("단위업무명 (필수)"),
       description: z.string().optional().describe("단위업무 설명 (마크다운 지원)"),
-      assignMemberId: z.string().optional().describe("담당자 회원 ID (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능)"),
+      assignMemberId: z.string().optional().describe("담당자 회원 ID (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능, list_members로 조회). 생략하면 만든 사람이 담당자로 자동 지정됩니다"),
       startDate: z.string().optional().describe("시작일 (YYYY-MM-DD, 생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능)"),
       endDate: z.string().optional().describe("종료일 (YYYY-MM-DD, 생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능)"),
+      ...DESIGN_AGREEMENT_FIELDS,
     },
-    async ({ projectId, ...body }) => {
+    async ({ projectId, userAgreement, discussionSummary, ...body }) => {
+      const blocked = agreementGate({ userAgreement, discussionSummary });
+      if (blocked) return blocked;
       try {
         const data = await specodeFetch(
           `/api/projects/${projectId}/unit-works`,
@@ -574,7 +621,8 @@ export function registerTools(
   server.tool(
     "update_unit_work",
     "단위업무 수정 — OWNER/ADMIN·PM/PL, 자신 또는 상위 요구사항/과업의 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다. " +
-      "description을 작성하기 전에 get_design_template(refType=UNIT_WORK)로 표준 양식을 먼저 확인하세요.",
+      "description을 작성하기 전에 get_design_template(refType=UNIT_WORK)로 표준 양식을 먼저 확인하세요. " +
+      DESIGN_WRITE_POLICY_POINTER,
     {
       projectId: z.string().describe("프로젝트 ID"),
       unitWorkId: z.string().describe("단위업무 ID"),
@@ -588,9 +636,12 @@ export function registerTools(
       planEffort: z.string().optional().describe("계획설계 공수"),
       docStatus: z.string().optional().describe("단위업무 설계서 작성 상태 (BEFORE/DOING/DONE)"),
       sortOrder: z.number().optional().describe("정렬 순서"),
+      ...DESIGN_AGREEMENT_FIELDS,
     },
     // 실적 진행률(progress)은 2026-07-28부터 하위 화면·기능 롤업 자동계산값이라 여기서 설정 불가
-    async ({ projectId, unitWorkId, ...body }) => {
+    async ({ projectId, unitWorkId, userAgreement, discussionSummary, ...body }) => {
+      const blocked = agreementGate({ userAgreement, discussionSummary });
+      if (blocked) return blocked;
       try {
         const data = await specodeFetch(
           `/api/projects/${projectId}/unit-works/${unitWorkId}`,
@@ -653,19 +704,24 @@ export function registerTools(
     "create_screen",
     "화면 생성 — 새 화면을 등록합니다. 단위업무에 소속시키려면 unitWorkId를 전달하세요 (선행: list_unit_works로 조회). " +
       "description을 작성하기 전에 get_design_template(refType=SCREEN)로 표준 양식을 먼저 확인하세요. " +
-      DESIGN_TEMPLATE_MCP_PLACEHOLDER_GUIDANCE,
+      DESIGN_TEMPLATE_MCP_PLACEHOLDER_GUIDANCE + " " +
+      DESIGN_WRITE_POLICY_POINTER,
     {
       projectId: z.string().describe("프로젝트 ID"),
       name: z.string().describe("화면명 (필수)"),
       unitWorkId: z.string().optional().describe("소속 단위업무 ID"),
       description: z.string().optional().describe("화면 설명 (마크다운 지원)"),
+      assignMemberId: z.string().optional().describe("담당자 회원 ID (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능, list_members로 조회). 생략하면 만든 사람이 담당자로 자동 지정됩니다"),
       displayId: z.string().optional().describe("화면 표시 ID (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능; 생략 시 자동 채번)"),
       type: z.string().optional().describe("화면 유형. 허용값: LIST | DETAIL | GRID | TAB | FULL_SCREEN. 기본: LIST"),
       categoryL: z.string().optional().describe("대분류"),
       categoryM: z.string().optional().describe("중분류"),
       categoryS: z.string().optional().describe("소분류"),
+      ...DESIGN_AGREEMENT_FIELDS,
     },
-    async ({ projectId, ...body }) => {
+    async ({ projectId, userAgreement, discussionSummary, ...body }) => {
+      const blocked = agreementGate({ userAgreement, discussionSummary });
+      if (blocked) return blocked;
       try {
         const data = await specodeFetch(
           `/api/projects/${projectId}/screens`,
@@ -681,7 +737,8 @@ export function registerTools(
   server.tool(
     "update_screen",
     "화면 수정 — OWNER/ADMIN·PM/PL, 자신 또는 상위 단위업무/요구사항/과업의 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다. " +
-      "description을 작성하기 전에 get_design_template(refType=SCREEN)로 표준 양식을 먼저 확인하세요.",
+      "description을 작성하기 전에 get_design_template(refType=SCREEN)로 표준 양식을 먼저 확인하세요. " +
+      DESIGN_WRITE_POLICY_POINTER,
     {
       projectId: z.string().describe("프로젝트 ID"),
       screenId: z.string().describe("화면 ID"),
@@ -697,8 +754,11 @@ export function registerTools(
       implBgngDe: z.string().optional().describe("실질구현 시작일 (YYYY-MM-DD) — 기능은 일정이 없고 화면 단위로 관리. 설계 일정은 화면에 없음(update_unit_work로 관리)"),
       implEndDe: z.string().optional().describe("실질구현 종료일 (YYYY-MM-DD)"),
       docStatus: z.string().optional().describe("화면정의서 작성 상태 (BEFORE/DOING/DONE)"),
+      ...DESIGN_AGREEMENT_FIELDS,
     },
-    async ({ projectId, screenId, ...body }) => {
+    async ({ projectId, screenId, userAgreement, discussionSummary, ...body }) => {
+      const blocked = agreementGate({ userAgreement, discussionSummary });
+      if (blocked) return blocked;
       try {
         const data = await specodeFetch(
           `/api/projects/${projectId}/screens/${screenId}`,
@@ -760,16 +820,21 @@ export function registerTools(
     "create_area",
     "영역 생성 — 새 영역을 등록합니다. 화면에 소속시키려면 screenId를 전달하세요 (선행: list_screens로 조회). 정렬 순서 지정은 OWNER/ADMIN 또는 PM/PL만 가능합니다. " +
       "description을 작성하기 전에 get_design_template(refType=AREA)로 표준 양식을 먼저 확인하세요. " +
-      DESIGN_TEMPLATE_MCP_PLACEHOLDER_GUIDANCE,
+      DESIGN_TEMPLATE_MCP_PLACEHOLDER_GUIDANCE + " " +
+      AREA_GRANULARITY_POINTER + " " +
+      DESIGN_WRITE_POLICY_POINTER,
     {
       projectId: z.string().describe("프로젝트 ID"),
       name: z.string().describe("영역명 (필수)"),
       screenId: z.string().optional().describe("소속 화면 ID"),
-      type: z.string().optional().describe("영역 유형. 허용값: SEARCH | GRID | FORM | DETAIL | BUTTON | TAB | CHART | OTHER. 기본: LIST"),
+      type: z.string().optional().describe("영역 유형. 허용값: SEARCH | GRID | FORM | DETAIL | BUTTON | TAB | CHART | OTHER. 기본: LIST. 주의 — 이 목록은 분리가 결정된 뒤 성격을 표시하는 용도이지, 이 단위로 영역을 나누라는 뜻이 아닙니다"),
       description: z.string().optional().describe("영역 설명"),
       sortOrder: z.number().optional().describe("정렬 순서 (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능)"),
+      ...DESIGN_AGREEMENT_FIELDS,
     },
-    async ({ projectId, ...body }) => {
+    async ({ projectId, userAgreement, discussionSummary, ...body }) => {
+      const blocked = agreementGate({ userAgreement, discussionSummary });
+      if (blocked) return blocked;
       try {
         const data = await specodeFetch(
           `/api/projects/${projectId}/areas`,
@@ -785,7 +850,9 @@ export function registerTools(
   server.tool(
     "update_area",
     "영역 수정 — OWNER/ADMIN·PM/PL, 상위 화면/단위업무/요구사항/과업의 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다. " +
-      "description을 작성하기 전에 get_design_template(refType=AREA)로 표준 양식을 먼저 확인하세요.",
+      "description을 작성하기 전에 get_design_template(refType=AREA)로 표준 양식을 먼저 확인하세요. " +
+      AREA_GRANULARITY_POINTER + " " +
+      DESIGN_WRITE_POLICY_POINTER,
     {
       projectId: z.string().describe("프로젝트 ID"),
       areaId: z.string().describe("영역 ID"),
@@ -796,8 +863,11 @@ export function registerTools(
       commentCn: z.string().optional().describe("코멘트"),
       sortOrder: z.number().optional().describe("정렬 순서"),
       docStatus: z.string().optional().describe("영역 설계(와이어프레임) 작성 상태 (BEFORE/DOING/DONE)"),
+      ...DESIGN_AGREEMENT_FIELDS,
     },
-    async ({ projectId, areaId, ...body }) => {
+    async ({ projectId, areaId, userAgreement, discussionSummary, ...body }) => {
+      const blocked = agreementGate({ userAgreement, discussionSummary });
+      if (blocked) return blocked;
       try {
         const data = await specodeFetch(
           `/api/projects/${projectId}/areas/${areaId}`,
@@ -859,7 +929,8 @@ export function registerTools(
     "create_function",
     "기능 생성 — 새 기능을 등록합니다. 영역에 소속시키려면 areaId를 전달하세요 (선행: list_areas로 조회). 복잡도·공수·담당자·정렬 지정은 OWNER/ADMIN 또는 PM/PL만 가능합니다. " +
       "description을 작성하기 전에 get_design_template(refType=FUNCTION)로 표준 양식을 먼저 확인하세요. " +
-      DESIGN_TEMPLATE_MCP_PLACEHOLDER_GUIDANCE,
+      DESIGN_TEMPLATE_MCP_PLACEHOLDER_GUIDANCE + " " +
+      DESIGN_WRITE_POLICY_POINTER,
     {
       projectId: z.string().describe("프로젝트 ID"),
       name: z.string().describe("기능명 (필수)"),
@@ -869,11 +940,14 @@ export function registerTools(
       priority: z.string().optional().describe("우선순위. 허용값: HIGH | MEDIUM | LOW. 기본: MEDIUM"),
       complexity: z.string().optional().describe("복잡도. 허용값: HIGH | MEDIUM | LOW (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능; 생략 시 MEDIUM)"),
       effort: z.string().optional().describe("구현 공수 (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능)"),
-      assignMemberId: z.string().optional().describe("담당자 회원 ID (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능)"),
+      assignMemberId: z.string().optional().describe("담당자 회원 ID (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능, list_members로 조회). 생략하면 만든 사람이 담당자로 자동 지정됩니다"),
       sortOrder: z.number().optional().describe("정렬 순서 (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능)"),
+      ...DESIGN_AGREEMENT_FIELDS,
     },
     // 기능 자신은 구현 일정이 없음 — 구현 마감은 소속 화면(update_screen의 implStartDate/implEndDate)에서 관리(2026-07-28)
-    async ({ projectId, ...body }) => {
+    async ({ projectId, userAgreement, discussionSummary, ...body }) => {
+      const blocked = agreementGate({ userAgreement, discussionSummary });
+      if (blocked) return blocked;
       try {
         const data = await specodeFetch(
           `/api/projects/${projectId}/functions`,
@@ -889,7 +963,8 @@ export function registerTools(
   server.tool(
     "update_function",
     "기능 수정 — OWNER/ADMIN·PM/PL, 자신 또는 상위 화면/단위업무/요구사항/과업의 가장 가까운 담당자, 또는 생성 후 30분 이내 생성자만 가능합니다. 권한이 없으면 구체적인 사유를 반환합니다. " +
-      "description을 작성하기 전에 get_design_template(refType=FUNCTION)로 표준 양식을 먼저 확인하세요.",
+      "description을 작성하기 전에 get_design_template(refType=FUNCTION)로 표준 양식을 먼저 확인하세요. " +
+      DESIGN_WRITE_POLICY_POINTER,
     {
       projectId: z.string().describe("프로젝트 ID"),
       functionId: z.string().describe("기능 ID"),
@@ -904,9 +979,12 @@ export function registerTools(
       assignMemberId: z.string().optional().describe("담당자 회원 ID (OWNER/ADMIN 또는 PM/PL만 변경 가능)"),
       docStatus: z.string().optional().describe("기능정의서 작성 상태 (BEFORE/DOING/DONE)"),
       sortOrder: z.number().optional().describe("정렬 순서"),
+      ...DESIGN_AGREEMENT_FIELDS,
     },
     // 기능 자신은 구현 일정이 없음 — 구현 마감은 소속 화면(update_screen)에서 관리(2026-07-28)
-    async ({ projectId, functionId, ...body }) => {
+    async ({ projectId, functionId, userAgreement, discussionSummary, ...body }) => {
+      const blocked = agreementGate({ userAgreement, discussionSummary });
+      if (blocked) return blocked;
       try {
         const data = await specodeFetch(
           `/api/projects/${projectId}/functions/${functionId}`,
