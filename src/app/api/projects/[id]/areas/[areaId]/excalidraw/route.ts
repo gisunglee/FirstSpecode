@@ -15,6 +15,7 @@ import {
 import { isCreatorWindowConflict, lockAndAssertCreatorWindow } from "@/lib/specContentWriteConcurrency";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { excalidrawUpdateSchema } from "@/lib/specContentSchemas";
+import { buildMdfcnAudit } from "@/lib/mdfcnSource";
 
 type RouteParams = { params: Promise<{ id: string; areaId: string }> };
 
@@ -41,7 +42,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       await Promise.all([
         tx.tbDsArea.update({
           where: { area_id: areaId },
-          data:  { excaldw_data: data as object, mdfcn_mber_id: gate.mberId, mdfcn_dt: new Date() },
+          data:  { excaldw_data: data as object, ...buildMdfcnAudit(gate) },
         }),
         tx.tbDsDesignChange.create({
           data: {

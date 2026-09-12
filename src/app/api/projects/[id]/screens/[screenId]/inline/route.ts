@@ -19,6 +19,7 @@ import {
 } from "@/lib/specContentWritePolicy";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { screenInlineSchema } from "@/lib/specContentSchemas";
+import { buildMdfcnAudit } from "@/lib/mdfcnSource";
 
 type RouteParams = { params: Promise<{ id: string; screenId: string }> };
 
@@ -57,7 +58,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     await prisma.$transaction([
       prisma.tbDsScreen.update({
         where: { scrn_id: screenId },
-        data:  { asign_mber_id: nextAssignee, mdfcn_mber_id: gate.mberId, mdfcn_dt: new Date() },
+        data:  { asign_mber_id: nextAssignee, ...buildMdfcnAudit(gate) },
       }),
       prisma.tbDsDesignChange.create({
         data: {

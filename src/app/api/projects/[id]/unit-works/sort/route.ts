@@ -10,6 +10,7 @@ import { requireSpecManager } from "@/lib/specContentWritePolicy";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { unitWorkSortSchema } from "@/lib/specContentSchemas";
+import { buildMdfcnAudit } from "@/lib/mdfcnSource";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -31,7 +32,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             unit_work_id: unitWorkId,
             prjct_id:     projectId,
           },
-          data: { sort_ordr: sortOrder, mdfcn_mber_id: gate.mberId, mdfcn_dt: new Date() },
+          data: { sort_ordr: sortOrder, ...buildMdfcnAudit(gate) },
         })
       )
     );

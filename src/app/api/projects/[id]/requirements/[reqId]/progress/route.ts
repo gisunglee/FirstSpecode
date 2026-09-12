@@ -15,6 +15,7 @@ import {
 } from "@/lib/specContentWritePolicy";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { requirementProgressSchema } from "@/lib/specContentSchemas";
+import { buildMdfcnAudit } from "@/lib/mdfcnSource";
 
 type RouteParams = { params: Promise<{ id: string; reqId: string }> };
 
@@ -38,7 +39,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const updated = await prisma.tbRqRequirement.update({
       where: { req_id: reqId },
-      data: { progrs_rt: progress, mdfcn_mber_id: gate.mberId, mdfcn_dt: new Date() },
+      data: { progrs_rt: progress, ...buildMdfcnAudit(gate) },
     });
 
     return apiSuccess({ progress: updated.progrs_rt });

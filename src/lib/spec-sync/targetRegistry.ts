@@ -11,6 +11,7 @@ import {
   type SyncTargetField,
   type SyncTargetType,
 } from "./contracts";
+import { MDFCN_SRC } from "@/lib/mdfcnSource";
 
 export type LockedTarget = {
   targetType: SyncTargetType;
@@ -50,7 +51,13 @@ export async function updateLockedTarget(
   memberId: string,
 ) {
   const nullableValue = value === "" ? null : value;
-  const audit = { mdfcn_mber_id: memberId, mdfcn_dt: new Date() };
+  // 스펙 동기화 적용은 웹 세션으로 승인하지만, 사용자가 화면에서 직접 고친 것과는
+  // 구분되어야 한다. 인증 방식으로는 WEB 과 갈리지 않으므로 출처를 SYNC 로 명시한다.
+  const audit = {
+    mdfcn_mber_id:  memberId,
+    mdfcn_dt:       new Date(),
+    mdfcn_src_code: MDFCN_SRC.SYNC,
+  };
 
   switch (target.targetType) {
     case "UNIT_WORK":

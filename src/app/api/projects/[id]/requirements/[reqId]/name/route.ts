@@ -16,6 +16,7 @@ import {
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { requirementNameSchema } from "@/lib/specContentSchemas";
+import { buildMdfcnAudit } from "@/lib/mdfcnSource";
 
 type RouteParams = { params: Promise<{ id: string; reqId: string }> };
 
@@ -42,7 +43,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const updated = await prisma.tbRqRequirement.update({
       where: { req_id: reqId },
-      data: { req_nm: name.trim(), mdfcn_mber_id: gate.mberId, mdfcn_dt: new Date() },
+      data: { req_nm: name.trim(), ...buildMdfcnAudit(gate) },
     });
 
     return apiSuccess({ name: updated.req_nm });

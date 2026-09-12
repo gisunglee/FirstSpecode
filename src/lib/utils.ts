@@ -51,14 +51,23 @@ export function isEmpty(value: unknown): boolean {
 //
 // 입력은 ISO 문자열 또는 Date 객체 모두 허용.
 // 잘못된 입력이 들어오면 빈 문자열 반환 (UI 깨짐 방지).
-export function formatRelativeKo(input: string | Date | null | undefined): string {
+//
+// options.withSeconds — 1분 미만을 "방금 전" 대신 "12초 전"으로 표시한다.
+//   주기적으로 리렌더되는 화면에서만 켤 것. 렌더 시점에 한 번 계산되는 값이라
+//   갱신이 없는 화면에서 초를 보여주면 시간이 지날수록 표시가 거짓이 된다.
+//   (기본값 false — 기존 호출부의 동작을 바꾸지 않기 위함)
+export function formatRelativeKo(
+  input: string | Date | null | undefined,
+  options?: { withSeconds?: boolean },
+): string {
   if (!input) return "";
   const ms = typeof input === "string" ? Date.parse(input) : input.getTime();
   if (Number.isNaN(ms)) return "";
 
   const sec = Math.floor((Date.now() - ms) / 1000);
   if (sec < 0)   return "방금 전";  // 시계 오차로 미래 시각이 들어오는 경우
-  if (sec < 60)  return "방금 전";
+  if (sec < 5)   return "방금 전";  // 5초 미만은 초를 세도 의미가 없음
+  if (sec < 60)  return options?.withSeconds ? `${sec}초 전` : "방금 전";
   const min = Math.floor(sec / 60);
   if (min < 60)  return `${min}분 전`;
   const hr  = Math.floor(min / 60);
@@ -68,4 +77,22 @@ export function formatRelativeKo(input: string | Date | null | undefined): strin
   // 30일 넘어가면 날짜로 — 입력이 string 이면 ISO 앞 10자리, Date 면 toISOString 후 자르기
   const iso = typeof input === "string" ? input : input.toISOString();
   return iso.slice(0, 10);
+}
+
+// ─── 날짜+시각 포맷 (브라우저 로컬 기준) ──────────────────────────────────────
+// "YYYY-MM-DD HH:mm" — 상대 시간("3분 전") 옆에 정확한 시각을 툴팁으로 보여줄 때 사용.
+//
+// formatDate()의 toISOString()은 UTC로 변환하므로 여기서는 쓰지 않는다.
+// 사용자가 보는 시각은 항상 브라우저 로컬 타임존 기준이어야 한다
+// (한국 사용자는 UTC+9 → UTC로 표시하면 9시간 어긋난 시각을 보게 됨).
+export function formatDateTimeKo(input: string | Date | null | undefined): string {
+  if (!input) return "";
+  const d = typeof input === "string" ? new Date(input) : input;
+  if (Number.isNaN(d.getTime())) return "";
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  );
 }

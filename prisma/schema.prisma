@@ -571,6 +571,8 @@ model TbDsUnitWork {
   creat_dt             DateTime         @default(now())
   mdfcn_mber_id        String? // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
   mdfcn_dt             DateTime?
+  // 최종 수정 경로 — WEB | MCP | SYNC. 기존 행은 NULL(모름).
+  mdfcn_src_code       String?   @db.VarChar(10)
   coment_cn            String?
   screens              TbDsScreen[]
   // 2026-05-10 — 테스트 명세서 매핑 (단위테스트는 1행 / 통합테스트는 N행)
@@ -601,6 +603,8 @@ model TbDsScreen {
   creat_dt            DateTime             @default(now())
   mdfcn_mber_id       String? // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
   mdfcn_dt            DateTime?
+  // 최종 수정 경로 — WEB | MCP | SYNC. 기존 행은 NULL(모름).
+  mdfcn_src_code      String?   @db.VarChar(10)
   ctgry_l_nm          String?
   ctgry_m_nm          String?
   ctgry_s_nm          String?
@@ -647,6 +651,8 @@ model TbDsArea {
   creat_dt            DateTime       @default(now())
   mdfcn_mber_id       String? // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
   mdfcn_dt            DateTime?
+  // 최종 수정 경로 — WEB | MCP | SYNC. 기존 행은 NULL(모름).
+  mdfcn_src_code      String?   @db.VarChar(10)
   excaldw_data        Json?
   layer_data_dc       String?
   coment_cn           String?
@@ -674,6 +680,8 @@ model TbDsFunction {
   creat_dt            DateTime    @default(now())
   mdfcn_mber_id       String? // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
   mdfcn_dt            DateTime?
+  // 최종 수정 경로 — WEB | MCP | SYNC. 기존 행은 NULL(모름).
+  mdfcn_src_code      String?   @db.VarChar(10)
   asign_mber_id       String?
   cmplx_code          String      @default("MEDIUM")
   // 구현 공수 (2026-07-28 리네임: efrt_val → impl_efrt_val — 화면의 actl_dsgn_efrt_val과 대칭)
@@ -897,6 +905,9 @@ model TbRqRequirement {
   creat_dt       DateTime        @default(now())
   mdfcn_mber_id  String? // 최종 수정자 회원 ID — 생성자 보정시간 판정 및 감사 추적
   mdfcn_dt       DateTime?
+  // 최종 수정 경로 — WEB(웹 화면) | MCP(MCP 도구) | SYNC(스펙 동기화). 기존 행은 NULL(모름).
+  // mdfcn_mber_id 는 MCP 키 소유자와 웹 로그인 사용자가 동일해 두 경로를 구분하지 못한다.
+  mdfcn_src_code String?         @db.VarChar(10)
   unitWorks      TbDsUnitWork[]
   task           TbRqTask?       @relation(fields: [task_id], references: [task_id])
   userStories    TbRqUserStory[]

@@ -57,6 +57,7 @@ import { requireSpecManager } from "@/lib/specContentWritePolicy";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { createIdPrefixCache } from "@/lib/idPrefix";
 import { maxDisplayIdSeq } from "@/lib/nextDisplayId";
+import { buildMdfcnAudit } from "@/lib/mdfcnSource";
 
 // Prisma 인터랙티브 트랜잭션 클라이언트 타입
 // 채번 헬퍼에 tx를 넘겨야 트랜잭션 내 미커밋 데이터를 읽을 수 있음
@@ -287,8 +288,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 analy_cn:     reqInput.discussionMd?.trim()    ?? existing.analy_cn,
                 // [2026-04-25] P2: RFP 페이지
                 rfp_page_no:  reqInput.rfpPage?.trim()         ?? existing.rfp_page_no,
-                mdfcn_mber_id: gate.mberId,
-                mdfcn_dt:     new Date(),
+                ...buildMdfcnAudit(gate),
               },
             });
             reqId = reqInput.systemId;

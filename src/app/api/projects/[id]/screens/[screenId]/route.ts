@@ -24,6 +24,7 @@ import { isCreatorWindowConflict, lockAndAssertCreatorWindow } from "@/lib/specC
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { screenUpdateSchema } from "@/lib/specContentSchemas";
 import { applyTemplateVars } from "@/lib/templateVars";
+import { buildMdfcnAudit } from "@/lib/mdfcnSource";
 
 type RouteParams = { params: Promise<{ id: string; screenId: string }> };
 
@@ -255,8 +256,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           actl_impl_bgng_de:  implBgngDe    !== undefined ? (implBgngDe?.trim()    || null) : existing.actl_impl_bgng_de,
           actl_impl_end_de:   implEndDe     !== undefined ? (implEndDe?.trim()     || null) : existing.actl_impl_end_de,
           dsgn_doc_sttus_code: docStatus || existing.dsgn_doc_sttus_code,
-          mdfcn_dt:      new Date(),
-          mdfcn_mber_id: gate.mberId,
+          ...buildMdfcnAudit(gate),
         },
       });
       // 설계 변경 이력 자동 기록 (FID-00147 v3 정책)

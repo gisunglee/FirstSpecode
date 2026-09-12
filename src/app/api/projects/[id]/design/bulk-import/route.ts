@@ -57,6 +57,7 @@ import { requireSpecManager } from "@/lib/specContentWritePolicy";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { createIdPrefixCache } from "@/lib/idPrefix";
 import { maxDisplayIdSeq } from "@/lib/nextDisplayId";
+import { buildMdfcnAudit } from "@/lib/mdfcnSource";
 
 // Prisma 인터랙티브 트랜잭션 클라이언트 타입
 // 채번 헬퍼에 tx를 넘겨야 트랜잭션 내 미커밋 데이터를 읽을 수 있음
@@ -234,8 +235,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             data: {
               unit_work_nm: uwInput.name.trim(),
               unit_work_dc: uwInput.description?.trim() ?? existing.unit_work_dc,
-              mdfcn_mber_id: gate.mberId,
-              mdfcn_dt:     new Date(),
+              ...buildMdfcnAudit(gate),
             },
           });
           unitWorkId = uwInput.systemId;
@@ -299,8 +299,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 ctgry_l_nm:   scInput.categoryL?.trim()  ?? existing.ctgry_l_nm,
                 ctgry_m_nm:   scInput.categoryM?.trim()  ?? existing.ctgry_m_nm,
                 ctgry_s_nm:   scInput.categoryS?.trim()  ?? existing.ctgry_s_nm,
-                mdfcn_mber_id: gate.mberId,
-                mdfcn_dt:     new Date(),
+                ...buildMdfcnAudit(gate),
               },
             });
             screenId = scInput.systemId;
@@ -352,8 +351,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                   area_dc:      arInput.description?.trim() ?? existing.area_dc,
                   // [2026-04-25] D5: 화이트리스트 미통과 시 기존 값 유지
                   area_ty_code: pickAllowed(arInput.areaType, ALLOWED_AREA_TYPES, existing.area_ty_code),
-                  mdfcn_mber_id: gate.mberId,
-                  mdfcn_dt:     new Date(),
+                  ...buildMdfcnAudit(gate),
                 },
               });
               areaId = arInput.systemId;
@@ -401,8 +399,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                     func_ty_code: pickAllowed(fnInput.functionType, ALLOWED_FUNCTION_TYPES, existing.func_ty_code),
                     priort_code:  pickAllowed(fnInput.priority,     ALLOWED_PRIORITIES,     existing.priort_code),
                     cmplx_code:   pickAllowed(fnInput.complexity,   ALLOWED_COMPLEXITIES,   existing.cmplx_code),
-                    mdfcn_mber_id: gate.mberId,
-                    mdfcn_dt:     new Date(),
+                    ...buildMdfcnAudit(gate),
                   },
                 });
                 result.updated.functions++;

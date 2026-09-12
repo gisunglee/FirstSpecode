@@ -25,6 +25,7 @@ import {
   buildRequirementHistoryVersionPlan,
   INITIAL_REQUIREMENT_HISTORY_COMMENT,
 } from "@/lib/requirementHistoryVersion";
+import { buildMdfcnAudit } from "@/lib/mdfcnSource";
 
 type RouteParams = { params: Promise<{ id: string; reqId: string }> };
 
@@ -238,8 +239,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           anls_end_de:    analysisEnd   !== undefined ? (analysisEnd?.trim()   || null) : existing.anls_end_de,
           anls_efrt_val:  analysisEffort !== undefined ? (analysisEffort?.trim() || null) : existing.anls_efrt_val,
           progrs_rt:      progress ?? existing.progrs_rt,
-          mdfcn_mber_id:  gate.mberId,
-          mdfcn_dt:       new Date(),
+          ...buildMdfcnAudit(gate),
         },
       });
 

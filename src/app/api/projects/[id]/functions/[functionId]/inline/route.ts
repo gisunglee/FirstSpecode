@@ -20,6 +20,7 @@ import {
 } from "@/lib/specContentWritePolicy";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { functionInlineSchema } from "@/lib/specContentSchemas";
+import { buildMdfcnAudit } from "@/lib/mdfcnSource";
 
 type RouteParams = { params: Promise<{ id: string; functionId: string }> };
 
@@ -44,8 +45,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     if (field === "complexity" || field === "effort") {
       const updateData = field === "complexity"
-        ? { cmplx_code: value as string, mdfcn_mber_id: gate.mberId, mdfcn_dt: new Date() }
-        : { impl_efrt_val: value || null, mdfcn_mber_id: gate.mberId, mdfcn_dt: new Date() };
+        ? { cmplx_code: value as string, ...buildMdfcnAudit(gate) }
+        : { impl_efrt_val: value || null, ...buildMdfcnAudit(gate) };
 
       await prisma.$transaction([
         prisma.tbDsFunction.update({ where: { func_id: functionId }, data: updateData }),
@@ -79,7 +80,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     await prisma.$transaction([
       prisma.tbDsFunction.update({
         where: { func_id: functionId },
-        data:  { asign_mber_id: nextAssignee, mdfcn_mber_id: gate.mberId, mdfcn_dt: new Date() },
+        data:  { asign_mber_id: nextAssignee, ...buildMdfcnAudit(gate) },
       }),
       prisma.tbDsDesignChange.create({
         data: {

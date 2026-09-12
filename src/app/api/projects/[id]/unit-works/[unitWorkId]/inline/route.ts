@@ -16,6 +16,7 @@ import {
 } from "@/lib/specContentWritePolicy";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { unitWorkInlineSchema } from "@/lib/specContentSchemas";
+import { buildMdfcnAudit } from "@/lib/mdfcnSource";
 
 type RouteParams = { params: Promise<{ id: string; unitWorkId: string }> };
 
@@ -43,7 +44,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (field === "startDate" || field === "endDate") {
       await prisma.tbDsUnitWork.update({
         where: { unit_work_id: unitWorkId },
-        data:  { [field === "startDate" ? "plan_dsgn_bgng_de" : "plan_dsgn_end_de"]: value || null, mdfcn_mber_id: gate.mberId, mdfcn_dt: new Date() },
+        data:  { [field === "startDate" ? "plan_dsgn_bgng_de" : "plan_dsgn_end_de"]: value || null, ...buildMdfcnAudit(gate) },
       });
       return apiSuccess({ unitWorkId, field, value: value || null });
     }
@@ -65,7 +66,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     await prisma.$transaction([
       prisma.tbDsUnitWork.update({
         where: { unit_work_id: unitWorkId },
-        data:  { asign_mber_id: nextAssignee, mdfcn_mber_id: gate.mberId, mdfcn_dt: new Date() },
+        data:  { asign_mber_id: nextAssignee, ...buildMdfcnAudit(gate) },
       }),
       prisma.tbDsDesignChange.create({
         data: {

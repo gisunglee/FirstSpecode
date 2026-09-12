@@ -24,6 +24,7 @@ import { isCreatorWindowConflict, lockAndAssertCreatorWindow } from "@/lib/specC
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { unitWorkUpdateSchema } from "@/lib/specContentSchemas";
 import { applyTemplateVars } from "@/lib/templateVars";
+import { buildMdfcnAudit } from "@/lib/mdfcnSource";
 
 type RouteParams = { params: Promise<{ id: string; unitWorkId: string }> };
 
@@ -208,8 +209,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       plan_dsgn_efrt_val: planEffort    !== undefined ? (planEffort?.trim()    || null) : existing.plan_dsgn_efrt_val,
       dsgn_doc_sttus_code: docStatus || existing.dsgn_doc_sttus_code,
       sort_ordr:     sortOrder ?? existing.sort_ordr,
-      mdfcn_dt:      new Date(),
-      mdfcn_mber_id: gate.mberId,
+      ...buildMdfcnAudit(gate),
     };
 
     // 담당자 이력 저장 시 이름도 함께 기록 → 멤버 탈퇴 후에도 이력 뷰 보존

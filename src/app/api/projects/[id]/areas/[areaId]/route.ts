@@ -23,6 +23,7 @@ import { isCreatorWindowConflict, lockAndAssertCreatorWindow } from "@/lib/specC
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { areaUpdateSchema } from "@/lib/specContentSchemas";
 import { applyTemplateVars } from "@/lib/templateVars";
+import { buildMdfcnAudit } from "@/lib/mdfcnSource";
 
 type RouteParams = { params: Promise<{ id: string; areaId: string }> };
 
@@ -247,8 +248,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           layer_data_dc: layoutData !== undefined ? layoutData : existing.layer_data_dc,
           coment_cn:     commentCn  !== undefined ? (commentCn || null) : existing.coment_cn,
           dsgn_doc_sttus_code: docStatus || existing.dsgn_doc_sttus_code,
-          mdfcn_dt:     new Date(),
-          mdfcn_mber_id: gate.mberId,
+          ...buildMdfcnAudit(gate),
         },
       });
       await tx.tbDsDesignChange.create({
