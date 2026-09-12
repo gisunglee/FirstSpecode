@@ -52,7 +52,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       orderBy: { sort_ordr: "asc" },
       select: {
         unit_work_id: true, unit_work_display_id: true, unit_work_nm: true,
-        unit_work_dc: true, req_id: true, sort_ordr: true,
+        unit_work_dc: true, req_id: true, sort_ordr: true, scope_sttus_code: true,
       },
     });
 
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       orderBy: { sort_ordr: "asc" },
       select: {
         scrn_id: true, scrn_display_id: true, scrn_nm: true, scrn_dc: true,
-        scrn_ty_code: true, unit_work_id: true, sort_ordr: true,
+        scrn_ty_code: true, unit_work_id: true, sort_ordr: true, scope_sttus_code: true,
       },
     });
     const screenIds = screens.map((s) => s.scrn_id);
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       orderBy: { sort_ordr: "asc" },
       select: {
         area_id: true, area_display_id: true, area_nm: true, area_dc: true,
-        area_ty_code: true, scrn_id: true, sort_ordr: true,
+        area_ty_code: true, scrn_id: true, sort_ordr: true, scope_sttus_code: true,
       },
     });
     const areaIds = areas.map((a) => a.area_id);
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       orderBy: { sort_ordr: "asc" },
       select: {
         func_id: true, func_display_id: true, func_nm: true, func_dc: true,
-        func_ty_code: true, area_id: true, sort_ordr: true,
+        func_ty_code: true, area_id: true, sort_ordr: true, scope_sttus_code: true,
       },
     });
 
@@ -115,24 +115,29 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       name: u.unit_work_nm,
       description: u.unit_work_dc,
       reqId: u.req_id,
+      // 사업 범위 구분 — 이전 사업분(EXISTING)을 다시 등록하지 않도록 AI 에게도 함께 내려준다
+      scopeStatus: u.scope_sttus_code,
       screens: (screensByUnitWork.get(u.unit_work_id) ?? []).map((s) => ({
         screenId: s.scrn_id,
         displayId: s.scrn_display_id,
         name: s.scrn_nm,
         description: s.scrn_dc,
         type: s.scrn_ty_code,
+        scopeStatus: s.scope_sttus_code,
         areas: (areasByScreen.get(s.scrn_id) ?? []).map((a) => ({
           areaId: a.area_id,
           displayId: a.area_display_id,
           name: a.area_nm,
           description: a.area_dc,
           type: a.area_ty_code,
+          scopeStatus: a.scope_sttus_code,
           functions: (funcsByArea.get(a.area_id) ?? []).map((f) => ({
             functionId: f.func_id,
             displayId: f.func_display_id,
             name: f.func_nm,
             description: f.func_dc,
             type: f.func_ty_code,
+            scopeStatus: f.scope_sttus_code,
           })),
         })),
       })),

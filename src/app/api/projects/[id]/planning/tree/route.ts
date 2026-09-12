@@ -37,7 +37,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       prisma.tbRqRequirement.findMany({
         where:   { prjct_id: projectId },
         orderBy: { sort_ordr: "asc" },
-        select:  { req_id: true, req_display_id: true, req_nm: true, priort_code: true, src_code: true, task_id: true, sort_ordr: true, asign_mber_id: true },
+        select:  { req_id: true, req_display_id: true, req_nm: true, priort_code: true, src_code: true, task_id: true, sort_ordr: true, asign_mber_id: true, scope_sttus_code: true },
       }),
       prisma.tbRqUserStory.findMany({
         where:   { requirement: { prjct_id: projectId } },
@@ -76,6 +76,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           name:           r.req_nm,
           priority:       r.priort_code,
           source:         r.src_code,
+          // 사업 범위 구분 — 트리에서 이전 사업분을 구분해 보여주기 위함(과업·스토리엔 없는 값)
+          scopeStatus:    r.scope_sttus_code,
           assignMemberId: r.asign_mber_id,
           storyCount:     (storyMap.get(r.req_id) ?? []).length,
           stories:        (storyMap.get(r.req_id) ?? []).map((s) => ({

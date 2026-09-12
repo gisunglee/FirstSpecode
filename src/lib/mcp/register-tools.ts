@@ -89,6 +89,7 @@ import { DESIGN_TEMPLATE_MCP_PLACEHOLDER_GUIDANCE } from "@/lib/templateVars";
 import {
   AREA_GRANULARITY_POINTER,
   DESIGN_AGREEMENT_FIELDS,
+  SCOPE_STATUS_FIELD,
   DESIGN_WRITE_POLICY_POINTER,
   checkDesignAgreement,
 } from "@/lib/mcp/design-policy";
@@ -374,6 +375,7 @@ export function registerTools(
       currentContent: z.string().optional().describe("현행화 내용"),
       analysisMemo: z.string().optional().describe("분석 메모"),
       detailSpec: z.string().optional().describe("상세 명세"),
+      ...SCOPE_STATUS_FIELD,
       ...DESIGN_AGREEMENT_FIELDS,
     },
     // userAgreement/discussionSummary는 게이트 판정에만 쓰고 API로 넘기지 않는다
@@ -413,6 +415,7 @@ export function registerTools(
       analysisEnd: z.string().optional().describe("분석 종료일 (YYYY-MM-DD)"),
       analysisEffort: z.string().optional().describe("분석 공수"),
       progress: z.number().optional().describe("분석 진행률 (0~100)"),
+      ...SCOPE_STATUS_FIELD,
       ...DESIGN_AGREEMENT_FIELDS,
     },
     async ({ projectId, requirementId, userAgreement, discussionSummary, ...body }) => {
@@ -619,6 +622,7 @@ export function registerTools(
       assignMemberId: z.string().optional().describe("담당자 회원 ID (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능, list_members로 조회). 생략하면 만든 사람이 담당자로 자동 지정됩니다"),
       startDate: z.string().optional().describe("시작일 (YYYY-MM-DD, 생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능)"),
       endDate: z.string().optional().describe("종료일 (YYYY-MM-DD, 생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능)"),
+      ...SCOPE_STATUS_FIELD,
       ...DESIGN_AGREEMENT_FIELDS,
     },
     async ({ projectId, userAgreement, discussionSummary, ...body }) => {
@@ -654,6 +658,7 @@ export function registerTools(
       planEffort: z.string().optional().describe("계획설계 공수"),
       docStatus: z.string().optional().describe("단위업무 설계서 작성 상태 (BEFORE/DOING/DONE)"),
       sortOrder: z.number().optional().describe("정렬 순서"),
+      ...SCOPE_STATUS_FIELD,
       ...DESIGN_AGREEMENT_FIELDS,
     },
     // 실적 진행률(progress)은 2026-07-28부터 하위 화면·기능 롤업 자동계산값이라 여기서 설정 불가
@@ -735,6 +740,7 @@ export function registerTools(
       categoryL: z.string().optional().describe("대분류"),
       categoryM: z.string().optional().describe("중분류"),
       categoryS: z.string().optional().describe("소분류"),
+      ...SCOPE_STATUS_FIELD,
       ...DESIGN_AGREEMENT_FIELDS,
     },
     async ({ projectId, userAgreement, discussionSummary, ...body }) => {
@@ -772,6 +778,7 @@ export function registerTools(
       implBgngDe: z.string().optional().describe("실질구현 시작일 (YYYY-MM-DD) — 기능은 일정이 없고 화면 단위로 관리. 설계 일정은 화면에 없음(update_unit_work로 관리)"),
       implEndDe: z.string().optional().describe("실질구현 종료일 (YYYY-MM-DD)"),
       docStatus: z.string().optional().describe("화면정의서 작성 상태 (BEFORE/DOING/DONE)"),
+      ...SCOPE_STATUS_FIELD,
       ...DESIGN_AGREEMENT_FIELDS,
     },
     async ({ projectId, screenId, userAgreement, discussionSummary, ...body }) => {
@@ -848,6 +855,7 @@ export function registerTools(
       type: z.string().optional().describe("영역 유형. 허용값: SEARCH | GRID | FORM | DETAIL | BUTTON | TAB | CHART | OTHER. 기본: LIST. 주의 — 이 목록은 분리가 결정된 뒤 성격을 표시하는 용도이지, 이 단위로 영역을 나누라는 뜻이 아닙니다"),
       description: z.string().optional().describe("영역 설명"),
       sortOrder: z.number().optional().describe("정렬 순서 (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능)"),
+      ...SCOPE_STATUS_FIELD,
       ...DESIGN_AGREEMENT_FIELDS,
     },
     async ({ projectId, userAgreement, discussionSummary, ...body }) => {
@@ -881,6 +889,7 @@ export function registerTools(
       commentCn: z.string().optional().describe("코멘트"),
       sortOrder: z.number().optional().describe("정렬 순서"),
       docStatus: z.string().optional().describe("영역 설계(와이어프레임) 작성 상태 (BEFORE/DOING/DONE)"),
+      ...SCOPE_STATUS_FIELD,
       ...DESIGN_AGREEMENT_FIELDS,
     },
     async ({ projectId, areaId, userAgreement, discussionSummary, ...body }) => {
@@ -960,6 +969,7 @@ export function registerTools(
       effort: z.string().optional().describe("구현 공수 (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능)"),
       assignMemberId: z.string().optional().describe("담당자 회원 ID (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능, list_members로 조회). 생략하면 만든 사람이 담당자로 자동 지정됩니다"),
       sortOrder: z.number().optional().describe("정렬 순서 (생성 시 OWNER/ADMIN 또는 PM/PL만 지정 가능)"),
+      ...SCOPE_STATUS_FIELD,
       ...DESIGN_AGREEMENT_FIELDS,
     },
     // 기능 자신은 구현 일정이 없음 — 구현 마감은 소속 화면(update_screen의 implStartDate/implEndDate)에서 관리(2026-07-28)
@@ -997,6 +1007,7 @@ export function registerTools(
       assignMemberId: z.string().optional().describe("담당자 회원 ID (OWNER/ADMIN 또는 PM/PL만 변경 가능)"),
       docStatus: z.string().optional().describe("기능정의서 작성 상태 (BEFORE/DOING/DONE)"),
       sortOrder: z.number().optional().describe("정렬 순서"),
+      ...SCOPE_STATUS_FIELD,
       ...DESIGN_AGREEMENT_FIELDS,
     },
     // 기능 자신은 구현 일정이 없음 — 구현 마감은 소속 화면(update_screen)에서 관리(2026-07-28)

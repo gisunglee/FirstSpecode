@@ -23,11 +23,16 @@ import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import { usePermissions } from "@/hooks/useMyRole";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
+import { ScopeStatusCell } from "@/components/common/ScopeStatusCell";
+import { ModifiedCell } from "@/components/common/ModifiedCell";
+import { useRelativeTimeTick } from "@/hooks/useRelativeTimeTick";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
 type ScreenRow = {
   screenId: string;
+  // 사업 범위 구분 — NEW | MODIFIED | EXISTING | DEPRECATED (lib/scopeStatus.ts)
+  scopeStatus: string;
   displayId: string;
   name: string;
   type: string;
@@ -50,6 +55,11 @@ type ScreenRow = {
   docStatus: string;
   avgDesignRt: number;
   avgImplRt: number;
+
+  // 최종 수정 추적 — 서버 목록 서비스에서 조립해 내려온다
+  modifiedAt:       string;
+  modifiedIsCreate: boolean;
+  modifiedSource:   string | null;
 };
 
 // 작성상태 — 색 구분 없이 기본 텍스트로만 표시 (단위업무 목록과 동일 정책).
@@ -79,7 +89,9 @@ function ScreensPageInner() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const projectId = params.id;
-  const { myRole } = usePermissions(projectId);
+  const { myRole, isSpecManager } = usePermissions(projectId);
+  // 수정 컬럼의 상대시간이 화면을 열어둔 채 멈추지 않도록 주기 리렌더
+  useRelativeTimeTick();
 
   // 삭제 다이얼로그 상태
   const [deleteTarget, setDeleteTarget] = useState<ScreenRow | null>(null);
@@ -91,6 +103,18 @@ function ScreensPageInner() {
   // 드래그 핸들(☰)이 이름 셀과 분리되어 있어 편집 중에도 행 draggable 가드가 불필요.
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [editNameValue, setEditNameValue] = useState("");
+
+  // 사업 범위 구분 인라인 변경 — AS-IS 등록 후 잘못 찍힌 항목을 목록에서 바로 정정한다.
+  // 서버는 MANAGER 만 통과시키므로 실패 시 사유를 토스트로 그대로 보여준다.
+  const scopeMutation = useMutation({
+    mutationFn: ({ screenId, value }: { screenId: string; value: string }) =>
+      authFetch(`/api/projects/${projectId}/screens/${screenId}/inline`, {
+        method: "PATCH",
+        body:   JSON.stringify({ field: "scopeStatus", value }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["screens", projectId] }),
+    onError:   (err: Error) => toast.error(err.message),
+  });
 
   const nameMutation = useMutation({
     mutationFn: ({ screenId, name }: { screenId: string; name: string }) =>
@@ -458,6 +482,7 @@ function ScreensPageInner() {
             <div />
             <div>단위업무 명</div>
             <div>화면 명</div>
+            <div style={{ textAlign: "center" }}>구분</div>
             {/* 대/중/소분류는 분류순 모드에서만 노출 — 화면명 바로 다음에 배치해 분류 기준으로
                 훑어보기 쉽게 함(2026-07-29) */}
             {isCategoryView && (
@@ -476,6 +501,7 @@ function ScreensPageInner() {
             <div style={{ textAlign: "center" }}>영역</div>
             <div style={{ textAlign: "center" }}>정렬</div>
             <div style={{ textAlign: "center" }}>설/구</div>
+            <div style={{ textAlign: "center" }}>수정</div>
           </div>
 
           {items.length === 0 ? (
@@ -591,6 +617,15 @@ function ScreensPageInner() {
                     )}
                   </div>
 
+                  {/* 사업 범위 구분 — 목록에서 바로 정정 가능(MANAGER 한정, 서버 재판정) */}
+                  <div style={{ textAlign: "center" }}>
+                    <ScopeStatusCell
+                      value={screen.scopeStatus}
+                      canEdit={isSpecManager}
+                      onChange={(next) => scopeMutation.mutate({ screenId: screen.screenId, value: next })}
+                    />
+                  </div>
+
                   {/* 대/중/소분류 — 분류순 모드에서만 노출, 화면명 바로 다음에 배치(2026-07-29) */}
                   {isCategoryView && (
                     <>
@@ -685,6 +720,12 @@ function ScreensPageInner() {
                     ))}
                   </div>
 
+              {/* 최종 수정 — MCP 도구가 건드린 항목을 목록에서 바로 식별 */}
+              <ModifiedCell
+                modifiedAt={screen.modifiedAt}
+                modifiedIsCreate={screen.modifiedIsCreate}
+                modifiedSource={screen.modifiedSource}
+              />
                 </div>
               );
             })
@@ -858,8 +899,10 @@ const countBadgeStyle: React.CSSProperties = {
 // 작성상태는 60→64px — "전/중/완료" 축약을 "작성전/작성중/작성완료" 풀네임으로 되돌리며 소폭 확장(2026-07-29).
 // 대/중/소분류 위치를 화면명 바로 다음으로 이동(2026-07-29) — 템플릿 컬럼 순서도 함께 이동.
 // 작성상태도 담당자 오른쪽으로 이동(2026-07-29).
-const GRID_TEMPLATE_DEFAULT  = "32px 2fr 3fr 48px 64px 52px 70px 30px 32px 58px";
-const GRID_TEMPLATE_CATEGORY = "32px 2fr 3fr 1.3fr 1.3fr 1.3fr 48px 64px 52px 70px 30px 32px 58px";
+// 구분(사업 범위) 컬럼은 화면명 바로 오른쪽 — 두 템플릿 모두 같은 위치에 넣어야
+// 분류순/기본 보기를 오갈 때 컬럼이 어긋나지 않는다(2026-09-12)
+const GRID_TEMPLATE_DEFAULT  = "32px 2fr 3fr 52px 48px 64px 52px 70px 30px 32px 58px 80px";
+const GRID_TEMPLATE_CATEGORY = "32px 2fr 3fr 52px 1.3fr 1.3fr 1.3fr 48px 64px 52px 70px 30px 32px 58px 80px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid",

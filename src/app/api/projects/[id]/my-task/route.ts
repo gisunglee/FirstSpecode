@@ -30,6 +30,7 @@ import { fetchProjectMembers } from "@/lib/exports/members-data";
 import { fetchDeadlineItems } from "@/lib/pm/fetchDeadlineItems";
 import { computeDDay } from "@/lib/pm/deadlineProgress";
 import { parseEffortHours } from "@/lib/effort";
+import { effortScopeWhere } from "@/lib/scopeStatus";
 import type { MyTaskNode, MyTaskResponse, MyTaskView, MyTaskSortBy } from "@/types/myTask";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -120,16 +121,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
   try {
     const [unitWorks, orphanFunctions, members, uwImplRows, uwDesignRows, scrImplRows, scrDesignRows, fnImplRows, fnDesignRows] = await Promise.all([
+      // 이전 사업분(EXISTING)은 이번 사업에서 할 일이 아니다 — 계층 전체에서 제외한다.
+      // 상위만 걸러도 하위가 딸려 나오므로 중첩 include 마다 같은 조건을 건다.
       prisma.tbDsUnitWork.findMany({
-        where:   { prjct_id: projectId },
+        where:   { prjct_id: projectId, ...effortScopeWhere() },
         orderBy: { sort_ordr: "asc" },
         include: {
           screens: {
+            where:   effortScopeWhere(),
             orderBy: { sort_ordr: "asc" },
             include: {
               areas: {
+                where:   effortScopeWhere(),
                 orderBy: { sort_ordr: "asc" },
-                include: { functions: { orderBy: { sort_ordr: "asc" } } },
+                include: { functions: { where: effortScopeWhere(), orderBy: { sort_ordr: "asc" } } },
               },
             },
           },
@@ -139,7 +144,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       // 절대 안 잡힌다. "전체 점검"이 이 화면의 존재 이유라 이런 것도 빠뜨리면 안 됨 —
       // 트리 최상위에 별도 노드로 얹고, flat은 같은 배열을 훑으니 자동으로 포함된다.
       prisma.tbDsFunction.findMany({
-        where:   { prjct_id: projectId, OR: [{ area_id: null }, { area: { scrn_id: null } }] },
+        where:   { prjct_id: projectId, OR: [{ area_id: null }, { area: { scrn_id: null } }], ...effortScopeWhere() },
         orderBy: { sort_ordr: "asc" },
       }),
       fetchProjectMembers({ projectId }),

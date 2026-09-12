@@ -180,7 +180,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
   const parsed = await parseJsonBody(request, areaUpdateSchema);
   if (parsed instanceof Response) return parsed;
-  const { screenId, name, type, displayFormCode, description, sortOrder, layoutData, commentCn, saveHistory, displayId, docStatus } = parsed.data;
+  const { screenId, name, type, displayFormCode, description, sortOrder, layoutData, commentCn, saveHistory, displayId, docStatus, scopeStatus } = parsed.data;
 
   // 장문 텍스트 한도 검증 — 정책은 src/lib/constants/textLimits.ts
   const limitErr = apiTextLimitGuard([
@@ -248,6 +248,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           layer_data_dc: layoutData !== undefined ? layoutData : existing.layer_data_dc,
           coment_cn:     commentCn  !== undefined ? (commentCn || null) : existing.coment_cn,
           dsgn_doc_sttus_code: docStatus || existing.dsgn_doc_sttus_code,
+          // 사업 범위 구분 — 미전송 시 기존값 유지 (부분 수정 안전).
+          scope_sttus_code: scopeStatus || existing.scope_sttus_code,
           ...buildMdfcnAudit(gate),
         },
       });

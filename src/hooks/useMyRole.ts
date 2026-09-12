@@ -27,6 +27,7 @@ import {
   type PlanCode,
   type Permission,
 } from "@/lib/permissions";
+import { isSpecManager } from "@/lib/specContentPolicyCore";
 
 // ─── 서버 응답 타입 ──────────────────────────────────────────────────────────
 // /api/projects/{projectId}/my-role 의 응답 계약
@@ -114,6 +115,16 @@ export function usePermissions(projectId: string | null) {
     canManageWeeklyReport: has("weeklyReport.manage"),
     // 설정 > 일정 탭(단계별 일정/마일스톤/공휴일) — PM/PL 직무 또는 OWNER/ADMIN 역할
     canManageSchedule: has("schedule.manage"),
+    // 설계 5계층의 구조·범위 필드(담당자·사업 범위 구분 등)를 바꿀 수 있는 사람.
+    // 서버 판정과 같은 순수 함수를 그대로 쓴다 — 화면이 다른 기준으로 버튼을 열어주면
+    // "눌리는데 403" 이 나서 사용자가 원인을 알 수 없다.
+    // 멤버십이 없으면(role/job = null) 관리자일 수 없다 — 권한이 가장 낮은
+    // VIEWER/ETC 로 채워 넘긴다. 시스템 관리자만 그 상태에서도 true 가 된다.
+    isSpecManager: isSpecManager({
+      systemRole: actor.systemRole ?? null,
+      role:       actor.role ?? "VIEWER",
+      job:        actor.job  ?? "ETC",
+    }),
   };
 }
 

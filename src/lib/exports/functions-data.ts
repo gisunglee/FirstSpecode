@@ -3,11 +3,15 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { ARTIFACT_SCOPE_DEFAULT, scopeWhere, type ArtifactScopeCode } from "@/lib/scopeStatus";
+import { toModifiedFields, type ModifiedFields } from "@/lib/mdfcnSource";
 
 export type FunctionAiTaskInfo = { taskId: string; status: string };
 
 export type FunctionListItem = {
   funcId:          string;
+  // 사업 범위 구분 — NEW | MODIFIED | EXISTING | DEPRECATED (lib/scopeStatus.ts)
+  scopeStatus:     string;
   displayId:       string;
   name:            string;
   type:            string;
@@ -43,7 +47,7 @@ export type FunctionListItem = {
   aiInspect:       FunctionAiTaskInfo | null;
   designRt:        number;
   implRt:          number;
-};
+} & ModifiedFields;   // 최종 수정 시각·경로 (lib/mdfcnSource.ts)
 
 /**
  * fetchProjectFunctions — 기능 목록 + 영역/화면/단위업무 join + 진척률 + AI 태스크 최신
@@ -53,12 +57,19 @@ export async function fetchProjectFunctions(opts: {
   areaId?:         string;
   unitWorkId?:     string;
   assigneeFilter?: string;
+  /**
+   * 산출물 출력 범위. 기본은 ALL — 이 함수는 웹 목록 API 와 엑셀 산출물이
+   * 함께 쓰기 때문에, 기본값으로 필터를 걸면 작업 화면에서 이전 사업분이
+   * 통째로 사라진다. 걸러낼 곳(엑셀 산출물)에서만 명시적으로 넘긴다.
+   */
+  scope?:          ArtifactScopeCode;
 }): Promise<FunctionListItem[]> {
-  const { projectId, areaId, unitWorkId, assigneeFilter } = opts;
+  const { projectId, areaId, unitWorkId, assigneeFilter, scope = ARTIFACT_SCOPE_DEFAULT } = opts;
 
   const functions = await prisma.tbDsFunction.findMany({
     where: {
       prjct_id: projectId,
+      ...scopeWhere(scope),
       ...(areaId ? { area_id: areaId } : {}),
       // 영역→화면→단위업무 관계 필터 — 이미 화면명/단위업무명 표시를 위해 조인해두었던
       // 관계를 그대로 재사용(추가 조인 없음)
@@ -168,6 +179,7 @@ export async function fetchProjectFunctions(opts: {
 
   return functions.map((f) => ({
     funcId:          f.func_id,
+    scopeStatus:     f.scope_sttus_code,
     displayId:       f.func_display_id,
     name:            f.func_nm,
     type:            f.func_ty_code,
@@ -175,6 +187,7 @@ export async function fetchProjectFunctions(opts: {
     complexity:      f.cmplx_code,
     effort:          f.impl_efrt_val ?? "",
     sortOrder:       f.sort_ordr,
+    ...toModifiedFields(f),
     areaId:          f.area_id ?? null,
     assignMemberId:  f.asign_mber_id ?? null,
     assignMemberName: f.asign_mber_id ? (assigneeMap.get(f.asign_mber_id) ?? null) : null,

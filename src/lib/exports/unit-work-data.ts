@@ -15,6 +15,8 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { ARTIFACT_SCOPE, isInBusinessScope, keepInScope } from "@/lib/scopeStatus";
+import { getArtifactScope } from "@/lib/exports/artifact-scope";
 import {
   buildUnitWorkDocx,
   type UnitWorkExportInput,
@@ -267,7 +269,7 @@ export async function buildUnitWorkExportInput(
   }
 
   // ── ③ 화면 → 영역 → 기능 트리 ──────────────────────────────
-  const screens = await prisma.tbDsScreen.findMany({
+  const allScreens = await prisma.tbDsScreen.findMany({
     where:   { prjct_id: projectId, unit_work_id: unitWorkId },
     orderBy: [{ sort_ordr: "asc" }, { creat_dt: "asc" }],
     select: {
@@ -281,11 +283,12 @@ export async function buildUnitWorkExportInput(
       ctgry_m_nm:      true,
       ctgry_s_nm:      true,
       asign_mber_id:   true,
+      scope_sttus_code: true,
     },
   });
-  const screenIds = screens.map((s) => s.scrn_id);
+  const screenIds = allScreens.map((s) => s.scrn_id);
 
-  const areas = screenIds.length === 0 ? [] : await prisma.tbDsArea.findMany({
+  const allAreas = screenIds.length === 0 ? [] : await prisma.tbDsArea.findMany({
     where:   { prjct_id: projectId, scrn_id: { in: screenIds } },
     orderBy: [{ sort_ordr: "asc" }, { creat_dt: "asc" }],
     select: {
@@ -296,11 +299,12 @@ export async function buildUnitWorkExportInput(
       area_dc:           true,
       area_ty_code:      true,
       display_form_code: true,
+      scope_sttus_code:  true,
     },
   });
-  const areaIds = areas.map((a) => a.area_id);
+  const areaIds = allAreas.map((a) => a.area_id);
 
-  const functions = areaIds.length === 0 ? [] : await prisma.tbDsFunction.findMany({
+  const allFunctions = areaIds.length === 0 ? [] : await prisma.tbDsFunction.findMany({
     where:   { prjct_id: projectId, area_id: { in: areaIds } },
     orderBy: [{ sort_ordr: "asc" }, { creat_dt: "asc" }],
     select: {
@@ -314,8 +318,38 @@ export async function buildUnitWorkExportInput(
       cmplx_code:      true,
       impl_efrt_val:   true,
       asign_mber_id:   true,
+      scope_sttus_code: true,
     },
   });
+
+  // ── ③-b 산출물 출력 범위 필터 ──────────────────────────────
+  // ALL 이면 그대로. SCOPED 면 말단(기능)부터 걸러 올라간다 — 이전 사업분
+  // 영역·화면이라도 이번 사업분 기능을 품고 있으면 남겨야 그 기능이 문서에서
+  // 부모를 잃지 않기 때문.
+  //
+  // 반대 방향은 굳이 보정하지 않는다. 이번 사업분 영역인데 하위 기능이 전부
+  // 이전 사업분이면 기능 표가 비어서 나오는데, "영역만 손대고 기능은 그대로"인
+  // 상태를 그대로 보여주는 것이 맞다.
+  //
+  // 문서에 신규/수정 표기는 넣지 않는다(2026-09-12 결정) — docx 는 발주처가
+  // 검수하는 정식 양식이라 본문 레이아웃을 건드리지 않고 범위 필터만 적용한다.
+  const scope = await getArtifactScope(projectId);
+  const inScope = scope === ARTIFACT_SCOPE.SCOPED;
+
+  const functions = inScope
+    ? allFunctions.filter((f) => isInBusinessScope(f.scope_sttus_code))
+    : allFunctions;
+
+  const keptAreaIds = new Set(functions.map((f) => f.area_id).filter((v): v is string => !!v));
+  const areas = inScope
+    ? allAreas.filter((a) => keepInScope(a.scope_sttus_code, keptAreaIds.has(a.area_id) ? 1 : 0))
+    : allAreas;
+
+  const keptScreenIds = new Set(areas.map((a) => a.scrn_id).filter((v): v is string => !!v));
+  const screens = inScope
+    ? allScreens.filter((s) => keepInScope(s.scope_sttus_code, keptScreenIds.has(s.scrn_id) ? 1 : 0))
+    : allScreens;
+
   const funcIds = functions.map((f) => f.func_id);
 
   // 단위업무 실적 진행률(설계+구현 롤업) — 저장값이 아니라 항상 재계산(2026-07-28)

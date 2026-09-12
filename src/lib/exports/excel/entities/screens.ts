@@ -7,6 +7,8 @@ import {
   fetchProjectScreens,
   type ScreenListItem,
 } from "@/lib/exports/screens-data";
+import { getArtifactScope } from "@/lib/exports/artifact-scope";
+import { SCOPE_STTUS_LABELS, isScopeSttusCode } from "@/lib/scopeStatus";
 
 const SCREEN_TYPE_LABEL: Record<string, string> = {
   LIST:    "목록",
@@ -18,6 +20,8 @@ const SCREEN_TYPE_LABEL: Record<string, string> = {
 
 const columns: ExcelColumn<ScreenListItem>[] = [
   { key: "displayId",       header: "화면 ID",     width: 14 },
+  { key: "scopeStatus",     header: "구분",        width: 8,
+    format: (r) => isScopeSttusCode(r.scopeStatus) ? SCOPE_STTUS_LABELS[r.scopeStatus] : r.scopeStatus },
   { key: "name",            header: "화면명",       width: 32 },
   { key: "type",            header: "유형",        width: 10,
     format: (r) => SCREEN_TYPE_LABEL[r.type] ?? r.type },
@@ -44,6 +48,8 @@ export const screensExportConfig: ExportConfig<ScreenListItem, { id: string }> =
     const unitWorkId = url.searchParams.get("unitWorkId") ?? undefined;
     const assignedTo = url.searchParams.get("assignedTo") ?? undefined;
     const assigneeFilter = assignedTo === "me" ? mberId : (assignedTo || undefined);
-    return fetchProjectScreens({ projectId: params.id, unitWorkId, assigneeFilter });
+    // 산출물 출력 범위 — SCOPED 면 이전 사업분(EXISTING)은 빠진다.
+    const scope = await getArtifactScope(params.id);
+    return fetchProjectScreens({ projectId: params.id, scope, unitWorkId, assigneeFilter });
   },
 };

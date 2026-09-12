@@ -11,7 +11,7 @@
  *   - 최종 수정 시각·경로 표시 (2026-09-12) — MCP 도구가 건드린 항목을 즉시 식별
  */
 
-import { Suspense, useEffect, useReducer, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -19,15 +19,19 @@ import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import { usePermissions } from "@/hooks/useMyRole";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
+import { ScopeStatusCell } from "@/components/common/ScopeStatusCell";
+import { ModifiedCell } from "@/components/common/ModifiedCell";
+import { useRelativeTimeTick } from "@/hooks/useRelativeTimeTick";
 import ReleaseDialog from "@/components/common/ReleaseDialog";
 import ReleaseHistoryDialog from "@/components/documents/ReleaseHistoryDialog";
 import { bumpMinorVersion } from "@/lib/exports/version";
-import { formatRelativeKo, formatDateTimeKo } from "@/lib/utils";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
 type RequirementRow = {
   requirementId:    string;
+  // 사업 범위 구분 — NEW | MODIFIED | EXISTING | DEPRECATED (lib/scopeStatus.ts)
+  scopeStatus:      string;
   displayId:        string;
   name:             string;
   priority:         string;
@@ -78,7 +82,7 @@ function RequirementsPageInner() {
   // ── 요구사항 정의서 발행/이력 ─────────────────────────────────────────────
   // 정의서 발행은 프로젝트 단위 — refId = projectId (한 프로젝트 = 한 라인 산출물).
   // 권한: content.export (MEMBER+). VIEWER 는 버튼 자체 숨김.
-  const { has: hasPerm, myRole } = usePermissions(projectId);
+  const { has: hasPerm, myRole, isSpecManager } = usePermissions(projectId);
   const canRelease       = hasPerm("content.export");
   const [isReleaseOpen,         setIsReleaseOpen]         = useState(false);
   const [isReleaseHistoryOpen,  setIsReleaseHistoryOpen]  = useState(false);
@@ -115,14 +119,8 @@ function RequirementsPageInner() {
     author:   docSettingsData?.approverName ?? "",
     approver: docSettingsData?.approverName ?? "",
   };
-  // 수정 컬럼의 상대시간("12초 전")은 렌더 시점에 한 번 계산되는 값이라, 목록을
-  // 열어둔 채 두면 표시가 그 자리에 멈춘다. 10초마다 리렌더해서 실제 경과 시간과
-  // 맞춘다(초 단위를 보여주는 이상 이 갱신이 없으면 화면이 거짓말을 하게 됨).
-  const [, tickRelativeTime] = useReducer((n: number) => n + 1, 0);
-  useEffect(() => {
-    const timer = setInterval(tickRelativeTime, 10_000);
-    return () => clearInterval(timer);
-  }, []);
+  // 수정 컬럼의 상대시간이 화면을 열어둔 채 멈추지 않도록 주기 리렌더
+  useRelativeTimeTick();
 
   // 담당자 필터 — 전역 appStore.myAssigneeMode 구독 (GNB 토글과 양방향 바인딩)
   const filterAssignedTo  = useAppStore((s) => s.myAssigneeMode);
@@ -224,6 +222,17 @@ function RequirementsPageInner() {
   const isFiltered = !!taskFilter || !!kw;
 
   // ── 순서 변경 뮤테이션 ──────────────────────────────────────────────────────
+  // 사업 범위 구분 인라인 변경 — AS-IS 대량 등록 후 정정용. 서버는 MANAGER 만 통과.
+  const scopeMutation = useMutation({
+    mutationFn: ({ requirementId, value }: { requirementId: string; value: string }) =>
+      authFetch(`/api/projects/${projectId}/requirements/${requirementId}/inline`, {
+        method: "PATCH",
+        body:   JSON.stringify({ field: "scopeStatus", value }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["requirements", projectId] }),
+    onError:   (err: Error) => toast.error(err.message),
+  });
+
   const sortMutation = useMutation({
     mutationFn: (orders: { requirementId: string; sortOrder: number }[]) =>
       authFetch(`/api/projects/${projectId}/requirements/sort`, {
@@ -441,13 +450,14 @@ function RequirementsPageInner() {
           <div />
           <div>과업명</div>
           <div>요구사항명</div>
+          <div style={{ textAlign: "center" }}>구분</div>
           <div style={{ textAlign: "center" }}>담당자</div>
           <div style={{ textAlign: "center" }}>분석</div>
-          <div style={{ textAlign: "center" }}>수정</div>
           <div style={{ textAlign: "center" }}>우선순위</div>
           <div style={{ textAlign: "center" }}>출처</div>
           <div style={{ textAlign: "center" }}>단위업무</div>
           <div style={{ textAlign: "center" }}>정렬</div>
+          <div style={{ textAlign: "center" }}>수정</div>
         </div>
 
         {items.length === 0 ? (
@@ -534,6 +544,15 @@ function RequirementsPageInner() {
                   )}
                 </div>
 
+                {/* 사업 범위 구분 — 목록에서 바로 정정 가능(MANAGER 한정, 서버 재판정) */}
+                <div style={{ textAlign: "center" }}>
+                  <ScopeStatusCell
+                    value={req.scopeStatus}
+                    canEdit={isSpecManager}
+                    onChange={(next) => scopeMutation.mutate({ requirementId: req.requirementId, value: next })}
+                  />
+                </div>
+
                 {/* 담당자 — 미지정/퇴장 멤버는 흐린 "-" */}
                 <div
                   style={{
@@ -552,45 +571,6 @@ function RequirementsPageInner() {
                 {/* 분석 진척률 */}
                 <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
                   {req.progress}%
-                </div>
-
-                {/* 최종 수정 — 상대시간 + 수정 경로. 정확한 시각은 title 툴팁으로 제공 */}
-                <div
-                  style={{
-                    display:        "flex",
-                    alignItems:     "center",
-                    justifyContent: "center",
-                    gap:            4,
-                    overflow:       "hidden",
-                  }}
-                  title={modifiedTitle(req)}
-                >
-                  <span
-                    style={{
-                      fontSize:     12,
-                      whiteSpace:   "nowrap",
-                      overflow:     "hidden",
-                      textOverflow: "ellipsis",
-                      // 최근에 바뀐 행은 진하게 — 목록을 훑을 때 바로 눈에 띄어야
-                      // "내가 안 건드렸는데 방금 수정됨" 을 알아챌 수 있다.
-                      color: isRecentlyModified(req)
-                        ? "var(--color-text-primary)"
-                        : "var(--color-text-tertiary)",
-                      fontWeight: isRecentlyModified(req) ? 600 : 400,
-                    }}
-                  >
-                    {/* withSeconds — 아래 10초 주기 리렌더가 있어서 초 표시가 거짓이 되지 않음 */}
-                    {formatRelativeKo(req.modifiedAt, { withSeconds: true })}
-                  </span>
-
-                  {/* 웹 화면 수정(WEB)은 배지를 생략한다. 전부 표시하면 모든 행에
-                      배지가 떠서 정작 찾아야 할 MCP·SYNC 가 묻힌다. */}
-                  {!req.modifiedIsCreate && req.modifiedSource === "MCP" && (
-                    <span className="sp-badge sp-badge-warning" style={modifiedBadgeStyle}>MCP</span>
-                  )}
-                  {!req.modifiedIsCreate && req.modifiedSource === "SYNC" && (
-                    <span className="sp-badge sp-badge-info" style={modifiedBadgeStyle}>SYNC</span>
-                  )}
                 </div>
 
                 {/* 우선순위 배지 */}
@@ -616,6 +596,13 @@ function RequirementsPageInner() {
                 <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
                   {req.sortOrder || "-"}
                 </div>
+
+                {/* 최종 수정 — MCP 도구가 건드린 항목을 목록에서 바로 식별 */}
+                <ModifiedCell
+                  modifiedAt={req.modifiedAt}
+                  modifiedIsCreate={req.modifiedIsCreate}
+                  modifiedSource={req.modifiedSource}
+                />
 
               </div>
             );
@@ -776,44 +763,6 @@ const SOURCE_LABELS: Record<string, string> = {
   CHANGE: "변경",
 };
 
-// ── 최종 수정 표시 헬퍼 ──────────────────────────────────────────────────────
-
-// 최근 수정 강조 기준. 이 시간 안에 바뀐 행은 진하게 표시한다.
-// 10분으로 잡은 이유 — MCP 작업 한 턴을 마치고 화면으로 돌아와 확인하는 시간은
-// 넉넉히 덮으면서, 어제 수정분까지 강조되지는 않는 범위이기 때문.
-const RECENT_MODIFY_MS = 10 * 60 * 1000;
-
-function isRecentlyModified(req: RequirementRow): boolean {
-  const ms = Date.parse(req.modifiedAt);
-  if (Number.isNaN(ms)) return false;
-  return Date.now() - ms < RECENT_MODIFY_MS;
-}
-
-// 수정 경로 코드 → 툴팁 문구.
-// 코드 값은 DB의 mdfcn_src_code = src/lib/mdfcnSource.ts 의 MDFCN_SRC 와 일치해야 한다.
-const MODIFIED_SOURCE_LABELS: Record<string, string> = {
-  WEB:  "웹 화면에서 수정",
-  MCP:  "MCP 도구가 수정",
-  SYNC: "스펙 동기화로 수정",
-};
-
-// 툴팁 문구 — 상대시간("3분 전")만으로는 시점을 특정할 수 없다.
-// MCP가 엉뚱한 항목을 건드렸는지 추적할 때는 정확한 시각이 필요하므로 함께 담는다.
-function modifiedTitle(req: RequirementRow): string {
-  const at = formatDateTimeKo(req.modifiedAt);
-  if (req.modifiedIsCreate) return `등록 후 수정 없음 · 등록 ${at}`;
-  // mdfcn_src_code 컬럼 추가(2026-09-12) 이전 수정분은 경로를 알 수 없다 → "수정"
-  const label = MODIFIED_SOURCE_LABELS[req.modifiedSource ?? ""] ?? "수정";
-  return `${label} · ${at}`;
-}
-
-// 수정 경로 배지 — 좁은 컬럼(88px)에 상대시간과 나란히 들어가도록 기본 sp-badge 보다 작게
-const modifiedBadgeStyle: React.CSSProperties = {
-  fontSize:   10,
-  padding:    "0 4px",
-  flexShrink: 0,
-};
-
 // ── 스타일 헬퍼 ──────────────────────────────────────────────────────────────
 
 function priorityBadgeStyle(priority: string): React.CSSProperties {
@@ -860,8 +809,10 @@ function sourceBadgeStyle(source: string): React.CSSProperties {
 // 좁아지지 않으므로 minmax(0, ...) 로 바닥을 0으로 깔아준다.
 // 나머지 컬럼은 실제 표시되는 배지·숫자 길이에 맞춘 고정폭.
 // 분석은 "100%" 4글자가 최대치라 44px로 타이트하게.
-// 수정 컬럼(88px)은 "12초 전"~"2026-09-10" 텍스트에 MCP 배지가 붙어도 들어가는 폭.
-const GRID_TEMPLATE = "32px minmax(0, 45fr) minmax(0, 55fr) 96px 44px 88px 64px 60px 74px 56px";
+// 수정 컬럼(80px)은 최장 문구 "11개월 전" 또는 "3분 전"+MCP 배지가 들어가는 폭.
+// (날짜 폴백을 개월 표기로 바꾸면서 "2026-09-10" 10자가 사라져 88px → 80px 로 축소)
+// 구분(사업 범위) 컬럼은 요구사항명 바로 오른쪽 — 항목을 읽기 전에 이번 사업분인지 보이게(2026-09-12)
+const GRID_TEMPLATE = "32px minmax(0, 45fr) minmax(0, 55fr) 52px 96px 44px 64px 60px 74px 56px 80px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",

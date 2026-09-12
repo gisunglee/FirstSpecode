@@ -7,9 +7,13 @@ import {
   fetchProjectUnitWorks,
   type UnitWorkListItem,
 } from "@/lib/exports/unit-works-data";
+import { getArtifactScope } from "@/lib/exports/artifact-scope";
+import { SCOPE_STTUS_LABELS, isScopeSttusCode } from "@/lib/scopeStatus";
 
 const columns: ExcelColumn<UnitWorkListItem>[] = [
   { key: "displayId",    header: "단위업무 ID", width: 14 },
+  { key: "scopeStatus",  header: "구분",      width: 8,
+    format: (r) => isScopeSttusCode(r.scopeStatus) ? SCOPE_STTUS_LABELS[r.scopeStatus] : r.scopeStatus },
   { key: "name",         header: "단위업무명",   width: 36 },
   { key: "reqDisplayId", header: "요구사항 ID", width: 14 },
   { key: "reqName",      header: "요구사항명",   width: 30 },
@@ -37,6 +41,8 @@ export const unitWorksExportConfig: ExportConfig<UnitWorkListItem, { id: string 
     const reqId      = url.searchParams.get("reqId") ?? undefined;
     const assignedTo = url.searchParams.get("assignedTo") ?? undefined;
     const assigneeFilter = assignedTo === "me" ? mberId : (assignedTo || undefined);
-    return fetchProjectUnitWorks({ projectId: params.id, reqId, assigneeFilter });
+    // 산출물 출력 범위 — SCOPED 면 이전 사업분(EXISTING)은 빠진다.
+    const scope = await getArtifactScope(params.id);
+    return fetchProjectUnitWorks({ projectId: params.id, scope, reqId, assigneeFilter });
   },
 };

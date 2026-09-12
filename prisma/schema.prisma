@@ -300,6 +300,14 @@ model TbPjProjectSettings {
   system_code         String?
   doc_no_template     String?
   artifact_meta_json  Json?
+  // ── 산출물 출력 범위 (고도화 사업용) ──────────────────────────────────────
+  // ALL    — 전체 출력. 이전 사업분(EXISTING)까지 모두 포함하고 항목마다 구분을 표기한다.
+  //          발주처 제출 산출물은 보통 "현행 포함 전체 설계서"를 요구하므로 이쪽이 기본값.
+  // SCOPED — 이번 사업분(NEW/MODIFIED/DEPRECATED) + 그 상위 계층만. 내부 검토·범위 확인용.
+  //
+  // 프로젝트당 한 번 지정해 두고 모든 출력에 적용한다. 출력 시점마다 고르지 않는 이유는
+  // 제출본의 범위가 매번 달라지면 검수 대상이 흔들리기 때문.
+  artifact_scope_code String      @default("ALL")
   creat_dt            DateTime    @default(now())
   mdfcn_dt            DateTime    @default(now())
   project             TbPjProject @relation(fields: [prjct_id], references: [prjct_id])
@@ -573,6 +581,8 @@ model TbDsUnitWork {
   mdfcn_dt             DateTime?
   // 최종 수정 경로 — WEB | MCP | SYNC. 기존 행은 NULL(모름).
   mdfcn_src_code       String?   @db.VarChar(10)
+  // 사업 범위 구분 — NEW | MODIFIED | EXISTING | DEPRECATED. 상세는 TbRqRequirement 참조.
+  scope_sttus_code     String    @default("NEW") @db.VarChar(10)
   coment_cn            String?
   screens              TbDsScreen[]
   // 2026-05-10 — 테스트 명세서 매핑 (단위테스트는 1행 / 통합테스트는 N행)
@@ -605,6 +615,8 @@ model TbDsScreen {
   mdfcn_dt            DateTime?
   // 최종 수정 경로 — WEB | MCP | SYNC. 기존 행은 NULL(모름).
   mdfcn_src_code      String?   @db.VarChar(10)
+  // 사업 범위 구분 — NEW | MODIFIED | EXISTING | DEPRECATED. 상세는 TbRqRequirement 참조.
+  scope_sttus_code    String    @default("NEW") @db.VarChar(10)
   ctgry_l_nm          String?
   ctgry_m_nm          String?
   ctgry_s_nm          String?
@@ -653,6 +665,8 @@ model TbDsArea {
   mdfcn_dt            DateTime?
   // 최종 수정 경로 — WEB | MCP | SYNC. 기존 행은 NULL(모름).
   mdfcn_src_code      String?   @db.VarChar(10)
+  // 사업 범위 구분 — NEW | MODIFIED | EXISTING | DEPRECATED. 상세는 TbRqRequirement 참조.
+  scope_sttus_code    String    @default("NEW") @db.VarChar(10)
   excaldw_data        Json?
   layer_data_dc       String?
   coment_cn           String?
@@ -682,6 +696,8 @@ model TbDsFunction {
   mdfcn_dt            DateTime?
   // 최종 수정 경로 — WEB | MCP | SYNC. 기존 행은 NULL(모름).
   mdfcn_src_code      String?   @db.VarChar(10)
+  // 사업 범위 구분 — NEW | MODIFIED | EXISTING | DEPRECATED. 상세는 TbRqRequirement 참조.
+  scope_sttus_code    String    @default("NEW") @db.VarChar(10)
   asign_mber_id       String?
   cmplx_code          String      @default("MEDIUM")
   // 구현 공수 (2026-07-28 리네임: efrt_val → impl_efrt_val — 화면의 actl_dsgn_efrt_val과 대칭)
@@ -908,6 +924,15 @@ model TbRqRequirement {
   // 최종 수정 경로 — WEB(웹 화면) | MCP(MCP 도구) | SYNC(스펙 동기화). 기존 행은 NULL(모름).
   // mdfcn_mber_id 는 MCP 키 소유자와 웹 로그인 사용자가 동일해 두 경로를 구분하지 못한다.
   mdfcn_src_code String?         @db.VarChar(10)
+  // 사업 범위 구분 — NEW(신규) | MODIFIED(기존 수정) | EXISTING(기존 유지) | DEPRECATED(폐기)
+  //
+  // 고도화 사업에서 "이번 사업으로 만든 것"과 "이전 사업 결과물"을 산출물·공수에서
+  // 갈라내기 위한 값. 설계 5계층(요구사항/단위업무/화면/영역/기능)에 동일하게 붙는다.
+  //
+  // 기본값이 NEW 인 이유: 새로 등록되는 항목은 이번 사업에서 만들어진 것이 정상이다.
+  // AS-IS(이전 사업분) 등록은 온보딩 경로에서 EXISTING 을 명시해 넣는다.
+  // 자동 판정하지 않는다 — mdfcn_dt 로는 "오타 수정"과 "사업 범위상 수정"이 구분되지 않는다.
+  scope_sttus_code String          @default("NEW") @db.VarChar(10)
   unitWorks      TbDsUnitWork[]
   task           TbRqTask?       @relation(fields: [task_id], references: [task_id])
   userStories    TbRqUserStory[]

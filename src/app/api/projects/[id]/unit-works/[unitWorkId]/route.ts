@@ -151,7 +151,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
   const parsed = await parseJsonBody(request, unitWorkUpdateSchema);
   if (parsed instanceof Response) return parsed;
-  const { name, displayId, description, comment, assignMemberId, planStartDate, planEndDate, planEffort, docStatus, sortOrder, saveHistory } = parsed.data;
+  const { name, displayId, description, comment, assignMemberId, planStartDate, planEndDate, planEffort, docStatus, sortOrder, saveHistory, scopeStatus } = parsed.data;
 
   // 장문 텍스트 한도 검증 — 정책은 src/lib/constants/textLimits.ts
   const limitErr = apiTextLimitGuard([
@@ -209,6 +209,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       plan_dsgn_efrt_val: planEffort    !== undefined ? (planEffort?.trim()    || null) : existing.plan_dsgn_efrt_val,
       dsgn_doc_sttus_code: docStatus || existing.dsgn_doc_sttus_code,
       sort_ordr:     sortOrder ?? existing.sort_ordr,
+      // 사업 범위 구분 — 미전송 시 기존값 유지 (부분 수정 안전).
+      scope_sttus_code: scopeStatus || existing.scope_sttus_code,
       ...buildMdfcnAudit(gate),
     };
 

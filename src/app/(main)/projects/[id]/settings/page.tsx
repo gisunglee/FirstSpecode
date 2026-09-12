@@ -98,6 +98,8 @@ type DocumentSettings = {
   systemName:        string | null;
   systemCode:        string | null;
   docNoTemplate:     string | null;
+  // 산출물 출력 범위 — ALL | SCOPED (lib/scopeStatus.ts). NOT NULL 이라 항상 값이 온다.
+  artifactScopeCode: string;
 };
 
 // ── 복사 확인 POPUP ──────────────────────────────────────────────────────
@@ -1545,6 +1547,8 @@ function DocumentSettingsTab({ projectId }: { projectId: string }) {
   const [systemName,        setSystemName]        = useState("");
   const [systemCode,        setSystemCode]        = useState("");
   const [docNoTemplate,     setDocNoTemplate]     = useState("");
+  // 출력 범위만 select — 나머지 자유 텍스트와 달리 빈 값이 없다
+  const [artifactScope,     setArtifactScope]     = useState("ALL");
   const [loaded, setLoaded] = useState(false);
 
   // 처음 로드된 데이터를 폼 상태에 한 번만 반영 — 사용자 편집 중에 덮어쓰지 않도록
@@ -1555,6 +1559,7 @@ function DocumentSettingsTab({ projectId }: { projectId: string }) {
     setSystemName(data.systemName ?? "");
     setSystemCode(data.systemCode ?? "");
     setDocNoTemplate(data.docNoTemplate ?? "");
+    setArtifactScope(data.artifactScopeCode || "ALL");
     setLoaded(true);
   }
 
@@ -1570,6 +1575,7 @@ function DocumentSettingsTab({ projectId }: { projectId: string }) {
           systemName:        systemName        || null,
           systemCode:        systemCode        || null,
           docNoTemplate:     docNoTemplate     || null,
+          artifactScopeCode: artifactScope,
         }),
       }),
     onSuccess: () => {
@@ -1691,6 +1697,46 @@ function DocumentSettingsTab({ projectId }: { projectId: string }) {
               <strong>최초 발행 버전</strong>으로 사용됩니다. 표기는 자유 — 예) <code style={hintCodeStyle}>v1.0</code>, <code style={hintCodeStyle}>1.0.0</code>, <code style={hintCodeStyle}>v0.1</code>
             </p>
           </div>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button
+            className="sp-btn sp-btn-primary"
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+          >
+            {saveMutation.isPending ? "저장 중..." : "저장"}
+          </button>
+        </div>
+      </div>
+
+      {/* 산출물 출력 범위 — 고도화(2차 이상) 사업에서만 의미가 있는 설정 */}
+      <div style={{ background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-card)", padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <h3 style={{ margin: "0 0 4px", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--color-text-heading)" }}>산출물 출력 범위</h3>
+        <p style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+          고도화 사업처럼 <strong>이전 사업 결과물과 이번 사업 결과물이 한 프로젝트에 섞여 있을 때</strong>,
+          산출물을 뽑을 때 어디까지 포함할지 정합니다. 요구사항·단위업무·화면·영역·기능 항목마다 지정된
+          <strong> 구분(신규/수정/기존/폐기)</strong> 값을 기준으로 걸러집니다.
+          <br />
+          이 설정은 <strong>산출물 출력에만</strong> 적용됩니다 — 목록·트리 같은 작업 화면에는 항상 전체가 보입니다.
+        </p>
+
+        <div style={{ maxWidth: 320 }}>
+          <label style={fieldLabelStyle}>출력 범위</label>
+          <select
+            className="sp-input sp-select"
+            value={artifactScope}
+            onChange={(e) => setArtifactScope(e.target.value)}
+          >
+            <option value="ALL">전체 출력 — 이전 사업분 포함</option>
+            <option value="SCOPED">이번 사업분만 — 상위 계층은 맥락으로 포함</option>
+          </select>
+          <p style={fieldHintStyle}>
+            <strong>전체 출력</strong>은 현행 시스템 전체가 담긴 설계서가 되고, 각 항목에 구분이 표기됩니다.
+            발주처 검수용으로는 보통 이쪽입니다.<br />
+            <strong>이번 사업분만</strong>은 신규·수정·폐기 항목과 그 상위 계층만 남깁니다.
+            이전 사업분 화면이라도 그 안에 이번 사업분 기능이 있으면 함께 출력됩니다.
+          </p>
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end" }}>

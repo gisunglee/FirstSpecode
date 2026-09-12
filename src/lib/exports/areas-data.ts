@@ -4,6 +4,8 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { ARTIFACT_SCOPE_DEFAULT, scopeWhere, type ArtifactScopeCode } from "@/lib/scopeStatus";
+import { toModifiedFields, type ModifiedFields } from "@/lib/mdfcnSource";
 
 export type AreaImplTask = {
   aiTaskId:    string;
@@ -13,6 +15,8 @@ export type AreaImplTask = {
 
 export type AreaListItem = {
   areaId:           string;
+  // 사업 범위 구분 — NEW | MODIFIED | EXISTING | DEPRECATED (lib/scopeStatus.ts)
+  scopeStatus:      string;
   displayId:        string;
   name:             string;
   type:             string;
@@ -30,7 +34,7 @@ export type AreaListItem = {
   avgDesignRt:      number;
   avgImplRt:        number;
   implTask:         AreaImplTask | null;
-};
+} & ModifiedFields;   // 최종 수정 시각·경로 (lib/mdfcnSource.ts)
 
 /**
  * fetchProjectAreas — 영역 목록 + 화면/단위업무 join + 기능 수 + 공수/일정/진척률 집계
@@ -39,12 +43,19 @@ export async function fetchProjectAreas(opts: {
   projectId: string;
   screenId?: string;
   unitWorkId?: string;
+  /**
+   * 산출물 출력 범위. 기본은 ALL — 이 함수는 웹 목록 API 와 엑셀 산출물이
+   * 함께 쓰기 때문에, 기본값으로 필터를 걸면 작업 화면에서 이전 사업분이
+   * 통째로 사라진다. 걸러낼 곳(엑셀 산출물)에서만 명시적으로 넘긴다.
+   */
+  scope?:      ArtifactScopeCode;
 }): Promise<AreaListItem[]> {
-  const { projectId, screenId, unitWorkId } = opts;
+  const { projectId, screenId, unitWorkId, scope = ARTIFACT_SCOPE_DEFAULT } = opts;
 
   const areas = await prisma.tbDsArea.findMany({
     where: {
       prjct_id: projectId,
+      ...scopeWhere(scope),
       ...(screenId ? { scrn_id: screenId } : {}),
       // 화면→단위업무 관계로 필터 — 이미 화면명/단위업무명 표시를 위해 조인해두었던
       // 관계를 그대로 재사용(추가 조인 없음)
@@ -144,11 +155,13 @@ export async function fetchProjectAreas(opts: {
     const impl = implTaskMap.get(a.area_id);
     return {
       areaId:           a.area_id,
+      scopeStatus:      a.scope_sttus_code,
       displayId:        a.area_display_id,
       name:             a.area_nm,
       type:             a.area_ty_code,
       displayFormCode:  a.display_form_code,
       sortOrder:        a.sort_ordr,
+      ...toModifiedFields(a),
       docStatus:        a.dsgn_doc_sttus_code,
       screenId:         a.scrn_id ?? null,
       screenName:       a.screen?.scrn_nm ?? "미분류",

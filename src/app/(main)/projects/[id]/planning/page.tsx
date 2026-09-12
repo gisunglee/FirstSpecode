@@ -24,6 +24,7 @@ import { SelectChevron } from "@/components/ui/SelectChevron";
 import { useIdPrefixes } from "@/hooks/useIdPrefixes";
 import { ReqSaveOptionDialog } from "@/components/common/ReqSaveOptionDialog";
 import { usePermissions } from "@/hooks/useMyRole";
+import { ScopeStatusCell } from "@/components/common/ScopeStatusCell";
 import { useCanEditTask } from "@/hooks/useCanEditTask";
 import type { SpecContentPermissions } from "@/types/specContentPermissions";
 
@@ -37,6 +38,8 @@ type ReqNode = {
   name:           string;
   priority:       string;
   source:         string;
+  // 사업 범위 구분 — NEW | MODIFIED | EXISTING | DEPRECATED (lib/scopeStatus.ts)
+  scopeStatus:    string;
   assignMemberId: string | null;
   storyCount:     number;
   stories:        StoryNode[];
@@ -723,6 +726,7 @@ function ReqTreeNode({
         isActive={isActive}
         isOpen={isOpen}
         hasChildren={req.storyCount > 0}
+        badge={<ScopeStatusCell value={req.scopeStatus} />}
         onClick={() => onSelect({ type: "requirement", id: req.reqId, displayId: req.displayId })}
         onToggle={req.storyCount > 0 ? () => onToggle(req.reqId) : undefined}
         onAdd={canCreate ? () => onAddStory(req.reqId) : undefined}

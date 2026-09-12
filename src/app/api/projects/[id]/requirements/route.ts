@@ -52,7 +52,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (parsed instanceof Response) return parsed;
   const {
     taskId, name, displayId: inputDisplayId, priority, source, rfpPage,
-    originalContent, currentContent, analysisMemo, detailSpec,
+    originalContent, currentContent, analysisMemo, detailSpec, scopeStatus,
   } = parsed.data;
   const fieldError = requireSpecCreateFields(gate, "REQUIREMENT", listMeaningfulFields(parsed.data));
   if (fieldError) return fieldError;
@@ -121,6 +121,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         spec_cn:        newDetailSpec,
         sort_ordr:      (maxSort?.sort_ordr ?? 0) + 1,
         creat_mber_id:  gate.mberId,
+        // 사업 범위 구분 — 미지정이면 DB DEFAULT('NEW'). AS-IS 등록 경로만 EXISTING 을 명시해 넘긴다.
+        ...(scopeStatus ? { scope_sttus_code: scopeStatus } : {}),
       },
     });
 

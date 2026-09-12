@@ -10,6 +10,8 @@
  *       일정 미입력   = 시작일·종료일 중 하나라도 없음 (화면은 실질구현기간 기준 —
  *                       실질설계기간은 2026-07-28부터 화면에 없고 단위업무에만 있음)
  *       공수 미입력   = parseEffortHours <= 0 (기능에만 존재)
+ *   - 이전 사업분(scope_sttus_code=EXISTING)은 전 엔티티에서 제외한다. 이번 사업에서
+ *     담당자·일정·공수를 채울 대상이 아니므로 누락으로 세면 숫자가 통째로 부풀어 오른다.
  *
  * Query:
  *   entity  — REQUIREMENT | UNIT_WORK | SCREEN | FUNCTION (필수)
@@ -24,6 +26,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { parseEffortHours } from "@/lib/effort";
+import { effortScopeWhere } from "@/lib/scopeStatus";
 import type { MissingDetailItem, MissingEntityKind } from "@/types/pm";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -73,7 +76,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     if (entity === "REQUIREMENT") {
       const rows = await prisma.tbRqRequirement.findMany({
-        where:  { prjct_id: projectId },
+        where:  { prjct_id: projectId, ...effortScopeWhere() },
         select: { req_id: true, req_display_id: true, req_nm: true, asign_mber_id: true, anls_bgng_de: true, anls_end_de: true },
         take:   HARD_LIMIT,
       });
@@ -84,7 +87,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }));
     } else if (entity === "UNIT_WORK") {
       const rows = await prisma.tbDsUnitWork.findMany({
-        where:  { prjct_id: projectId },
+        where:  { prjct_id: projectId, ...effortScopeWhere() },
         select: { unit_work_id: true, unit_work_display_id: true, unit_work_nm: true, asign_mber_id: true, plan_dsgn_bgng_de: true, plan_dsgn_end_de: true },
         take:   HARD_LIMIT,
       });
@@ -95,7 +98,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }));
     } else if (entity === "SCREEN") {
       const rows = await prisma.tbDsScreen.findMany({
-        where:  { prjct_id: projectId },
+        where:  { prjct_id: projectId, ...effortScopeWhere() },
         select: {
           scrn_id: true, scrn_display_id: true, scrn_nm: true, asign_mber_id: true,
           actl_impl_bgng_de: true, actl_impl_end_de: true,
@@ -110,7 +113,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }));
     } else {
       const rows = await prisma.tbDsFunction.findMany({
-        where:  { prjct_id: projectId },
+        where:  { prjct_id: projectId, ...effortScopeWhere() },
         select: {
           func_id: true, func_display_id: true, func_nm: true, asign_mber_id: true, impl_efrt_val: true,
           area: { select: { screen: { select: { actl_impl_bgng_de: true, actl_impl_end_de: true } } } },

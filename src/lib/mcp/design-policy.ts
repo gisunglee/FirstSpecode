@@ -17,6 +17,8 @@
 
 import { z } from "zod";
 
+import { SCOPE_STTUS, type ScopeSttusCode } from "@/lib/scopeStatus";
+
 // ─── MCP initialize instructions ────────────────────────────────
 // MCP SDK ServerOptions.instructions 로 전달되어 클라이언트 컨텍스트에 주입된다.
 export const SPECODE_MCP_INSTRUCTIONS = `
@@ -124,6 +126,30 @@ NOT_DISCUSSED 를 보내고, 거부 응답을 받으면 사용자와 논의부�
 `.trim();
 
 // ─── 쓰기 도구 공통 입력 (설계 5계층 create/update 전용) ──────────
+/**
+ * 사업 범위 구분 — 설계 5계층 create_/update_ 10개 도구 공용 입력.
+ *
+ * 고도화(2차 이상) 사업에서는 한 프로젝트 안에 "이번 사업으로 만든 것"과
+ * "이전 사업 결과물"이 섞여 산다. 이 값이 없으면 산출물을 뽑을 때 둘을
+ * 갈라낼 방법이 없다.
+ *
+ * 생략 시 서버가 NEW 로 처리한다 — 새로 등록되는 항목은 이번 사업분인 것이
+ * 정상이기 때문. AI 가 항목마다 스스로 판단하라는 뜻이 아니다. AS-IS(이전
+ * 사업) 정보를 등록하는 온보딩 작업에서만 EXISTING 을 명시해 넘긴다.
+ */
+export const SCOPE_STATUS_FIELD = {
+  scopeStatus: z
+    .enum(Object.values(SCOPE_STTUS) as [ScopeSttusCode, ...ScopeSttusCode[]])
+    .optional()
+    .describe(
+      "사업 범위 구분 (선택). NEW=이번 사업에서 신규 | MODIFIED=이전 사업분을 이번 사업에서 수정 | " +
+        "EXISTING=이전 사업 그대로(AS-IS 등록 전용) | DEPRECATED=이번 사업에서 폐기. " +
+        "생략하면 NEW 로 저장됩니다. AS-IS 온보딩으로 이전 사업 정보를 넣을 때만 EXISTING 을 " +
+        "명시하세요 — 일반 설계 등록에서는 지정하지 마세요. " +
+        "OWNER/ADMIN 또는 PM/PL만 지정 가능합니다."
+    ),
+};
+
 export const DESIGN_AGREEMENT_FIELDS = {
   userAgreement: z
     .enum(["AGREED", "NOT_DISCUSSED"])

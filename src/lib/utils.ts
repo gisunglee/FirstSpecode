@@ -56,9 +56,14 @@ export function isEmpty(value: unknown): boolean {
 //   주기적으로 리렌더되는 화면에서만 켤 것. 렌더 시점에 한 번 계산되는 값이라
 //   갱신이 없는 화면에서 초를 보여주면 시간이 지날수록 표시가 거짓이 된다.
 //   (기본값 false — 기존 호출부의 동작을 바꾸지 않기 위함)
+//
+// options.withMonths — 30일 이상을 날짜 대신 "2개월 전"/"1년 전"으로 표시한다.
+//   정확한 날짜보다 "오래됐다"는 신호만 필요하고, 폭이 좁은 목록 컬럼에서 켤 것.
+//   "2026-08-03"(10자)보다 짧고 경과 정도가 직관적으로 읽힌다.
+//   (기본값 false — 날짜가 필요한 기존 호출부의 동작을 바꾸지 않기 위함)
 export function formatRelativeKo(
   input: string | Date | null | undefined,
-  options?: { withSeconds?: boolean },
+  options?: { withSeconds?: boolean; withMonths?: boolean },
 ): string {
   if (!input) return "";
   const ms = typeof input === "string" ? Date.parse(input) : input.getTime();
@@ -74,6 +79,16 @@ export function formatRelativeKo(
   if (hr  < 24)  return `${hr}시간 전`;
   const day = Math.floor(hr / 24);
   if (day < 30)  return `${day}일 전`;
+
+  // 30일 이상을 개월/년으로 뭉갠다. "57일 전"처럼 큰 일수는 사람이 바로 읽지
+  // 못하고(머릿속 나눗셈이 필요하고), 그렇다고 날짜를 적으면 컬럼이 넓어진다.
+  // 한 달을 30일로 근사 — 이 구간에서 며칠 오차는 표시 목적상 의미가 없다.
+  if (options?.withMonths) {
+    const month = Math.floor(day / 30);
+    if (month < 12) return `${month}개월 전`;
+    return `${Math.floor(month / 12)}년 전`;
+  }
+
   // 30일 넘어가면 날짜로 — 입력이 string 이면 ISO 앞 10자리, Date 면 toISOString 후 자르기
   const iso = typeof input === "string" ? input : input.toISOString();
   return iso.slice(0, 10);

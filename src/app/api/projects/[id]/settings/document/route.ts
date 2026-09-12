@@ -6,6 +6,8 @@
  *   - 산출물(.docx) 출력 시 표지/바닥글에 들어가는 저작권 문구와 기본 문서 버전을
  *     프로젝트(발주처)별로 입력받기 위한 설정 엔드포인트.
  *   - 두 항목 모두 nullable. 미설정 시 export 핸들러가 코드 fallback 사용.
+ *   - 산출물 출력 범위(artifactScopeCode)도 여기서 관리한다 — 고도화 사업에서
+ *     이전 사업분까지 출력할지(ALL) 이번 사업분만 출력할지(SCOPED) 프로젝트당 한 번 지정.
  *   - 값 변경 시 TbPjSettingsHistory 에 자동 기록 (기존 AI 설정과 동일 패턴).
  *
  * 권한:
@@ -19,6 +21,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { ARTIFACT_SCOPE_DEFAULT, isArtifactScopeCode } from "@/lib/scopeStatus";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -50,6 +53,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         system_nm:           true,
         system_code:         true,
         doc_no_template:     true,
+        artifact_scope_code: true,
       },
     });
 
@@ -61,6 +65,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       systemName:        settings?.system_nm           ?? null,
       systemCode:        settings?.system_code         ?? null,
       docNoTemplate:     settings?.doc_no_template     ?? null,
+      // 출력 범위는 NOT NULL 이라 null 이 올 수 없지만, settings 행 자체가 없는
+      // 비정상 상태에서도 UI 가 빈 select 를 그리지 않도록 기본값으로 보정한다.
+      artifactScopeCode: settings?.artifact_scope_code  ?? ARTIFACT_SCOPE_DEFAULT,
     });
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/settings/document] DB 오류:`, err);
@@ -80,13 +87,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { copyrightHolder, docVersionDefault, approverName, systemName, systemCode, docNoTemplate } = body as {
+  const { copyrightHolder, docVersionDefault, approverName, systemName, systemCode, docNoTemplate, artifactScopeCode } = body as {
     copyrightHolder?:   string | null;
     docVersionDefault?: string | null;
     approverName?:      string | null;
     systemName?:        string | null;
     systemCode?:        string | null;
     docNoTemplate?:     string | null;
+    artifactScopeCode?: string | null;
   };
 
   // 입력값 정규화 — 빈 문자열은 NULL 로 저장 (사용자가 지우면 fallback 으로 돌아가도록)
@@ -129,6 +137,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", `문서번호 템플릿은 ${MAX_DOC_TPL_LEN}자 이내로 입력해 주세요.`, 400);
   }
 
+  // 출력 범위만 "미전송 시 기존값 유지" 규칙을 쓴다.
+  // 위 자유 텍스트들은 지우면 코드 fallback 으로 돌아가면 그만이지만, 이 값은
+  // 제출 산출물의 범위를 바꾸는 설정이다. 이 필드를 모르는 예전 화면이 저장을
+  // 한 번 누르는 것만으로 SCOPED 가 ALL 로 조용히 되돌아가서는 안 된다.
+  if (artifactScopeCode !== undefined && artifactScopeCode !== null && !isArtifactScopeCode(artifactScopeCode)) {
+    return apiError("VALIDATION_ERROR", "산출물 출력 범위는 ALL 또는 SCOPED 여야 합니다.", 400);
+  }
+
   try {
     // 현재값 조회 — 변경이력 기록용 (값이 실제 바뀐 항목만 기록)
     const current = await prisma.tbPjProjectSettings.findUnique({
@@ -140,12 +156,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         system_nm:           true,
         system_code:         true,
         doc_no_template:     true,
+        artifact_scope_code: true,
       },
     });
     if (!current) {
       // 프로젝트 생성 시 settings 행이 같이 만들어지므로 정상 경로에선 발생 안 함
       return apiError("NOT_FOUND", "프로젝트 설정이 존재하지 않습니다.", 404);
     }
+
+    // 미전송이면 기존값 유지 (위 ⑤ 주석 참조)
+    const newScope = isArtifactScopeCode(artifactScopeCode)
+      ? artifactScopeCode
+      : current.artifact_scope_code;
 
     await prisma.$transaction(async (tx) => {
       // 한 번에 모든 문서 컬럼 업데이트
@@ -158,6 +180,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           system_nm:           newSystemNm,
           system_code:         newSystemCode,
           doc_no_template:     newDocTpl,
+          artifact_scope_code: newScope,
           mdfcn_dt:            new Date(),
         },
       });
@@ -182,6 +205,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       if ((current.doc_no_template ?? null) !== newDocTpl) {
         histories.push({ item: "문서번호 템플릿", before: current.doc_no_template, after: newDocTpl });
       }
+      if (current.artifact_scope_code !== newScope) {
+        histories.push({ item: "산출물 출력 범위", before: current.artifact_scope_code, after: newScope });
+      }
       if (histories.length > 0) {
         await tx.tbPjSettingsHistory.createMany({
           data: histories.map((h) => ({
@@ -202,6 +228,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       systemName:        newSystemNm,
       systemCode:        newSystemCode,
       docNoTemplate:     newDocTpl,
+      artifactScopeCode: newScope,
     });
   } catch (err) {
     console.error(`[PUT /api/projects/${projectId}/settings/document] DB 오류:`, err);

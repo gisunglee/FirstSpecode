@@ -1,9 +1,16 @@
 import { z } from "zod";
 
+import { SCOPE_STTUS, type ScopeSttusCode } from "@/lib/scopeStatus";
+
 const requiredText = (message: string) => z.string().trim().min(1, message);
 const optionalText = z.string().optional();
 const optionalNullableText = z.string().nullable().optional();
 const optionalOrder = z.number().int().min(0).optional();
+
+// 사업 범위 구분 — 미지정이면 필드를 넘기지 않아 DB DEFAULT('NEW') 가 적용된다.
+// 허용값을 SCOPE_STTUS 에서 끌어오므로 코드값이 늘어도 여기를 고칠 필요가 없다.
+const SCOPE_STTUS_VALUES = Object.values(SCOPE_STTUS) as [ScopeSttusCode, ...ScopeSttusCode[]];
+const optionalScopeStatus = z.enum(SCOPE_STTUS_VALUES).optional();
 const acceptanceCriterion = z.object({
   given: optionalText,
   when: optionalText,
@@ -35,6 +42,7 @@ export const requirementCreateSchema = z.object({
   currentContent: optionalText,
   analysisMemo: optionalText,
   detailSpec: optionalText,
+  scopeStatus: optionalScopeStatus,
 }).strict();
 
 export const requirementUpdateSchema = requirementCreateSchema.extend({
@@ -73,6 +81,7 @@ export const unitWorkCreateSchema = z.object({
   assignMemberId: optionalNullableText,
   startDate: optionalText,
   endDate: optionalText,
+  scopeStatus: optionalScopeStatus,
 }).strict();
 
 export const unitWorkUpdateSchema = z.object({
@@ -87,6 +96,7 @@ export const unitWorkUpdateSchema = z.object({
   docStatus: optionalText,
   sortOrder: optionalOrder,
   saveHistory: z.boolean().optional(),
+  scopeStatus: optionalScopeStatus,
 }).strict();
 
 export const screenCreateSchema = z.object({
@@ -100,6 +110,7 @@ export const screenCreateSchema = z.object({
   categoryL: optionalText,
   categoryM: optionalText,
   categoryS: optionalText,
+  scopeStatus: optionalScopeStatus,
 }).strict();
 
 export const screenUpdateSchema = z.object({
@@ -119,6 +130,7 @@ export const screenUpdateSchema = z.object({
   implBgngDe: optionalText,
   implEndDe: optionalText,
   docStatus: optionalText,
+  scopeStatus: optionalScopeStatus,
 }).strict();
 
 export const areaCreateSchema = z.object({
@@ -129,6 +141,7 @@ export const areaCreateSchema = z.object({
   description: optionalText,
   sortOrder: optionalOrder,
   displayId: optionalText,
+  scopeStatus: optionalScopeStatus,
 }).strict();
 
 export const areaUpdateSchema = areaCreateSchema.extend({
@@ -149,6 +162,7 @@ export const functionCreateSchema = z.object({
   effort: optionalText,
   assignMemberId: optionalNullableText,
   sortOrder: optionalOrder,
+  scopeStatus: optionalScopeStatus,
 }).strict();
 
 export const functionUpdateSchema = functionCreateSchema.partial().extend({
@@ -162,17 +176,29 @@ export const excalidrawUpdateSchema = z.object({
 }).strict();
 
 export const unitWorkInlineSchema = z.object({
-  field: z.enum(["assignee", "startDate", "endDate"]),
+  field: z.enum(["assignee", "startDate", "endDate", "scopeStatus"]),
   value: z.string().nullable(),
 }).strict();
 
 export const screenInlineSchema = z.object({
-  field: z.literal("assignee"),
+  field: z.enum(["assignee", "scopeStatus"]),
   value: z.string().nullable(),
 }).strict();
 
 export const functionInlineSchema = z.object({
-  field: z.enum(["complexity", "effort", "assignee"]),
+  field: z.enum(["complexity", "effort", "assignee", "scopeStatus"]),
+  value: z.string().nullable(),
+}).strict();
+
+// 요구사항·영역은 원래 인라인 편집 대상이 없었다. 사업 범위 구분만 목록에서
+// 바로 고칠 수 있어야 해서(AS-IS 대량 등록 후 정정) field 를 한 값으로 고정한 채 추가한다.
+export const requirementInlineSchema = z.object({
+  field: z.literal("scopeStatus"),
+  value: z.string().nullable(),
+}).strict();
+
+export const areaInlineSchema = z.object({
+  field: z.literal("scopeStatus"),
   value: z.string().nullable(),
 }).strict();
 

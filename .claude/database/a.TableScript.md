@@ -50,6 +50,10 @@
   * `prjct_mber_id` (t, PK) / `prjct_id` (t, FK) / `mber_id` (t, FK)
   * `role_code` (t, 기본 MEMBER)
 * 프로젝트 설정/권한 관련: `tb_pj_project_settings`, `tb_pj_settings_history`, `tb_pj_project_api_key`, `tb_pj_project_invitation`, `tb_pj_member_removal_notice`
+  * `tb_pj_project_settings.artifact_scope_code` (v10, NOT NULL, 기본 `ALL`): 산출물 출력 범위
+    `ALL`(전체 출력 — 이전 사업분 포함, 항목마다 구분 표기) / `SCOPED`(이번 사업분 + 상위 계층만).
+    2026-09-12 추가. 프로젝트당 한 번 지정해 모든 산출물 출력에 적용된다.
+    목록·트리 같은 작업 화면에는 적용하지 않는다 — 작업 중에는 이전 사업분도 보여야 한다.
 
 ## 4. 요구사항 관리 (Requirements)
 * **`tb_rq_task`** (과업/Task)
@@ -67,6 +71,18 @@
     구분할 수 없어 분리. 기본값 없음(과거 수정분은 NULL = 모름). 설계 5계층에만 존재.
     쓰기는 `src/lib/mdfcnSource.ts` 의 `buildMdfcnAudit()` 경유 — `mdfcn_dt` 를 갱신하는
     모든 경로가 이 컬럼도 함께 갱신해야 한다(하나만 갱신하면 이전 출처가 남아 오표시)
+  * `scope_sttus_code` (v10, NOT NULL, 기본 `NEW`): 사업 범위 구분
+    `NEW`(이번 사업 신규) / `MODIFIED`(이전 사업분을 이번에 수정) / `EXISTING`(이전 사업 그대로,
+    맥락 제공용) / `DEPRECATED`(이번 사업에서 폐기) — 2026-09-12 추가, 설계 5계층에만 존재.
+    고도화(2차 이상) 사업에서 한 프로젝트에 이전/이번 사업 결과물이 섞이는 것을 가르는 값.
+    기본값이 `NEW` 인 이유는 `tb_ds_db_table.tbl_sttus_code`(기본 `EXISTING`)와 반대다 —
+    그쪽은 AS-IS 스키마를 통째로 쓸어담는 도구이고, 설계 5계층은 평소 등록분이 이번 사업
+    산출물인 것이 정상이기 때문. AS-IS 등록 경로에서만 `EXISTING` 을 명시해 넣는다.
+    자동 판정 없음(`mdfcn_dt` 로는 오타 수정과 사업 범위 수정이 구분되지 않는다).
+    상수·판정은 `src/lib/scopeStatus.ts`. 변경 권한은 MANAGER(OWNER/ADMIN, PM/PL) 한정 —
+    `specContentFieldPolicy.ts` 의 어느 allow-list 에도 넣지 않는 방식으로 강제한다.
+    용도: (1) 산출물 출력 필터(`tb_pj_project_settings.artifact_scope_code`)
+          (2) 공수·진척·지연·누락 집계에서 `EXISTING` 제외(출력 설정과 무관하게 항상)
 * **`tb_rq_user_story`** (유저 스토리)
   * `story_id` (t, PK) / `req_id` (t, FK) / `persona_cn`, `scenario_cn` (t)
   * `creat_mber_id`, `mdfcn_mber_id` (t): 생성자/최종 수정자
@@ -99,10 +115,12 @@
     (`src/lib/pm/progressRollup.ts`)
   * `creat_mber_id`, `mdfcn_mber_id` (t): 생성자/최종 수정자
   * `mdfcn_src_code` (v10): 최종 수정 경로 `WEB | MCP | SYNC` — `tb_rq_requirement` 참고
+  * `scope_sttus_code` (v10, 기본 `NEW`): 사업 범위 구분 — `tb_rq_requirement` 참고
 * **`tb_ds_screen`** & **`tb_ds_area`** & **`tb_ds_function`** (화면/영역/기능 계층)
   * 화면(`tb_ds_screen`): `scrn_id` (PK) / `unit_work_id` (FK)
     * `creat_mber_id`, `mdfcn_mber_id` (t): 생성자/최종 수정자
     * `mdfcn_src_code` (v10): 최종 수정 경로 `WEB | MCP | SYNC` — `tb_rq_requirement` 참고
+    * `scope_sttus_code` (v10, 기본 `NEW`): 사업 범위 구분 — `tb_rq_requirement` 참고
     * `actl_impl_bgng_de`, `actl_impl_end_de` (v): 담당 개발자가 커밋하는 실질 구현 일정 —
       화면이 유일하게 갖는 일정 축(설계 일정은 없음, 단위업무의 `plan_dsgn_*`를 상속 표시만 함)
     * `dsgn_doc_sttus_code` (v): 화면정의서 작성 상태
@@ -110,10 +128,12 @@
   * 영역(`tb_ds_area`): `area_id` (PK) / `scrn_id` (FK) / `excaldw_data` (jsonb)
     * `creat_mber_id`, `mdfcn_mber_id` (t): 생성자/최종 수정자
     * `mdfcn_src_code` (v10): 최종 수정 경로 `WEB | MCP | SYNC` — `tb_rq_requirement` 참고
+    * `scope_sttus_code` (v10, 기본 `NEW`): 사업 범위 구분 — `tb_rq_requirement` 참고
     * `dsgn_doc_sttus_code` (v): 영역 와이어프레임 작성 상태. 일정/공수/진척률 컬럼 없음
   * 기능(`tb_ds_function`): `func_id` (PK) / `area_id` (FK)
     * `creat_mber_id`, `mdfcn_mber_id` (t): 생성자/최종 수정자
     * `mdfcn_src_code` (v10): 최종 수정 경로 `WEB | MCP | SYNC` — `tb_rq_requirement` 참고
+    * `scope_sttus_code` (v10, 기본 `NEW`): 사업 범위 구분 — `tb_rq_requirement` 참고
     * `impl_efrt_val` (v): 구현 공수(2026-07-28 리네임, 예전 `efrt_val`). 날짜 컬럼 없음 —
       구현 일정은 소속 화면(`actl_impl_*`)을 그대로 상속해서 표시
     * `dsgn_doc_sttus_code` (v): 기능정의서 작성 상태

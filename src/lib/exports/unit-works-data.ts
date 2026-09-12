@@ -3,8 +3,11 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { ARTIFACT_SCOPE_DEFAULT, scopeWhere, type ArtifactScopeCode } from "@/lib/scopeStatus";
 import { fetchUnitWorkProgress, combinePhaseProgress } from "@/lib/pm/progressRollup";
 import { parseEffortHours } from "@/lib/effort";
+import { effortScopeWhere } from "@/lib/scopeStatus";
+import { toModifiedFields, type ModifiedFields } from "@/lib/mdfcnSource";
 
 export type UnitWorkImplTask = {
   aiTaskId:    string;
@@ -14,6 +17,8 @@ export type UnitWorkImplTask = {
 
 export type UnitWorkListItem = {
   unitWorkId:       string;
+  // 사업 범위 구분 — NEW | MODIFIED | EXISTING | DEPRECATED (lib/scopeStatus.ts)
+  scopeStatus:      string;
   displayId:        string;
   name:             string;
   description:      string;
@@ -45,7 +50,7 @@ export type UnitWorkListItem = {
   reqAssignMemberName: string | null;
   screenCount:      number;
   implTask:         UnitWorkImplTask | null;
-};
+} & ModifiedFields;   // 최종 수정 시각·경로 (lib/mdfcnSource.ts)
 
 // 하위 화면들의 실질구현기간 중 가장 이른 시작일 / 가장 늦은 종료일 계산.
 // "YYYY-MM-DD" 형식 문자열은 사전식 비교가 곧 날짜 비교와 같아 별도 파싱 없이 비교 가능.
@@ -70,12 +75,19 @@ export async function fetchProjectUnitWorks(opts: {
   projectId:       string;
   reqId?:          string;
   assigneeFilter?: string;
+  /**
+   * 산출물 출력 범위. 기본은 ALL — 이 함수는 웹 목록 API 와 엑셀 산출물이
+   * 함께 쓰기 때문에, 기본값으로 필터를 걸면 작업 화면에서 이전 사업분이
+   * 통째로 사라진다. 걸러낼 곳(엑셀 산출물)에서만 명시적으로 넘긴다.
+   */
+  scope?:          ArtifactScopeCode;
 }): Promise<UnitWorkListItem[]> {
-  const { projectId, reqId, assigneeFilter } = opts;
+  const { projectId, reqId, assigneeFilter, scope = ARTIFACT_SCOPE_DEFAULT } = opts;
 
   const unitWorks = await prisma.tbDsUnitWork.findMany({
     where: {
       prjct_id: projectId,
+      ...scopeWhere(scope),
       ...(reqId ? { req_id: reqId } : {}),
       ...(assigneeFilter ? { asign_mber_id: assigneeFilter } : {}),
     },
@@ -122,7 +134,8 @@ export async function fetchProjectUnitWorks(opts: {
     // impl_efrt_val을 걷어와 JS에서 합산한다(문자열 컬럼이라 SQL SUM 대신 parseEffortHours로).
     unitWorkIds.length > 0
       ? prisma.tbDsFunction.findMany({
-          where:  { area: { screen: { unit_work_id: { in: unitWorkIds } } } },
+          // 이전 사업분(EXISTING)은 이번 사업의 작업량이 아니므로 공수 합산에서 제외
+          where:  { area: { screen: { unit_work_id: { in: unitWorkIds } } }, ...effortScopeWhere() },
           select: { impl_efrt_val: true, area: { select: { screen: { select: { unit_work_id: true } } } } },
         })
       : Promise.resolve([]),
@@ -167,6 +180,7 @@ export async function fetchProjectUnitWorks(opts: {
     const implRange = computeImplRange(uw.screens);
     return {
       unitWorkId:       uw.unit_work_id,
+      scopeStatus:      uw.scope_sttus_code,
       displayId:        uw.unit_work_display_id,
       name:             uw.unit_work_nm,
       description:      uw.unit_work_dc ?? "",
@@ -183,6 +197,7 @@ export async function fetchProjectUnitWorks(opts: {
       implRt:           prog?.implRt ?? 0,
       progress:         prog ? combinePhaseProgress(prog) : 0,
       sortOrder:        uw.sort_ordr,
+      ...toModifiedFields(uw),
       reqId:            uw.req_id,
       reqDisplayId:     uw.requirement.req_display_id,
       reqName:          uw.requirement.req_nm,

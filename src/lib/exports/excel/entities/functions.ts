@@ -7,6 +7,8 @@ import {
   fetchProjectFunctions,
   type FunctionListItem,
 } from "@/lib/exports/functions-data";
+import { getArtifactScope } from "@/lib/exports/artifact-scope";
+import { SCOPE_STTUS_LABELS, isScopeSttusCode } from "@/lib/scopeStatus";
 
 const PRIORITY_LABEL: Record<string, string> = {
   HIGH:   "높음",
@@ -21,6 +23,8 @@ const COMPLEXITY_LABEL: Record<string, string> = {
 
 const columns: ExcelColumn<FunctionListItem>[] = [
   { key: "displayId",       header: "기능 ID",      width: 14 },
+  { key: "scopeStatus",     header: "구분",         width: 8,
+    format: (r) => isScopeSttusCode(r.scopeStatus) ? SCOPE_STTUS_LABELS[r.scopeStatus] : r.scopeStatus },
   { key: "name",            header: "기능명",        width: 32 },
   { key: "type",            header: "유형",         width: 12 },
   { key: "priority",        header: "우선순위",      width: 10,
@@ -48,6 +52,8 @@ export const functionsExportConfig: ExportConfig<FunctionListItem, { id: string 
   fetchData: async ({ req, params }) => {
     const url    = new URL(req.url);
     const areaId = url.searchParams.get("areaId") ?? undefined;
-    return fetchProjectFunctions({ projectId: params.id, areaId });
+    // 산출물 출력 범위 — SCOPED 면 이전 사업분(EXISTING)은 빠진다.
+    const scope = await getArtifactScope(params.id);
+    return fetchProjectFunctions({ projectId: params.id, scope, areaId });
   },
 };

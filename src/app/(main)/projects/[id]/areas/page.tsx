@@ -24,12 +24,17 @@ import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import { type AiTaskStatus, AI_TASK_STATUS_LABEL, AI_TASK_STATUS_BADGE } from "@/constants/codes";
 import { usePermissions } from "@/hooks/useMyRole";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
+import { ScopeStatusCell } from "@/components/common/ScopeStatusCell";
+import { ModifiedCell } from "@/components/common/ModifiedCell";
+import { useRelativeTimeTick } from "@/hooks/useRelativeTimeTick";
 import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
 type AreaRow = {
   areaId: string;
+  // 사업 범위 구분 — NEW | MODIFIED | EXISTING | DEPRECATED (lib/scopeStatus.ts)
+  scopeStatus: string;
   displayId: string;
   name: string;
   type: string;
@@ -47,6 +52,11 @@ type AreaRow = {
   avgImplRt: number;
   // AI 구현 요청 정보 (스냅샷 → IMPLEMENT 태스크 최신 1건)
   implTask: { aiTaskId: string; status: string; requestedAt: string } | null;
+
+  // 최종 수정 추적 — 서버 목록 서비스에서 조립해 내려온다
+  modifiedAt:       string;
+  modifiedIsCreate: boolean;
+  modifiedSource:   string | null;
 };
 
 // 작성상태 — 색 구분 없이 기본 텍스트로만 표시 (화면 목록과 동일 정책, 풀네임 표기)
@@ -70,7 +80,9 @@ function AreasPageInner() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const projectId = params.id;
-  const { myRole } = usePermissions(projectId);
+  const { myRole, isSpecManager } = usePermissions(projectId);
+  // 수정 컬럼의 상대시간이 화면을 열어둔 채 멈추지 않도록 주기 리렌더
+  useRelativeTimeTick();
 
   // 화면 필터 (URL ?screenId=xxx 로 초기화 — 브레드크럼에서 진입 시 자동 적용)
   const [screenFilter, setScreenFilter] = useState(searchParams.get("screenId") ?? "");
@@ -133,6 +145,17 @@ function AreasPageInner() {
   const dragDisabled = nameSearch !== "";
 
   // ── 순서 변경 뮤테이션 ──────────────────────────────────────────────────────
+  // 사업 범위 구분 인라인 변경 — AS-IS 대량 등록 후 정정용. 서버는 MANAGER 만 통과.
+  const scopeMutation = useMutation({
+    mutationFn: ({ areaId, value }: { areaId: string; value: string }) =>
+      authFetch(`/api/projects/${projectId}/areas/${areaId}/inline`, {
+        method: "PATCH",
+        body:   JSON.stringify({ field: "scopeStatus", value }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["areas", projectId] }),
+    onError:   (err: Error) => toast.error(err.message),
+  });
+
   const sortMutation = useMutation({
     mutationFn: (orders: { areaId: string; sortOrder: number }[]) =>
       authFetch(`/api/projects/${projectId}/areas/sort`, {
@@ -326,6 +349,7 @@ function AreasPageInner() {
             <div>단위업무 명</div>
             <div>화면 명</div>
             <div>영역 명</div>
+            <div style={{ textAlign: "center" }}>구분</div>
             {/* 작성상태는 영역명 오른쪽에 배치(2026-07-29) */}
             <div style={{ textAlign: "center" }}>작성상태</div>
             <div>유형</div>
@@ -334,6 +358,7 @@ function AreasPageInner() {
             <div style={{ textAlign: "center" }}>구현공수</div>
             <div style={{ textAlign: "center" }}>AI 구현</div>
             <div style={{ textAlign: "center" }}>설/구</div>
+            <div style={{ textAlign: "center" }}>수정</div>
           </div>
 
           {items.length === 0 ? (
@@ -461,6 +486,15 @@ function AreasPageInner() {
                   )}
                 </div>
 
+                {/* 사업 범위 구분 — 목록에서 바로 정정 가능(MANAGER 한정, 서버 재판정) */}
+                <div style={{ textAlign: "center" }}>
+                  <ScopeStatusCell
+                    value={area.scopeStatus}
+                    canEdit={isSpecManager}
+                    onChange={(next) => scopeMutation.mutate({ areaId: area.areaId, value: next })}
+                  />
+                </div>
+
                 {/* 작성상태 — 영역 설계(와이어프레임) 작성 상태. 색 구분 없이 기본 텍스트(다른 목록과 동일 정책).
                     영역명 오른쪽으로 위치 이동(2026-07-29) */}
                 <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
@@ -558,6 +592,12 @@ function AreasPageInner() {
                   ))}
                 </div>
 
+              {/* 최종 수정 — MCP 도구가 건드린 항목을 목록에서 바로 식별 */}
+              <ModifiedCell
+                modifiedAt={area.modifiedAt}
+                modifiedIsCreate={area.modifiedIsCreate}
+                modifiedSource={area.modifiedSource}
+              />
               </div>
             ))
           )}
@@ -754,7 +794,8 @@ function formatRequestedAt(iso: string): string {
 // 구현기간 컬럼은 통째로 삭제(2026-07-28) — 구현 일정은 화면 단위 값이라 영역별로는 다
 // 똑같이 찍혀서 의미가 없었다. 쿼리(areas-data.ts)에서도 해당 집계·조인을 걷어냄.
 // 작성상태를 영역명 오른쪽으로 이동(2026-07-29)하며 트랙 순서도 함께 조정
-const GRID_TEMPLATE = "32px 1.4fr 1.4fr 2.2fr 64px 60px 32px 40px 64px 104px 48px";
+// 구분(사업 범위) 컬럼은 영역명 바로 오른쪽 — 항목을 읽기 전에 이번 사업분인지 보이게(2026-09-12)
+const GRID_TEMPLATE = "32px 1.4fr 1.4fr 2.2fr 52px 64px 60px 32px 40px 64px 104px 48px 80px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid",

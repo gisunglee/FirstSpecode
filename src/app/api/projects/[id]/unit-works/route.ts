@@ -54,7 +54,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   const parsed = await parseJsonBody(request, unitWorkCreateSchema);
   if (parsed instanceof Response) return parsed;
-  const { reqId, name, displayId: inputDisplayId, description, assignMemberId, startDate, endDate } = parsed.data;
+  const { reqId, name, displayId: inputDisplayId, description, assignMemberId, startDate, endDate, scopeStatus } = parsed.data;
   const fieldError = requireSpecCreateFields(gate, "UNIT_WORK", listMeaningfulFields(parsed.data));
   if (fieldError) return fieldError;
 
@@ -115,6 +115,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         plan_dsgn_end_de:     endDate?.trim() || null,
         sort_ordr:            (maxSort?.sort_ordr ?? 0) + 1,
         creat_mber_id:        gate.mberId,
+        // 사업 범위 구분 — 미지정이면 DB DEFAULT('NEW'). AS-IS 등록 경로만 EXISTING 을 명시해 넘긴다.
+        ...(scopeStatus ? { scope_sttus_code: scopeStatus } : {}),
       },
     });
 

@@ -1,7 +1,8 @@
 /**
  * PATCH /api/projects/[id]/screens/[screenId]/inline — My Task 인라인 편집
  *
- * Body: { field: "assignee", value: string | null }
+ * Body: { field: "assignee" | "scopeStatus", value: string | null }
+ *   - scopeStatus(사업 범위 구분)는 MANAGER 만 변경 가능 — specContentFieldPolicy.ts 주석 참조.
  *   - 일정/공수(실질설계/실질구현/구현공수)는 항목이 여러 개(설계기간은 화면에 없고
  *     단위업무 소관, 구현기간+공수는 sibling route.ts PUT에서 한꺼번에 편집)라 인라인
  *     한 필드씩 바꾸는 이 엔드포인트로는 다루지 않음 — 담당자만 여기서 즉시 변경.
@@ -20,6 +21,7 @@ import {
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { screenInlineSchema } from "@/lib/specContentSchemas";
 import { buildMdfcnAudit } from "@/lib/mdfcnSource";
+import { parseScopeSttus, SCOPE_STTUS_ERROR_MSG } from "@/lib/scopeStatus";
 
 type RouteParams = { params: Promise<{ id: string; screenId: string }> };
 
@@ -32,13 +34,27 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const parsed = await parseJsonBody(request, screenInlineSchema);
   if (parsed instanceof Response) return parsed;
   const { field, value } = parsed.data;
-  const fieldError = requireSpecChangedFields(gate, "SCREEN", ["assignMemberId"]);
+  const policyField = field === "assignee" ? "assignMemberId" : "scopeStatus";
+  const fieldError = requireSpecChangedFields(gate, "SCREEN", [policyField]);
   if (fieldError) return fieldError;
 
   try {
     const existing = await prisma.tbDsScreen.findUnique({ where: { scrn_id: screenId } });
     if (!existing || existing.prjct_id !== projectId) {
       return apiError("NOT_FOUND", "화면을 찾을 수 없습니다.", 404);
+    }
+
+    // 사업 범위 구분 — AS-IS 등록 후 잘못 찍힌 항목을 목록에서 바로 정정하는 경로.
+    // 컬럼이 NOT NULL 이라 빈 값으로 지우는 것은 허용하지 않는다.
+    if (field === "scopeStatus") {
+      const nextScope = parseScopeSttus(value);
+      if (!nextScope) return apiError("VALIDATION_ERROR", SCOPE_STTUS_ERROR_MSG, 400);
+
+      await prisma.tbDsScreen.update({
+        where: { scrn_id: screenId },
+        data:  { scope_sttus_code: nextScope, ...buildMdfcnAudit(gate) },
+      });
+      return apiSuccess({ screenId, field, value: nextScope });
     }
 
     // field === "assignee" — 값이 실제로 바뀌었을 때만 이력 저장(no-op 스킵)

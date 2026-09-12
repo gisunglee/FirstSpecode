@@ -144,7 +144,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
   const parsed = await parseJsonBody(request, screenUpdateSchema);
   if (parsed instanceof Response) return parsed;
-  const { unitWorkId, displayId, name, description, comment, type, sortOrder, categoryL, categoryM, categoryS, layoutData, saveHistory, assignMemberId, implBgngDe, implEndDe, docStatus } = parsed.data;
+  const { unitWorkId, displayId, name, description, comment, type, sortOrder, categoryL, categoryM, categoryS, layoutData, saveHistory, assignMemberId, implBgngDe, implEndDe, docStatus, scopeStatus } = parsed.data;
 
   // name은 부분 수정 시 생략 가능(기존값 유지) — 단, 전달됐다면 공백은 거부
   if (name !== undefined && !name.trim()) {
@@ -256,6 +256,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           actl_impl_bgng_de:  implBgngDe    !== undefined ? (implBgngDe?.trim()    || null) : existing.actl_impl_bgng_de,
           actl_impl_end_de:   implEndDe     !== undefined ? (implEndDe?.trim()     || null) : existing.actl_impl_end_de,
           dsgn_doc_sttus_code: docStatus || existing.dsgn_doc_sttus_code,
+          // 사업 범위 구분 — 미전송 시 기존값 유지 (부분 수정 안전).
+          scope_sttus_code: scopeStatus || existing.scope_sttus_code,
           ...buildMdfcnAudit(gate),
         },
       });

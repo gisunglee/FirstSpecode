@@ -119,7 +119,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     reqDisplayId, sortOrder, assignMemberId,
     analysisStart, analysisEnd, analysisEffort, progress,
     saveHistory, versionMode, versionComment,
-    saveSpecHistory, saveAnalyHistory,
+    saveSpecHistory, saveAnalyHistory, scopeStatus,
   } = parsed.data;
   if (analysisStart && analysisEnd && analysisEnd < analysisStart) {
     return apiError("VALIDATION_ERROR", "분석 종료일은 시작일 이후여야 합니다.", 400);
@@ -239,6 +239,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           anls_end_de:    analysisEnd   !== undefined ? (analysisEnd?.trim()   || null) : existing.anls_end_de,
           anls_efrt_val:  analysisEffort !== undefined ? (analysisEffort?.trim() || null) : existing.anls_efrt_val,
           progrs_rt:      progress ?? existing.progrs_rt,
+          // 사업 범위 구분 — 미전송 시 기존값 유지 (부분 수정 안전).
+          scope_sttus_code: scopeStatus || existing.scope_sttus_code,
           ...buildMdfcnAudit(gate),
         },
       });

@@ -10,12 +10,16 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { ARTIFACT_SCOPE_DEFAULT, scopeWhere, type ArtifactScopeCode } from "@/lib/scopeStatus";
+import { toModifiedFields, type ModifiedFields } from "@/lib/mdfcnSource";
 
 // ─── 화면 행 타입 ────────────────────────────────────────────────────────────
 // GET /api/projects/[id]/requirements 응답의 items 배열 원소와 동일 구조.
 
 export type RequirementListItem = {
   requirementId:    string;
+  // 사업 범위 구분 — NEW | MODIFIED | EXISTING | DEPRECATED (lib/scopeStatus.ts)
+  scopeStatus:      string;
   displayId:        string;
   name:             string;
   priority:         string;
@@ -27,15 +31,7 @@ export type RequirementListItem = {
   unitWorkCount:    number;
   sortOrder:        number;
   progress:         number;
-  // ── 최종 수정 추적 (2026-09-12) ─────────────────────────────────────────
-  // MCP 도구가 요구사항을 건드렸는지 목록에서 바로 알아채기 위한 필드.
-  /** 최종 수정 일시(ISO 문자열). 수정 이력이 없으면 생성 일시로 폴백 */
-  modifiedAt:       string;
-  /** true면 modifiedAt 이 생성 일시 — 등록 후 한 번도 수정되지 않았다는 뜻 */
-  modifiedIsCreate: boolean;
-  /** 최종 수정 경로 — WEB | MCP | SYNC. 컬럼 추가 이전 수정분은 null(= 모름) */
-  modifiedSource:   string | null;
-};
+} & ModifiedFields;   // 최종 수정 시각·경로 (lib/mdfcnSource.ts)
 
 // ─── 조회 함수 ───────────────────────────────────────────────────────────────
 
@@ -49,12 +45,19 @@ export type RequirementListItem = {
 export async function fetchProjectRequirements(opts: {
   projectId:       string;
   assigneeFilter?: string;
+  /**
+   * 산출물 출력 범위. 기본은 ALL — 이 함수는 웹 목록 API 와 엑셀 산출물이
+   * 함께 쓰기 때문에, 기본값으로 필터를 걸면 작업 화면에서 이전 사업분이
+   * 통째로 사라진다. 걸러낼 곳(엑셀 산출물)에서만 명시적으로 넘긴다.
+   */
+  scope?:          ArtifactScopeCode;
 }): Promise<RequirementListItem[]> {
-  const { projectId, assigneeFilter } = opts;
+  const { projectId, assigneeFilter, scope = ARTIFACT_SCOPE_DEFAULT } = opts;
 
   const requirements = await prisma.tbRqRequirement.findMany({
     where: {
       prjct_id: projectId,
+      ...scopeWhere(scope),
       ...(assigneeFilter ? { asign_mber_id: assigneeFilter } : {}),
     },
     include: {
@@ -83,6 +86,7 @@ export async function fetchProjectRequirements(opts: {
 
   return requirements.map((r) => ({
     requirementId:    r.req_id,
+    scopeStatus:      r.scope_sttus_code,
     displayId:        r.req_display_id,
     name:             r.req_nm,
     priority:         r.priort_code,
@@ -94,10 +98,6 @@ export async function fetchProjectRequirements(opts: {
     unitWorkCount:    r._count.unitWorks,
     sortOrder:        r.sort_ordr,
     progress:         r.progrs_rt,
-    // 한 번도 수정되지 않은 행은 mdfcn_dt 가 null — 빈칸으로 두면 "수정 안 됨"인지
-    // "데이터가 없는 건지" 구분이 안 되므로 생성 일시로 폴백하고 플래그로 구분한다.
-    modifiedAt:       (r.mdfcn_dt ?? r.creat_dt).toISOString(),
-    modifiedIsCreate: r.mdfcn_dt === null,
-    modifiedSource:   r.mdfcn_src_code ?? null,
+    ...toModifiedFields(r),
   }));
 }

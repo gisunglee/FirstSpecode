@@ -71,3 +71,35 @@ export function buildMdfcnAudit(auth: AuthPayload, src?: MdfcnSrcCode) {
     mdfcn_src_code: src ?? resolveMdfcnSource(auth),
   };
 }
+
+// ─── 목록 응답 조립 ──────────────────────────────────────────────────────────
+// 설계 5계층 목록 API 가 공통으로 내려보내는 "최종 수정" 3필드.
+// 다섯 곳(요구사항·단위업무·화면·영역·기능)이 같은 규칙을 써야 화면 표시도 일치한다.
+
+export type ModifiedFields = {
+  /** 최종 수정 일시(ISO 문자열). 수정 이력이 없으면 생성 일시로 폴백 */
+  modifiedAt:       string;
+  /** true면 modifiedAt 이 생성 일시 — 등록 후 한 번도 수정되지 않았다는 뜻 */
+  modifiedIsCreate: boolean;
+  /** 최종 수정 경로 — WEB | MCP | SYNC. 컬럼 추가 이전 수정분은 null(= 모름) */
+  modifiedSource:   string | null;
+};
+
+/**
+ * toModifiedFields — DB 행의 감사 컬럼을 목록 응답 필드로 변환
+ *
+ * 한 번도 수정되지 않은 행은 mdfcn_dt 가 null 이다. 그대로 내려보내 화면을
+ * 빈칸으로 두면 "수정 안 됨"인지 "데이터가 없는 건지" 구분할 수 없으므로,
+ * 생성 일시로 폴백하고 modifiedIsCreate 플래그로 둘을 구분한다.
+ */
+export function toModifiedFields(row: {
+  creat_dt:       Date;
+  mdfcn_dt:       Date | null;
+  mdfcn_src_code: string | null;
+}): ModifiedFields {
+  return {
+    modifiedAt:       (row.mdfcn_dt ?? row.creat_dt).toISOString(),
+    modifiedIsCreate: row.mdfcn_dt === null,
+    modifiedSource:   row.mdfcn_src_code ?? null,
+  };
+}

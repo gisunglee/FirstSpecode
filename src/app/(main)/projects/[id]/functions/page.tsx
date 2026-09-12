@@ -24,6 +24,9 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import { usePermissions } from "@/hooks/useMyRole";
+import { ScopeStatusCell } from "@/components/common/ScopeStatusCell";
+import { ModifiedCell } from "@/components/common/ModifiedCell";
+import { useRelativeTimeTick } from "@/hooks/useRelativeTimeTick";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 import { useAppStore } from "@/store/appStore";
 
@@ -33,6 +36,8 @@ type AiTaskInfo = { taskId: string; status: string } | null;
 
 type FuncRow = {
   funcId: string;
+  // 사업 범위 구분 — NEW | MODIFIED | EXISTING | DEPRECATED (lib/scopeStatus.ts)
+  scopeStatus: string;
   displayId: string;
   name: string;
   type: string;
@@ -56,6 +61,11 @@ type FuncRow = {
   aiInspect: AiTaskInfo;
   designRt: number;
   implRt: number;
+
+  // 최종 수정 추적 — 서버 목록 서비스에서 조립해 내려온다
+  modifiedAt:       string;
+  modifiedIsCreate: boolean;
+  modifiedSource:   string | null;
 };
 
 // 작성상태 — 색 구분 없이 기본 텍스트로만 표시 (다른 목록 페이지와 동일 정책)
@@ -80,7 +90,9 @@ function FunctionsPageInner() {
   const queryClient = useQueryClient();
   const projectId = params.id;
   const areaIdFilter = searchParams.get("areaId") ?? undefined;
-  const { myRole } = usePermissions(projectId);
+  const { myRole, isSpecManager } = usePermissions(projectId);
+  // 수정 컬럼의 상대시간이 화면을 열어둔 채 멈추지 않도록 주기 리렌더
+  useRelativeTimeTick();
 
   // AI 태스크 상세 팝업
   const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
@@ -419,6 +431,7 @@ function FunctionsPageInner() {
             <div>화면 명</div>
             <div>영역 명</div>
             <div>기능명</div>
+            <div style={{ textAlign: "center" }}>구분</div>
             <div style={{ textAlign: "center" }}>작성상태</div>
             <div style={{ textAlign: "center" }}>정렬</div>
             <div style={{ textAlign: "center" }}>유형</div>
@@ -427,6 +440,7 @@ function FunctionsPageInner() {
             <div style={{ textAlign: "center" }}>AI</div>
             {/* 테(test)는 2026-07-28 3차 개편으로 진행률 계산에서 빠짐 — 헤더도 맞춰서 정리 */}
             <div style={{ textAlign: "center" }}>설/구</div>
+            <div style={{ textAlign: "center" }}>수정</div>
           </div>
 
           {filteredItems.length === 0 ? (
@@ -588,6 +602,16 @@ function FunctionsPageInner() {
                     )}
                   </div>
 
+                  {/* 사업 범위 구분 — AS-IS 등록 후 정정이 잦아 목록에서 바로 바꿀 수 있게 한다.
+                      변경 권한은 서버가 MANAGER 로 제한하므로 화면도 같은 기준으로 select 를 연다. */}
+                  <div style={{ textAlign: "center" }}>
+                    <ScopeStatusCell
+                      value={fn.scopeStatus}
+                      canEdit={isSpecManager}
+                      onChange={(next) => inlineMutation.mutate({ funcId: fn.funcId, field: "scopeStatus", value: next })}
+                    />
+                  </div>
+
                   {/* 작성상태 — 기능정의서 작성 상태. 색 구분 없이 기본 텍스트(다른 목록과 동일 정책) */}
                   <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
                     {DOC_STATUS_LABEL[fn.docStatus] ?? fn.docStatus}
@@ -701,6 +725,12 @@ function FunctionsPageInner() {
                       <RatioChip label="구" value={fn.implRt} color="#2e7d32" />
                     </div>
                   )}
+              {/* 최종 수정 — MCP 도구가 건드린 항목을 목록에서 바로 식별 */}
+              <ModifiedCell
+                modifiedAt={fn.modifiedAt}
+                modifiedIsCreate={fn.modifiedIsCreate}
+                modifiedSource={fn.modifiedSource}
+              />
                 </div>
               );
             })
@@ -832,7 +862,8 @@ function complexityBadgeStyle(c: string): React.CSSProperties {
 //   기능명(3fr)이 가장 큰 비중, 영역명(2fr), 단위업무·화면(1.5fr) 순.
 //   유형/복잡도/공수/AI/설구 는 배지·짧은 값이라 여유가 많아 전부 타이트하게 축소함(2026-07-28)
 // 작성상태 컬럼 신규 추가(기능명 오른쪽, 2026-07-29)
-const GRID_TEMPLATE = "32px 1.5fr 1.5fr 2fr 3fr 64px 40px 56px 64px 40px 50px 78px";
+// 구분(사업 범위) 컬럼은 기능명 바로 오른쪽 — 항목을 읽기 전에 이번 사업분인지 먼저 보이게(2026-09-12)
+const GRID_TEMPLATE = "32px 1.5fr 1.5fr 2fr 3fr 52px 64px 40px 56px 64px 40px 50px 78px 80px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID_TEMPLATE, gap: 8,

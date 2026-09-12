@@ -1,7 +1,8 @@
 /**
  * PATCH /api/projects/[id]/functions/[functionId]/inline — 복잡도·공수·담당자 인라인 편집 (FID-00168, 00169)
  *
- * Body: { field: "complexity" | "effort" | "assignee", value: string | null }
+ * Body: { field: "complexity" | "effort" | "assignee" | "scopeStatus", value: string | null }
+ *   - scopeStatus(사업 범위 구분)는 MANAGER 만 변경 가능 — specContentFieldPolicy.ts 주석 참조.
  *   - 구현 일정(startDate/endDate)은 2026-07-28부터 기능이 아니라 소속 화면 단위로 관리 —
  *     화면 인라인 편집(screens/[screenId]/inline/route.ts)에서 처리.
  *
@@ -21,6 +22,7 @@ import {
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { functionInlineSchema } from "@/lib/specContentSchemas";
 import { buildMdfcnAudit } from "@/lib/mdfcnSource";
+import { parseScopeSttus, SCOPE_STTUS_ERROR_MSG } from "@/lib/scopeStatus";
 
 type RouteParams = { params: Promise<{ id: string; functionId: string }> };
 
@@ -41,6 +43,19 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const existing = await prisma.tbDsFunction.findUnique({ where: { func_id: functionId } });
     if (!existing || existing.prjct_id !== projectId) {
       return apiError("NOT_FOUND", "기능을 찾을 수 없습니다.", 404);
+    }
+
+    // 사업 범위 구분 — AS-IS 등록 후 잘못 찍힌 항목을 목록에서 바로 정정하는 경로.
+    // 컬럼이 NOT NULL 이라 빈 값으로 지우는 것은 허용하지 않는다.
+    if (field === "scopeStatus") {
+      const nextScope = parseScopeSttus(value);
+      if (!nextScope) return apiError("VALIDATION_ERROR", SCOPE_STTUS_ERROR_MSG, 400);
+
+      await prisma.tbDsFunction.update({
+        where: { func_id: functionId },
+        data:  { scope_sttus_code: nextScope, ...buildMdfcnAudit(gate) },
+      });
+      return apiSuccess({ funcId: functionId, field, value: nextScope });
     }
 
     if (field === "complexity" || field === "effort") {

@@ -7,6 +7,8 @@ import {
   fetchProjectAreas,
   type AreaListItem,
 } from "@/lib/exports/areas-data";
+import { getArtifactScope } from "@/lib/exports/artifact-scope";
+import { SCOPE_STTUS_LABELS, isScopeSttusCode } from "@/lib/scopeStatus";
 
 const AREA_TYPE_LABEL: Record<string, string> = {
   LIST:    "데이터 목록",
@@ -19,6 +21,8 @@ const AREA_TYPE_LABEL: Record<string, string> = {
 
 const columns: ExcelColumn<AreaListItem>[] = [
   { key: "displayId",       header: "영역 ID",      width: 14 },
+  { key: "scopeStatus",     header: "구분",         width: 8,
+    format: (r) => isScopeSttusCode(r.scopeStatus) ? SCOPE_STTUS_LABELS[r.scopeStatus] : r.scopeStatus },
   { key: "name",            header: "영역명",        width: 30 },
   { key: "type",            header: "유형",         width: 14,
     format: (r) => AREA_TYPE_LABEL[r.type] ?? r.type },
@@ -42,6 +46,8 @@ export const areasExportConfig: ExportConfig<AreaListItem, { id: string }> = {
   fetchData: async ({ req, params }) => {
     const url      = new URL(req.url);
     const screenId = url.searchParams.get("screenId") ?? undefined;
-    return fetchProjectAreas({ projectId: params.id, screenId });
+    // 산출물 출력 범위 — SCOPED 면 이전 사업분(EXISTING)은 빠진다.
+    const scope = await getArtifactScope(params.id);
+    return fetchProjectAreas({ projectId: params.id, scope, screenId });
   },
 };

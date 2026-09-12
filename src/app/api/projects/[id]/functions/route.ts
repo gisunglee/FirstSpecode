@@ -52,7 +52,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (parsed instanceof Response) return parsed;
   const {
     areaId, displayId: inputDisplayId, name, type, description, priority, complexity, effort,
-    assignMemberId, sortOrder,
+    assignMemberId, sortOrder, scopeStatus,
   } = parsed.data;
   const fieldError = requireSpecCreateFields(gate, "FUNCTION", listMeaningfulFields(parsed.data));
   if (fieldError) return fieldError;
@@ -118,6 +118,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           asign_mber_id:   assignMemberId || gate.mberId,
           sort_ordr:       nextSort,
           creat_mber_id:   gate.mberId,
+          // 사업 범위 구분 — 미지정이면 DB DEFAULT('NEW'). AS-IS 등록 경로만 EXISTING 을 명시해 넘긴다.
+          ...(scopeStatus ? { scope_sttus_code: scopeStatus } : {}),
         },
       });
       await tx.tbDsDesignChange.create({

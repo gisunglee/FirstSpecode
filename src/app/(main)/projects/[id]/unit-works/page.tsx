@@ -23,12 +23,17 @@ import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import { type AiTaskStatus, AI_TASK_STATUS_LABEL, AI_TASK_STATUS_BADGE } from "@/constants/codes";
 import { useAppStore } from "@/store/appStore";
 import { usePermissions } from "@/hooks/useMyRole";
+import { ScopeStatusCell } from "@/components/common/ScopeStatusCell";
+import { ModifiedCell } from "@/components/common/ModifiedCell";
+import { useRelativeTimeTick } from "@/hooks/useRelativeTimeTick";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
 type UnitWorkRow = {
   unitWorkId:       string;
+  // 사업 범위 구분 — NEW | MODIFIED | EXISTING | DEPRECATED (lib/scopeStatus.ts)
+  scopeStatus:      string;
   displayId:        string;
   name:             string;
   description:      string;
@@ -53,6 +58,10 @@ type UnitWorkRow = {
   screenCount:      number;
   // AI 구현 요청 정보 (스냅샷 → IMPLEMENT 태스크 최신 1건). 없으면 null
   implTask: { aiTaskId: string; status: string; requestedAt: string } | null;
+  // 최종 수정 추적 — 서버(exports/unit-works-data.ts)에서 조립해 내려온다
+  modifiedAt:       string;         // ISO. 수정 이력이 없으면 생성 일시
+  modifiedIsCreate: boolean;        // true면 등록 후 한 번도 수정되지 않음
+  modifiedSource:   string | null;  // WEB | MCP | SYNC (과거 수정분은 null)
 };
 
 type RequirementOption = {
@@ -83,7 +92,9 @@ function UnitWorksPageInner() {
   const router      = useRouter();
   const queryClient = useQueryClient();
   const projectId   = params.id;
-  const { myRole }  = usePermissions(projectId);
+  const { myRole, isSpecManager } = usePermissions(projectId);
+  // 수정 컬럼의 상대시간이 화면을 열어둔 채 멈추지 않도록 주기 리렌더
+  useRelativeTimeTick();
 
   // 요구사항 필터 (빈 문자열 = 전체)
   // URL 쿼리 ?reqId=xxx 로 초기화 (상세 페이지 브레드크럼에서 진입 시 해당 요구사항으로 자동 필터)
@@ -172,6 +183,18 @@ function UnitWorksPageInner() {
   // 나머지 필드를 undefined 체크로 보존하므로 안전하다.
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [editNameValue, setEditNameValue] = useState("");
+
+  // 사업 범위 구분 인라인 변경 — AS-IS 등록 후 잘못 찍힌 항목을 목록에서 바로 정정한다.
+  // 서버는 MANAGER 만 통과시키므로 실패 시 사유를 토스트로 그대로 보여준다.
+  const scopeMutation = useMutation({
+    mutationFn: ({ unitWorkId, value }: { unitWorkId: string; value: string }) =>
+      authFetch(`/api/projects/${projectId}/unit-works/${unitWorkId}/inline`, {
+        method: "PATCH",
+        body:   JSON.stringify({ field: "scopeStatus", value }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["unit-works", projectId] }),
+    onError:   (err: Error) => toast.error(err.message),
+  });
 
   const nameMutation = useMutation({
     mutationFn: ({ unitWorkId, name }: { unitWorkId: string; name: string }) =>
@@ -603,6 +626,7 @@ function UnitWorksPageInner() {
           <div style={{ textAlign: "center" }}>순서</div>
           <div>요구사항</div>
           <div>단위업무명</div>
+          <div style={{ textAlign: "center" }}>구분</div>
           <div style={{ textAlign: "center" }}>담당자</div>
           {/* 작성상태는 담당자 오른쪽에 배치(2026-07-29) — 담당자를 확인한 다음 바로 진행 상태를
               볼 수 있도록 시선 흐름을 맞춤 */}
@@ -619,6 +643,7 @@ function UnitWorksPageInner() {
             <span style={{ color: "#1565c0" }}>설계</span>
             <span style={{ color: "#2e7d32" }}>구현</span>
           </div>
+          <div style={{ textAlign: "center" }}>수정</div>
         </div>
 
         {items.length === 0 ? (
@@ -767,6 +792,15 @@ function UnitWorksPageInner() {
                 )}
               </div>
 
+              {/* 사업 범위 구분 — 목록에서 바로 정정 가능(MANAGER 한정, 서버 재판정) */}
+              <div style={{ textAlign: "center" }}>
+                <ScopeStatusCell
+                  value={uw.scopeStatus}
+                  canEdit={isSpecManager}
+                  onChange={(next) => scopeMutation.mutate({ unitWorkId: uw.unitWorkId, value: next })}
+                />
+              </div>
+
               {/* 담당자 — 미지정은 흐린 "-" 표시. 퇴장한 멤버는 서버에서 null 내려줌 */}
               <div
                 style={{
@@ -883,6 +917,13 @@ function UnitWorksPageInner() {
                   <UwRatioChip label="구" value={uw.implRt}   color="#2e7d32" />
                 </div>
               )}
+
+              {/* 최종 수정 — MCP 도구가 건드린 항목을 목록에서 바로 식별 */}
+              <ModifiedCell
+                modifiedAt={uw.modifiedAt}
+                modifiedIsCreate={uw.modifiedIsCreate}
+                modifiedSource={uw.modifiedSource}
+              />
             </div>
             );
           })
@@ -1177,7 +1218,9 @@ function DeleteConfirmDialog({
 // 설계·구현 평균(진행률) 컬럼은 폐지 — 설계/구현 각각 값을 보여주는 마지막 컬럼과 의미가 겹쳐서
 // 혼란만 줬음(2026-07-28).
 // 작성상태를 담당자 오른쪽으로 이동(2026-07-29)하며 트랙 순서도 함께 조정
-const GRID_TEMPLATE = "28px 36px 220px minmax(240px, 1fr) 60px 60px 70px 70px 40px 104px 85px";
+// 구분(사업 범위) 컬럼은 단위업무명 바로 오른쪽 — 항목을 읽기 전에 이번 사업분인지 먼저 보이게(2026-09-12)
+// 맨 끝 80px = 최종 수정 컬럼("11개월 전" 또는 "3분 전"+MCP 배지가 들어가는 폭)
+const GRID_TEMPLATE = "28px 36px 220px minmax(240px, 1fr) 52px 60px 60px 70px 70px 40px 104px 85px 80px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",

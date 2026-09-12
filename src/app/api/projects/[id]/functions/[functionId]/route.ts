@@ -159,7 +159,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   const {
     areaId, displayId, name, type, description, commentCn,
     priority, complexity, effort, docStatus,
-    assignMemberId, sortOrder, saveHistory,
+    assignMemberId, sortOrder, saveHistory, scopeStatus,
   } = parsed.data;
 
   // name은 부분 수정 시 생략 가능(기존값 유지) — 단, 전달됐다면 공백은 거부
@@ -236,6 +236,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           dsgn_doc_sttus_code: docStatus || existing.dsgn_doc_sttus_code,
           asign_mber_id: assignMemberId !== undefined ? (assignMemberId || null) : existing.asign_mber_id,
           sort_ordr:     sortOrder ?? existing.sort_ordr,
+          // 사업 범위 구분 — 미전송 시 기존값 유지 (부분 수정 안전).
+          scope_sttus_code: scopeStatus || existing.scope_sttus_code,
           ...buildMdfcnAudit(gate),
         },
       });

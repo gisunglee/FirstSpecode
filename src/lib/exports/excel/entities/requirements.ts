@@ -10,6 +10,8 @@ import {
   fetchProjectRequirements,
   type RequirementListItem,
 } from "@/lib/exports/requirements-data";
+import { getArtifactScope } from "@/lib/exports/artifact-scope";
+import { SCOPE_STTUS_LABELS, isScopeSttusCode } from "@/lib/scopeStatus";
 
 // 화면(page.tsx) 의 PRIORITY_LABELS / SOURCE_LABELS 와 동일 매핑
 const PRIORITY_LABEL: Record<string, string> = {
@@ -25,6 +27,8 @@ const SOURCE_LABEL: Record<string, string> = {
 
 const columns: ExcelColumn<RequirementListItem>[] = [
   { key: "displayId",     header: "요구사항 ID", width: 14 },
+  { key: "scopeStatus",   header: "구분",      width: 8,
+    format: (r) => isScopeSttusCode(r.scopeStatus) ? SCOPE_STTUS_LABELS[r.scopeStatus] : r.scopeStatus },
   { key: "name",          header: "요구사항명",   width: 40 },
   { key: "taskName",      header: "과업",        width: 24 },
   { key: "priority",      header: "우선순위",     width: 10,
@@ -47,6 +51,8 @@ export const requirementsExportConfig: ExportConfig<RequirementListItem, { id: s
     const assignedTo = url.searchParams.get("assignedTo") ?? undefined;
     // "me" → 인증 mberId 변환 (화면-엑셀 결과 일치)
     const assigneeFilter = assignedTo === "me" ? mberId : (assignedTo || undefined);
-    return fetchProjectRequirements({ projectId: params.id, assigneeFilter });
+    // 산출물 출력 범위 — SCOPED 면 이전 사업분(EXISTING)은 빠진다.
+    const scope = await getArtifactScope(params.id);
+    return fetchProjectRequirements({ projectId: params.id, scope, assigneeFilter });
   },
 };

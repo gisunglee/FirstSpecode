@@ -3,8 +3,11 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { ARTIFACT_SCOPE_DEFAULT, scopeWhere, type ArtifactScopeCode } from "@/lib/scopeStatus";
 import { fetchScreenProgress } from "@/lib/pm/progressRollup";
 import { parseEffortHours } from "@/lib/effort";
+import { effortScopeWhere } from "@/lib/scopeStatus";
+import { toModifiedFields, type ModifiedFields } from "@/lib/mdfcnSource";
 
 export type ScreenImplTask = {
   aiTaskId:    string;
@@ -14,6 +17,8 @@ export type ScreenImplTask = {
 
 export type ScreenListItem = {
   screenId:         string;
+  // 사업 범위 구분 — NEW | MODIFIED | EXISTING | DEPRECATED (lib/scopeStatus.ts)
+  scopeStatus:      string;
   displayId:        string;
   name:             string;
   type:             string;
@@ -46,7 +51,7 @@ export type ScreenListItem = {
   avgDesignRt:      number;
   avgImplRt:        number;
   implTask:         ScreenImplTask | null;
-};
+} & ModifiedFields;   // 최종 수정 시각·경로 (lib/mdfcnSource.ts)
 
 /**
  * fetchProjectScreens — 화면 목록 + 단위업무·요구사항 join + 영역 수 + 진척률 + IMPLEMENT 최신
@@ -55,12 +60,19 @@ export async function fetchProjectScreens(opts: {
   projectId:       string;
   unitWorkId?:     string;
   assigneeFilter?: string;
+  /**
+   * 산출물 출력 범위. 기본은 ALL — 이 함수는 웹 목록 API 와 엑셀 산출물이
+   * 함께 쓰기 때문에, 기본값으로 필터를 걸면 작업 화면에서 이전 사업분이
+   * 통째로 사라진다. 걸러낼 곳(엑셀 산출물)에서만 명시적으로 넘긴다.
+   */
+  scope?:          ArtifactScopeCode;
 }): Promise<ScreenListItem[]> {
-  const { projectId, unitWorkId, assigneeFilter } = opts;
+  const { projectId, unitWorkId, assigneeFilter, scope = ARTIFACT_SCOPE_DEFAULT } = opts;
 
   const screens = await prisma.tbDsScreen.findMany({
     where: {
       prjct_id: projectId,
+      ...scopeWhere(scope),
       ...(unitWorkId ? { unit_work_id: unitWorkId } : {}),
       ...(assigneeFilter ? { asign_mber_id: assigneeFilter } : {}),
     },
@@ -96,7 +108,8 @@ export async function fetchProjectScreens(opts: {
   // impl_efrt_val을 걷어와 JS에서 합산한다(문자열 컬럼이라 SQL SUM 대신 parseEffortHours로).
   const implEffortFunctions = screenIds.length > 0
     ? await prisma.tbDsFunction.findMany({
-        where:  { area: { scrn_id: { in: screenIds } } },
+        // 이전 사업분(EXISTING)은 이번 사업의 작업량이 아니므로 공수 합산에서 제외
+        where:  { area: { scrn_id: { in: screenIds } }, ...effortScopeWhere() },
         select: { impl_efrt_val: true, area: { select: { scrn_id: true } } },
       })
     : [];
@@ -160,6 +173,7 @@ export async function fetchProjectScreens(opts: {
     const impl = implTaskMap.get(s.scrn_id);
     return {
       screenId:         s.scrn_id,
+      scopeStatus:      s.scope_sttus_code,
       displayId:        s.scrn_display_id,
       name:             s.scrn_nm,
       type:             s.scrn_ty_code,
@@ -177,6 +191,7 @@ export async function fetchProjectScreens(opts: {
       requirementName:  s.unitWork?.requirement ? s.unitWork.requirement.req_nm : "미분류",
       areaCount:        s._count.areas,
       sortOrder:        s.sort_ordr,
+      ...toModifiedFields(s),
       startDate:        s.unitWork?.plan_dsgn_bgng_de ?? null,
       endDate:          s.unitWork?.plan_dsgn_end_de ?? null,
       implStartDate:    s.actl_impl_bgng_de ?? null,

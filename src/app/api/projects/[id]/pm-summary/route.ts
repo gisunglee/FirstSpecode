@@ -20,6 +20,7 @@ import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { buildDesignDelayRows, buildImplDelayRows, buildAnalysisDelayRows } from "@/lib/pm/delayStatus";
 import { buildMissingStat } from "@/lib/pm/missingStatus";
 import { parseEffortHours } from "@/lib/effort";
+import { effortScopeWhere } from "@/lib/scopeStatus";
 import { fetchUnitWorkProgress, combinePhaseProgress, resolveFunctionScreenDates } from "@/lib/pm/progressRollup";
 import type { PmSummaryResponse, TeamLoadRow } from "@/types/pm";
 
@@ -50,7 +51,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // 단위업무 + 담당자ID 한 번에.
     const unitWorks = await prisma.tbDsUnitWork.findMany({
-      where:  { prjct_id: projectId },
+      // 이전 사업분(EXISTING)은 이번 사업의 작업량이 아니다 — 공수·지연·진척 집계에서 제외
+      where:  { prjct_id: projectId, ...effortScopeWhere() },
       select: {
         unit_work_id:         true,
         unit_work_display_id: true,
@@ -79,18 +81,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // ── D. 지연 현황용 원본 조회 — 기능/영역/화면 (단위업무는 위에서 이미 조회) ──
     // 진척률 등 무거운 필드는 제외. 담당자 집계에 필요한 최소 컬럼만.
     const functions = await prisma.tbDsFunction.findMany({
-      where:  { prjct_id: projectId },
+      where:  { prjct_id: projectId, ...effortScopeWhere() },
       select: { func_id: true, area_id: true, asign_mber_id: true, impl_efrt_val: true },
       take:   HARD_LIMIT,
     });
     // 영역(TbDsArea)에는 담당자 컬럼이 없음 — scrn_id 로 화면 담당자를 역참조해서 사용 (아래 buildDesignDelayRows/buildImplDelayRows)
     const areas = await prisma.tbDsArea.findMany({
-      where:  { prjct_id: projectId },
+      where:  { prjct_id: projectId, ...effortScopeWhere() },
       select: { area_id: true, scrn_id: true },
       take:   HARD_LIMIT,
     });
     const screens = await prisma.tbDsScreen.findMany({
-      where:  { prjct_id: projectId },
+      where:  { prjct_id: projectId, ...effortScopeWhere() },
       select: {
         scrn_id: true, unit_work_id: true, asign_mber_id: true,
         actl_impl_bgng_de: true, actl_impl_end_de: true,

@@ -1,5 +1,10 @@
 import type { SpecResourceType, SpecWriteGrant } from "./specContentPolicyCore";
 
+// scopeStatus(사업 범위 구분)가 아래 어느 allow-list 에도 없는 것은 누락이 아니라 결정이다.
+// 이 값은 산출물 출력 범위·공수 집계·계약상 사업 범위에 직결되므로 담당자나 생성자가
+// 개별로 바꿀 값이 아니다 — MANAGER(OWNER/ADMIN, PM/PL)만 통과한다.
+// allow-list 에 없는 필드는 checkSpecChangedFields/checkSpecCreateFields 가 자동으로
+// 403 을 내므로, 여기에 줄을 추가하지 않는 것만으로 그 정책이 성립한다.
 const CREATOR_FIELDS: Record<SpecResourceType, readonly string[]> = {
   TASK: ["name", "category", "definition", "content", "outputInfo", "rfpPage"],
   REQUIREMENT: [
