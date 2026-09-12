@@ -34,6 +34,10 @@ yarn-error.log*
 .mcp.json
 .mcp.json.stdio-backup
 
+# Codex MCP 클라이언트 설정 — .mcp.json 과 같은 이유로 커밋 금지
+# 팀 공유용 템플릿은 .codex/config.toml.example 로 관리
+.codex/config.toml
+
 # vercel
 .vercel
 

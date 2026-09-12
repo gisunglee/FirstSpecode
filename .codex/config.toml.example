@@ -2,4 +2,4 @@
 url = "http://localhost:3000/api/mcp"
 
 [mcp_servers.specode.http_headers]
-Authorization = "Bearer spk_d1109b1d68ecd24e2ac9234e01b77ad52af175d38e24f28c0ed1b94d94155c55"
+Authorization = "Bearer spk_<본인_키로_교체>"
