@@ -29,10 +29,12 @@ import {
 import { refreshAccessTokenResult } from "@/lib/authRefreshClient";
 import {
   clearStoredRefreshTokens,
-  getStoredAccessToken,
   storeAccessToken,
 } from "@/lib/authTokenStorage";
-import { accessTokenMemberId } from "@/lib/authSessionPolicy";
+import {
+  accessTokenMemberId,
+  shouldRefreshAccessToken,
+} from "@/lib/authSessionPolicy";
 import {
   AUTH_COOKIE_MODE_HEADER,
   AUTH_COOKIE_MODE_VALUE,
@@ -97,8 +99,20 @@ export default function SessionExpiredModal() {
   // ── 복구 완료 처리 — 계정이 바뀌었으면 화면을 새로 불러온다 ──────────────────
   // 공유 RT 쿠키 특성상 다른 탭에서 다른 계정으로 로그인하면 이 탭도 그 계정의 AT 를 받는다.
   // 그 상태로 저장하면 이전 계정 화면의 데이터가 새 계정으로 저장되므로 반드시 끊어준다.
-  const finishRecovery = useCallback((message: string) => {
-    const nextMemberId = accessTokenMemberId(getStoredAccessToken());
+  const finishRecovery = useCallback((message: string, accessToken: string) => {
+    // success 상태만 믿고 닫지 않는다. 실제 반환 토큰이 손상·만료된 경우 모달을 유지한다.
+    // leeway 0은 "이미 만료됐는지"만 확인한다. 만료 임박 토큰의 선제 갱신은 일반 흐름이 담당한다.
+    if (shouldRefreshAccessToken(accessToken, Date.now(), 0)) {
+      setError("로그인 복구 결과가 만료되었거나 올바르지 않습니다. 다시 로그인해 주세요.");
+      return;
+    }
+    if (!storeAccessToken(accessToken)) {
+      setError("브라우저에 로그인 정보를 저장할 수 없습니다.");
+      return;
+    }
+    clearStoredRefreshTokens();
+
+    const nextMemberId = accessTokenMemberId(accessToken);
     if (prevMemberId && nextMemberId && prevMemberId !== nextMemberId) {
       toast.info("다른 계정으로 로그인되어 화면을 새로 불러옵니다.");
       window.location.href = SOCIAL_LOGIN_LANDING;
@@ -119,7 +133,7 @@ export default function SessionExpiredModal() {
     try {
       const result = await refreshAccessTokenResult();
       if (result.status === "success") {
-        finishRecovery("로그인이 복구되었습니다. 저장을 다시 눌러 주세요.");
+        finishRecovery("로그인이 복구되었습니다. 저장을 다시 눌러 주세요.", result.accessToken);
       } else if (result.status === "transient") {
         setError("로그인 상태를 확인하지 못했습니다. 잠시 후 다시 확인해 주세요.");
       }
@@ -187,12 +201,12 @@ export default function SessionExpiredModal() {
       const body = await res.json().catch(() => ({}));
 
       if (res.ok) {
-        if (!storeAccessToken(body?.data?.accessToken)) {
-          setError("브라우저에 로그인 정보를 저장할 수 없습니다.");
+        const accessToken = body?.data?.accessToken;
+        if (typeof accessToken !== "string") {
+          setError("로그인 응답에 인증 정보가 없습니다.");
           return;
         }
-        clearStoredRefreshTokens();
-        finishRecovery("다시 로그인되었습니다. 저장을 다시 눌러 주세요.");
+        finishRecovery("다시 로그인되었습니다. 저장을 다시 눌러 주세요.", accessToken);
         return;
       }
 

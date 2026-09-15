@@ -22,6 +22,7 @@ import { accessTokenMemberId, shouldRefreshAccessToken } from "@/lib/authSession
 import { tokenExpiryLabel, traceAuth } from "@/lib/authTrace";
 import {
   classifyRefreshFailure,
+  createAsyncSingleFlight,
   type AccessTokenRefreshResult,
 } from "@/lib/authRefreshPolicy";
 
@@ -63,7 +64,7 @@ type PeerResult = {
 const tabId = globalThis.crypto?.randomUUID?.()
   ?? `tab-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-let refreshPromise: Promise<AccessTokenRefreshResult> | null = null;
+const runRefreshSingleFlight = createAsyncSingleFlight<AccessTokenRefreshResult>();
 let refreshChannel: BroadcastChannel | null = null;
 let listenersInitialized = false;
 let latestPeerResult: PeerResult | null = null;
@@ -329,22 +330,16 @@ export async function refreshAccessToken(
 export async function refreshAccessTokenResult(
   requiredKind?: RefreshTokenStorageKind,
 ): Promise<AccessTokenRefreshResult> {
-  if (refreshPromise) return refreshPromise;
-
-  refreshPromise = (async () => {
+  return runRefreshSingleFlight(async () => {
     try {
       if (typeof window === "undefined") return { status: "transient" };
       ensureCoordinationListeners();
-      return coordinateAcrossTabs(requiredKind);
+      return await coordinateAcrossTabs(requiredKind);
     } catch (err) {
       console.warn("[authRefresh] 로그인 세션 갱신에 실패했습니다.", err);
       return { status: "transient", detail: "refresh network-error" };
-    } finally {
-      refreshPromise = null;
     }
-  })();
-
-  return refreshPromise;
+  });
 }
 
 /**

@@ -41,7 +41,10 @@ import {
   accessTokenExpiresAtMs,
   shouldRefreshAccessToken,
 } from "../src/lib/authSessionPolicy";
-import { classifyRefreshFailure } from "../src/lib/authRefreshPolicy";
+import {
+  classifyRefreshFailure,
+  createAsyncSingleFlight,
+} from "../src/lib/authRefreshPolicy";
 
 const PROJECT_ID = "project-1";
 const JWT_SECRET = "test-only-secret-with-sufficient-length";
@@ -158,6 +161,61 @@ test("Refresh 인증 거부만 세션 종료로, 일시 오류는 재시도 대�
   assert.equal(classifyRefreshFailure(429), "transient");
   assert.equal(classifyRefreshFailure(500), "transient");
   assert.equal(classifyRefreshFailure(503), "transient");
+});
+
+test("Refresh 단일 실행 Promise는 동시 호출만 합치고 완료 후 반드시 해제한다", async () => {
+  const runSingleFlight = createAsyncSingleFlight<string>();
+  let callCount = 0;
+  let releaseFirst!: () => void;
+  const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+
+  const first = runSingleFlight(async () => {
+    callCount += 1;
+    await firstGate;
+    return `token-${callCount}`;
+  });
+  const concurrent = runSingleFlight(async () => {
+    callCount += 1;
+    return `token-${callCount}`;
+  });
+
+  assert.strictEqual(concurrent, first);
+  assert.equal(callCount, 0);
+
+  releaseFirst();
+  assert.equal(await first, "token-1");
+  assert.equal(await concurrent, "token-1");
+  assert.equal(callCount, 1);
+
+  const next = runSingleFlight(async () => {
+    callCount += 1;
+    return `token-${callCount}`;
+  });
+  assert.notStrictEqual(next, first);
+  assert.equal(await next, "token-2");
+  assert.equal(callCount, 2);
+});
+
+test("Refresh 단일 실행 Promise는 실패 후에도 다음 실행을 허용한다", async () => {
+  const runSingleFlight = createAsyncSingleFlight<string>();
+  let callCount = 0;
+
+  await assert.rejects(
+    runSingleFlight(async () => {
+      callCount += 1;
+      throw new Error("temporary failure");
+    }),
+    /temporary failure/,
+  );
+
+  assert.equal(
+    await runSingleFlight(async () => {
+      callCount += 1;
+      return "recovered";
+    }),
+    "recovered",
+  );
+  assert.equal(callCount, 2);
 });
 
 test("필수 클레임이 있는 기존 Access Token은 전환 기간에 허용한다", () => {
