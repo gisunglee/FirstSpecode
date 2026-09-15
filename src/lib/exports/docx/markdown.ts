@@ -153,20 +153,38 @@ export function parseMarkdown(md: string): MarkdownBlock[] {
 // ═══════════════════════════════════════════════════════════════════════
 //  표 빌더 (자동 폭 분배)
 //
-//  - 2컬럼 + 1열 평균 ≤ 8글자 → "라벨/값" 패턴으로 간주, 28/72 분배
+//  - 2컬럼 + 1열 평균 ≤ 8글자 → "라벨/값" 패턴으로 간주, 라벨 컬럼을 좁게
 //  - 그 외 → 균등 분할. 마지막 컬럼이 자투리 흡수해 합계 = CONTENT_WIDTH
 // ═══════════════════════════════════════════════════════════════════════
+
+// 라벨/값 표에서 라벨(1열)이 차지하는 비율
+// 표준 양식의 "항목 | 내용" 표가 라벨 쪽에 과하게 폭을 먹던 문제로 조정한 값
+const LABEL_COL_RATIO = 0.28;
+
+/**
+ * 글자수 판정용으로 인라인 마크다운 마커를 제거한다.
+ *
+ * 표준 양식의 라벨은 `**비즈니스 목적**` 처럼 볼드로 적히는데, 마커 4자가
+ * 그대로 길이에 더해지면 "라벨/값 표" 판정(평균 8자 이하)에서 탈락해
+ * 균등 분할(50/50)로 떨어진다. 그래서 길이를 재기 전에 벗겨낸다.
+ */
+function stripInlineMarkers(text: string): string {
+  return text.replace(/[*_`]/g, "").trim();
+}
+
 export function buildMarkdownTable(header: string[], rows: string[][]): Table {
   const colCount = header.length;
 
   const isLabelValue = colCount === 2 && rows.length > 0 && (() => {
-    const avg = rows.reduce((sum, r) => sum + (r[0]?.length ?? 0), 0) / rows.length;
+    const avg = rows.reduce(
+      (sum, r) => sum + stripInlineMarkers(r[0] ?? "").length, 0
+    ) / rows.length;
     return avg <= 8;
   })();
 
   let widths: number[];
   if (isLabelValue) {
-    const labelW = Math.floor(CONTENT_WIDTH * 0.28);
+    const labelW = Math.floor(CONTENT_WIDTH * LABEL_COL_RATIO);
     widths = [labelW, CONTENT_WIDTH - labelW];
   } else {
     const baseW = Math.floor(CONTENT_WIDTH / colCount);
