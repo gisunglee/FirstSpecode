@@ -4,7 +4,7 @@
  * ModifiedCell — 최종 수정 시각 + 수정 경로 표시 (목록 그리드 한 칸)
  *
  * 역할:
- *   - "방금 전 / 12초 전 / 3분 전 / 24일 전 / 2개월 전" 상대시간 표시
+ *   - "방금 / 3m / 5h / 24d / 2M / 1y" 축약 상대시간 표시 (formatRelativeShort)
  *   - MCP·스펙동기화로 수정된 건에 배지를 붙여 구분
  *   - 최근(10분 내) 수정은 진하게 강조
  *   - 정확한 시각과 수정 경로는 title 툴팁으로 제공
@@ -19,12 +19,12 @@
  *   웹 로그인 사용자가 같은 사람이라 경로 구분에 쓸 수 없다 → mdfcn_src_code.
  *
  * 주의 — 상대시간 갱신:
- *   초 단위 표시는 렌더 시점에 계산된 값이라 화면을 열어둔 채 두면 멈춘다.
- *   이 컴포넌트를 쓰는 페이지는 주기적으로 리렌더해야 한다
+ *   상대시간은 렌더 시점에 계산된 값이라 화면을 열어둔 채 두면 멈춘다("방금"이
+ *   10분 뒤에도 "방금"). 이 컴포넌트를 쓰는 페이지는 주기적으로 리렌더해야 한다
  *   (useRelativeTimeTick 훅 사용).
  */
 
-import { formatRelativeKo, formatDateTimeKo } from "@/lib/utils";
+import { formatRelativeShort, formatDateTimeKo } from "@/lib/utils";
 import { MDFCN_SRC } from "@/lib/mdfcnSource";
 
 // 최근 수정 강조 기준. 이 시간 안에 바뀐 행은 진하게 표시한다.
@@ -46,7 +46,9 @@ const SOURCE_BADGE_CLASS: Record<string, string> = {
   [MDFCN_SRC.SYNC]: "sp-badge sp-badge-info",
 };
 
-// 좁은 컬럼(80px)에 상대시간과 나란히 들어가도록 기본 sp-badge 보다 작게
+// 좁은 컬럼(44px)에 들어가도록 기본 sp-badge 보다 작게. 44px 은 배지 없는 행("11M" 최대 3자)
+// 기준으로 잡은 폭이라 배지가 붙으면 옆 시각은 줄임표로 밀린다 — 이 컬럼의 1차 목적은
+// "MCP·SYNC 가 건드렸다"는 식별이고 정확한 시각은 title 툴팁에 있으므로 배지를 우선한다.
 const badgeStyle: React.CSSProperties = {
   fontSize:   10,
   padding:    "0 4px",
@@ -93,10 +95,9 @@ export function ModifiedCell({ modifiedAt, modifiedIsCreate, modifiedSource }: P
           fontWeight: isRecent ? 600 : 400,
         }}
       >
-        {/* withSeconds — 호출 페이지의 주기 리렌더가 있어서 초 표시가 거짓이 되지 않음
-            withMonths  — 오래된 항목은 정확한 날짜보다 "오래됐다"는 신호가 중요.
-                          정확한 시각은 아래 title 툴팁에 있다. */}
-        {formatRelativeKo(modifiedAt, { withSeconds: true, withMonths: true })}
+        {/* 축약형 — 이 칸은 "오래됐다 / 방금 바뀌었다" 신호만 주면 된다.
+            정확한 시각은 아래 title 툴팁에 있다. */}
+        {formatRelativeShort(modifiedAt)}
       </span>
 
       {badgeClass && (

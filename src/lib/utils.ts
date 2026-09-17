@@ -94,6 +94,36 @@ export function formatRelativeKo(
   return iso.slice(0, 10);
 }
 
+// ─── 상대 시간 축약 포맷 ("방금" / "3m" / "5h" / "2d" / "2M" / "1y") ──────────────
+// 목록의 "수정" 컬럼처럼 폭이 아주 좁은 곳 전용. "11개월 전"(6자)이 "11M"(3자)로 줄어
+// 컬럼을 80px → 56px 로 좁힐 수 있다. 숫자 하나 + 단위 한 글자만 읽으면 되므로
+// 목록을 훑을 때 스캔이 빠르다(GitHub·Slack 과 같은 표기).
+//
+// 단위 문자 — 분(m)과 월(M)이 대소문자로만 구분된다. 헷갈릴 수 있어 초 단위는 아예
+// 두지 않고 1분 미만을 전부 "방금"으로 뭉갠다(s 가 있으면 m 과 M 사이에서 더 어지럽다).
+// 최근(10분 내) 수정은 ModifiedCell 이 글자를 진하게 강조하므로 3m 과 3M 은
+// 표기 외에도 굵기로 구분된다.
+//
+// 정확한 시각이 필요한 곳은 이 함수 대신 formatRelativeKo / formatDateTimeKo 를 쓸 것.
+export function formatRelativeShort(input: string | Date | null | undefined): string {
+  if (!input) return "";
+  const ms = typeof input === "string" ? Date.parse(input) : input.getTime();
+  if (Number.isNaN(ms)) return "";
+
+  const sec = Math.floor((Date.now() - ms) / 1000);
+  if (sec < 60)  return "방금";   // 음수(시계 오차로 미래 시각)도 여기서 흡수
+  const min = Math.floor(sec / 60);
+  if (min < 60)  return `${min}m`;
+  const hr  = Math.floor(min / 60);
+  if (hr  < 24)  return `${hr}h`;
+  const day = Math.floor(hr / 24);
+  if (day < 30)  return `${day}d`;
+  // 한 달을 30일로 근사 — formatRelativeKo 의 withMonths 와 같은 기준
+  const month = Math.floor(day / 30);
+  if (month < 12) return `${month}M`;
+  return `${Math.floor(month / 12)}y`;
+}
+
 // ─── 날짜+시각 포맷 (브라우저 로컬 기준) ──────────────────────────────────────
 // "YYYY-MM-DD HH:mm" — 상대 시간("3분 전") 옆에 정확한 시각을 툴팁으로 보여줄 때 사용.
 //

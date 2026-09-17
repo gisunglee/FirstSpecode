@@ -795,7 +795,8 @@ function formatRequestedAt(iso: string): string {
 // 똑같이 찍혀서 의미가 없었다. 쿼리(areas-data.ts)에서도 해당 집계·조인을 걷어냄.
 // 작성상태를 영역명 오른쪽으로 이동(2026-07-29)하며 트랙 순서도 함께 조정
 // 구분(사업 범위) 컬럼은 영역명 바로 오른쪽 — 항목을 읽기 전에 이번 사업분인지 보이게(2026-09-12)
-const GRID_TEMPLATE = "32px 1.4fr 1.4fr 2.2fr 52px 64px 60px 32px 40px 64px 104px 48px 80px";
+// 수정 컬럼 44px — 축약 상대시간 2~3자 기준. 배지가 붙는 행은 시각이 줄임표 처리되고 배지만 남는다(툴팁에 시각)
+const GRID_TEMPLATE = "32px 1.4fr 1.4fr 2.2fr 52px 64px 60px 32px 40px 64px 104px 48px 44px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid",

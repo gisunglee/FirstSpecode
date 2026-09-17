@@ -807,17 +807,28 @@ function sourceBadgeStyle(source: string): React.CSSProperties {
 // 과업명:요구사항명 = 45:55 — 남는 공간을 이 비율로 나눠 갖고 화면이 넓어지면
 // 같은 비율로 함께 늘어난다. 그냥 45fr/55fr 이면 트랙 최소폭이 auto(=내용 최소폭)라서
 // 좁아지지 않으므로 minmax(0, ...) 로 바닥을 0으로 깔아준다.
-// 나머지 컬럼은 실제 표시되는 배지·숫자 길이에 맞춘 고정폭.
-// 분석은 "100%" 4글자가 최대치라 44px로 타이트하게.
-// 수정 컬럼(80px)은 최장 문구 "11개월 전" 또는 "3분 전"+MCP 배지가 들어가는 폭.
-// (날짜 폴백을 개월 표기로 바꾸면서 "2026-09-10" 10자가 사라져 88px → 80px 로 축소)
-// 구분(사업 범위) 컬럼은 요구사항명 바로 오른쪽 — 항목을 읽기 전에 이번 사업분인지 보이게(2026-09-12)
-const GRID_TEMPLATE = "32px minmax(0, 45fr) minmax(0, 55fr) 52px 96px 44px 64px 60px 74px 56px 80px";
+// 나머지 컬럼은 실제 표시되는 배지·숫자·헤더 글자 길이에 맞춘 고정폭. 오른쪽 고정 컬럼을
+// 타이트하게 잡을수록 왼쪽 과업명·요구사항명이 넓어지므로(1040px 창에서 fr 영역 330→444px)
+// 각 컬럼은 "헤더 4글자(12px×4=48px) 또는 배지 폭 중 큰 쪽 + 여유" 로 정한다.
+//   구분 52px    — "신규" 배지 + 편집용 select 화살표
+//   담당자 72px  — 한글 4자 이름(52px)까지 온전히, 더 길면 ellipsis + title 툴팁
+//   분석 44px    — "100%" 4글자가 최대치
+//   우선순위 56px / 단위업무 56px — 헤더 4글자(48px)가 하한
+//   출처 52px    — "RFP"·"변경" 배지
+//   정렬 40px    — 숫자 2~3자리
+//   수정 44px    — 축약 상대시간 2~3자 기준. 배지가 붙는 행은 시각이 줄임표 처리되고
+//                  배지만 남는다(정확한 시각은 툴팁). 정렬(40px)과 비슷한 폭으로 맞춤
+// 구분(사업 범위) 컬럼은 요구사항명 바로 오른쪽 — 항목을 읽기 전에 이번 사업분인지 보이게
+const GRID_TEMPLATE = "32px minmax(0, 45fr) minmax(0, 55fr) 52px 72px 44px 56px 52px 56px 40px 44px";
+
+// 컬럼 간격 — 고정 컬럼이 9개라 간격 4px 차이가 총 40px 로 누적된다.
+// 헤더/행이 같은 값을 써야 열이 어긋나지 않으므로 상수로 공유.
+const GRID_GAP = 8;
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",
   gridTemplateColumns: GRID_TEMPLATE,
-  gap:                 12,
+  gap:                 GRID_GAP,
   padding:             "10px 16px",
   background:          "var(--color-bg-muted)",
   fontSize:            12,
@@ -830,7 +841,7 @@ const gridHeaderStyle: React.CSSProperties = {
 const gridRowStyle: React.CSSProperties = {
   display:             "grid",
   gridTemplateColumns: GRID_TEMPLATE,
-  gap:                 12,
+  gap:                 GRID_GAP,
   padding:             "12px 16px",
   alignItems:          "center",
   background:          "var(--color-bg-card)",

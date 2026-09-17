@@ -901,8 +901,9 @@ const countBadgeStyle: React.CSSProperties = {
 // 작성상태도 담당자 오른쪽으로 이동(2026-07-29).
 // 구분(사업 범위) 컬럼은 화면명 바로 오른쪽 — 두 템플릿 모두 같은 위치에 넣어야
 // 분류순/기본 보기를 오갈 때 컬럼이 어긋나지 않는다(2026-09-12)
-const GRID_TEMPLATE_DEFAULT  = "32px 2fr 3fr 52px 48px 64px 52px 70px 30px 32px 58px 80px";
-const GRID_TEMPLATE_CATEGORY = "32px 2fr 3fr 52px 1.3fr 1.3fr 1.3fr 48px 64px 52px 70px 30px 32px 58px 80px";
+// 맨 끝 44px = 최종 수정 컬럼(축약 상대시간 2~3자 기준. 배지가 붙는 행은 시각이 줄임표 처리되고 배지만 남는다)
+const GRID_TEMPLATE_DEFAULT  = "32px 2fr 3fr 52px 48px 64px 52px 70px 30px 32px 58px 44px";
+const GRID_TEMPLATE_CATEGORY = "32px 2fr 3fr 52px 1.3fr 1.3fr 1.3fr 48px 64px 52px 70px 30px 32px 58px 44px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid",

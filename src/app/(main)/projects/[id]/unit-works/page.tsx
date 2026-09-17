@@ -1219,8 +1219,8 @@ function DeleteConfirmDialog({
 // 혼란만 줬음(2026-07-28).
 // 작성상태를 담당자 오른쪽으로 이동(2026-07-29)하며 트랙 순서도 함께 조정
 // 구분(사업 범위) 컬럼은 단위업무명 바로 오른쪽 — 항목을 읽기 전에 이번 사업분인지 먼저 보이게(2026-09-12)
-// 맨 끝 80px = 최종 수정 컬럼("11개월 전" 또는 "3분 전"+MCP 배지가 들어가는 폭)
-const GRID_TEMPLATE = "28px 36px 220px minmax(240px, 1fr) 52px 60px 60px 70px 70px 40px 104px 85px 80px";
+// 맨 끝 44px = 최종 수정 컬럼(축약 상대시간 2~3자 기준. 배지가 붙는 행은 시각이 줄임표 처리되고 배지만 남는다)
+const GRID_TEMPLATE = "28px 36px 220px minmax(240px, 1fr) 52px 60px 60px 70px 70px 40px 104px 85px 44px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display:             "grid",

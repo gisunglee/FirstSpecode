@@ -5,7 +5,6 @@
  *
  * 역할:
  *   - 기능 목록 조회 (FID-00167)
- *   - 복잡도 인라인 편집 (FID-00168)
  *   - 공수 인라인 편집 (FID-00169)
  *   - 드래그앤드롭 순서 조정 (FID-00170)
  *   - 영역 상세 링크 이동 (AR-00077)
@@ -22,7 +21,6 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
-import AiTaskDetailDialog from "@/components/ui/AiTaskDetailDialog";
 import { usePermissions } from "@/hooks/useMyRole";
 import { ScopeStatusCell } from "@/components/common/ScopeStatusCell";
 import { ModifiedCell } from "@/components/common/ModifiedCell";
@@ -32,7 +30,6 @@ import { useAppStore } from "@/store/appStore";
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
-type AiTaskInfo = { taskId: string; status: string } | null;
 
 type FuncRow = {
   funcId: string;
@@ -57,8 +54,6 @@ type FuncRow = {
   screenDisplayId: string | null;
   unitWorkId: string | null;
   unitWorkName: string;
-  aiDesign: AiTaskInfo;
-  aiInspect: AiTaskInfo;
   designRt: number;
   implRt: number;
 
@@ -95,11 +90,10 @@ function FunctionsPageInner() {
   useRelativeTimeTick();
 
   // AI 태스크 상세 팝업
-  const [aiDetailTaskId, setAiDetailTaskId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   // 인라인 편집 상태: { funcId, field } or null
-  const [editingCell, setEditingCell] = useState<{ funcId: string; field: "complexity" | "effort" } | null>(null);
+  const [editingCell, setEditingCell] = useState<{ funcId: string; field: "effort" } | null>(null);
   const [editValue, setEditValue] = useState("");
   // 정렬순서 직접 입력 상태: { funcId → sortOrder }
   const [sortEdits, setSortEdits] = useState<Record<string, number>>({});
@@ -253,18 +247,18 @@ function FunctionsPageInner() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  function startEdit(funcId: string, field: "complexity" | "effort", current: string) {
+  function startEdit(funcId: string, field: "effort", current: string) {
     setEditingCell({ funcId, field });
     setEditValue(current);
   }
 
-  function commitEdit(funcId: string, field: "complexity" | "effort") {
+  function commitEdit(funcId: string, field: "effort") {
     if (!editingCell) return;
     inlineMutation.mutate({ funcId, field, value: editValue });
   }
 
   // ── 기능명 인라인 편집 ────────────────────────────────────────────────────────
-  // 복잡도/공수 편집(editingCell/editValue)과 별개 상태로 관리 — 동시에 다른 셀을 편집 중이어도
+  // 공수 편집(editingCell/editValue)과 별개 상태로 관리 — 동시에 다른 셀을 편집 중이어도
   // 서로 간섭하지 않음. VIEWER는 decideSpecContentWrite에서 항상 차단되므로 연필 아이콘 자체를
   // 숨긴다. 그 외(담당자 아님/생성자 보정시간 만료 등)는 서버 판정에 맡기고 실패 시 토스트로 안내.
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
@@ -434,10 +428,7 @@ function FunctionsPageInner() {
             <div style={{ textAlign: "center" }}>구분</div>
             <div style={{ textAlign: "center" }}>작성상태</div>
             <div style={{ textAlign: "center" }}>정렬</div>
-            <div style={{ textAlign: "center" }}>유형</div>
-            <div style={{ textAlign: "center" }}>복잡도</div>
             <div style={{ textAlign: "center" }}>공수</div>
-            <div style={{ textAlign: "center" }}>AI</div>
             {/* 테(test)는 2026-07-28 3차 개편으로 진행률 계산에서 빠짐 — 헤더도 맞춰서 정리 */}
             <div style={{ textAlign: "center" }}>설/구</div>
             <div style={{ textAlign: "center" }}>수정</div>
@@ -639,37 +630,6 @@ function FunctionsPageInner() {
                     />
                   </div>
 
-                  {/* 유형 배지 */}
-                  <div style={{ textAlign: "center" }}>
-                    <span className="sp-badge" style={typeBadgeStyle(fn.type)}>{fn.type}</span>
-                  </div>
-
-                  {/* 복잡도 인라인 편집 (FID-00168) */}
-                  <div style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                    {editingCell?.funcId === fn.funcId && editingCell.field === "complexity" ? (
-                      <select
-                        autoFocus
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onBlur={() => commitEdit(fn.funcId, "complexity")}
-                        style={{ fontSize: 12, padding: "2px 4px", borderRadius: 4, border: "1px solid var(--color-border)" }}
-                      >
-                        <option value="HIGH">HIGH</option>
-                        <option value="MEDIUM">MEDIUM</option>
-                        <option value="LOW">LOW</option>
-                      </select>
-                    ) : (
-                      <span
-                        className="sp-badge"
-                        onClick={() => startEdit(fn.funcId, "complexity", fn.complexity)}
-                        style={{ ...complexityBadgeStyle(fn.complexity), cursor: "pointer" }}
-                        title="클릭하여 편집"
-                      >
-                        {fn.complexity}
-                      </span>
-                    )}
-                  </div>
-
                   {/* 공수 인라인 편집 (FID-00169) */}
                   <div style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                     {editingCell?.funcId === fn.funcId && editingCell.field === "effort" ? (
@@ -697,15 +657,9 @@ function FunctionsPageInner() {
                     )}
                   </div>
 
-                  {/* AI 진행 현황 인디케이터 */}
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "center" }} onClick={(e) => e.stopPropagation()}>
-                    <AiDot label="설" taskInfo={fn.aiDesign} onClick={(id) => setAiDetailTaskId(id)} />
-                    <AiDot label="검" taskInfo={fn.aiInspect} onClick={(id) => setAiDetailTaskId(id)} />
-                  </div>
-
                   {/* 설계/구현/테스트 비율 */}
                   {fn.designRt === 100 && fn.implRt === 100 ? (
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingLeft: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <span style={{
                         background: "linear-gradient(90deg, #1565c0, #2e7d32, #6a1b9a)",
                         color: "#fff",
@@ -720,7 +674,7 @@ function FunctionsPageInner() {
                       </span>
                     </div>
                   ) : (
-                    <div style={{ display: "flex", gap: 3, alignItems: "center", justifyContent: "center", paddingLeft: 8 }}>
+                    <div style={{ display: "flex", gap: 3, alignItems: "center", justifyContent: "center" }}>
                       <RatioChip label="설" value={fn.designRt} color="#1565c0" />
                       <RatioChip label="구" value={fn.implRt} color="#2e7d32" />
                     </div>
@@ -737,16 +691,6 @@ function FunctionsPageInner() {
           )}
         </div>
       </div>
-
-      {/* AI 태스크 상세 팝업 */}
-      {aiDetailTaskId && (
-        <AiTaskDetailDialog
-          projectId={projectId}
-          taskId={aiDetailTaskId}
-          onClose={() => setAiDetailTaskId(null)}
-          onRejected={() => { setAiDetailTaskId(null); queryClient.invalidateQueries({ queryKey }); }}
-        />
-      )}
 
     </div>
   );
@@ -771,62 +715,6 @@ function RatioChip({ label, value, color }: { label: string; value: number; colo
   );
 }
 
-// ── AI 인디케이터 동그라미 ─────────────────────────────────────────────────────
-
-const AI_DOT_COLORS: Record<string, { bg: string; border: string; text: string; label: string }> = {
-  DONE: { bg: "#1976d2", border: "#1565c0", text: "#fff", label: "완료" },
-  APPLIED: { bg: "#2e7d32", border: "#1b5e20", text: "#fff", label: "적용됨" },
-  REJECTED: { bg: "#c62828", border: "#b71c1c", text: "#fff", label: "반려됨" },
-  FAILED: { bg: "#e65100", border: "#bf360c", text: "#fff", label: "실패" },
-  TIMEOUT: { bg: "#e65100", border: "#bf360c", text: "#fff", label: "타임아웃" },
-  IN_PROGRESS: { bg: "#f59e0b", border: "#d97706", text: "#fff", label: "진행중" },
-  PENDING: { bg: "#9e9e9e", border: "#757575", text: "#fff", label: "대기중" },
-};
-
-function AiDot({ label, taskInfo, onClick }: {
-  label: string;
-  taskInfo: AiTaskInfo;
-  onClick: (taskId: string) => void;
-}) {
-  const active = taskInfo !== null;
-  const colorCfg = taskInfo ? (AI_DOT_COLORS[taskInfo.status] ?? AI_DOT_COLORS.DONE) : null;
-  const fullLabel = label === "설" ? "설계" : "점검";
-  const title = active ? `AI ${fullLabel}: ${colorCfg?.label}` : `AI ${fullLabel} 미진행`;
-
-  return (
-    <button
-      className="sp-badge"
-      title={title}
-      onClick={() => active && taskInfo && onClick(taskInfo.taskId)}
-      style={{
-        // 다른 목록 페이지의 배지(약 20~22px)와 세로 높이를 맞춰 row 간 통일감 유지.
-        width: 22, height: 22, borderRadius: "50%",
-        border: active ? `2px solid ${colorCfg!.border}` : "2px solid #d0d0d0",
-        background: active ? colorCfg!.bg : "#f0f0f0",
-        cursor: active ? "pointer" : "default",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 10, fontWeight: 700, letterSpacing: "-0.3px",
-        color: active ? colorCfg!.text : "#bbb",
-        flexShrink: 0, padding: 0,
-        boxShadow: active ? `0 1px 3px ${colorCfg!.border}55` : "none",
-        transition: "transform 0.15s, box-shadow 0.15s",
-      }}
-      onMouseEnter={(e) => {
-        if (active) {
-          e.currentTarget.style.transform = "scale(1.18)";
-          e.currentTarget.style.boxShadow = `0 2px 6px ${colorCfg!.border}88`;
-        }
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = "scale(1)";
-        e.currentTarget.style.boxShadow = active ? `0 1px 3px ${colorCfg!.border}55` : "none";
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
 // ── 상수·스타일 ───────────────────────────────────────────────────────────────
 
 // 인라인 편집용 연필 아이콘 (외부 아이콘 라이브러리 미도입 — 인라인 SVG)
@@ -839,31 +727,22 @@ function PencilIcon() {
   );
 }
 
-function typeBadgeStyle(type: string): React.CSSProperties {
-  return {
-    display: "inline-block", padding: "2px 6px", borderRadius: 4,
-    fontSize: 11, fontWeight: 600, background: "#e3f2fd", color: "#1565c0",
-  };
-}
-
-function complexityBadgeStyle(c: string): React.CSSProperties {
-  const map: Record<string, { bg: string; color: string }> = {
-    HIGH: { bg: "#fce4ec", color: "#880e4f" },
-    MEDIUM: { bg: "#fff3e0", color: "#e65100" },
-    LOW: { bg: "#e8f5e9", color: "#2e7d32" },
-  };
-  const s = map[c] ?? { bg: "#f5f5f5", color: "#555" };
-  return { display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, ...s };
-}
 
 
 // 단위업무·화면·영역·기능명은 fr로 비율 분배, 나머지 소형 컬럼은 고정.
 // 좁은 폭에서도 텍스트가 줄바꿈되지 않도록 ellipsis 처리와 함께 사용.
 //   기능명(3fr)이 가장 큰 비중, 영역명(2fr), 단위업무·화면(1.5fr) 순.
-//   유형/복잡도/공수/AI/설구 는 배지·짧은 값이라 여유가 많아 전부 타이트하게 축소함(2026-07-28)
-// 작성상태 컬럼 신규 추가(기능명 오른쪽, 2026-07-29)
-// 구분(사업 범위) 컬럼은 기능명 바로 오른쪽 — 항목을 읽기 전에 이번 사업분인지 먼저 보이게(2026-09-12)
-const GRID_TEMPLATE = "32px 1.5fr 1.5fr 2fr 3fr 52px 64px 40px 56px 64px 40px 50px 78px 80px";
+//   고정 컬럼은 "헤더 글자 폭 또는 셀 내용 폭 중 큰 쪽" 이 하한 — 오른쪽을 타이트하게 잡을수록
+//   왼쪽 이름 컬럼(fr)이 넓어진다. 유형·복잡도·AI 컬럼은 목록에서 제외(상세 화면에서 확인).
+//     구분 52px     — "신규" 배지 + 편집용 select 화살표
+//     작성상태 56px — "작성완료" 4글자(13px)
+//     정렬 40px     — 36px 숫자 input
+//     공수 40px     — 숫자 1~2자리(편집 input 48px 는 gap 을 조금 침범해도 무방)
+//     설/구 72px    — 비율 칩 30px×2 + 간격 3px
+//     수정 44px     — 축약 상대시간 2~3자 기준. 배지가 붙는 행은 시각이 줄임표 처리되고
+//                     배지만 남는다(정확한 시각은 툴팁). 정렬(40px)과 비슷한 폭으로 맞춤
+// 구분(사업 범위) 컬럼은 기능명 바로 오른쪽 — 항목을 읽기 전에 이번 사업분인지 먼저 보이게
+const GRID_TEMPLATE = "32px 1.5fr 1.5fr 2fr 3fr 52px 56px 40px 40px 72px 44px";
 
 const gridHeaderStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID_TEMPLATE, gap: 8,
