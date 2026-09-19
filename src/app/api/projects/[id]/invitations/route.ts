@@ -112,10 +112,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
   }
 
-  // FREE 플랜 멤버 상한 — 소유자 플랜 기준. 이번 요청의 초대 인원을 모두 더해 검사한다.
-  // (이미 멤버인 이메일이 섞여 있어도 인원으로 세므로, 그 경우엔 목록을 정리해 다시 보내면 된다.)
+  // 플랜 상한 — 소유자 플랜 기준. FREE 는 프로젝트당 5명, 구독은 편집 역할의 구매 좌석.
+  // 이번 요청의 초대 인원을 모두 더해 검사한다 (이메일로 기존 좌석 보유자를 가려낸다).
   // 수락 시점에 다시 검사하므로 PENDING 초대는 여기서 세지 않는다.
-  const limitErr = await checkMemberLimit(projectId, invitations.length, "inviter");
+  const limitErr = await checkMemberLimit(
+    projectId,
+    invitations.map((inv) => ({ role: inv.role, email: inv.email })),
+    "inviter"
+  );
   if (limitErr) return limitErr;
 
   // 프로젝트 정보 + 초대자 이메일 조회

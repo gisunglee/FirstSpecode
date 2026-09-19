@@ -16,6 +16,7 @@
  *      d. 참여 프로젝트 OWNER에게 제거 안내 INSERT
  *      e. 소셜 계정 삭제
  *      f. 전 RT·세션 무효화
+ *      g. 구독 해지 + 빌링키 삭제 (정책 §1-10 — 안 하면 탈퇴자 카드에서 계속 출금)
  *
  * Body: { password?: string, socialToken?: string }
  * Header: Authorization: Bearer <AT>
@@ -29,6 +30,7 @@ import { verifyPassword, verifySocialToken } from "@/lib/auth";
 import { clearRefreshTokenCookie } from "@/lib/authRefreshCookie";
 import { isSystemAdminWithdrawalBlocked } from "@/lib/memberLifecyclePolicy";
 import { resolveSoftDeleteRetentionDays, softDeleteProject } from "@/lib/projectLifecycle";
+import { withdrawSubscription } from "@/lib/billing/subscription";
 
 export async function DELETE(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -199,6 +201,10 @@ export async function DELETE(request: NextRequest) {
         where: { mber_id: auth.mberId, invald_dt: null },
         data:  { invald_dt: now },
       });
+
+      // g. 구독 해지 + 빌링키 삭제 — 살아 있는 구독이 있으면 CANCELED 로 닫는다.
+      //    탈퇴자의 카드에서 다음 달에도 출금되는 사고를 여기서 끊는다.
+      await withdrawSubscription(tx, auth.mberId, now);
     });
 
     return clearRefreshTokenCookie(apiSuccess({ message: "탈퇴가 완료되었습니다." }));

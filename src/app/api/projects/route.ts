@@ -100,12 +100,12 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // 기본 프로젝트 설정 생성 (DIRECT 방식, FREE 플랜)
+      // 기본 프로젝트 설정 생성 (DIRECT 방식)
+      // 플랜은 프로젝트 설정이 아니라 회원(소유자)에게 있다 — 정책 §1-3. 옛 plan_code 쓰기는 2026-09-20 제거
       await tx.tbPjProjectSettings.create({
         data: {
           prjct_id:          created.prjct_id,
           ai_call_mthd_code: "DIRECT",
-          plan_code:         "FREE",
         },
       });
 

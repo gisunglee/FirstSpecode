@@ -19,6 +19,7 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { applyLockOnTransferOrRestore } from "@/lib/billing/lock";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { ROLE_CODES, isRoleCode } from "@/lib/permissions";
@@ -100,6 +101,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           where: { prjct_id: projectId },
           data:  { owner_mber_id: memberId },
         });
+        // 새 소유자 플랜 기준으로 상한을 넘으면 잠긴 채 넘어간다 (양도 자체는 막지 않음 — 정책 §1-6)
+        await applyLockOnTransferOrRestore(projectId, now, tx);
       });
 
       return apiSuccess({ memberId, role, transferred: true, previousOwnerRole: "ADMIN" });

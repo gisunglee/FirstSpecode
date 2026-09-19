@@ -23,6 +23,7 @@ import { useAppStore } from "@/store/appStore";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 import ProjectAbbrChip from "@/components/ui/ProjectAbbrChip";
 import PlanLimitDialog, { isPlanLimitError } from "@/components/common/PlanLimitDialog";
+import { AuthFetchError } from "@/lib/authFetch";
 import {
   parseProjectAbbrInput,
   PROJECT_ABBR_MAX_LEN,
@@ -39,6 +40,9 @@ type ProjectItem = {
   startDate:    string | null;
   endDate:      string | null;
   myRole:       string;
+  /** 결제 잠금 — 자물쇠 배지. 소유자면 "활성화" 버튼 (정책 §1-6) */
+  locked:       boolean;
+  isOwner:      boolean;
 };
 
 type ProjectsResponse = {
@@ -253,6 +257,23 @@ function ProjectsPageInner() {
 
   const items = data?.data?.items ?? [];
 
+  // 잠긴 프로젝트 "활성화" — 서버가 상한(FREE 멤버 5명 / 구독 좌석)을 판정한다.
+  // 초과면 403 PROJECT_UNLOCK_OVER_LIMIT 와 함께 무엇을 줄여야 하는지 메시지가 온다.
+  const unlockMutation = useMutation({
+    mutationFn: (projectId: string) =>
+      authFetch<{ data: { unlocked: boolean } }>(`/api/projects/${projectId}/unlock`, { method: "POST" }),
+    onSuccess: () => {
+      toast.success("프로젝트가 활성화되었습니다.");
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["my-role"] });
+    },
+    onError: (err: Error) => {
+      // 상한 초과 안내는 길어서 토스트를 오래 보여 준다
+      const long = err instanceof AuthFetchError && err.code === "PROJECT_UNLOCK_OVER_LIMIT";
+      toast.error(err.message, { duration: long ? 8000 : 4000 });
+    },
+  });
+
   function handleProjectClick(projectId: string) {
     // 프로젝트 선택 후 대시보드로 진입
     setCurrentProjectId(projectId);
@@ -319,7 +340,7 @@ function ProjectsPageInner() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr 140px 200px 80px 36px",
+              gridTemplateColumns: "1fr 140px 200px 80px 64px",
               padding: "8px 16px",
               background: "var(--color-bg-muted)",
               borderBottom: "1px solid var(--color-border)",
@@ -346,7 +367,7 @@ function ProjectsPageInner() {
               }}
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 140px 200px 80px 36px",
+                gridTemplateColumns: "1fr 140px 200px 80px 64px",
                 padding: "10px 16px",
                 borderBottom: i < items.length - 1 ? "1px solid var(--color-border-subtle)" : "none",
                 alignItems: "center",
@@ -368,6 +389,15 @@ function ProjectsPageInner() {
                   {item.name}
                 </span>
                 <ProjectAbbrChip value={item.abbreviation} />
+                {item.locked && (
+                  <span
+                    className="sp-badge sp-badge-warning"
+                    title="구독 종료로 읽기 전용 잠금 — 조회는 되고 편집·생성·초대·업로드는 막힙니다"
+                    style={{ flexShrink: 0 }}
+                  >
+                    🔒 잠김
+                  </span>
+                )}
               </span>
 
               <span style={{ fontSize: "var(--text-base)", color: "var(--color-text-primary)" }}>
@@ -382,7 +412,21 @@ function ProjectsPageInner() {
 
               <div style={{ textAlign: "center" }}><RoleBadge role={item.myRole} /></div>
 
-              {/* 설정 아이콘 — 클릭 시 프로젝트 설정 이동 (FID-00055) */}
+              {/* 잠긴 프로젝트 — 소유자에게 "활성화" 버튼 (멤버 상한 이하면 즉시 해제) */}
+              {item.locked && item.isOwner ? (
+                <button
+                  className="sp-btn sp-btn-primary sp-btn-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    unlockMutation.mutate(item.projectId);
+                  }}
+                  disabled={unlockMutation.isPending}
+                  title="FREE 플랜 상한(멤버 5명) 이하이면 바로 활성화됩니다"
+                  style={{ whiteSpace: "nowrap", justifySelf: "end" }}
+                >
+                  활성화
+                </button>
+              ) : (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -400,6 +444,7 @@ function ProjectsPageInner() {
               >
                 ⚙
               </button>
+              )}
             </div>
           ))}
         </div>

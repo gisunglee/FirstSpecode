@@ -15,9 +15,10 @@
  *   - 플랜 변경 + 감사 기록을 한 트랜잭션으로. memo 에 전후 값 스냅샷
  *   - 자기 자신도 변경 가능 (플랫폼 운영자 계정이므로 차단 이유 없음). 감사 로그로 추적
  *
- * 2단계(결제 연동) 이후 주의:
- *   - 활성 구독이 있는 회원은 구독이 플랜의 원천이다. 그때는 이 API 가 구독 상태와 어긋나지
- *     않도록 "활성 구독 있음 → 409" 검사를 여기 추가한다 (정책 문서 §3 2단계 참조).
+ * 구독과의 관계 (2026-09-20 결제 2단계):
+ *   - 살아 있는 구독(ACTIVE/PAST_DUE/CANCEL_SCHEDULED)이 있는 회원은 구독이 플랜의 원천이다.
+ *     이 API 로 바꾸면 다음 결제 때 구독이 다시 덮어써 어긋나므로 409 로 거부한다.
+ *     운영자가 정말 바꿔야 하면 회원이 먼저 해지하거나, 결제 화면에서 처리한다.
  */
 
 import { NextRequest } from "next/server";
@@ -27,6 +28,7 @@ import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { requireSystemAdmin } from "@/lib/requireSystemAdmin";
 import { PLAN_CODES, resolveEffectivePlan } from "@/lib/permissions";
+import { hasLiveSubscription } from "@/lib/billing/subscription";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -87,6 +89,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
   if (target.mber_sttus_code === "WITHDRAWN") {
     return apiError("ACCOUNT_INACTIVE", "탈퇴한 회원의 플랜은 변경할 수 없습니다.", 409);
+  }
+  // 구독이 플랜의 원천인 회원은 수동 변경 불가 — 구독 상태와 어긋난 미러를 만들지 않는다
+  if (await hasLiveSubscription(targetMberId)) {
+    return apiError(
+      "SUBSCRIPTION_ACTIVE",
+      "이 회원은 결제 구독 중이라 플랜을 수동으로 바꿀 수 없습니다. 구독이 해지·종료된 뒤에 변경해 주세요.",
+      409
+    );
   }
 
   // 같은 값이면 no-op (멱등)

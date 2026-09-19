@@ -15,6 +15,10 @@ export type ProjectListItem = {
   startDate:    Date | null;
   endDate:      Date | null;
   myRole:       string;
+  /** 결제 잠금(lock_yn='Y') — 목록에 자물쇠 배지, 소유자에게 "활성화" 버튼 */
+  locked:       boolean;
+  /** 내가 소유자(owner_mber_id)인가 — "활성화" 버튼 노출 판정 */
+  isOwner:      boolean;
 };
 
 /**
@@ -47,6 +51,8 @@ export async function fetchMyProjects(opts: {
           end_de:     true,
           mdfcn_dt:   true,
           creat_dt:   true,
+          lock_yn:       true,
+          owner_mber_id: true,
         },
       },
     },
@@ -67,5 +73,7 @@ export async function fetchMyProjects(opts: {
       startDate:    m.project.bgng_de    ?? null,
       endDate:      m.project.end_de     ?? null,
       myRole:       m.role_code,
+      locked:       m.project.lock_yn === "Y",
+      isOwner:      m.project.owner_mber_id === mberId,
     }));
 }

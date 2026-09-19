@@ -18,6 +18,7 @@
  *      - tb_pj_project del_yn='N', 관련 컬럼 NULL
  *      - 삭제 시 함께 REMOVED 처리됐던 멤버를 ACTIVE 로 되돌림
  *        (sttus_chg_dt >= del_dt 인 REMOVED 멤버가 그 대상)
+ *      - 소유자 플랜 상한을 넘는 상태면 잠긴 채 복구 (정책 §1-6 — 복구는 막지 않음)
  *
  * 시스템 관리자(SUPER_ADMIN)도 자기 OWNER 프로젝트면 동일 경로로 복구 가능.
  * 다른 사람의 프로젝트 복구는 별도 어드민 API 에서 처리(예정).
@@ -25,6 +26,7 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { applyLockOnTransferOrRestore } from "@/lib/billing/lock";
 import { requireAuth } from "@/lib/requireAuth";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
@@ -106,6 +108,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           },
         });
       }
+
+      // 소유자 플랜 기준 상한(FREE 멤버 5명 / 구독 좌석) 초과면 잠긴 상태로 복구된다.
+      // 멤버를 되살린 뒤에 판정해야 정확하다.
+      await applyLockOnTransferOrRestore(projectId, now, tx);
     });
 
     return apiSuccess({ ok: true });

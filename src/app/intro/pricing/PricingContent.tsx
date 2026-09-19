@@ -161,7 +161,7 @@ export default function PricingContent() {
                 <li>좌석 추가는 즉시(일할 결제), 축소는 다음 결제일부터</li>
               </ul>
               {BILLING_OPEN ? (
-                <Link href={INTRO_PATHS.login} className="btn btn-primary plan-cta">
+                <Link href={INTRO_PATHS.billing} className="btn btn-primary plan-cta">
                   BASIC 시작하기 <span className="arr">→</span>
                 </Link>
               ) : (

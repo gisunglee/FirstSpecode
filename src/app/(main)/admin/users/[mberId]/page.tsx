@@ -20,6 +20,10 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useIsSystemAdmin } from "@/hooks/useMyRole";
 import { PLAN_CODES, type PlanCode } from "@/lib/permissions";
+import type { SubscriptionDto } from "@/lib/billing/subscription";
+import type { PaidFeatureUsage } from "@/lib/billing/paidUsage";
+import { isLiveSubscriptionStatus } from "@/lib/billing/constants";
+import { formatKstDate, formatWon } from "@/lib/billing/pricing";
 
 type UserDetail = {
   mberId:        string;
@@ -56,6 +60,10 @@ type UserDetail = {
       attemptedAt: string;
     } | null;
   };
+  /** 결제 구독 요약 (없으면 null) — 살아 있으면 플랜 수동 변경은 서버가 409 */
+  subscription: SubscriptionDto | null;
+  /** 환불 판정용 유료 기능 사용 3플래그 (정책 §1-7) */
+  paidFeatureUsage: PaidFeatureUsage;
   projects: Array<{
     projectId: string;
     name:      string;
@@ -198,6 +206,8 @@ export default function AdminUserDetailPage({ params }: Props) {
   const statusAction: AccessAction | null =
     user.status === "ACTIVE" ? "SUSPEND" :
     user.status === "SUSPENDED" ? "UNSUSPEND" : null;
+  // 살아 있는 구독이 있으면 플랜 수동 변경 불가 (서버 409 와 같은 판정)
+  const hasLiveSub = !!user.subscription && isLiveSubscriptionStatus(user.subscription.status);
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
@@ -298,8 +308,12 @@ export default function AdminUserDetailPage({ params }: Props) {
                 setPlanForm({ plan: current, expiresAt });
                 setPlanModalOpen(true);
               }}
-              disabled={user.status === "WITHDRAWN"}
-              title={user.status === "WITHDRAWN" ? "탈퇴한 회원의 플랜은 변경할 수 없습니다." : undefined}
+              disabled={user.status === "WITHDRAWN" || hasLiveSub}
+              title={
+                user.status === "WITHDRAWN" ? "탈퇴한 회원의 플랜은 변경할 수 없습니다."
+                : hasLiveSub ? "결제 구독 중인 회원은 구독이 플랜의 원천입니다. 해지·종료 후 변경할 수 있습니다."
+                : undefined
+              }
             >
               플랜 변경
             </button>
@@ -320,6 +334,9 @@ export default function AdminUserDetailPage({ params }: Props) {
           </div>
         </div>
       </section>
+
+      {/* 구독·결제 (결제 2단계) — 구독 요약 + 환불 판정 3플래그. 환불 실행은 PG 콘솔 수동 */}
+      <BillingSummarySection subscription={user.subscription} usage={user.paidFeatureUsage} />
 
       {/* 계정 접근 및 인증 보안 */}
       <section
@@ -748,6 +765,59 @@ function AccessActionModal({
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── 구독·결제 요약 ────────────────────────────────────────────────────
+// 관리자 구독 목록 화면은 만들지 않는다(정책 §1-10). 회원 상세에서 구독 상태와
+// 환불 판정 플래그(결제 후 ② 프로젝트 생성 / 6번째 편집 멤버 / 첨부 업로드)만 보여 준다.
+const SUB_STATUS_LABEL: Record<string, string> = {
+  ACTIVE:           "이용 중",
+  PAST_DUE:         "결제 실패 · 재시도 중",
+  CANCEL_SCHEDULED: "해지 예약",
+  CANCELED:         "해지됨",
+  EXPIRED:          "결제 실패로 종료",
+};
+
+function BillingSummarySection({ subscription, usage }: { subscription: SubscriptionDto | null; usage: PaidFeatureUsage }) {
+  const flag = (v: boolean) => (
+    <span className={`sp-badge ${v ? "sp-badge-warning" : "sp-badge-neutral"}`}>{v ? "사용" : "미사용"}</span>
+  );
+  return (
+    <section
+      style={{
+        background: "var(--color-bg-card)",
+        border: "1px solid var(--color-border)",
+        borderRadius: "var(--radius-card)",
+        padding: "var(--space-5)",
+      }}
+    >
+      <h3 style={{ margin: 0, marginBottom: "var(--space-3)", fontSize: "var(--text-lg)", color: "var(--color-text-heading)" }}>
+        구독·결제
+      </h3>
+      {!subscription ? (
+        <div style={{ color: "var(--color-text-tertiary)", fontSize: "var(--text-sm)" }}>결제 구독 이력이 없습니다.</div>
+      ) : (
+        <div style={{ display: "flex", gap: 20, flexWrap: "wrap", fontSize: "var(--text-xs)", marginBottom: "var(--space-4)" }}>
+          <InfoItem label="상품" value={subscription.productName} />
+          <InfoItem label="상태" value={SUB_STATUS_LABEL[subscription.status] ?? subscription.status} />
+          <InfoItem label="좌석" value={`${subscription.seatCnt}개${subscription.pendingSeatCnt !== null ? ` → ${subscription.pendingSeatCnt}개 예약` : ""}`} />
+          <InfoItem label="다음 결제" value={subscription.nextBillAt ? `${formatKstDate(new Date(subscription.nextBillAt))} · ${formatWon(subscription.nextChargeAmount)}` : "-"} />
+          <InfoItem label="결제 수단" value={subscription.card ? `${subscription.card.company} ${subscription.card.numberMasked}` : "-"} />
+          <InfoItem label="연속 실패" value={`${subscription.failCnt}회`} />
+          {subscription.endedAt && <InfoItem label="종료일" value={formatKstDate(new Date(subscription.endedAt))} />}
+        </div>
+      )}
+      <div style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", marginBottom: "var(--space-2)" }}>
+        환불 판정 — 결제 후 유료 기능 사용 여부 (7일 이내 + 전부 미사용이면 전액 환불 대상)
+        {usage.firstPaidAt && <span style={{ color: "var(--color-text-tertiary)" }}> · 기준 시각 {formatKstDate(new Date(usage.firstPaidAt))}</span>}
+      </div>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: "var(--text-sm)" }}>
+        <span>① 두 번째 프로젝트 생성 {flag(usage.secondProjectCreated)}</span>
+        <span>② 6번째 이상 편집 멤버 {flag(usage.sixthEditorJoined)}</span>
+        <span>③ 첨부파일 업로드 {flag(usage.fileUploaded)}</span>
+      </div>
+    </section>
   );
 }
 

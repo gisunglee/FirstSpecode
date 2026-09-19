@@ -10,6 +10,8 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { findSubscription, toSubscriptionDto } from "@/lib/billing/subscription";
+import { getPaidFeatureUsage } from "@/lib/billing/paidUsage";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { requireSystemAdmin } from "@/lib/requireSystemAdmin";
 import { resolveEffectivePlan } from "@/lib/permissions";
@@ -103,6 +105,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "사용자를 찾을 수 없습니다.", 404);
     }
 
+    // 결제 2단계 — 구독 요약 + 환불 판정용 유료 기능 사용 3플래그 (정책 §1-7, 컬럼 저장 없이 계산)
+    const [subscription, paidFeatureUsage] = await Promise.all([
+      findSubscription(targetMberId),
+      getPaidFeatureUsage(targetMberId),
+    ]);
+
     return apiSuccess({
       mberId:         member.mber_id,
       email:          member.email_addr,
@@ -144,6 +152,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             }
           : null,
       },
+      subscription:     subscription ? toSubscriptionDto(subscription) : null,
+      paidFeatureUsage,
       projects: member.projectMembers.map((pm) => ({
         projectId: pm.project.prjct_id,
         name:      pm.project.prjct_nm,

@@ -54,10 +54,9 @@ export const TERMS_EFFECTIVE_DATE = "2026년 10월 1일";
 export const PRIVACY_EFFECTIVE_DATE = "2026년 10월 1일";
 
 // ─── 결제 오픈 여부 ───────────────────────────────────────────────────────────
-// 2단계(결제 연동) 배포 전까지 false. false 이면 요금제 페이지의 BASIC 버튼이
-// "결제 준비 중" 안내로 바뀐다 — 결제 화면이 없는데 "시작하기"를 눌러 헤매는 민원 방지.
-// 2단계 배포 시 true 로 바꾸고 이 주석을 정리한다.
-export const BILLING_OPEN = false;
+// true 이면 요금제 페이지의 BASIC 버튼이 설정 > 구독·결제 화면으로 이어진다.
+// false 로 내리면 "결제 준비 중" 안내로 바뀐다 (PG 장애 등으로 결제를 잠시 닫을 때 사용).
+export const BILLING_OPEN = true;
 
 // ─── 요금 (정책 문서 §1-2, §1-4 와 동일해야 함) ────────────────────────────────
 export const PRICING = {
@@ -92,4 +91,6 @@ export const INTRO_PATHS = {
   terms: "/intro/terms",
   privacy: "/intro/privacy",
   login: "/auth/login",
+  /** 로그인 후 구독·결제 설정 — 비로그인이면 앱이 로그인으로 보낸 뒤 되돌아온다 */
+  billing: "/settings/billing",
 } as const;

@@ -7,7 +7,8 @@
  *   - 미가입 또는 비활성 멤버 → 403
  *
  * 응답 계약: usePermissions 훅(src/hooks/useMyRole.ts)과 맞춰져 있음
- *   { myRole: RoleCode, myJob: JobCode, myPlan: PlanCode }
+ *   { myRole: RoleCode, myJob: JobCode, myPlan: PlanCode, isLocked: boolean }
+ *   isLocked — 프로젝트 결제 잠금(lock_yn). 화면 상단 "읽기 전용" 배너용 (2026-09-20)
  */
 
 import { NextRequest } from "next/server";
@@ -31,7 +32,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       role_code:       true,
       job_title_code:  true,
       mber_sttus_code: true,
-      member: { select: { plan_code: true, plan_expire_dt: true } },
+      member:  { select: { plan_code: true, plan_expire_dt: true } },
+      project: { select: { lock_yn: true } },
     },
   });
 
@@ -48,5 +50,5 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     membership.member.plan_expire_dt,
   );
 
-  return apiSuccess({ myRole, myJob, myPlan });
+  return apiSuccess({ myRole, myJob, myPlan, isLocked: membership.project.lock_yn === "Y" });
 }

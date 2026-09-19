@@ -34,6 +34,7 @@ import LNB from "./LNB";
 import StatusBar from "./StatusBar";
 import GlobalSearchDialog from "@/components/search/GlobalSearchDialog";
 import SupportSessionBanner from "@/components/admin/SupportSessionBanner";
+import ProjectLockedBanner from "@/components/billing/ProjectLockedBanner";
 import SessionExpiredModal from "@/components/auth/SessionExpiredModal";
 import { useAppStore } from "@/store/appStore";
 import { authFetch } from "@/lib/authFetch";
@@ -223,6 +224,8 @@ export default function MainLayout({
             flexDirection: "column",
           }}
         >
+          {/* 결제 잠금 배너 — 현재 프로젝트가 lock_yn='Y' 일 때만 렌더 (정책 §1-6) */}
+          <ProjectLockedBanner />
           {children}
         </main>
       </div>

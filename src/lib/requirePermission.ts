@@ -33,6 +33,7 @@ import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/apiResponse";
 import { requireAuth, type AuthPayload } from "@/lib/requireAuth";
 import { enforceMcpKeyScope } from "@/lib/mcpKeyScope";
+import { BILLING_ERROR_CODES, BILLING_PATH } from "@/lib/billing/constants";
 import {
   hasPermission,
   explainPermission,
@@ -63,6 +64,21 @@ export type PermissionContext = AuthPayload & {
 function isWritePermission(perm: Permission): boolean {
   // "*.read" 접미사 + "member.read" 같은 읽기만 허용
   return !perm.endsWith(".read");
+}
+
+// 결제 잠금 중에도 허용하는 쓰기 권한 — 잠금을 "해소"하는 데 필요한 동작만.
+// 정책 §1-6 은 "멤버를 5명 이하로 줄이세요" 로 안내하므로 멤버 제거·역할 변경(뷰어로 내리기)은
+// 잠긴 상태에서도 되어야 한다. 프로젝트 삭제·소유권 양도도 정리 수단이라 막지 않는다.
+// 이 목록 밖의 쓰기(콘텐츠 편집·생성·초대·업로드·설정 등)는 전부 403 PROJECT_LOCKED.
+const LOCK_EXEMPT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>([
+  "member.remove",
+  "member.changeRole",
+  "project.delete",
+  "project.transfer",
+]);
+
+function isBlockedByLock(perm: Permission): boolean {
+  return isWritePermission(perm) && !LOCK_EXEMPT_PERMISSIONS.has(perm);
 }
 
 /**
@@ -105,7 +121,7 @@ export async function requirePermission(
         },
       },
       project: {
-        select: { del_yn: true },
+        select: { del_yn: true, lock_yn: true },
       },
     },
   });
@@ -126,6 +142,22 @@ export async function requirePermission(
 
   if (membership && membership.member.mber_sttus_code !== "ACTIVE") {
     return apiError("ACCOUNT_INACTIVE", "활성 상태의 계정이 아닙니다.", 403);
+  }
+
+  // ─── 결제 잠금 — 쓰기만 차단 (정책 §1-6, §1-10) ──────────────────────
+  //
+  // 소유자가 강등(해지 확정·결제 실패)되면 소유 프로젝트가 lock_yn='Y' 가 된다.
+  // 조회·MCP 읽기는 그대로 되고 쓰기 권한만 여기서 한 번에 막는다 — 기능별 검사 금지.
+  // 지원 세션 읽기전용과 같은 isWritePermission 판정을 재사용하되, 잠금을 해소하는
+  // 동작(멤버 제거·역할 변경·삭제·양도)은 LOCK_EXEMPT_PERMISSIONS 로 예외.
+  // 시스템 관리자도 예외가 아니다 — 잠금은 권한이 아니라 소유자 플랜 상태다.
+  if (membership?.project?.lock_yn === "Y" && isBlockedByLock(permission)) {
+    return apiError(
+      BILLING_ERROR_CODES.PROJECT_LOCKED,
+      "이 프로젝트는 읽기 전용으로 잠겨 있습니다. 소유자가 구독을 갱신하거나 프로젝트 목록에서 활성화하면 편집할 수 있습니다.",
+      403,
+      { billingPath: BILLING_PATH }
+    );
   }
 
   // ─── 멤버십이 있는 정상 경로 ───────────────────────────────────────

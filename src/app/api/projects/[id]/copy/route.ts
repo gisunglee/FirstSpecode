@@ -77,7 +77,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         data: {
           prjct_id:          copy.prjct_id,
           ai_call_mthd_code: origSettings?.ai_call_mthd_code ?? "DIRECT",
-          plan_code:         origSettings?.plan_code         ?? "FREE",
         },
       });
 

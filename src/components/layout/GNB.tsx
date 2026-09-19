@@ -743,19 +743,26 @@ export default function GNB() {
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {myProfile?.name?.trim() || "이름 미설정"}
                     </span>
+                    {/* 플랜 배지 — 클릭 시 구독·결제 화면 (정책 §3 2단계) */}
                     {myProfile?.plan && (
-                      <span style={{
-                        flexShrink: 0,
-                        fontSize: "var(--text-xs)",
-                        fontWeight: 600,
-                        padding: "1px 6px",
-                        borderRadius: "var(--radius-sm)",
-                        background: "var(--color-brand-subtle)",
-                        color: "var(--color-brand)",
-                        lineHeight: 1.4,
-                      }}>
+                      <Link
+                        href="/settings/billing"
+                        onClick={() => setProfileOpen(false)}
+                        title="구독·결제 설정"
+                        style={{
+                          flexShrink: 0,
+                          fontSize: "var(--text-xs)",
+                          fontWeight: 600,
+                          padding: "1px 6px",
+                          borderRadius: "var(--radius-sm)",
+                          background: "var(--color-brand-subtle)",
+                          color: "var(--color-brand)",
+                          lineHeight: 1.4,
+                          textDecoration: "none",
+                        }}
+                      >
                         {myProfile.plan}
-                      </span>
+                      </Link>
                     )}
                   </div>
                   <div style={{
@@ -782,6 +789,22 @@ export default function GNB() {
                 onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
               >
                 프로필 설정
+              </Link>
+              {/* 구독·결제 — 플랜·좌석·결제 수단·해지 (정책 §3 2단계) */}
+              <Link
+                href="/settings/billing"
+                onClick={() => setProfileOpen(false)}
+                style={{
+                  display: "block",
+                  padding: "7px 14px",
+                  fontSize: "var(--text-md)",
+                  color: "var(--color-text-secondary)",
+                  textDecoration: "none",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-bg-elevated)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              >
+                구독·결제
               </Link>
               {/* MCP 키 관리 — 프로필 설정의 MCP 키 탭으로 직접 진입.
                   Claude Code 등 외부 클라이언트 연결 키 관리는 자주 쓰이므로 한 클릭에 노출 */}

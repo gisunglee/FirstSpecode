@@ -12,6 +12,7 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { applyLockOnTransferOrRestore } from "@/lib/billing/lock";
 import { requireAuth } from "@/lib/requireAuth";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
@@ -82,6 +83,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           sttus_chg_dt:    new Date(),
         },
       });
+
+      // 새 소유자 플랜 기준 상한 초과면 잠긴 채 넘어간다 — 탈퇴 흐름을 막지 않기 위해 양도는 항상 허용 (정책 §1-6).
+      // 본인이 LEFT 된 뒤에 판정해야 멤버 수·좌석에 본인이 잡히지 않는다.
+      await applyLockOnTransferOrRestore(projectId, new Date(), tx);
     });
 
     return apiSuccess({ ok: true });

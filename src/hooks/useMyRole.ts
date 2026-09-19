@@ -36,6 +36,7 @@ type MyRoleResponse = {
   myRole: RoleCode;
   myJob:  JobCode;   // 미지정 시 "ETC"
   myPlan: PlanCode;  // 계정 플랜 (FREE/BASIC/PRO/ENTERPRISE)
+  isLocked?: boolean; // 프로젝트 결제 잠금 — 읽기 전용 배너 (2026-09-20)
 };
 
 // /api/member/profile 에서 시스템 관리자 여부만 뽑아 쓰는 최소 타입.
@@ -101,6 +102,8 @@ export function usePermissions(projectId: string | null) {
     myPlan: actor.plan,
     isSystemAdmin,
     isLoading,
+    // 프로젝트 결제 잠금 여부 — 서버가 쓰기 권한을 403 으로 막는 상태. 배너·버튼 안내용
+    isProjectLocked: data?.isLocked === true,
 
     // 단일 권한 체크 — 백엔드와 동일 로직
     has,
