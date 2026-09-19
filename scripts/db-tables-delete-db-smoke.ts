@@ -87,11 +87,13 @@ async function main(): Promise<void> {
     const routeBulk  = await import("../src/app/api/projects/[id]/db-tables/bulk/route");
     const routeList  = await import("../src/app/api/projects/[id]/db-tables/route");
 
-    // ── 시드: 프로젝트 + 멤버 2명 (OWNER / 권한 없는 MEMBER) ──────────────
-    const project = await testDb.tbPjProject.create({ data: { prjct_nm: "스모크 테스트" } });
-
+    // ── 시드: 멤버 2명 (OWNER / 권한 없는 MEMBER) + 프로젝트 ──────────────
+    // 프로젝트는 owner_mber_id 가 필수라 소유자 회원을 먼저 만든다.
     const owner = await testDb.tbCmMember.create({
       data: { email_addr: "owner@smoke.invalid", mber_sttus_code: "ACTIVE" },
+    });
+    const project = await testDb.tbPjProject.create({
+      data: { prjct_nm: "스모크 테스트", owner_mber_id: owner.mber_id, creat_mber_id: owner.mber_id },
     });
     const dev = await testDb.tbCmMember.create({
       data: { email_addr: "dev@smoke.invalid", mber_sttus_code: "ACTIVE" },

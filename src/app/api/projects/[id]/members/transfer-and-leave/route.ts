@@ -3,8 +3,11 @@
  *
  * 역할:
  *   - OWNER가 새 OWNER를 지정하고 탈퇴
- *   - 트랜잭션: 대상 role → OWNER, 본인 status → LEFT
+ *   - 트랜잭션: 대상 role → OWNER, 프로젝트 owner_mber_id → 대상, 본인 status → LEFT
  *   - OWNER만 호출 가능
+ *
+ * 소유자는 항상 1명 — 멤버 역할(OWNER)과 프로젝트 소유자 컬럼(owner_mber_id)을
+ * 같은 트랜잭션에서 함께 바꿔야 한다. 하나만 바꾸면 탈퇴·상한·결제 판정이 갈린다.
  */
 
 import { NextRequest } from "next/server";
@@ -42,6 +45,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (!newOwnerId?.trim()) {
     return apiError("VALIDATION_ERROR", "양도할 멤버를 선택해 주세요.", 400);
   }
+  if (newOwnerId === auth.mberId) {
+    return apiError("VALIDATION_ERROR", "본인에게는 양도할 수 없습니다.", 400);
+  }
 
   // 양도 대상 멤버 확인
   const newOwner = await prisma.tbPjProjectMember.findUnique({
@@ -60,6 +66,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           role_code:    "OWNER",
           sttus_chg_dt: new Date(),
         },
+      });
+
+      // 프로젝트 소유자 컬럼도 함께 갱신 — 소유 판정의 단일 기준
+      await tx.tbPjProject.update({
+        where: { prjct_id: projectId },
+        data:  { owner_mber_id: newOwnerId },
       });
 
       // 본인 탈퇴 처리

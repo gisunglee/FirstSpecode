@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
           end_de:        endDate    ? new Date(endDate)     : null,
           client_nm:     clientName?.trim() || null,
           creat_mber_id: auth.mberId,
+          owner_mber_id: auth.mberId,  // 소유자 단일 컬럼 — 아래 OWNER 멤버십과 항상 같은 사람
         },
       });
 

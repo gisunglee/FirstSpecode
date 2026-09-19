@@ -15,6 +15,8 @@
     "db:migrate:extend-memo": "dotenv -e .env.local -- prisma db execute --schema prisma/schema.prisma --file prisma/sql/2026-08-19_extend_tb_ds_memo.sql",
     "db:migrate:mdfcn-src": "dotenv -e .env.local -- prisma db execute --schema prisma/schema.prisma --file prisma/sql/2026-09-12_add_mdfcn_src_code.sql",
     "db:migrate:scope-sttus": "dotenv -e .env.local -- prisma db execute --schema prisma/schema.prisma --file prisma/sql/2026-09-12_add_scope_sttus_code.sql",
+    "db:migrate:project-owner": "dotenv -e .env.local -- prisma db execute --schema prisma/schema.prisma --file prisma/sql/2026-09-19_add_project_owner.sql",
+    "db:migrate:project-owner-step2": "dotenv -e .env.local -- prisma db execute --schema prisma/schema.prisma --file prisma/sql/2026-09-19_add_project_owner_step2.sql",
     "db:migrate:memo-purpose": "dotenv -e .env.local -- prisma db execute --schema prisma/schema.prisma --file prisma/sql/2026-08-31_add_memo_purpose.sql",
     "db:migrate:spec-creator-permissions": "dotenv -e .env.local -- node scripts/run-spec-creator-permissions-migration.mjs",
     "test:ddl": "npx tsx scripts/test-ddl-parser.ts && npx tsx scripts/test-ddl-parser-2.ts",

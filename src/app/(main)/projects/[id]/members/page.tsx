@@ -6,6 +6,8 @@
  * 역할:
  *   - ACTIVE 멤버 목록 조회 (FID-00072, FID-00083)
  *   - 인라인 역할 드롭다운으로 즉시 변경 (FID-00073)
+ *     — OWNER 선택은 "양도"다: 확인 다이얼로그를 거친 뒤 대상이 소유자가 되고
+ *       현재 소유자는 관리자로 내려간다 (소유자는 항상 1명)
  *   - 멤버 강제 제거 — OWNER/ADMIN이 OWNER 아닌 멤버 제거 (FID-00084)
  *   - 프로젝트 탈퇴 — 역할·상황별 멀티스텝 (FID-00085~089)
  *
@@ -21,6 +23,7 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { SelectChevron } from "@/components/ui/SelectChevron";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
+import ConfirmDialog from "@/components/common/ConfirmDialog";
 import {
   ROLE_CODES, ROLE_LABEL,
   JOB_CODES,  JOB_LABEL,
@@ -103,6 +106,8 @@ function MembersPageInner() {
   const [removingMember, setRemovingMember] = useState<Member | null>(null);
   // 탈퇴 다이얼로그 열림 여부
   const [leaveOpen, setLeaveOpen] = useState(false);
+  // 소유권 양도 확인 대상 — 드롭다운에서 OWNER 를 고른 멤버. 확인 전에는 API 를 부르지 않는다.
+  const [transferTarget, setTransferTarget] = useState<Member | null>(null);
 
   // ── 멤버 목록 조회 ─────────────────────────────────────────────────────────
   const { data, isLoading, error } = useQuery({
@@ -120,10 +125,14 @@ function MembersPageInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role }),
       }),
-    onSuccess: () => {
+    onSuccess: (_res, vars) => {
       queryClient.invalidateQueries({ queryKey: ["project-members", projectId] });
-      // 본인 역할 변경 시 상단 권한 캐시도 갱신
+      // 본인 역할 변경 시 상단 권한 캐시도 갱신 (양도하면 내 역할이 ADMIN 으로 바뀜)
       queryClient.invalidateQueries({ queryKey: ["my-role", projectId] });
+      if (vars.role === "OWNER") {
+        setTransferTarget(null);
+        toast.success("소유권을 양도했습니다. 내 역할은 관리자로 변경되었습니다.");
+      }
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -313,9 +322,13 @@ function MembersPageInner() {
                         disabled={roleMutation.isPending}
                         onChange={(e) => {
                           const newRole = e.target.value as RoleCode;
-                          if (newRole !== member.role) {
-                            roleMutation.mutate({ memberId: member.memberId, role: newRole });
+                          if (newRole === member.role) return;
+                          // OWNER 지정은 양도 — 되돌리기 어려운 변경이므로 확인을 먼저 받는다
+                          if (newRole === "OWNER") {
+                            setTransferTarget(member);
+                            return;
                           }
+                          roleMutation.mutate({ memberId: member.memberId, role: newRole });
                         }}
                         className="sp-input"
                       >
@@ -414,6 +427,25 @@ function MembersPageInner() {
           onClose={() => setRemovingMember(null)}
         />
       )}
+
+      {/* 소유권 양도 확인 — 드롭다운에서 OWNER 를 고른 경우 */}
+      <ConfirmDialog
+        open={transferTarget !== null}
+        title="소유권을 양도하시겠습니까?"
+        description={
+          transferTarget
+            ? `${transferTarget.name ?? transferTarget.email} 님이 이 프로젝트의 소유자가 되고, 내 역할은 관리자로 변경됩니다. 소유자는 한 명만 둘 수 있으며, 되돌리려면 새 소유자가 다시 양도해야 합니다.`
+            : ""
+        }
+        confirmLabel="양도"
+        loading={roleMutation.isPending}
+        onConfirm={() => {
+          if (transferTarget) {
+            roleMutation.mutate({ memberId: transferTarget.memberId, role: "OWNER" });
+          }
+        }}
+        onCancel={() => setTransferTarget(null)}
+      />
 
       {/* 탈퇴 확인 다이얼로그 (PID-00026) */}
       {leaveOpen && (

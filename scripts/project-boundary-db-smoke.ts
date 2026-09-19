@@ -145,8 +145,8 @@ async function main(): Promise<void> {
     });
     await testDb.tbPjProject.createMany({
       data: [
-        { prjct_id: ids.projectA, prjct_nm: "Boundary Project A", creat_mber_id: ids.ownerA },
-        { prjct_id: ids.projectB, prjct_nm: "Boundary Project B", creat_mber_id: ids.ownerB },
+        { prjct_id: ids.projectA, prjct_nm: "Boundary Project A", creat_mber_id: ids.ownerA, owner_mber_id: ids.ownerA },
+        { prjct_id: ids.projectB, prjct_nm: "Boundary Project B", creat_mber_id: ids.ownerB, owner_mber_id: ids.ownerB },
       ],
     });
     await testDb.tbPjProjectMember.createMany({

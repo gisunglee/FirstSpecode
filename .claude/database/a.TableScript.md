@@ -46,9 +46,19 @@
 ## 3. 프로젝트 관리 (Project)
 * **`tb_pj_project`** (프로젝트)
   * `prjct_id` (t, PK) / `prjct_nm` (t, NN) / `client_nm` (t)
+  * `owner_mber_id` (t, 인덱스 `tb_pj_project_owner_idx`; 1단계는 nullable, 새 코드 배포 후 step2 SQL 로 NOT NULL 전환): 프로젝트 소유자 — 2026-09-19 추가.
+    "소유자는 항상 1명"의 단일 기준. `tb_pj_project_member.role_code='OWNER'` 멤버와 항상 같은 사람이며
+    양도(역할 API의 OWNER 지정, transfer-and-leave)에서 두 곳을 한 트랜잭션으로 함께 갱신한다.
+    회원 탈퇴 시 소유 프로젝트 판정, 플랜 상한(프로젝트 수·좌석), 결제 주체 판정은 모두 이 컬럼만 본다.
+    `creat_mber_id` 는 생성자 감사용으로만 남김(양도해도 바뀌지 않음) — 소유 판정에 쓰지 말 것.
+    FK 없음(creat_mber_id 와 동일한 문자열 참조; 회원은 논리 삭제만 함). 마이그레이션: `prisma/sql/2026-09-19_add_project_owner.sql` → 배포 → `..._step2.sql`
+  * 회원 탈퇴 시 소유 프로젝트는 2026-09-19부터 즉시 물리 삭제가 아니라 프로젝트 삭제와 같은
+    보관 삭제(`del_yn='Y'` + `hard_del_dt`)를 탄다 — 공통 로직 `src/lib/projectLifecycle.ts`
 * **`tb_pj_project_member`** (프로젝트 멤버)
   * `prjct_mber_id` (t, PK) / `prjct_id` (t, FK) / `mber_id` (t, FK)
-  * `role_code` (t, 기본 MEMBER)
+  * `role_code` (t, 기본 MEMBER): OWNER / ADMIN / MEMBER / VIEWER.
+    OWNER 는 프로젝트당 정확히 1명(2026-09-19부터) — 과거의 "복수 OWNER + 마지막 OWNER 보호" 모델은 폐기.
+    OWNER 를 다른 역할로 내리는 API 요청은 거부되며, 소유자를 바꾸는 길은 양도만 있다.
 * 프로젝트 설정/권한 관련: `tb_pj_project_settings`, `tb_pj_settings_history`, `tb_pj_project_api_key`, `tb_pj_project_invitation`, `tb_pj_member_removal_notice`
   * `tb_pj_project_settings.artifact_scope_code` (v10, NOT NULL, 기본 `ALL`): 산출물 출력 범위
     `ALL`(전체 출력 — 이전 사업분 포함, 항목마다 구분 표기) / `SCOPED`(이번 사업분 + 상위 계층만).

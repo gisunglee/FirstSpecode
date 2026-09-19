@@ -204,6 +204,17 @@ model TbPjProject {
   creat_dt      DateTime  @default(now())
   mdfcn_dt      DateTime?
 
+  // ── 소유자 (2026-09-19 도입) ────────────────────────────────────────────
+  // "이 프로젝트의 소유자는 누구인가"의 단일 기준. OWNER 역할 멤버는 항상 1명이며
+  // 이 컬럼과 같은 사람이다. 양도(transfer) 시 두 곳을 함께 갱신한다.
+  // 탈퇴 시 소유 프로젝트 판정, 플랜 상한(프로젝트 수·좌석), 결제 주체 판정이
+  // 모두 이 컬럼만 본다. creat_mber_id 는 감사용(누가 만들었나)으로만 남긴다.
+  // FK 는 걸지 않음 — creat_mber_id 와 동일하게 문자열 참조 (회원은 논리 삭제만 함).
+  // nullable 인 이유(임시): 옛 코드가 운영에 남아 있는 동안 INSERT 가 깨지지 않게
+  // 1단계 마이그레이션은 NULL 허용으로 추가했다. step2 SQL 로 NOT NULL 전환 후
+  // 이 타입도 String 으로 바꿀 것. 새 코드는 항상 값을 채운다.
+  owner_mber_id String?
+
   // ── Soft delete (2026-05-06 도입) ───────────────────────────────────────
   // OWNER 가 DELETE 를 호출하면 즉시 삭제하지 않고 다음 4개 컬럼이 세팅된다.
   //   - del_yn        : 'Y' = 삭제 예정, 'N' = 사용 중
@@ -270,6 +281,8 @@ model TbPjProject {
   // 배치(project-hard-delete) 가 매일 스캔하는 인덱스
   // (del_yn='Y' AND hard_del_dt <= now()) 조건을 빠르게 추리기 위함
   @@index([del_yn, hard_del_dt], map: "tb_pj_project_soft_del_idx")
+  // 소유자별 프로젝트 조회(상한 검사·탈퇴 처리·결제) 용
+  @@index([owner_mber_id], map: "tb_pj_project_owner_idx")
   @@map("tb_pj_project")
 }
 

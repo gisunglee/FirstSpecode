@@ -52,6 +52,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           end_de:        original.end_de,
           client_nm:     original.client_nm,
           creat_mber_id: auth.mberId,
+          owner_mber_id: auth.mberId,  // 소유자 단일 컬럼 — 아래 OWNER 멤버십과 항상 같은 사람
         },
       });
 

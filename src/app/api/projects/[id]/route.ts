@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { parseProjectAbbrInput } from "@/lib/constants/projectAbbr";
+import { resolveSoftDeleteRetentionDays, softDeleteProject } from "@/lib/projectLifecycle";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -265,10 +266,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 //     "실수로 DELETE 가 발사되는" 사고를 1차 차단한다.
 //   - 이미 del_yn='Y' 인 프로젝트에 다시 DELETE 가 오면 idempotent — 200 OK.
 //
-// 보관기간:
-//   TbSysConfigTemplate.PROJECT_SOFT_DELETE_DAYS (기본 14) 를 읽어 사용.
-//   값이 누락되면 SOFT_DELETE_DEFAULT_DAYS 로 fallback.
-const SOFT_DELETE_DEFAULT_DAYS = 14;
+// 보관기간·트랜잭션 본체:
+//   src/lib/projectLifecycle.ts 의 공통 로직 사용. 회원 탈퇴 시 소유 프로젝트
+//   정리(DELETE /api/member/me)와 같은 보관 흐름을 타야 하므로 한 곳에서 관리한다.
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const auth = await requireAuth(request);
@@ -315,62 +315,22 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     // 보관기간 결정 — 시스템 템플릿에서 읽고, 없거나 파싱 실패 시 기본값.
-    const retentionTmpl = await prisma.tbSysConfigTemplate.findUnique({
-      where:  { config_key: "PROJECT_SOFT_DELETE_DAYS" },
-      select: { default_value: true },
-    });
-    const retentionDays = (() => {
-      const n = parseInt(retentionTmpl?.default_value ?? "", 10);
-      return Number.isFinite(n) && n > 0 ? n : SOFT_DELETE_DEFAULT_DAYS;
-    })();
+    const retentionDays = await resolveSoftDeleteRetentionDays(prisma);
 
     const now = new Date();
     const hardDeleteAt = new Date(now.getTime() + retentionDays * 24 * 60 * 60 * 1000);
 
+    // 보관 삭제 트랜잭션 — 프로젝트 마크 + 다른 멤버 REMOVED/안내.
+    // OWNER 본인은 ACTIVE 유지(keepActorActive) — 보관 기간 동안 복구하려면 멤버십이 살아있어야 함.
     await prisma.$transaction(async (tx) => {
-      // ① 프로젝트를 "삭제 예정" 상태로 마크.
-      await tx.tbPjProject.update({
-        where: { prjct_id: projectId },
-        data: {
-          del_yn:      "Y",
-          del_dt:      now,
-          del_mber_id: auth.mberId,
-          hard_del_dt: hardDeleteAt,
-        },
+      await softDeleteProject(tx, {
+        projectId,
+        projectName:     project.prjct_nm,
+        actorMberId:     auth.mberId,
+        keepActorActive: true,
+        now,
+        hardDeleteAt,
       });
-
-      // ② 본인 제외 활성 멤버에게 제거 안내 발송 + 상태를 REMOVED 로 변경.
-      //    상태 변경 이유: 다른 멤버의 GNB/LNB/대시보드에서 즉시 사라져야 한다.
-      //    OWNER 본인은 ACTIVE 유지 — 보관 기간 동안 복구하려면 멤버십이 살아있어야 함.
-      const activeMembers = await tx.tbPjProjectMember.findMany({
-        where: {
-          prjct_id:        projectId,
-          mber_id:         { not: auth.mberId },
-          mber_sttus_code: "ACTIVE",
-        },
-        select: { mber_id: true },
-      });
-
-      if (activeMembers.length > 0) {
-        await tx.tbPjMemberRemovalNotice.createMany({
-          data: activeMembers.map((m) => ({
-            mber_id:  m.mber_id,
-            prjct_id: projectId,
-            prjct_nm: project.prjct_nm,
-          })),
-        });
-
-        await tx.tbPjProjectMember.updateMany({
-          where: {
-            prjct_id:        projectId,
-            mber_id:         { in: activeMembers.map((m) => m.mber_id) },
-          },
-          data: {
-            mber_sttus_code: "REMOVED",
-            sttus_chg_dt:    now,
-          },
-        });
-      }
     });
 
     return apiSuccess({

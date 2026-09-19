@@ -8,7 +8,10 @@
  *      - 둘 다 없으면: 소유 프로젝트 없는 경우의 단순 탈퇴 (AT만으로 진행)
  *   2. 트랜잭션:
  *      a. 회원 논리 삭제 (WITHDRAWN + wthdrw_dt)
- *      b. 소유 프로젝트 물리 삭제 (CASCADE)
+ *      b. 소유 프로젝트 보관 삭제 (owner_mber_id 기준, 프로젝트 삭제와 같은 soft delete)
+ *         — 과거엔 CASCADE 즉시 물리 삭제였음. 결제 도입 후 "실수 탈퇴 → 데이터 소멸"
+ *           분쟁을 막기 위해 보관 기간을 두고 배치(project-hard-delete)가 정리하게 변경.
+ *           탈퇴자는 돌아오지 않으므로 본인 멤버십도 함께 REMOVED 처리한다.
  *      c. 참여 프로젝트 멤버 상태 LEFT 처리
  *      d. 참여 프로젝트 OWNER에게 제거 안내 INSERT
  *      e. 소셜 계정 삭제
@@ -25,6 +28,7 @@ import { requireAuth } from "@/lib/requireAuth";
 import { verifyPassword, verifySocialToken } from "@/lib/auth";
 import { clearRefreshTokenCookie } from "@/lib/authRefreshCookie";
 import { isSystemAdminWithdrawalBlocked } from "@/lib/memberLifecyclePolicy";
+import { resolveSoftDeleteRetentionDays, softDeleteProject } from "@/lib/projectLifecycle";
 
 export async function DELETE(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -101,6 +105,10 @@ export async function DELETE(request: NextRequest) {
 
     const now = new Date();
 
+    // 소유 프로젝트 보관 기간 — 프로젝트 직접 삭제와 동일한 설정값을 쓴다.
+    const retentionDays = await resolveSoftDeleteRetentionDays(prisma);
+    const hardDeleteAt  = new Date(now.getTime() + retentionDays * 24 * 60 * 60 * 1000);
+
     await prisma.$transaction(async (tx) => {
       // a. 회원 논리 삭제
       await tx.tbCmMember.update({
@@ -108,21 +116,26 @@ export async function DELETE(request: NextRequest) {
         data:  { mber_sttus_code: "WITHDRAWN", wthdrw_dt: now },
       });
 
-      // b. 소유 프로젝트 물리 삭제 (creat_mber_id 기준)
-      //    CASCADE가 없을 경우 멤버 레코드를 먼저 삭제 후 프로젝트 삭제
+      // b. 소유 프로젝트 보관 삭제 (owner_mber_id 기준)
+      //    소유 판정은 owner_mber_id 단일 컬럼만 본다. creat_mber_id 로 고르면
+      //    양도 후 나간 원 생성자가 탈퇴할 때 남의 프로젝트가 지워진다.
+      //    이미 삭제 예정(del_yn='Y')인 프로젝트는 그대로 두고, 아래 c 단계의
+      //    제외 목록에는 포함시켜 멤버십 상태를 건드리지 않는다.
       const ownedProjects = await tx.tbPjProject.findMany({
-        where:  { creat_mber_id: auth.mberId },
-        select: { prjct_id: true },
+        where:  { owner_mber_id: auth.mberId },
+        select: { prjct_id: true, prjct_nm: true, del_yn: true },
       });
       const ownedProjectIds = ownedProjects.map((p) => p.prjct_id);
 
-      if (ownedProjectIds.length > 0) {
-        // 소유 프로젝트의 멤버 레코드 먼저 삭제 (FK 제약)
-        await tx.tbPjProjectMember.deleteMany({
-          where: { prjct_id: { in: ownedProjectIds } },
-        });
-        await tx.tbPjProject.deleteMany({
-          where: { prjct_id: { in: ownedProjectIds } },
+      for (const project of ownedProjects) {
+        if (project.del_yn === "Y") continue;
+        await softDeleteProject(tx, {
+          projectId:       project.prjct_id,
+          projectName:     project.prjct_nm,
+          actorMberId:     auth.mberId,
+          keepActorActive: false,
+          now,
+          hardDeleteAt,
         });
       }
 
