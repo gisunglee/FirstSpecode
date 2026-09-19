@@ -185,7 +185,10 @@ export default function LNB() {
           { label: "공통코드",  href: p("/common-codes"),   icon: "i_commonCode" },
           { label: "기준 정보", href: p("/standard-info"),  icon: "i_referenceInfo", dividerAfter: true },
           // 표준 가이드는 성격이 또 달라(작성 규칙 문서) 별도 구분선 아래
-          { label: "표준 가이드", href: p("/standard-guides"), icon: "i_standardGuide" },
+          { label: "표준 가이드", href: p("/standard-guides"), icon: "i_standardGuide", dividerAfter: true },
+          // 종합 설계실은 기존 상세 화면을 대체하지 않는 독립 워크스페이스다.
+          // 연결점은 이 메뉴 한 줄뿐이라 기능 제거 시 기존 설계 메뉴에 영향이 없다.
+          { label: "종합 설계실", href: p("/design-studio"), icon: "i_docs" },
         ],
       },
       {
