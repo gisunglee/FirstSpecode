@@ -46,7 +46,7 @@
 ## 3. 프로젝트 관리 (Project)
 * **`tb_pj_project`** (프로젝트)
   * `prjct_id` (t, PK) / `prjct_nm` (t, NN) / `client_nm` (t)
-  * `owner_mber_id` (t, 인덱스 `tb_pj_project_owner_idx`; 1단계는 nullable, 새 코드 배포 후 step2 SQL 로 NOT NULL 전환): 프로젝트 소유자 — 2026-09-19 추가.
+  * `owner_mber_id` (t, NOT NULL, 인덱스 `tb_pj_project_owner_idx`): 프로젝트 소유자 — 2026-09-19 추가 (1단계 nullable 추가 → 배포 → step2 NOT NULL 전환, 둘 다 운영 적용 완료).
     "소유자는 항상 1명"의 단일 기준. `tb_pj_project_member.role_code='OWNER'` 멤버와 항상 같은 사람이며
     양도(역할 API의 OWNER 지정, transfer-and-leave)에서 두 곳을 한 트랜잭션으로 함께 갱신한다.
     회원 탈퇴 시 소유 프로젝트 판정, 플랜 상한(프로젝트 수·좌석), 결제 주체 판정은 모두 이 컬럼만 본다.
