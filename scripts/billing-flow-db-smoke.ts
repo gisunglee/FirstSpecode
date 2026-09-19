@@ -11,7 +11,7 @@
  *   가격·날짜 순수 함수 → BASIC 시작(좌석 검증·첫 결제·플랜 미러) → 좌석 상한(초대 검사)
  *   → 좌석 추가(일할 결제) → 좌석 축소 예약·취소 → 사전 안내 메일(멱등) → 정기 결제(갱신)
  *   → 실패 카드로 변경 → 결제 실패(PAST_DUE) → 3일 간격 재시도 3회 → 강등(EXPIRED·FREE·잠금)
- *   → 잠금 검사(requirePermission) → 활성화(상한 이하/초과) → 재결제(전부 해제)
+ *   → 잠금 검사(requirePermission 권한·메서드 기준, requireProjectUnlocked) → 활성화(상한 이하/초과) → 재결제(전부 해제)
  *   → 해지 예약·취소·확정 → 관리자 수동 플랜 409 판정 → 탈퇴 시 구독 종료
  */
 
@@ -85,6 +85,7 @@ async function main(): Promise<void> {
     const { buildCustomerKey }  = await import("@/lib/billing/gateway");
     const { BillingError }      = await import("@/lib/billing/errors");
     const { requirePermission } = await import("@/lib/requirePermission");
+    const { requireProjectUnlocked } = await import("@/lib/requireProjectUnlocked");
     const { NextRequest }       = await import("next/server");
     const { signAccessToken }   = await import("@/lib/auth");
 
@@ -221,6 +222,10 @@ async function main(): Promise<void> {
     log("배치 — 결제일 도래 → RECURRING 결제, 좌석 5→4 적용, 새 주기 = 이전 종료일부터");
     const prevEnd = s.next_bill_dt!;
     const tBill = new Date(prevEnd.getTime() + days(0.5));
+    // 주기가 끝났는데 배치가 아직 안 돈 틈 — 남은 일수 0 → 0원 좌석 추가가 되면 안 된다
+    await assert.rejects(sub.previewSeatAddition(ids.A, 1, tBill), (e: unknown) => e instanceof BillingError && e.code === "BILLING_INVALID_STATE");
+    await assert.rejects(sub.changeSeats(actor, 6, tBill), (e: unknown) => e instanceof BillingError && e.code === "BILLING_INVALID_STATE");
+    assert.equal((await sub.findSubscription(ids.A))!.seat_cnt, 5, "주기 종료 후 좌석 추가 거부 → 좌석 그대로");
     assert.deepEqual(await daily.processSubscriptionDaily(s.sbscrptn_id, tBill), ["RENEWED"]);
     s = (await sub.findSubscription(ids.A))!;
     assert.equal(s.seat_cnt, 4);
@@ -231,6 +236,20 @@ async function main(): Promise<void> {
     const recurring = await prisma.tbBlPayment.findFirst({ where: { sbscrptn_id: s.sbscrptn_id, pymnt_ty_code: "RECURRING" } });
     assert.equal(recurring?.amt, 4 * 9900);
     assert.deepEqual(await daily.processSubscriptionDaily(s.sbscrptn_id, tBill), [], "같은 날 재실행 → 중복 청구 없음");
+
+    log("이중 결제 방지 — 다른 요청이 먼저 갱신한(낡은 버전) 구독으로 청구 시도 → skipped, 결제 이력 없음");
+    {
+      const stale = (await sub.findSubscription(ids.A))!;
+      // 다른 요청이 먼저 처리한 것을 흉내낸다 — mdfcn_dt(버전)만 앞으로 밀어 둔다
+      await prisma.tbBlSubscription.update({ where: { sbscrptn_id: stale.sbscrptn_id }, data: { mdfcn_dt: new Date(stale.mdfcn_dt.getTime() + 1000) } });
+      const before = await prisma.tbBlPayment.count({ where: { sbscrptn_id: stale.sbscrptn_id } });
+      const r = await sub.attemptRecurringCharge(stale, emailA, tBill, "RENEWAL");
+      assert.ok(!r.ok && r.skipped === true, "선점 실패 → skipped");
+      assert.equal(await prisma.tbBlPayment.count({ where: { sbscrptn_id: stale.sbscrptn_id } }), before, "PG 청구·이력 없음");
+      const after = (await sub.findSubscription(ids.A))!;
+      assert.equal(after.fail_cnt, 0, "실패로 세지 않음");
+      assert.equal(after.sbscrptn_sttus_code, "ACTIVE");
+    }
 
     // ── 8. 실패 카드로 변경 → 결제 실패 → 재시도 3회 → 강등 ──────────
     log("결제 수단 변경(실패 카드) → 다음 결제 실패 → PAST_DUE, 플랜은 유지");
@@ -277,11 +296,23 @@ async function main(): Promise<void> {
     assert.ok(writeGate instanceof Response && writeGate.status === 403 && (await writeGate.clone().json()).code === "PROJECT_LOCKED");
     const removeGate = await requirePermission(req(`/api/projects/${ids.P1}/members/x`), ids.P1, "member.remove");
     assert.ok(!(removeGate instanceof Response), "잠금 해소 수단(멤버 제거)은 허용");
+    // 상세 수정·인라인·정렬은 "content.read" 로 게이트를 통과한 뒤 자체 판정한다 → 메서드(PUT)로 막혀야 한다
+    const reqPut = (p: string) => new NextRequest(`http://localhost:3000${p}`, { method: "PUT", headers: { Authorization: `Bearer ${token}` } });
+    const putGate = await requirePermission(reqPut(`/api/projects/${ids.P1}/screens/x`), ids.P1, "content.read");
+    assert.ok(putGate instanceof Response && putGate.status === 403 && (await putGate.clone().json()).code === "PROJECT_LOCKED", "읽기 권한이어도 PUT 은 잠금");
+    const patchTransfer = new NextRequest(`http://localhost:3000/api/projects/${ids.P1}/members/x/role`, { method: "PATCH", headers: { Authorization: `Bearer ${token}` } });
+    const roleGate = await requirePermission(patchTransfer, ids.P1, "member.changeRole");
+    assert.ok(!(roleGate instanceof Response) && roleGate.projectLocked === true, "역할 변경은 통과하되 projectLocked 플래그 전달");
+    // requireAuth 만 쓰는 라우트용 헬퍼
+    const helperGate = await requireProjectUnlocked(ids.P1);
+    assert.ok(helperGate instanceof Response && helperGate.status === 403, "requireProjectUnlocked → 403");
+    assert.equal(await requireProjectUnlocked(randomUUID()), null, "없는 프로젝트는 호출부 404 에 맡김");
 
     // ── 10. 활성화 — P1(4명) 해제 OK, P2(6명) 초과 거부 → 뷰어 1명 빼면 OK ─
     log("활성화 — P1(멤버 4명) 해제, P2(6명) 는 FREE 상한 초과로 거부, 뷰어 제거 후 해제");
     const u1 = await lock.unlockProjectByOwner(ids.P1);
     assert.equal(u1.unlocked, true);
+    assert.equal(await requireProjectUnlocked(ids.P1), null, "해제 후 헬퍼 통과");
     const u2 = await lock.unlockProjectByOwner(ids.P2);
     assert.equal(u2.unlocked, false);
     assert.ok(!u2.unlocked && u2.verdict.reason === "FREE_MEMBERS" && u2.verdict.memberCount === 6);
@@ -362,7 +393,7 @@ async function main(): Promise<void> {
     assert.ok(payments.some((p) => p.status === "FAILED" && p.failReason?.includes("MOCK_DECLINED")));
     assert.ok(payments.every((p) => p.orderId.startsWith("SPC-")));
 
-    console.log("\n\x1b[32m✔ 결제 2단계 스모크 전부 통과\x1b[0m — 결제 이력", payments.length, "건, 좌석 흐름·배치·잠금·해지 검증 완료");
+    console.log("\n\x1b[32m✔ 결제 2단계 스모크 전부 통과\x1b[0m — 결제 이력", payments.length, "건, 좌석 흐름·배치·잠금(권한·메서드·헬퍼)·이중결제 방지·해지 검증 완료");
   } finally {
     if (db) await db.$disconnect().catch(() => {});
     await admin.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`).catch((e) => console.error("스키마 정리 실패:", e));
