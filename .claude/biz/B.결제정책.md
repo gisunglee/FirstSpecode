@@ -1,5 +1,5 @@
 # B. SPECODE 결제·요금제 정책 (작업 기준 문서)
-> 최종 갱신: 2026-09-20 · 상태: 2단계(결제 연동) 코드 완료 — 운영 DDL 적용·푸시 대기
+> 최종 갱신: 2026-09-20 · 상태: 2단계(결제 연동)+3단계(잠금) **운영 배포 완료** (Mock PG). 다음: 사업자 정보 실제값 교체 → 토스 가맹 심사 → 토스 어댑터
 
 이 문서는 결제 기능이 끝날 때까지 **모든 세션이 가장 먼저 읽는 단일 기준**이다.
 대화에서 결정된 것은 여기에만 쓴다. 여기 없는 규칙은 결정되지 않은 것이다.
@@ -249,9 +249,9 @@
 - [x] 4단계 관리자 수동 부여 — 코드 완료·로컬 커밋(2026-09-19). `PATCH /api/admin/users/[id]/plan` + 회원 상세 "플랜 변경" 모달 + 감사 `USER_PLAN_CHANGE`. 좌석 입력·사용 플래그 표시는 2단계에서 구독 데이터가 생기면 같은 모달에 추가
 - [x] 2단계 결제 연동 — **코드 완료·로컬 커밋** (2026-09-20). Mock PG("PG 창" `/billing/pg-window`), 구독·결제·웹훅 테이블, 게이트웨이 인터페이스, 도메인 서비스, `/api/billing/*` 9개 + `POST /api/projects/[id]/unlock`, 일일 배치 `billing-daily`, 메일 5종, `/settings/billing` 화면(시작·좌석 추가/축소·카드 변경·해지·해지 취소·결제 내역), GNB 배지 링크, 요금제 페이지 `BILLING_OPEN=true`, 관리자 회원 상세 구독 요약·환불 3플래그, 수동 플랜 변경 409, 탈퇴 시 구독 종료. 검증: `npm run test:billing:db` 스모크 17단계 통과(임시 스키마) + `tsc` 통과 + 손 DDL ↔ Prisma 모델 diff 없음
 - [x] 3단계 잠금 — 2단계에 포함해 완료 (2026-09-20). `requirePermission` 잠금 403(예외 4개), 프로젝트 목록 🔒 배지·"활성화", 프로젝트 내부 읽기 전용 배너, 소유권 이전·복구 시 상한 판정, 좌석 상한 초대·수락 검사(`PLAN_LIMIT_SEAT`)
-- [ ] **운영 DDL 적용 — 사용자 확인 대기** (§0 규칙 6): (a) 읽기 전용 점검 완료(tb_bl_* 없음, lock_yn 없음, 회원 11명 FREE) → (b) `prisma/sql/2026-09-20_create_billing.sql` 작성 → (c) 확인 → (d) `npm run db:migrate:billing` → (e) 재검증. 새 코드 배포 뒤 `npm run db:migrate:billing-drop-settings-plan`(plan_code DROP)
-- [ ] 운영 env 확인: `PAYMENT_GATEWAY=mock`(기본), `API_KEY_SECRET`(빌링키 암호화), `BATCH_CRON_SECRET` + 외부 cron 에 `billing-daily` 하루 1회 등록, `SMTP_*`(메일 5종)
-- [ ] 푸시(배포) — 로컬 커밋(1단계·3단계 상한·4단계·2단계) 대기. **DDL (d) 적용 후** 사용자 확인하고 푸시
+- [x] 운영 DDL 적용 (2026-09-20, 사용자 확인 후): `create_billing.sql` 적용 → 재검증(테이블 3·인덱스 8·lock_yn 기본 N, 회원·프로젝트 수 불변) → 푸시·배포 확인(143초, /intro/pricing 200) → `drop_project_settings_plan_code.sql` 적용 → 재검증(plan_code 없음, 설정 13컬럼·10행). 운영 DB ↔ Prisma 모델 `migrate diff`: 결제 관련 차이 없음 (남은 1건 `tb_pj_project_settings.artifact_scope_code` varchar(10) vs 모델 text 는 2026-09-12 부터 있던 기존 drift — 결제 무관, 미조치)
+- [x] 푸시(배포) — 2026-09-20 커밋 7개(1·3·4·2단계) 푸시 완료. 요금제 페이지 BASIC 버튼이 `/settings/billing` 으로 열림
+- [ ] **운영 env 확인 (사용자)**: `PAYMENT_GATEWAY`(비우면 mock), `API_KEY_SECRET`(빌링키 암호화 — 미설정이면 개발 기본키로 암호화됨, 운영 필수), `BATCH_CRON_SECRET`(32자+) + 외부 cron 에 `POST /api/admin/batch/run/billing-daily` 하루 1회 등록(없으면 정기 결제·재시도·해지 확정이 돌지 않음 — 관리자 배치 화면 수동 실행은 가능), `SMTP_*`(메일 5종)
 - [ ] 토스 가맹 심사 신청 — 사업자 정보 실제 값 교체 후 (§2)
 - [ ] 후속: 첨부 용량 집계, PRO 출시, 세금계산서
 
@@ -267,3 +267,4 @@
 - 2026-09-19 심사 제외 전부 리얼로 만들기로 결정(사용자). PG 지점만 Mock("PG 창"), 운영에서도 Mock 사용 허용(내부 사용자만). 4단계 완료. 2단계 상세 설계 §3 에 확정.
 - 2026-09-20 2단계 구현 완료(Mock PG). 설계 대비 확정 차이: 콜백은 화면→POST, prentc_dt 컬럼, payment.sbscrptn_id NULL 허용, 잠금 예외 권한 4개, PAST_DUE 해지는 즉시 종료, 카드 변경 시 즉시 재결제, 축소 예약값이 초대 상한. 3단계 잠금도 함께 완료. 운영 DDL·푸시는 사용자 확인 대기.
 - 2026-09-20 역할 변경 VIEWER→MEMBER/ADMIN 도 좌석 검사(사용자 결정, `checkSeatLimit`). 뷰어 무료는 유지 — "뷰어도 다 본다"는 요금이 아니라 권한(content.export 제외 등)으로 다룬다.
+- 2026-09-20 운영 배포(사용자 지시 "1·2·3 다 진행"): create_billing DDL → 푸시 → plan_code DROP 순서로 적용, 각 단계 읽기 전용 재검증. 결제 기능 운영 오픈(Mock PG, 내부 사용자).

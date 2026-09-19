@@ -68,8 +68,8 @@
     해제 3경로: 재결제 성공(전부) / 소유자 "활성화"(상한 이하인 프로젝트만) / 강등 직후 소유 프로젝트 1개뿐이면 자동.
     소유권 이전·복구 시 새 소유자 플랜 기준 상한 초과면 `Y` 로 넘어간다. 로직: `src/lib/billing/lock.ts`
 * 프로젝트 설정/권한 관련: `tb_pj_project_settings`, `tb_pj_settings_history`, `tb_pj_project_api_key`, `tb_pj_project_invitation`, `tb_pj_member_removal_notice`
-  * `tb_pj_project_settings.plan_code` 는 **삭제 예정** (2026-09-20 Prisma 모델에서 제거, 생성·복사 라우트의 쓰기 제거).
-    플랜은 `tb_cm_member.plan_code` 에만 있다. DB 컬럼 DROP 은 새 코드 배포 후 `prisma/sql/2026-09-20_drop_project_settings_plan_code.sql`.
+  * `tb_pj_project_settings.plan_code` 는 **삭제됨** (2026-09-20 운영 적용, `prisma/sql/2026-09-20_drop_project_settings_plan_code.sql`).
+    플랜은 `tb_cm_member.plan_code` 에만 있다.
   * `tb_pj_project_settings.artifact_scope_code` (v10, NOT NULL, 기본 `ALL`): 산출물 출력 범위
     `ALL`(전체 출력 — 이전 사업분 포함, 항목마다 구분 표기) / `SCOPED`(이번 사업분 + 상위 계층만).
     2026-09-12 추가. 프로젝트당 한 번 지정해 모든 산출물 출력에 적용된다.
