@@ -19,6 +19,9 @@
  *                    설계 내용을 논의하거나 description을 작성하기 전에 반드시 먼저 호출할 것)
  *   [DB]           list_db_tables, get_db_table, create_db_table, update_db_table, deprecate_db_table,
  *                    get_db_table_usage, get_db_column_usage
+ *   [설계-컬럼매핑] get_col_mappings, add_col_mappings (기능 ↔ DB 컬럼. 조회·추가만 —
+ *                    삭제·교체·그룹 이름변경은 웹 UI 전용. 추가는 서버 APPEND 모드라 기존 매핑을
+ *                    절대 지우지 않음. 권한은 update_function과 동일: 담당자 아니면 사유 반환)
  *   [공통코드/기준정보] list_code_groups, create_code_group, list_codes, create_code, update_code,
  *                    list_standard_info, create_standard_info (삭제는 등록자/PM/PL/관리자만
  *                    가능한 동적 조건이라 웹 UI 전용 — MCP엔 미등록. 그룹 수정 도구는 없음)
@@ -1272,6 +1275,107 @@ export function registerTools(
       try {
         const data = await specodeFetch(
           `/api/projects/${projectId}/db-tables/${tableId}/columns/${colId}/usage`
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  // ═══════════════════════════════════════════════════════════════
+  // 10-1. 설계 — 기능 컬럼 매핑 (Function ↔ DB Column Mapping)
+  // ═══════════════════════════════════════════════════════════════
+  // 안전 우선 설계 — MCP는 "조회"와 "추가"만 할 수 있다:
+  //   · 삭제·교체·그룹 이름변경 도구 없음. 잘못 추가된 매핑은 웹 UI에서 지운다.
+  //   · 추가는 서버 APPEND 모드 — 기존 매핑은 절대 지우거나 덮어쓰지 않고, 이미 매핑된
+  //     컬럼은 건너뛴다(skippedColIds로 알려줌). 그룹 확정과 삽입이 한 트랜잭션.
+  //   · 권한은 update_function과 동일 — 담당자/상위 담당자/PM·PL/OWNER·ADMIN만.
+  //     아니면 서버가 "이 기능의 담당자가 아닙니다 ..." 사유를 그대로 반환하고, 그 문구를
+  //     AI가 사용자에게 전달한다.
+  //   · 대상은 FUNCTION 하나씩만(functionId 단건). 웹 UI도 FUNCTION만 사용한다.
+
+  server.tool(
+    "get_col_mappings",
+    "기능 컬럼 매핑 조회 — 기능이 어떤 DB 테이블·컬럼을 INPUT/OUTPUT/INOUT 으로 쓰는지 " +
+      "그룹(grpNm)별 매핑 목록을 반환합니다. add_col_mappings 전에 반드시 먼저 호출해 " +
+      "이미 매핑된 컬럼과 기존 그룹 이름을 확인하세요. " +
+      "(역방향 — 컬럼이 어떤 기능에서 쓰이는지는 get_db_column_usage)",
+    {
+      projectId:  z.string().describe("프로젝트 ID"),
+      functionId: z.string().describe("기능 ID (list_functions로 조회)"),
+    },
+    async ({ projectId, functionId }) => {
+      try {
+        const qs = buildQs({ refType: "FUNCTION", refId: functionId });
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/col-mappings${qs}`
+        );
+        return textResult(data);
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  server.tool(
+    "add_col_mappings",
+    "기능 컬럼 매핑 추가 — 기능에 DB 컬럼 매핑을 '추가만' 합니다(기존 매핑은 절대 지우거나 " +
+      "덮어쓰지 않음). 지정한 그룹(grpNm)에 이미 매핑된 컬럼은 건너뛰고 skippedColIds로 " +
+      "알려줍니다. grpNm과 같은 이름의 그룹이 없으면 새로 만듭니다. " +
+      "선행: get_col_mappings로 기존 매핑·그룹 이름 확인, get_db_table로 colId 확인. " +
+      "권한: 이 기능의 담당자(또는 상위 담당자)·PM/PL·OWNER/ADMIN만 가능 — 아니면 서버가 " +
+      "사유를 반환하므로 그 문구를 사용자에게 그대로 전달하세요. " +
+      "매핑 삭제·교체·그룹 이름 변경은 MCP에 없으며 웹 UI에서만 가능합니다. " +
+      DESIGN_WRITE_POLICY_POINTER,
+    {
+      projectId:  z.string().describe("프로젝트 ID"),
+      functionId: z.string().describe("기능 ID (list_functions로 조회)"),
+      grpNm: z
+        .string()
+        .min(1)
+        .describe(
+          "매핑 그룹 이름 (필수). 기존 그룹에 추가하려면 get_col_mappings에서 본 grpNm을 " +
+            "그대로 쓰고, 새 그룹이면 새 이름을 지정하세요. 예: '검색 조건', '결과 그리드', '저장 항목'"
+        ),
+      items: z
+        .array(
+          z.object({
+            colId: z.string().describe("DB 컬럼 ID (get_db_table의 columns[].colId)"),
+            ioSeCode: z
+              .enum(["INPUT", "OUTPUT", "INOUT"])
+              .optional()
+              .describe("IO 구분. INPUT=입력 | OUTPUT=출력 | INOUT=입출력"),
+            // 웹 UI(ColMappingDialog)의 UI 유형 선택지와 동일하게 유지할 것
+            uiTyCode: z
+              .enum(["TEXT", "TEXTAREA", "SELECT", "RADIO", "CHECKBOX", "DATE", "NUMBER", "FILE", "HIDDEN"])
+              .optional()
+              .describe("UI 유형. TEXT=텍스트 | TEXTAREA=텍스트영역 | SELECT=콤보박스 | RADIO=라디오 | CHECKBOX=체크박스 | DATE=날짜 | NUMBER=숫자 | FILE=파일 | HIDDEN=히든"),
+            usePurpsCn: z.string().optional().describe("항목명 — 화면에서 이 컬럼이 어떤 이름으로 쓰이는지"),
+            colDc: z.string().optional().describe("비고 — 변환 규칙, 기본값, 검증 조건 등"),
+          })
+        )
+        .min(1, "items는 최소 1개 이상이어야 합니다")
+        .describe("추가할 컬럼 매핑 목록. 같은 colId를 두 번 넣으면 서버가 거부합니다"),
+      ...DESIGN_AGREEMENT_FIELDS,
+    },
+    async ({ projectId, functionId, grpNm, items, userAgreement, discussionSummary }) => {
+      const blocked = agreementGate({ userAgreement, discussionSummary });
+      if (blocked) return blocked;
+      try {
+        const data = await specodeFetch(
+          `/api/projects/${projectId}/col-mappings`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              refType: "FUNCTION",
+              refId:   functionId,
+              grpNm,
+              // APPEND 고정 — MCP 채널에서는 REPLACE(전체 교체)를 절대 쓰지 않는다
+              mode:    "APPEND",
+              items,
+            }),
+          }
         );
         return textResult(data);
       } catch (err) {

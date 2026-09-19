@@ -1028,7 +1028,8 @@ function FunctionDetailPageInner() {
               refId={functionId}
             />
 
-            {/* ── AR-00082 컬럼 매핑 — 신규 모드에서는 버튼 disabled */}
+            {/* ── AR-00082 컬럼 매핑 — 신규 모드 또는 수정 권한 없음(담당자 아님 등)이면 버튼 disabled
+                 매핑 API가 기능 수정 권한과 같은 기준으로 403을 반환하므로, 저장 시점에 실패하는 대신 진입을 막는다 */}
             <section style={sectionStyle}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: colMappings.length > 0 ? 12 : 0 }}>
                 <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>컬럼 매핑</h3>
@@ -1043,9 +1044,13 @@ function FunctionDetailPageInner() {
                   )}
                   <button
                     onClick={() => setMappingPopupOpen(true)}
-                    disabled={isNew}
-                    title={isNew ? "저장 후 사용할 수 있습니다" : undefined}
-                    style={{ ...primaryBtnStyle, fontSize: 11, padding: "3px 10px", opacity: isNew ? 0.4 : 1, cursor: isNew ? "not-allowed" : "pointer" }}
+                    disabled={isNew || !canEdit}
+                    title={
+                      isNew    ? "저장 후 사용할 수 있습니다"
+                      : !canEdit ? "이 기능의 담당자 또는 PM/PL만 매핑을 편집할 수 있습니다"
+                      : undefined
+                    }
+                    style={{ ...primaryBtnStyle, fontSize: 11, padding: "3px 10px", opacity: (isNew || !canEdit) ? 0.4 : 1, cursor: (isNew || !canEdit) ? "not-allowed" : "pointer" }}
                   >
                     매핑 관리
                   </button>

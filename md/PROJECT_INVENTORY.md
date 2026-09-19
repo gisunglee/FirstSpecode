@@ -201,6 +201,7 @@ MCP 동기화 규칙).
 | 설계-기능 | `list_functions`, `get_function`, `create_function`, `update_function` |
 | 설계-트리 | `get_design_tree` (배치 조회 — 단위업무 ID 1~20개 필수, "전체 조회" 미지원) |
 | DB | `list_db_tables`, `get_db_table`, `get_db_table_usage`, `get_db_column_usage` |
+| 설계-컬럼매핑 | `get_col_mappings`, `add_col_mappings` (기능 ↔ DB 컬럼. 조회·추가만 — 추가는 서버 APPEND 모드로 기존 매핑을 지우지 않음. 삭제·교체·그룹 이름변경은 웹 UI 전용. 권한은 `update_function`과 동일) |
 | 스펙 정합성 | `get_source_baselines`, `get_reconciliation_context`, `submit_implementation_receipt`, `submit_maintenance_change`, `submit_provider_verified_change`, `list_spec_reconciliations`, `get_spec_reconciliation`, `queue_reconciliation_analysis`, `retry_reconciliation_batch`, `confirm_reconciliation_resolution`, `check_reconciliation_gate` |
 | 워커 배포 | `get_worker_command_files` |
 

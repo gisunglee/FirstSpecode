@@ -3,35 +3,45 @@
  * DELETE /api/projects/[id]/col-mapping-groups/[groupId] — 그룹 삭제 (매핑도 함께 삭제, FK cascade)
  *
  * PUT Body: { grpNm?, sortOrdr? }
+ *
+ * 권한: 매핑 그룹은 소속 엔티티(기능 등) 설계 내용의 일부 → 그 엔티티의 "수정" 권한과 동일하게 판정.
+ *   OWNER/ADMIN·PM/PL·가장 가까운 담당자만 통과. 아니면 사유가 담긴 403이 그대로 나간다.
+ *   그룹 삭제는 엔티티 자체를 지우는 것이 아니므로 관리자 전용 DELETE 정책이 아니라 UPDATE로 판정한다.
  */
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
-import { checkRole } from "@/lib/checkRole";
+import { requireSpecContentWrite } from "@/lib/specContentWritePolicy";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import {
   isProjectEntityRefType,
   projectEntityBelongsToProject,
+  type ProjectEntityRefType,
 } from "@/lib/projectEntityScope";
 
 type RouteParams = { params: Promise<{ id: string; groupId: string }> };
 
+/**
+ * 그룹을 찾아 이 프로젝트 소속인지 확인한다.
+ * 소속 엔티티의 refType/refId를 알아야 권한 판정을 할 수 있으므로 PUT/DELETE 공통으로 먼저 호출한다.
+ * 다른 프로젝트의 그룹이면 존재 여부를 노출하지 않기 위해 null(→ 404)로 취급한다.
+ */
+async function findGroupInProject(projectId: string, groupId: string) {
+  const target = await prisma.tbDsColMappingGroup.findUnique({ where: { grp_id: groupId } });
+  if (!target) return null;
+  if (!isProjectEntityRefType(target.ref_ty_code)) return null;
+  if (!await projectEntityBelongsToProject(projectId, target.ref_ty_code, target.ref_id)) return null;
+  return { ...target, ref_ty_code: target.ref_ty_code as ProjectEntityRefType };
+}
+
 // ─── PUT: 그룹 이름/순서 수정 ─────────────────────────────────────────────────
 export async function PUT(request: NextRequest, { params }: RouteParams) {
+  // 인증만 먼저 확인 — 비로그인 요청이 그룹 존재 여부(404/403 차이)를 알아내지 못하게 함
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const { id: projectId, groupId } = await params;
-
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
-  const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER"]);
-  if (roleCheck) return roleCheck;
 
   let body: unknown;
   try { body = await request.json(); } catch {
@@ -45,14 +55,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const target = await prisma.tbDsColMappingGroup.findUnique({ where: { grp_id: groupId } });
-    if (
-      !target ||
-      !isProjectEntityRefType(target.ref_ty_code) ||
-      !await projectEntityBelongsToProject(projectId, target.ref_ty_code, target.ref_id)
-    ) {
+    const target = await findGroupInProject(projectId, groupId);
+    if (!target) {
       return apiError("NOT_FOUND", "매핑 그룹을 찾을 수 없습니다.", 404);
     }
+
+    // 소속 엔티티의 수정 권한으로 판정 (담당자 아니면 사유와 함께 403)
+    const gate = await requireSpecContentWrite(request, projectId, target.ref_ty_code, target.ref_id, "UPDATE");
+    if (gate instanceof Response) return gate;
 
     const group = await prisma.tbDsColMappingGroup.update({
       where: { grp_id: groupId },
@@ -76,27 +86,17 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   const { id: projectId, groupId } = await params;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
-  const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER"]);
-  if (roleCheck) return roleCheck;
-
   try {
-    // 같은 ref 안에 그룹이 하나뿐이면 삭제 불가 — 매핑이 소속될 그룹이 항상 있어야 함
-    const target = await prisma.tbDsColMappingGroup.findUnique({ where: { grp_id: groupId } });
+    const target = await findGroupInProject(projectId, groupId);
     if (!target) {
-      return apiError("NOT_FOUND", "그룹을 찾을 수 없습니다.", 404);
-    }
-    if (
-      !isProjectEntityRefType(target.ref_ty_code) ||
-      !await projectEntityBelongsToProject(projectId, target.ref_ty_code, target.ref_id)
-    ) {
       return apiError("NOT_FOUND", "매핑 그룹을 찾을 수 없습니다.", 404);
     }
+
+    // 소속 엔티티의 수정 권한으로 판정 (담당자 아니면 사유와 함께 403)
+    const gate = await requireSpecContentWrite(request, projectId, target.ref_ty_code, target.ref_id, "UPDATE");
+    if (gate instanceof Response) return gate;
+
+    // 같은 ref 안에 그룹이 하나뿐이면 삭제 불가 — 매핑이 소속될 그룹이 항상 있어야 함
     const siblingCount = await prisma.tbDsColMappingGroup.count({
       where: { ref_ty_code: target.ref_ty_code, ref_id: target.ref_id },
     });
