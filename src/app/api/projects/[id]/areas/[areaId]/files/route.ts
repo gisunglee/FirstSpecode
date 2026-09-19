@@ -10,6 +10,7 @@ import { requireAuth } from "@/lib/requireAuth";
 import { checkRole } from "@/lib/checkRole";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { saveFile } from "@/lib/fileStorage";
+import { checkUploadAllowed } from "@/lib/planLimits";
 
 type RouteParams = { params: Promise<{ id: string; areaId: string }> };
 
@@ -65,6 +66,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
   const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER"]);
   if (roleCheck) return roleCheck;
+
+  // FREE 플랜은 첨부 업로드 차단 — 소유자 플랜 기준. 파일 파싱 전에 막는다 (정책 §1-8)
+  const uploadErr = await checkUploadAllowed(projectId);
+  if (uploadErr) return uploadErr;
 
   // 영역 존재 확인
   const area = await prisma.tbDsArea.findUnique({ where: { area_id: areaId } });

@@ -20,6 +20,7 @@ import { authFetch } from "@/lib/authFetch";
 import { JOB_CODES, JOB_LABEL, type JobCode } from "@/lib/permissions";
 import { type InvitationStatus, INVITATION_STATUS_LABEL, INVITATION_STATUS_COLOR } from "@/constants/codes";
 import { SelectChevron } from "@/components/ui/SelectChevron";
+import PlanLimitDialog, { isPlanLimitError } from "@/components/common/PlanLimitDialog";
 
 // ── 타입 ──────────────────────────────────────────────────────────────────
 type InvitationItem = {
@@ -62,10 +63,13 @@ function InviteDialog({
   projectId,
   onClose,
   onSent,
+  onLimit,
 }: {
   projectId: string;
   onClose: () => void;
   onSent: () => void;
+  /** FREE 멤버 상한(PLAN_LIMIT_MEMBER)에 걸리면 서버 문구를 넘긴다 — 부모가 요금제 안내 모달로 전환 */
+  onLimit: (message: string) => void;
 }) {
   const [rows, setRows] = useState<InviteRow[]>([{ email: "", role: "MEMBER", job: "ETC" }]);
   const [errors, setErrors] = useState<string[]>([""]);
@@ -105,7 +109,8 @@ function InviteDialog({
         if (successCount > 0) toast.success(`${successCount}건 발송 완료, ${failed.length}건 실패`);
       }
     },
-    onError: (err: Error) => toast.error(err.message),
+    // 플랜 상한은 토스트가 아니라 요금제 안내 모달로
+    onError: (err: Error) => (isPlanLimitError(err) ? onLimit(err.message) : toast.error(err.message)),
   });
 
   function handleSubmit(e: React.FormEvent) {
@@ -281,6 +286,8 @@ function InvitationsInner() {
   const projectId   = params.id as string;
 
   const [inviteOpen,     setInviteOpen]     = useState(false);
+  // FREE 멤버 상한 안내 모달 문구 — null 이면 닫힘
+  const [limitMsg,       setLimitMsg]       = useState<string | null>(null);
   // 인라인 확인 대상 — 한 번에 한 행만 확인 모드. action 으로 메시지/토스트 분기.
   const [confirmTarget,  setConfirmTarget]  = useState<{ id: string; action: "cancel" | "delete" } | null>(null);
 
@@ -419,8 +426,12 @@ function InvitationsInner() {
           projectId={projectId}
           onClose={() => setInviteOpen(false)}
           onSent={() => { setInviteOpen(false); refresh(); }}
+          onLimit={(msg) => { setInviteOpen(false); setLimitMsg(msg); }}
         />
       )}
+
+      {/* FREE 상한 안내 — 초대가 멤버 상한에 걸렸을 때 요금제 페이지로 유도 */}
+      <PlanLimitDialog message={limitMsg} onClose={() => setLimitMsg(null)} />
     </div>
   );
 }

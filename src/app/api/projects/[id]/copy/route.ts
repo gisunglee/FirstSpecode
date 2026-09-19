@@ -11,6 +11,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
+import { checkOwnedProjectLimit } from "@/lib/planLimits";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -41,6 +42,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (original.del_yn === "Y") {
       return apiError("FORBIDDEN_PROJECT_DELETED", "이 프로젝트는 삭제 처리되었습니다.", 403);
     }
+
+    // 복사본의 소유자는 복사한 사람 → 복사한 사람의 FREE 소유 프로젝트 상한 검사
+    const limitErr = await checkOwnedProjectLimit(auth.mberId);
+    if (limitErr) return limitErr;
 
     // 트랜잭션: 복사본 프로젝트 + 멤버(OWNER) + 설정 생성
     const newProject = await prisma.$transaction(async (tx) => {

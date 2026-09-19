@@ -220,17 +220,39 @@ async function authenticatedRequest(
   );
 }
 
+/**
+ * AuthFetchError — API 가 apiError() 포맷으로 내려준 실패 응답
+ *
+ * message 만 있던 기존 Error 와 호환되며(onError: (err: Error) 그대로 동작),
+ * 호출부가 서버 에러 코드로 분기해야 할 때만 instanceof 로 좁혀서 code 를 읽는다.
+ * 예: 플랜 상한(PLAN_LIMIT_*) 은 토스트 대신 요금제 안내 모달을 띄운다.
+ */
+export class AuthFetchError extends Error {
+  /** 서버 apiError() 의 code. 본문이 JSON 이 아니면 null */
+  readonly code: string | null;
+  readonly status: number;
+
+  constructor(message: string, status: number, code: string | null) {
+    super(message);
+    this.name   = "AuthFetchError";
+    this.status = status;
+    this.code   = code;
+  }
+}
+
 export async function authFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await authenticatedRequest(url, options, true);
   if (!response.ok) {
     let message = `요청 실패 (${response.status})`;
+    let code: string | null = null;
     try {
       const errorBody = await response.json();
       if (typeof errorBody?.message === "string") message = errorBody.message;
+      if (typeof errorBody?.code    === "string") code    = errorBody.code;
     } catch {
       // JSON 오류 본문이 아니면 상태 코드 기반 기본 메시지를 사용한다.
     }
-    throw new Error(message);
+    throw new AuthFetchError(message, response.status, code);
   }
 
   return response.json() as Promise<T>;

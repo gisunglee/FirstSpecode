@@ -35,7 +35,7 @@ import { isSpecManager } from "@/lib/specContentPolicyCore";
 type MyRoleResponse = {
   myRole: RoleCode;
   myJob:  JobCode;   // 미지정 시 "ETC"
-  myPlan: PlanCode;  // 계정 플랜 (FREE/PRO/TEAM/ENTERPRISE)
+  myPlan: PlanCode;  // 계정 플랜 (FREE/BASIC/PRO/ENTERPRISE)
 };
 
 // /api/member/profile 에서 시스템 관리자 여부만 뽑아 쓰는 최소 타입.

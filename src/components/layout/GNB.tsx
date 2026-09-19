@@ -37,7 +37,7 @@ type MyProfile = {
   name:             string;
   email:            string;
   profileImage:     string | null;
-  plan:             string;  // 시스템 플랜: FREE / PRO / TEAM / ENTERPRISE
+  plan:             string;  // 시스템 플랜: FREE / BASIC / PRO / ENTERPRISE
   assigneeViewMode: "all" | "me";  // 전역 담당자 필터 모드 — GNB 토글 초기값
   isSystemAdmin:    boolean; // SUPER_ADMIN 여부 — 드롭다운에 "시스템 관리" 링크 노출
 };

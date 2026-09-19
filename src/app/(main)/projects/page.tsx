@@ -22,6 +22,7 @@ import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 import ProjectAbbrChip from "@/components/ui/ProjectAbbrChip";
+import PlanLimitDialog, { isPlanLimitError } from "@/components/common/PlanLimitDialog";
 import {
   parseProjectAbbrInput,
   PROJECT_ABBR_MAX_LEN,
@@ -77,9 +78,12 @@ function RoleBadge({ role }: { role: string }) {
 function CreateProjectDialog({
   onClose,
   onCreated,
+  onLimit,
 }: {
   onClose: () => void;
   onCreated: (projectId: string) => void;
+  /** FREE 소유 프로젝트 상한(PLAN_LIMIT_PROJECT)에 걸리면 서버 문구를 넘긴다 — 부모가 요금제 안내 모달로 전환 */
+  onLimit: (message: string) => void;
 }) {
   const [name,         setName]         = useState("");
   const [abbreviation, setAbbreviation] = useState("");
@@ -98,7 +102,8 @@ function CreateProjectDialog({
       toast.success("프로젝트가 생성되었습니다.");
       onCreated(res.data.projectId);
     },
-    onError: (err: Error) => toast.error(err.message),
+    // 플랜 상한은 토스트가 아니라 요금제 안내 모달로 — 왜 막혔는지와 해결 경로를 같이 보여준다
+    onError: (err: Error) => (isPlanLimitError(err) ? onLimit(err.message) : toast.error(err.message)),
   });
 
   function handleSubmit(e: React.FormEvent) {
@@ -237,6 +242,8 @@ function ProjectsPageInner() {
   const queryClient = useQueryClient();
   const { setCurrentProjectId } = useAppStore();
   const [createOpen, setCreateOpen] = useState(false);
+  // FREE 상한 안내 모달 문구 — null 이면 닫힘
+  const [limitMsg, setLimitMsg] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery<ProjectsResponse>({
     queryKey: ["projects"],
@@ -402,8 +409,15 @@ function ProjectsPageInner() {
 
       {/* 생성 POPUP */}
       {createOpen && (
-        <CreateProjectDialog onClose={() => setCreateOpen(false)} onCreated={handleCreated} />
+        <CreateProjectDialog
+          onClose={() => setCreateOpen(false)}
+          onCreated={handleCreated}
+          onLimit={(msg) => { setCreateOpen(false); setLimitMsg(msg); }}
+        />
       )}
+
+      {/* FREE 상한 안내 — 요금제 페이지로 유도 */}
+      <PlanLimitDialog message={limitMsg} onClose={() => setLimitMsg(null)} />
     </div>
   );
 }

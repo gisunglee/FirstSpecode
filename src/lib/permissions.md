@@ -33,7 +33,7 @@
 |---|---|---|---|
 | **역할** | `RoleCode` | `tb_pj_project_member.role_code` | `OWNER` / `ADMIN` / `MEMBER` / `VIEWER` |
 | **직무** | `JobCode`  | `tb_pj_project_member.job_title_code` | `PM` / `PL` / `DBA` / `DEV` / `DESIGNER` / `QA` / `ETC` |
-| **플랜** | `PlanCode` | `tb_cm_member.plan_code`, `plan_expire_dt` | `FREE` / `PRO` / `TEAM` / `ENTERPRISE` |
+| **플랜** | `PlanCode` | `tb_cm_member.plan_code`, `plan_expire_dt` | `FREE` / `BASIC` / `PRO` / `ENTERPRISE` (2026-09-19 TEAM 제거) |
 
 멤버당 역할 1개 + 직무 1개. 복수 권한 없음.
 
@@ -184,7 +184,7 @@ const { has, myRole, myJob, myPlan } = usePermissions(projectId);
 ## 향후 확장 (지금은 안 함)
 
 - **DBA 승인 워크플로우** — DEV가 DB 수정 시 DBA 승인. 실제 주도 기능 등장 시 결정 (`tb_ds_review_request` 재활용 or 신규 테이블)
-- **플랜 결제 연동** — `requiresPlan` 위반 시 업그레이드 유도 UI
+- **플랜 결제 연동** — 상한 검사는 `src/lib/planLimits.ts` 에 있고(프로젝트 수·멤버 수·첨부), 프론트는 `PLAN_LIMIT_*` 코드를 받으면 `PlanLimitDialog` 로 요금제 안내. 구독·좌석은 `.claude/biz/B.결제정책.md` 2단계
 - **남은 ~58 route 신패턴 이관** — 기능 수정할 때 자연스럽게 교체 (급하지 않음)
 - **공통코드 seed** — 레이블을 DB로 옮기고 싶어질 때 `PROJECT_ROLE` / `JOB_TITLE` / `MEMBER_PLAN` 그룹 추가
 

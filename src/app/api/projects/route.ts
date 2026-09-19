@@ -9,6 +9,7 @@ import { requireAuth } from "@/lib/requireAuth";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { fetchMyProjects } from "@/lib/exports/projects-data";
 import { parseProjectAbbrInput } from "@/lib/constants/projectAbbr";
+import { checkOwnedProjectLimit } from "@/lib/planLimits";
 
 // ─── GET: 내 프로젝트 목록 ─────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
@@ -34,6 +35,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
+
+  // FREE 플랜 소유 프로젝트 상한 — 본문 검증보다 먼저 막아 불필요한 입력 검증을 건너뛴다
+  const limitErr = await checkOwnedProjectLimit(auth.mberId);
+  if (limitErr) return limitErr;
 
   let body: unknown;
   try {

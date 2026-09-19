@@ -11,7 +11,7 @@
  * 4가지 축:
  *   - 역할(Role)  : 프로젝트 단위 보안 게이트 (OWNER/ADMIN/MEMBER/VIEWER)
  *   - 직무(Job)   : 프로젝트 단위 업무 성격 (PM/PL/DBA/DEV/DESIGNER/QA/ETC)
- *   - 플랜(Plan)  : 계정 단위 결제 (FREE/PRO/TEAM/ENTERPRISE)
+ *   - 플랜(Plan)  : 계정 단위 결제 (FREE/BASIC/PRO/ENTERPRISE) — 상한 검사는 src/lib/planLimits.ts
  *   - 규칙 결합   : roles OR jobs (둘 중 하나라도 만족하면 허용)
  */
 
@@ -59,7 +59,13 @@ export const SYSTEM_ROLE_LABEL: Record<SystemRoleCode, string> = {
 
 // ─── 플랜 ────────────────────────────────────────────────────────────────────
 
-export const PLAN_CODES = ["FREE", "PRO", "TEAM", "ENTERPRISE"] as const;
+// 2026-09-19 결제 정책(.claude/biz/B.결제정책.md §1-2): TEAM 제거, BASIC 추가.
+//   FREE       — 무료. 소유 프로젝트 1개, 프로젝트당 멤버 5명, 첨부 불가
+//   BASIC      — 좌석당 월 과금. 프로젝트 무제한, 뷰어 무료, 첨부 5GB
+//   PRO        — 준비 중(결제 불가). 첨부 20GB + AI 데이터 표준화
+//   ENTERPRISE — 관리자 수동 부여만
+// DB 에 남아 있을 수 있는 옛 값 "TEAM" 은 isPlanCode 를 통과하지 못해 FREE 로 취급된다.
+export const PLAN_CODES = ["FREE", "BASIC", "PRO", "ENTERPRISE"] as const;
 export type  PlanCode   = (typeof PLAN_CODES)[number];
 
 /**
@@ -80,8 +86,8 @@ export function resolveEffectivePlan(
 // 플랜 계층 — 숫자가 클수록 상위 (requiresPlan 비교에 사용)
 const PLAN_RANK: Record<PlanCode, number> = {
   FREE:       0,
-  PRO:        1,
-  TEAM:       2,
+  BASIC:      1,
+  PRO:        2,
   ENTERPRISE: 3,
 };
 
@@ -90,7 +96,7 @@ const PLAN_RANK: Record<PlanCode, number> = {
 export type PermissionRule = {
   roles?:        readonly RoleCode[];  // 허용 역할 (비어있으면 역할 조건 없음)
   jobs?:         readonly JobCode[];   // 허용 직무 (비어있으면 직무 조건 없음)
-  requiresPlan?: PlanCode;             // 이 플랜 이상 필요 (FREE=전체, PRO=유료만)
+  requiresPlan?: PlanCode;             // 이 플랜 이상 필요 (FREE=전체, BASIC=유료만). 2026-09-19 현재 사용하는 규칙 없음
 };
 
 /**
@@ -150,9 +156,11 @@ export const PERMISSIONS = {
   "db.standard.manage": { roles: ["OWNER", "ADMIN"], jobs: ["DBA"] },
 
   // ── AI ─────────────────────────────────────────────────────────
+  // AI 기능은 전 플랜 무료 (정책 §1-1: AI 호출 비용은 고객이 자기 API 키로 낸다).
+  // 과거의 requiresPlan:"PRO" 게이트는 2026-09-19 제거.
   "ai.request":         { roles: ["OWNER", "ADMIN", "MEMBER"] },
-  "ai.bulkDesign":      { roles: ["OWNER", "ADMIN", "MEMBER"], requiresPlan: "PRO" },
-  "ai.planStudio":      { roles: ["OWNER", "ADMIN", "MEMBER"], requiresPlan: "PRO" },
+  "ai.bulkDesign":      { roles: ["OWNER", "ADMIN", "MEMBER"] },
+  "ai.planStudio":      { roles: ["OWNER", "ADMIN", "MEMBER"] },
 
   // V2 구현-설계 동기화. 결과 제출은 개발 멤버, 실제 설계 반영은 PM/PL 이상이 맡는다.
   "specSync.read":     { roles: ["OWNER", "ADMIN", "MEMBER", "VIEWER"] },
