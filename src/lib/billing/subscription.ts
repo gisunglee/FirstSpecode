@@ -16,6 +16,14 @@
  * 회원 plan_code / plan_expire_dt 는 "실효 플랜"의 미러다. 구독이 살아 있으면 BASIC/NULL,
  * 종료되면 FREE/NULL 로 여기서만 써 준다 → requirePermission·planLimits 는 그대로 동작.
  *
+ * 동시성 원칙 (2026-09-20 점검 후 추가):
+ *   "읽고 → PG 청구 → 저장" 사이에 같은 요청이 겹치면 PG 가 두 번 청구된다(더블클릭·새로고침·재시도).
+ *   PG 호출을 DB 트랜잭션 안에 넣을 수 없으므로(pgbouncer 트랜잭션 풀링, 토스는 최대 60초) 낙관적
+ *   잠금을 쓴다 — 청구 직전에 "내가 읽은 버전(mdfcn_dt)이 아직 그대로일 때만" 행을 선점(UPDATE ... WHERE
+ *   mdfcn_dt = 읽은값)하고, 0건이면 다른 요청이 먼저 처리 중인 것이므로 청구 없이 409 로 끝낸다.
+ *   대상: 첫 결제(회원 행 선점 — 구독 행이 아직 없을 수 있음)·좌석 추가·정기/재시도 결제.
+ *   토스 어댑터를 붙일 때 Idempotency-Key·결제 상태 조회(UNKNOWN 복구)를 이 위에 얹는다.
+ *
  * 트랜잭션 원칙:
  *   PG 호출(외부)은 트랜잭션 밖에서, DB 반영은 한 트랜잭션으로. 결제는 성공했는데 DB 가 실패하면
  *   tb_bl_payment 에 기록이 없으므로 운영자가 PG 콘솔 대조로 찾아 수동 반영한다(로그 ERROR).
@@ -309,7 +317,9 @@ export async function completeCardRegistration(
   // 재시도 중이었다면 새 카드로 바로 청구 — 사용자가 3일을 기다리지 않게
   let retry: RecurringChargeResult | null = null;
   if (updated.sbscrptn_sttus_code === S.PAST_DUE) {
-    retry = await attemptRecurringCharge(updated, actor.email, now, "RETRY");
+    const r = await attemptRecurringCharge(updated, actor.email, now, "RETRY");
+    // 배치가 같은 순간 재시도 중이면 결과를 알 수 없으니 "카드 변경됨" 만 알린다
+    retry = r.ok || !r.skipped ? r : null;
   }
   const latest = (await findSubscription(actor.mberId)) ?? updated;
   return { purpose: "change", subscription: toSubscriptionDto(latest), retry };
@@ -327,6 +337,11 @@ async function activateSubscription(
     throw new BillingError(E.ALREADY_SUBSCRIBED, "이미 구독 중입니다.", 409);
   }
   assertSeatCount(seatCnt, await countUsedSeats(actor.mberId));
+
+  // 이중 결제 방지 — 구독 행이 아직 없을 수 있어 회원 행을 선점한다 (콜백 화면 새로고침·중복 제출 대비)
+  if (!(await claimMemberForBilling(actor.mberId, now))) {
+    throw concurrentOperationError();
+  }
 
   const gw          = getPaymentGateway();
   const customerKey = buildCustomerKey(actor.mberId);
@@ -442,7 +457,7 @@ export type SeatAdditionPreview = ProrationResult & {
 
 /** 좌석 추가 모달 — 일할 금액 미리보기 */
 export async function previewSeatAddition(mberId: string, addSeats: number, now = new Date()): Promise<SeatAdditionPreview> {
-  const sub = await requireActiveForSeatAdd(mberId);
+  const sub = await requireActiveForSeatAdd(mberId, now);
   if (!Number.isInteger(addSeats) || addSeats < 1 || sub.seat_cnt + addSeats > SEAT_INPUT_LIMITS.max) {
     throw new BillingError(E.SEAT_COUNT_INVALID, `추가 좌석은 1개 이상, 합계 ${SEAT_INPUT_LIMITS.max}개 이하여야 합니다.`, 400);
   }
@@ -460,8 +475,12 @@ export async function previewSeatAddition(mberId: string, addSeats: number, now 
   };
 }
 
-/** 좌석 추가는 ACTIVE 에서만 — 재시도 중이면 카드부터, 해지 예정이면 해지 취소부터 */
-async function requireActiveForSeatAdd(mberId: string): Promise<TbBlSubscription> {
+/**
+ * 좌석 추가는 ACTIVE 에서만 — 재시도 중이면 카드부터, 해지 예정이면 해지 취소부터.
+ * 결제 주기가 이미 끝났는데 배치가 아직 갱신하지 않은 틈(하루 1회 배치)에는 남은 일수가 0 이라
+ * 0원으로 좌석이 늘어나므로 거절한다 — 갱신 결제가 먼저다.
+ */
+async function requireActiveForSeatAdd(mberId: string, now: Date): Promise<TbBlSubscription> {
   const sub = await findSubscription(mberId);
   if (!sub || !isLiveSubscriptionStatus(sub.sbscrptn_sttus_code)) {
     throw new BillingError(E.NO_SUBSCRIPTION, "구독이 없습니다.", 404);
@@ -474,6 +493,13 @@ async function requireActiveForSeatAdd(mberId: string): Promise<TbBlSubscription
   }
   if (!sub.crrnt_perd_bgng_dt || !sub.crrnt_perd_end_dt) {
     throw new BillingError(E.INVALID_STATE, "결제 주기 정보가 없습니다. 운영자에게 문의해 주세요.", 500);
+  }
+  if (sub.crrnt_perd_end_dt <= now) {
+    throw new BillingError(
+      E.INVALID_STATE,
+      "이번 결제 주기가 끝나 정기 결제를 기다리는 중입니다. 정기 결제가 처리된 뒤 좌석을 추가할 수 있습니다.",
+      409,
+    );
   }
   return sub;
 }
@@ -499,7 +525,7 @@ export async function changeSeats(actor: BillingActorRef, seatCnt: number, now =
 
   // ── 추가: 즉시 일할 결제 ────────────────────────────────────────────────
   if (seatCnt > sub.seat_cnt) {
-    const active   = await requireActiveForSeatAdd(actor.mberId);
+    const active   = await requireActiveForSeatAdd(actor.mberId, now);
     const addSeats = seatCnt - active.seat_cnt;
     const pr = prorationForAddedSeats({
       unitPrice: active.unit_price, addSeats, now,
@@ -507,6 +533,14 @@ export async function changeSeats(actor: BillingActorRef, seatCnt: number, now =
     });
     if (!active.billing_key) {
       throw new BillingError(E.INVALID_STATE, "등록된 결제 수단이 없습니다. 결제 수단을 먼저 등록해 주세요.", 409);
+    }
+    // 0원 청구는 없다 — 남은 일수가 0 이거나 계산이 어긋난 경우 좌석만 늘어나는 사고 방지
+    if (pr.amount <= 0) {
+      throw new BillingError(E.INVALID_STATE, "일할 결제 금액이 0원이라 좌석을 추가할 수 없습니다. 정기 결제 뒤 다시 시도해 주세요.", 409);
+    }
+    // 이중 결제 방지 — 같은 구독 행을 다른 요청이 먼저 선점했으면 청구하지 않는다
+    if (!(await claimSubscriptionVersion(active, now))) {
+      throw concurrentOperationError();
     }
 
     const gw      = getPaymentGateway();
@@ -640,7 +674,9 @@ export async function uncancelSubscription(actor: BillingActorRef, now = new Dat
 
 export type RecurringChargeResult =
   | { ok: true;  periodEnd: Date; amount: number; seatCnt: number }
-  | { ok: false; expired: boolean; failCnt: number; reason: string };
+  | { ok: false; expired: boolean; failCnt: number; reason: string; skipped?: false }
+  /** 다른 요청(배치·카드 변경)이 같은 구독을 먼저 청구 중 — 시도하지 않았고 실패로 세지도 않는다 */
+  | { ok: false; skipped: true; expired: false; failCnt: number; reason: string };
 
 /**
  * 정기 결제 1회 시도.
@@ -654,6 +690,11 @@ export async function attemptRecurringCharge(
   now: Date,
   kind: "RENEWAL" | "RETRY",
 ): Promise<RecurringChargeResult> {
+  // 이중 결제 방지 — 배치와 카드 변경 즉시 재결제가 겹칠 수 있다. 선점 실패면 청구 없이 물러난다.
+  if (!(await claimSubscriptionVersion(sub, now))) {
+    return { ok: false, skipped: true, expired: false, failCnt: sub.fail_cnt, reason: "다른 결제 처리가 진행 중" };
+  }
+
   const gw      = getPaymentGateway();
   const seatCnt = sub.pending_seat_cnt ?? sub.seat_cnt;
   const amount  = monthlyAmount(seatCnt, sub.unit_price);
@@ -823,6 +864,47 @@ async function mirrorPlan(db: Db, mberId: string, planCode: PlanCode, now: Date)
     where: { mber_id: mberId },
     data:  { plan_code: planCode, plan_expire_dt: null, mdfcn_dt: now },
   });
+}
+
+/**
+ * 낙관적 잠금 — 구독 행의 mdfcn_dt 를 버전으로 쓴다.
+ * "내가 읽은 mdfcn_dt 가 아직 그대로일 때만" 새 값으로 바꾸는 UPDATE 는 원자적이라, 같은 행을 두 요청이
+ * 동시에 읽어도 한 쪽만 1건을 갱신한다. 새 값은 읽은 값보다 항상 크게 잡아(같은 ms 방어) 두 번째 요청이
+ * 같은 버전으로 다시 선점하지 못하게 한다. 별도 version 컬럼 없이 되는 이유는 이 도메인의 모든 갱신이
+ * mdfcn_dt 를 함께 쓰기 때문이다.
+ * 반환: 선점 성공 여부
+ */
+async function claimSubscriptionVersion(sub: TbBlSubscription, now: Date): Promise<boolean> {
+  const claimAt = new Date(Math.max(now.getTime(), sub.mdfcn_dt.getTime() + 1));
+  const r = await prisma.tbBlSubscription.updateMany({
+    where: { sbscrptn_id: sub.sbscrptn_id, mdfcn_dt: sub.mdfcn_dt },
+    data:  { mdfcn_dt: claimAt },
+  });
+  return r.count === 1;
+}
+
+/**
+ * 첫 결제용 선점 — 구독 행이 없을 수 있으므로 회원 행의 mdfcn_dt 를 같은 방식으로 쓴다.
+ * 프로필 수정 같은 다른 갱신과 겹치면 드물게 409 가 나지만, 다시 시도하면 된다(이중 결제보다 낫다).
+ */
+async function claimMemberForBilling(mberId: string, now: Date): Promise<boolean> {
+  const member = await prisma.tbCmMember.findUnique({ where: { mber_id: mberId }, select: { mdfcn_dt: true } });
+  if (!member) return false;
+  const base    = member.mdfcn_dt?.getTime() ?? 0;
+  const claimAt = new Date(Math.max(now.getTime(), base + 1));
+  const r = await prisma.tbCmMember.updateMany({
+    where: { mber_id: mberId, mdfcn_dt: member.mdfcn_dt },
+    data:  { mdfcn_dt: claimAt },
+  });
+  return r.count === 1;
+}
+
+function concurrentOperationError(): BillingError {
+  return new BillingError(
+    E.CONCURRENT_OPERATION,
+    "같은 구독에 대한 결제 처리가 이미 진행 중입니다. 잠시 후 구독 화면을 새로 고쳐 결과를 확인해 주세요.",
+    409,
+  );
 }
 
 /** 주문 ID — 시도마다 고유. 토스 규칙(6~64자, 영문·숫자·-_) 충족 */

@@ -144,6 +144,8 @@ export const BILLING_ERROR_CODES = {
   CUSTOMER_KEY_MISMATCH: "BILLING_CUSTOMER_KEY_MISMATCH",
   /** PG 어댑터 미구현·설정 오류 */
   GATEWAY_UNAVAILABLE:  "BILLING_GATEWAY_UNAVAILABLE",
+  /** 같은 구독에 대한 결제 작업이 동시에 들어옴 — 하나만 처리하고 나머지는 거절 (이중 결제 방지) */
+  CONCURRENT_OPERATION: "BILLING_CONCURRENT_OPERATION",
   /** 프로젝트가 결제 잠금 상태 — 쓰기 차단 */
   PROJECT_LOCKED:       "PROJECT_LOCKED",
   /** 잠금 해제 조건 미충족 (멤버·좌석 상한 초과) */

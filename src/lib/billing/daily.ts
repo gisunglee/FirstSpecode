@@ -81,6 +81,7 @@ export async function processSubscriptionDaily(sbscrptnId: string, now: Date): P
   // ② 정기 결제
   if (sub.sbscrptn_sttus_code === S.ACTIVE && sub.next_bill_dt && sub.next_bill_dt <= now) {
     const r = await attemptRecurringCharge(sub, email, now, "RENEWAL");
+    if (!r.ok && r.skipped) return actions;  // 다른 처리가 선점 — 오늘은 건너뛴다(다음 실행에 다시 판정)
     actions.push(r.ok ? "RENEWED" : r.expired ? "EXPIRED" : "RENEW_FAILED");
     if (!r.ok) return actions;
     sub = await refetch(sbscrptnId);
@@ -92,6 +93,7 @@ export async function processSubscriptionDaily(sbscrptnId: string, now: Date): P
     const due = sub.last_fail_dt ? addDays(sub.last_fail_dt, RETRY_POLICY.intervalDays) : now;
     if (due <= now) {
       const r = await attemptRecurringCharge(sub, email, now, "RETRY");
+      if (!r.ok && r.skipped) return actions;
       actions.push(r.ok ? "RETRY_SUCCEEDED" : r.expired ? "EXPIRED" : "RETRY_FAILED");
       if (!r.ok) return actions;
       sub = await refetch(sbscrptnId);
