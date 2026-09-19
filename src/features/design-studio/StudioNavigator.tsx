@@ -3,6 +3,7 @@
 /** Wiki-like studio navigation: flat labels, minimal indentation, no folder tree. */
 
 import { useEffect, useRef } from "react";
+import PanelToggleIcon from "./PanelToggleIcon";
 import type { StudioBlock, UnitWorkSummary } from "./types";
 
 const SHORT_KIND_CODE: Record<StudioBlock["kind"], string> = {
@@ -66,7 +67,7 @@ export default function StudioNavigator({
         title={collapsed ? "설계 문서 펼치기" : "설계 문서 접기"}
         aria-label={collapsed ? "설계 문서 펼치기" : "설계 문서 접기"}
       >
-        {collapsed ? "›" : "‹"}
+        <PanelToggleIcon direction={collapsed ? "right" : "left"} />
       </button>
 
       {!collapsed && (

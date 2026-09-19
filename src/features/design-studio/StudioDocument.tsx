@@ -25,11 +25,14 @@ type Props = {
   onEdit: (block: StudioBlock) => void;
   onExpandAll: () => void;
   onSave: () => void;
+  onScrollStateChange: (isScrolling: boolean) => void;
   onSelect: (block: StudioBlock) => void;
   onToggleBlock: (block: StudioBlock) => void;
   onToggleKind: (kind: StudioKind) => void;
   onVisibleBlockChange: (blockKey: string) => void;
 };
+
+const SCROLL_SETTLE_DELAY_MS = 220;
 
 function kindState(blocks: StudioBlock[], openKeys: Set<string>, kind: StudioKind) {
   const kindBlocks = blocks.filter((block) => block.kind === kind);
@@ -38,6 +41,23 @@ function kindState(blocks: StudioBlock[], openKeys: Set<string>, kind: StudioKin
     count: kindBlocks.length,
     state: openCount === 0 ? "closed" : openCount === kindBlocks.length ? "open" : "mixed",
   } as const;
+}
+
+function DisclosureStateIcon({ state }: { state: "open" | "closed" | "mixed" }) {
+  return (
+    <svg
+      className={`sp-studio-kind-state-icon is-${state}`}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {state === "mixed" ? <path d="M4 8h8" /> : <path d="m4 6 4 4 4-4" />}
+    </svg>
+  );
 }
 
 export default function StudioDocument({
@@ -53,6 +73,7 @@ export default function StudioDocument({
   onEdit,
   onExpandAll,
   onSave,
+  onScrollStateChange,
   onSelect,
   onToggleBlock,
   onToggleKind,
@@ -60,6 +81,8 @@ export default function StudioDocument({
 }: Props) {
   const paneRef = useRef<HTMLElement>(null);
   const scrollFrameRef = useRef<number | null>(null);
+  const scrollEndTimerRef = useRef<number | null>(null);
+  const isScrollingRef = useRef(false);
 
   function syncVisibleBlock() {
     const pane = paneRef.current;
@@ -92,6 +115,20 @@ export default function StudioDocument({
   }
 
   function handleScroll() {
+    if (!isScrollingRef.current) {
+      isScrollingRef.current = true;
+      onScrollStateChange(true);
+    }
+    if (scrollEndTimerRef.current !== null) {
+      window.clearTimeout(scrollEndTimerRef.current);
+    }
+    scrollEndTimerRef.current = window.setTimeout(() => {
+      scrollEndTimerRef.current = null;
+      syncVisibleBlock();
+      isScrollingRef.current = false;
+      onScrollStateChange(false);
+    }, SCROLL_SETTLE_DELAY_MS);
+
     if (scrollFrameRef.current !== null) return;
     scrollFrameRef.current = window.requestAnimationFrame(() => {
       scrollFrameRef.current = null;
@@ -106,6 +143,7 @@ export default function StudioDocument({
 
   useEffect(() => () => {
     if (scrollFrameRef.current !== null) window.cancelAnimationFrame(scrollFrameRef.current);
+    if (scrollEndTimerRef.current !== null) window.clearTimeout(scrollEndTimerRef.current);
   }, []);
 
   return (
@@ -136,7 +174,7 @@ export default function StudioDocument({
               >
                 <span>{STUDIO_KIND_LABEL[kind]}</span>
                 <strong>{count}</strong>
-                <span aria-hidden="true">{state === "open" ? "⌃" : state === "closed" ? "⌄" : "−"}</span>
+                <DisclosureStateIcon state={state} />
               </button>
             );
           })}

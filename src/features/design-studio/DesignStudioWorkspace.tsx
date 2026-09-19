@@ -26,6 +26,8 @@ import type { StudioBlock, StudioDraft, StudioKind } from "./types";
 
 type Props = { projectId: string };
 
+const PROGRAMMATIC_SCROLL_FALLBACK_MS = 300;
+
 function formatModifiedAt(value: string | undefined) {
   if (!value) return "수정 정보 없음";
   return new Intl.DateTimeFormat("ko-KR", {
@@ -54,11 +56,14 @@ export default function DesignStudioWorkspace({ projectId }: Props) {
   const [query, setQuery] = useState("");
   const [openKeys, setOpenKeys] = useState<Set<string>>(new Set());
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [inspectorSelectedKey, setInspectorSelectedKey] = useState<string | null>(null);
+  const [isDocumentScrolling, setIsDocumentScrolling] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draft, setDraft] = useState<StudioDraft | null>(null);
   const [checkingKey, setCheckingKey] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const initializedUnitWorkRef = useRef<string | null>(null);
+  const programmaticScrollFallbackRef = useRef<number | null>(null);
 
   const unitWorksQuery = useQuery({
     queryKey: ["design-studio", projectId, "unit-works"],
@@ -95,6 +100,21 @@ export default function DesignStudioWorkspace({ projectId }: Props) {
     [projectId, requirementQuery.data, treeQuery.data],
   );
   const selectedBlock = blocks.find((block) => block.key === selectedKey) ?? blocks[0] ?? null;
+  const inspectorSelectedBlock = blocks.find((block) => block.key === inspectorSelectedKey)
+    ?? blocks[0]
+    ?? null;
+
+  // 스크롤 스파이는 계속 현재 문서를 추적하되, 관련 정보는 스크롤이 멈춘 뒤 한 번만 바꾼다.
+  useEffect(() => {
+    if (isDocumentScrolling || !selectedBlock) return;
+    setInspectorSelectedKey(selectedBlock.key);
+  }, [isDocumentScrolling, selectedBlock]);
+
+  useEffect(() => () => {
+    if (programmaticScrollFallbackRef.current !== null) {
+      window.clearTimeout(programmaticScrollFallbackRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     if (!selectedUnitWorkId || blocks.length === 0) return;
@@ -115,6 +135,8 @@ export default function DesignStudioWorkspace({ projectId }: Props) {
     ));
     const firstDesignBlock = blocks.find((block) => block.kind === "unitWork") ?? blocks[0];
     setSelectedKey(firstDesignBlock?.key ?? null);
+    setInspectorSelectedKey(firstDesignBlock?.key ?? null);
+    setIsDocumentScrolling(false);
     setEditingKey(null);
     setDraft(null);
   }, [blocks, selectedUnitWorkId]);
@@ -130,6 +152,17 @@ export default function DesignStudioWorkspace({ projectId }: Props) {
   }
 
   function selectBlock(block: StudioBlock, scroll = false) {
+    if (scroll) {
+      // 대상이 이미 화면 안에 있어 scroll 이벤트가 발생하지 않는 경우에도 잠금이 풀려야 한다.
+      setIsDocumentScrolling(true);
+      if (programmaticScrollFallbackRef.current !== null) {
+        window.clearTimeout(programmaticScrollFallbackRef.current);
+      }
+      programmaticScrollFallbackRef.current = window.setTimeout(() => {
+        programmaticScrollFallbackRef.current = null;
+        setIsDocumentScrolling(false);
+      }, PROGRAMMATIC_SCROLL_FALLBACK_MS);
+    }
     setSelectedKey(block.key);
     if (scroll) {
       setOpenKeys((current) => new Set(current).add(block.key));
@@ -140,6 +173,14 @@ export default function DesignStudioWorkspace({ projectId }: Props) {
         });
       });
     }
+  }
+
+  function handleDocumentScrollStateChange(isScrolling: boolean) {
+    if (programmaticScrollFallbackRef.current !== null) {
+      window.clearTimeout(programmaticScrollFallbackRef.current);
+      programmaticScrollFallbackRef.current = null;
+    }
+    setIsDocumentScrolling(isScrolling);
   }
 
   function toggleBlock(block: StudioBlock) {
@@ -313,13 +354,16 @@ export default function DesignStudioWorkspace({ projectId }: Props) {
           onSelect={(block) => selectBlock(block)}
           onToggleBlock={toggleBlock}
           onToggleKind={toggleKind}
+          onScrollStateChange={handleDocumentScrollStateChange}
           onVisibleBlockChange={setSelectedKey}
         />
 
         <StudioInspector
           blocks={blocks}
           collapsed={inspectorCollapsed}
-          selectedBlock={selectedBlock}
+          projectId={projectId}
+          selectedBlock={inspectorSelectedBlock}
+          unitWorkId={selectedUnitWorkId}
           onToggleCollapsed={() => setInspectorCollapsed((current) => !current)}
         />
       </div>

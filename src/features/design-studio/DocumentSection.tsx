@@ -151,7 +151,7 @@ export default function DocumentSection({
                   <MarkdownEditor
                     value={draft.description}
                     onChange={(description) => onChangeDraft({ ...draft, description })}
-                    rows={10}
+                    rows={20}
                     field="description"
                     title={`${block.displayId} ${block.name}`}
                   />
@@ -164,7 +164,7 @@ export default function DocumentSection({
                   <MarkdownEditor
                     value={draft.secondaryDescription}
                     onChange={(secondaryDescription) => onChangeDraft({ ...draft, secondaryDescription })}
-                    rows={12}
+                    rows={24}
                     field="detailSpec"
                     title="상세 명세"
                   />
@@ -215,4 +215,3 @@ export default function DocumentSection({
     </section>
   );
 }
-

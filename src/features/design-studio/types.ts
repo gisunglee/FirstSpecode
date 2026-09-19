@@ -57,6 +57,7 @@ export type DesignFunctionNode = {
   description: string;
   type: string;
   scopeStatus: string;
+  colMappingCount: number;
 };
 
 export type DesignAreaNode = {
@@ -131,6 +132,7 @@ export type StudioBlock = {
   depth: number;
   sourceHref: string;
   format: "markdown" | "html";
+  colMappingCount?: number;
 };
 
 export type StudioDraft = {
@@ -143,3 +145,65 @@ export type BlockDetail = {
   permissions: SpecContentPermissions;
 };
 
+export type RelatedCodeSource = {
+  mappingId: string;
+  mappingGroupName: string;
+  tableId: string;
+  tableName: string;
+  tableLogicalName: string;
+  columnId: string;
+  columnName: string;
+  columnLogicalName: string;
+  ioType: string;
+  purpose: string;
+};
+
+export type RelatedCodeGroup = {
+  groupCode: string;
+  groupName: string;
+  description: string;
+  useYn: string;
+  exists: boolean;
+  codes: Array<{
+    codeId: number;
+    code: string;
+    name: string;
+    description: string;
+    useYn: string;
+  }>;
+};
+
+export type RelatedDbTable = {
+  tableId: string;
+  tableName: string;
+  tableLogicalName: string;
+  functionIds: string[];
+};
+
+export type RelatedFunctionCode = {
+  functionId: string;
+  displayId: string;
+  name: string;
+  areaId: string;
+  screenId: string;
+  mappingCount: number;
+  codeGroups: Array<{
+    groupCode: string;
+    sources: RelatedCodeSource[];
+  }>;
+};
+
+export type RelatedCodesResponse = {
+  unitWorkId: string;
+  loadedAt: string;
+  summary: {
+    functionCount: number;
+    mappedFunctionCount: number;
+    mappingCount: number;
+    codeGroupCount: number;
+    tableCount: number;
+  };
+  codeGroups: RelatedCodeGroup[];
+  dbTables: RelatedDbTable[];
+  functions: RelatedFunctionCode[];
+};

@@ -46,6 +46,8 @@ type MenuItem = {
   // true면 이 항목 바로 아래에 구분선 표시 — 성격이 다른 항목 묶음을 시각적으로 분리
   // (예: 분석 그룹의 "과업·요구사항"과 그 아래 나머지 항목, 2026-07-29)
   dividerAfter?: boolean;
+  // 넓은 작업 공간이 필요한 메뉴는 이동과 동시에 서브 패널을 접는다.
+  collapseSidebarOnNavigate?: boolean;
 };
 
 type MenuGroup = {
@@ -188,7 +190,12 @@ export default function LNB() {
           { label: "표준 가이드", href: p("/standard-guides"), icon: "i_standardGuide", dividerAfter: true },
           // 종합 설계실은 기존 상세 화면을 대체하지 않는 독립 워크스페이스다.
           // 연결점은 이 메뉴 한 줄뿐이라 기능 제거 시 기존 설계 메뉴에 영향이 없다.
-          { label: "종합 설계실", href: p("/design-studio"), icon: "i_docs" },
+          {
+            label: "종합 설계실",
+            href: p("/design-studio"),
+            icon: "i_docs",
+            collapseSidebarOnNavigate: true,
+          },
         ],
       },
       {
@@ -480,6 +487,7 @@ export default function LNB() {
                   isActive={it.href !== "#" && it.href === activeItemHref}
                   isHome={!!it.canPinHome && homePage === it.href}
                   onToggleHome={it.canPinHome ? () => toggleHomePage(it.href) : undefined}
+                  onNavigate={it.collapseSidebarOnNavigate ? () => setSidebarCollapsed(true) : undefined}
                 />
                 {/* 구분선 — 항목 좌우 인셋(14px)에 맞춰 살짝 안쪽으로 들여서 사이드바 폭에
                     딱 붙지 않게 함 */}
@@ -499,12 +507,13 @@ export default function LNB() {
 // 별 버튼을 Link 안에 중첩시키지 않고 형제로 둔다(버튼-안-링크는 잘못된 중첩이라
 // Link는 flex:1로 라벨 영역만 차지하고, 별은 그 옆에 별도 버튼으로 존재).
 function SubItem({
-  item, isActive, isHome, onToggleHome,
+  item, isActive, isHome, onToggleHome, onNavigate,
 }: {
   item: MenuItem;
   isActive: boolean;
   isHome: boolean;
   onToggleHome?: () => void;
+  onNavigate?: () => void;
 }) {
   const isDisabled = item.href === "#";
   return (
@@ -525,7 +534,13 @@ function SubItem({
           padding: item.indent ? "8px 14px 8px 26px" : "8px 14px",
           color: "inherit", textDecoration: "none",
         }}
-        onClick={isDisabled ? (e) => e.preventDefault() : undefined}
+        onClick={(event) => {
+          if (isDisabled) {
+            event.preventDefault();
+            return;
+          }
+          onNavigate?.();
+        }}
       >
         <MenuIcon name={item.icon} size={15} />
         <span>{item.label}</span>

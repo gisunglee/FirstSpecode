@@ -11,6 +11,7 @@ import type {
   BlockDetail,
   DesignTreeResponse,
   RequirementDetail,
+  RelatedCodesResponse,
   StudioBlock,
   StudioDraft,
   UnitWorkSummary,
@@ -41,6 +42,16 @@ export async function fetchRequirement(
 ): Promise<RequirementDetail> {
   const response = await authFetch<ApiEnvelope<RequirementDetail>>(
     `/api/projects/${projectId}/requirements/${requirementId}`,
+  );
+  return response.data;
+}
+
+export async function fetchRelatedCodes(
+  projectId: string,
+  unitWorkId: string,
+): Promise<RelatedCodesResponse> {
+  const response = await authFetch<ApiEnvelope<RelatedCodesResponse>>(
+    `/api/projects/${projectId}/design-studio/related-codes?unitWorkId=${encodeURIComponent(unitWorkId)}`,
   );
   return response.data;
 }
@@ -131,4 +142,3 @@ export async function saveStudioBlock(
     body: JSON.stringify(body),
   });
 }
-

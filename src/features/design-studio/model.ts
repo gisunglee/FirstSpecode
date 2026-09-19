@@ -103,6 +103,7 @@ export function buildStudioBlocks(
           depth: 3,
           sourceHref: `/projects/${projectId}/functions/${fn.functionId}`,
           format: "markdown",
+          colMappingCount: fn.colMappingCount,
         });
       }
     }
@@ -110,4 +111,3 @@ export function buildStudioBlocks(
 
   return blocks;
 }
-
