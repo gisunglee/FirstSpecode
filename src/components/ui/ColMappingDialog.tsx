@@ -252,13 +252,18 @@ export default function ColMappingDialog({
     // tables가 아직 로드되지 않은 경우 스킵 (tables 로드 후 재실행됨)
     if (unitWorkDc && tables.length > 0) {
       const matches = [...unitWorkDc.matchAll(/TABLE_SCRIPT:([^>]+)>/g)];
-      const tableNames = matches.map((m) => m[1].trim());
+      // 태그 표기(소문자 tb_xxx)와 SPECODE 등록명(대문자 TB_XXX)이 다른 경우가 흔해서 대소문자 무시로 비교
+      const tableNames = matches.map((m) => m[1].trim().toLowerCase());
       const matchedIds = tables
-        .filter((t) => tableNames.includes(t.tableName))
+        .filter((t) => tableNames.includes(t.tableName.toLowerCase()))
         .map((t) => t.tableId);
 
       if (matchedIds.length > 0) {
-        setFilterTableIds(matchedIds);
+        // 이미 저장된 행의 테이블은 태그에 없어도 필터에 포함 —
+        // 자동 필터 때문에 저장된 매핑이 화면에서 사라져 "매핑이 깨졌다"고 오해하는 일을 막기 위함
+        const savedTableIds = items.map((m) => m.tableId).filter(Boolean);
+        const filterIds = [...new Set([...matchedIds, ...savedTableIds])];
+        setFilterTableIds(filterIds);
         setSelectedTableId(matchedIds[0]);
         return;
       }
@@ -728,15 +733,29 @@ export default function ColMappingDialog({
                 ? rows.filter(r => !r._tableId || filterTableIds.includes(r._tableId))
                 : rows;
 
+              // 필터 때문에 가려진 저장 행 수 — 사용자가 "매핑이 사라졌다"고 오해하지 않도록 개수를 명시
+              const hiddenCount = rows.length - visibleRows.length;
+              const hiddenNotice = hiddenCount > 0 ? (
+                <div style={{ padding: "8px 12px", fontSize: 12, color: "var(--color-text-secondary)", textAlign: "center" }}>
+                  테이블 필터로 가려진 행 {hiddenCount}개가 있습니다. 위의 테이블 칩(×)을 지우면 모두 표시됩니다.
+                </div>
+              ) : null;
+
               if (visibleRows.length === 0) {
                 return (
-                  <div style={{ padding: 40, textAlign: "center", color: "var(--color-text-disabled)" }}>
-                    선택한 필터 조건에 맞는 데이터가 없습니다.
-                  </div>
+                  <>
+                    <div style={{ padding: 40, textAlign: "center", color: "var(--color-text-disabled)" }}>
+                      선택한 필터 조건에 맞는 데이터가 없습니다.
+                    </div>
+                    {hiddenNotice}
+                  </>
                 );
               }
 
-              return visibleRows.map((row, idx) => (
+              return (
+                <>
+                  {hiddenNotice}
+                  {visibleRows.map((row, idx) => (
                 <div
                   key={row._key}
                   // 햄버거 핸들에서 mousedown 된 row만 draggable=true 가 되어 드래그 가능
@@ -859,7 +878,9 @@ export default function ColMappingDialog({
                   </button>
                 </div>
               </div>
-            ));
+            ))}
+                </>
+              );
           })()
         )}
         </div>{/* ── 스크롤 영역 끝 */}

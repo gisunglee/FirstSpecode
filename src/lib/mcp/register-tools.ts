@@ -1351,8 +1351,21 @@ export function registerTools(
               .enum(["TEXT", "TEXTAREA", "SELECT", "RADIO", "CHECKBOX", "DATE", "NUMBER", "FILE", "HIDDEN"])
               .optional()
               .describe("UI 유형. TEXT=텍스트 | TEXTAREA=텍스트영역 | SELECT=콤보박스 | RADIO=라디오 | CHECKBOX=체크박스 | DATE=날짜 | NUMBER=숫자 | FILE=파일 | HIDDEN=히든"),
-            usePurpsCn: z.string().optional().describe("항목명 — 화면에서 이 컬럼이 어떤 이름으로 쓰이는지"),
-            colDc: z.string().optional().describe("비고 — 변환 규칙, 기본값, 검증 조건 등"),
+            usePurpsCn: z
+              .string()
+              .optional()
+              .describe(
+                "항목명 — 화면에 표시되는 한글 이름만 씁니다. 영문 변수명·파라미터명을 괄호로 " +
+                  "덧붙이지 마세요(컬럼명이 이미 옆 열에 있어 중복입니다). " +
+                  "좋은 예: '지침 종류 구분 코드' / 나쁜 예: '지침 종류 구분 코드(guidncKndSeCd)'"
+              ),
+            colDc: z
+              .string()
+              .optional()
+              .describe(
+                "비고 — 이 컬럼에 한정된 변환 규칙·기본값·검증 조건을 한 줄로. " +
+                  "처리 로직 서술은 기능 설명(description)에 쓰고 여기에 반복하지 마세요"
+              ),
           })
         )
         .min(1, "items는 최소 1개 이상이어야 합니다")

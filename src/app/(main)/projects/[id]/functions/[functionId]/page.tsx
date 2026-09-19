@@ -1068,11 +1068,12 @@ function FunctionDetailPageInner() {
                       <div style={{ border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
                         {/* 헤더 */}
                         <div style={colMappingHeaderStyle}>
-                          <div style={{ flex: "0 0 120px" }}>항목명</div>
+                          {/* 항목명이 가장 길어 넓게 — 테이블·컬럼의 여유 폭 30%씩을 항목명이 가져간다 (0.7+0.7+0.6 = 기존 1+1) */}
+                          <div style={{ flex: "0.6 1 120px" }}>항목명</div>
                           <div style={{ flex: "0 0 72px", textAlign: "center" }}>IO구분</div>
                           <div style={{ flex: "0 0 90px" }}>UI유형</div>
-                          <div style={{ flex: "1 1 0" }}>테이블</div>
-                          <div style={{ flex: "1 1 0" }}>컬럼</div>
+                          <div style={{ flex: "0.7 1 0" }}>테이블</div>
+                          <div style={{ flex: "0.7 1 0" }}>컬럼</div>
                           <div style={{ flex: "0 0 120px" }}>공통코드</div>
                         </div>
                         {/* 행 */}
@@ -1085,7 +1086,7 @@ function FunctionDetailPageInner() {
                               background: idx % 2 === 0 ? "var(--color-bg-card)" : "var(--color-bg-muted)",
                             }}
                           >
-                            <div style={{ flex: "0 0 120px", fontSize: 12 }}>{m.usePurpsCn || <span style={{ color: "var(--color-text-disabled)" }}>—</span>}</div>
+                            <div style={{ flex: "0.6 1 120px", fontSize: 12 }}>{m.usePurpsCn || <span style={{ color: "var(--color-text-disabled)" }}>—</span>}</div>
                             <div style={{ flex: "0 0 72px", textAlign: "center" }}>
                               {m.ioSeCode ? (
                                 <span className="sp-badge" style={{
@@ -1097,8 +1098,8 @@ function FunctionDetailPageInner() {
                               ) : <span style={{ color: "var(--color-text-disabled)", fontSize: 12 }}>—</span>}
                             </div>
                             <div style={{ flex: "0 0 90px", fontSize: 12, color: "var(--color-text-secondary)" }}>{m.uiTyCode || "—"}</div>
-                            <div style={{ flex: "1 1 0", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.tableName || "—"}</div>
-                            <div style={{ flex: "1 1 0", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.colName || "—"}</div>
+                            <div style={{ flex: "0.7 1 0", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.tableName || "—"}</div>
+                            <div style={{ flex: "0.7 1 0", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.colName || "—"}</div>
                             <div style={{ flex: "0 0 120px", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {m.refGrpCode ? (
                                 <span className="sp-badge" style={{
