@@ -23,6 +23,8 @@ import { useRef } from "react";
 import { useIntroEffects } from "../_components/useIntroEffects";
 import DesignTree from "../_components/DesignTree";
 import PhaseAccordion, { type PhaseStep } from "../_components/PhaseAccordion";
+import IntroNav from "../_components/IntroNav";
+import IntroFooter from "../_components/IntroFooter";
 
 // 이용 시작 경로 — 한 곳에서 관리
 // 로그인 페이지로 보냄: 기존 회원은 바로 로그인, 신규 회원은 로그인 화면의 회원가입 링크로 이동
@@ -96,23 +98,8 @@ export default function IntroAboutPage() {
 
   return (
     <div className="sp-intro" ref={rootRef}>
-      {/* ===================== NAV ===================== */}
-      <nav className="nav">
-        <div className="wrap">
-          {/* 로고 클릭 시 요약 페이지로 복귀 */}
-          <Link href="/intro" className="brand" style={{ textDecoration: "none" }}>
-            <span className="b-spec">SPE</span>
-            <span className="b-code">CODE</span>
-            <span className="b-dot" />
-          </Link>
-          <div className="nav-right">
-            <span className="nav-tag">B2B · 공공 SI 설계 플랫폼</span>
-            <Link href={LOGIN_PATH} className="btn btn-primary btn-sm">
-              이용하기 <span className="arr">→</span>
-            </Link>
-          </div>
-        </div>
-      </nav>
+      {/* ===================== NAV (공용) ===================== */}
+      <IntroNav active="about" />
 
       {/* ===================== HERO ===================== */}
       <header className="hero" data-screen-label="히어로">
@@ -1230,27 +1217,8 @@ export default function IntroAboutPage() {
         </div>
       </section>
 
-      {/* ===================== FOOTER ===================== */}
-      <footer className="foot">
-        <div className="wrap">
-          <div>
-            <div className="brand f-brand">
-              <span className="b-spec">SPE</span>
-              <span className="b-code">CODE</span>
-              <span className="b-dot" />
-            </div>
-            <p className="f-disc">
-              스펙코드는 2~7억 규모 공공 SI 사업에 최적화된 AI 설계 플랫폼입니다. 개발을 전혀 모르는 일반인이 아닌, 기존
-              개발팀이 AI를 더 잘 활용하도록 돕습니다.
-            </p>
-          </div>
-          <div className="f-meta">
-            ANALYZE → DESIGN → PRD → BUILD
-            <br />
-            분석 · 설계 · 산출물 자동화
-          </div>
-        </div>
-      </footer>
+      {/* ===================== FOOTER (공용 — 사업자 정보·약관 링크) ===================== */}
+      <IntroFooter />
 
       {/* ===================== STICKY DOCK ===================== */}
       <div className="dock">

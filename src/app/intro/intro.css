@@ -900,3 +900,186 @@ html:has(.sp-intro) { scroll-behavior: smooth; }
   .more-link:hover { gap: 14px; }
   .sec.light .more-link, .sec.light-2 .more-link { color: var(--blue); border-color: rgba(47,107,255,0.4); }
 }
+
+/* =====================================================================
+   서브 페이지 (요금제 · 이용약관 · 개인정보처리방침) — .sp-intro.is-white.is-sub
+   화이트 + 블루 + 짙은 그레이. 히어로 없이 고정 내비 아래 여백부터 시작한다.
+   색은 전부 위 팔레트 변수만 쓴다(--blue, --ink*, --paper*, --light*, --dark-line).
+   ===================================================================== */
+.sp-intro {
+  /* 공용 내비 — 서브 페이지는 처음부터 불투명(is-static) */
+  .nav.is-static { position: sticky; }
+  .nav-tag { transition: color .2s ease; }
+  .nav-tag:hover, .nav-tag.is-active { color: var(--blue); }
+  /* 기존 규칙(≤680px 에서 .nav-tag 숨김)은 긴 안내 문구 기준이었다. 이제는 짧은 링크 2개라 모바일에서도 보인다 */
+  @media (max-width: 680px) { .nav-tag { display: inline; font-size: 11.5px; } .nav-right { gap: 14px; } }
+
+  /* 공용 푸터 — 사업자 정보 그리드 */
+  .foot .foot-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 36px; align-items: start; }
+  @media (max-width: 760px) { .foot .foot-grid { grid-template-columns: 1fr; gap: 26px; } }
+  .foot .f-links { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 22px; }
+  .foot .f-links a { font-size: 13.5px; color: var(--paper-soft); text-decoration: none; }
+  .foot .f-links a:hover { color: var(--blue); }
+  .foot .f-links a.is-strong { font-weight: 700; color: var(--paper); }
+  .foot .f-biz { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; font-size: 12.5px; line-height: 1.6; color: var(--paper-faint); margin: 0; }
+  .foot .f-biz div { display: contents; }
+  .foot .f-biz dt { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; padding-top: 2px; }
+  .foot .f-biz dd { margin: 0; color: var(--paper-soft); overflow-wrap: anywhere; }
+  .foot .f-biz a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--dark-line); }
+  .foot .f-copy { margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--dark-line); font-family: var(--mono); font-size: 11.5px; color: var(--paper-faint); }
+}
+
+.sp-intro.is-white.is-sub {
+  /* 페이지 머리 */
+  .pg-head { padding: clamp(56px, 9vh, 96px) 0 clamp(28px, 5vh, 48px); background: var(--dark); }
+  .pg-head .kicker { color: var(--blue); margin-bottom: 18px; }
+  .pg-head h1 { font-size: clamp(32px, 5.2vw, 56px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.12; color: var(--paper); text-wrap: balance; }
+  .pg-sub { margin-top: 20px; max-width: 640px; font-size: clamp(15.5px, 1.8vw, 18.5px); line-height: 1.7; color: var(--paper-soft); text-wrap: pretty; }
+  .pg-sub b { color: var(--paper); font-weight: 700; }
+  .legal-head { padding-bottom: clamp(24px, 4vh, 40px); }
+  .legal-head h1 { font-size: clamp(28px, 4vw, 42px); }
+  .legal-head .pg-sub { margin-top: 12px; font-family: var(--mono); font-size: 13px; }
+
+  /* 섹션 리듬 — 랜딩보다 촘촘하게 */
+  .sec { padding: clamp(48px, 7vh, 84px) 0; }
+  .sec-head { margin-bottom: 36px; }
+  .sec-head h2 { font-size: clamp(24px, 3.2vw, 36px); font-weight: 800; letter-spacing: -0.025em; line-height: 1.2; color: var(--paper); }
+  .sec-head p { color: var(--paper-soft); }
+  .sec-head p b { color: var(--paper); font-weight: 700; }
+  .sec.light .sec-head h2 { color: var(--ink); }
+  .sec.light .sec-head p { color: var(--ink-soft); }
+  .sec.light .sec-head p b { color: var(--ink); }
+
+  /* ── 플랜 카드 ───────────────────────────────────────────── */
+  /* 섹션(.sec)이 overflow:hidden 이라 카드 위로 튀어나온 "추천" 리본이 잘린다 → 리본 높이만큼 위 여백 */
+  .plans-sec { padding-top: 18px; }
+  .plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; align-items: stretch; }
+  @media (max-width: 960px) { .plans { grid-template-columns: 1fr; max-width: 520px; margin: 0 auto; } }
+  .plan {
+    position: relative; display: flex; flex-direction: column;
+    background: var(--light); border: 1px solid var(--dark-line); border-radius: 20px;
+    padding: clamp(24px, 2.6vw, 34px);
+    box-shadow: 0 10px 34px rgba(20, 40, 90, 0.05);
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  }
+  .plan:hover { transform: translateY(-3px); box-shadow: 0 20px 50px rgba(20, 40, 90, 0.09); }
+  .plan.is-rec { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue), 0 22px 60px rgba(47, 107, 255, 0.16); }
+  .plan.is-rec:hover { transform: translateY(-4px); }
+  .plan.is-soon { background: var(--light-2); border-style: dashed; color: var(--ink-faint); box-shadow: none; }
+  .plan.is-soon:hover { transform: none; box-shadow: none; }
+  .ribbon {
+    position: absolute; top: -13px; left: 50%; transform: translateX(-50%);
+    background: var(--blue); color: #fff; font-family: var(--mono); font-size: 11.5px; font-weight: 600; letter-spacing: 0.14em;
+    padding: 5px 14px; border-radius: 999px; box-shadow: 0 6px 18px rgba(47, 107, 255, 0.35);
+  }
+  .plan-name { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.16em; color: var(--ink-soft); display: flex; align-items: center; gap: 10px; }
+  .plan.is-rec .plan-name { color: var(--blue); }
+  .plan.is-soon .plan-name { color: var(--ink-faint); }
+  .soon-badge { font-size: 10.5px; letter-spacing: 0.08em; padding: 3px 9px; border-radius: 6px; background: rgba(72, 80, 102, 0.1); color: var(--ink-soft); }
+  .plan-price { margin-top: 18px; display: flex; align-items: baseline; gap: 4px; color: var(--ink); }
+  .plan-price b { font-size: clamp(38px, 4.2vw, 48px); font-weight: 800; letter-spacing: -0.04em; line-height: 1; }
+  .plan-price .unit { font-size: 20px; font-weight: 700; }
+  .plan-price .per { margin-left: 6px; font-size: 14px; font-weight: 500; color: var(--ink-soft); }
+  .plan.is-soon .plan-price { color: var(--ink-faint); }
+  .plan-period { margin-top: 10px; font-family: var(--mono); font-size: 12px; letter-spacing: 0.02em; color: var(--ink-faint); }
+  .plan-desc { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--light-3); font-size: 14.5px; line-height: 1.65; color: var(--ink-soft); text-wrap: pretty; }
+  .plan-feats { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-direction: column; gap: 11px; flex: 1; }
+  .plan-feats li { position: relative; padding-left: 26px; font-size: 14.5px; line-height: 1.55; color: var(--ink); text-wrap: pretty; }
+  .plan-feats li b { font-weight: 700; color: var(--blue); }
+  .plan-feats li::before {
+    content: ""; position: absolute; left: 0; top: 4px; width: 16px; height: 16px; border-radius: 50%;
+    background: rgba(47, 107, 255, 0.12) url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Cpath d=%27M4 8.3l2.6 2.6L12 5.6%27 fill=%27none%27 stroke=%27%232f6bff%27 stroke-width=%271.8%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E") center/16px no-repeat;
+  }
+  .plan-feats li.no { color: var(--ink-faint); }
+  .plan-feats li.no::before { background: rgba(72, 80, 102, 0.1) url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Cpath d=%27M5 5l6 6M11 5l-6 6%27 fill=%27none%27 stroke=%27%238a93a8%27 stroke-width=%271.8%27 stroke-linecap=%27round%27/%3E%3C/svg%3E") center/16px no-repeat; }
+  .plan.is-soon .plan-feats li { color: var(--ink-soft); }
+  .plan.is-soon .plan-feats li::before { background-color: rgba(72, 80, 102, 0.08); filter: grayscale(1); opacity: .7; }
+  .plan-cta { margin-top: 26px; width: 100%; justify-content: center; }
+  .plan-cta-soon { margin-top: 26px; display: flex; flex-direction: column; gap: 10px; }
+  .plan-cta-soon small { font-size: 12.5px; line-height: 1.55; color: var(--ink-soft); text-align: center; text-wrap: pretty; }
+  .btn.is-disabled { opacity: .55; cursor: not-allowed; pointer-events: none; box-shadow: none; }
+  .enterprise-line { margin-top: 26px; text-align: center; font-size: 14px; color: var(--paper-soft); }
+  .enterprise-line b { font-family: var(--mono); letter-spacing: 0.1em; color: var(--paper); font-weight: 600; }
+  .enterprise-line a { color: var(--blue); text-decoration: none; border-bottom: 1px solid rgba(47, 107, 255, 0.4); }
+
+
+  /* ── 좌석 계산 예시 ──────────────────────────────────────── */
+  .seat-ex { border: 1px solid var(--light-3); border-radius: 20px; background: var(--light-2); padding: clamp(18px, 2.4vw, 28px); }
+  .seat-ex-row { display: grid; grid-template-columns: 1fr 1fr 1.15fr; gap: 14px; }
+  @media (max-width: 820px) { .seat-ex-row { grid-template-columns: 1fr; } }
+  .seat-ex-proj, .seat-ex-result { background: var(--light); border: 1px solid var(--light-3); border-radius: 14px; padding: 18px; }
+  .seat-ex-pn { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.14em; color: var(--ink-faint); margin-bottom: 12px; }
+  .seat-ex-proj ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .seat-ex-proj li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 9px; background: rgba(47, 107, 255, 0.06); font-size: 14px; font-weight: 600; color: var(--ink); }
+  .seat-ex-proj li em { font-style: normal; font-family: var(--mono); font-size: 11px; color: var(--blue); }
+  .seat-ex-proj li.viewer { background: rgba(72, 80, 102, 0.06); color: var(--ink-soft); font-weight: 500; }
+  .seat-ex-proj li.viewer em { color: var(--ink-faint); }
+  .seat-ex-result { border-color: rgba(47, 107, 255, 0.35); display: flex; flex-direction: column; }
+  .seat-ex-count { display: flex; align-items: baseline; gap: 4px; color: var(--ink); font-size: 18px; font-weight: 700; }
+  .seat-ex-count b { font-size: 44px; font-weight: 800; letter-spacing: -0.04em; line-height: 1; color: var(--blue); }
+  .seat-ex-who { margin-top: 8px; font-size: 13.5px; color: var(--ink-soft); }
+  .seat-ex-total { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--light-3); font-size: 20px; font-weight: 800; color: var(--ink); letter-spacing: -0.02em; }
+  .seat-ex-total small { display: block; margin-top: 4px; font-family: var(--mono); font-size: 11.5px; font-weight: 500; color: var(--ink-faint); letter-spacing: 0.02em; }
+  .seat-ex-cap { margin-top: 16px; font-size: 14px; line-height: 1.6; color: var(--ink-soft); }
+
+  /* ── 알아두실 점 ─────────────────────────────────────────── */
+  .notes { list-style: none; margin: 0; padding: 0; counter-reset: note; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  @media (max-width: 820px) { .notes { grid-template-columns: 1fr; } }
+  .notes li {
+    counter-increment: note; position: relative; padding: 16px 18px 16px 54px;
+    background: var(--light); border: 1px solid var(--dark-line); border-radius: 14px;
+    font-size: 14.5px; line-height: 1.68; color: var(--paper-soft); text-wrap: pretty;
+  }
+  .notes li::before {
+    content: counter(note, decimal-leading-zero); position: absolute; left: 18px; top: 17px;
+    font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: var(--blue);
+  }
+  .notes li b { color: var(--paper); font-weight: 700; }
+  .notes li a { color: var(--blue); text-decoration: none; border-bottom: 1px solid rgba(47, 107, 255, 0.4); }
+
+  /* ── FAQ ─────────────────────────────────────────────────── */
+  .faq { display: flex; flex-direction: column; gap: 10px; max-width: 880px; }
+  .faq-item { border: 1px solid var(--light-3); border-radius: 14px; background: var(--light); overflow: hidden; transition: border-color .2s ease; }
+  .faq-item.is-open { border-color: rgba(47, 107, 255, 0.45); }
+  .faq-q {
+    width: 100%; display: flex; align-items: center; gap: 14px; padding: 17px 20px;
+    background: none; border: 0; cursor: pointer; text-align: left; font: inherit; color: var(--ink);
+  }
+  .faq-mark { font-family: var(--mono); font-weight: 600; font-size: 13px; color: var(--blue); flex: none; }
+  .faq-qt { font-weight: 700; font-size: 16px; line-height: 1.4; }
+  .faq-toggle { margin-left: auto; color: var(--ink-faint); font-size: 18px; flex: none; transition: transform .2s ease, color .2s ease; }
+  .faq-item.is-open .faq-toggle { transform: rotate(45deg); color: var(--blue); }
+  .faq-a { padding: 0 20px 20px 47px; }
+  .faq-a p { font-size: 14.5px; line-height: 1.75; color: var(--ink-soft); text-wrap: pretty; }
+  .faq-a p + p { margin-top: 10px; }
+  .faq-more { margin-top: 26px; font-size: 14px; color: var(--ink-soft); }
+  .faq-more a { color: var(--blue); text-decoration: none; border-bottom: 1px solid rgba(47, 107, 255, 0.4); }
+
+  /* ── 마무리 CTA (서브 페이지용, 랜딩 .final 보다 낮게) ──────── */
+  .final.final-sub { padding: clamp(60px, 9vh, 110px) 0; }
+  .final.final-sub h2 { font-size: clamp(28px, 4.4vw, 50px); }
+  .final.final-sub p { color: var(--paper-soft); }
+
+  /* ── 약관·방침 본문 ──────────────────────────────────────── */
+  .legal-sec { padding-top: clamp(36px, 5vh, 56px); }
+  .legal { max-width: 820px; color: var(--ink); font-size: 15px; line-height: 1.8; }
+  .legal h2 { font-size: 21px; font-weight: 800; letter-spacing: -0.02em; margin: 48px 0 8px; padding-top: 24px; border-top: 1px solid var(--light-3); color: var(--ink); }
+  .legal h2:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+  .legal h3 { font-size: 16.5px; font-weight: 700; margin: 30px 0 10px; color: var(--ink); }
+  .legal p { margin: 0 0 12px; color: var(--ink-soft); text-wrap: pretty; }
+  .legal .legal-intro { font-size: 15.5px; color: var(--ink); }
+  /* 인트로 스코프 리셋이 list-style 을 없애므로 약관 조항 번호를 명시적으로 켠다 */
+  .legal ol { list-style: decimal; margin: 0 0 12px; padding-left: 22px; color: var(--ink-soft); }
+  .legal ol li { margin-bottom: 7px; }
+  .legal ol ol { margin-top: 7px; padding-left: 20px; list-style: lower-alpha; }
+  .legal a { color: var(--blue); text-decoration: none; border-bottom: 1px solid rgba(47, 107, 255, 0.4); }
+  .legal-table { width: 100%; border-collapse: collapse; margin: 8px 0 14px; font-size: 13.5px; line-height: 1.6; }
+  .legal-table th, .legal-table td { padding: 10px 12px; border: 1px solid var(--light-3); text-align: left; vertical-align: top; }
+  .legal-table th { background: var(--light-2); font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.06em; color: var(--ink-soft); font-weight: 600; }
+  .legal-table td { color: var(--ink-soft); }
+  .legal-table td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
+  @media (max-width: 640px) { .legal-table td:first-child { white-space: normal; } }
+  .legal-biz { margin-top: 28px; padding: 18px 20px; border-radius: 14px; background: var(--light-2); border: 1px solid var(--light-3); }
+  .legal-biz p { margin: 0; font-size: 13.5px; line-height: 1.8; color: var(--ink-soft); }
+  .legal-biz b { color: var(--ink); }
+}
