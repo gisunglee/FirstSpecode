@@ -574,7 +574,8 @@ export function registerTools(
 
   server.tool(
     "list_unit_works",
-    "단위업무 목록 조회 — 프로젝트의 단위업무 목록을 반환합니다 (요구사항별 필터 가능). 진척률, 화면 수, AI 구현 요청 상태 포함",
+    "단위업무 목록 조회 — 프로젝트의 단위업무 목록을 반환합니다 (요구사항별 필터 가능). 진척률, 화면 수, AI 구현 요청 상태 포함. " +
+      "설명 본문(description)은 목록에서 제외됩니다 — 본문이 필요하면 get_unit_work(단건) 또는 get_design_tree(설계 계층 포함)를 사용하세요.",
     {
       projectId: z.string().describe("프로젝트 ID"),
       reqId: z.string().optional().describe("요구사항 ID (필터 — 특정 요구사항의 단위업무만)"),
@@ -582,10 +583,16 @@ export function registerTools(
     async ({ projectId, reqId }) => {
       try {
         const qs = buildQs({ reqId });
-        const data = await specodeFetch(
+        const data = await specodeFetch<{ items?: Array<Record<string, unknown>>; totalCount?: number }>(
           `/api/projects/${projectId}/unit-works${qs}`
         );
-        return textResult(data);
+        // 목록 단계에서는 본문을 쓰지 않는데 단위업무마다 수 KB씩 실려 와 AI 컨텍스트를 크게 소모함.
+        // API 응답은 그대로 두고(웹 UI 공용) MCP 응답에서만 description 을 제외한다.
+        const items = (data.items ?? []).map((item) => {
+          const { description: _omitted, ...rest } = item;
+          return rest;
+        });
+        return textResult({ ...data, items });
       } catch (err) {
         return errorResult(err);
       }
@@ -1037,6 +1044,7 @@ export function registerTools(
     "get_design_tree",
     "설계 트리 배치 조회 — 지정한 단위업무들의 화면>영역>기능 계층을 한 번에 반환합니다. " +
       "여러 단위업무 사이의 설계 일관성을 점검할 때 사용하세요 (예: B와 C 단위업무가 서로 모순되지 않는지 확인). " +
+      "기능 노드에는 colMappingCount(저장된 컬럼 매핑 행 수)가 포함됩니다 — 컬럼 매핑 작업 시 0인 기능은 get_col_mappings 조회를 생략할 수 있습니다. " +
       "unitWorkIds는 최대 20개까지만 허용됩니다 — 그 이상이거나 '프로젝트 전체'를 한 번에 조회하는 것은 " +
       "지원하지 않습니다(응답 payload와 컨텍스트 소진 방지). 20개보다 많은 단위업무를 점검하려면 " +
       "list_unit_works로 전체 ID 목록을 먼저 받은 뒤 20개씩 나눠서 여러 번 호출하세요.",
@@ -1125,15 +1133,49 @@ export function registerTools(
 
   server.tool(
     "get_db_table",
-    "DB 테이블 상세 조회 — 테이블 스키마와 컬럼 정보를 반환합니다",
+    "DB 테이블 상세 조회 — 테이블 스키마와 컬럼 정보(colId 포함)를 반환합니다. " +
+      "tableId 또는 tableName(물리명, 대소문자 무시) 중 하나로 조회합니다. " +
+      "소스에서 본 테이블명을 알고 있으면 list_db_tables 로 전체 목록을 받지 말고 tableName 으로 바로 조회하세요. " +
+      "같은 물리명이 여러 개 등록된 경우에는 후보 목록을 돌려주니 tableId 로 다시 호출하세요.",
     {
       projectId: z.string().describe("프로젝트 ID"),
-      tableId: z.string().describe("테이블 ID"),
+      tableId: z.string().optional().describe("테이블 ID (tableName 과 둘 중 하나 필수)"),
+      tableName: z.string().optional().describe("테이블 물리명, 예: tb_cm_crbn_ntl_plcy (대소문자 무시, 정확 일치)"),
     },
-    async ({ projectId, tableId }) => {
+    async ({ projectId, tableId, tableName }) => {
       try {
+        const trimmedName = tableName?.trim();
+        if (!tableId && !trimmedName) {
+          return errorResult(new Error("tableId 또는 tableName 중 하나는 필요합니다."));
+        }
+
+        let resolvedTableId = tableId;
+        if (!resolvedTableId) {
+          // 물리명에 유니크 제약이 없어(폐기본·중복 등록) 0개 또는 여러 개가 나올 수 있다 —
+          // 임의로 하나를 고르면 잘못된 tableId 로 매핑이 들어갈 수 있으므로 정확히 1개일 때만 진행
+          const qs = buildQs({ physicalName: trimmedName });
+          const candidates = await specodeFetch<Array<{ tblId: string; tblPhysclNm: string; tblLgclNm: string; tblSttusCode: string }>>(
+            `/api/projects/${projectId}/db-tables${qs}`
+          );
+          if (candidates.length === 0) {
+            return errorResult(new Error(
+              `물리명 '${trimmedName}' 인 테이블이 이 프로젝트에 없습니다. list_db_tables 로 등록된 이름을 확인하세요.`
+            ));
+          }
+          if (candidates.length > 1) {
+            const list = candidates
+              .map((c) => `- ${c.tblPhysclNm} (${c.tblLgclNm}, ${c.tblSttusCode}) tableId=${c.tblId}`)
+              .join("\n");
+            return errorResult(new Error(
+              `물리명 '${trimmedName}' 인 테이블이 ${candidates.length}개 있어 하나를 고를 수 없습니다. ` +
+                `아래 후보 중 맞는 tableId 로 다시 호출하세요.\n${list}`
+            ));
+          }
+          resolvedTableId = candidates[0].tblId;
+        }
+
         const data = await specodeFetch(
-          `/api/projects/${projectId}/db-tables/${tableId}`
+          `/api/projects/${projectId}/db-tables/${resolvedTableId}`
         );
         return textResult(data);
       } catch (err) {
@@ -1298,8 +1340,8 @@ export function registerTools(
   server.tool(
     "get_col_mappings",
     "기능 컬럼 매핑 조회 — 기능이 어떤 DB 테이블·컬럼을 INPUT/OUTPUT/INOUT 으로 쓰는지 " +
-      "그룹(grpNm)별 매핑 목록을 반환합니다. add_col_mappings 전에 반드시 먼저 호출해 " +
-      "이미 매핑된 컬럼과 기존 그룹 이름을 확인하세요. " +
+      "그룹(grpNm)별 매핑 목록을 반환합니다. get_design_tree 의 colMappingCount 가 0보다 큰 기능이면 " +
+      "add_col_mappings 전에 먼저 호출해 기존 그룹 이름을 확인하세요(0이면 생략 가능 — 중복 컬럼은 서버가 걸러냄). " +
       "(역방향 — 컬럼이 어떤 기능에서 쓰이는지는 get_db_column_usage)",
     {
       projectId:  z.string().describe("프로젝트 ID"),
@@ -1323,7 +1365,8 @@ export function registerTools(
     "기능 컬럼 매핑 추가 — 기능에 DB 컬럼 매핑을 '추가만' 합니다(기존 매핑은 절대 지우거나 " +
       "덮어쓰지 않음). 지정한 그룹(grpNm)에 이미 매핑된 컬럼은 건너뛰고 skippedColIds로 " +
       "알려줍니다. grpNm과 같은 이름의 그룹이 없으면 새로 만듭니다. " +
-      "선행: get_col_mappings로 기존 매핑·그룹 이름 확인, get_db_table로 colId 확인. " +
+      "선행: get_db_table(tableName 으로 조회 가능)로 colId 확인. get_design_tree 의 colMappingCount 가 " +
+      "0보다 큰 기능만 get_col_mappings 로 기존 그룹 이름을 먼저 확인하고, 0이면 바로 등록해도 됩니다. " +
       "권한: 이 기능의 담당자(또는 상위 담당자)·PM/PL·OWNER/ADMIN만 가능 — 아니면 서버가 " +
       "사유를 반환하므로 그 문구를 사용자에게 그대로 전달하세요. " +
       "매핑 삭제·교체·그룹 이름 변경은 MCP에 없으며 웹 UI에서만 가능합니다. " +

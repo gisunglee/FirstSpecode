@@ -95,6 +95,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       funcsByArea.get(f.area_id)!.push(f);
     }
 
+    // 기능별 컬럼 매핑 건수 — AI가 add_col_mappings 전에 "이미 매핑이 있는 기능"만 골라
+    // get_col_mappings 를 부를 수 있게 함 (0건인 기능은 조회 생략 → 호출 수 절감)
+    const colMappingCounts = functions.length > 0
+      ? await prisma.tbDsColMapping.groupBy({
+          by: ["ref_id"],
+          where: { ref_ty_code: "FUNCTION", ref_id: { in: functions.map((f) => f.func_id) } },
+          _count: { _all: true },
+        })
+      : [];
+    const colMappingCountByFunc = new Map(colMappingCounts.map((c) => [c.ref_id, c._count._all]));
+
     const areasByScreen = new Map<string, typeof areas>();
     for (const a of areas) {
       if (!a.scrn_id) continue;
@@ -138,6 +149,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             description: f.func_dc,
             type: f.func_ty_code,
             scopeStatus: f.scope_sttus_code,
+            // 이 기능에 저장된 컬럼 매핑 행 수 (그룹 무관 합계)
+            colMappingCount: colMappingCountByFunc.get(f.func_id) ?? 0,
           })),
         })),
       })),

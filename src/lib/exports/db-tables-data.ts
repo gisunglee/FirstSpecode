@@ -28,13 +28,19 @@ export type DbTableListItem = {
 export async function fetchProjectDbTables(opts: {
   projectId:       string;
   assigneeFilter?: string;
+  /**
+   * 물리명 정확 일치 필터 (대소문자 무시). MCP가 "tb_xxx → tableId" 를 목록 전체 없이 찾을 때 사용.
+   * 물리명에 유니크 제약이 없어 결과가 0개 또는 여러 개일 수 있다 — 호출자가 개수를 확인해야 한다.
+   */
+  physicalName?:   string;
 }): Promise<DbTableListItem[]> {
-  const { projectId, assigneeFilter } = opts;
+  const { projectId, assigneeFilter, physicalName } = opts;
 
   const tables = await prisma.tbDsDbTable.findMany({
     where: {
       prjct_id: projectId,
       ...(assigneeFilter ? { asign_mber_id: assigneeFilter } : {}),
+      ...(physicalName ? { tbl_physcl_nm: { equals: physicalName.trim(), mode: "insensitive" } } : {}),
     },
     include: { _count: { select: { columns: true } } },
     orderBy: { tbl_physcl_nm: "asc" },

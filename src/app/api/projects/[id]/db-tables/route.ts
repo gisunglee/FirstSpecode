@@ -22,6 +22,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   // 담당자 필터 — "me"는 로그인 사용자, 그 외 값은 해당 mberId로 필터
   const url        = new URL(request.url);
   const assignedTo = url.searchParams.get("assignedTo") ?? undefined;
+  // 물리명 정확 일치 필터(대소문자 무시, 선택) — MCP get_db_table(tableName) 이 목록 전체 대신 사용
+  const physicalName = url.searchParams.get("physicalName")?.trim() || undefined;
 
   const gate = await requirePermission(request, projectId, "content.read");
   if (gate instanceof Response) return gate;
@@ -30,7 +32,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
   try {
     // 데이터 조회+가공 로직은 service 로 분리 — export 라우트와 동일 결과 보장
-    const items = await fetchProjectDbTables({ projectId, assigneeFilter });
+    const items = await fetchProjectDbTables({ projectId, assigneeFilter, physicalName });
     return apiSuccess(items);
   } catch (err) {
     console.error(`[GET /api/projects/${projectId}/db-tables] DB 오류:`, err);
