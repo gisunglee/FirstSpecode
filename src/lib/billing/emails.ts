@@ -11,7 +11,11 @@
  * (SMTP_HOST 미설정이면 콘솔 출력). auth.ts 를 건드리지 않고 여기서 별도 transporter 를 만든다.
  *
  * 실패 정책: 메일 실패가 결제·강등 처리를 되돌리면 안 된다. 모든 함수는 throw 하지 않고
- * console.error 만 남긴다. 호출자는 트랜잭션 커밋 뒤에 호출한다.
+ * console.error 만 남기며, 발송 성공 여부(boolean)만 돌려준다. 호출자는 트랜잭션 커밋 뒤에
+ * **await** 로 호출한다 — Vercel 같은 서버리스는 응답을 보낸 뒤 남은 promise 를 보장하지 않아
+ * void 로 던지면 메일이 조용히 유실된다(2026-09-20 점검).
+ *
+ * 본문에 들어가는 외부 문자열(프로젝트명·카드사명·PG 실패 사유 등)은 esc() 로 이스케이프한다.
  */
 
 import nodemailer from "nodemailer";
@@ -19,6 +23,16 @@ import { BILLING_PATH } from "./constants";
 import { formatKstDate, formatWon } from "./pricing";
 
 // ─── 공통 발송 ───────────────────────────────────────────────────────────────
+
+/** HTML 이스케이프 — 사용자·PG 가 정한 문자열을 본문에 넣을 때 */
+function esc(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 function appUrl(): string {
   return process.env.APP_URL ?? "http://localhost:3000";
@@ -36,11 +50,11 @@ function layout(title: string, bodyHtml: string): string {
     </div>`;
 }
 
-/** 표 한 줄 */
+/** 표 한 줄 — value 는 외부 문자열일 수 있어 항상 이스케이프 */
 function row(label: string, value: string): string {
   return `<tr>
     <td style="padding:6px 10px 6px 0; color:#666; white-space:nowrap;">${label}</td>
-    <td style="padding:6px 0; font-weight:600;">${value}</td>
+    <td style="padding:6px 0; font-weight:600;">${esc(value)}</td>
   </tr>`;
 }
 
@@ -48,12 +62,13 @@ function table(rows: string[]): string {
   return `<table style="border-collapse:collapse; margin:12px 0; font-size:14px;">${rows.join("")}</table>`;
 }
 
-async function sendBillingMail(to: string, subject: string, html: string): Promise<void> {
+/** 발송 성공이면 true. SMTP 미설정(개발)도 true — 흐름을 막지 않기 위해 */
+async function sendBillingMail(to: string, subject: string, html: string): Promise<boolean> {
   try {
     if (!process.env.SMTP_HOST) {
       // 개발 환경 — 링크·본문 요약만 콘솔로
       console.log(`\n\x1b[33m[DEV] 결제 메일 → ${to}\x1b[0m\n\x1b[36m${subject}\x1b[0m`);
-      return;
+      return true;
     }
     const transporter = nodemailer.createTransport({
       host:   process.env.SMTP_HOST,
@@ -67,9 +82,11 @@ async function sendBillingMail(to: string, subject: string, html: string): Promi
       subject,
       html,
     });
+    return true;
   } catch (err) {
     // 결제 처리 자체는 이미 끝났다 — 메일 실패는 로그만
     console.error(`[billing/emails] 발송 실패 to=${to} subject=${subject}:`, err);
+    return false;
   }
 }
 
@@ -89,7 +106,7 @@ export type ReceiptEmailInput = {
   nextBillAt:  Date | null;
 };
 
-export async function sendPaymentReceiptEmail(i: ReceiptEmailInput): Promise<void> {
+export async function sendPaymentReceiptEmail(i: ReceiptEmailInput): Promise<boolean> {
   const kindLabel =
     i.kind === "INITIAL"  ? "구독이 시작되었습니다" :
     i.kind === "SEAT_ADD" ? "좌석 추가 결제가 완료되었습니다" :
@@ -107,9 +124,9 @@ export async function sendPaymentReceiptEmail(i: ReceiptEmailInput): Promise<voi
   if (i.cardLabel)  rows.push(row("결제 수단", i.cardLabel));
   if (i.nextBillAt) rows.push(row("다음 결제일", formatKstDate(i.nextBillAt)));
   const receipt = i.receiptUrl
-    ? `<p><a href="${absolute(i.receiptUrl)}" style="color:#4a56d4;">영수증 보기</a></p>`
+    ? `<p><a href="${esc(absolute(i.receiptUrl))}" style="color:#4a56d4;">영수증 보기</a></p>`
     : "";
-  await sendBillingMail(
+  return sendBillingMail(
     i.to,
     `[SPECODE] ${kindLabel} — ${formatWon(i.amount)}`,
     layout(kindLabel, `${table(rows)}${receipt}`),
@@ -127,14 +144,14 @@ export type UpcomingChargeEmailInput = {
   cardLabel:   string | null;
 };
 
-export async function sendUpcomingChargeEmail(i: UpcomingChargeEmailInput): Promise<void> {
+export async function sendUpcomingChargeEmail(i: UpcomingChargeEmailInput): Promise<boolean> {
   const rows = [
     row("상품", i.productName),
     row("결제 예정일", formatKstDate(i.billAt)),
     row("결제 예정 금액", `${formatWon(i.amount)} (${i.seatCnt}좌석 × 단가, 부가세 포함)`),
   ];
   if (i.cardLabel) rows.push(row("결제 수단", i.cardLabel));
-  await sendBillingMail(
+  return sendBillingMail(
     i.to,
     `[SPECODE] ${formatKstDate(i.billAt)} 정기 결제 예정 안내`,
     layout(
@@ -157,7 +174,7 @@ export type PaymentFailedEmailInput = {
   reason:      string | null;
 };
 
-export async function sendPaymentFailedEmail(i: PaymentFailedEmailInput): Promise<void> {
+export async function sendPaymentFailedEmail(i: PaymentFailedEmailInput): Promise<boolean> {
   const rows = [
     row("상품", i.productName),
     row("결제 금액", formatWon(i.amount)),
@@ -165,7 +182,7 @@ export async function sendPaymentFailedEmail(i: PaymentFailedEmailInput): Promis
   ];
   if (i.reason)      rows.push(row("사유", i.reason));
   if (i.nextRetryAt) rows.push(row("다음 재시도", formatKstDate(i.nextRetryAt)));
-  await sendBillingMail(
+  return sendBillingMail(
     i.to,
     `[SPECODE] 정기 결제 실패 (${i.attemptNo}회차) — 결제 수단을 확인해 주세요`,
     layout(
@@ -186,13 +203,13 @@ export type CancelConfirmedEmailInput = {
   periodEnd:   Date;
 };
 
-export async function sendCancelConfirmedEmail(i: CancelConfirmedEmailInput): Promise<void> {
-  await sendBillingMail(
+export async function sendCancelConfirmedEmail(i: CancelConfirmedEmailInput): Promise<boolean> {
+  return sendBillingMail(
     i.to,
     `[SPECODE] 구독 해지 예약 확인 — ${formatKstDate(i.periodEnd)}까지 이용 가능`,
     layout(
       "구독 해지가 예약되었습니다",
-      `<p>${i.productName} 구독 해지가 예약되었습니다. 이미 결제한 기간이 끝나는
+      `<p>${esc(i.productName)} 구독 해지가 예약되었습니다. 이미 결제한 기간이 끝나는
        <strong>${formatKstDate(i.periodEnd)}</strong>까지는 그대로 이용할 수 있고, 그 이후 추가 결제는 없습니다.</p>
        <p>그 전에 마음이 바뀌면 설정에서 <strong>해지 취소</strong>를 누르면 됩니다.</p>
        <p style="font-size:13px; color:#666;">해지가 확정되면 소유한 프로젝트는 읽기 전용으로 잠깁니다. 데이터는 삭제되지 않으며,
@@ -213,7 +230,7 @@ export type DowngradedEmailInput = {
   autoUnlockedProjectName: string | null;
 };
 
-export async function sendDowngradedEmail(i: DowngradedEmailInput): Promise<void> {
+export async function sendDowngradedEmail(i: DowngradedEmailInput): Promise<boolean> {
   const why = i.reason === "CANCELED"
     ? "요청하신 해지가 확정되어"
     : "정기 결제가 재시도까지 모두 실패하여";
@@ -222,14 +239,14 @@ export async function sendDowngradedEmail(i: DowngradedEmailInput): Promise<void
        편집·생성·초대·업로드만 막힙니다. <strong>데이터는 삭제되지 않습니다.</strong></p>`
     : "";
   const autoLine = i.autoUnlockedProjectName
-    ? `<p>프로젝트 <strong>${i.autoUnlockedProjectName}</strong>는 멤버 5명 이하라 FREE 플랜으로 바로 활성화되었습니다.</p>`
+    ? `<p>프로젝트 <strong>${esc(i.autoUnlockedProjectName)}</strong>는 멤버 5명 이하라 FREE 플랜으로 바로 활성화되었습니다.</p>`
     : "";
-  await sendBillingMail(
+  return sendBillingMail(
     i.to,
     `[SPECODE] FREE 플랜으로 전환되었습니다`,
     layout(
       "FREE 플랜으로 전환되었습니다",
-      `<p>${why} ${i.productName} 구독이 종료되고 FREE 플랜으로 전환되었습니다.</p>
+      `<p>${why} ${esc(i.productName)} 구독이 종료되고 FREE 플랜으로 전환되었습니다.</p>
        ${lockLine}${autoLine}
        <p>프로젝트 목록에서 멤버 5명 이하인 프로젝트는 <strong>활성화</strong> 버튼으로 바로 풀 수 있고,
        다시 결제하면 모든 프로젝트가 즉시 해제됩니다.</p>

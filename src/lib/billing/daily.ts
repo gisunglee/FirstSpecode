@@ -113,11 +113,9 @@ export async function processSubscriptionDaily(sbscrptnId: string, now: Date): P
     email
   ) {
     const seatCnt = sub.pending_seat_cnt ?? sub.seat_cnt;
-    await prisma.tbBlSubscription.update({
-      where: { sbscrptn_id: sub.sbscrptn_id },
-      data:  { prentc_dt: now },
-    });
-    await sendUpcomingChargeEmail({
+    // 발송이 성공했을 때만 발송 시각을 기록한다 — 먼저 기록하면 SMTP 장애 때 안내가 영영 나가지 않는다.
+    // 하루 1회 배치라 실패 시 다음 날 다시 시도되고, 결제일 전이면 그때 나간다.
+    const sent = await sendUpcomingChargeEmail({
       to:          email,
       productName: PRODUCTS[sub.prdct_code as keyof typeof PRODUCTS]?.name ?? sub.prdct_code,
       amount:      monthlyAmount(seatCnt, sub.unit_price),
@@ -125,7 +123,13 @@ export async function processSubscriptionDaily(sbscrptnId: string, now: Date): P
       billAt:      sub.next_bill_dt,
       cardLabel:   sub.card_co_nm && sub.card_no_masked ? `${sub.card_co_nm} ${sub.card_no_masked}` : null,
     });
-    actions.push("PRENOTICE_SENT");
+    if (sent) {
+      await prisma.tbBlSubscription.update({
+        where: { sbscrptn_id: sub.sbscrptn_id },
+        data:  { prentc_dt: now },
+      });
+      actions.push("PRENOTICE_SENT");
+    }
   }
 
   return actions;

@@ -27,7 +27,7 @@
  * 트랜잭션 원칙:
  *   PG 호출(외부)은 트랜잭션 밖에서, DB 반영은 한 트랜잭션으로. 결제는 성공했는데 DB 가 실패하면
  *   tb_bl_payment 에 기록이 없으므로 운영자가 PG 콘솔 대조로 찾아 수동 반영한다(로그 ERROR).
- *   메일은 커밋 뒤에 보내고 실패해도 흐름을 되돌리지 않는다(emails.ts).
+ *   메일은 커밋 뒤에 await 로 보내고(서버리스에서 void 는 유실) 실패해도 흐름을 되돌리지 않는다(emails.ts).
  */
 
 import type { Prisma, PrismaClient, TbBlSubscription } from "@prisma/client";
@@ -436,7 +436,7 @@ async function activateSubscription(
     return s;
   });
 
-  void sendPaymentReceiptEmail({
+  await sendPaymentReceiptEmail({
     to: actor.email, productName: product.name, kind: "INITIAL", amount, seatCnt,
     periodStart, periodEnd, cardLabel: cardLabel(sub), receiptUrl: charge.receiptUrl, nextBillAt: periodEnd,
   });
@@ -580,7 +580,7 @@ export async function changeSeats(actor: BillingActorRef, seatCnt: number, now =
       return s;
     });
 
-    void sendPaymentReceiptEmail({
+    await sendPaymentReceiptEmail({
       to: actor.email, productName: product.name, kind: "SEAT_ADD", amount: pr.amount, seatCnt: addSeats,
       periodStart: now, periodEnd: active.crrnt_perd_end_dt, cardLabel: cardLabel(updated),
       receiptUrl: charge.receiptUrl, nextBillAt: updated.next_bill_dt,
@@ -647,7 +647,7 @@ export async function cancelSubscription(actor: BillingActorRef, now = new Date(
     data:  { sbscrptn_sttus_code: S.CANCEL_SCHEDULED, cancel_reqst_dt: now, mdfcn_dt: now },
   });
   if (updated.crrnt_perd_end_dt) {
-    void sendCancelConfirmedEmail({ to: actor.email, productName: product.name, periodEnd: updated.crrnt_perd_end_dt });
+    await sendCancelConfirmedEmail({ to: actor.email, productName: product.name, periodEnd: updated.crrnt_perd_end_dt });
   }
   return { status: S.CANCEL_SCHEDULED, periodEnd: updated.crrnt_perd_end_dt?.toISOString() ?? null, subscription: toSubscriptionDto(updated) };
 }
@@ -749,7 +749,7 @@ export async function attemptRecurringCharge(
       await unlockAllOwnedProjects(sub.mber_id, tx);
       return s;
     });
-    void sendPaymentReceiptEmail({
+    await sendPaymentReceiptEmail({
       to: email, productName: product.name, kind: "RECURRING", amount, seatCnt, periodStart, periodEnd,
       cardLabel: cardLabel(updated), receiptUrl: chargeResult.receiptUrl, nextBillAt: periodEnd,
     });
@@ -783,7 +783,7 @@ export async function attemptRecurringCharge(
     where: { sbscrptn_id: sub.sbscrptn_id },
     data:  { sbscrptn_sttus_code: S.PAST_DUE, fail_cnt: failCnt, last_fail_dt: now, mdfcn_dt: now },
   });
-  void sendPaymentFailedEmail({
+  await sendPaymentFailedEmail({
     to: email, productName: product.name, amount, attemptNo: failCnt,
     nextRetryAt: addDays(now, RETRY_POLICY.intervalDays), reason: chargeResult.message,
   });
@@ -824,7 +824,7 @@ export async function terminateSubscription(
     const autoName = result.autoUnlockedProjectId
       ? (await prisma.tbPjProject.findUnique({ where: { prjct_id: result.autoUnlockedProjectId }, select: { prjct_nm: true } }))?.prjct_nm ?? null
       : null;
-    void sendDowngradedEmail({
+    await sendDowngradedEmail({
       to: email, productName: product.name, reason,
       lockedCount: await countLockedProjects(sub.mber_id), autoUnlockedProjectName: autoName,
     });
