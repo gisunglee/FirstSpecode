@@ -173,6 +173,10 @@ async function main(): Promise<void> {
     const emailD = (await prisma.tbCmMember.findUniqueOrThrow({ where: { mber_id: ids.D } })).email_addr!;
     const r2 = await limits.checkMemberLimit(ids.P1, [{ role: "MEMBER", email: emailD }, { role: "MEMBER", email: emailD.toUpperCase() }], "inviter");
     assert.ok(r2 && r2.status === 403, "이메일 초대(같은 사람 2번)도 새 좌석 1개로 계산돼 초과");
+    // 뷰어 → 편집 승격도 좌석을 먹는다 (역할 변경 API 가 checkSeatLimit 호출)
+    const r2b = await limits.checkSeatLimit(ids.P1, [{ role: "MEMBER", mberId: ids.V[0]! }]);
+    assert.ok(r2b && r2b.status === 403, "좌석 3/3 에서 뷰어 승격 → 403");
+    assert.equal(await limits.checkSeatLimit(ids.P1, [{ role: "MEMBER", mberId: ids.C }]), null, "이미 좌석 보유자 승격은 통과");
 
     // ── 4. 좌석 추가 — 일할 결제 ─────────────────────────────────────────
     log("좌석 추가 — 10일 뒤 1좌석 추가, 일할 금액 결제 후 seat_cnt=4, 초대 통과");

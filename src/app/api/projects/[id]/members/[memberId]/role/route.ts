@@ -23,6 +23,8 @@ import { applyLockOnTransferOrRestore } from "@/lib/billing/lock";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { ROLE_CODES, isRoleCode } from "@/lib/permissions";
+import { checkSeatLimit } from "@/lib/planLimits";
+import { isSeatRole } from "@/lib/billing/seats";
 
 type RouteParams = { params: Promise<{ id: string; memberId: string }> };
 
@@ -113,6 +115,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
 
   // ── 일반 역할 변경 (ADMIN / MEMBER / VIEWER 사이) ──────────────────────
+
+  // 뷰어 → 편집 역할 승격은 좌석을 하나 먹는다 (정책 §1-4 — 편집 멤버 수 ≤ 구매 좌석).
+  // 초대·수락과 같은 검사를 여기서도 해야 이 경로로 불변식이 깨지지 않는다. 내리는 방향은 검사 없음.
+  if (!isSeatRole(target.role_code) && isSeatRole(role)) {
+    const seatErr = await checkSeatLimit(projectId, [{ role, mberId: memberId }]);
+    if (seatErr) return seatErr;
+  }
+
   try {
     await prisma.tbPjProjectMember.update({
       where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: memberId } },

@@ -144,7 +144,33 @@ export async function checkMemberLimit(
     return checkFreeMemberLimit(projectId, owner.plan, adding.length, perspective);
   }
 
-  // ── 유료: 구독 좌석 상한 ──────────────────────────────────────────────
+  return checkSeatLimitForOwner(owner.ownerMberId, owner.plan, adding, perspective);
+}
+
+/**
+ * ②-b 구독 좌석만 검사 — 역할 변경(VIEWER → MEMBER/ADMIN) 전에 호출.
+ *
+ * 초대·수락과 다른 점: 멤버 수는 늘지 않고 편집 멤버만 는다. 그래서 FREE 의 "프로젝트당 5명"
+ * 규칙은 건드리지 않고(멤버 수 불변) 구독 좌석 불변식만 지킨다. 뷰어로 내리는 변경은 검사 없음.
+ * 2026-09-20 사용자 결정 — 편집 역할이 되는 모든 경로(초대·수락·승격)가 좌석을 먹는다.
+ */
+export async function checkSeatLimit(
+  projectId: string,
+  adding: MemberAddition[],
+): Promise<Response | null> {
+  const owner = await getProjectOwnerPlan(projectId);
+  if (!owner || owner.plan === "FREE") return null;
+  return checkSeatLimitForOwner(owner.ownerMberId, owner.plan, adding, "inviter");
+}
+
+/** 구독 좌석 상한 본체 — checkMemberLimit(유료)·checkSeatLimit 공용 */
+async function checkSeatLimitForOwner(
+  ownerMberId: string,
+  plan: PlanCode,
+  adding: MemberAddition[],
+  perspective: "inviter" | "invitee",
+): Promise<Response | null> {
+  const owner = { ownerMberId, plan };
   const seat = await getSeatLimit(owner.ownerMberId);
   if (!seat) return null;  // 구독 없는 유료(수동 부여) — 무제한
 
