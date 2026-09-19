@@ -6,6 +6,7 @@
  * 역할:
  *   - 사용자 기본 정보 + 참여 프로젝트 목록
  *   - 시스템 관리자 임명/해임 및 계정 접근 보안 조치 (사유·감사 로그 포함)
+ *   - 플랜·만료일 수동 변경 (결제 연동 전 얼리 고객 BASIC, ENTERPRISE 부여 — 정책 문서 §3 4단계)
  *
  * 설계:
  *   - 자기 자신은 임명/해임 버튼 비활성화 (서버도 403)
@@ -18,6 +19,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import { useIsSystemAdmin } from "@/hooks/useMyRole";
+import { PLAN_CODES, type PlanCode } from "@/lib/permissions";
 
 type UserDetail = {
   mberId:        string;
@@ -117,6 +119,9 @@ export default function AdminUserDetailPage({ params }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
   const [reason, setReason]       = useState("");
   const [accessAction, setAccessAction] = useState<AccessAction | null>(null);
+  // 플랜 변경 모달 상태 — 열 때 현재 값으로 초기화
+  const [planModalOpen, setPlanModalOpen] = useState(false);
+  const [planForm, setPlanForm] = useState<{ plan: PlanCode; expiresAt: string }>({ plan: "FREE", expiresAt: "" });
 
   const mutation = useMutation({
     mutationFn: (input: { role: "SUPER_ADMIN" | null; reason: string }) =>
@@ -132,6 +137,25 @@ export default function AdminUserDetailPage({ params }: Props) {
       queryClient.invalidateQueries({ queryKey: ["member", "profile"] });
       toast.success("시스템 역할이 변경되었습니다.");
       setModalOpen(false);
+      setReason("");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const planMutation = useMutation({
+    mutationFn: (input: { plan: PlanCode; expiresAt: string | null; reason: string }) =>
+      authFetch(`/api/admin/users/${mberId}/plan`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(input),
+      }),
+    onSuccess: () => {
+      // 상세·목록·감사 로그 + 대상자가 본인이면 프로필/권한 훅까지 갱신
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "audit"] });
+      queryClient.invalidateQueries({ queryKey: ["member", "profile"] });
+      toast.success("플랜이 변경되었습니다.");
+      setPlanModalOpen(false);
       setReason("");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -262,7 +286,23 @@ export default function AdminUserDetailPage({ params }: Props) {
           </div>
 
           {/* 액션 버튼 */}
-          <div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <button
+              className="sp-btn sp-btn-secondary"
+              onClick={() => {
+                // 현재 값으로 폼 초기화 — 만료일은 KST 날짜(YYYY-MM-DD)로 환산
+                const current = (PLAN_CODES as readonly string[]).includes(user.plan) ? (user.plan as PlanCode) : "FREE";
+                const expiresAt = user.planExpiresAt
+                  ? new Date(new Date(user.planExpiresAt).getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+                  : "";
+                setPlanForm({ plan: current, expiresAt });
+                setPlanModalOpen(true);
+              }}
+              disabled={user.status === "WITHDRAWN"}
+              title={user.status === "WITHDRAWN" ? "탈퇴한 회원의 플랜은 변경할 수 없습니다." : undefined}
+            >
+              플랜 변경
+            </button>
             <button
               className={user.isSystemAdmin ? "sp-btn sp-btn-danger" : "sp-btn sp-btn-primary"}
               onClick={() => setModalOpen(true)}
@@ -501,6 +541,28 @@ export default function AdminUserDetailPage({ params }: Props) {
         </div>
       )}
 
+      {planModalOpen && (
+        <PlanChangeModal
+          target={user.email ?? user.name ?? user.mberId}
+          currentLabel={displayedPlan}
+          form={planForm}
+          reason={reason}
+          pending={planMutation.isPending}
+          onFormChange={setPlanForm}
+          onReasonChange={setReason}
+          onCancel={() => { setPlanModalOpen(false); setReason(""); }}
+          onConfirm={() => {
+            if (!reason.trim()) { toast.error("사유를 입력해 주세요."); return; }
+            planMutation.mutate({
+              plan:      planForm.plan,
+              // FREE 는 만료일 없음. 유료는 비우면 무기한
+              expiresAt: planForm.plan === "FREE" || !planForm.expiresAt ? null : planForm.expiresAt,
+              reason:    reason.trim(),
+            });
+          }}
+        />
+      )}
+
       {accessAction && (
         <AccessActionModal
           action={accessAction}
@@ -521,6 +583,107 @@ export default function AdminUserDetailPage({ params }: Props) {
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ─── 플랜 변경 모달 ─────────────────────────────────────────────────────
+// 결제 연동 전 운영자가 BASIC/ENTERPRISE 를 수동 부여하는 유일한 경로.
+// 2단계 이후 활성 구독이 있는 회원은 서버가 409 로 거부한다 (구독이 플랜의 원천).
+const PLAN_OPTION_LABEL: Record<PlanCode, string> = {
+  FREE:       "FREE — 무료 (프로젝트 1개·멤버 5명·첨부 불가)",
+  BASIC:      "BASIC — 좌석당 월 과금 플랜",
+  PRO:        "PRO — 준비 중 (수동 부여만)",
+  ENTERPRISE: "ENTERPRISE — 별도 계약 (수동 부여만)",
+};
+
+function PlanChangeModal({
+  target,
+  currentLabel,
+  form,
+  reason,
+  pending,
+  onFormChange,
+  onReasonChange,
+  onCancel,
+  onConfirm,
+}: {
+  target: string;
+  currentLabel: string;
+  form: { plan: PlanCode; expiresAt: string };
+  reason: string;
+  pending: boolean;
+  onFormChange: (next: { plan: PlanCode; expiresAt: string }) => void;
+  onReasonChange: (value: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const isFree = form.plan === "FREE";
+  // 만료일 최소값 = 내일(KST) — 서버도 "오늘 이후"만 허용
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000 + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  return (
+    <div className="sp-overlay" onClick={() => !pending && onCancel()}>
+      <div className="sp-modal" onClick={(e) => e.stopPropagation()} style={{ padding: "var(--space-6)" }}>
+        <h2 style={{ margin: 0, marginBottom: "var(--space-2)", fontSize: "var(--text-lg)", color: "var(--color-text-heading)" }}>
+          플랜 변경
+        </h2>
+        <p style={{ margin: 0, marginBottom: "var(--space-4)", color: "var(--color-text-secondary)", fontSize: "var(--text-sm)" }}>
+          대상: <strong>{target}</strong> · 현재 <strong>{currentLabel}</strong><br />
+          이 회원이 소유한 모든 프로젝트의 상한이 새 플랜 기준으로 바뀝니다. 유료 플랜의 만료일을 비우면 무기한입니다.
+        </p>
+
+        <div className="sp-field" style={{ marginBottom: "var(--space-3)" }}>
+          <label style={{ display: "block", marginBottom: "var(--space-1)", fontSize: "var(--text-sm)", fontWeight: 600 }}>플랜</label>
+          <div className="sp-select-wrap">
+            <select
+              className="sp-input"
+              value={form.plan}
+              onChange={(e) => onFormChange({ ...form, plan: e.target.value as PlanCode })}
+              autoFocus
+            >
+              {PLAN_CODES.map((code) => (
+                <option key={code} value={code}>{PLAN_OPTION_LABEL[code]}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="sp-field" style={{ marginBottom: "var(--space-3)" }}>
+          <label style={{ display: "block", marginBottom: "var(--space-1)", fontSize: "var(--text-sm)", fontWeight: 600 }}>
+            만료일 <span style={{ color: "var(--color-text-tertiary)", fontWeight: 400 }}>(그 날까지 유효 · 비우면 무기한)</span>
+          </label>
+          <input
+            className="sp-input"
+            type="date"
+            value={isFree ? "" : form.expiresAt}
+            min={tomorrow}
+            disabled={isFree}
+            onChange={(e) => onFormChange({ ...form, expiresAt: e.target.value })}
+            style={{ width: "100%" }}
+          />
+        </div>
+
+        <label style={{ display: "block", marginBottom: "var(--space-1)", fontSize: "var(--text-sm)", fontWeight: 600 }}>
+          사유 <span style={{ color: "var(--color-error)" }}>*</span>
+        </label>
+        <textarea
+          className="sp-input"
+          value={reason}
+          onChange={(e) => onReasonChange(e.target.value)}
+          placeholder="예) 얼리 고객 3개월 무상 BASIC — 2026-12-31 까지"
+          rows={3}
+          maxLength={500}
+          style={{ width: "100%", resize: "vertical" }}
+        />
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-2)", marginTop: "var(--space-4)" }}>
+          <button className="sp-btn sp-btn-ghost" onClick={onCancel} disabled={pending}>취소</button>
+          <button className="sp-btn sp-btn-primary" onClick={onConfirm} disabled={pending}>
+            {pending ? "처리 중…" : "플랜 변경"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -41,6 +41,9 @@ export const AUDIT_ACTION_TYPES = [
   "USER_UNLOCK",
   "USER_FORCE_LOGOUT",
   "USER_MCP_KEYS_REVOKE",
+  // 관리자가 회원 플랜·만료일을 수동 변경 (얼리 고객 BASIC, ENTERPRISE 부여 등).
+  // memo 에 "[대상: email] FREE → BASIC(~2026-12-31) 사유" 형식으로 전후 값을 남긴다.
+  "USER_PLAN_CHANGE",
   "PROJECT_TRANSFER_OWNER",
   // 어드민이 /admin/cleanup 에서 soft-deleted 프로젝트를 영구 삭제 실행한 기록.
   // memo 에 "executed=N (expired=E, retained=R)" 형식으로 처리량을 적재한다.
