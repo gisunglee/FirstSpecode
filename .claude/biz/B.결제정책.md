@@ -1,5 +1,5 @@
 # B. SPECODE 결제·요금제 정책 (작업 기준 문서)
-> 최종 갱신: 2026-09-19 · 상태: 1단계(정책 페이지) 진행 중
+> 최종 갱신: 2026-09-20 · 상태: 2단계(결제 연동) 코드 완료 — 운영 DDL 적용·푸시 대기
 
 이 문서는 결제 기능이 끝날 때까지 **모든 세션이 가장 먼저 읽는 단일 기준**이다.
 대화에서 결정된 것은 여기에만 쓴다. 여기 없는 규칙은 결정되지 않은 것이다.
@@ -102,6 +102,13 @@
 - 관리자 구독 목록 화면은 만들지 않는다(토스 대시보드로 대체). 관리자 회원 상세에 플랜·만료일·좌석 수동 변경 폼만(현재 GET 만 있고 PATCH 없음 → 신규).
 - 결제 페이지 UI 는 `.claude/design/` 토큰·컴포넌트 규칙 준수. 인트로(공개) 페이지는 `src/app/intro/` 의 기존 스타일(`intro.css`)을 따른다.
 - 사업자 정보·약관 시행일 등 법정 표기는 `src/app/intro/_components/siteInfo.ts` 한 곳에서 관리. 인트로 내비·푸터는 `IntroNav`/`IntroFooter` 공용 컴포넌트.
+- (2026-09-20 구현 확정) 결제 도메인 코드는 `src/lib/billing/` 한 폴더: `constants`(상품·상태·정책 상수) · `pricing`(금액·KST 월 연산) · `gateway`+`gateway-mock`(PG) · `seats` · `lock` · `subscription`(핵심 서비스) · `daily`(배치 본체) · `emails` · `paidUsage`(환불 3플래그 계산) · `actor`(결제 API 는 로그인 세션 전용, MCP 키 거부).
+- (2026-09-20) 카드 등록 콜백은 **API GET 이 아니라 앱 화면**(`/settings/billing/callback`)이 받고 `POST /api/billing/card/callback` 을 호출한다. 이 앱의 인증이 Bearer 헤더라 PG 리다이렉트(GET)에 실리지 않기 때문. successUrl 에 purpose·seatCnt 를 실어 두고 서버가 재검증한다.
+- (2026-09-20) 잠금 중에도 허용하는 쓰기 권한 4개: `member.remove`·`member.changeRole`·`project.delete`·`project.transfer` — "멤버를 5명 이하로 줄이세요"(§1-6) 안내를 실제로 수행할 수 있어야 하므로. 나머지 쓰기는 전부 403 `PROJECT_LOCKED`.
+- (2026-09-20) PAST_DUE(결제 실패로 새 기간 미결제) 상태에서 해지하면 남은 유료 기간이 없으므로 **즉시 종료**(CANCELED·FREE·잠금). ACTIVE 에서의 해지만 기간 말 적용.
+- (2026-09-20) 카드 변경 시 PAST_DUE 였다면 새 카드로 **즉시 재결제**를 시도한다 (3일을 기다리게 하지 않음). 좌석 추가는 ACTIVE 에서만(PAST_DUE 는 카드 먼저, CANCEL_SCHEDULED 는 해지 취소 먼저). 좌석 추가 결제가 성공하면 기존 축소 예약은 취소된다.
+- (2026-09-20) 축소 예약(pending_seat_cnt) 중에는 **예약값이 초대 상한**이다 — 다음 결제일에 좌석이 줄 때 불변식이 깨지지 않도록.
+- (2026-09-20) 다음 결제일 기준일(anchor)은 마지막 INITIAL 결제의 KST 일자 — 31일 시작이면 2월 28일 → 3월 31일로 복귀(드리프트 없음). 갱신 주기는 이전 종료 시각부터 이어진다(재시도로 늦어도 연속).
 
 ## 2. 미확정 항목 (해당 단계 시작 시 한 번에 묻기)
 - [x] 좌석 단가 → 9,900원 확정 (2026-09-19). PRO 는 출시 시 14,900원 제안.
@@ -153,6 +160,7 @@
 - `tb_bl_pg_event` — 웹훅 원문. `event_id` PK · `pg_provdr_code` · `pg_event_id` UNIQUE (멱등) · `event_ty_code` · `payload` jsonb · `prcs_sttus_code` (`RECEIVED`|`PROCESSED`|`IGNORED`|`FAILED`) · `prcs_dt` · `creat_dt`
 - `tb_pj_project` + `lock_yn` char(1) NOT NULL DEFAULT 'N', `lock_dt` NULL — 잠금 플래그(정책 §1-6). fast default 라 재작성 없음.
 - `tb_pj_project_settings.plan_code` **삭제** — 읽는 코드가 없음을 grep 으로 확인 → 생성·복사 라우트의 쓰기 제거 → 배포 → DROP (2단계 DDL 규칙).
+- (2026-09-20 구현 시 확정된 차이 2개) ① `tb_bl_subscription.prentc_dt` 추가 — 결제 7일 전 안내를 주기당 1회만 보내기 위한 발송 시각(같은 날 배치가 두 번 돌아도 중복 없음). ② `tb_bl_payment.sbscrptn_id` NULL 허용 — 첫 결제(INITIAL)가 거절되면 구독 행을 만들지 않고 실패 이력만 남긴다. 조회는 mber_id 기준. 실제 DDL: `prisma/sql/2026-09-20_create_billing.sql`, 문서: `.claude/database/a.TableScript.md §10`.
 
 **게이트웨이 인터페이스 `src/lib/billing/gateway.ts`** — 토스 빌링 API 모양에 맞춰 정의. Mock/Toss 두 구현, `PAYMENT_GATEWAY=mock|toss` 로 선택(기본 mock).
 - `startCardRegistration({ customerKey, successUrl, failUrl })` → Mock: `{ mode:"redirect", url:"/billing/pg-window?..." }` · Toss: `{ mode:"sdk", clientKey, customerKey }` (토스 카드 등록은 브라우저 SDK `requestBillingAuth` 가 띄우므로 리다이렉트 URL 이 아니다 — 프론트 버튼이 mode 로 분기)
@@ -239,9 +247,11 @@
 - [x] 1단계 정책 페이지 — 코드 완료(2026-09-19). 사업자 정보는 임시값으로 배포(§2 교체 목록 참조). 푸시는 사용자 확인 후
 - [ ] 3단계(부분) 생성·초대 상한 — 코드 작성 완료(2026-09-19). `src/lib/planLimits.ts`(소유 프로젝트 1개·멤버 5명·첨부 차단, 소유자 플랜 기준, SUPER_ADMIN 제외) + 생성·복사·초대·수락·첨부 3곳 진입점 + `PlanLimitDialog`. permissions: TEAM 제거·BASIC 추가·AI PRO 게이트 제거. 운영 현황: 회원 11명 전부 FREE, 소유 2개↑ 3명(기존 유지, 추가만 차단), 멤버 6명↑ 프로젝트 0. 남은 것: 커밋·푸시
 - [x] 4단계 관리자 수동 부여 — 코드 완료·로컬 커밋(2026-09-19). `PATCH /api/admin/users/[id]/plan` + 회원 상세 "플랜 변경" 모달 + 감사 `USER_PLAN_CHANGE`. 좌석 입력·사용 플래그 표시는 2단계에서 구독 데이터가 생기면 같은 모달에 추가
-- [ ] 2단계 결제 연동 — 다음 작업. §3 "2단계 상세 설계" 확정됨. PG 는 Mock, 토스 어댑터는 심사 후
-- [ ] 3단계 잠금 — 2단계와 같은 흐름에서 이어서
-- [ ] 푸시(배포) — 로컬 커밋 3개(1단계·3단계 상한·4단계) 대기. 사용자 확인 후
+- [x] 2단계 결제 연동 — **코드 완료·로컬 커밋** (2026-09-20). Mock PG("PG 창" `/billing/pg-window`), 구독·결제·웹훅 테이블, 게이트웨이 인터페이스, 도메인 서비스, `/api/billing/*` 9개 + `POST /api/projects/[id]/unlock`, 일일 배치 `billing-daily`, 메일 5종, `/settings/billing` 화면(시작·좌석 추가/축소·카드 변경·해지·해지 취소·결제 내역), GNB 배지 링크, 요금제 페이지 `BILLING_OPEN=true`, 관리자 회원 상세 구독 요약·환불 3플래그, 수동 플랜 변경 409, 탈퇴 시 구독 종료. 검증: `npm run test:billing:db` 스모크 17단계 통과(임시 스키마) + `tsc` 통과 + 손 DDL ↔ Prisma 모델 diff 없음
+- [x] 3단계 잠금 — 2단계에 포함해 완료 (2026-09-20). `requirePermission` 잠금 403(예외 4개), 프로젝트 목록 🔒 배지·"활성화", 프로젝트 내부 읽기 전용 배너, 소유권 이전·복구 시 상한 판정, 좌석 상한 초대·수락 검사(`PLAN_LIMIT_SEAT`)
+- [ ] **운영 DDL 적용 — 사용자 확인 대기** (§0 규칙 6): (a) 읽기 전용 점검 완료(tb_bl_* 없음, lock_yn 없음, 회원 11명 FREE) → (b) `prisma/sql/2026-09-20_create_billing.sql` 작성 → (c) 확인 → (d) `npm run db:migrate:billing` → (e) 재검증. 새 코드 배포 뒤 `npm run db:migrate:billing-drop-settings-plan`(plan_code DROP)
+- [ ] 운영 env 확인: `PAYMENT_GATEWAY=mock`(기본), `API_KEY_SECRET`(빌링키 암호화), `BATCH_CRON_SECRET` + 외부 cron 에 `billing-daily` 하루 1회 등록, `SMTP_*`(메일 5종)
+- [ ] 푸시(배포) — 로컬 커밋(1단계·3단계 상한·4단계·2단계) 대기. **DDL (d) 적용 후** 사용자 확인하고 푸시
 - [ ] 토스 가맹 심사 신청 — 사업자 정보 실제 값 교체 후 (§2)
 - [ ] 후속: 첨부 용량 집계, PRO 출시, 세금계산서
 
@@ -255,3 +265,5 @@
 - 2026-09-19 3단계(부분) FREE 상한 구현. 초대 시 PENDING 은 세지 않고 수락 시 재검사. 시스템 관리자는 상한 제외.
 - 2026-09-19 사업자 정보는 임시값으로 두고 진행(사용자). 상호 (주)바른아이오, 대표 이강선 확정. 나머지는 §2 교체 목록.
 - 2026-09-19 심사 제외 전부 리얼로 만들기로 결정(사용자). PG 지점만 Mock("PG 창"), 운영에서도 Mock 사용 허용(내부 사용자만). 4단계 완료. 2단계 상세 설계 §3 에 확정.
+- 2026-09-20 2단계 구현 완료(Mock PG). 설계 대비 확정 차이: 콜백은 화면→POST, prentc_dt 컬럼, payment.sbscrptn_id NULL 허용, 잠금 예외 권한 4개, PAST_DUE 해지는 즉시 종료, 카드 변경 시 즉시 재결제, 축소 예약값이 초대 상한. 3단계 잠금도 함께 완료. 운영 DDL·푸시는 사용자 확인 대기.
+- 2026-09-20 미결(사용자 판단 필요): 역할 변경 VIEWER→MEMBER/ADMIN 은 좌석을 먹지만 §1-10 "상한 계산 3곳" 원칙대로 검사하지 않음 — 좌석 불변식이 이 경로로 깨질 수 있음. 넣으려면 역할 API 한 줄(`checkMemberLimit`)이면 됨.

@@ -25,6 +25,9 @@
   * `mber_id` (t, PK): 회원 ID
   * `email_addr` (t, Unique): 이메일
   * `mber_sttus_code` (t, NN): 상태 (UNVERIFIED 등)
+  * `plan_code` (t, 기본 `FREE`) / `plan_expire_dt` (ts): 실효 플랜의 **미러**. 결제 구독(`tb_bl_subscription`)이 살아 있으면
+    구독 서비스가 `BASIC`/NULL 로, 종료·강등 시 `FREE`/NULL 로 써 준다. 구독 없는 회원은 관리자 수동 부여값(4단계 PATCH).
+    살아 있는 구독이 있는 회원의 수동 변경은 409. 판정: `src/lib/permissions.ts resolveEffectivePlan`
 * **`tb_cm_member_session`** (회원 세션)
   * `sesn_id` (t, PK) / `mber_id` (t, FK) / `device_info_cn` (t)
 * 인증/보안 관련 테이블: `tb_cm_account_lock`, `tb_cm_email_verification`, `tb_cm_login_attempt`, `tb_cm_password_reset_token`, `tb_cm_refresh_token`, `tb_cm_social_account` (모두 `mber_id` FK 포함)
@@ -59,7 +62,14 @@
   * `role_code` (t, 기본 MEMBER): OWNER / ADMIN / MEMBER / VIEWER.
     OWNER 는 프로젝트당 정확히 1명(2026-09-19부터) — 과거의 "복수 OWNER + 마지막 OWNER 보호" 모델은 폐기.
     OWNER 를 다른 역할로 내리는 API 요청은 거부되며, 소유자를 바꾸는 길은 양도만 있다.
+  * `lock_yn` (b1, NOT NULL, 기본 `N`) / `lock_dt` (ts): 결제 잠금 — 2026-09-20 추가 (`prisma/sql/2026-09-20_create_billing.sql`).
+    소유자가 강등(해지 확정·결제 실패 소진)되면 소유 프로젝트 전부 `Y`. 조회·MCP 읽기는 되고 쓰기 권한만
+    `requirePermission` 에서 403 `PROJECT_LOCKED` (멤버 제거·역할 변경·삭제·양도는 잠금 해소 수단이라 예외).
+    해제 3경로: 재결제 성공(전부) / 소유자 "활성화"(상한 이하인 프로젝트만) / 강등 직후 소유 프로젝트 1개뿐이면 자동.
+    소유권 이전·복구 시 새 소유자 플랜 기준 상한 초과면 `Y` 로 넘어간다. 로직: `src/lib/billing/lock.ts`
 * 프로젝트 설정/권한 관련: `tb_pj_project_settings`, `tb_pj_settings_history`, `tb_pj_project_api_key`, `tb_pj_project_invitation`, `tb_pj_member_removal_notice`
+  * `tb_pj_project_settings.plan_code` 는 **삭제 예정** (2026-09-20 Prisma 모델에서 제거, 생성·복사 라우트의 쓰기 제거).
+    플랜은 `tb_cm_member.plan_code` 에만 있다. DB 컬럼 DROP 은 새 코드 배포 후 `prisma/sql/2026-09-20_drop_project_settings_plan_code.sql`.
   * `tb_pj_project_settings.artifact_scope_code` (v10, NOT NULL, 기본 `ALL`): 산출물 출력 범위
     `ALL`(전체 출력 — 이전 사업분 포함, 항목마다 구분 표기) / `SCOPED`(이번 사업분 + 상위 계층만).
     2026-09-12 추가. 프로젝트당 한 번 지정해 모든 산출물 출력에 적용된다.
@@ -248,3 +258,46 @@
 `tb_sp_impl_snapshot`은 구현요청 당시 설계 snapshot 기능이 계속 사용하므로 유지한다.
 
 DDL: `prisma/sql/2026-08-17_create_spec_sync_v2.sql`
+
+## 10. 결제·구독 (Billing) — `tb_bl_*`
+
+정책 문서 `.claude/biz/B.결제정책.md` §3 2단계 (2026-09-20). DDL `prisma/sql/2026-09-20_create_billing.sql`.
+PG 는 게이트웨이 인터페이스(`src/lib/billing/gateway.ts`) 뒤에 있고, 현재 구현은 Mock(`PAYMENT_GATEWAY=mock`).
+상품 코드를 두어 SPECODE 전용으로 짜지 않았다 — 표준화닷컴 상품은 `src/lib/billing/constants.ts PRODUCTS` 한 줄 추가.
+
+* **`tb_bl_subscription`** (구독 — 결제자 1인 × 상품 1개 = 1행, 상태만 변경·행 재사용)
+  * `sbscrptn_id` (t, PK) / `mber_id` (t, NN, FK → tb_cm_member) / `prdct_code` (v30, NN): `SPECODE_BASIC`
+  * UNIQUE `(mber_id, prdct_code)` — 재구독 시 같은 행을 되살린다 (단가는 재구독 시점 판매가로 갱신)
+  * `sbscrptn_sttus_code` (v20, NN): `ACTIVE` | `PAST_DUE`(재시도 중, 혜택 유지) | `CANCEL_SCHEDULED`(기간 말 해지 예정) | `CANCELED` | `EXPIRED`(재시도 소진 강등).
+    "살아 있는" 상태 = 앞의 셋. 좌석 상한·관리자 409 판정은 이 셋만 본다
+  * `seat_cnt` (i, NN): 구매 좌석. 편집 멤버(OWNER/ADMIN/MEMBER, 소유 활성 프로젝트 전체 distinct) 수 ≤ seat_cnt 불변식
+  * `pending_seat_cnt` (i): 축소 예약 — 다음 결제 시 적용. 예약 중에는 예약값이 초대 상한 (`seats.getSeatLimit`)
+  * `unit_price` (i, NN): 계약 좌석 단가(부가세 포함). 가격 인상 시 기존 구독 유지용
+  * `billing_key` (t): PG 빌링키 — `src/lib/encrypt.ts` AES 암호화 저장. 종료(CANCELED/EXPIRED)·탈퇴 시 NULL
+  * `card_co_nm` (v50) / `card_no_masked` (v30): 표시용 카드 정보
+  * `pg_provdr_code` (v10, NN): `MOCK` | `TOSS` · `pg_customer_key` (v100, NN): 회원별 고정 해시 (`gateway.buildCustomerKey`)
+  * `crrnt_perd_bgng_dt` / `crrnt_perd_end_dt` / `next_bill_dt` (ts): 결제 주기. 갱신 시 새 주기 시작 = 이전 종료(연속).
+    다음 결제일은 매월 같은 날(KST), 없는 날은 말일 — 기준일(anchor)은 마지막 INITIAL 결제의 KST 일자
+  * `prentc_dt` (ts): 이번 주기 "결제 7일 전 안내" 발송 시각. 갱신 시 NULL 리셋 — 배치 중복 발송 방지 (설계 표에 없던 운영 컬럼)
+  * `fail_cnt` (i, NN 기본 0) / `last_fail_dt` (ts): 연속 실패. 초기 실패 1 + 3일 간격 재시도 3회 소진(fail_cnt 4) → EXPIRED
+  * `cancel_reqst_dt` / `ended_dt` (ts)
+  * 인덱스 `(sbscrptn_sttus_code, next_bill_dt)` — 일일 배치 스캔
+* **`tb_bl_payment`** (결제 이력 — 영수증·환불 판정 근거)
+  * `pymnt_id` (t, PK) / `sbscrptn_id` (t, **NULL 허용**, FK → tb_bl_subscription) / `mber_id` (t, NN)
+    · NULL = 첫 결제(INITIAL) 실패로 구독 행을 만들지 않은 경우. 조회는 항상 `mber_id` 기준
+  * `pymnt_ty_code` (v20, NN): `INITIAL` | `RECURRING` | `SEAT_ADD` | `REFUND`
+  * `amt` (i, NN, 원) / `seat_cnt` (i, NN): SEAT_ADD 는 추가 좌석 수 · `perd_bgng_dt`/`perd_end_dt`: 덮는 기간(SEAT_ADD 는 결제 시점~주기 종료)
+  * `pymnt_sttus_code` (v20, NN): `PAID` | `FAILED` | `REFUNDED`
+  * `pg_provdr_code` (v10) / `pg_pymnt_key` (v200) / `pg_order_id` (v64, **UNIQUE**, 시도마다 새 발급 `SPC-yyyymmddHHmmss-XXXXXXXX`)
+  * `receipt_url` (t) / `fail_rsn_cn` (t): `PG코드: 메시지` / `apprv_dt` (ts)
+  * 인덱스 `(mber_id, creat_dt DESC)`
+  * 환불 판정 3플래그(정책 §1-7)는 컬럼이 아니라 계산: 마지막 INITIAL PAID 의 `apprv_dt` 이후 프로젝트 `creat_dt`·멤버 `join_dt`·첨부 `creat_dt` — `src/lib/billing/paidUsage.ts`
+* **`tb_bl_pg_event`** (PG 웹훅 원문)
+  * `event_id` (t, PK) / `pg_provdr_code` (v10) / `pg_event_id` (v200): UNIQUE `(pg_provdr_code, pg_event_id)` 로 재전송 멱등
+  * `event_ty_code` (v60) / `payload` (jsonb) / `prcs_sttus_code` (v20, 기본 `RECEIVED`): `RECEIVED` | `PROCESSED` | `IGNORED` | `FAILED` / `prcs_dt` / `prcs_rsn_cn`
+  * v1 은 청구를 동기 API 로 반영하므로 웹훅은 기록만(`IGNORED`). 토스 어댑터 시 이벤트별 처리 추가
+
+배치: `POST /api/admin/batch/run/billing-daily` (`job_ty_code=BILLING_DAILY`, `src/lib/billing/daily.ts`) — 하루 1회
+① CANCEL_SCHEDULED 기간 종료 → CANCELED ② ACTIVE 결제일 → RECURRING ③ PAST_DUE 3일 간격 재시도 ④ 결제 7일 전 안내.
+검증: `npm run test:billing:db` (임시 스키마에서 전체 흐름 스모크, 운영 데이터 무영향).
+
