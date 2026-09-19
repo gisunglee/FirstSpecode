@@ -33,7 +33,7 @@
 import type { Prisma, PrismaClient, TbBlSubscription } from "@prisma/client";
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { decryptApiKey, encryptApiKey } from "@/lib/encrypt";
+import { decryptBillingKey, encryptBillingKey } from "./billing-key";
 import { getMemberEffectivePlan } from "@/lib/planLimits";
 import type { PlanCode } from "@/lib/permissions";
 import {
@@ -305,7 +305,7 @@ export async function completeCardRegistration(
   const updated = await prisma.tbBlSubscription.update({
     where: { sbscrptn_id: sub.sbscrptn_id },
     data: {
-      billing_key:     encryptApiKey(issued.billingKey),
+      billing_key:     encryptBillingKey(issued.billingKey),
       card_co_nm:      issued.cardCompany,
       card_no_masked:  issued.cardNumberMasked,
       pg_provdr_code:  gw.provider,
@@ -376,7 +376,7 @@ async function activateSubscription(
 
   const periodStart = now;
   const periodEnd   = nextPeriodEnd(periodStart, kstDayOfMonth(periodStart));
-  const encryptedKey = encryptApiKey(issued.billingKey);
+  const encryptedKey = encryptBillingKey(issued.billingKey);
 
   const sub = await prisma.$transaction(async (tx) => {
     const s = await tx.tbBlSubscription.upsert({
@@ -546,7 +546,7 @@ export async function changeSeats(actor: BillingActorRef, seatCnt: number, now =
     const gw      = getPaymentGateway();
     const orderId = newOrderId(now);
     const charge  = await gw.charge({
-      billingKey:    decryptApiKey(active.billing_key),
+      billingKey:    decryptBillingKey(active.billing_key),
       customerKey:   active.pg_customer_key,
       amount:        pr.amount,
       orderId,
@@ -711,7 +711,7 @@ export async function attemptRecurringCharge(
 
   const chargeResult = sub.billing_key
     ? await gw.charge({
-        billingKey:    decryptApiKey(sub.billing_key),
+        billingKey:    decryptBillingKey(sub.billing_key),
         customerKey:   sub.pg_customer_key,
         amount,
         orderId,
