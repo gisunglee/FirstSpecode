@@ -18,6 +18,8 @@ import { z } from "zod";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { requireBillingActor } from "@/lib/billing/actor";
+import { getPaymentGateway } from "@/lib/billing/gateway";
+import { checkMockBillingAccess } from "@/lib/billing/mock-access";
 import { SEAT_INPUT_LIMITS } from "@/lib/billing/constants";
 import { toBillingErrorResponse } from "@/lib/billing/errors";
 import { completeCardRegistration } from "@/lib/billing/subscription";
@@ -32,6 +34,10 @@ const bodySchema = z.object({
 export async function POST(request: NextRequest) {
   const actor = await requireBillingActor(request);
   if (actor instanceof Response) return actor;
+
+  // Mock PG 단계에서는 지정 계정만 구독 시작/카드 교체 가능 (mock-access.ts)
+  const mockErr = checkMockBillingAccess(getPaymentGateway(), actor);
+  if (mockErr) return mockErr;
 
   const parsed = await parseJsonBody(request, bodySchema);
   if (parsed instanceof Response) return parsed;

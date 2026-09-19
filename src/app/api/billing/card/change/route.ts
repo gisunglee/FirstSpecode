@@ -8,12 +8,18 @@
 import { NextRequest } from "next/server";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { requireBillingActor } from "@/lib/billing/actor";
+import { getPaymentGateway } from "@/lib/billing/gateway";
+import { checkMockBillingAccess } from "@/lib/billing/mock-access";
 import { toBillingErrorResponse } from "@/lib/billing/errors";
 import { beginCardRegistration } from "@/lib/billing/subscription";
 
 export async function POST(request: NextRequest) {
   const actor = await requireBillingActor(request);
   if (actor instanceof Response) return actor;
+
+  // Mock PG 단계에서는 지정 계정만 구독 시작/카드 교체 가능 (mock-access.ts)
+  const mockErr = checkMockBillingAccess(getPaymentGateway(), actor);
+  if (mockErr) return mockErr;
 
   try {
     return apiSuccess(await beginCardRegistration(actor, "change"));
