@@ -21,6 +21,7 @@ import { NextRequest } from "next/server";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
+import { requireProjectUnlocked } from "@/lib/requireProjectUnlocked";
 import { checkRole } from "@/lib/checkRole";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { projectEntityBelongsToProject } from "@/lib/projectEntityScope";
@@ -103,6 +104,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   if (auth instanceof Response) return auth;
 
   const { id: projectId } = await params;
+  // 결제 잠금(정책 §1-6) — 이 라우트는 requirePermission 을 거치지 않아 여기서 직접 막는다
+  const lockErr = await requireProjectUnlocked(projectId);
+  if (lockErr) return lockErr;
 
   // 수정은 OWNER·ADMIN·PM·DESIGNER·DEVELOPER만 가능
   const membership = await prisma.tbPjProjectMember.findUnique({

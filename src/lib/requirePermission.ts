@@ -33,7 +33,7 @@ import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/apiResponse";
 import { requireAuth, type AuthPayload } from "@/lib/requireAuth";
 import { enforceMcpKeyScope } from "@/lib/mcpKeyScope";
-import { BILLING_ERROR_CODES, BILLING_PATH } from "@/lib/billing/constants";
+import { projectLockedError } from "@/lib/requireProjectUnlocked";
 import {
   hasPermission,
   explainPermission,
@@ -56,6 +56,11 @@ export type PermissionContext = AuthPayload & {
   systemRole: SystemRoleCode | null;
   /** true면 지원 세션을 통해 진입한 상태 — API 에서 추가 로깅 등에 활용 */
   viaSupportSession: boolean;
+  /**
+   * 프로젝트 결제 잠금 여부(lock_yn='Y'). 게이트를 통과한 뒤에도 "잠금 중엔 강등만" 같은
+   * 세부 규칙이 필요한 라우트(역할 변경)가 참고한다. 비멤버 지원 세션 경로는 false.
+   */
+  projectLocked: boolean;
 };
 
 // 쓰기성 권한 판정 — 지원 세션에서는 허용되지 않음
@@ -77,8 +82,22 @@ const LOCK_EXEMPT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>([
   "project.transfer",
 ]);
 
-function isBlockedByLock(perm: Permission): boolean {
-  return isWritePermission(perm) && !LOCK_EXEMPT_PERMISSIONS.has(perm);
+// 안전한(읽기) HTTP 메서드 — 이 외의 메서드는 서버 상태를 바꾸는 요청으로 본다
+const SAFE_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/**
+ * 잠금 차단 판정 — 권한 이름 OR HTTP 메서드, 둘 중 하나라도 "쓰기"면 차단.
+ *
+ * 권한 이름만 보면 안 되는 이유(2026-09-20 점검):
+ *   상세 수정·삭제·인라인·정렬·일괄 등록 라우트는 requireSpecContentWrite / requireSpecManager 를
+ *   거치는데, 이 둘은 "content.read" 로 이 게이트를 통과한 뒤 자체 규칙으로 쓰기를 판정한다.
+ *   그래서 권한 이름만 보면 잠긴 프로젝트의 핵심 편집 경로(웹 상세 화면·MCP update_*)가 전부 열린다.
+ *   요청 메서드를 함께 보면 그 경로도 한 곳에서 막힌다. 기존 권한 기준은 그대로 유지한다
+ *   (GET 이어도 content.export 같은 쓰기 권한은 계속 차단 — 데이터 유출 경로).
+ */
+function isBlockedByLock(method: string, perm: Permission): boolean {
+  if (LOCK_EXEMPT_PERMISSIONS.has(perm)) return false;
+  return isWritePermission(perm) || !SAFE_METHODS.has(method.toUpperCase());
 }
 
 /**
@@ -151,13 +170,9 @@ export async function requirePermission(
   // 지원 세션 읽기전용과 같은 isWritePermission 판정을 재사용하되, 잠금을 해소하는
   // 동작(멤버 제거·역할 변경·삭제·양도)은 LOCK_EXEMPT_PERMISSIONS 로 예외.
   // 시스템 관리자도 예외가 아니다 — 잠금은 권한이 아니라 소유자 플랜 상태다.
-  if (membership?.project?.lock_yn === "Y" && isBlockedByLock(permission)) {
-    return apiError(
-      BILLING_ERROR_CODES.PROJECT_LOCKED,
-      "이 프로젝트는 읽기 전용으로 잠겨 있습니다. 소유자가 구독을 갱신하거나 프로젝트 목록에서 활성화하면 편집할 수 있습니다.",
-      403,
-      { billingPath: BILLING_PATH }
-    );
+  const projectLocked = membership?.project?.lock_yn === "Y";
+  if (projectLocked && isBlockedByLock(request.method, permission)) {
+    return projectLockedError();
   }
 
   // ─── 멤버십이 있는 정상 경로 ───────────────────────────────────────
@@ -196,6 +211,7 @@ export async function requirePermission(
       plan,
       systemRole,
       viaSupportSession: false,
+      projectLocked,
     };
   }
 
@@ -289,5 +305,6 @@ export async function requirePermission(
     plan,
     systemRole: "SUPER_ADMIN",
     viaSupportSession: true,
+    projectLocked: false,
   };
 }

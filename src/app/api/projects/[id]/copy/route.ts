@@ -10,6 +10,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
+import { requireProjectUnlocked } from "@/lib/requireProjectUnlocked";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { checkOwnedProjectLimit } from "@/lib/planLimits";
 
@@ -20,6 +21,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (auth instanceof Response) return auth;
 
   const { id: projectId } = await params;
+  // 결제 잠금(정책 §1-6) — 이 라우트는 requirePermission 을 거치지 않아 여기서 직접 막는다
+  const lockErr = await requireProjectUnlocked(projectId);
+  if (lockErr) return lockErr;
 
   try {
     // 원본 프로젝트 + 설정 조회 (내 멤버십 확인 겸)

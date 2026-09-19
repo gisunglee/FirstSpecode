@@ -25,6 +25,7 @@ import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { ROLE_CODES, isRoleCode } from "@/lib/permissions";
 import { checkSeatLimit } from "@/lib/planLimits";
 import { isSeatRole } from "@/lib/billing/seats";
+import { BILLING_ERROR_CODES, BILLING_PATH } from "@/lib/billing/constants";
 
 type RouteParams = { params: Promise<{ id: string; memberId: string }> };
 
@@ -64,6 +65,18 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   // 변화 없음 — 멱등 처리
   if (target.role_code === role) {
     return apiSuccess({ memberId, role });
+  }
+
+  // 결제 잠금 중에는 "정리" 방향만 허용한다 — 뷰어로 내리기(좌석·멤버 정리), 소유권 양도.
+  // member.changeRole 이 잠금 예외 권한인 이유가 "멤버를 줄이세요" 안내를 실행하기 위함이라(정책 §1-6)
+  // ADMIN↔MEMBER 이동이나 뷰어 승격은 예외 취지 밖이다.
+  if (gate.projectLocked && role !== "VIEWER" && role !== "OWNER") {
+    return apiError(
+      BILLING_ERROR_CODES.PROJECT_LOCKED,
+      "잠긴 프로젝트에서는 역할을 뷰어로 내리거나 소유권을 양도하는 것만 할 수 있습니다.",
+      403,
+      { billingPath: BILLING_PATH }
+    );
   }
 
   // 소유자 강등 거부 — 소유자를 바꾸는 유일한 경로는 양도(role=OWNER 지정)다.

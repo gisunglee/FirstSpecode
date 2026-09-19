@@ -6,6 +6,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
+import { requireProjectUnlocked } from "@/lib/requireProjectUnlocked";
 import { checkRole } from "@/lib/checkRole";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { deleteFile } from "@/lib/fileStorage";
@@ -18,6 +19,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   if (auth instanceof Response) return auth;
 
   const { id: projectId, areaId, fileId } = await params;
+  // 결제 잠금(정책 §1-6) — 이 라우트는 requirePermission 을 거치지 않아 여기서 직접 막는다
+  const lockErr = await requireProjectUnlocked(projectId);
+  if (lockErr) return lockErr;
 
   const membership = await prisma.tbPjProjectMember.findUnique({
     where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
@@ -53,6 +57,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   if (auth instanceof Response) return auth;
 
   const { id: projectId, areaId, fileId } = await params;
+  // 결제 잠금(정책 §1-6) — 이 라우트는 requirePermission 을 거치지 않아 여기서 직접 막는다
+  const lockErr = await requireProjectUnlocked(projectId);
+  if (lockErr) return lockErr;
 
   const membership = await prisma.tbPjProjectMember.findUnique({
     where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },

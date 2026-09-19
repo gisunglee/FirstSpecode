@@ -15,6 +15,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
+import { projectLockedError } from "@/lib/requireProjectUnlocked";
 import { hasPermission, isRoleCode, isJobCode } from "@/lib/permissions";
 import { apiError } from "@/lib/apiResponse";
 
@@ -30,10 +31,19 @@ export async function requireScheduleWrite(
 
   const membership = await prisma.tbPjProjectMember.findUnique({
     where:  { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-    select: { role_code: true, job_title_code: true, mber_sttus_code: true },
+    select: {
+      role_code: true, job_title_code: true, mber_sttus_code: true,
+      project: { select: { lock_yn: true } },
+    },
   });
   if (!membership || membership.mber_sttus_code !== "ACTIVE") {
     return apiError("FORBIDDEN", "프로젝트 멤버가 아닙니다.", 403);
+  }
+
+  // 결제 잠금(정책 §1-6) — 이 게이트는 requirePermission 을 거치지 않으므로 여기서 직접 막는다.
+  // 일정(휴일·마일스톤) 편집은 잠금 해소 수단이 아니라 전부 차단.
+  if (membership.project.lock_yn === "Y") {
+    return projectLockedError();
   }
 
   const role = isRoleCode(membership.role_code)      ? membership.role_code      : null;

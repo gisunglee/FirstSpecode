@@ -7,6 +7,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
+import { requireProjectUnlocked } from "@/lib/requireProjectUnlocked";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { parseProjectAbbrInput } from "@/lib/constants/projectAbbr";
 import { resolveSoftDeleteRetentionDays, softDeleteProject } from "@/lib/projectLifecycle";
@@ -78,6 +79,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   if (auth instanceof Response) return auth;
 
   const { id: projectId } = await params;
+  // 결제 잠금(정책 §1-6) — 이 라우트는 requirePermission 을 거치지 않아 여기서 직접 막는다
+  const lockErr = await requireProjectUnlocked(projectId);
+  if (lockErr) return lockErr;
 
   // OWNER/ADMIN 권한 확인 (UW-00012: 기본정보 수정은 OWNER/ADMIN 가능)
   const membership = await prisma.tbPjProjectMember.findUnique({
