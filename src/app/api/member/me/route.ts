@@ -30,7 +30,7 @@ import { verifyPassword, verifySocialToken } from "@/lib/auth";
 import { clearRefreshTokenCookie } from "@/lib/authRefreshCookie";
 import { isSystemAdminWithdrawalBlocked } from "@/lib/memberLifecyclePolicy";
 import { resolveSoftDeleteRetentionDays, softDeleteProject } from "@/lib/projectLifecycle";
-import { withdrawSubscription } from "@/lib/billing/subscription";
+import { hasLiveSubscription, withdrawSubscription } from "@/lib/billing/subscription";
 
 export async function DELETE(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -101,8 +101,21 @@ export async function DELETE(request: NextRequest) {
       }
 
     } else if (!member.pswd_hash) {
-      // 소셜 전용 계정인데 socialToken 없음 → 프로젝트 없는 경우 단순 탈퇴도 허용
-      // (프론트에서 프로젝트 없을 때는 다이얼로그 확인만으로 탈퇴 가능)
+      // 소셜 전용 계정인데 socialToken 없음 → 소유 프로젝트도, 살아 있는 구독도 없을 때만 단순 탈퇴 허용
+      // (프론트도 같은 조건으로 재인증 여부를 정한다.)
+      // 탈퇴는 소유 프로젝트 보관 삭제·구독 종료·빌링키 삭제까지 이어지므로, 탈취된 액세스 토큰 하나로
+      // 되게 두면 안 된다 — 지킬 것이 있는 계정은 소셜 재인증을 거친다 (2026-09-20 점검).
+      const [ownedProjectCount, liveSubscription] = await Promise.all([
+        prisma.tbPjProject.count({ where: { owner_mber_id: auth.mberId, del_yn: "N" } }),
+        hasLiveSubscription(auth.mberId),
+      ]);
+      if (ownedProjectCount > 0 || liveSubscription) {
+        return apiError(
+          "REAUTH_REQUIRED",
+          "소유한 프로젝트나 이용 중인 구독이 있어 소셜 계정 재인증이 필요합니다. 다시 로그인한 뒤 탈퇴를 진행해 주세요.",
+          400
+        );
+      }
     }
 
     const now = new Date();
