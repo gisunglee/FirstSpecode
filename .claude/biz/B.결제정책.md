@@ -1,5 +1,5 @@
 # B. SPECODE 결제·요금제 정책 (작업 기준 문서)
-> 최종 갱신: 2026-09-20 · 상태: **결제 기능 운영 배포 완료 (Mock PG, 내부 사용자용)**. 다음 단계 = 운영 env·cron → 사업자 정보 실제값 → 토스 가맹 심사 → 토스 어댑터
+> 최종 갱신: 2026-09-20 · 상태: **결제 기능 운영 배포 완료 (Mock PG, 내부 사용자용) + 보안 점검 보완 커밋 8개(미푸시)**. 다음 단계 = 보완 커밋 푸시·확인 → 운영 env·cron → 사업자 정보 실제값 → 토스 가맹 심사 → 토스 어댑터
 
 이 문서는 결제 기능이 끝날 때까지 **모든 세션이 가장 먼저 읽는 단일 기준**이다.
 대화에서 결정된 것은 여기에만 쓴다. 여기 없는 규칙은 결정되지 않은 것이다.
@@ -68,8 +68,9 @@
 - 첫 결제(INITIAL)가 거절되면 구독 행을 만들지 않고 실패 이력만 남긴다(402). 다시 시작하면 된다.
 
 ### 1-6. 강등·해지 시 데이터
-- 강등(해지 확정·결제 실패 소진) 순간 **소유 프로젝트 전부에 잠금 플래그**(`tb_pj_project.lock_yn='Y'`). 조회·MCP 읽기는 되고 쓰기 권한만 403 `PROJECT_LOCKED`. 잠금은 `requirePermission` 한 곳에서 판정하며 시스템 관리자도 예외가 아니다(잠금은 권한이 아니라 소유자 플랜 상태).
-- 잠금 중에도 허용하는 쓰기 4개: `member.remove` · `member.changeRole` · `project.delete` · `project.transfer` — "멤버를 줄이세요" 안내를 실제로 수행할 수 있어야 한다. 그 외 편집·생성·초대·업로드·설정은 전부 막힘.
+- 강등(해지 확정·결제 실패 소진) 순간 **소유 프로젝트 전부에 잠금 플래그**(`tb_pj_project.lock_yn='Y'`). 조회·MCP 읽기는 되고 쓰기만 403 `PROJECT_LOCKED`. 시스템 관리자도 예외가 아니다(잠금은 권한이 아니라 소유자 플랜 상태).
+- **"쓰기" 판정 = 권한 이름이 `.read` 가 아님 OR HTTP 메서드가 GET/HEAD/OPTIONS 가 아님.** 둘 중 하나면 차단. 상세 수정·인라인·정렬·일괄 등록은 `content.read` 로 게이트를 통과한 뒤 자체 판정하는 구조라 권한 이름만 보면 전부 뚫린다(2026-09-20 점검에서 발견·수정).
+- 잠금 중에도 허용하는 쓰기 4개: `member.remove` · `member.changeRole` · `project.delete` · `project.transfer` — "멤버를 줄이세요" 안내를 실제로 수행할 수 있어야 한다. `member.changeRole` 은 **뷰어 강등·소유권 양도만** 허용(승격·ADMIN↔MEMBER 는 403). 그 외 편집·생성·초대·업로드·설정·AI 요청·복사·초대 재발송은 전부 막힘. 정리 수단(멤버 제거·탈퇴·양도·복구·초대 취소·AI 태스크 취소·프로젝트 삭제)은 허용.
 - 화면: 프로젝트 목록에 🔒 배지 + 소유자에게 **"활성화"** 버튼. 잠긴 프로젝트 안에는 상단 "읽기 전용" 배너(소유자에겐 활성화·구독 갱신 링크, 멤버에겐 소유자 문의 안내).
 - "상한 초과" 판정은 한 함수(`lock.isProjectOverPlanLimit`)로 통일: FREE 소유자 → 그 프로젝트 활성 멤버 > 5(소유자·뷰어 포함) / 구독 좌석 소유자 → 소유 프로젝트 전체 사용 좌석 > 좌석 상한 / 그 외(수동 부여) → 초과 없음. FREE 의 "소유 프로젝트 1개" 상한은 잠금 판정에 넣지 않는다 — 기존 것은 그대로, 새로 늘리는 것만 막는다.
 - 해제 3경로: **재결제 성공 → 전부 즉시 해제** / 소유자 "활성화" → 상한 이하인 그 프로젝트만 해제(초과면 403 + 무엇을 줄여야 하는지 안내) / 강등 직후 소유 프로젝트가 1개뿐이고 상한 이하면 **자동 해제**.
@@ -114,12 +115,18 @@
   | `daily.ts` | 일일 배치 본체 — 구독 1건씩 ① 해지 확정 ② 청구 ③ 재시도 ④ 사전 안내. `now` 주입 가능(스모크) |
   | `emails.ts` | 메일 5종(영수증·사전 안내·실패·해지 확인·강등). SMTP 없으면 콘솔. 실패해도 흐름을 되돌리지 않음 |
   | `paidUsage.ts` | 환불 판정 3플래그 계산 |
-  | `actor.ts` | 결제 API 호출자 — **로그인 세션만**(MCP 키 거부), ACTIVE 회원, 이메일 필수 |
+  | `actor.ts` | 결제 API 호출자 — **로그인 세션만**(MCP 키 거부), ACTIVE 회원, 이메일 필수, `isSystemAdmin` |
+  | `mock-access.ts` | Mock PG 일 때 카드 등록 시작·콜백을 SUPER_ADMIN 또는 허용 도메인(`BILLING_MOCK_ALLOWED_EMAIL_DOMAINS`, 기본 `bareun.io`)으로 제한. 운영에서만, 실결제 PG 면 제한 없음 |
+  | `billing-key.ts` | 빌링키 암호화 래퍼 — 운영에서 `API_KEY_SECRET` 32자 미만이면 결제 경로만 503(fail-closed). AI 키 저장(encrypt.ts)은 영향 없음 |
   | `errors.ts` | `BillingError(code, message, status)` → 라우트가 `apiError` 로 변환 |
+  | `src/lib/requireProjectUnlocked.ts` | (결제 폴더 밖) `requireAuth` 만 쓰는 쓰기 라우트용 한 줄 잠금 가드 + 공용 403 응답 |
 
 - **테이블 3개 + 컬럼 2개** (`tb_bl_subscription`·`tb_bl_payment`·`tb_bl_pg_event`, `tb_pj_project.lock_yn/lock_dt`). 상세는 `.claude/database/a.TableScript.md §10`. 구독은 (결제자, 상품) UNIQUE 1행을 재사용, 빌링키는 `src/lib/encrypt.ts` AES 암호화, 종료 시 NULL.
 - **카드 등록 콜백은 앱 화면이 받는다.** PG 는 브라우저를 `/settings/billing/callback` 으로 되돌리고, 그 화면이 `POST /api/billing/card/callback` 을 호출한다. 이 앱의 인증이 Bearer 헤더라 리다이렉트(GET)에 실리지 않기 때문. successUrl 에 `purpose(start|change)`·`seatCnt` 를 실어 두고 서버가 customerKey 대조·좌석 재검증한다.
-- 잠금 검사는 `requirePermission` 한 곳(멤버십 쿼리에 `lock_yn` 포함). 기능별 검사 금지. 잠금 해제 API(`POST /api/projects/[id]/unlock`)는 이 게이트를 타지 않고 `owner_mber_id` 만 직접 확인한다(잠긴 상태에서 쓰기 게이트는 통과 불가).
+- 잠금 검사는 두 곳: ① `requirePermission`(멤버십 쿼리에 `lock_yn` 포함, 권한 이름 OR 메서드로 판정, 컨텍스트에 `projectLocked`) ② `requirePermission` 을 안 타는 쓰기 라우트(`requireAuth` + 자체 멤버십 검사 — AI 요청·첨부·복사·리뷰·PRD 일괄·설계 변경 확인·초대 재발송·단계 진행률·프로젝트 설정 PUT·휴일/마일스톤)는 `requireProjectUnlocked(projectId)` 한 줄. **새 쓰기 라우트를 만들 때 둘 중 하나는 반드시 탄다.** 잠금 해제 API(`POST /api/projects/[id]/unlock`)는 게이트를 타지 않고 `owner_mber_id` 만 직접 확인한다.
+- **이중 결제 방지 = 낙관적 잠금.** 첫 결제·좌석 추가·정기/재시도 결제 직전에 "읽은 버전(`mdfcn_dt`)이 그대로일 때만" 행을 선점(UPDATE ... WHERE mdfcn_dt = 읽은값). 0건이면 다른 요청이 처리 중 → 청구 없이 409 `BILLING_CONCURRENT_OPERATION`(정기 결제는 `skipped` 로 물러나 실패로 세지 않음). 첫 결제는 구독 행이 없을 수 있어 회원 행을 선점. PG 호출을 DB 트랜잭션에 넣지 않는 이유: pgbouncer 트랜잭션 풀링 + 토스 최대 60초. 토스 어댑터 때 Idempotency-Key·UNKNOWN 복구를 이 위에 얹는다.
+- 좌석 추가는 결제 주기 안에서만(주기가 끝나 배치 갱신 대기 중이면 409), 일할 금액 0원이면 409 — 0원으로 좌석이 늘어나는 틈 차단.
+- 메일은 커밋 뒤 **await** 로 보낸다(서버리스에서 `void` 는 유실). 7일 전 사전 안내는 발송 성공 뒤에만 `prentc_dt` 기록(실패 시 다음 날 재시도). 본문 외부 문자열은 이스케이프.
 - 상한 계산 지점: 프로젝트 생성·복사(소유 수) / 초대·수락·승격(FREE 5명 또는 구독 좌석) / 첨부 업로드(FREE 차단). 일상 요청은 아무것도 세지 않는다.
 - 배치는 기존 `requireBatchAuth`(X-Cron-Secret 또는 SUPER_ADMIN 세션) + `runJob` 패턴. `job_ty_code=BILLING_DAILY`. 같은 날 두 번 돌아도 상태 전이·`prentc_dt` 로 중복 청구·중복 메일 없음. PG 호출은 항목별 격리.
 - 웹훅(`POST /api/billing/webhook/[provider]`)은 서명 검증 후 원문만 저장하고 `IGNORED` 처리. 청구는 동기 API 로 직접 반영하므로 v1 은 기록·대조용. Mock 은 `MOCK_WEBHOOK_SECRET` 없으면 경로 닫힘.
@@ -134,7 +141,7 @@
   - 주소 `서울특별시 (상세 주소 입력 예정)` → 사업장 주소
   - 문의 이메일 `contact@bareun.io` → 실제 수신 가능한 주소로 확정(없으면 메일함 개설)
 - [ ] **이용약관·개인정보처리방침 시행일** — `siteInfo.ts`, 현재 "2026년 10월 1일" 가정. 실제 오픈일로.
-- [ ] **운영 환경변수 확인** (Vercel): `API_KEY_SECRET`(빌링키 암호화 키 32자 — 미설정이면 개발 기본키로 암호화됨, 운영 필수) · `BATCH_CRON_SECRET`(32자 이상) · `SMTP_HOST/PORT/USER/PASS/FROM`(메일 5종) · `PAYMENT_GATEWAY`(비우면 mock) · `MOCK_WEBHOOK_SECRET`(선택).
+- [ ] **운영 환경변수 확인** (Vercel): `API_KEY_SECRET`(빌링키 암호화 키 **32자 이상, 운영 필수** — 2026-09-20 부터 미설정이면 카드 등록·청구가 503 으로 막힘. **한 번 정하면 바꾸지 않는다** — 바꾸면 기존 빌링키 전부 복호화 불가 → 정기 결제 실패 → 강등. 지금 운영에 Mock 구독이 있다면 설정 뒤 카드를 다시 등록해야 한다) · `BATCH_CRON_SECRET`(32자 이상) · `SMTP_HOST/PORT/USER/PASS/FROM`(메일 5종) · `PAYMENT_GATEWAY`(비우면 mock) · `MOCK_WEBHOOK_SECRET`(선택) · `BILLING_MOCK_ALLOWED_EMAIL_DOMAINS`(선택, 비우면 `bareun.io`).
 - [ ] **외부 cron 등록** — 하루 1회. 없으면 정기 결제·재시도·해지 확정·사전 안내가 돌지 않는다(관리자 배치 화면 수동 실행은 가능).
   ```
   POST https://www.specode.co.kr/api/admin/batch/run/billing-daily
@@ -187,7 +194,7 @@
 - 운영 DB ↔ Prisma 모델 drift: 결제 관련 없음. 기존 drift 1건(`tb_pj_project_settings.artifact_scope_code` varchar(10) vs 모델 text, 2026-09-12 부터) — 결제 무관, §7 후속.
 
 ### 3-5. 검증
-- `npm run test:billing:db` — 임시 스키마(`specode_billing_test_*`)에 전체 스키마를 올려 도메인 서비스를 실제 호출, 17단계: 가격·날짜 순수 함수 → BASIC 시작(좌석 부족 거부·customerKey 불일치 403·첫 결제 거절 402·성공) → 좌석 상한(초대·이메일 중복·승격) → 좌석 추가 일할 → 축소 예약·취소 → 사전 안내 멱등 → 정기 결제(축소 적용·기간 연속) → 실패 카드 변경 → PAST_DUE → 재시도 3회 → EXPIRED·FREE·잠금 → requirePermission 읽기/쓰기/예외 → 활성화(이하/초과) → 재결제 전부 해제 → 해지 예약·취소·확정 → 자동 해제 → 이전 판정·탈퇴 → DTO 빌링키 미노출. 운영 데이터 무영향, SMTP 차단.
+- `npm run test:billing:db` — 임시 스키마(`specode_billing_test_*`)에 전체 스키마를 올려 도메인 서비스를 실제 호출, 18단계: 가격·날짜 순수 함수 → BASIC 시작(좌석 부족 거부·customerKey 불일치 403·첫 결제 거절 402·성공) → 좌석 상한(초대·이메일 중복·승격) → 좌석 추가 일할 → 축소 예약·취소 → 사전 안내 멱등 → **주기 종료 후 좌석 추가 거부** → 정기 결제(축소 적용·기간 연속) → **낡은 버전 청구 시도 skipped(이중 결제 방지)** → 실패 카드 변경 → PAST_DUE → 재시도 3회 → EXPIRED·FREE·잠금 → requirePermission 읽기/쓰기/예외/**PUT+read 차단/projectLocked 플래그** + **requireProjectUnlocked** → 활성화(이하/초과) → 재결제 전부 해제 → 해지 예약·취소·확정 → 자동 해제 → 이전 판정·탈퇴 → DTO 빌링키 미노출. 운영 데이터 무영향(운영 DB 서버의 임시 스키마 생성·삭제), SMTP 차단.
 - `npm run typecheck`.
 - 배포 확인은 운영 URL 로: `/intro/pricing` 200 + `/settings/billing` 링크 포함, `/billing/pg-window` 200, `/api/billing/subscription` 미인증 401.
 
@@ -217,10 +224,12 @@
 - [x] 2단계 결제 연동(Mock PG) + 3단계 잠금 — §3 전부 (2026-09-20 코드·배포). 스모크 17단계·tsc·DDL drift 검증
 - [x] 뷰어 → 편집 승격 좌석 검사 (2026-09-20)
 - [x] 운영 DDL 2건 적용·재검증, 커밋 9개 푸시·배포 확인 (2026-09-20)
+- [x] 보안·편의성 점검 및 보완 (2026-09-20 밤, 커밋 8개 — **푸시 전**). 잠금 우회 수정(메서드 기준 + `requireProjectUnlocked` 25개 라우트 + 일정 게이트 + 역할 변경 제한) · 이중 결제 방지(낙관적 잠금) · 0원/주기 종료 후 좌석 추가 차단 · Mock 구독 시작 내부 계정 제한 · 운영 암호화 키 미설정 fail-closed · 메일 await/발송 후 기록/이스케이프 · 소셜 탈퇴 재인증 · 의존성 패치(next 16.3.5·image-size·postcss·nodemailer 8.0.11) · 스모크 18단계. GPT 교차 검토 의견 중 수용/보류 판정은 §7-3·§7-4 에 반영.
 
 ## 7. 남은 작업 (순서대로)
 
 ### 7-1. 지금 바로 — 운영 마무리 (사용자, 코드 변경 없음)
+0. **보완 커밋 8개 푸시**(`e2a1dd6`~ 의존성 커밋) → 배포 확인. 주의: 이 배포부터 운영에서 `API_KEY_SECRET` 이 32자 미만이면 카드 등록·정기 청구가 503 으로 막힌다(설정 뒤 정상). 기존 Mock 구독은 키 변경으로 복호화가 안 되니 "결제 수단 변경"으로 카드 재등록. Mock 구독 시작은 `@bareun.io` 또는 SUPER_ADMIN 만 가능.
 1. 운영 env 확인·설정 — §2 목록. 특히 `API_KEY_SECRET` 과 `BATCH_CRON_SECRET`.
 2. 외부 cron 에 `billing-daily` 하루 1회 등록 — §2 curl. 첫 실행 후 `/admin/batch` 에서 `BILLING_DAILY` 잡이 SUCCESS(대상 0건이면 trgt 0) 로 남는지 확인.
 3. 운영 Mock 으로 실사용 점검 — 내부 계정으로 `/settings/billing` → BASIC 시작 → PG 창 → 구독 화면 반영, 좌석 추가/축소, 해지/취소. (스모크는 서비스 계층 검증이라 화면·리다이렉트 흐름은 브라우저에서 한 번 눌러 보는 것이 남았다.)
@@ -238,6 +247,12 @@
 4. **Mock → Toss 전환 절차** (중요): Mock 으로 만든 운영 구독의 빌링키는 토스에서 청구할 수 없다. 전환 시 살아 있는 Mock 구독을 어떻게 할지 결정 필요 — (권장) 내부 사용자 구독은 전환 직전 CANCELED 로 닫고 토스로 재등록. `pg_provdr_code` 로 구분 가능. 전환은 `PAYMENT_GATEWAY=toss` env 변경 + 재배포.
 5. 실카드 소액 결제 → 콘솔 취소로 `cancelPayment` 까지 확인. 영수증 URL 은 토스 `receipt.url` 사용.
 6. 정책 문서 §1-1 "현재는 Mock" 문구 갱신.
+7. **실결제 오픈 전 필수 (2026-09-20 점검·GPT 교차 검토에서 수용, 토스 응답 형태가 정해진 뒤 만들어야 해서 여기로):**
+   - 결제 시도 1건 = 고정 주문 ID + 토스 `Idempotency-Key`. 타임아웃·응답 유실 시 재청구 전에 결제 조회 API 로 상태 확인(UNKNOWN 복구). 지금의 낙관적 잠금(§1-10)은 동시 요청만 막고 "PG 성공·DB 실패" 는 여전히 수동 대조.
+   - 빌링키 암호화를 AES-256-GCM(인증 태그) + 암호문 버전 prefix 로 교체. 지금(CBC)은 Mock 키만 있어 재암호화 부담이 없는 이 시점이 가장 싸다. 결제용 키 분리·KMS 는 보류.
+   - 웹훅: 토스 이벤트 종류별 처리(승인·취소·환불), 서명 검증은 이벤트별 방식 확인(단일 shared-secret 일반화 금지). 환불은 콘솔 수동이므로 최소한 REFUND 이력을 `tb_bl_payment` 에 반영하는 경로(웹훅 또는 관리자 입력) 필요.
+   - 결제 API 응답에 `Cache-Control: no-store`, 콜백 화면에서 authKey 를 읽은 뒤 주소창에서 제거.
+   - `nodemailer` 8→10 메이저 업그레이드(High 취약점 1건 남음) — 메일 발송 회귀 확인과 함께.
 
 ### 7-4. 후속 (우선순위 낮음, 각각 사용자 결정 후)
 - 첨부 용량 집계·초과 차단(BASIC 5GB / PRO 20GB 표기만 있음).
@@ -246,6 +261,11 @@
 - 표준화닷컴 상품 연결 — `PRODUCTS` 한 줄 + 플랜 미러 대상 결정.
 - 기존 drift 1건 정리: `tb_pj_project_settings.artifact_scope_code` varchar(10) ↔ 모델 text (별도 DDL 또는 모델에 `@db.VarChar(10)`). 결제 무관.
 - SPECODE 자체 설계 등록 — 결제·요금제를 새 UW 로 화면·영역·기능 등록(`get_design_template` 먼저 조회). 1단계 때 "검토"로 두었고 미착수.
+- **(정책 결정 필요) FREE 소유 프로젝트 1개 상한의 양도 우회** — 계정 B 가 만들고 A 에게 양도를 반복하면 A 는 무제한 소유. §1-6 "양도는 항상 허용"이 정한 결과라 코드로 막지 않았다. 막으려면 양도 시 새 소유자가 FREE 면 `checkOwnedProjectLimit` 한 번.
+- 스모크(`test:billing:db`)가 운영 DB 서버에 임시 스키마를 만든다(§0-7 규칙). 별도 테스트 DB(`TEST_DATABASE_URL`)로 옮기는 것이 안전. 사용자 결정.
+- 개인정보처리방침 "인증 토큰은 보안 쿠키로 관리" 문구 — 리프레시 토큰은 HttpOnly 쿠키, 액세스 토큰은 sessionStorage 라 절반만 맞음. 법률 문서라 사용자 판단.
+- 좌석 승격 거부 문구가 "초대할 수 없습니다"로 나옴(역할 변경 모달에서 어색). 프로젝트 목록 "활성화" 버튼이 한 줄 누르면 전 줄 비활성. 사소한 UX.
+- 반려(다시 제안하지 말 것): 초대·수락·승격 소유자 단위 락(경합 창 밀리초, 좌석 1개 초과는 잠금 판정이 잡음), 메일 outbox/재시도 큐, 카드 변경·좌석 추가 재인증(PG 창 입력이 재인증), 앱 시작 시 env 검증으로 전체 중단(결제 경로만 fail-closed), 결제 이벤트 원장·큐/worker(규모 전), 세션 토큰 쿠키/BFF 전환(결제 범위 밖).
 
 ## 8. 결정 이력 (한 줄씩, 최신이 아래)
 - 2026-09-19 결제 도입 결정. 순서 = 정책 확정 → 정책 페이지 → 결제 연동.
@@ -260,4 +280,5 @@
 - 2026-09-20 2단계 구현 완료(Mock PG). 설계 대비 확정 차이: 콜백은 화면→POST, `prentc_dt` 컬럼, `payment.sbscrptn_id` NULL 허용, 잠금 예외 권한 4개, PAST_DUE 해지는 즉시 종료, 카드 변경 시 즉시 재결제, 축소 예약값이 초대 상한, 결제일 anchor = INITIAL 결제 KST 일자. 3단계 잠금도 함께 완료. (전부 §1 본문에 반영됨)
 - 2026-09-20 역할 변경 VIEWER→MEMBER/ADMIN 도 좌석 검사(사용자 결정, `checkSeatLimit`). 뷰어 무료는 유지 — 뷰어 유료화 제안 반려.
 - 2026-09-20 운영 배포(사용자 지시 "1·2·3 다 진행"): create_billing DDL → 푸시 → plan_code DROP 순서로 적용, 각 단계 읽기 전용 재검증. 결제 기능 운영 오픈(Mock PG, 내부 사용자).
+- 2026-09-20 보안 점검(Claude) + GPT 교차 검토 비교 후 사용자 승인 "과한 것 빼고 운영에 필요한 만큼": 잠금 판정 = 권한 OR 메서드, requireAuth 라우트는 `requireProjectUnlocked`; 이중 결제는 낙관적 잠금(intent/멱등키는 토스 때); Mock 구독 시작은 내부 도메인만(기본 bareun.io); 운영 암호화 키 미설정은 결제만 fail-closed(GCM 은 토스 때); 메일 await·발송 후 기록; 소셜 탈퇴는 지킬 것 있으면 재인증; 의존성은 semver 내 패치만(nodemailer 메이저 보류). FREE 양도 우회는 정책 사항으로 보류. 커밋 8개, 푸시는 사용자 확인 후.
 - 2026-09-20 문서 현행화: 계획 문서 → 현재 상태 문서로 재구성. 설계 차이는 §1 본문에 흡수, §3 은 구현 현황, §7 은 남은 작업(운영 마무리 → 사업자 정보 → 토스 어댑터 → 후속). Mock→Toss 전환 시 Mock 구독 정리 필요를 §7-3 에 기록.
