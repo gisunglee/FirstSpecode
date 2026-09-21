@@ -383,13 +383,83 @@ async function main(): Promise<void> {
     assert.equal(soloSub.billing_key, null);
 
     // ── 15. 결제 내역·개요 DTO ───────────────────────────────────────────
+    // ── 16. 관리자 결제 화면 — 조회·운영 액션 ────────────────────────────
+    log("관리자 — 요약·목록·상세 조회, 잠금 해제 대행(초과→강제), 결제일 연기, 환불 기록, 즉시 재결제, 강제 종료");
+    const adminApi = await import("@/lib/billing/admin");
+    {
+      const sum0 = await adminApi.getBillingSummary(tEnd);
+      assert.equal(sum0.liveCount, 0, "A·solo 모두 종료 → 살아 있는 구독 0");
+      assert.ok(sum0.lockedProjectCount >= 2, "A 의 프로젝트 2개 잠김");
+      assert.equal(sum0.provider, "MOCK");
+      const liveList = await adminApi.listSubscriptionsForAdmin({ status: "LIVE", page: 1, pageSize: 50 });
+      assert.equal(liveList.items.length, 0);
+      const allList = await adminApi.listSubscriptionsForAdmin({ status: "", search: "owner-", page: 1, pageSize: 50 });
+      assert.equal(allList.items.length, 1, "이메일 검색으로 A 만");
+      assert.ok(!JSON.stringify(allList).includes("mockbk_"), "목록에 빌링키 없음");
+
+      // 잠금 해제 대행 — P2(6명) 는 상한 초과 → 거부, force 면 해제
+      const u1 = await adminApi.adminUnlockProject(ids.P2, false);
+      assert.ok(!u1.unlocked && u1.verdict.reason === "FREE_MEMBERS");
+      const u2 = await adminApi.adminUnlockProject(ids.P2, true);
+      assert.ok(u2.unlocked && u2.forced, "강제 해제");
+      assert.equal((await prisma.tbPjProject.findUniqueOrThrow({ where: { prjct_id: ids.P2 } })).lock_yn, "N");
+
+      // 재구독 → ACTIVE. 결제일 연기 +10일, 사전 안내 플래그 리셋
+      const tA = new Date(tEnd.getTime() + days(1));
+      await sub.completeCardRegistration(actor, { authKey: goodCard(), customerKey, purpose: "start", seatCnt: 4 }, tA);
+      const before = (await sub.findSubscription(ids.A))!;
+      await assert.rejects(adminApi.adminRetryCharge(before.sbscrptn_id, tA), (e: unknown) => e instanceof BillingError && e.code === "BILLING_INVALID_STATE");
+      await assert.rejects(adminApi.adminDeferBilling(before.sbscrptn_id, 0, tA), (e: unknown) => e instanceof BillingError);
+      const deferred = await adminApi.adminDeferBilling(before.sbscrptn_id, 10, tA);
+      assert.equal(new Date(deferred.nextBillAt!).getTime(), before.next_bill_dt!.getTime() + days(10));
+      assert.equal(new Date(deferred.currentPeriodEnd!).getTime(), before.crrnt_perd_end_dt!.getTime() + days(10));
+
+      // 환불 기록 — 방금 첫 결제(INITIAL PAID) 의 일부 환불 → REFUND 행(음수) + 원 결제 REFUNDED
+      const initialPaid = (await prisma.tbBlPayment.findFirst({ where: { sbscrptn_id: before.sbscrptn_id, pymnt_ty_code: "INITIAL", pymnt_sttus_code: "PAID" }, orderBy: { creat_dt: "desc" } }))!;
+      await assert.rejects(adminApi.adminRecordRefund(initialPaid.pymnt_id, initialPaid.amt + 1, "초과", tA), (e: unknown) => e instanceof BillingError);
+      const rf = await adminApi.adminRecordRefund(initialPaid.pymnt_id, 1000, "테스트 부분 환불", tA);
+      assert.equal(rf.refund.amount, -1000);
+      assert.equal(rf.refund.type, "REFUND");
+      assert.equal(rf.original.status, "REFUNDED");
+      await assert.rejects(adminApi.adminRecordRefund(initialPaid.pymnt_id, 1000, "중복", tA), (e: unknown) => e instanceof BillingError, "REFUNDED 건은 재기록 불가");
+      const payList = await adminApi.listPaymentsForAdmin({ search: "owner-", page: 1, pageSize: 200 });
+      assert.ok(payList.items.some((p) => p.type === "REFUND" && p.amount === -1000));
+      assert.ok(payList.items.every((p) => p.member.email?.startsWith("owner-")), "검색은 회원 기준");
+      const exportRows = await adminApi.fetchPaymentsForExport({ status: "REFUNDED" }, 100);
+      assert.ok(exportRows.length >= 2, "원 결제 + 환불 행");
+
+      // 실패 카드로 바꾸고 결제일 도래 → PAST_DUE → 관리자 즉시 재결제(실패 카드라 fail_cnt 2)
+      await sub.completeCardRegistration(actor, { authKey: failCard(), customerKey, purpose: "change" }, tA);
+      const dueAt = new Date(new Date(deferred.nextBillAt!).getTime() + days(0.1));
+      assert.deepEqual(await daily.processSubscriptionDaily(before.sbscrptn_id, dueAt), ["RENEW_FAILED"]);
+      const retry = await adminApi.adminRetryCharge(before.sbscrptn_id, new Date(dueAt.getTime() + 60_000));
+      assert.ok(!retry.ok && !retry.skipped && retry.failCnt === 2, "즉시 재결제도 실패 카드 → fail_cnt 2 (3일을 안 기다림)");
+      // 결제 이력 creat_dt 는 DB 기본값(실제 현재 시각)이라 30일 창은 시뮬레이션 시각이 아닌 실제 now 로 본다
+      const sum1 = await adminApi.getBillingSummary();
+      assert.equal(sum1.pastDueCount, 1);
+      assert.ok(sum1.failedPaymentsLast30d >= 2);
+
+      // 상세 조회 + 강제 종료
+      const detail = (await adminApi.getSubscriptionDetailForAdmin(before.sbscrptn_id))!;
+      assert.equal(detail.subscription.status, "PAST_DUE");
+      assert.equal(detail.ownedProjects.length, 2);
+      assert.equal(detail.usedSeats, 4);
+      assert.ok(detail.payments.some((p) => p.type === "REFUND"));
+      const ended = await adminApi.adminTerminate(before.sbscrptn_id, dueAt);
+      assert.equal(ended.status, "CANCELED");
+      assert.equal((await prisma.tbCmMember.findUniqueOrThrow({ where: { mber_id: ids.A } })).plan_code, "FREE");
+      assert.equal(await prisma.tbPjProject.count({ where: { owner_mber_id: ids.A, lock_yn: "Y" } }), 2, "강제 종료 → 잠금");
+      await assert.rejects(adminApi.adminTerminate(before.sbscrptn_id, dueAt), (e: unknown) => e instanceof BillingError && e.code === "BILLING_INVALID_STATE");
+      assert.deepEqual(await adminApi.listAdminAlertRecipients(), [], "임시 스키마엔 SUPER_ADMIN 없음");
+    }
+
     log("DTO — 개요·결제 내역에 빌링키 없음, 실패 이력 포함");
     const overview = await sub.getBillingOverview(ids.A);
     assert.equal(overview.provider, "MOCK");
     assert.equal(overview.subscription?.status, "CANCELED");
     assert.ok(!JSON.stringify(overview).includes("mockbk_"), "빌링키 노출 없음");
     const payments = await sub.listPayments(ids.A);
-    assert.ok(payments.length >= 9);
+    assert.ok(payments.length >= 12);
     assert.ok(payments.some((p) => p.status === "FAILED" && p.failReason?.includes("MOCK_DECLINED")));
     assert.ok(payments.every((p) => p.orderId.startsWith("SPC-")));
 

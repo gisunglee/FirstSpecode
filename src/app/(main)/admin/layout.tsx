@@ -35,6 +35,7 @@ const TITLE_BY_PATH: Array<{ prefix: string; title: string }> = [
   { prefix: "/admin/audit",            title: "감사 로그" },
   { prefix: "/admin/cleanup",          title: "정보 삭제" },
   { prefix: "/admin/batch",            title: "배치" },
+  { prefix: "/admin/billing",          title: "결제" },
   { prefix: "/admin",                  title: "대시보드" }, // 가장 짧음 — 항상 마지막
 ];
 

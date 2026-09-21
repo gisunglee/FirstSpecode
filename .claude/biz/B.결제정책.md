@@ -130,7 +130,8 @@
 - 상한 계산 지점: 프로젝트 생성·복사(소유 수) / 초대·수락·승격(FREE 5명 또는 구독 좌석) / 첨부 업로드(FREE 차단). 일상 요청은 아무것도 세지 않는다.
 - 배치는 기존 `requireBatchAuth`(X-Cron-Secret 또는 SUPER_ADMIN 세션) + `runJob` 패턴. `job_ty_code=BILLING_DAILY`. 같은 날 두 번 돌아도 상태 전이·`prentc_dt` 로 중복 청구·중복 메일 없음. PG 호출은 항목별 격리.
 - 웹훅(`POST /api/billing/webhook/[provider]`)은 서명 검증 후 원문만 저장하고 `IGNORED` 처리. 청구는 동기 API 로 직접 반영하므로 v1 은 기록·대조용. Mock 은 `MOCK_WEBHOOK_SECRET` 없으면 경로 닫힘.
-- 관리자 구독 목록 화면은 만들지 않는다(PG 대시보드로 대체). 관리자 회원 상세에 구독 요약·환불 3플래그 표시, 플랜 수동 변경(구독 있으면 409). 배치 화면에 `BILLING_DAILY` 수동 실행.
+- **관리자 결제 화면 `/admin/billing`** (2026-09-21, 이전의 "PG 대시보드로 대체" 결정을 뒤집음 — Mock 에는 대시보드가 없고, 토스 대시보드도 좌석·잠금·재시도 같은 우리 도메인 상태는 모른다). 요약 카드·구독 목록·결제 이력(엑셀)·구독 상세 운영 액션 5개(즉시 재결제·다음 결제일 연기·강제 종료·환불 기록·잠금 해제 대행). **좌석·단가·플랜은 관리자 화면에서도 바꾸지 않는다** — 구독이 플랜의 원천. 보상은 "결제일 연기"로만. 모든 액션은 사유 필수 + 감사 로그(`BILLING_*`, `PROJECT_FORCE_UNLOCK`). 코드: `src/lib/billing/admin.ts`. 관리자 회원 상세에는 구독 요약·환불 3플래그 + 상세 링크. 배치 화면에 `BILLING_DAILY` 수동 실행.
+- **관리자 알림 메일**: 일일 배치가 FAILED/PARTIAL 이거나 강등(EXPIRED)·해지 확정·정기 결제 실패가 있으면 활성 SUPER_ADMIN 전원에게 하루 1통(`sendAdminBillingAlertEmail`). 매일 화면을 보지 않아도 사고를 놓치지 않게.
 - UI 는 `.claude/design/` 토큰·`sp-*` 컴포넌트. 인트로 페이지는 `intro.css`. 법정 표기·가격은 `siteInfo.ts` 한 곳.
 
 ## 2. 사용자 입력 대기 (Claude 가 대신 정할 수 없는 것)
@@ -165,6 +166,9 @@
 | 잠긴 프로젝트 내부 | `MainLayout` 배너 | "읽기 전용" + 소유자 링크(활성화·구독 갱신) |
 | 관리자 회원 상세 | `/admin/users/[id]` | 플랜 변경 모달(구독 있으면 비활성·409), 구독·결제 섹션(상태·좌석·다음 결제·카드·연속 실패·종료일), 환불 판정 3플래그 |
 | 관리자 배치 | `/admin/batch` | `BILLING_DAILY` 잡 필터·수동 실행 |
+| **관리자 결제** | `/admin/billing` | 요약 카드(구독 중·재시도 중·월 예정 청구액·7일 내 결제 예정·이번 달 순매출·최근 30일 실패·잠긴 프로젝트·마지막 배치) · [구독] 탭(상태 필터·검색·페이지) · [결제 이력] 탭(기간·상태·구분·검색, 순액 합계, 엑셀) · Mock 안내 배너 |
+| **관리자 구독 상세** | `/admin/billing/[id]` | 구독 정보·사용 좌석·환불 3플래그 · 소유 프로젝트(잠금·멤버 수)+잠금 해제 대행(초과 시 강제+사유) · 즉시 재결제(PAST_DUE) · 다음 결제일 연기(ACTIVE, 1~90일) · 강제 종료 · 결제 이력+환불 기록. 전부 사유 필수 |
+| 관리자 대시보드 · LNB | `/admin`, 시스템 관리 메뉴 | "구독 중"·"결제 실패 재시도 중" 카드, "결제" 메뉴 |
 
 ### 3-2. API
 | 메서드·경로 | 인증 | 내용 |
@@ -181,6 +185,9 @@
 | `POST /api/projects/[id]/unlock` | 세션·소유자 | 활성화. 초과 시 403 `PROJECT_UNLOCK_OVER_LIMIT` |
 | `POST /api/admin/batch/run/billing-daily` | cron 시크릿 또는 SUPER_ADMIN | 일일 배치 |
 | `PATCH /api/admin/users/[id]/plan` | SUPER_ADMIN | 수동 플랜 변경(구독 있으면 409 `SUBSCRIPTION_ACTIVE`) |
+| `GET /api/admin/billing/summary` · `GET .../subscriptions` · `GET .../subscriptions/[id]` | SUPER_ADMIN | 요약 · 구독 목록(status=LIVE 등, search) · 구독 상세 |
+| `GET /api/admin/billing/payments` · `GET .../payments/export` | SUPER_ADMIN | 결제 이력(from/to KST·status·type·search, sumAmount) · 엑셀(최대 10,000행) |
+| `POST .../subscriptions/[id]/retry` · `/defer {days}` · `/terminate` · `POST .../payments/[id]/refund {amount}` · `POST /api/admin/projects/[id]/unlock {force?}` | SUPER_ADMIN | 운영 액션 5개. body 에 `reason` 필수, 감사 로그 기록 |
 | 기존 라우트 수정 | | 프로젝트 생성·복사(소유 상한, `plan_code` 쓰기 제거) · 초대·수락(좌석 상한) · 역할 변경(승격 좌석 상한, 양도 후 잠금 판정) · transfer-and-leave · restore(잠금 판정) · `DELETE /api/member/me`(구독 종료) · `GET /api/projects`(locked·isOwner) · `GET my-role`(isLocked) · `GET /api/admin/users/[id]`(구독·3플래그) |
 
 결제 API 는 MCP 에 노출하지 않는다(`register-tools.ts` 변경 없음). MCP 키로 호출하면 `actor.ts` 가 403.
@@ -188,6 +195,7 @@
 ### 3-3. 배치·메일
 - `billing-daily` 하루 1회: 살아 있는 구독마다 ① CANCEL_SCHEDULED 기간 종료 → CANCELED ② ACTIVE 결제일 → RECURRING(축소 예약 적용) ③ PAST_DUE 마지막 실패 +3일 → 재시도, 소진 → EXPIRED ④ ACTIVE 결제 7일 전 → 사전 안내. 할 일 없으면 SKIPPED. 결과는 `tb_cm_batch_job_item.meta_json.actions`.
 - 메일 5종 발송 시점: 영수증(시작·정기·좌석 추가 성공 직후) · 사전 안내(배치 ④) · 실패(재시도 남았을 때) · 해지 확인(해지 예약 시) · 강등(CANCELED/EXPIRED 확정 시, 잠긴 수·자동 해제 프로젝트명 포함).
+- 관리자 알림(⑥): 배치 종료 후 결과가 SUCCESS 가 아니거나 EXPIRED·RENEW_FAILED·RETRY_FAILED·CANCEL_FINALIZED 가 한 건이라도 있으면 SUPER_ADMIN 전원에게 요약 1통. 성공 갱신·사전 안내는 알리지 않는다.
 
 ### 3-4. DB
 - 적용된 SQL: `prisma/sql/2026-09-20_create_billing.sql`(테이블 3·인덱스 8·잠금 컬럼 2) → 배포 → `2026-09-20_drop_project_settings_plan_code.sql`. npm 스크립트 `db:migrate:billing`, `db:migrate:billing-drop-settings-plan`.
@@ -208,7 +216,8 @@
 ## 5. 하지 않기로 한 것 (다시 제안하지 말 것)
 - 좌석 없는 정액제 (제안했으나 사용자가 인원당 과금 선택).
 - 뷰어 좌석 차감(뷰어 유료화) — 2026-09-20 반려. 확산이 우선.
-- 4티어(TEAM) 유지, 연간 결제, 별도 체험 기간, 세금계산서 자동 발행, 관리자 구독 목록 화면, 첨부 버튼 화면별 비활성화, 첨부 용량 실시간 집계(후속).
+- 4티어(TEAM) 유지, 연간 결제, 별도 체험 기간, 세금계산서 자동 발행, 첨부 버튼 화면별 비활성화, 첨부 용량 실시간 집계(후속). ("관리자 구독 목록 화면 안 만들기"는 2026-09-21 철회 — §1-10)
+- 관리자 화면에서 좌석·단가·플랜 직접 수정 — 구독이 원천. 보상은 결제일 연기로.
 - PRO "출시 알림 받기" 이메일 수집 (만들었다가 2026-09-19 제거 — 수요 측정보다 단순함 우선).
 - 강등 시 "최근 프로젝트 1개 자동 유지" (누구를 남길지 시스템이 고를 수 없음 → 소유자가 "활성화"로 선택).
 - 강등 시 "기존 멤버 유지" 예외 (악용 경로).
@@ -224,12 +233,14 @@
 - [x] 2단계 결제 연동(Mock PG) + 3단계 잠금 — §3 전부 (2026-09-20 코드·배포). 스모크 17단계·tsc·DDL drift 검증
 - [x] 뷰어 → 편집 승격 좌석 검사 (2026-09-20)
 - [x] 운영 DDL 2건 적용·재검증, 커밋 9개 푸시·배포 확인 (2026-09-20)
+- [x] 보안 점검 보완 9커밋 푸시·배포 (2026-09-21)
+- [x] 관리자 결제 화면 — 요약·구독 목록·결제 이력(엑셀)·구독 상세 운영 액션 5개·관리자 알림 메일 (2026-09-21 코드, 푸시 대기)
 - [x] 보안·편의성 점검 및 보완 (2026-09-20 밤, 커밋 8개 — **푸시 전**). 잠금 우회 수정(메서드 기준 + `requireProjectUnlocked` 25개 라우트 + 일정 게이트 + 역할 변경 제한) · 이중 결제 방지(낙관적 잠금) · 0원/주기 종료 후 좌석 추가 차단 · Mock 구독 시작 내부 계정 제한 · 운영 암호화 키 미설정 fail-closed · 메일 await/발송 후 기록/이스케이프 · 소셜 탈퇴 재인증 · 의존성 패치(next 16.3.5·image-size·postcss·nodemailer 8.0.11) · 스모크 18단계. GPT 교차 검토 의견 중 수용/보류 판정은 §7-3·§7-4 에 반영.
 
 ## 7. 남은 작업 (순서대로)
 
 ### 7-1. 지금 바로 — 운영 마무리 (사용자, 코드 변경 없음)
-0. **보완 커밋 8개 푸시**(`e2a1dd6`~ 의존성 커밋) → 배포 확인. 주의: 이 배포부터 운영에서 `API_KEY_SECRET` 이 32자 미만이면 카드 등록·정기 청구가 503 으로 막힌다(설정 뒤 정상). 기존 Mock 구독은 키 변경으로 복호화가 안 되니 "결제 수단 변경"으로 카드 재등록. Mock 구독 시작은 `@bareun.io` 또는 SUPER_ADMIN 만 가능.
+0. **관리자 결제 화면 커밋 푸시**(사용자 확인) → 배포 확인 → `/admin/billing` 열어 요약 카드·탭 확인. (보안 보완 9커밋은 2026-09-21 푸시 완료. 이 배포부터 운영 `API_KEY_SECRET` 32자 미만이면 카드 등록·청구 503 — env 먼저.)
 1. 운영 env 확인·설정 — §2 목록. 특히 `API_KEY_SECRET` 과 `BATCH_CRON_SECRET`.
 2. 외부 cron 에 `billing-daily` 하루 1회 등록 — §2 curl. 첫 실행 후 `/admin/batch` 에서 `BILLING_DAILY` 잡이 SUCCESS(대상 0건이면 trgt 0) 로 남는지 확인.
 3. 운영 Mock 으로 실사용 점검 — 내부 계정으로 `/settings/billing` → BASIC 시작 → PG 창 → 구독 화면 반영, 좌석 추가/축소, 해지/취소. (스모크는 서비스 계층 검증이라 화면·리다이렉트 흐름은 브라우저에서 한 번 눌러 보는 것이 남았다.)
@@ -282,3 +293,4 @@
 - 2026-09-20 운영 배포(사용자 지시 "1·2·3 다 진행"): create_billing DDL → 푸시 → plan_code DROP 순서로 적용, 각 단계 읽기 전용 재검증. 결제 기능 운영 오픈(Mock PG, 내부 사용자).
 - 2026-09-20 보안 점검(Claude) + GPT 교차 검토 비교 후 사용자 승인 "과한 것 빼고 운영에 필요한 만큼": 잠금 판정 = 권한 OR 메서드, requireAuth 라우트는 `requireProjectUnlocked`; 이중 결제는 낙관적 잠금(intent/멱등키는 토스 때); Mock 구독 시작은 내부 도메인만(기본 bareun.io); 운영 암호화 키 미설정은 결제만 fail-closed(GCM 은 토스 때); 메일 await·발송 후 기록; 소셜 탈퇴는 지킬 것 있으면 재인증; 의존성은 semver 내 패치만(nodemailer 메이저 보류). FREE 양도 우회는 정책 사항으로 보류. 커밋 8개, 푸시는 사용자 확인 후.
 - 2026-09-20 문서 현행화: 계획 문서 → 현재 상태 문서로 재구성. 설계 차이는 §1 본문에 흡수, §3 은 구현 현황, §7 은 남은 작업(운영 마무리 → 사업자 정보 → 토스 어댑터 → 후속). Mock→Toss 전환 시 Mock 구독 정리 필요를 §7-3 에 기록.
+- 2026-09-21 보안 보완 9커밋 푸시. 관리자 결제 가시성 부족 지적(사용자) → "관리자 구독 화면 안 만든다" 철회. `/admin/billing` 요약·목록·이력·운영 액션 5개·관리자 알림 구현. 좌석·단가·플랜 수정은 관리자 화면에서도 금지(보상은 결제일 연기).

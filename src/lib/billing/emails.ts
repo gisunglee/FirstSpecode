@@ -261,3 +261,33 @@ export async function sendDowngradedEmail(i: DowngradedEmailInput): Promise<bool
 function absolute(url: string): string {
   return url.startsWith("/") ? `${appUrl()}${url}` : url;
 }
+
+// ─── ⑥ 관리자 알림 (배치 결과·강등·결제 실패) ────────────────────────────────
+
+export type AdminBillingAlertInput = {
+  to:      string[];
+  subject: string;
+  /** 요약 줄 — 그대로 <li> 로 나열 (이스케이프됨) */
+  lines:   string[];
+  /** 관리자 결제 화면 링크 경로 (기본 /admin/billing) */
+  path?:   string;
+};
+
+/**
+ * 관리자에게 결제 운영 알림 — 배치 FAILED/PARTIAL, 강등(EXPIRED·CANCELED), 정기 결제 실패가 있을 때
+ * 하루 1통. 매일 화면을 보지 않아도 사고를 놓치지 않게. 수신자가 없으면 콘솔 로그만.
+ */
+export async function sendAdminBillingAlertEmail(i: AdminBillingAlertInput): Promise<boolean> {
+  if (i.to.length === 0) {
+    console.warn("[billing/emails] 관리자 알림 수신자(SUPER_ADMIN) 없음:", i.subject);
+    return false;
+  }
+  const items = i.lines.map((l) => `<li style="margin:4px 0;">${esc(l)}</li>`).join("");
+  const html = `
+    <div style="font-family: sans-serif; max-width: 560px; margin: 0 auto; color:#222;">
+      <h2 style="color: #b45309; margin-bottom: 8px;">${esc(i.subject)}</h2>
+      <ul style="padding-left:18px; font-size:14px; line-height:1.6;">${items}</ul>
+      <p style="margin-top:20px;"><a href="${appUrl()}${i.path ?? "/admin/billing"}" style="color:#4a56d4;">관리자 &gt; 결제 화면 열기</a></p>
+    </div>`;
+  return sendBillingMail(i.to.join(", "), `[SPECODE 운영] ${i.subject}`, html);
+}

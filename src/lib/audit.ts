@@ -51,10 +51,16 @@ export const AUDIT_ACTION_TYPES = [
   "TEMPLATE_CREATE",
   "TEMPLATE_UPDATE",
   "TEMPLATE_DELETE",
+  // 결제 운영 액션 (관리자 > 결제, 2026-09-21). memo 에 대상·전후 값·사유.
+  "BILLING_RETRY_CHARGE",      // PAST_DUE 구독 즉시 재결제
+  "BILLING_DEFER_BILL_DATE",   // 다음 결제일 N일 연기 (보상)
+  "BILLING_FORCE_TERMINATE",   // 구독 강제 종료 (CANCELED 경로)
+  "BILLING_REFUND_RECORD",     // PG 콘솔 환불 뒤 이력 기록
+  "PROJECT_FORCE_UNLOCK",      // 결제 잠금 해제 대행 (상한 초과 강제 포함)
 ] as const;
 export type AuditActionType = (typeof AUDIT_ACTION_TYPES)[number];
 
-export const AUDIT_TARGET_TYPES = ["PROJECT", "USER", "TEMPLATE"] as const;
+export const AUDIT_TARGET_TYPES = ["PROJECT", "USER", "TEMPLATE", "SUBSCRIPTION", "PAYMENT"] as const;
 export type AuditTargetType = (typeof AUDIT_TARGET_TYPES)[number];
 
 export type LogAdminActionInput = {

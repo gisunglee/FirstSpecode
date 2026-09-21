@@ -285,6 +285,8 @@ export default function LNB() {
               { label: "프롬프트 관리",   href: "/admin/prompt-templates",  icon: "i_promptTemplate" as MenuIconKey },
               // 시스템 공식 문서(Docs Hub) 관리 — /docs 사용자 뷰어와 짝
               { label: "문서 관리",       href: "/admin/docs",              icon: "i_docs" as MenuIconKey },
+              // 구독·결제 운영 — 요약·구독 목록·결제 이력·운영 액션 (정책 §3-1)
+              { label: "결제",            href: "/admin/billing",           icon: "i_referenceInfo" as MenuIconKey },
               { label: "감사 로그",       href: "/admin/audit",             icon: "i_changeLog" as MenuIconKey },
               // 소프트삭제된 프로젝트의 영구 삭제 운영 화면
               { label: "정보 삭제",       href: "/admin/cleanup",           icon: "i_cleanup" as MenuIconKey },

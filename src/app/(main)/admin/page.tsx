@@ -87,6 +87,14 @@ export default function AdminDashboardPage() {
         .then((r) => r.data.pagination.totalCount),
     staleTime: 5 * 60 * 1000,
   });
+  // 살아 있는 구독 수 — 결제 요약 API 의 liveCount 만 사용
+  const { data: billing } = useQuery<{ liveCount: number; pastDueCount: number }>({
+    queryKey: ["admin", "billing", "summary"],
+    queryFn: () =>
+      authFetch<{ data: { liveCount: number; pastDueCount: number } }>("/api/admin/billing/summary")
+        .then((r) => r.data),
+    staleTime: 60 * 1000,
+  });
   const { data: projectCount = 0 } = useQuery<number>({
     queryKey: ["admin", "projects", "count"],
     queryFn: () =>
@@ -101,6 +109,8 @@ export default function AdminDashboardPage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
         <StatCard label="전체 사용자"        value={userCount}           href="/admin/users"    />
         <StatCard label="전체 프로젝트"      value={projectCount}        href="/admin/projects" />
+        <StatCard label="구독 중"            value={billing?.liveCount ?? 0}    href="/admin/billing" />
+        <StatCard label="결제 실패 재시도 중" value={billing?.pastDueCount ?? 0} href="/admin/billing?status=PAST_DUE" />
         <StatCard label="내 활성 지원 세션"  value={activeSessions.length} href="#" />
       </div>
 

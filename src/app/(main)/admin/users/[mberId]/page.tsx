@@ -792,9 +792,14 @@ function BillingSummarySection({ subscription, usage }: { subscription: Subscrip
         padding: "var(--space-5)",
       }}
     >
-      <h3 style={{ margin: 0, marginBottom: "var(--space-3)", fontSize: "var(--text-lg)", color: "var(--color-text-heading)" }}>
-        구독·결제
-      </h3>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--space-3)" }}>
+        <h3 style={{ margin: 0, fontSize: "var(--text-lg)", color: "var(--color-text-heading)" }}>구독·결제</h3>
+        {subscription && (
+          <Link href={`/admin/billing/${subscription.subscriptionId}`} className="sp-btn sp-btn-secondary sp-btn-sm">
+            구독 상세·운영 액션
+          </Link>
+        )}
+      </div>
       {!subscription ? (
         <div style={{ color: "var(--color-text-tertiary)", fontSize: "var(--text-sm)" }}>결제 구독 이력이 없습니다.</div>
       ) : (

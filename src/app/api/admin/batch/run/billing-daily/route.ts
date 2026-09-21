@@ -17,11 +17,23 @@ import { NextRequest } from "next/server";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { runJob } from "@/lib/batch/runJob";
 import { requireBatchAuth } from "@/lib/batch/requireBatchAuth";
-import { BILLING_DAILY_JOB_TYPE, loadDailyTargets, processSubscriptionDaily, type DailyTarget } from "@/lib/billing/daily";
+import { BILLING_DAILY_JOB_TYPE, loadDailyTargets, processSubscriptionDaily, type DailyAction, type DailyTarget } from "@/lib/billing/daily";
+import { listAdminAlertRecipients } from "@/lib/billing/admin";
+import { sendAdminBillingAlertEmail } from "@/lib/billing/emails";
+
+// 관리자에게 알릴 동작 — 성공 갱신·사전 안내는 평상시 일이라 제외
+const ALERT_ACTIONS: ReadonlySet<DailyAction> = new Set<DailyAction>(["EXPIRED", "RENEW_FAILED", "RETRY_FAILED", "CANCEL_FINALIZED"]);
+const ALERT_LABEL: Record<string, string> = {
+  EXPIRED: "재시도 소진 → FREE 강등·잠금", RENEW_FAILED: "정기 결제 실패(재시도 예정)",
+  RETRY_FAILED: "재시도 실패", CANCEL_FINALIZED: "해지 확정 → FREE·잠금",
+};
 
 export async function POST(request: NextRequest) {
   const auth = await requireBatchAuth(request);
   if (auth instanceof Response) return auth;
+
+  // 관리자 알림용 — 항목별 동작을 모아 배치가 끝난 뒤 한 통으로 보낸다
+  const notable: Array<{ label: string; actions: DailyAction[] }> = [];
 
   try {
     const result = await runJob<DailyTarget>({
@@ -47,9 +59,24 @@ export async function POST(request: NextRequest) {
         if (actions.length === 0) {
           return { status: "SKIPPED", reason: "오늘 할 일 없음", meta: { statusBefore: t.status } };
         }
+        if (actions.some((a) => ALERT_ACTIONS.has(a))) notable.push({ label: t.email ?? t.mberId, actions });
         return { status: "SUCCESS", meta: { statusBefore: t.status, actions } };
       },
     });
+
+    // 관리자 알림 — 배치 자체가 실패/부분 실패했거나, 강등·결제 실패·해지 확정이 있으면 하루 1통.
+    // 발송 실패는 배치 결과를 바꾸지 않는다.
+    if (result.ttusCode !== "SUCCESS" || notable.length > 0) {
+      const lines: string[] = [
+        `배치 결과 ${result.ttusCode} — 대상 ${result.trgtCnt} · 처리 ${result.successCnt} · 실패 ${result.failCnt} · 건너뜀 ${result.skipCnt}`,
+        ...notable.map((n) => `${n.label}: ${n.actions.map((a) => ALERT_LABEL[a] ?? a).join(", ")}`),
+      ];
+      await sendAdminBillingAlertEmail({
+        to: await listAdminAlertRecipients(),
+        subject: result.ttusCode !== "SUCCESS" ? `결제 일일 배치 ${result.ttusCode}` : `결제 일일 배치 — 확인 필요 ${notable.length}건`,
+        lines,
+      });
+    }
 
     return apiSuccess(result);
   } catch (err) {
