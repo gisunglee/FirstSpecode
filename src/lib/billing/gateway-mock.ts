@@ -61,6 +61,9 @@ export class MockPaymentGateway implements PaymentGateway {
   }
 
   async charge(p: ChargeParams): Promise<ChargeResult> {
+    // 테스트 전용 — PG 응답 지연을 흉내내 "청구 중 다른 변경" 경합을 재현한다 (스모크에서만 설정)
+    const delayMs = Number(process.env.MOCK_CHARGE_DELAY_MS ?? 0);
+    if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
     if (p.billingKey.includes("fail")) {
       return { ok: false, code: "MOCK_DECLINED", message: "모의 결제 거절 — 실패 테스트 카드입니다." };
     }

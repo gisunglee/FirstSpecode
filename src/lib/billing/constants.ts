@@ -87,11 +87,70 @@ export const PAYMENT_TYPE = {
 export type PaymentType = (typeof PAYMENT_TYPE)[keyof typeof PAYMENT_TYPE];
 
 export const PAYMENT_STATUS = {
-  PAID:     "PAID",
-  FAILED:   "FAILED",
-  REFUNDED: "REFUNDED",
+  PAID:               "PAID",
+  FAILED:             "FAILED",
+  /** 일부 환불됨 — 누적 환불 < 원 금액. 원 결제 행에만 */
+  PARTIALLY_REFUNDED: "PARTIALLY_REFUNDED",
+  /** 전액 환불됨(원 결제 행) 또는 환불 행 자체 */
+  REFUNDED:           "REFUNDED",
 } as const;
 export type PaymentStatus = (typeof PAYMENT_STATUS)[keyof typeof PAYMENT_STATUS];
+
+/** 환불 유형 (정책 §1-7) — 동작이 다른 두 가지만. 상세 사유는 텍스트로 */
+export const REFUND_REASON = {
+  /** 청약철회: 결제 후 7일 이내 + 유료 기능 미사용. 전액만, 구독 즉시 종료 */
+  WITHDRAWAL: "WITHDRAWAL",
+  /** 운영 보정: 이중 청구·과청구·장애 보상 등. 전액/부분, 구독 유지 */
+  ADJUSTMENT: "ADJUSTMENT",
+} as const;
+export type RefundReason = (typeof REFUND_REASON)[keyof typeof REFUND_REASON];
+
+/** 구독 종료 사유 (tb_bl_subscription.ended_rsn_code) — 상태의 보조 정보 */
+export const ENDED_REASON = {
+  USER_CANCEL:             "USER_CANCEL",
+  PAYMENT_RETRY_EXHAUSTED: "PAYMENT_RETRY_EXHAUSTED",
+  ADMIN_TERMINATE:         "ADMIN_TERMINATE",
+  MEMBER_WITHDRAWAL:       "MEMBER_WITHDRAWAL",
+  REFUND_WITHDRAWAL:       "REFUND_WITHDRAWAL",
+} as const;
+export type EndedReason = (typeof ENDED_REASON)[keyof typeof ENDED_REASON];
+
+// ─── 표시 라벨 (화면 3곳 공용 — 여기만 고치면 전부 바뀐다) ────────────────────
+
+export const SUBSCRIPTION_STATUS_LABEL: Record<SubscriptionStatus, string> = {
+  ACTIVE:           "이용 중",
+  PAST_DUE:         "결제 실패 · 재시도 중",
+  CANCEL_SCHEDULED: "해지 예약",
+  CANCELED:         "해지됨",
+  EXPIRED:          "결제 실패로 종료",
+};
+
+export const PAYMENT_TYPE_LABEL: Record<PaymentType, string> = {
+  INITIAL:   "구독 시작",
+  RECURRING: "정기 결제",
+  SEAT_ADD:  "좌석 추가",
+  REFUND:    "환불",
+};
+
+export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
+  PAID:               "완료",
+  FAILED:             "실패",
+  PARTIALLY_REFUNDED: "일부 환불",
+  REFUNDED:           "환불",
+};
+
+export const REFUND_REASON_LABEL: Record<RefundReason, string> = {
+  WITHDRAWAL: "청약철회 (7일 이내 · 미사용 · 전액 · 구독 종료)",
+  ADJUSTMENT: "운영 보정 (이중 청구·과청구·장애 보상 · 구독 유지)",
+};
+
+export const ENDED_REASON_LABEL: Record<EndedReason, string> = {
+  USER_CANCEL:             "회원 해지",
+  PAYMENT_RETRY_EXHAUSTED: "결제 실패 재시도 소진",
+  ADMIN_TERMINATE:         "관리자 강제 종료",
+  MEMBER_WITHDRAWAL:       "회원 탈퇴",
+  REFUND_WITHDRAWAL:       "청약철회 환불",
+};
 
 // ─── PG ──────────────────────────────────────────────────────────────────────
 
@@ -120,6 +179,11 @@ export const RETRY_POLICY = {
 /** 정기결제 사전 안내 메일 — 결제 N일 전 (카드사 가이드라인 7일) */
 export const PRENOTICE_DAYS = PRICING.prenoticeDays;
 
+// ─── 결제 작업 토큰 ──────────────────────────────────────────────────────────
+// PG 청구를 시작한 요청이 토큰을 보유하는 동안 다른 구독 변경은 409. 토스 빌링 API 최대 응답 60초를
+// 넉넉히 넘기는 2분을 만료로 둔다 — 프로세스가 죽어 토큰이 남아도 2분 뒤 다음 작업이 인계한다.
+export const BILLING_OP_TIMEOUT_MS = 2 * 60 * 1000;
+
 // ─── 좌석 입력 범위 ──────────────────────────────────────────────────────────
 // 상한은 입력 실수(예: 9999) 방어용. 실제로 이만큼 필요하면 ENTERPRISE 문의 경로다.
 export const SEAT_INPUT_LIMITS = {
@@ -144,8 +208,12 @@ export const BILLING_ERROR_CODES = {
   CUSTOMER_KEY_MISMATCH: "BILLING_CUSTOMER_KEY_MISMATCH",
   /** PG 어댑터 미구현·설정 오류 */
   GATEWAY_UNAVAILABLE:  "BILLING_GATEWAY_UNAVAILABLE",
-  /** 같은 구독에 대한 결제 작업이 동시에 들어옴 — 하나만 처리하고 나머지는 거절 (이중 결제 방지) */
+  /** 같은 구독에 대한 결제 작업이 동시에 들어옴 — 하나만 처리하고 나머지는 거절 (이중 결제 방지·결제 중 변경 차단) */
   CONCURRENT_OPERATION: "BILLING_CONCURRENT_OPERATION",
+  /** 환불 조건 위반 (청약철회 7일·미사용, 잔액 초과 등) */
+  REFUND_NOT_ALLOWED:   "BILLING_REFUND_NOT_ALLOWED",
+  /** PG 는 승인했는데 구독 반영이 토큰 인계로 막힘 — 이력은 남았고 운영자 수동 대조 필요 */
+  RECONCILE_REQUIRED:   "BILLING_RECONCILE_REQUIRED",
   /** 프로젝트가 결제 잠금 상태 — 쓰기 차단 */
   PROJECT_LOCKED:       "PROJECT_LOCKED",
   /** 잠금 해제 조건 미충족 (멤버·좌석 상한 초과) */

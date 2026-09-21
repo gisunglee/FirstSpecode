@@ -1,35 +1,31 @@
 "use client";
 
 /**
- * 관리자 결제 화면 공용 — 상태 라벨·배지·날짜 포맷·페이저
+ * 관리자 결제 화면 공용 — 상태 배지·날짜 포맷·페이저
  *
  * page.tsx 는 Next.js 규칙상 default 외 export 를 둘 수 없어 목록·상세가 함께 쓰는 조각을 여기에 둔다.
+ * 라벨 문자열은 src/lib/billing/constants.ts 한 곳에서 온다(사용자 화면·회원 상세와 공용).
  */
 
 import { formatKstDate } from "@/lib/billing/pricing";
-import type { Pagination } from "@/lib/billing/admin";
+import { PAYMENT_STATUS_LABEL, SUBSCRIPTION_STATUS_LABEL } from "@/lib/billing/constants";
+import type { Pagination } from "@/lib/billing/admin-queries";
 
 export const SUB_STATUS_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: "LIVE",             label: "살아 있는 구독" },
-  { value: "",                 label: "전체" },
-  { value: "ACTIVE",           label: "이용 중" },
-  { value: "PAST_DUE",         label: "결제 실패 · 재시도 중" },
-  { value: "CANCEL_SCHEDULED", label: "해지 예약" },
-  { value: "CANCELED",         label: "해지됨" },
-  { value: "EXPIRED",          label: "결제 실패로 종료" },
+  { value: "LIVE", label: "살아 있는 구독" },
+  { value: "",     label: "전체" },
+  ...Object.entries(SUBSCRIPTION_STATUS_LABEL).map(([value, label]) => ({ value, label })),
 ];
 
-export const SUB_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  ACTIVE:           { label: "이용 중",   cls: "sp-badge-success" },
-  PAST_DUE:         { label: "재시도 중", cls: "sp-badge-error" },
-  CANCEL_SCHEDULED: { label: "해지 예약", cls: "sp-badge-warning" },
-  CANCELED:         { label: "해지됨",    cls: "sp-badge-neutral" },
-  EXPIRED:          { label: "실패 종료", cls: "sp-badge-neutral" },
+const SUB_STATUS_CLS: Record<string, string> = {
+  ACTIVE: "sp-badge-success", PAST_DUE: "sp-badge-error", CANCEL_SCHEDULED: "sp-badge-warning",
+  CANCELED: "sp-badge-neutral", EXPIRED: "sp-badge-neutral",
 };
 
-export const PAYMENT_TYPE_LABEL: Record<string, string> = {
-  INITIAL: "구독 시작", RECURRING: "정기 결제", SEAT_ADD: "좌석 추가", REFUND: "환불",
-};
+export function SubStatusBadge({ status }: { status: string }) {
+  const label = (SUBSCRIPTION_STATUS_LABEL as Record<string, string>)[status] ?? status;
+  return <span className={`sp-badge ${SUB_STATUS_CLS[status] ?? "sp-badge-neutral"}`}><span className="dot" />{label}</span>;
+}
 
 export function fmtDate(iso: string | null | undefined): string {
   return iso ? formatKstDate(new Date(iso)) : "-";
@@ -38,11 +34,13 @@ export function fmtDateTime(iso: string | null | undefined): string {
   return iso ? new Date(iso).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" }) : "-";
 }
 
+const PAY_STATUS_CLS: Record<string, string> = {
+  PAID: "sp-badge-success", FAILED: "sp-badge-error", PARTIALLY_REFUNDED: "sp-badge-warning", REFUNDED: "sp-badge-neutral",
+};
+
 export function PaymentStatusBadge({ status, title }: { status: string; title?: string }) {
-  if (status === "PAID")     return <span className="sp-badge sp-badge-success">완료</span>;
-  if (status === "FAILED")   return <span className="sp-badge sp-badge-error" title={title}>실패</span>;
-  if (status === "REFUNDED") return <span className="sp-badge sp-badge-neutral" title={title}>환불</span>;
-  return <span className="sp-badge sp-badge-neutral">{status}</span>;
+  const label = (PAYMENT_STATUS_LABEL as Record<string, string>)[status] ?? status;
+  return <span className={`sp-badge ${PAY_STATUS_CLS[status] ?? "sp-badge-neutral"}`} title={title}>{label}</span>;
 }
 
 export function Pager({ pg, page, setPage }: { pg: Pagination | undefined; page: number; setPage: (f: (p: number) => number) => void }) {

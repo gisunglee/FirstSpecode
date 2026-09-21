@@ -18,7 +18,7 @@ import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { runJob } from "@/lib/batch/runJob";
 import { requireBatchAuth } from "@/lib/batch/requireBatchAuth";
 import { BILLING_DAILY_JOB_TYPE, loadDailyTargets, processSubscriptionDaily, type DailyAction, type DailyTarget } from "@/lib/billing/daily";
-import { listAdminAlertRecipients } from "@/lib/billing/admin";
+import { listAdminAlertRecipients } from "@/lib/billing/admin-queries";
 import { sendAdminBillingAlertEmail } from "@/lib/billing/emails";
 
 // 관리자에게 알릴 동작 — 성공 갱신·사전 안내는 평상시 일이라 제외

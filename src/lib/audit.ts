@@ -25,43 +25,13 @@
 
 import { prisma } from "@/lib/prisma";
 
-/**
- * 감사 액션 타입 — 새 액션을 추가하려면 여기 추가하고 호출부에서 사용.
- * 허용 값만 저장되도록 은근히 강제.
- */
-export const AUDIT_ACTION_TYPES = [
-  "SUPPORT_SESSION_OPEN",
-  "SUPPORT_SESSION_END",
-  "SUPPORT_SESSION_EXPIRE",
-  "SUPPORT_SESSION_CLEANUP",   // 만료된 세션 일괄 정리 (관리자 버튼 실행)
-  "SYSTEM_ROLE_GRANT",         // 시스템 관리자 임명
-  "SYSTEM_ROLE_REVOKE",        // 시스템 관리자 해임 (+ 대상 활성 세션 일괄 종료)
-  "USER_SUSPEND",
-  "USER_UNSUSPEND",
-  "USER_UNLOCK",
-  "USER_FORCE_LOGOUT",
-  "USER_MCP_KEYS_REVOKE",
-  // 관리자가 회원 플랜·만료일을 수동 변경 (얼리 고객 BASIC, ENTERPRISE 부여 등).
-  // memo 에 "[대상: email] FREE → BASIC(~2026-12-31) 사유" 형식으로 전후 값을 남긴다.
-  "USER_PLAN_CHANGE",
-  "PROJECT_TRANSFER_OWNER",
-  // 어드민이 /admin/cleanup 에서 soft-deleted 프로젝트를 영구 삭제 실행한 기록.
-  // memo 에 "executed=N (expired=E, retained=R)" 형식으로 처리량을 적재한다.
-  "PROJECT_HARD_DELETE",
-  "TEMPLATE_CREATE",
-  "TEMPLATE_UPDATE",
-  "TEMPLATE_DELETE",
-  // 결제 운영 액션 (관리자 > 결제, 2026-09-21). memo 에 대상·전후 값·사유.
-  "BILLING_RETRY_CHARGE",      // PAST_DUE 구독 즉시 재결제
-  "BILLING_DEFER_BILL_DATE",   // 다음 결제일 N일 연기 (보상)
-  "BILLING_FORCE_TERMINATE",   // 구독 강제 종료 (CANCELED 경로)
-  "BILLING_REFUND_RECORD",     // PG 콘솔 환불 뒤 이력 기록
-  "PROJECT_FORCE_UNLOCK",      // 결제 잠금 해제 대행 (상한 초과 강제 포함)
-] as const;
-export type AuditActionType = (typeof AUDIT_ACTION_TYPES)[number];
-
-export const AUDIT_TARGET_TYPES = ["PROJECT", "USER", "TEMPLATE", "SUBSCRIPTION", "PAYMENT"] as const;
-export type AuditTargetType = (typeof AUDIT_TARGET_TYPES)[number];
+// 액션·대상 상수와 라벨은 순수 파일(auditTypes.ts)에 — 감사 화면(클라이언트)도 같은 것을 쓴다.
+export {
+  AUDIT_ACTION_TYPES, AUDIT_TARGET_TYPES, AUDIT_ACTION_LABEL, AUDIT_TARGET_LABEL,
+  type AuditActionType, type AuditTargetType,
+} from "@/lib/auditTypes";
+import type { AuditActionType, AuditTargetType } from "@/lib/auditTypes";
+import type { Prisma, PrismaClient } from "@prisma/client";
 
 export type LogAdminActionInput = {
   adminMberId: string;
@@ -94,4 +64,29 @@ export async function logAdminAction(input: LogAdminActionInput): Promise<void> 
     // 정말 중요한 경우(예: SUPPORT_SESSION_OPEN)에는 호출부에서 직접 응답 실패로 취급할 것.
     console.error("[logAdminAction] 감사 로그 기록 실패:", err, input);
   }
+}
+
+/**
+ * 감사 로그 기록 — **실패하면 throw** 하는 판. 돈이 움직이는 관리자 액션(환불 기록·강제 종료·결제일 연기·
+ * 잠금 해제 대행)은 상태 변경과 같은 트랜잭션에서 이 함수를 불러, 감사 행이 안 남으면 변경도 롤백되게 한다.
+ * PG 를 호출하는 액션(즉시 재결제)은 호출 전에 이 함수로 "시도" 행을 만들고 결과로 memo 를 갱신한다.
+ * 반환: audit_id
+ */
+export async function logAdminActionStrict(
+  db: PrismaClient | Prisma.TransactionClient,
+  input: LogAdminActionInput,
+): Promise<string> {
+  const row = await db.tbSysAdminAudit.create({
+    data: {
+      admin_mber_id: input.adminMberId,
+      action_type:   input.actionType,
+      target_type:   input.targetType ?? null,
+      target_id:     input.targetId   ?? null,
+      memo:          input.memo       ?? null,
+      ip_addr:       input.ipAddr     ?? null,
+      user_agent:    input.userAgent  ?? null,
+    },
+    select: { audit_id: true },
+  });
+  return row.audit_id;
 }

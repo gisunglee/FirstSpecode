@@ -16,13 +16,18 @@
  * 회원 plan_code / plan_expire_dt 는 "실효 플랜"의 미러다. 구독이 살아 있으면 BASIC/NULL,
  * 종료되면 FREE/NULL 로 여기서만 써 준다 → requirePermission·planLimits 는 그대로 동작.
  *
- * 동시성 원칙 (2026-09-20 점검 후 추가):
- *   "읽고 → PG 청구 → 저장" 사이에 같은 요청이 겹치면 PG 가 두 번 청구된다(더블클릭·새로고침·재시도).
- *   PG 호출을 DB 트랜잭션 안에 넣을 수 없으므로(pgbouncer 트랜잭션 풀링, 토스는 최대 60초) 낙관적
- *   잠금을 쓴다 — 청구 직전에 "내가 읽은 버전(mdfcn_dt)이 아직 그대로일 때만" 행을 선점(UPDATE ... WHERE
- *   mdfcn_dt = 읽은값)하고, 0건이면 다른 요청이 먼저 처리 중인 것이므로 청구 없이 409 로 끝낸다.
- *   대상: 첫 결제(회원 행 선점 — 구독 행이 아직 없을 수 있음)·좌석 추가·정기/재시도 결제.
- *   토스 어댑터를 붙일 때 Idempotency-Key·결제 상태 조회(UNKNOWN 복구)를 이 위에 얹는다.
+ * 동시성 원칙 — 결제 작업 토큰 (2026-09-21, 정책 §1-5):
+ *   PG 호출은 DB 트랜잭션 안에 넣을 수 없다(pgbouncer 트랜잭션 풀링, 토스 최대 60초). 그래서
+ *   "청구 시작 → PG 응답 → 결과 반영" 구간을 구독 행의 billing_op_token 으로 묶는다.
+ *     ① 청구 직전 beginBillingOperation — 읽은 버전(mdfcn_dt)이 그대로이고 토큰이 없거나 만료(2분)됐을 때만
+ *        토큰을 발급·선점. 실패면 다른 결제가 진행 중 → 청구 없이 물러난다(이중 결제 방지).
+ *     ② 그 사이 들어오는 다른 변경(연기·종료·해지·카드·좌석·탈퇴)은 guardedSubscriptionUpdate 가
+ *        "토큰이 없거나 만료됐을 때만" 갱신하고, 아니면 409 BILLING_CONCURRENT_OPERATION.
+ *        → "PG 응답 대기 중 관리자가 종료" 같은 상태 불일치를 막는다.
+ *     ③ 결제 결과 반영은 "내 토큰이 그대로일 때만". 0건이면(2분 넘어 다른 작업이 인계) 결제 이력은
+ *        남기고 구독은 건드리지 않은 채 CRITICAL 로그 → 운영자가 PG 콘솔과 대조해 수동 반영.
+ *   첫 결제는 구독 행이 없을 수 있어 회원 행(mdfcn_dt)을 선점한다.
+ *   토스 어댑터를 붙일 때 Idempotency-Key·결제 상태 조회(UNKNOWN 복구)를 이 토큰 위에 얹는다.
  *
  * 트랜잭션 원칙:
  *   PG 호출(외부)은 트랜잭션 밖에서, DB 반영은 한 트랜잭션으로. 결제는 성공했는데 DB 가 실패하면
@@ -30,8 +35,8 @@
  *   메일은 커밋 뒤에 await 로 보내고(서버리스에서 void 는 유실) 실패해도 흐름을 되돌리지 않는다(emails.ts).
  */
 
-import type { Prisma, PrismaClient, TbBlSubscription } from "@prisma/client";
-import { randomBytes } from "node:crypto";
+import type { Prisma, PrismaClient, TbBlPayment, TbBlSubscription } from "@prisma/client";
+import { randomBytes, randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { decryptBillingKey, encryptBillingKey } from "./billing-key";
 import { getMemberEffectivePlan } from "@/lib/planLimits";
@@ -39,6 +44,9 @@ import type { PlanCode } from "@/lib/permissions";
 import {
   BILLING_CALLBACK_PATH,
   BILLING_ERROR_CODES as E,
+  BILLING_OP_TIMEOUT_MS,
+  ENDED_REASON,
+  type EndedReason,
   isLiveSubscriptionStatus,
   PAYMENT_STATUS,
   PAYMENT_TYPE,
@@ -105,9 +113,13 @@ export type SubscriptionDto = {
   lastFailAt:         string | null;
   cancelRequestedAt:  string | null;
   endedAt:            string | null;
+  /** 종료 사유 (CANCELED/EXPIRED 일 때). 옛 데이터는 null */
+  endedReason:        EndedReason | null;
+  /** 지금 PG 청구가 진행 중(토큰 살아 있음) — 화면은 변경 버튼을 잠시 막는다 */
+  opInProgress:       boolean;
 };
 
-export function toSubscriptionDto(sub: TbBlSubscription): SubscriptionDto {
+export function toSubscriptionDto(sub: TbBlSubscription, now = new Date()): SubscriptionDto {
   const nextSeats = sub.pending_seat_cnt ?? sub.seat_cnt;
   return {
     subscriptionId:     sub.sbscrptn_id,
@@ -127,6 +139,8 @@ export function toSubscriptionDto(sub: TbBlSubscription): SubscriptionDto {
     lastFailAt:         sub.last_fail_dt?.toISOString() ?? null,
     cancelRequestedAt:  sub.cancel_reqst_dt?.toISOString() ?? null,
     endedAt:            sub.ended_dt?.toISOString() ?? null,
+    endedReason:        (sub.ended_rsn_code as EndedReason | null) ?? null,
+    opInProgress:       isBillingOperationLive(sub, now),
   };
 }
 
@@ -171,16 +185,14 @@ export type PaymentDto = {
   orderId:     string;
   approvedAt:  string | null;
   createdAt:   string;
+  /** REFUND 행: 원 결제 ID · 환불 유형. 그 외 null */
+  origPaymentId: string | null;
+  refundReason:  string | null;
 };
 
-/** 결제 내역 — 최신순. 첫 결제 실패(구독 행 없음)도 mber_id 로 함께 나온다 */
-export async function listPayments(mberId: string, limit = 50): Promise<PaymentDto[]> {
-  const rows = await prisma.tbBlPayment.findMany({
-    where:   { mber_id: mberId },
-    orderBy: { creat_dt: "desc" },
-    take:    limit,
-  });
-  return rows.map((p) => ({
+/** 결제 행 → DTO. 사용자 화면·관리자 화면이 같은 매핑을 쓴다 (한 곳) */
+export function toPaymentDto(p: TbBlPayment): PaymentDto {
+  return {
     paymentId:   p.pymnt_id,
     type:        p.pymnt_ty_code as PaymentType,
     status:      p.pymnt_sttus_code,
@@ -193,7 +205,19 @@ export async function listPayments(mberId: string, limit = 50): Promise<PaymentD
     orderId:     p.pg_order_id,
     approvedAt:  p.apprv_dt?.toISOString() ?? null,
     createdAt:   p.creat_dt.toISOString(),
-  }));
+    origPaymentId: p.orig_pymnt_id,
+    refundReason:  p.refund_rsn_code,
+  };
+}
+
+/** 결제 내역 — 최신순. 첫 결제 실패(구독 행 없음)도 mber_id 로 함께 나온다 */
+export async function listPayments(mberId: string, limit = 50): Promise<PaymentDto[]> {
+  const rows = await prisma.tbBlPayment.findMany({
+    where:   { mber_id: mberId },
+    orderBy: { creat_dt: "desc" },
+    take:    limit,
+  });
+  return rows.map(toPaymentDto);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -302,17 +326,14 @@ export async function completeCardRegistration(
   if (!sub || !isLiveSubscriptionStatus(sub.sbscrptn_sttus_code)) {
     throw new BillingError(E.NO_SUBSCRIPTION, "변경할 구독이 없습니다.", 404);
   }
-  const updated = await prisma.tbBlSubscription.update({
-    where: { sbscrptn_id: sub.sbscrptn_id },
-    data: {
-      billing_key:     encryptBillingKey(issued.billingKey),
-      card_co_nm:      issued.cardCompany,
-      card_no_masked:  issued.cardNumberMasked,
-      pg_provdr_code:  gw.provider,
-      pg_customer_key: input.customerKey,
-      mdfcn_dt:        now,
-    },
-  });
+  // 청구 진행 중이면 카드를 바꾸지 않는다 — 결과 반영과 교차하면 어느 카드로 결제됐는지 흐려진다
+  const updated = await guardedSubscriptionUpdate(sub.sbscrptn_id, {
+    billing_key:     encryptBillingKey(issued.billingKey),
+    card_co_nm:      issued.cardCompany,
+    card_no_masked:  issued.cardNumberMasked,
+    pg_provdr_code:  gw.provider,
+    pg_customer_key: input.customerKey,
+  }, now);
 
   // 재시도 중이었다면 새 카드로 바로 청구 — 사용자가 3일을 기다리지 않게
   let retry: RecurringChargeResult | null = null;
@@ -420,6 +441,9 @@ async function activateSubscription(
         last_fail_dt:        null,
         cancel_reqst_dt:     null,
         ended_dt:            null,
+        ended_rsn_code:      null,
+        billing_op_token:    null,
+        billing_op_started_dt: null,
         mdfcn_dt:            now,
       },
     });
@@ -539,9 +563,8 @@ export async function changeSeats(actor: BillingActorRef, seatCnt: number, now =
       throw new BillingError(E.INVALID_STATE, "일할 결제 금액이 0원이라 좌석을 추가할 수 없습니다. 정기 결제 뒤 다시 시도해 주세요.", 409);
     }
     // 이중 결제 방지 — 같은 구독 행을 다른 요청이 먼저 선점했으면 청구하지 않는다
-    if (!(await claimSubscriptionVersion(active, now))) {
-      throw concurrentOperationError();
-    }
+    const opToken = await beginBillingOperation(active, now);
+    if (!opToken) throw concurrentOperationError();
 
     const gw      = getPaymentGateway();
     const orderId = newOrderId(now);
@@ -562,13 +585,15 @@ export async function changeSeats(actor: BillingActorRef, seatCnt: number, now =
           fail_rsn_cn: `${charge.code}: ${charge.message}`,
         },
       });
+      await releaseBillingOperation(active.sbscrptn_id, opToken, now);
       throw new BillingError(E.PAYMENT_FAILED, `좌석 추가 결제가 거절되었습니다. ${charge.message}`, 402, { pgCode: charge.code });
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      const s = await tx.tbBlSubscription.update({
-        where: { sbscrptn_id: active.sbscrptn_id },
-        data:  { seat_cnt: seatCnt, pending_seat_cnt: null, mdfcn_dt: now },
+      // 내 토큰이 그대로일 때만 반영 — 2분 넘어 다른 작업이 인계했으면 구독은 건드리지 않는다
+      const applied = await tx.tbBlSubscription.updateMany({
+        where: { sbscrptn_id: active.sbscrptn_id, billing_op_token: opToken },
+        data:  { seat_cnt: seatCnt, pending_seat_cnt: null, billing_op_token: null, billing_op_started_dt: null, mdfcn_dt: now },
       });
       await tx.tbBlPayment.create({
         data: paidPaymentData({
@@ -577,7 +602,23 @@ export async function changeSeats(actor: BillingActorRef, seatCnt: number, now =
           paymentKey: charge.paymentKey, receiptUrl: charge.receiptUrl, approvedAt: charge.approvedAt,
         }),
       });
-      return s;
+      if (applied.count !== 1) {
+        console.error(`[billing] CRITICAL 좌석 추가 결제는 승인(${orderId})됐으나 구독 반영 실패 — 토큰 인계됨. sub=${active.sbscrptn_id} 수동 대조 필요`);
+        throw new BillingError(E.RECONCILE_REQUIRED, "결제는 완료되었지만 구독 반영이 지연되었습니다. 운영자가 확인 후 반영합니다.", 500);
+      }
+      return (await tx.tbBlSubscription.findUniqueOrThrow({ where: { sbscrptn_id: active.sbscrptn_id } }));
+    }).catch(async (err) => {
+      // 결제 이력이 롤백되지 않도록 — 반영 실패 시 이력만 다시 남긴다
+      if (err instanceof BillingError && err.code === E.RECONCILE_REQUIRED) {
+        await prisma.tbBlPayment.create({
+          data: paidPaymentData({
+            sbscrptnId: active.sbscrptn_id, mberId: actor.mberId, type: PAYMENT_TYPE.SEAT_ADD, amount: pr.amount,
+            seatCnt: addSeats, periodStart: now, periodEnd: active.crrnt_perd_end_dt!, provider: gw.provider, orderId,
+            paymentKey: charge.paymentKey, receiptUrl: charge.receiptUrl, approvedAt: charge.approvedAt,
+          }),
+        }).catch((e) => console.error("[billing] CRITICAL 결제 이력 기록도 실패:", e));
+      }
+      throw err;
     });
 
     await sendPaymentReceiptEmail({
@@ -590,10 +631,7 @@ export async function changeSeats(actor: BillingActorRef, seatCnt: number, now =
 
   // ── 축소: 다음 결제일 적용 예약 ─────────────────────────────────────────
   if (seatCnt < sub.seat_cnt) {
-    const updated = await prisma.tbBlSubscription.update({
-      where: { sbscrptn_id: sub.sbscrptn_id },
-      data:  { pending_seat_cnt: seatCnt, mdfcn_dt: now },
-    });
+    const updated = await guardedSubscriptionUpdate(sub.sbscrptn_id, { pending_seat_cnt: seatCnt }, now);
     return {
       action: "REDUCE_SCHEDULED", seatCnt: sub.seat_cnt, pendingSeatCnt: seatCnt,
       appliesAt: sub.next_bill_dt?.toISOString() ?? null, subscription: toSubscriptionDto(updated),
@@ -602,10 +640,7 @@ export async function changeSeats(actor: BillingActorRef, seatCnt: number, now =
 
   // ── 같음: 축소 예약 취소 ────────────────────────────────────────────────
   if (sub.pending_seat_cnt !== null) {
-    const updated = await prisma.tbBlSubscription.update({
-      where: { sbscrptn_id: sub.sbscrptn_id },
-      data:  { pending_seat_cnt: null, mdfcn_dt: now },
-    });
+    const updated = await guardedSubscriptionUpdate(sub.sbscrptn_id, { pending_seat_cnt: null }, now);
     return { action: "REDUCE_CANCELED", seatCnt, subscription: toSubscriptionDto(updated) };
   }
   return { action: "NO_CHANGE", seatCnt, subscription: toSubscriptionDto(sub) };
@@ -637,15 +672,12 @@ export async function cancelSubscription(actor: BillingActorRef, now = new Date(
   }
 
   if (sub.sbscrptn_sttus_code === S.PAST_DUE) {
-    await terminateSubscription(sub, S.CANCELED, now, actor.email);
+    await terminateSubscription(sub, S.CANCELED, now, actor.email, ENDED_REASON.USER_CANCEL);
     const ended = (await findSubscription(actor.mberId))!;
     return { status: S.CANCELED, periodEnd: null, subscription: toSubscriptionDto(ended) };
   }
 
-  const updated = await prisma.tbBlSubscription.update({
-    where: { sbscrptn_id: sub.sbscrptn_id },
-    data:  { sbscrptn_sttus_code: S.CANCEL_SCHEDULED, cancel_reqst_dt: now, mdfcn_dt: now },
-  });
+  const updated = await guardedSubscriptionUpdate(sub.sbscrptn_id, { sbscrptn_sttus_code: S.CANCEL_SCHEDULED, cancel_reqst_dt: now }, now);
   if (updated.crrnt_perd_end_dt) {
     await sendCancelConfirmedEmail({ to: actor.email, productName: product.name, periodEnd: updated.crrnt_perd_end_dt });
   }
@@ -661,10 +693,7 @@ export async function uncancelSubscription(actor: BillingActorRef, now = new Dat
   if (sub.crrnt_perd_end_dt && sub.crrnt_perd_end_dt <= now) {
     throw new BillingError(E.INVALID_STATE, "이용 기간이 이미 끝나 해지를 취소할 수 없습니다. 새로 구독해 주세요.", 409);
   }
-  const updated = await prisma.tbBlSubscription.update({
-    where: { sbscrptn_id: sub.sbscrptn_id },
-    data:  { sbscrptn_sttus_code: S.ACTIVE, cancel_reqst_dt: null, mdfcn_dt: now },
-  });
+  const updated = await guardedSubscriptionUpdate(sub.sbscrptn_id, { sbscrptn_sttus_code: S.ACTIVE, cancel_reqst_dt: null }, now);
   return toSubscriptionDto(updated);
 }
 
@@ -673,7 +702,8 @@ export async function uncancelSubscription(actor: BillingActorRef, now = new Dat
 // ═══════════════════════════════════════════════════════════════════════════
 
 export type RecurringChargeResult =
-  | { ok: true;  periodEnd: Date; amount: number; seatCnt: number }
+  /** applied=false: 결제는 승인됐지만 토큰이 인계돼 구독에 반영하지 못함 — 이력만 남김, 운영자 수동 대조 */
+  | { ok: true;  periodEnd: Date; amount: number; seatCnt: number; applied: boolean }
   | { ok: false; expired: boolean; failCnt: number; reason: string; skipped?: false }
   /** 다른 요청(배치·카드 변경)이 같은 구독을 먼저 청구 중 — 시도하지 않았고 실패로 세지도 않는다 */
   | { ok: false; skipped: true; expired: false; failCnt: number; reason: string };
@@ -691,7 +721,8 @@ export async function attemptRecurringCharge(
   kind: "RENEWAL" | "RETRY",
 ): Promise<RecurringChargeResult> {
   // 이중 결제 방지 — 배치와 카드 변경 즉시 재결제가 겹칠 수 있다. 선점 실패면 청구 없이 물러난다.
-  if (!(await claimSubscriptionVersion(sub, now))) {
+  const opToken = await beginBillingOperation(sub, now);
+  if (!opToken) {
     return { ok: false, skipped: true, expired: false, failCnt: sub.fail_cnt, reason: "다른 결제 처리가 진행 중" };
   }
 
@@ -722,9 +753,18 @@ export async function attemptRecurringCharge(
 
   // ── 성공 ────────────────────────────────────────────────────────────────
   if (chargeResult.ok) {
-    const updated = await prisma.$transaction(async (tx) => {
-      const s = await tx.tbBlSubscription.update({
-        where: { sbscrptn_id: sub.sbscrptn_id },
+    const applied = await prisma.$transaction(async (tx) => {
+      // 결제 이력은 무조건 남긴다 — 돈이 움직였다
+      await tx.tbBlPayment.create({
+        data: paidPaymentData({
+          sbscrptnId: sub.sbscrptn_id, mberId: sub.mber_id, type: PAYMENT_TYPE.RECURRING, amount, seatCnt,
+          periodStart, periodEnd, provider: gw.provider, orderId,
+          paymentKey: chargeResult.paymentKey, receiptUrl: chargeResult.receiptUrl, approvedAt: chargeResult.approvedAt,
+        }),
+      });
+      // 구독 반영은 내 토큰이 그대로일 때만 (토큰 인계 = 2분 초과 → 다른 작업이 상태를 바꿨을 수 있음)
+      const r = await tx.tbBlSubscription.updateMany({
+        where: { sbscrptn_id: sub.sbscrptn_id, billing_op_token: opToken },
         data: {
           sbscrptn_sttus_code: S.ACTIVE,
           seat_cnt:            seatCnt,
@@ -735,25 +775,26 @@ export async function attemptRecurringCharge(
           prentc_dt:           null,
           fail_cnt:            0,
           last_fail_dt:        null,
+          billing_op_token:    null,
+          billing_op_started_dt: null,
           mdfcn_dt:            now,
         },
       });
-      await tx.tbBlPayment.create({
-        data: paidPaymentData({
-          sbscrptnId: sub.sbscrptn_id, mberId: sub.mber_id, type: PAYMENT_TYPE.RECURRING, amount, seatCnt,
-          periodStart, periodEnd, provider: gw.provider, orderId,
-          paymentKey: chargeResult.paymentKey, receiptUrl: chargeResult.receiptUrl, approvedAt: chargeResult.approvedAt,
-        }),
-      });
+      if (r.count !== 1) return false;
       await mirrorPlan(tx, sub.mber_id, product.planCode, now);
       await unlockAllOwnedProjects(sub.mber_id, tx);
-      return s;
+      return true;
     });
+    if (!applied) {
+      console.error(`[billing] CRITICAL 정기 결제 승인(${orderId})됐으나 구독 반영 실패 — 토큰 인계됨. sub=${sub.sbscrptn_id} 수동 대조 필요`);
+      return { ok: true, periodEnd, amount, seatCnt, applied: false };
+    }
+    const updated = (await prisma.tbBlSubscription.findUnique({ where: { sbscrptn_id: sub.sbscrptn_id } })) ?? sub;
     await sendPaymentReceiptEmail({
       to: email, productName: product.name, kind: "RECURRING", amount, seatCnt, periodStart, periodEnd,
       cardLabel: cardLabel(updated), receiptUrl: chargeResult.receiptUrl, nextBillAt: periodEnd,
     });
-    return { ok: true, periodEnd, amount, seatCnt };
+    return { ok: true, periodEnd, amount, seatCnt, applied: true };
   }
 
   // ── 실패 ────────────────────────────────────────────────────────────────
@@ -768,21 +809,29 @@ export async function attemptRecurringCharge(
     },
   });
 
-  // 초기 실패(1) + 재시도 3회(2,3,4) 를 다 쓰면 강등
+  // 초기 실패(1) + 재시도 3회(2,3,4) 를 다 쓰면 강등 — 종료는 내 토큰으로 이어서 처리
   if (failCnt > RETRY_POLICY.maxRetryCount) {
-    await prisma.tbBlSubscription.update({
-      where: { sbscrptn_id: sub.sbscrptn_id },
+    const r = await prisma.tbBlSubscription.updateMany({
+      where: { sbscrptn_id: sub.sbscrptn_id, billing_op_token: opToken },
       data:  { fail_cnt: failCnt, last_fail_dt: now, mdfcn_dt: now },
     });
+    if (r.count !== 1) {
+      console.error(`[billing] 결제 실패 반영 실패 — 토큰 인계됨. sub=${sub.sbscrptn_id}`);
+      return { ok: false, expired: false, failCnt, reason };
+    }
     const latest = (await prisma.tbBlSubscription.findUnique({ where: { sbscrptn_id: sub.sbscrptn_id } }))!;
-    await terminateSubscription(latest, S.EXPIRED, now, email);
+    await terminateSubscription(latest, S.EXPIRED, now, email, ENDED_REASON.PAYMENT_RETRY_EXHAUSTED, { opToken });
     return { ok: false, expired: true, failCnt, reason };
   }
 
-  await prisma.tbBlSubscription.update({
-    where: { sbscrptn_id: sub.sbscrptn_id },
-    data:  { sbscrptn_sttus_code: S.PAST_DUE, fail_cnt: failCnt, last_fail_dt: now, mdfcn_dt: now },
+  const r = await prisma.tbBlSubscription.updateMany({
+    where: { sbscrptn_id: sub.sbscrptn_id, billing_op_token: opToken },
+    data:  { sbscrptn_sttus_code: S.PAST_DUE, fail_cnt: failCnt, last_fail_dt: now, billing_op_token: null, billing_op_started_dt: null, mdfcn_dt: now },
   });
+  if (r.count !== 1) {
+    console.error(`[billing] 결제 실패 반영 실패 — 토큰 인계됨. sub=${sub.sbscrptn_id}`);
+    return { ok: false, expired: false, failCnt, reason };
+  }
   await sendPaymentFailedEmail({
     to: email, productName: product.name, amount, attemptNo: failCnt,
     nextRetryAt: addDays(now, RETRY_POLICY.intervalDays), reason: chargeResult.message,
@@ -791,44 +840,77 @@ export async function attemptRecurringCharge(
   return { ok: false, expired: false, failCnt, reason };
 }
 
+export type TerminationStatus = typeof S.CANCELED | typeof S.EXPIRED;
+export type TerminationResult = { lockedCount: number; autoUnlockedProjectId: string | null };
+
+/**
+ * 구독 종료의 트랜잭션 본체 — 상태·종료 사유·빌링키 삭제·FREE 미러·잠금·자동 해제.
+ *   status: CANCELED(해지·탈퇴·관리자·환불) | EXPIRED(재시도 소진)
+ *   endedReason: 왜 끝났는지 (ended_rsn_code)
+ *   opToken: 결제 작업 안에서 이어서 종료할 때(재시도 소진) 내 토큰. 없으면 "토큰 없음/만료" 조건으로 갱신.
+ * 조건에 맞는 행이 없으면(다른 결제 작업 진행 중) 409 — 호출자의 트랜잭션이 롤백된다.
+ * 관리자 환불(청약철회)처럼 같은 트랜잭션에서 다른 일을 함께 해야 하는 호출자가 쓴다.
+ */
+export async function terminateSubscriptionTx(
+  tx: Prisma.TransactionClient,
+  sub: TbBlSubscription,
+  status: TerminationStatus,
+  now: Date,
+  endedReason: EndedReason,
+  opts: { opToken?: string } = {},
+): Promise<TerminationResult> {
+  const r = await tx.tbBlSubscription.updateMany({
+    where: { sbscrptn_id: sub.sbscrptn_id, ...opTokenWhere(opts.opToken, now) },
+    data: {
+      sbscrptn_sttus_code: status,
+      ended_dt:            now,
+      ended_rsn_code:      endedReason,
+      billing_key:         null,
+      pending_seat_cnt:    null,
+      next_bill_dt:        null,
+      billing_op_token:    null,
+      billing_op_started_dt: null,
+      mdfcn_dt:            now,
+    },
+  });
+  if (r.count !== 1) throw concurrentOperationError();
+  await mirrorPlan(tx, sub.mber_id, "FREE", now);
+  const lockedCount = await lockAllOwnedProjects(sub.mber_id, now, tx);
+  const autoUnlockedProjectId = await autoUnlockIfSingle(sub.mber_id, tx);
+  return { lockedCount: autoUnlockedProjectId ? lockedCount - 1 : lockedCount, autoUnlockedProjectId };
+}
+
+/** 종료 안내 메일 — 커밋 뒤에 호출 (잠긴 수·자동 해제 프로젝트명 포함) */
+export async function sendTerminationNotice(
+  sub: TbBlSubscription,
+  status: TerminationStatus,
+  email: string | null,
+  result: TerminationResult,
+): Promise<void> {
+  if (!email) return;
+  const autoName = result.autoUnlockedProjectId
+    ? (await prisma.tbPjProject.findUnique({ where: { prjct_id: result.autoUnlockedProjectId }, select: { prjct_nm: true } }))?.prjct_nm ?? null
+    : null;
+  await sendDowngradedEmail({
+    to: email, productName: product.name, reason: status,
+    lockedCount: await countLockedProjects(sub.mber_id), autoUnlockedProjectName: autoName,
+  });
+}
+
 /**
  * 구독 종료 → FREE 강등 + 소유 프로젝트 전부 잠금 (+ 1개뿐이면 자동 해제) + 안내 메일.
- *   reason: CANCELED(해지 확정) | EXPIRED(재시도 소진)
  * 빌링키는 지운다 — 종료된 구독으로 다시 출금될 길을 없앤다. 재구독은 카드를 다시 등록한다.
  */
 export async function terminateSubscription(
   sub: TbBlSubscription,
-  reason: typeof S.CANCELED | typeof S.EXPIRED,
+  status: TerminationStatus,
   now: Date,
   email: string | null,
-): Promise<{ lockedCount: number; autoUnlockedProjectId: string | null }> {
-  const result = await prisma.$transaction(async (tx) => {
-    await tx.tbBlSubscription.update({
-      where: { sbscrptn_id: sub.sbscrptn_id },
-      data: {
-        sbscrptn_sttus_code: reason,
-        ended_dt:            now,
-        billing_key:         null,
-        pending_seat_cnt:    null,
-        next_bill_dt:        null,
-        mdfcn_dt:            now,
-      },
-    });
-    await mirrorPlan(tx, sub.mber_id, "FREE", now);
-    const lockedCount = await lockAllOwnedProjects(sub.mber_id, now, tx);
-    const autoUnlockedProjectId = await autoUnlockIfSingle(sub.mber_id, tx);
-    return { lockedCount: autoUnlockedProjectId ? lockedCount - 1 : lockedCount, autoUnlockedProjectId };
-  });
-
-  if (email) {
-    const autoName = result.autoUnlockedProjectId
-      ? (await prisma.tbPjProject.findUnique({ where: { prjct_id: result.autoUnlockedProjectId }, select: { prjct_nm: true } }))?.prjct_nm ?? null
-      : null;
-    await sendDowngradedEmail({
-      to: email, productName: product.name, reason,
-      lockedCount: await countLockedProjects(sub.mber_id), autoUnlockedProjectName: autoName,
-    });
-  }
+  endedReason: EndedReason,
+  opts: { opToken?: string } = {},
+): Promise<TerminationResult> {
+  const result = await prisma.$transaction((tx) => terminateSubscriptionTx(tx, sub, status, now, endedReason, opts));
+  await sendTerminationNotice(sub, status, email, result);
   return result;
 }
 
@@ -839,18 +921,23 @@ export async function terminateSubscription(
 export async function withdrawSubscription(tx: Prisma.TransactionClient, mberId: string, now: Date): Promise<boolean> {
   const sub = await findSubscription(mberId, tx);
   if (!sub || !isLiveSubscriptionStatus(sub.sbscrptn_sttus_code)) return false;
-  await tx.tbBlSubscription.update({
-    where: { sbscrptn_id: sub.sbscrptn_id },
+  // 청구 진행 중이면 탈퇴를 잠시 막는다(409) — 결제 결과와 교차하면 "돈은 받고 탈퇴" 가 된다. 몇 초 뒤 재시도로 충분
+  const r = await tx.tbBlSubscription.updateMany({
+    where: { sbscrptn_id: sub.sbscrptn_id, ...opTokenWhere(undefined, now) },
     data: {
       sbscrptn_sttus_code: S.CANCELED,
       cancel_reqst_dt:     sub.cancel_reqst_dt ?? now,
       ended_dt:            now,
+      ended_rsn_code:      ENDED_REASON.MEMBER_WITHDRAWAL,
       billing_key:         null,
       pending_seat_cnt:    null,
       next_bill_dt:        null,
+      billing_op_token:    null,
+      billing_op_started_dt: null,
       mdfcn_dt:            now,
     },
   });
+  if (r.count !== 1) throw concurrentOperationError();
   return true;
 }
 
@@ -866,21 +953,69 @@ async function mirrorPlan(db: Db, mberId: string, planCode: PlanCode, now: Date)
   });
 }
 
+// ─── 결제 작업 토큰 ──────────────────────────────────────────────────────────
+
+/** 토큰이 살아 있는가 — 있고, 발급 후 만료 시간(2분)이 지나지 않았다 */
+export function isBillingOperationLive(sub: TbBlSubscription, now: Date): boolean {
+  return !!sub.billing_op_token && !!sub.billing_op_started_dt &&
+    sub.billing_op_started_dt.getTime() > now.getTime() - BILLING_OP_TIMEOUT_MS;
+}
+
 /**
- * 낙관적 잠금 — 구독 행의 mdfcn_dt 를 버전으로 쓴다.
- * "내가 읽은 mdfcn_dt 가 아직 그대로일 때만" 새 값으로 바꾸는 UPDATE 는 원자적이라, 같은 행을 두 요청이
- * 동시에 읽어도 한 쪽만 1건을 갱신한다. 새 값은 읽은 값보다 항상 크게 잡아(같은 ms 방어) 두 번째 요청이
- * 같은 버전으로 다시 선점하지 못하게 한다. 별도 version 컬럼 없이 되는 이유는 이 도메인의 모든 갱신이
- * mdfcn_dt 를 함께 쓰기 때문이다.
- * 반환: 선점 성공 여부
+ * "이 갱신을 지금 해도 되는가" 의 WHERE 조각.
+ *   opToken 있음 → 내 토큰이 그대로일 때만 (결제 작업 안에서 이어서 갱신)
+ *   opToken 없음 → 토큰이 없거나 만료됐을 때만 (결제 작업 밖의 일반 변경)
  */
-async function claimSubscriptionVersion(sub: TbBlSubscription, now: Date): Promise<boolean> {
+function opTokenWhere(opToken: string | undefined, now: Date): Prisma.TbBlSubscriptionWhereInput {
+  if (opToken) return { billing_op_token: opToken };
+  return {
+    OR: [
+      { billing_op_token: null },
+      { billing_op_started_dt: { lt: new Date(now.getTime() - BILLING_OP_TIMEOUT_MS) } },
+    ],
+  };
+}
+
+/**
+ * 결제 작업 시작 — 읽은 버전(mdfcn_dt)이 그대로이고 토큰이 없거나 만료됐을 때만 내 토큰을 심는다.
+ * UPDATE 한 문장이 원자적이라 두 요청이 같은 행을 동시에 읽어도 한 쪽만 1건을 갱신한다.
+ * mdfcn_dt 도 함께 올려 두어(읽은 값 +1ms 이상) 같은 버전으로 다시 선점하지 못하게 한다.
+ * 반환: 발급된 토큰 또는 null(다른 결제 진행 중)
+ */
+async function beginBillingOperation(sub: TbBlSubscription, now: Date): Promise<string | null> {
+  const token   = randomUUID();
   const claimAt = new Date(Math.max(now.getTime(), sub.mdfcn_dt.getTime() + 1));
   const r = await prisma.tbBlSubscription.updateMany({
-    where: { sbscrptn_id: sub.sbscrptn_id, mdfcn_dt: sub.mdfcn_dt },
-    data:  { mdfcn_dt: claimAt },
+    where: { sbscrptn_id: sub.sbscrptn_id, mdfcn_dt: sub.mdfcn_dt, ...opTokenWhere(undefined, now) },
+    data:  { billing_op_token: token, billing_op_started_dt: now, mdfcn_dt: claimAt },
   });
-  return r.count === 1;
+  return r.count === 1 ? token : null;
+}
+
+/** 결제 작업 해제 — 청구가 거절돼 반영할 것이 없을 때. 내 토큰일 때만 지운다 */
+async function releaseBillingOperation(sbscrptnId: string, opToken: string, now: Date): Promise<void> {
+  await prisma.tbBlSubscription.updateMany({
+    where: { sbscrptn_id: sbscrptnId, billing_op_token: opToken },
+    data:  { billing_op_token: null, billing_op_started_dt: null, mdfcn_dt: now },
+  });
+}
+
+/**
+ * 결제 작업 밖의 일반 변경(해지·해지 취소·축소 예약·카드 교체·연기 등) — 토큰이 없거나 만료됐을 때만.
+ * 0건이면 지금 PG 청구가 진행 중 → 409. 성공 시 갱신된 행을 돌려준다.
+ */
+export async function guardedSubscriptionUpdate(
+  sbscrptnId: string,
+  data: Prisma.TbBlSubscriptionUpdateManyMutationInput,
+  now: Date,
+  db: Db = prisma,
+): Promise<TbBlSubscription> {
+  const r = await db.tbBlSubscription.updateMany({
+    where: { sbscrptn_id: sbscrptnId, ...opTokenWhere(undefined, now) },
+    data:  { ...data, mdfcn_dt: now },
+  });
+  if (r.count !== 1) throw concurrentOperationError();
+  return db.tbBlSubscription.findUniqueOrThrow({ where: { sbscrptn_id: sbscrptnId } });
 }
 
 /**
@@ -899,7 +1034,7 @@ async function claimMemberForBilling(mberId: string, now: Date): Promise<boolean
   return r.count === 1;
 }
 
-function concurrentOperationError(): BillingError {
+export function concurrentOperationError(): BillingError {
   return new BillingError(
     E.CONCURRENT_OPERATION,
     "같은 구독에 대한 결제 처리가 이미 진행 중입니다. 잠시 후 구독 화면을 새로 고쳐 결과를 확인해 주세요.",

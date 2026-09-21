@@ -19,6 +19,7 @@
     "db:migrate:project-owner-step2": "dotenv -e .env.local -- prisma db execute --schema prisma/schema.prisma --file prisma/sql/2026-09-19_add_project_owner_step2.sql",
     "db:migrate:billing": "dotenv -e .env.local -- prisma db execute --schema prisma/schema.prisma --file prisma/sql/2026-09-20_create_billing.sql",
     "db:migrate:billing-drop-settings-plan": "dotenv -e .env.local -- prisma db execute --schema prisma/schema.prisma --file prisma/sql/2026-09-20_drop_project_settings_plan_code.sql",
+    "db:migrate:billing-admin-ops": "dotenv -e .env.local -- prisma db execute --schema prisma/schema.prisma --file prisma/sql/2026-09-21_billing_admin_ops.sql",
     "test:billing:db": "dotenv -e .env.local -- npx tsx scripts/billing-flow-db-smoke.ts",
     "db:migrate:memo-purpose": "dotenv -e .env.local -- prisma db execute --schema prisma/schema.prisma --file prisma/sql/2026-08-31_add_memo_purpose.sql",
     "db:migrate:spec-creator-permissions": "dotenv -e .env.local -- node scripts/run-spec-creator-permissions-migration.mjs",

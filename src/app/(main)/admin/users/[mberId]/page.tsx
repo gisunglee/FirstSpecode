@@ -22,7 +22,7 @@ import { useIsSystemAdmin } from "@/hooks/useMyRole";
 import { PLAN_CODES, type PlanCode } from "@/lib/permissions";
 import type { SubscriptionDto } from "@/lib/billing/subscription";
 import type { PaidFeatureUsage } from "@/lib/billing/paidUsage";
-import { isLiveSubscriptionStatus } from "@/lib/billing/constants";
+import { isLiveSubscriptionStatus, SUBSCRIPTION_STATUS_LABEL } from "@/lib/billing/constants";
 import { formatKstDate, formatWon } from "@/lib/billing/pricing";
 
 type UserDetail = {
@@ -771,13 +771,6 @@ function AccessActionModal({
 // ─── 구독·결제 요약 ────────────────────────────────────────────────────
 // 관리자 구독 목록 화면은 만들지 않는다(정책 §1-10). 회원 상세에서 구독 상태와
 // 환불 판정 플래그(결제 후 ② 프로젝트 생성 / 6번째 편집 멤버 / 첨부 업로드)만 보여 준다.
-const SUB_STATUS_LABEL: Record<string, string> = {
-  ACTIVE:           "이용 중",
-  PAST_DUE:         "결제 실패 · 재시도 중",
-  CANCEL_SCHEDULED: "해지 예약",
-  CANCELED:         "해지됨",
-  EXPIRED:          "결제 실패로 종료",
-};
 
 function BillingSummarySection({ subscription, usage }: { subscription: SubscriptionDto | null; usage: PaidFeatureUsage }) {
   const flag = (v: boolean) => (
@@ -805,7 +798,7 @@ function BillingSummarySection({ subscription, usage }: { subscription: Subscrip
       ) : (
         <div style={{ display: "flex", gap: 20, flexWrap: "wrap", fontSize: "var(--text-xs)", marginBottom: "var(--space-4)" }}>
           <InfoItem label="상품" value={subscription.productName} />
-          <InfoItem label="상태" value={SUB_STATUS_LABEL[subscription.status] ?? subscription.status} />
+          <InfoItem label="상태" value={SUBSCRIPTION_STATUS_LABEL[subscription.status] ?? subscription.status} />
           <InfoItem label="좌석" value={`${subscription.seatCnt}개${subscription.pendingSeatCnt !== null ? ` → ${subscription.pendingSeatCnt}개 예약` : ""}`} />
           <InfoItem label="다음 결제" value={subscription.nextBillAt ? `${formatKstDate(new Date(subscription.nextBillAt))} · ${formatWon(subscription.nextChargeAmount)}` : "-"} />
           <InfoItem label="결제 수단" value={subscription.card ? `${subscription.card.company} ${subscription.card.numberMasked}` : "-"} />

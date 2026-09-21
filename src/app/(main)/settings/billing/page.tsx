@@ -25,25 +25,19 @@ import { authFetch, AuthFetchError } from "@/lib/authFetch";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 import type { BillingOverview, PaymentDto, SeatAdditionPreview, SeatChangeResult, CancelResult, SubscriptionDto } from "@/lib/billing/subscription";
 import type { CardRegistrationStart } from "@/lib/billing/gateway";
-import { SEAT_INPUT_LIMITS, SUBSCRIPTION_STATUS as S } from "@/lib/billing/constants";
+import { PAYMENT_STATUS_LABEL, PAYMENT_TYPE_LABEL, SEAT_INPUT_LIMITS, SUBSCRIPTION_STATUS as S, SUBSCRIPTION_STATUS_LABEL } from "@/lib/billing/constants";
 import { formatKstDate, formatWon } from "@/lib/billing/pricing";
 
 // ─── 표시 라벨 ────────────────────────────────────────────────────────────────
 
-const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  ACTIVE:           { label: "이용 중",              cls: "sp-badge-success" },
-  PAST_DUE:         { label: "결제 실패 · 재시도 중", cls: "sp-badge-error" },
-  CANCEL_SCHEDULED: { label: "해지 예약",            cls: "sp-badge-warning" },
-  CANCELED:         { label: "해지됨",               cls: "sp-badge-neutral" },
-  EXPIRED:          { label: "결제 실패로 종료",     cls: "sp-badge-neutral" },
+// 라벨은 constants.ts 한 곳 — 여기서는 배지 색만 정한다
+const STATUS_CLS: Record<string, string> = {
+  ACTIVE: "sp-badge-success", PAST_DUE: "sp-badge-error", CANCEL_SCHEDULED: "sp-badge-warning",
+  CANCELED: "sp-badge-neutral", EXPIRED: "sp-badge-neutral",
 };
-
-const PAYMENT_TYPE_LABEL: Record<string, string> = {
-  INITIAL:   "구독 시작",
-  RECURRING: "정기 결제",
-  SEAT_ADD:  "좌석 추가",
-  REFUND:    "환불",
-};
+const STATUS_BADGE: Record<string, { label: string; cls: string }> = Object.fromEntries(
+  Object.entries(SUBSCRIPTION_STATUS_LABEL).map(([k, label]) => [k, { label, cls: STATUS_CLS[k] ?? "sp-badge-neutral" }]),
+);
 
 function fmtDate(iso: string | null): string {
   return iso ? formatKstDate(new Date(iso)) : "-";
@@ -510,9 +504,10 @@ function PaymentsTable({ items, loading }: { items: PaymentDto[]; loading: boole
                     <td className="is-mono is-muted">{p.periodStart ? `${fmtDate(p.periodStart)} ~ ${fmtDate(p.periodEnd)}` : "-"}</td>
                     <td className="is-mono" style={{ textAlign: "right" }}>{formatWon(p.amount)}</td>
                     <td>
-                      {p.status === "PAID"   && <span className="sp-badge sp-badge-success">완료</span>}
-                      {p.status === "FAILED" && <span className="sp-badge sp-badge-error" title={p.failReason ?? undefined}>실패</span>}
-                      {p.status === "REFUNDED" && <span className="sp-badge sp-badge-neutral">환불</span>}
+                      {p.status === "PAID"   && <span className="sp-badge sp-badge-success">{PAYMENT_STATUS_LABEL.PAID}</span>}
+                      {p.status === "FAILED" && <span className="sp-badge sp-badge-error" title={p.failReason ?? undefined}>{PAYMENT_STATUS_LABEL.FAILED}</span>}
+                      {p.status === "PARTIALLY_REFUNDED" && <span className="sp-badge sp-badge-warning">{PAYMENT_STATUS_LABEL.PARTIALLY_REFUNDED}</span>}
+                      {p.status === "REFUNDED" && <span className="sp-badge sp-badge-neutral">{PAYMENT_STATUS_LABEL.REFUNDED}</span>}
                     </td>
                     <td>
                       {p.receiptUrl ? <a href={p.receiptUrl} target="_blank" rel="noopener noreferrer">보기</a> : <span className="is-muted">-</span>}

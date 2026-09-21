@@ -11,11 +11,13 @@ import { requireSystemAdmin } from "@/lib/requireSystemAdmin";
 import { buildWorkbook } from "@/lib/exports/excel/buildWorkbook";
 import { buildExportFilename } from "@/lib/exports/excel/filename";
 import { MAX_EXPORT_ROWS, type ExcelColumn } from "@/lib/exports/excel/types";
-import { fetchPaymentsForExport, type AdminPaymentRow } from "@/lib/billing/admin";
+import { fetchPaymentsForExport, type AdminPaymentRow } from "@/lib/billing/admin-queries";
+import { PAYMENT_STATUS_LABEL, PAYMENT_TYPE_LABEL, REFUND_REASON_LABEL } from "@/lib/billing/constants";
 import { parsePaymentFilters } from "../filters";
 
-const TYPE_LABEL: Record<string, string> = { INITIAL: "구독 시작", RECURRING: "정기 결제", SEAT_ADD: "좌석 추가", REFUND: "환불" };
-const STATUS_LABEL: Record<string, string> = { PAID: "완료", FAILED: "실패", REFUNDED: "환불" };
+// 라벨은 constants.ts 한 곳 (화면과 같은 문구가 엑셀에도 나가야 대조가 쉽다)
+const TYPE_LABEL:   Record<string, string> = PAYMENT_TYPE_LABEL;
+const STATUS_LABEL: Record<string, string> = PAYMENT_STATUS_LABEL;
 
 const kst = (iso: string | null) => (iso ? new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000).toISOString().replace("T", " ").slice(0, 19) : "");
 
@@ -32,6 +34,8 @@ const columns: ExcelColumn<AdminPaymentRow>[] = [
   { key: "orderId",    header: "주문 ID",     width: 30 },
   { key: "paymentKey", header: "PG 결제 키",  width: 30, format: (r) => r.paymentKey ?? "" },
   { key: "provider",   header: "PG",          width: 8 },
+  { key: "refundReason", header: "환불 유형", width: 12, format: (r) => (r.refundReason ? (REFUND_REASON_LABEL as Record<string, string>)[r.refundReason]?.split(" (")[0] ?? r.refundReason : "") },
+  { key: "origPaymentId", header: "원 결제 ID", width: 38, format: (r) => r.origPaymentId ?? "" },
   { key: "failReason", header: "실패·환불 사유", width: 40, format: (r) => r.failReason ?? "" },
 ];
 

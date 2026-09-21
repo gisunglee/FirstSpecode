@@ -31,6 +31,7 @@ import { clearRefreshTokenCookie } from "@/lib/authRefreshCookie";
 import { isSystemAdminWithdrawalBlocked } from "@/lib/memberLifecyclePolicy";
 import { resolveSoftDeleteRetentionDays, softDeleteProject } from "@/lib/projectLifecycle";
 import { hasLiveSubscription, withdrawSubscription } from "@/lib/billing/subscription";
+import { toBillingErrorResponse } from "@/lib/billing/errors";
 
 export async function DELETE(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -223,6 +224,9 @@ export async function DELETE(request: NextRequest) {
     return clearRefreshTokenCookie(apiSuccess({ message: "탈퇴가 완료되었습니다." }));
 
   } catch (err) {
+    // 결제 청구가 진행 중이면 구독 종료가 409 로 막힌다 — 몇 초 뒤 다시 시도하면 된다
+    const billing = toBillingErrorResponse(err);
+    if (billing) return billing;
     console.error("[DELETE /api/member/me] 오류:", err);
     return apiError("DB_ERROR", "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", 500);
   }

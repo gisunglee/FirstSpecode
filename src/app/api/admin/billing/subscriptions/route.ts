@@ -8,7 +8,7 @@
 import { NextRequest } from "next/server";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { requireSystemAdmin } from "@/lib/requireSystemAdmin";
-import { listSubscriptionsForAdmin } from "@/lib/billing/admin";
+import { listSubscriptionsForAdmin } from "@/lib/billing/admin-queries";
 
 const PAGE_SIZE_MAX = 200;
 

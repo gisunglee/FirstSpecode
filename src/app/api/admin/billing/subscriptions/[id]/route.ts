@@ -8,7 +8,7 @@
 import { NextRequest } from "next/server";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { requireSystemAdmin } from "@/lib/requireSystemAdmin";
-import { getSubscriptionDetailForAdmin } from "@/lib/billing/admin";
+import { getSubscriptionDetailForAdmin } from "@/lib/billing/admin-queries";
 
 type RouteParams = { params: Promise<{ id: string }> };
 

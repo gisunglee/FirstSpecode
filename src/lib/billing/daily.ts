@@ -14,6 +14,7 @@
 
 import { prisma } from "@/lib/prisma";
 import {
+  ENDED_REASON,
   isLiveSubscriptionStatus,
   LIVE_SUBSCRIPTION_STATUSES,
   PRENOTICE_DAYS,
@@ -72,7 +73,7 @@ export async function processSubscriptionDaily(sbscrptnId: string, now: Date): P
   // ① 해지 예약 — 주기 종료 시 확정
   if (sub.sbscrptn_sttus_code === S.CANCEL_SCHEDULED) {
     if (sub.crrnt_perd_end_dt && sub.crrnt_perd_end_dt <= now) {
-      await terminateSubscription(sub, S.CANCELED, now, email || null);
+      await terminateSubscription(sub, S.CANCELED, now, email || null, ENDED_REASON.USER_CANCEL);
       actions.push("CANCEL_FINALIZED");
     }
     return actions;  // 해지 예정 구독은 청구·사전 안내 대상이 아니다

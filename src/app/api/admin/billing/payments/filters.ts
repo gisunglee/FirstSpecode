@@ -4,7 +4,7 @@
  */
 
 import { apiError } from "@/lib/apiResponse";
-import type { PaymentFilters } from "@/lib/billing/admin";
+import type { PaymentFilters } from "@/lib/billing/admin-queries";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 

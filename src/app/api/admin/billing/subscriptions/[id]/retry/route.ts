@@ -2,8 +2,8 @@
  * POST /api/admin/billing/subscriptions/[id]/retry — 즉시 재결제 (SUPER_ADMIN)
  *
  * PAST_DUE 구독에 대해 배치의 3일 간격을 기다리지 않고 지금 청구한다 ("카드 고쳤어요" 민원).
- * 결과가 실패면 fail_cnt 가 올라가고 소진 시 강등까지 그대로 진행된다 — 배치와 같은 함수.
- * Body: { reason: string }  → 감사 BILLING_RETRY_CHARGE
+ * 감사는 서비스가 PG 호출 전 "시도" 행을 남기고 결과로 갱신한다 (실패한 시도도 기록).
+ * Body: { reason: string }
  */
 
 import { NextRequest } from "next/server";
@@ -11,8 +11,7 @@ import { z } from "zod";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { requireSystemAdmin } from "@/lib/requireSystemAdmin";
-import { logAdminAction } from "@/lib/audit";
-import { adminRetryCharge } from "@/lib/billing/admin";
+import { adminRetryCharge } from "@/lib/billing/admin-actions";
 import { toBillingErrorResponse } from "@/lib/billing/errors";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -26,13 +25,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (parsed instanceof Response) return parsed;
 
   try {
-    const result = await adminRetryCharge(id);
-    await logAdminAction({
-      adminMberId: gate.mberId, actionType: "BILLING_RETRY_CHARGE", targetType: "SUBSCRIPTION", targetId: id,
-      memo: `[즉시 재결제] ${result.ok ? `성공 ${result.amount.toLocaleString("ko-KR")}원` : result.skipped ? "다른 처리 진행 중(건너뜀)" : `실패 fail_cnt=${result.failCnt}${result.expired ? " → EXPIRED 강등" : ""}`} · ${parsed.data.reason}`,
-      ipAddr: gate.ipAddr, userAgent: gate.userAgent,
-    });
-    return apiSuccess(result);
+    return apiSuccess(await adminRetryCharge(id, gate, parsed.data.reason));
   } catch (err) {
     const known = toBillingErrorResponse(err);
     if (known) return known;

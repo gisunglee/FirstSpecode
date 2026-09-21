@@ -2,7 +2,8 @@
  * POST /api/admin/billing/subscriptions/[id]/defer — 다음 결제일 N일 연기 (SUPER_ADMIN)
  *
  * 장애 보상·민원 처리용. ACTIVE 구독의 주기 종료·다음 결제일을 뒤로 민다. 좌석·단가는 그대로.
- * Body: { days: 1~90, reason: string } → 감사 BILLING_DEFER_BILL_DATE (전후 결제일 기록)
+ * 결제 진행 중이면 409. 상태 변경과 감사 기록은 같은 트랜잭션.
+ * Body: { days: 1~90, reason: string }
  */
 
 import { NextRequest } from "next/server";
@@ -10,10 +11,8 @@ import { z } from "zod";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { requireSystemAdmin } from "@/lib/requireSystemAdmin";
-import { logAdminAction } from "@/lib/audit";
-import { adminDeferBilling, DEFER_DAYS_LIMITS, getSubscriptionDetailForAdmin } from "@/lib/billing/admin";
+import { adminDeferBilling, DEFER_DAYS_LIMITS } from "@/lib/billing/admin-actions";
 import { toBillingErrorResponse } from "@/lib/billing/errors";
-import { formatKstDate } from "@/lib/billing/pricing";
 
 type RouteParams = { params: Promise<{ id: string }> };
 const bodySchema = z.object({
@@ -29,16 +28,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (parsed instanceof Response) return parsed;
 
   try {
-    const before = await getSubscriptionDetailForAdmin(id);
-    const updated = await adminDeferBilling(id, parsed.data.days);
-    const from = before?.subscription.nextBillAt ? formatKstDate(new Date(before.subscription.nextBillAt)) : "-";
-    const to   = updated.nextBillAt ? formatKstDate(new Date(updated.nextBillAt)) : "-";
-    await logAdminAction({
-      adminMberId: gate.mberId, actionType: "BILLING_DEFER_BILL_DATE", targetType: "SUBSCRIPTION", targetId: id,
-      memo: `[결제일 연기 +${parsed.data.days}일] ${from} → ${to} · ${parsed.data.reason}`,
-      ipAddr: gate.ipAddr, userAgent: gate.userAgent,
-    });
-    return apiSuccess(updated);
+    return apiSuccess(await adminDeferBilling(id, parsed.data.days, gate, parsed.data.reason));
   } catch (err) {
     const known = toBillingErrorResponse(err);
     if (known) return known;

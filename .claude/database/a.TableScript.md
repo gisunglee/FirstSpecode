@@ -281,13 +281,18 @@ PG 는 게이트웨이 인터페이스(`src/lib/billing/gateway.ts`) 뒤에 있�
   * `prentc_dt` (ts): 이번 주기 "결제 7일 전 안내" 발송 시각. 갱신 시 NULL 리셋 — 배치 중복 발송 방지 (설계 표에 없던 운영 컬럼)
   * `fail_cnt` (i, NN 기본 0) / `last_fail_dt` (ts): 연속 실패. 초기 실패 1 + 3일 간격 재시도 3회 소진(fail_cnt 4) → EXPIRED
   * `cancel_reqst_dt` / `ended_dt` (ts)
+  * `ended_rsn_code` (v30, 2026-09-21): 종료 사유 `USER_CANCEL` | `PAYMENT_RETRY_EXHAUSTED` | `ADMIN_TERMINATE` | `MEMBER_WITHDRAWAL` | `REFUND_WITHDRAWAL`. 상태의 보조 정보, 재구독 시 NULL. 이전 종료 건은 NULL
+  * `billing_op_token` (v36) / `billing_op_started_dt` (ts) (2026-09-21): 결제 작업 토큰. PG 청구를 시작한 요청이 보유, 결제 결과는 토큰 일치 시만 반영, 살아 있는 동안(2분) 다른 변경은 409. `src/lib/billing/subscription.ts beginBillingOperation`
   * 인덱스 `(sbscrptn_sttus_code, next_bill_dt)` — 일일 배치 스캔
 * **`tb_bl_payment`** (결제 이력 — 영수증·환불 판정 근거)
   * `pymnt_id` (t, PK) / `sbscrptn_id` (t, **NULL 허용**, FK → tb_bl_subscription) / `mber_id` (t, NN)
     · NULL = 첫 결제(INITIAL) 실패로 구독 행을 만들지 않은 경우. 조회는 항상 `mber_id` 기준
   * `pymnt_ty_code` (v20, NN): `INITIAL` | `RECURRING` | `SEAT_ADD` | `REFUND`
   * `amt` (i, NN, 원) / `seat_cnt` (i, NN): SEAT_ADD 는 추가 좌석 수 · `perd_bgng_dt`/`perd_end_dt`: 덮는 기간(SEAT_ADD 는 결제 시점~주기 종료)
-  * `pymnt_sttus_code` (v20, NN): `PAID` | `FAILED` | `REFUNDED`
+  * `pymnt_sttus_code` (v20, NN): `PAID` | `FAILED` | `PARTIALLY_REFUNDED`(누적 환불 < 원 금액) | `REFUNDED`(전액 환불된 원 결제 또는 환불 행)
+  * `orig_pymnt_id` (t, 자기 참조 FK `tb_bl_payment_orig_fk`, 인덱스, 2026-09-21): REFUND 행이 가리키는 원 결제. 누적 환불액·잔액 계산 근거
+  * `refund_rsn_code` (v20, 2026-09-21): 환불 유형 `WITHDRAWAL`(청약철회: 전액·구독 종료) | `ADJUSTMENT`(운영 보정: 전액/부분·구독 유지). REFUND 행에만
+  * `pg_cancel_key` (v200, 2026-09-21): PG 취소 트랜잭션 키(토스 cancels[].transactionKey). Mock 은 NULL
   * `pg_provdr_code` (v10) / `pg_pymnt_key` (v200) / `pg_order_id` (v64, **UNIQUE**, 시도마다 새 발급 `SPC-yyyymmddHHmmss-XXXXXXXX`)
   * `receipt_url` (t) / `fail_rsn_cn` (t): `PG코드: 메시지` / `apprv_dt` (ts)
   * 인덱스 `(mber_id, creat_dt DESC)`
@@ -299,5 +304,7 @@ PG 는 게이트웨이 인터페이스(`src/lib/billing/gateway.ts`) 뒤에 있�
 
 배치: `POST /api/admin/batch/run/billing-daily` (`job_ty_code=BILLING_DAILY`, `src/lib/billing/daily.ts`) — 하루 1회
 ① CANCEL_SCHEDULED 기간 종료 → CANCELED ② ACTIVE 결제일 → RECURRING ③ PAST_DUE 3일 간격 재시도 ④ 결제 7일 전 안내.
-검증: `npm run test:billing:db` (임시 스키마에서 전체 흐름 스모크, 운영 데이터 무영향).
+DDL 2차: `prisma/sql/2026-09-21_billing_admin_ops.sql` (nullable 6컬럼 추가만, `npm run db:migrate:billing-admin-ops`).
+관리자 운영: `/admin/billing` — 조회 `src/lib/billing/admin-queries.ts`, 액션 `admin-actions.ts`(즉시 재결제·결제일 연기·강제 종료·환불 기록·잠금 해제 대행, 감사 `tb_sys_admin_audit` 와 같은 트랜잭션).
+검증: `npm run test:billing:db` (임시 스키마에서 전체 흐름 스모크 19단계, 동시성 포함, 운영 데이터 무영향).
 

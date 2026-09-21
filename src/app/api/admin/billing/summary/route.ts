@@ -8,7 +8,7 @@
 import { NextRequest } from "next/server";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { requireSystemAdmin } from "@/lib/requireSystemAdmin";
-import { getBillingSummary } from "@/lib/billing/admin";
+import { getBillingSummary } from "@/lib/billing/admin-queries";
 
 export async function GET(request: NextRequest) {
   const gate = await requireSystemAdmin(request);

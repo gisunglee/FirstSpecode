@@ -10,7 +10,7 @@
 import { NextRequest } from "next/server";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { requireSystemAdmin } from "@/lib/requireSystemAdmin";
-import { listPaymentsForAdmin } from "@/lib/billing/admin";
+import { listPaymentsForAdmin } from "@/lib/billing/admin-queries";
 import { parsePaymentFilters } from "./filters";
 
 const PAGE_SIZE_MAX = 200;

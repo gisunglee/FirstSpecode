@@ -12,7 +12,9 @@
  *   - 따라서 페이지에는 조회 기능만 — 수정/삭제 UI 없음
  */
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { AUDIT_ACTION_LABEL, AUDIT_ACTION_TYPES, AUDIT_TARGET_LABEL, AUDIT_TARGET_TYPES } from "@/lib/auditTypes";
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
 
@@ -38,43 +40,38 @@ type AuditResponse = {
 const PAGE_SIZE = 50;
 
 // 행동 유형 — audit.ts 의 AUDIT_ACTION_TYPES 와 동기 유지
+// 액션·대상 라벨은 src/lib/auditTypes.ts 한 곳 (서버 상수와 같은 파일)
 const ACTION_TYPES: Array<{ value: string; label: string }> = [
-  { value: "",                         label: "전체 행동" },
-  { value: "SUPPORT_SESSION_OPEN",     label: "지원 세션 시작" },
-  { value: "SUPPORT_SESSION_END",      label: "지원 세션 종료" },
-  { value: "SUPPORT_SESSION_EXPIRE",   label: "지원 세션 만료" },
-  { value: "SUPPORT_SESSION_CLEANUP",  label: "지원 세션 정리" },
-  { value: "SYSTEM_ROLE_GRANT",        label: "시스템 관리자 임명" },
-  { value: "SYSTEM_ROLE_REVOKE",       label: "시스템 관리자 해임" },
-  { value: "USER_SUSPEND",             label: "계정 정지" },
-  { value: "USER_UNSUSPEND",           label: "정지 해제" },
-  { value: "USER_UNLOCK",              label: "계정 잠금 해제" },
-  { value: "USER_FORCE_LOGOUT",        label: "전체 기기 로그아웃" },
-  { value: "USER_MCP_KEYS_REVOKE",     label: "MCP 키 일괄 폐기" },
-  { value: "PROJECT_TRANSFER_OWNER",   label: "소유권 이전" },
-  { value: "PROJECT_HARD_DELETE",      label: "프로젝트 영구 삭제" },
-  { value: "TEMPLATE_CREATE",          label: "템플릿 생성" },
-  { value: "TEMPLATE_UPDATE",          label: "템플릿 수정" },
-  { value: "TEMPLATE_DELETE",          label: "템플릿 삭제" },
+  { value: "", label: "전체 행동" },
+  ...AUDIT_ACTION_TYPES.map((v) => ({ value: v, label: AUDIT_ACTION_LABEL[v] })),
 ];
 
 const TARGET_TYPES: Array<{ value: string; label: string }> = [
-  { value: "",         label: "전체 대상" },
-  { value: "PROJECT",  label: "프로젝트" },
-  { value: "USER",     label: "사용자" },
-  { value: "TEMPLATE", label: "템플릿" },
+  { value: "", label: "전체 대상" },
+  ...AUDIT_TARGET_TYPES.map((v) => ({ value: v, label: AUDIT_TARGET_LABEL[v] })),
 ];
 
 export default function AdminAuditPage() {
-  const [actionType, setActionType] = useState("");
-  const [targetType, setTargetType] = useState("");
+  return (
+    <Suspense fallback={null}>
+      <AdminAuditInner />
+    </Suspense>
+  );
+}
+
+// 구독 상세 등에서 ?targetType=SUBSCRIPTION&targetId=... 로 바로 들어올 수 있다
+function AdminAuditInner() {
+  const params = useSearchParams();
+  const [actionType, setActionType] = useState(params.get("actionType") ?? "");
+  const [targetType, setTargetType] = useState(params.get("targetType") ?? "");
+  const [targetId]                  = useState(params.get("targetId") ?? "");
   const [page,       setPage]       = useState(1);
 
   const query = useQuery<AuditResponse["data"]>({
-    queryKey: ["admin", "audit", { actionType, targetType, page }],
+    queryKey: ["admin", "audit", { actionType, targetType, targetId, page }],
     queryFn: () =>
       authFetch<AuditResponse>(
-        `/api/admin/audit?actionType=${actionType}&targetType=${targetType}&page=${page}&pageSize=${PAGE_SIZE}`
+        `/api/admin/audit?actionType=${actionType}&targetType=${targetType}&targetId=${encodeURIComponent(targetId)}&page=${page}&pageSize=${PAGE_SIZE}`
       ).then((r) => r.data),
   });
 
@@ -153,7 +150,7 @@ export default function AdminAuditPage() {
                 </Td>
                 <Td>
                   <code style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)" }}>
-                    {a.actionType}
+                    {(AUDIT_ACTION_LABEL as Record<string, string>)[a.actionType] ?? a.actionType}
                   </code>
                 </Td>
                 <Td>

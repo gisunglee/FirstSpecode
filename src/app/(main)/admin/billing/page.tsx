@@ -19,9 +19,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
-import type { AdminPaymentRow, AdminSubscriptionRow, BillingSummary, Pagination } from "@/lib/billing/admin";
+import type { AdminPaymentRow, AdminSubscriptionRow, BillingSummary, Pagination } from "@/lib/billing/admin-queries";
 import { formatKstDate, formatWon } from "@/lib/billing/pricing";
-import { fmtDate, fmtDateTime, Pager, PAYMENT_TYPE_LABEL, PaymentStatusBadge, SUB_STATUS_BADGE, SUB_STATUS_OPTIONS } from "./_shared";
+import { ENDED_REASON_LABEL, PAYMENT_TYPE_LABEL } from "@/lib/billing/constants";
+import { fmtDate, fmtDateTime, Pager, PaymentStatusBadge, SUB_STATUS_OPTIONS, SubStatusBadge } from "./_shared";
 
 const PAGE_SIZE = 50;
 
@@ -86,7 +87,7 @@ function SummaryCards({ s }: { s: BillingSummary }) {
         <Card label="재시도 중 (강등 임박)" value={String(s.pastDueCount)} tone={s.pastDueCount > 0 ? "var(--color-error)" : undefined} hint="3일 간격 3회 실패 시 FREE 강등" />
         <Card label="월 예정 청구액" value={formatWon(s.monthlyExpectedAmount)} hint={`좌석 합 ${s.seatTotal} · 해지 예약 제외`} />
         <Card label="7일 내 결제 예정" value={String(s.dueWithin7Days)} hint="사전 안내 메일 대상" />
-        <Card label="이번 달 순매출 (KST)" value={formatWon(s.paidAmountThisMonth)} hint="완료 − 환불" />
+        <Card label="이번 달 승인 순액 (KST)" value={formatWon(s.approvedNetThisMonth)} hint="승인 시각 기준 결제 − 환불. 회계 매출·부가세·PG 수수료 미반영" />
         <Card label="최근 30일 결제 실패" value={String(s.failedPaymentsLast30d)} tone={s.failedPaymentsLast30d > 0 ? "var(--color-warning)" : undefined} />
         <Card label="잠긴 프로젝트" value={String(s.lockedProjectCount)} tone={s.lockedProjectCount > 0 ? "var(--color-warning)" : undefined} hint="강등으로 읽기 전용" />
         <Card
@@ -159,7 +160,6 @@ function SubscriptionsTab({ initialStatus }: { initialStatus: string }) {
             {q.isLoading && <tr><td colSpan={9} className="is-muted" style={{ textAlign: "center" }}>불러오는 중…</td></tr>}
             {!q.isLoading && items.length === 0 && <tr><td colSpan={9} className="is-muted" style={{ textAlign: "center" }}>조건에 맞는 구독이 없습니다.</td></tr>}
             {items.map((s) => {
-              const b = SUB_STATUS_BADGE[s.status] ?? { label: s.status, cls: "sp-badge-neutral" };
               return (
                 <tr key={s.subscriptionId}>
                   <td>
@@ -168,7 +168,7 @@ function SubscriptionsTab({ initialStatus }: { initialStatus: string }) {
                     </Link>
                     {s.member.name && <span className="is-muted" style={{ marginLeft: 6, fontSize: "var(--text-xs)" }}>{s.member.name}</span>}
                   </td>
-                  <td><span className={`sp-badge ${b.cls}`}>{b.label}</span></td>
+                  <td><SubStatusBadge status={s.status} />{s.endedReason && <div className="is-muted" style={{ fontSize: "var(--text-xs)", marginTop: 2 }}>{ENDED_REASON_LABEL[s.endedReason]}</div>}</td>
                   <td className="is-mono">{s.seatCnt}{s.pendingSeatCnt !== null && <span className="is-muted"> → {s.pendingSeatCnt}</span>}</td>
                   <td className="is-mono">{s.status === "CANCEL_SCHEDULED" ? `${fmtDate(s.currentPeriodEnd)} 종료` : fmtDate(s.nextBillAt)}</td>
                   <td className="is-mono" style={{ textAlign: "right" }}>{s.status === "CANCEL_SCHEDULED" || s.endedAt ? "-" : formatWon(s.nextChargeAmount)}</td>
@@ -204,7 +204,7 @@ function PaymentsTab() {
   const q = useQuery({
     queryKey: ["admin", "billing", "payments", { from, to, status, type, search, page }],
     queryFn: () =>
-      authFetch<{ data: { items: AdminPaymentRow[]; pagination: Pagination; sumAmount: number } }>(
+      authFetch<{ data: { items: AdminPaymentRow[]; pagination: Pagination; sumAmount: number; searchTruncated: boolean } }>(
         `/api/admin/billing/payments?${qs}&page=${page}&pageSize=${PAGE_SIZE}`,
       ).then((r) => r.data),
   });
@@ -218,7 +218,7 @@ function PaymentsTab() {
         <span className="is-muted">~</span>
         <input className="sp-input sp-input-fixed" type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} style={{ width: 150 }} />
         <select className="sp-input sp-input-fixed sp-select" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} style={{ width: 130 }}>
-          <option value="">전체 상태</option><option value="PAID">완료</option><option value="FAILED">실패</option><option value="REFUNDED">환불</option>
+          <option value="">전체 상태</option><option value="PAID">완료</option><option value="FAILED">실패</option><option value="PARTIALLY_REFUNDED">일부 환불</option><option value="REFUNDED">환불</option>
         </select>
         <select className="sp-input sp-input-fixed sp-select" value={type} onChange={(e) => { setType(e.target.value); setPage(1); }} style={{ width: 140 }}>
           <option value="">전체 구분</option>
@@ -232,7 +232,8 @@ function PaymentsTab() {
           style={{ width: 220 }}
         />
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12, fontSize: "var(--text-sm)", color: "var(--color-text-tertiary)" }}>
-          <span>총 {pg?.totalCount ?? 0}건 · 순액 <b style={{ color: "var(--color-text-primary)" }}>{formatWon(q.data?.sumAmount ?? 0)}</b></span>
+          <span>총 {pg?.totalCount ?? 0}건 · 승인 순액 <b style={{ color: "var(--color-text-primary)" }}>{formatWon(q.data?.sumAmount ?? 0)}</b></span>
+          {q.data?.searchTruncated && <span className="sp-badge sp-badge-warning" title="검색에 맞는 회원이 500명을 넘어 일부만 반영됐습니다. 검색어를 더 좁혀 주세요.">검색 결과 잘림</span>}
           <ExcelDownloadButton href={`/api/admin/billing/payments/export?${qs}`} entityKey="billing-payments" disabled={q.isLoading} />
         </div>
       </div>
