@@ -35,7 +35,7 @@ import {
 import { useEditorPrefsStore } from "@/store/editorPrefsStore";
 import { FontScaleControl } from "./FontScaleControl";
 import { useDraggablePosition } from "@/hooks/useDraggablePosition";
-import { useResizablePanelSize } from "@/hooks/useResizablePanelSize";
+import { useResizablePanelSize, expandedPanelFrameStyle } from "@/hooks/useResizablePanelSize";
 import { PanelResizeHandle } from "./PanelResizeHandle";
 import { PanelSizeControl } from "./PanelSizeControl";
 
@@ -133,7 +133,8 @@ export default function RichEditor({
   const [expanded, setExpanded] = useState(false);
   const { pos: panelPos, onDragStart: onPanelDragStart } = useDraggablePosition({ x: 32, y: 88 });
   // MarkdownEditor(상세명세 등) 확대 창과 같은 기본 크기 — 폭이 서로 다르면 어색해서 통일
-  const { size: panelSize, onResizeStart: onPanelResizeStart, widen: widenPanel, narrow: narrowPanel } = useResizablePanelSize({ width: 760, height: 600 });
+  // 기본 크기 1000×720 — 760×600 이던 시절 "확대인데 너무 작다"는 피드백으로 키움
+  const { size: panelSize, isFull: panelIsFull, onResizeStart: onPanelResizeStart, widen: widenPanel, narrow: narrowPanel, toggleFull: togglePanelFull } = useResizablePanelSize({ width: 1000, height: 720 });
 
   // ── 길이 제한 (field 지정 시 카운터 표시용) ──────────────────────────────
   // HTML 태그 포함 전체 길이 — htmlContent 한도(100K)는 태그 오버헤드 감안한 수치.
@@ -238,13 +239,8 @@ export default function RichEditor({
       )}
 
       <div style={expanded ? {
-        position:      "fixed",
-        left:          panelPos.x,
-        top:           panelPos.y,
-        width:         panelSize.width,
-        maxWidth:      "calc(100vw - 48px)",
-        height:        panelSize.height,
-        maxHeight:     "calc(100vh - 48px)",
+        // 위치·크기는 훅 쪽 공용 규칙(일반: 드래그 좌표+단계 크기 / FULL: 가운데+세로 전체)
+        ...expandedPanelFrameStyle(panelPos, panelSize, panelIsFull),
         zIndex:        1500,
         display:       "flex",
         flexDirection: "column",
@@ -258,12 +254,13 @@ export default function RichEditor({
         {/* 확대 창 헤더 — 드래그로 위치 이동, 배경은 모달 아니라서 계속 편집 가능 */}
         {expanded && (
           <div
-            onMouseDown={onPanelDragStart}
-            style={{ cursor: "move", userSelect: "none", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "var(--color-bg-muted)", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}
+            // FULL 모드는 가운데 고정이라 드래그 이동을 막는다 — 드래그 좌표 기준으로 튀는 것 방지
+            onMouseDown={panelIsFull ? undefined : onPanelDragStart}
+            style={{ cursor: panelIsFull ? "default" : "move", userSelect: "none", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "var(--color-bg-muted)", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}
           >
             <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", whiteSpace: "nowrap" }}>⠿ 요구사항 내용 (확대)</span>
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-              <PanelSizeControl onNarrow={narrowPanel} onWiden={widenPanel} />
+              <PanelSizeControl onNarrow={narrowPanel} onWiden={widenPanel} isFull={panelIsFull} onToggleFull={togglePanelFull} />
               <button
                 type="button"
                 onClick={() => setExpanded(false)}
@@ -275,7 +272,8 @@ export default function RichEditor({
           </div>
         )}
 
-        {expanded && <PanelResizeHandle onMouseDown={onPanelResizeStart} />}
+        {/* FULL 모드에선 크기가 화면에 맞춰 고정이라 핸들을 숨긴다 */}
+        {expanded && !panelIsFull && <PanelResizeHandle onMouseDown={onPanelResizeStart} />}
 
       {/* ── 툴바 ───────────────────────────────────────────────────────── */}
       {/* flexShrink:0 필수 — flexDirection:column인 확대 패널 안에서, 아래 에디터 본문 div가
