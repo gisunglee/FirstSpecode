@@ -1,5 +1,5 @@
 # B. SPECODE 결제·요금제 정책 (작업 기준 문서)
-> 최종 갱신: 2026-09-21 · 상태: **결제 기능 운영 배포 완료 (Mock PG, 내부 사용자용)**. 관리자 결제 화면·환불 원장·결제 작업 토큰·종료 사유 = 코드 완료, **DDL 1건 적용·푸시 대기**. 다음 = DDL → 푸시 → 운영 env·cron → 사업자 정보 실제값 → 토스 가맹 심사 → 토스 어댑터
+> 최종 갱신: 2026-09-21 · 상태: **결제 기능 운영 배포 완료 (Mock PG, 내부 사용자용)**. 관리자 결제 화면·환불 원장·결제 작업 토큰·종료 사유 = 코드 완료, **DDL 적용 완료·푸시 대기**. 다음 = 푸시 → 운영 env·cron → 사업자 정보 실제값 → 토스 가맹 심사 → 토스 어댑터
 
 이 문서는 결제 기능이 끝날 때까지 **모든 세션이 가장 먼저 읽는 단일 기준**이다.
 대화에서 결정된 것은 여기에만 쓴다. 여기 없는 규칙은 결정되지 않은 것이다.
@@ -210,7 +210,7 @@
 
 ### 3-4. DB
 - 적용된 SQL: `prisma/sql/2026-09-20_create_billing.sql`(테이블 3·인덱스 8·잠금 컬럼 2) → 배포 → `2026-09-20_drop_project_settings_plan_code.sql`. npm 스크립트 `db:migrate:billing`, `db:migrate:billing-drop-settings-plan`.
-- **적용 대기 SQL**: `prisma/sql/2026-09-21_billing_admin_ops.sql` (`npm run db:migrate:billing-admin-ops`) — nullable 컬럼 6개 추가만: 구독 `ended_rsn_code`·`billing_op_token`·`billing_op_started_dt`, 결제 `orig_pymnt_id`(자기 참조 FK)·`refund_rsn_code`·`pg_cancel_key`. 임시 스키마에서 HEAD 스키마 + 이 SQL → 현재 모델 diff **비어 있음** 확인(2026-09-21). 옛 코드와 공존(추가만) → DDL 먼저, 배포 다음.
+- **적용 완료 SQL(2026-09-21)**: `prisma/sql/2026-09-21_billing_admin_ops.sql` (`npm run db:migrate:billing-admin-ops`) — nullable 컬럼 6개 추가만: 구독 `ended_rsn_code`·`billing_op_token`·`billing_op_started_dt`, 결제 `orig_pymnt_id`(자기 참조 FK)·`refund_rsn_code`·`pg_cancel_key`. 임시 스키마에서 HEAD 스키마 + 이 SQL → 현재 모델 diff **비어 있음** 확인(2026-09-21). 옛 코드와 공존(추가만) → DDL 먼저, 배포 다음.
 - 운영 DB ↔ Prisma 모델 drift: 결제 관련 없음. 기존 drift 1건(`tb_pj_project_settings.artifact_scope_code` varchar(10) vs 모델 text, 2026-09-12 부터) — 결제 무관, §7 후속.
 
 ### 3-5. 검증
@@ -258,7 +258,7 @@
 ## 7. 남은 작업 (순서대로)
 
 ### 7-1. 지금 바로 — 운영 마무리 (사용자, 코드 변경 없음)
-0. **운영 DDL `2026-09-21_billing_admin_ops.sql` 적용**(§0-6: 읽기 전용 점검 완료 — tb_bl_* 0건·새 컬럼 없음 → 사용자 확인 → `npm run db:migrate:billing-admin-ops` → 재검증) → **관리자 결제 커밋 푸시**(사용자 확인) → 배포 확인 → `/admin/billing` 열어 요약 카드·탭·구독 상세 확인. (보안 보완 9커밋은 2026-09-21 푸시 완료. 운영 `API_KEY_SECRET` 32자 미만이면 카드 등록·청구 503 — env 먼저.)
+0. ~~운영 DDL `2026-09-21_billing_admin_ops.sql` 적용~~ **완료(2026-09-21, 사용자 확인 후)**: 적용 전후 스냅샷 동일(결제 표 0건, 프로젝트 10·멤버 15·회원 11·감사 11), 새 컬럼 6개·자기 참조 FK(SET NULL/CASCADE)·인덱스 생성 확인, 운영↔모델 drift 는 기존 `artifact_scope_code` 1건만. → **관리자 결제 커밋 6개 푸시**(사용자 확인) → 배포 확인 → `/admin/billing` 열어 요약 카드·탭·구독 상세·감사 필터 확인. (보안 보완 9커밋은 2026-09-21 푸시 완료. 운영 `API_KEY_SECRET` 32자 미만이면 카드 등록·청구 503 — env 먼저.)
 1. 운영 env 확인·설정 — §2 목록. 특히 `API_KEY_SECRET` 과 `BATCH_CRON_SECRET`.
 2. 외부 cron 에 `billing-daily` 하루 1회 등록 — §2 curl. 첫 실행 후 `/admin/batch` 에서 `BILLING_DAILY` 잡이 SUCCESS(대상 0건이면 trgt 0) 로 남는지 확인.
 3. 운영 Mock 으로 실사용 점검 — 내부 계정으로 `/settings/billing` → BASIC 시작 → PG 창 → 구독 화면 반영, 좌석 추가/축소, 해지/취소. (스모크는 서비스 계층 검증이라 화면·리다이렉트 흐름은 브라우저에서 한 번 눌러 보는 것이 남았다.)
