@@ -23,6 +23,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "@/store/appStore";
 import { authFetch } from "@/lib/authFetch";
 import { clearAuthTokensAcrossTabs } from "@/lib/authRefreshClient";
+import { beginIntentionalLogout } from "@/lib/authSessionEvents";
 import {
   AUTH_COOKIE_MODE_HEADER,
   AUTH_COOKIE_MODE_VALUE,
@@ -75,6 +76,16 @@ export default function GNB() {
   // 프로필 드롭다운 열림 상태
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+  // 의도적 로그아웃 중에는 같은 탭의 잔여 API 401이 세션 만료 모달을 띄우지 않게 한다.
+  // 이동이 완료되어 GNB가 언마운트되면 반드시 억제 상태를 해제한다.
+  const intentionalLogoutCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => {
+      intentionalLogoutCleanupRef.current?.();
+      intentionalLogoutCleanupRef.current = null;
+    };
+  }, []);
 
   // 내 프로젝트 목록 조회 — 첫 마운트 시 1회 + 5분 캐시
   const { data: projects = [] } = useQuery<ProjectOption[]>({
@@ -192,6 +203,17 @@ export default function GNB() {
   // 로그아웃 처리
   async function handleLogout() {
     setProfileOpen(false);
+    intentionalLogoutCleanupRef.current?.();
+    const endIntentionalLogout = beginIntentionalLogout();
+    intentionalLogoutCleanupRef.current = endIntentionalLogout;
+
+    const restoreSessionExpiredHandling = () => {
+      endIntentionalLogout();
+      if (intentionalLogoutCleanupRef.current === endIntentionalLogout) {
+        intentionalLogoutCleanupRef.current = null;
+      }
+    };
+
     try {
       const response = await fetch("/api/auth/logout", {
         method:  "POST",
@@ -203,10 +225,12 @@ export default function GNB() {
         body: JSON.stringify({}),
       });
       if (!response.ok) {
+        restoreSessionExpiredHandling();
         toast.error("로그아웃 처리에 실패했습니다. 다시 시도해 주세요.");
         return;
       }
     } catch {
+      restoreSessionExpiredHandling();
       toast.error("서버에 연결하지 못해 로그아웃하지 못했습니다. 다시 시도해 주세요.");
       return;
     }
@@ -226,7 +250,8 @@ export default function GNB() {
     useAppStore.getState().setMyAssigneeMode("all");
 
     toast.success("로그아웃되었습니다.");
-    router.push("/auth/login");
+    // 뒤로 가기로 인증이 끝난 화면에 다시 진입하지 않도록 로그아웃은 replace 한다.
+    router.replace("/auth/login");
   }
 
   // 프로젝트 선택 핸들러

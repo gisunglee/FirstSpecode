@@ -34,6 +34,29 @@ type SessionExpiredListener = (event: SessionExpiredEvent) => void;
 
 const listeners = new Set<SessionExpiredListener>();
 
+// 사용자가 직접 로그아웃한 현재 탭에서는 로그아웃 API 완료와 로그인 화면 이동 사이에
+// 남아 있던 요청이 401을 받아도 "세션 만료" 모달을 띄우지 않는다. 이 값은 탭의
+// 자바스크립트 메모리에만 있으므로 다른 탭의 작성 중 화면 보호 동작에는 영향을 주지 않는다.
+let intentionalLogoutGeneration = 0;
+let activeIntentionalLogoutGeneration: number | null = null;
+
+/**
+ * 현재 탭에서 의도적인 로그아웃을 시작한다.
+ * 반환 함수는 로그아웃 실패 또는 MainLayout 이탈 시 호출해 억제를 해제한다.
+ */
+export function beginIntentionalLogout(): () => void {
+  intentionalLogoutGeneration += 1;
+  const generation = intentionalLogoutGeneration;
+  activeIntentionalLogoutGeneration = generation;
+
+  return () => {
+    // 중복 로그아웃 시 이전 요청의 정리가 더 최신 로그아웃 상태를 해제하지 않게 한다.
+    if (activeIntentionalLogoutGeneration === generation) {
+      activeIntentionalLogoutGeneration = null;
+    }
+  };
+}
+
 /** 모달 등 UI 가 마운트 시 구독한다. 반환된 함수로 해제. */
 export function subscribeSessionExpired(listener: SessionExpiredListener): () => void {
   listeners.add(listener);
@@ -45,6 +68,9 @@ export function subscribeSessionExpired(listener: SessionExpiredListener): () =>
  * @returns 구독자가 있어 처리됐으면 true, 없으면 false (호출부가 폴백 이동을 결정)
  */
 export function notifySessionExpired(event: SessionExpiredEvent): boolean {
+  // 의도적인 로그아웃 중 발생한 401은 예상된 결과다. 처리 완료(true)로 반환해야
+  // 호출부가 로그인 이동 폴백이나 세션 만료 UI를 추가로 실행하지 않는다.
+  if (activeIntentionalLogoutGeneration !== null) return true;
   if (listeners.size === 0) return false;
   for (const listener of listeners) {
     try {

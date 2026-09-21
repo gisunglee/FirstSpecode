@@ -17,6 +17,7 @@
     "src/lib/authTokenStorage.ts",
     "src/lib/authSessionPolicy.ts",
     "src/lib/authRefreshPolicy.ts",
+    "src/lib/authSessionEvents.ts",
     "src/lib/memberLifecyclePolicy.ts",
     "src/lib/permissions.ts",
     "src/lib/refreshTokenRotation.ts",

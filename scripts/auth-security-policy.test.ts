@@ -45,6 +45,11 @@ import {
   classifyRefreshFailure,
   createAsyncSingleFlight,
 } from "../src/lib/authRefreshPolicy";
+import {
+  beginIntentionalLogout,
+  notifySessionExpired,
+  subscribeSessionExpired,
+} from "../src/lib/authSessionEvents";
 
 const PROJECT_ID = "project-1";
 const JWT_SECRET = "test-only-secret-with-sufficient-length";
@@ -216,6 +221,33 @@ test("Refresh 단일 실행 Promise는 실패 후에도 다음 실행을 허용�
     "recovered",
   );
   assert.equal(callCount, 2);
+});
+
+test("의도적 로그아웃 중에는 현재 탭의 세션 만료 알림만 억제한다", () => {
+  let notificationCount = 0;
+  const unsubscribe = subscribeSessionExpired(() => {
+    notificationCount += 1;
+  });
+  const endIntentionalLogout = beginIntentionalLogout();
+
+  try {
+    assert.equal(notifySessionExpired({
+      reason: "expired",
+      previousMemberId: "member-1",
+      detail: "401 during logout",
+    }), true);
+    assert.equal(notificationCount, 0);
+
+    endIntentionalLogout();
+    assert.equal(notifySessionExpired({
+      reason: "expired",
+      previousMemberId: "member-1",
+    }), true);
+    assert.equal(notificationCount, 1);
+  } finally {
+    endIntentionalLogout();
+    unsubscribe();
+  }
 });
 
 test("필수 클레임이 있는 기존 Access Token은 전환 기간에 허용한다", () => {
