@@ -121,10 +121,10 @@ export async function saveStudioBlock(
       });
       break;
     case "analysis":
-      if (!requirement) throw new Error("상세분석 원본을 불러오지 못했습니다.");
+      if (!requirement) throw new Error("상세명세 원본을 불러오지 못했습니다.");
       body = requirementPayload(requirement, {
-        analysisMemo: draft.description,
-        detailSpec: draft.secondaryDescription,
+        detailSpec: draft.description,
+        analysisMemo: draft.secondaryDescription,
       });
       break;
     case "unitWork":

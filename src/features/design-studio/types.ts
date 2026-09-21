@@ -20,7 +20,7 @@ export type StudioKind = (typeof STUDIO_KINDS)[number];
 
 export const STUDIO_KIND_LABEL: Record<StudioKind, string> = {
   requirement: "요구사항",
-  analysis: "상세분석",
+  analysis: "상세명세",
   unitWork: "단위업무",
   screen: "화면",
   area: "영역",

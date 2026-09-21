@@ -37,9 +37,10 @@ export function buildStudioBlocks(
       entityId: requirement.requirementId,
       kind: "analysis",
       displayId: requirement.displayId,
-      name: "상세분석",
-      description: requirement.analysisMemo,
-      secondaryDescription: requirement.detailSpec,
+      name: "상세명세",
+      // 본문 = 요구사항 상세 명세(spec_cn). 분석 메모는 보조 영역으로 함께 보여 준다 (2026-09-21 사용자 요청)
+      description: requirement.detailSpec,
+      secondaryDescription: requirement.analysisMemo,
       parentKey: `requirement:${requirement.requirementId}`,
       depth: 0,
       sourceHref: `/projects/${projectId}/requirements/${requirement.requirementId}`,

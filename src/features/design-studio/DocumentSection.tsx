@@ -146,13 +146,13 @@ export default function DocumentSection({
               ) : (
                 <div className="sp-field">
                   <div className="sp-label">
-                    {block.kind === "analysis" ? "분석 메모" : "내용"}
+                    {block.kind === "analysis" ? "상세 명세" : "내용"}
                   </div>
                   <MarkdownEditor
                     value={draft.description}
                     onChange={(description) => onChangeDraft({ ...draft, description })}
                     rows={20}
-                    field="description"
+                    field={block.kind === "analysis" ? "detailSpec" : "description"}
                     title={`${block.displayId} ${block.name}`}
                   />
                 </div>
@@ -160,13 +160,13 @@ export default function DocumentSection({
 
               {block.kind === "analysis" && (
                 <div className="sp-field">
-                  <div className="sp-label">상세 명세</div>
+                  <div className="sp-label">분석 메모</div>
                   <MarkdownEditor
                     value={draft.secondaryDescription}
                     onChange={(secondaryDescription) => onChangeDraft({ ...draft, secondaryDescription })}
-                    rows={24}
-                    field="detailSpec"
-                    title="상세 명세"
+                    rows={12}
+                    field="analysisMemo"
+                    title="분석 메모"
                   />
                 </div>
               )}
@@ -200,7 +200,7 @@ export default function DocumentSection({
               )}
               {block.kind === "analysis" && (
                 <div className="sp-studio-analysis-detail">
-                  <div className="sp-section-title">상세 명세</div>
+                  <div className="sp-section-title">분석 메모</div>
                   {renderedSecondary ? (
                     <div className="sp-markdown sp-studio-markdown" dangerouslySetInnerHTML={{ __html: renderedSecondary }} />
                   ) : (
