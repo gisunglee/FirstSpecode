@@ -199,6 +199,29 @@ export default function MemoSheetEditor({ initialValue, readOnly = false, height
     return () => container.removeEventListener("wheel", handleWheelCapture, { capture: true });
   }, []);
 
+  // 컨테이너 크기 변화 → 시트 캔버스 재계산.
+  // fortune-sheet(Workbook 내부 Sheet 컴포넌트)는 캔버스 크기를 window "resize" 이벤트에서만
+  // 다시 계산한다. 그래서 메모 모달의 가로/세로/FULL 버튼처럼 브라우저 창은 그대로인데
+  // 컨테이너만 커지는 경우 시트가 이전 크기에 그대로 머물러 우측·하단이 빈 채로 남는 문제가
+  // 실제로 있었다. 컨테이너를 ResizeObserver로 지켜보다가 크기가 바뀌면 window resize를
+  // 합성해 흘려보내 라이브러리의 재계산 경로를 그대로 태운다(라이브러리 내부 API를 건드리지
+  // 않아 버전 변경에 덜 민감함). 첫 관찰 콜백은 마운트 직후 초기 크기 보고라 건너뛴다.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || typeof ResizeObserver === "undefined") return;
+
+    let isFirstObservation = true;
+    const observer = new ResizeObserver(() => {
+      if (isFirstObservation) {
+        isFirstObservation = false;
+        return;
+      }
+      window.dispatchEvent(new Event("resize"));
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     // transform으로 별도 GPU 컴포지팅 레이어를 강제해 overflow:hidden 클리핑을 시트 캔버스와
     // 같은 레이어에서 동기화한다 — 위로 스크롤 우회 코드(위 useEffect)가 scrollTop을 강제로
