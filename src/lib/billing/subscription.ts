@@ -589,12 +589,9 @@ export async function changeSeats(actor: BillingActorRef, seatCnt: number, now =
       throw new BillingError(E.PAYMENT_FAILED, `좌석 추가 결제가 거절되었습니다. ${charge.message}`, 402, { pgCode: charge.code });
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
-      // 내 토큰이 그대로일 때만 반영 — 2분 넘어 다른 작업이 인계했으면 구독은 건드리지 않는다
-      const applied = await tx.tbBlSubscription.updateMany({
-        where: { sbscrptn_id: active.sbscrptn_id, billing_op_token: opToken },
-        data:  { seat_cnt: seatCnt, pending_seat_cnt: null, billing_op_token: null, billing_op_started_dt: null, mdfcn_dt: now },
-      });
+    // 정기 결제와 같은 순서 — 결제 이력을 먼저 남기고(돈이 움직였다), 구독 반영은 내 토큰이 그대로일 때만.
+    // 토큰이 인계됐으면(2분 초과) 이력만 남긴 채 커밋하고 운영자 수동 대조로 넘긴다. 이력이 롤백될 경로가 없다.
+    const applied = await prisma.$transaction(async (tx) => {
       await tx.tbBlPayment.create({
         data: paidPaymentData({
           sbscrptnId: active.sbscrptn_id, mberId: actor.mberId, type: PAYMENT_TYPE.SEAT_ADD, amount: pr.amount,
@@ -602,24 +599,17 @@ export async function changeSeats(actor: BillingActorRef, seatCnt: number, now =
           paymentKey: charge.paymentKey, receiptUrl: charge.receiptUrl, approvedAt: charge.approvedAt,
         }),
       });
-      if (applied.count !== 1) {
-        console.error(`[billing] CRITICAL 좌석 추가 결제는 승인(${orderId})됐으나 구독 반영 실패 — 토큰 인계됨. sub=${active.sbscrptn_id} 수동 대조 필요`);
-        throw new BillingError(E.RECONCILE_REQUIRED, "결제는 완료되었지만 구독 반영이 지연되었습니다. 운영자가 확인 후 반영합니다.", 500);
-      }
-      return (await tx.tbBlSubscription.findUniqueOrThrow({ where: { sbscrptn_id: active.sbscrptn_id } }));
-    }).catch(async (err) => {
-      // 결제 이력이 롤백되지 않도록 — 반영 실패 시 이력만 다시 남긴다
-      if (err instanceof BillingError && err.code === E.RECONCILE_REQUIRED) {
-        await prisma.tbBlPayment.create({
-          data: paidPaymentData({
-            sbscrptnId: active.sbscrptn_id, mberId: actor.mberId, type: PAYMENT_TYPE.SEAT_ADD, amount: pr.amount,
-            seatCnt: addSeats, periodStart: now, periodEnd: active.crrnt_perd_end_dt!, provider: gw.provider, orderId,
-            paymentKey: charge.paymentKey, receiptUrl: charge.receiptUrl, approvedAt: charge.approvedAt,
-          }),
-        }).catch((e) => console.error("[billing] CRITICAL 결제 이력 기록도 실패:", e));
-      }
-      throw err;
+      const r = await tx.tbBlSubscription.updateMany({
+        where: { sbscrptn_id: active.sbscrptn_id, billing_op_token: opToken },
+        data:  { seat_cnt: seatCnt, pending_seat_cnt: null, billing_op_token: null, billing_op_started_dt: null, mdfcn_dt: now },
+      });
+      return r.count === 1;
     });
+    if (!applied) {
+      console.error(`[billing] CRITICAL 좌석 추가 결제는 승인(${orderId})됐으나 구독 반영 실패 — 토큰 인계됨. sub=${active.sbscrptn_id} 수동 대조 필요`);
+      throw new BillingError(E.RECONCILE_REQUIRED, "결제는 완료되었지만 구독 반영이 지연되었습니다. 운영자가 확인 후 반영합니다.", 500);
+    }
+    const updated = await prisma.tbBlSubscription.findUniqueOrThrow({ where: { sbscrptn_id: active.sbscrptn_id } });
 
     await sendPaymentReceiptEmail({
       to: actor.email, productName: product.name, kind: "SEAT_ADD", amount: pr.amount, seatCnt: addSeats,

@@ -64,7 +64,7 @@ function AdminAuditInner() {
   const params = useSearchParams();
   const [actionType, setActionType] = useState(params.get("actionType") ?? "");
   const [targetType, setTargetType] = useState(params.get("targetType") ?? "");
-  const [targetId]                  = useState(params.get("targetId") ?? "");
+  const [targetId,   setTargetId]   = useState(params.get("targetId") ?? "");
   const [page,       setPage]       = useState(1);
 
   const query = useQuery<AuditResponse["data"]>({
@@ -103,6 +103,19 @@ function AdminAuditInner() {
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
+        {/* 대상 ID 필터 — 구독 상세 등에서 링크로 들어왔을 때만 생긴다. 보이게 하고 지울 수 있게 */}
+        {targetId && (
+          <span className="sp-badge sp-badge-brand" style={{ gap: 6 }}>
+            대상 ID: <span style={{ fontFamily: "var(--font-mono)" }}>{targetId.slice(0, 8)}…</span>
+            <button
+              onClick={() => { setTargetId(""); setPage(1); }}
+              aria-label="대상 ID 필터 해제"
+              style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 0, lineHeight: 1 }}
+            >
+              ✕
+            </button>
+          </span>
+        )}
         <div style={{ marginLeft: "auto", fontSize: "var(--text-sm)", color: "var(--color-text-tertiary)" }}>
           총 {totalCount.toLocaleString()}건
         </div>
