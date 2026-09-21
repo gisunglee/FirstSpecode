@@ -182,9 +182,12 @@ export default function MarkdownEditor({
           >
             <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", whiteSpace: "nowrap" }}>⠿ {title} (확대)</span>
             {onTabChange && <MarkdownTabButtons tab={tab} onTabChange={onTabChange} />}
+            {/* 크기 버튼은 왼쪽 그룹에 둔다 — 패널은 왼쪽 좌표 기준으로 오른쪽으로만 늘어나므로
+                오른쪽 정렬이면 넓게/좁게를 누를 때마다 버튼이 마우스 밑에서 옆으로 도망가
+                연타가 안 됐다. 왼쪽 가장자리는 폭 변경에 안 움직여 버튼이 제자리에 있다. */}
+            <PanelSizeControl onNarrow={narrowPanel} onWiden={widenPanel} isFull={panelIsFull} onToggleFull={togglePanelFull} />
             <div style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
               <FontScaleControl />
-              <PanelSizeControl onNarrow={narrowPanel} onWiden={widenPanel} isFull={panelIsFull} onToggleFull={togglePanelFull} />
               <button
                 type="button"
                 onClick={() => setExpanded(false)}
