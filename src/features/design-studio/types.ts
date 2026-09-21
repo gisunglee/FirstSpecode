@@ -207,3 +207,18 @@ export type RelatedCodesResponse = {
   dbTables: RelatedDbTable[];
   functions: RelatedFunctionCode[];
 };
+
+/** 관련 정보 패널 — 단위업무에 연결된 테스트 명세 (GET /api/projects/[id]/test-specs?unitWorkId=) */
+export type RelatedTestSpec = {
+  testSpecId: string;
+  displayId: string;
+  /** UNIT | INTEGRATION */
+  testKindCode: string;
+  testSpecNm: string;
+  /** DRAFT | IN_PROGRESS | PASSED | FAILED */
+  sttusCode: string;
+  /** 이 명세가 덮는 화면 — 현재 문서가 화면이면 포함 여부로 굵기 표시 */
+  screens: Array<{ screenId: string; displayId: string | null; name: string | null }>;
+  caseCount: number;
+  roundCount: number;
+};

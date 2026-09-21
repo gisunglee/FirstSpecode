@@ -5,10 +5,11 @@
 import { useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import MemoEntryButton from "@/components/common/MemoEntryButton";
-import { fetchRelatedCodes } from "./api";
+import { fetchRelatedCodes, fetchRelatedTestSpecs } from "./api";
 import PanelToggleIcon from "./PanelToggleIcon";
 import StudioRelatedCodes from "./StudioRelatedCodes";
 import StudioRelatedDb from "./StudioRelatedDb";
+import StudioRelatedTests from "./StudioRelatedTests";
 import type { StudioBlock } from "./types";
 
 const RELATED_INFO_AUTO_LOAD_DELAY_MS = 10_000;
@@ -22,7 +23,7 @@ type Props = {
   onToggleCollapsed: () => void;
 };
 
-const RELATED_MODULES = ["기준정보", "테스트케이스"];
+const RELATED_MODULES = ["기준정보"];
 const MEMO_REF_TYPE_BY_KIND: Record<StudioBlock["kind"], string> = {
   requirement: "REQUIREMENT",
   analysis: "REQUIREMENT",
@@ -42,35 +43,39 @@ export default function StudioInspector({
 }: Props) {
   const requirement = blocks.find((block) => block.kind === "requirement");
   const memoRefType = selectedBlock ? MEMO_REF_TYPE_BY_KIND[selectedBlock.kind] : undefined;
-  // Future DB/API/test queries should join this top-level loader so one user action
-  // prepares every related-information module for the current unit work.
+  // 관련 정보 조회는 전부 이 로더 하나에 합류한다 — 사용자 동작 한 번(또는 10초 자동)으로 현재 단위업무의
+  // 모듈 전체를 채우고, 이후 스크롤은 캐시만 읽는다. 새 모듈은 useQuery 하나 + Promise.all 한 줄 추가.
   const relatedCodesQuery = useQuery({
     queryKey: ["design-studio", projectId, "related-codes", unitWorkId],
     queryFn: () => fetchRelatedCodes(projectId, unitWorkId),
     enabled: false,
     staleTime: Number.POSITIVE_INFINITY,
   });
+  const relatedTestsQuery = useQuery({
+    queryKey: ["design-studio", projectId, "related-test-specs", unitWorkId],
+    queryFn: () => fetchRelatedTestSpecs(projectId, unitWorkId),
+    enabled: false,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+
+  // 로더 상태 표시는 모듈 전체를 하나로 본다 — 하나라도 실패면 실패, 전부 있으면 불러옴
+  const relatedLoaded   = !!relatedCodesQuery.data && !!relatedTestsQuery.data;
+  const relatedFetching = relatedCodesQuery.isFetching || relatedTestsQuery.isFetching;
+  const relatedError    = relatedCodesQuery.error ?? relatedTestsQuery.error ?? null;
 
   const loadRelatedInfo = useCallback(async () => {
-    // Add future related-information queries to this Promise.all batch.
-    await Promise.all([relatedCodesQuery.refetch()]);
-  }, [relatedCodesQuery.refetch]);
+    await Promise.all([relatedCodesQuery.refetch(), relatedTestsQuery.refetch()]);
+  }, [relatedCodesQuery.refetch, relatedTestsQuery.refetch]);
 
   useEffect(() => {
-    if (!unitWorkId || relatedCodesQuery.data || relatedCodesQuery.isFetching || relatedCodesQuery.isError) {
+    if (!unitWorkId || relatedLoaded || relatedFetching || relatedError) {
       return;
     }
     const timer = window.setTimeout(() => {
       void loadRelatedInfo();
     }, RELATED_INFO_AUTO_LOAD_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [
-    loadRelatedInfo,
-    relatedCodesQuery.data,
-    relatedCodesQuery.isError,
-    relatedCodesQuery.isFetching,
-    unitWorkId,
-  ]);
+  }, [loadRelatedInfo, relatedLoaded, relatedFetching, relatedError, unitWorkId]);
 
   return (
     <aside className={`sp-studio-inspector${collapsed ? " is-collapsed" : ""}`}>
@@ -104,33 +109,33 @@ export default function StudioInspector({
           <div className="sp-studio-related-loader">
             <div>
               <strong>
-                {relatedCodesQuery.data
+                {relatedLoaded
                   ? "관련 정보 불러옴"
-                  : relatedCodesQuery.isError
+                  : relatedError
                     ? "관련 정보 조회 실패"
                     : "관련 정보 준비"}
               </strong>
               <span>
-                {relatedCodesQuery.data
+                {relatedLoaded
                   ? "현재 단위업무 데이터가 캐시되어 있습니다."
-                  : relatedCodesQuery.isError
-                    ? relatedCodesQuery.error instanceof Error
-                      ? relatedCodesQuery.error.message
+                  : relatedError
+                    ? relatedError instanceof Error
+                      ? relatedError.message
                       : "관련 정보를 조회하지 못했습니다."
                     : "클릭하지 않으면 10초 후 자동으로 불러옵니다."}
               </span>
             </div>
             <button
               type="button"
-              className={`sp-btn ${relatedCodesQuery.data ? "sp-btn-ghost" : "sp-btn-primary"} sp-btn-sm`}
-              disabled={relatedCodesQuery.isFetching}
+              className={`sp-btn ${relatedLoaded ? "sp-btn-ghost" : "sp-btn-primary"} sp-btn-sm`}
+              disabled={relatedFetching}
               onClick={() => void loadRelatedInfo()}
             >
-              {relatedCodesQuery.isFetching
+              {relatedFetching
                 ? "불러오는 중..."
-                : relatedCodesQuery.data
+                : relatedLoaded
                   ? "새로고침"
-                  : relatedCodesQuery.isError
+                  : relatedError
                     ? "다시 불러오기"
                     : "관련 정보 불러오기"}
             </button>
@@ -159,6 +164,12 @@ export default function StudioInspector({
             <StudioRelatedDb
               blocks={blocks}
               data={relatedCodesQuery.data}
+              selectedBlock={selectedBlock}
+            />
+
+            <StudioRelatedTests
+              projectId={projectId}
+              data={relatedTestsQuery.data}
               selectedBlock={selectedBlock}
             />
 

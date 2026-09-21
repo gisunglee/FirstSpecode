@@ -12,6 +12,7 @@ import type {
   DesignTreeResponse,
   RequirementDetail,
   RelatedCodesResponse,
+  RelatedTestSpec,
   StudioBlock,
   StudioDraft,
   UnitWorkSummary,
@@ -54,6 +55,20 @@ export async function fetchRelatedCodes(
     `/api/projects/${projectId}/design-studio/related-codes?unitWorkId=${encodeURIComponent(unitWorkId)}`,
   );
   return response.data;
+}
+
+/**
+ * 단위업무에 연결된 테스트 명세(단위·통합) — 기존 목록 API 를 unitWorkId 필터로 그대로 쓴다.
+ * 응답에 화면 연결 목록이 함께 오므로 화면 블록별 표시에 추가 호출이 없다.
+ */
+export async function fetchRelatedTestSpecs(
+  projectId: string,
+  unitWorkId: string,
+): Promise<RelatedTestSpec[]> {
+  const response = await authFetch<ApiEnvelope<{ items: RelatedTestSpec[]; totalCount: number }>>(
+    `/api/projects/${projectId}/test-specs?unitWorkId=${encodeURIComponent(unitWorkId)}`,
+  );
+  return response.data.items;
 }
 
 function detailPath(projectId: string, block: StudioBlock): string {
