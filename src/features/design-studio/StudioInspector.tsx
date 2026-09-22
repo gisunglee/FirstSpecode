@@ -1,6 +1,10 @@
 "use client";
 
-/** Extensible right-side inspector shell. Initial modules use the loaded hierarchy only. */
+/**
+ * Extensible right-side inspector shell.
+ * 모듈: 요구사항 · 공통코드 · DB · 테스트케이스. 기준정보(tb_cm_standard_info)는 프로젝트에만 속하고
+ * 설계 계층·컬럼 매핑과 연결 컬럼이 없어 넣지 않는다 — 연결 모델이 생기면 그때 추가 (2026-09-22).
+ */
 
 import { useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -23,7 +27,6 @@ type Props = {
   onToggleCollapsed: () => void;
 };
 
-const RELATED_MODULES = ["기준정보"];
 const MEMO_REF_TYPE_BY_KIND: Record<StudioBlock["kind"], string> = {
   requirement: "REQUIREMENT",
   analysis: "REQUIREMENT",
@@ -173,12 +176,6 @@ export default function StudioInspector({
               selectedBlock={selectedBlock}
             />
 
-            {RELATED_MODULES.map((label) => (
-              <details className="sp-studio-related" key={label}>
-                <summary>{label} <span>0</span></summary>
-                <p>관련 정보 연결 기능을 추가할 수 있습니다.</p>
-              </details>
-            ))}
           </div>
       </div>
     </aside>
