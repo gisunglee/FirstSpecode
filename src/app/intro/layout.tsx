@@ -3,7 +3,7 @@
  *
  * 역할:
  *   - 두 인트로 페이지(요약/전체)가 공유하는 폰트·스타일을 한 곳에서 로드
- *   - Claude Design 핸드오프 원본이 쓰던 Pretendard + IBM Plex Mono 웹폰트를 주입
+ *   - 소개 화면 전반에서 사용하는 Pretendard 웹폰트를 주입
  *   - 인트로 전용 스코프 스타일(intro.css) 적용
  *
  * 참고:
@@ -17,17 +17,11 @@ import "./intro.css";
 export default function IntroLayout({ children }: { children: ReactNode }) {
   return (
     <>
-      {/* 원본 디자인 폰트 — Pretendard(본문) · IBM Plex Mono(라벨/모노) */}
+      {/* 한글과 영문이 섞인 라벨까지 같은 인상으로 보이도록 Pretendard로 통일한다. */}
       <link rel="preconnect" href="https://cdn.jsdelivr.net" />
       <link
         rel="stylesheet"
         href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
-      />
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-      <link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap"
       />
       {children}
     </>

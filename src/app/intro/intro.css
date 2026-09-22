@@ -51,8 +51,9 @@ html:has(.sp-intro) { scroll-behavior: smooth; }
   --maxw: 1180px;
   --pad: clamp(20px, 5vw, 64px);
 
-  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --sans: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  /* 한글이 시스템 모노 폴백으로 바뀌어 깨져 보이지 않도록 보조 라벨도 본문 글꼴을 쓴다. */
+  --mono: var(--sans);
 
   /* 원본 body 스타일 — 래퍼로 이동 */
   font-family: var(--sans);
