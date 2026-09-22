@@ -670,8 +670,8 @@ const gridRowStyle: React.CSSProperties = {
   display:             "grid",
   gridTemplateColumns: GRID_TEMPLATE,
   gap:                 12,
-  padding:             "4px 16px",
-  minHeight:           48,
+  padding:             "8px 16px",   // 다른 목록 페이지와 동일 값
+  minHeight:           40,   // 행간 축소(48 → 40). 액션 버튼이 없는 행도 같은 높이를 유지하기 위한 하한
   alignItems:          "center",
   background:          "var(--color-bg-card)",
   transition:          "background 0.1s",
