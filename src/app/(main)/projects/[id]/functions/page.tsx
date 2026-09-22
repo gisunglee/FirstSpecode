@@ -752,7 +752,7 @@ const gridHeaderStyle: React.CSSProperties = {
 };
 const gridRowStyle: React.CSSProperties = {
   display: "grid", gridTemplateColumns: GRID_TEMPLATE, gap: 8,
-  padding: "12px 16px", alignItems: "center",
+  padding: "8px 16px", alignItems: "center",   // 행간 축소(기본 12px → 8px)
   background: "var(--color-bg-card)", transition: "background 0.1s",
   cursor: "pointer",
 };

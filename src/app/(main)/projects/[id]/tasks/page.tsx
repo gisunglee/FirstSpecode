@@ -293,7 +293,7 @@ function TaskListPageInner() {
                 style={{
                   display: "grid",
                   gridTemplateColumns: TASK_GRID_TEMPLATE,
-                  padding: "12px 16px",
+                  padding: "8px 16px",   // 행간 축소(기본 12px → 8px)
                   borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
                   alignItems: "center",
                   gap: 12,

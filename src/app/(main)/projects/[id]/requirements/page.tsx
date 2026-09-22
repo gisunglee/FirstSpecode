@@ -842,7 +842,7 @@ const gridRowStyle: React.CSSProperties = {
   display:             "grid",
   gridTemplateColumns: GRID_TEMPLATE,
   gap:                 GRID_GAP,
-  padding:             "12px 16px",
+  padding:             "8px 16px",   // 행간 축소(기본 12px → 8px)
   alignItems:          "center",
   background:          "var(--color-bg-card)",
   transition:          "background 0.1s",

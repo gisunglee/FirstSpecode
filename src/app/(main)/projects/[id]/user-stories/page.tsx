@@ -294,7 +294,7 @@ const gridRowStyle: React.CSSProperties = {
   // 요구사항(2.5fr) 가장 길어질 수 있는 컬럼에 큰 비중, 페르소나(2fr)는 보통 짧음
   gridTemplateColumns:   "2.5fr 3fr 2fr 80px",
   gap:                   12,
-  padding:               "12px 16px",
+  padding:               "8px 16px",   // 행간 축소(기본 12px → 8px)
   alignItems:            "center",
   background:            "var(--color-bg-card)",
   transition:            "background 0.1s",
