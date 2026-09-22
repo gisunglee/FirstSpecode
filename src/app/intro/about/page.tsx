@@ -225,14 +225,14 @@ export default function IntroAboutPage() {
               </h2>
               <p className="reveal d2">
                 바이브 코딩이 정말 다 해줄까요? 개인 프로젝트나 MVP가 아니라, <b>업무가 중심을 이루는 난이도 중(中)
-                이상의 프로그램</b>도 전부 AI와 바이브 코딩으로 뚝딱 만들어 — 그대로 서비스할 수 있을까요?
+                  이상의 프로그램</b>도 전부 AI와 바이브 코딩으로 뚝딱 만들어 — 그대로 서비스할 수 있을까요?
               </p>
               <p className="reveal d2">
                 언제 어디서 문제가 터질지 모르는 <b>불안감</b>을 안고, 그렇게 살아가실 건가요?
               </p>
               <p className="hook-cta reveal d3">
                 이제 AI와 바이브 코딩하기 전에, <b>AI와 설계하세요.</b> 스펙코드와 함께{" "}
-                <span className="grad-text">30층, 안심하고 이용할 수 있는 시스템</span>을 지어보시죠.
+                <span className="grad-text"> 안심하고 이용할 수 있는 시스템</span>을 지어보시죠.
               </p>
             </div>
             <div className="hook-visual reveal d2">
