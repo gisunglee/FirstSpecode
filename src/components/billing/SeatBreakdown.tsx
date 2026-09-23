@@ -4,20 +4,21 @@
  * SeatBreakdown — "좌석에 누가 포함되나요?" 펼치기 (정책 §1-4)
  *
  * 역할:
- *   - 좌석 숫자만 보면 "왜 4명?"이 생긴다. 사람을 행으로, 그 사람이 속한 소유 프로젝트·역할을 칩으로 보여 줘
- *     "같은 사람이 세 프로젝트에 있어도 1좌석"을 그대로 드러낸다.
- *   - 좌석 차감(편집 역할) / 무료(뷰어) 두 묶음. 본인은 항상 첫 줄.
+ *   - 좌석 숫자만 보면 "왜 4명?"이 생긴다. 위에는 좌석 차감 멤버 이름을 한 줄로 나열(중복 제거된 그 사람들),
+ *     아래에는 프로젝트별 표(프로젝트 | 편집 멤버 | 뷰어)로 "누가 어디에 있나"를 보여 준다.
+ *   - 같은 이름이 여러 프로젝트 행에 나오지만 위 한 줄에는 한 번만 — 중복 제거가 그대로 드러난다.
  *   - 초대 중인 편집 멤버가 있으면 "수락 시 좌석을 더 씁니다" 한 줄 — 딱 맞게 사서 수락이 막히는 민원 방지.
- *   - 역할 변경은 여기서 하지 않는다. 프로젝트 칩 → 그 프로젝트의 멤버 관리로 보낸다.
+ *   - 역할 변경은 여기서 하지 않는다. 프로젝트 이름 → 그 프로젝트의 멤버 관리로 보낸다.
  *
- * 기본 접힘, 펼칠 때 /api/billing/seats/breakdown 을 부른다(개요 API 를 무겁게 하지 않기 위해).
- * 구독 시작 카드·플랜 카드·좌석 축소 모달 세 곳에서 같은 컴포넌트를 쓴다.
+ * 2026-09-23 사용자 피드백: 사람별 칩 나열은 지저분하다 → 이름 나열 + 프로젝트 행 표로 정리. 이메일은 툴팁만.
+ * 기본 접힘, 펼칠 때 /api/billing/seats/breakdown 을 부른다. 시작 카드·플랜 카드·좌석 축소 모달 세 곳 공용.
  */
 
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
+import { ROLE_LABEL, isRoleCode } from "@/lib/permissions";
 import type { SeatBreakdown as SeatBreakdownData, SeatMemberRow } from "@/lib/billing/seats";
 
 type Props = {
@@ -26,6 +27,40 @@ type Props = {
   /** 모달 안처럼 처음부터 펼쳐 둘 때 */
   defaultOpen?: boolean;
 };
+
+type ProjectRow = {
+  projectId: string;
+  name:      string;
+  editors:   Array<{ label: string; email: string | null; role: string }>;
+  viewers:   Array<{ label: string; email: string | null }>;
+};
+
+/** 사람 기준 응답을 프로젝트 행으로 뒤집는다. 프로젝트 순서는 처음 등장한 순(서버가 생성일 순으로 준다) */
+function toProjectRows(d: SeatBreakdownData): ProjectRow[] {
+  const rows = new Map<string, ProjectRow>();
+  const push = (person: SeatMemberRow, kind: "editor" | "viewer") => {
+    for (const p of person.projects) {
+      const row = rows.get(p.projectId) ?? { projectId: p.projectId, name: p.name, editors: [], viewers: [] };
+      const label = displayName(person);
+      if (kind === "editor") row.editors.push({ label, email: person.email, role: p.role });
+      else row.viewers.push({ label, email: person.email });
+      rows.set(p.projectId, row);
+    }
+  };
+  d.editors.forEach((e) => push(e, "editor"));
+  d.viewers.forEach((v) => push(v, "viewer"));
+  return [...rows.values()];
+}
+
+function displayName(r: SeatMemberRow): string {
+  return (r.name ?? r.email ?? r.mberId.slice(0, 8)) + (r.isSelf ? " (본인)" : "");
+}
+
+/** 역할 꼬리표 — 소유자·관리자만 붙인다. MEMBER 는 기본이라 생략해 표를 조용하게 */
+function roleTag(role: string): string {
+  if (role === "OWNER" || role === "ADMIN") return ` · ${isRoleCode(role) ? ROLE_LABEL[role] : role}`;
+  return "";
+}
 
 export default function SeatBreakdown({ usedSeats, defaultOpen = false }: Props) {
   const [open, setOpen] = useState(defaultOpen);
@@ -37,6 +72,7 @@ export default function SeatBreakdown({ usedSeats, defaultOpen = false }: Props)
     staleTime: 30 * 1000,
   });
   const d = q.data;
+  const projectRows = d ? toProjectRows(d) : [];
 
   return (
     <div style={{ border: "1px solid var(--color-border-subtle)", borderRadius: "var(--radius-sm)", background: "var(--color-bg-elevated)" }}>
@@ -52,13 +88,54 @@ export default function SeatBreakdown({ usedSeats, defaultOpen = false }: Props)
       </button>
 
       {open && (
-        <div style={{ padding: "0 12px 12px", display: "grid", gap: 12, fontSize: "var(--text-sm)" }}>
+        <div style={{ padding: "0 12px 12px", display: "grid", gap: 10, fontSize: "var(--text-sm)" }}>
           {q.isLoading && <div style={{ color: "var(--color-text-tertiary)" }}>불러오는 중…</div>}
           {q.isError && <div className="sp-hint is-err">{(q.error as Error).message}</div>}
           {d && (
             <>
-              <Group title={`좌석 차감 (${d.editors.length})`} rows={d.editors} emptyText="편집 멤버가 없습니다." />
-              <Group title={`무료 — 뷰어 (${d.viewers.length})`} rows={d.viewers} emptyText="뷰어가 없습니다." muted />
+              {/* 위: 좌석 차감 멤버 이름 한 줄 — 중복 제거된 사람들 그 자체 */}
+              <div style={{ lineHeight: 1.7 }}>
+                <span style={{ color: "var(--color-text-tertiary)", marginRight: 8 }}>좌석 차감 {d.editors.length}명</span>
+                {d.editors.length === 0
+                  ? <span style={{ color: "var(--color-text-tertiary)" }}>없음</span>
+                  : d.editors.map((e, i) => (
+                      <span key={e.mberId} title={e.email ?? undefined} style={{ color: "var(--color-text-primary)", fontWeight: e.isSelf ? 600 : 400 }}>
+                        {i > 0 && <span style={{ color: "var(--color-text-tertiary)" }}> · </span>}{displayName(e)}
+                      </span>
+                    ))}
+                <span style={{ color: "var(--color-text-tertiary)", marginLeft: 12 }}>
+                  뷰어(무료) {d.viewers.length}명{d.viewers.length > 0 && `: ${d.viewers.map(displayName).join(", ")}`}
+                </span>
+              </div>
+
+              {/* 아래: 프로젝트 행 표 — 누가 어디에 있나 */}
+              <div className="sp-table-wrap" style={{ background: "var(--color-bg-card)" }}>
+                <table className="sp-table">
+                  <thead>
+                    <tr><th style={{ width: "40%" }}>프로젝트</th><th>편집 멤버 (좌석)</th><th style={{ width: "22%" }}>뷰어 (무료)</th></tr>
+                  </thead>
+                  <tbody>
+                    {projectRows.length === 0 && <tr><td colSpan={3} className="is-muted" style={{ textAlign: "center" }}>소유한 프로젝트가 없습니다.</td></tr>}
+                    {projectRows.map((p) => (
+                      <tr key={p.projectId}>
+                        <td>
+                          <Link href={`/projects/${p.projectId}/members`} title="멤버 관리로 이동" style={{ color: "var(--color-text-primary)", textDecoration: "none" }}>
+                            {p.name}
+                          </Link>
+                        </td>
+                        <td>
+                          {p.editors.map((e, i) => (
+                            <span key={i} title={e.email ?? undefined}>{i > 0 && ", "}{e.label}<span className="is-muted">{roleTag(e.role)}</span></span>
+                          ))}
+                        </td>
+                        <td className={p.viewers.length ? undefined : "is-muted"}>
+                          {p.viewers.length ? p.viewers.map((v, i) => <span key={i} title={v.email ?? undefined}>{i > 0 && ", "}{v.label}</span>) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
               <div style={{ color: "var(--color-text-tertiary)", fontSize: "var(--text-xs)", lineHeight: 1.6 }}>
                 {d.pendingEditorInvites > 0 && (
@@ -70,42 +147,6 @@ export default function SeatBreakdown({ usedSeats, defaultOpen = false }: Props)
               </div>
             </>
           )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Group({ title, rows, emptyText, muted }: { title: string; rows: SeatMemberRow[]; emptyText: string; muted?: boolean }) {
-  return (
-    <div>
-      <div style={{ fontSize: "var(--text-2xs)", textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--color-text-tertiary)", marginBottom: 6 }}>{title}</div>
-      {rows.length === 0 ? (
-        <div style={{ color: "var(--color-text-tertiary)" }}>{emptyText}</div>
-      ) : (
-        <div style={{ display: "grid", gap: 6 }}>
-          {rows.map((r) => (
-            <div key={r.mberId} style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", opacity: muted ? 0.8 : 1 }}>
-              <span style={{ minWidth: 140, color: "var(--color-text-primary)", fontWeight: r.isSelf ? 600 : 400 }}>
-                {r.name ?? r.email ?? r.mberId.slice(0, 8)}
-                {r.isSelf && <span style={{ color: "var(--color-brand)", marginLeft: 4, fontSize: "var(--text-xs)" }}>(본인)</span>}
-                {r.name && r.email && <span style={{ color: "var(--color-text-tertiary)", marginLeft: 6, fontSize: "var(--text-xs)" }}>{r.email}</span>}
-              </span>
-              <span style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                {r.projects.map((p) => (
-                  <Link
-                    key={p.projectId}
-                    href={`/projects/${p.projectId}/members`}
-                    className="sp-badge sp-badge-neutral"
-                    title={`${p.name} 멤버 관리로 이동`}
-                    style={{ textDecoration: "none" }}
-                  >
-                    {p.name} <span style={{ opacity: 0.7, marginLeft: 3 }}>{p.role}</span>
-                  </Link>
-                ))}
-              </span>
-            </div>
-          ))}
         </div>
       )}
     </div>
