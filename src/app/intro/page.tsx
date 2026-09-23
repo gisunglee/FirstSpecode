@@ -47,8 +47,8 @@ export default function IntroPage() {
         />
         <div className="wrap">
           <div className="hero-badges reveal">
-            <span className="pill b">2~7억 공공 SI 최적화</span>
-            <span className="pill">기존 개발팀을 위한</span>
+            <span className="pill b">공공 SI 실무에 최적화</span>
+            <span className="pill">산출물 · 운영 · 유지보수까지</span>
             <span className="pill">AI 설계 플랫폼</span>
           </div>
           <h1 className="reveal d1">
@@ -58,9 +58,8 @@ export default function IntroPage() {
             </span>
           </h1>
           <p className="hero-sub reveal d2">
-            바이브 코딩으로 화면은 뚝딱 나오는데, 시스템은 점점 <b>알 수 없게</b> 됩니다. 스펙코드는{" "}
-            <b>구현 전에 제대로 설계</b>하고, AI에게 최적화된 문서로 전달해{" "}
-            <b>흔들림 없는 고품질 구현</b>이 되도록 돕습니다.
+            스펙코드는 요구사항과 설계 결정을 구조화해 AI가 프로젝트의 맥락을 이해하도록 돕습니다. 구현 속도뿐 아니라{" "}
+            <b>제출 산출물과 구축 이후 운영·유지보수까지 이어지는 기준</b>을 만듭니다.
           </p>
           <div className="hero-cta reveal d3">
             <Link href={LOGIN_PATH} className="btn btn-primary">
@@ -284,7 +283,8 @@ export default function IntroPage() {
             <div className="for-line yes reveal d1">
               <span className="fy">FOR</span>
               <span className="ft">
-                2~7억 규모의 공공 SI 사업팀<small>제출 산출물이 많고, 품질을 장담해야 하는 프로젝트</small>
+                산출물과 유지보수가 중요한 공공 SI 사업팀
+                <small>요구사항부터 구축 이후 운영까지 기준이 남아야 하는 프로젝트</small>
               </span>
             </div>
             <div className="for-line yes reveal d1">
@@ -315,10 +315,7 @@ export default function IntroPage() {
             <span className="grad-text">AI와 설계하세요.</span>
           </h2>
           <p className="reveal d2">
-            규모 있는 공공 SI를, AI와 함께 안심하고 올리는 방법.{" "}
-            <span style={{ color: "var(--paper-faint)", fontFamily: "var(--mono)", fontSize: "0.9em" }}>
-              (2026.07 오픈 예정)
-            </span>
+            요구사항부터 산출물과 유지보수까지, AI와 함께 일관된 기준으로 이어가는 방법.
           </p>
           <div className="final-cta reveal d3">
             <Link href={LOGIN_PATH} className="btn btn-primary">
@@ -337,7 +334,7 @@ export default function IntroPage() {
       {/* ===================== STICKY DOCK ===================== */}
       <div className="dock">
         <div className="d-txt">
-          AI와 구현하기 전에, AI와 설계하세요<small>2~7억 공공 SI 최적화 · 기존 개발팀을 위한</small>
+          AI와 구현하기 전에, AI와 설계하세요<small>공공 SI 실무 최적화 · 산출물부터 유지보수까지</small>
         </div>
         <Link href={LOGIN_PATH} className="btn btn-primary btn-sm">
           이용하기 <span className="arr">→</span>

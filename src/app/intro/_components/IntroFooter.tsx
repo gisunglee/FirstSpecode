@@ -11,7 +11,7 @@
  */
 
 import Link from "next/link";
-import { BUSINESS, INTRO_PATHS } from "./siteInfo";
+import { BILLING_OPEN, BUSINESS, INTRO_PATHS } from "./siteInfo";
 
 export default function IntroFooter() {
   return (
@@ -24,8 +24,8 @@ export default function IntroFooter() {
             <span className="b-dot" />
           </div>
           <p className="f-disc">
-            스펙코드는 2~7억 규모 공공 SI 사업에 최적화된 AI 설계 플랫폼입니다. 개발을 전혀 모르는 일반인이
-            아닌, 기존 개발팀이 AI를 더 잘 활용하도록 돕습니다.
+            스펙코드는 요구사항과 설계 결정, 제출 산출물을 연결해 구축 이후 운영·유지보수까지 기준을 이어가는 공공 SI
+            개발팀용 AI 설계 플랫폼입니다.
           </p>
           <nav className="f-links" aria-label="법적 고지">
             <Link href={INTRO_PATHS.pricing}>요금제</Link>
@@ -46,22 +46,27 @@ export default function IntroFooter() {
             <dt>대표</dt>
             <dd>{BUSINESS.ceoName}</dd>
           </div>
-          <div>
-            <dt>사업자등록번호</dt>
-            <dd>{BUSINESS.bizRegNo}</dd>
-          </div>
-          <div>
-            <dt>통신판매업신고</dt>
-            <dd>{BUSINESS.mailOrderNo}</dd>
-          </div>
-          <div>
-            <dt>주소</dt>
-            <dd>{BUSINESS.address}</dd>
-          </div>
-          <div>
-            <dt>전화</dt>
-            <dd>{BUSINESS.phone}</dd>
-          </div>
+          {/* 결제 오픈 전에는 심사용 임시값을 공개하지 않는다. 실제 값 확정 후 BILLING_OPEN과 함께 노출된다. */}
+          {BILLING_OPEN && (
+            <>
+              <div>
+                <dt>사업자등록번호</dt>
+                <dd>{BUSINESS.bizRegNo}</dd>
+              </div>
+              <div>
+                <dt>통신판매업신고</dt>
+                <dd>{BUSINESS.mailOrderNo}</dd>
+              </div>
+              <div>
+                <dt>주소</dt>
+                <dd>{BUSINESS.address}</dd>
+              </div>
+              <div>
+                <dt>전화</dt>
+                <dd>{BUSINESS.phone}</dd>
+              </div>
+            </>
+          )}
           <div>
             <dt>문의</dt>
             <dd>

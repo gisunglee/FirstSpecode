@@ -2,8 +2,8 @@
  * IntroAboutPage — SPECODE 인트로 · 전체 소개("스펙코드 소개", 다크 테마) (/intro/about)
  *
  * 역할:
- *   - 스펙코드 전반을 길게 설명하는 풀 소개 페이지 (배경 문제 → 전환 → Q&A →
- *     설계 구조 → 산출물 → 30층 비유 → 타겟 → 분석/설계 구성 → 등록 방식 → 비전)
+ *   - 스펙코드 전반을 설명하는 풀 소개 페이지 (문제 인식 → 해결 방식 → 설계 구조 →
+ *     산출물 → 대상 팀 → 분석/설계 구성 → 등록 방식 → 확장 방향)
  *   - 요약 페이지(/intro)에서 "자세히 보기"로 진입
  *
  * 디자인 출처:
@@ -35,26 +35,26 @@ const ANALYZE_STEPS: PhaseStep[] = [
   {
     si: "a1",
     title: "과업",
-    body: "제안요청서(RFP)에 있는 기능 요구사항입니다. Ctrl+C, Ctrl+V로 그대로 옮기면 됩니다.",
-    tip: "고객이 하고 싶은 것",
+    body: "제안요청서(RFP)와 과업지시서에 담긴 요구 내용을 옮겨 프로젝트의 출발점으로 삼습니다.",
+    tip: "발주 문서의 요구 내용",
   },
   {
     si: "a2",
     title: "요구사항",
-    body: "과업을 요구사항 단위로 분리합니다. 과업과 1:1일 때도, 1:N으로 나뉠 때도, 여러 과업의 일부가 하나로 합쳐질 때도 있습니다. 전산을 아는 사람이 분석·설계·구현하기 적당한 크기의 의미 있는 범위로 잘라냅니다. 인터뷰 내용·디테일·의미·구조를 자세히 적어두면, 나중에 요건정의서가 되고 기획실에서 요긴하게 쓰입니다.",
+    body: "과업을 분석·설계·구현하기 좋은 요구사항 단위로 나눕니다. 하나의 과업이 여러 요구사항으로 나뉘거나, 여러 과업의 일부가 하나의 요구사항으로 합쳐질 수도 있습니다. 인터뷰에서 확인한 업무 규칙과 배경을 함께 기록하면 요건정의서와 AI 기획의 근거가 됩니다.",
     tip: "만들기 적당한 의미 단위",
   },
   {
     si: "a3",
-    title: "스토리보드",
-    body: "애자일 방법론의 방식으로, 요구사항에 대한 스토리를 적습니다. 페르소나를 설정하고 시나리오를 적으며 이용 케이스를 그려보고, 충족되어야 할 인수 조건을 정의합니다. 이 정보는 나중에 AI가 분석·설계 방향을 고민할 때 길을 잡아줍니다.",
+    title: "사용자 스토리",
+    body: "사용자 관점에서 페르소나와 시나리오, 이용 사례, 인수 조건을 정리합니다. 이 정보는 AI가 요구사항의 의도와 완료 기준을 이해하는 데 활용됩니다.",
     tip: "페르소나 · 시나리오 · 인수조건",
   },
   {
     si: "a4",
     title: "기획실",
-    body: "요구사항 & 사용자 스토리를 소스로, AI와 함께 기획을 진행하는 메뉴입니다. 그간 열심히 적어둔 분석 내용에는 이미 많은 정보가 있죠. 이걸 AI에게 주면 화면정의(HTML), 업무 흐름, ERD, 정보구조도 등 다양한 결과를 양질로 돌려줍니다. 물론 그 결과물을 바로 설계에 적용하긴 어렵지만, “어떻게 화면을 만들지, 어떤 프로세스로 갈지” AI에게 먼저 제시받을 수 있습니다. 좋은 분석을 받은 AI는 아주 양질의 결과를 줍니다 — 기존에 보시던 결과와는 차원이 다르죠.",
-    tip: "화면정의 · 업무흐름 · ERD · 정보구조도",
+    body: "요구사항과 사용자 스토리를 바탕으로 AI와 기획 초안을 만드는 메뉴입니다. 화면 초안(HTML), 업무 흐름, ERD, 정보구조도 등을 먼저 검토하고 설계 방향을 정할 수 있습니다. 결과물은 그대로 확정하는 문서가 아니라, 팀이 검토하고 결정하기 위한 출발점으로 사용합니다.",
+    tip: "화면 초안 · 업무 흐름 · ERD · 정보구조도",
   },
 ];
 
@@ -75,14 +75,14 @@ const DESIGN_STEPS: PhaseStep[] = [
   {
     si: "d3",
     title: "영역",
-    body: "하나의 화면을 의미 단위로 나눈 구역입니다. 예: 검색 영역 · 목록 영역 · 입력 영역.",
+    body: "화면을 목적과 역할에 따라 나눈 구성 단위입니다. 예: 검색 영역 · 목록 영역 · 입력 영역.",
     tip: "화면 속 구역",
   },
   {
     si: "d4",
     title: "기능",
-    body: "각 영역에 존재하는 액션들을 기능으로 정의해 등록합니다. 예: 키워드 검색 · 페이징 · 등록/수정. 이 정의가 곧 구현 대상이 됩니다.",
-    tip: "영역의 액션 = 구현 대상",
+    body: "사용자 동작과 시스템 처리 단위를 기능으로 정의합니다. 예: 키워드 검색 · 페이징 · 등록/수정. 이 정의가 구현과 검토의 기준이 됩니다.",
+    tip: "동작과 처리 = 구현 단위",
   },
   {
     si: "d5",
@@ -110,8 +110,8 @@ export default function IntroAboutPage() {
         />
         <div className="wrap">
           <div className="hero-badges reveal">
-            <span className="pill b">2~7억 공공 SI 최적화</span>
-            <span className="pill">기존 개발팀을 위한</span>
+            <span className="pill b">공공 SI 실무에 최적화</span>
+            <span className="pill">산출물 · 운영 · 유지보수까지</span>
             <span className="pill">PRD · 설계 산출물 자동화</span>
           </div>
           <h1 className="reveal d1">
@@ -121,8 +121,8 @@ export default function IntroAboutPage() {
             </span>
           </h1>
           <p className="hero-sub reveal d2">
-            스펙코드는 우리가 만들 프로그램을 <b>제대로 설계</b>하고, AI에게 최적화된 형태의 문서로 전달해{" "}
-            <b>일괄적으로 고품질 구현</b>이 되도록 돕는 — 공공 SI 사업을 위한 AI 설계 플랫폼입니다.
+            스펙코드는 요구사항과 설계 정보를 <b>구조화된 PRD</b>로 만들고, AI가 프로젝트의 맥락을 정확히 이해해{" "}
+            <b>구현부터 운영·유지보수까지 일관된 기준</b>을 이어가도록 돕는 공공 SI 개발팀용 설계 플랫폼입니다.
           </p>
           <div className="hero-cta reveal d3">
             <Link href={LOGIN_PATH} className="btn btn-primary">
@@ -170,9 +170,9 @@ export default function IntroAboutPage() {
             이제 <span className="grad-text">설계는 필요 없을까요?</span>
           </p>
           <p className="small reveal d2">
-            처음엔 순식간에 만들어지는 화면에 엔돌핀이 돕니다.
+            처음에는 빠르게 나오는 결과에 기대가 커집니다.
             <br />
-            하지만 <b>만들수록 시스템은 점점 어긋나기 시작합니다.</b>
+            하지만 설계 없이 기능을 더할수록 <b>시스템의 기준은 조금씩 어긋나기 시작합니다.</b>
           </p>
 
           <div className="endo reveal d3" aria-hidden="true">
@@ -224,15 +224,16 @@ export default function IntroAboutPage() {
                 <span className="grad-text">마음 편히 주무실 수 있나요?</span>
               </h2>
               <p className="reveal d2">
-                바이브 코딩이 정말 다 해줄까요? 개인 프로젝트나 MVP가 아니라, <b>업무가 중심을 이루는 난이도 중(中)
-                  이상의 프로그램</b>도 전부 AI와 바이브 코딩으로 뚝딱 만들어 — 그대로 서비스할 수 있을까요?
+                개인 프로젝트나 MVP를 넘어, <b>업무 규칙이 복잡한 중·대규모 시스템</b>도 설계 없이 AI만으로 만들어
+                안정적으로 운영할 수 있을까요?
               </p>
               <p className="reveal d2">
-                언제 어디서 문제가 터질지 모르는 <b>불안감</b>을 안고, 그렇게 살아가실 건가요?
+                구현 속도가 빨라져도 구조를 설명하고 변경 영향을 판단할 수 없다면, 그 <b>불안은 운영 단계까지</b>
+                이어집니다.
               </p>
               <p className="hook-cta reveal d3">
-                이제 AI와 바이브 코딩하기 전에, <b>AI와 설계하세요.</b> 스펙코드와 함께{" "}
-                <span className="grad-text"> 안심하고 이용할 수 있는 시스템</span>을 지어보시죠.
+                그래서 구현을 시작하기 전에, <b>AI와 먼저 설계해야 합니다.</b> 스펙코드는{" "}
+                <span className="grad-text">팀이 이해하고 검토할 수 있는 설계</span>를 만드는 과정을 돕습니다.
               </p>
             </div>
             <div className="hook-visual reveal d2">
@@ -275,16 +276,16 @@ export default function IntroAboutPage() {
             <article className="prob reveal">
               <div className="prob-text">
                 <div className="prob-num">01</div>
-                <span className="prob-tag">무개념 설계 · 불안감</span>
-                <h3>만들수록 길어지는 설명, 그리고 알 수 없는 시스템</h3>
+                <span className="prob-tag">설계 없는 구현 · 커지는 불확실성</span>
+                <h3>설명은 길어지는데, 시스템은 이해하기 어려워집니다</h3>
                 <p>
-                  처음 빠르게 만들어지는 웹사이트를 보며 엔돌핀이 돌기도 합니다. 하지만{" "}
-                  <span className="hl">만들고 또 만들수록 내 설명은 점점 길어지고</span>, 정작 어떻게 시스템이
-                  만들어졌는지조차 알 수 없게 됩니다.
+                  처음에는 짧은 요청만으로도 화면과 기능이 빠르게 만들어집니다. 하지만 기능이 늘어날수록{" "}
+                  <span className="hl">이전 결정과 예외 규칙을 매번 다시 설명</span>해야 하고, 시스템이 어떤 기준으로
+                  만들어졌는지 파악하기 어려워집니다.
                 </p>
                 <p>
-                  시스템에 대한 불안감은 늘어나고, 운영 중 수정은{" "}
-                  <span className="hl">안정성을 장담할 수 없어 겁이 나서</span> 손대기 어려워집니다.
+                  변경 범위와 영향을 설명할 수 없으면 운영 중 수정도 조심스러워집니다. 빠른 구현이{" "}
+                  <span className="hl">지속 가능한 개발로 이어지지 않는 이유</span>입니다.
                 </p>
               </div>
               <div className="prob-visual">
@@ -309,16 +310,16 @@ export default function IntroAboutPage() {
             <article className="prob reveal">
               <div className="prob-text">
                 <div className="prob-num">02</div>
-                <span className="prob-tag">아까운 프롬프트 = 설계 정보</span>
-                <h3>일주일 전 내가 쓴 프롬프트가, 곧 나의 설계였습니다</h3>
+                <span className="prob-tag">대화 속에 흩어진 설계 의사결정</span>
+                <h3>프롬프트에 담긴 중요한 결정이 자산으로 남지 않습니다</h3>
                 <p>
-                  놀라운 AI와 대화하며 신속하게 프로그램을 완성해 나갑니다. 하루 몇 시간씩 프롬프트를 적어가며 대화하죠.
-                  그런데 하루가 지나면 <span className="hl">어제 한 얘기를 다시 하고 있는 나</span>를 보게 됩니다.
+                  AI와 나눈 대화에는 업무 규칙과 화면 흐름, 데이터 구조에 대한 결정이 쌓입니다. 하지만 이를 구조화하지
+                  않으면 다음 날 다시 <span className="hl">같은 배경과 조건을 설명</span>하게 됩니다.
                 </p>
                 <p>
-                  일주일 전 내가 작성한 프롬프트가 나의 설계였고 방향이었고 노력이었다면 — 그건 사라지고, 나는 다시
-                  설계하고 다시 노력합니다. 메모장 같은 MD 파일에 복잡한 업무를 모두 담을 수 있을까요?{" "}
-                  <span className="hl">먼저 AI와 SPEC을 정의하는 것, 분석·설계를 진행하는 것이 정답입니다.</span>
+                  흩어진 대화와 임시 메모만으로는 복잡한 업무를 팀의 자산으로 남기기 어렵습니다.{" "}
+                  <span className="hl">결정한 내용을 구조화된 분석·설계 정보로 축적</span>해야 다음 작업과 다음
+                  담당자에게 이어집니다.
                 </p>
               </div>
               <div className="prob-visual">
@@ -353,18 +354,15 @@ export default function IntroAboutPage() {
             <article className="prob reveal">
               <div className="prob-text">
                 <div className="prob-num">03</div>
-                <span className="prob-tag">비효율의 끝판왕 · 무한 프롬프팅</span>
+                <span className="prob-tag">반복되는 설명 · 늦어지는 합의</span>
                 <h3>말하고 기다리고, 또 말하고 기다리고</h3>
                 <p>
-                  원래 개발은 분석·설계·구현·테스트로 진행됩니다. 그런데 바이브 코딩 세상이 오며{" "}
-                  <span className="hl">아무 준비 없이 바로 구현부터</span> 하는 버릇이 생겼습니다. 분석·설계는 AI가
-                  하니까요. 그냥 믿어도 될까요?
+                  분석과 설계의 기준 없이 구현부터 시작하면 기획, 설계, 구현, 검토가 한 대화 안에서 뒤섞입니다.{" "}
+                  <span className="hl">무엇을 결정했고 무엇이 남았는지</span> 구분하기도 어려워집니다.
                 </p>
                 <p>
-                  구현과 기획, 때론 분석까지 동시에 하다 보면 <span className="hl">무한 프롬프팅</span>에 빠지기
-                  쉽습니다. 거의 다 된 것 같고, 처음부터 설명하긴 힘들고, 한 번만 더 말하면 될 것 같고. 시키고 기다리고,
-                  시키고 주식 보고, 시키고 쇼츠 보고. 개인의 효율은 올랐을지 몰라도{" "}
-                  <span className="hl">팀의 효율도 올랐다고 볼 수 있을까요?</span>
+                  결과가 나올 때마다 조건을 덧붙이고 다시 생성하는 과정이 반복됩니다. 개인의 구현 속도는 빨라져도,{" "}
+                  <span className="hl">팀이 합의하고 검토하는 시간까지 줄었다고 보기는 어렵습니다.</span>
                 </p>
               </div>
               <div className="prob-visual">
@@ -397,15 +395,14 @@ export default function IntroAboutPage() {
               <div className="prob-text">
                 <div className="prob-num">04</div>
                 <span className="prob-tag">공유되지 않는 설계 정보</span>
-                <h3>만들고… 잊혀집니다. 우리 자신에게서도.</h3>
+                <h3>AI에게 전달한 맥락이 팀에는 공유되지 않습니다</h3>
                 <p>
-                  개발 팀원들이 AI와 나누는 모든 것은 <span className="hl">분석 정보이자 설계 정보</span>입니다.
-                  테이블·컬럼 레벨까지 디테일한 업무 설명이 AI에게 전달됐는데도, 그 정보가 팀원에게 공유되지 않는다는 건
-                  너무 안타까운 일입니다.
+                  개발자가 AI에 전달한 업무 설명과 기술적 판단은 중요한 <span className="hl">분석·설계 정보</span>입니다.
+                  이 정보가 개인 대화에만 남으면 다른 팀원은 결과만 보고 의도를 추측해야 합니다.
                 </p>
                 <p>
-                  시간이 지나면 그 정보로부터 <span className="hl">자기 자신마저 배제됩니다.</span> 만들고… 잊혀지는
-                  겁니다. 시간이 지나면, 우리는 과연 기억할 수 있을까요?
+                  시간이 지나면 작성자도 당시의 맥락을 모두 기억하기 어렵습니다. 결정의 근거를 공유 가능한 형태로
+                  남겨야 <span className="hl">변경과 인수인계에 대응</span>할 수 있습니다.
                 </p>
               </div>
               <div className="prob-visual">
@@ -438,13 +435,13 @@ export default function IntroAboutPage() {
             THE TURN
           </div>
           <p className="big reveal d1" style={{ color: "var(--ink)" }}>
-            구현 전에 <span className="grad-text">지속적으로 설계</span>하세요.
+            구현 전에 <span className="grad-text">핵심 결정을 구조화</span>하세요.
             <br />
-            정통 개발의 순서는, 달라지지 않았습니다.
+            AI가 구현을 빨리해도, 분석과 설계의 역할은 사라지지 않습니다.
           </p>
           <p className="small reveal d2" style={{ color: "var(--ink-soft)" }}>
-            하루 동안 설계하고, 완성되면 구현으로 넘깁니다.
-            <br />그 설계를 담는 곳이 — <b style={{ color: "var(--blue)" }}>스펙코드</b>입니다.
+            구현 전에 기준을 세우고, 변경이 생기면 설계도 함께 갱신합니다.
+            <br />그 과정을 한곳에 축적하는 도구가 <b style={{ color: "var(--blue)" }}>스펙코드</b>입니다.
           </p>
         </div>
       </section>
@@ -469,9 +466,9 @@ export default function IntroAboutPage() {
               <div className="a">
                 <p>
                   <span className="lead">
-                    우리가 만들 프로그램을 설계하고, AI에게 최적화된 형태의 MD 파일로 전달합니다.
+                    요구사항과 설계 정보를 구조화하고, AI가 이해할 수 있는 PRD로 전달합니다.
                   </span>{" "}
-                  그래서 일괄적으로, 흔들림 없이 구현될 수 있도록 합니다.
+                  팀은 같은 기준을 공유하고, AI는 일관된 맥락 안에서 구현할 수 있습니다.
                 </p>
               </div>
             </div>
@@ -482,13 +479,12 @@ export default function IntroAboutPage() {
               </div>
               <div className="a">
                 <p>
-                  기존에 우리가 하던 것과 동일합니다. 때론 설계 문서 없이 그냥 구현해 오셨겠지만, 그러면{" "}
-                  <span className="hl">결과물의 품질을 장담할 수 없습니다.</span> 이제 모든 것은 예전보다 더 상세하게
-                  설계되어야 해요.
+                  기존 개발 과정과 크게 다르지 않습니다. 요구사항을 나누고, 화면과 기능을 정의하고, 데이터 구조와 업무
+                  규칙을 연결합니다. 다만 AI가 구현을 맡는 만큼{" "}
+                  <span className="hl">사람이 암묵적으로 알고 있던 기준까지 명시</span>해야 합니다.
                 </p>
                 <p>
-                  왜냐하면 <span className="hl">이제 우리에겐 시간이 있으니까요.</span> 구현은 AI가 해주니, 우리는
-                  설계에 더 집중할 수 있는 겁니다.
+                  구현에 쓰이던 시간을 분석과 설계에 더 배분하면, AI 결과를 검토할 기준도 함께 만들 수 있습니다.
                 </p>
               </div>
             </div>
@@ -499,15 +495,15 @@ export default function IntroAboutPage() {
               </div>
               <div className="a">
                 <p>
-                  아닙니다. AI는 너무 대단하고 뛰어납니다. 하지만 우리가 만들려는 제품을{" "}
-                  <span className="hl">“만들어줘”</span>라는 짧은 말로 고품질 결과물을 얻을 수 있을 거라 상상하시는 건
-                  아니죠?
+                  AI의 구현 역량은 빠르게 좋아지고 있습니다. 하지만 프로젝트의 목표와 업무 규칙, 예외 조건을 충분히
+                  제공하지 않으면 <span className="hl">짧은 요청만으로 원하는 결과를 안정적으로 반복</span>하기
+                  어렵습니다.
                 </p>
                 <p>
                   설계는 수많은 <span className="hl">선택의 과정</span>입니다. A·B 중 무엇이 좋은지 고르고, 다시 가·나
                   중 무엇이 좋은지 고르는 과정이죠. AI도 잘할 수 있지만, 충분한 배경지식과 프로젝트 정보가 필요합니다.
-                  그것 없이 짧은 프롬프트 덩어리로는 <span className="hl">엉뚱한 설계를 내뱉기 일쑤</span>입니다. 설계엔,
-                  우리가 필요합니다.
+                  정보가 부족하면 프로젝트 의도와 다른 결과가 나오기 쉽습니다. 중요한 선택을 검토하고 확정하는 일에는
+                  여전히 사람의 판단이 필요합니다.
                 </p>
               </div>
             </div>
@@ -519,12 +515,12 @@ export default function IntroAboutPage() {
               </div>
               <div className="a">
                 <p>
-                  네, 맞습니다. 저는 <span className="hl">설계에 우리가 필요하고 더 딥하게 설계해야 한다</span>고
-                  말씀드렸지, 이 모든 걸 담당자가 직접 다 해야 한다고 하진 않았습니다.
+                  맞습니다. 더 깊이 있게 설계해야 한다고 해서 모든 문서를 담당자가 처음부터 직접 작성해야 한다는 뜻은
+                  아닙니다.
                 </p>
                 <p>
-                  설계도 AI와 함께 해야죠. <span className="hl">구현하기 전에, 신나게 AI와 설계하라는 겁니다.</span> 그
-                  내용을 스펙코드에 열심히 입력하다 보면, 어느새 양질의 설계가 완성되어 있을 겁니다.
+                  설계 과정에서도 AI의 도움을 받을 수 있습니다. AI와 질문하고 선택한 내용을 스펙코드에 구조화하면,{" "}
+                  <span className="hl">팀이 검토하고 구현에 활용할 수 있는 설계</span>로 이어집니다.
                 </p>
               </div>
             </div>
@@ -544,13 +540,13 @@ export default function IntroAboutPage() {
               </div>
               <div className="a">
                 <p>
-                  맞습니다. 그래서 정보 등록을 위한 <span className="hl">몇 가지 방법</span>을 준비했습니다. 클로드의
-                  프로젝트, 제미나이의 잼스를 이용해 스펙코드가 원하는 JSON 형태로 결과를 받아{" "}
+                  맞습니다. 그래서 정보 등록을 위한 <span className="hl">세 가지 방법</span>을 준비했습니다. 클로드
+                  프로젝트나 제미나이 젬스에서 설계한 결과를 JSON으로 받아{" "}
                   <span className="hl">일괄 등록</span>할 수 있고, MCP로 직접 등록할 수도 있습니다.
                 </p>
                 <p>
-                  적응되시면, <span className="hl">JSON 등록 기능에 빠지시게 될 겁니다.</span> 등록 방식은 뒤에서
-                  자세히 다시 설명드릴게요.
+                  JSON 가져오기를 이용하면 반복 입력을 크게 줄일 수 있습니다. 등록 방식은 뒤에서 실제 흐름과 함께
+                  설명합니다.
                 </p>
               </div>
             </div>
@@ -568,14 +564,14 @@ export default function IntroAboutPage() {
               </div>
               <div className="a">
                 <p>
-                  구조는 이렇습니다. <span className="hl">단위업무 &gt; 화면 &gt; 영역 &gt; 기능.</span> 각 단계에
-                  내용을 채워 주시면 됩니다.
+                  설계 정보는 <span className="hl">단위업무 &gt; 화면 &gt; 영역 &gt; 기능</span> 순서로 구체화됩니다.
+                  큰 업무를 실제 구현할 수 있는 기능 단위까지 단계적으로 나누는 구조입니다.
                 </p>
                 <p>
                   예를 들어 <b style={{ color: "var(--ink)" }}>'게시판'</b>이라는 단위업무 아래에 게시판 목록·상세·등록이라는{" "}
                   <b style={{ color: "var(--ink)" }}>화면</b>이 있고, 각 화면을 구성하는{" "}
-                  <b style={{ color: "var(--ink)" }}>영역</b>, 그 영역의 액션들을{" "}
-                  <b style={{ color: "var(--ink)" }}>기능</b>으로 정의해 등록하는 겁니다.
+                  <b style={{ color: "var(--ink)" }}>영역</b>, 그 안의 사용자 동작과 시스템 처리를{" "}
+                  <b style={{ color: "var(--ink)" }}>기능</b>으로 정의합니다.
                 </p>
               </div>
             </div>
@@ -584,7 +580,7 @@ export default function IntroAboutPage() {
           <div className="sec-head reveal" style={{ marginBottom: 28 }}>
             <div className="kicker dot">INTERACTIVE — 직접 펼쳐보세요</div>
             <h2 style={{ fontSize: "clamp(26px,3.6vw,42px)" }}>설계 구조 탐색기</h2>
-            <p>노드를 클릭하면 하위 단계가 펼쳐지고, 오른쪽에 상세가 표시됩니다. (예시: 게시판)</p>
+            <p>게시판 예시의 노드를 클릭하면 하위 단계와 각 항목의 상세 내용을 확인할 수 있습니다.</p>
           </div>
 
           <div className="tree-wrap reveal d1">
@@ -621,9 +617,8 @@ export default function IntroAboutPage() {
               </div>
               <div className="a">
                 <p>
-                  아닙니다. 스펙코드는{" "}
-                  <span className="hl">양질의 PRD를 만들기 위한 설계 정보를 입력받고, 여러분께 PRD를 제공</span>합니다.
-                  이 PRD로 AI와 개발하시면, 훨씬 고품질의 프로그램을 얻게 되실 겁니다.
+                  스펙코드는 입력한 설계 정보를 구조화해 <span className="hl">AI 구현에 사용할 PRD를 생성</span>합니다.
+                  개발팀은 이 PRD를 구현 기준으로 사용하고, AI가 만든 결과를 같은 기준으로 검토합니다.
                 </p>
               </div>
             </div>
@@ -634,13 +629,13 @@ export default function IntroAboutPage() {
               </div>
               <div className="a">
                 <p>
-                  스펙코드 구조에 맞게 설계하시면, 스펙코드를 통해 <span className="hl">설계 검증</span>을 진행하실 수
-                  있습니다. 또한 <span className="hl">다양한 산출물</span>을 제공합니다.
+                  스펙코드 구조에 맞게 정보를 쌓으면 AI 피드백을 통해 누락된 내용을 점검하고,{" "}
+                  <span className="hl">다양한 분석·설계 산출물</span>로 내보낼 수 있습니다.
                 </p>
                 <p>
-                  특히 공공 사업은 제출해야 할 설계·구현 산출물이 많은데요, 스펙코드는 입력하신 정보로 여러 설계 문서를
-                  만들어 드립니다. 나아가 과업·요구사항·사용자 스토리를 입력받아{" "}
-                  <span className="hl">분석 단계 산출물부터</span> 제공하고 있습니다.
+                  공공 사업에서 반복 작성하는 요구사항정의서, 추적표, 프로그램 사양서, 테이블·컬럼 정의서를 하나의
+                  설계 정보에서 생성합니다. 같은 내용을 문서마다 다시 옮기는 작업을 줄이고{" "}
+                  <span className="hl">산출물 사이의 기준을 일치</span>시킬 수 있습니다.
                 </p>
               </div>
             </div>
@@ -717,56 +712,9 @@ export default function IntroAboutPage() {
             </div>
           </div>
           <p className="deli-note reveal d2">
-            그 외에도 입력 정보에 따라 산출물은 계속 확장됩니다. <b>설계에 들인 노력이, 그대로 제출 문서가 됩니다.</b>
+            입력한 정보가 구체적일수록 더 완성도 높은 문서를 만들 수 있습니다.{" "}
+            <b>설계에 들인 노력이 그대로 제출 산출물로 이어집니다.</b>
           </p>
-        </div>
-      </section>
-
-      {/* ===================== 30층 빌딩 metaphor ===================== */}
-      <section className="sec tower" data-screen-label="30층 빌딩 비유">
-        <div className="blueprint" />
-        <div className="wrap">
-          <div className="interject reveal" style={{ marginBottom: 46 }}>
-            “와~ 문서도 준다니 한층 더 매력적이네요. 스펙코드면 뭐든 다 만들 수 있겠어요!”
-          </div>
-          <div className="kicker dot reveal" style={{ color: "var(--blue-bright)", marginBottom: 22 }}>
-            THE METAPHOR
-          </div>
-          <h2 className="reveal d1">
-            초가집은 뚝딱. <em className="grad-text">하지만 30층 빌딩은요?</em>
-          </h2>
-          <p className="tower-body reveal d2">
-            집을 지어주는 AI가 있다고 해봅시다. 단독주택도, 초가집도, 3층짜리 빌라도 뚝딱 만들어 줍니다. 너무 좋죠.
-            그런데 <b>15층, 30층, 50층 초고층 빌딩</b>도 “뚝딱 지어줘”라고 하고 — 그 꼭대기에서{" "}
-            <b>마음 편히 주무실 수 있겠습니까?</b>
-          </p>
-          <p className="tower-body reveal d2" style={{ marginTop: 18 }}>
-            스펙코드는 AI와 함께 <b>30층 건물을 올리고, 그 위에서 안심하고 잘 수 있도록</b> 돕는 — AI를 위한 설계
-            툴입니다. 주요 타깃을 수억 원 규모의 사업으로 정한 것도 “그 정도면 20층 건물은 되겠네” 하는 마음에서였습니다.
-          </p>
-
-          <div className="skyline reveal d2">
-            <div className="bld easy">
-              <div className="box" style={{ height: 70 }} />
-              <div className="lab">초가집</div>
-              <div className="tag">AI 뚝딱 ✓</div>
-            </div>
-            <div className="bld easy">
-              <div className="box" style={{ height: 110 }} />
-              <div className="lab">3층 빌라</div>
-              <div className="tag">AI 뚝딱 ✓</div>
-            </div>
-            <div className="bld">
-              <div className="box" style={{ height: 200 }} />
-              <div className="lab">15층</div>
-              <div className="tag">설계 필요</div>
-            </div>
-            <div className="bld hard">
-              <div className="box" style={{ height: 300 }} />
-              <div className="lab">30층 빌딩</div>
-              <div className="tag">SPECODE</div>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -776,17 +724,17 @@ export default function IntroAboutPage() {
           <div className="qa-group" style={{ marginBottom: 56 }}>
             <div className="qa reveal">
               <div className="q">
-                <span className="mark">Q.</span> 설득당했습니다. 근데… 그래도 AI로 뚝딱 만들고는 싶네요.
+                <span className="mark">Q.</span> 스펙코드는 어떤 팀에 가장 적합한가요?
               </div>
               <div className="a">
                 <p>
-                  그 마음, 이해합니다. 스펙코드의 주요 타깃이 <span className="hl">공공 SI 사업</span>인 이유는, 어느
-                  정도 <span className="hl">규모가 있기 때문</span>입니다. 개발을 전혀 모르는 일반인을 대상으로 하지
-                  않습니다.
+                  스펙코드는 요구사항이 복잡하고 제출 산출물이 많으며, 구축 이후 운영·유지보수까지 설계 기준이 이어져야
+                  하는 <span className="hl">공공 SI 개발팀</span>을 먼저 생각해 만들었습니다. 개발을 처음 접하는 사용자를
+                  위한 노코드 도구가 아니라, 분석·설계 경험이 있는 팀의 판단을 더 잘 축적하고 활용하는 도구입니다.
                 </p>
                 <p>
-                  <span className="hl">기존 개발자가 AI를 활용해 더 잘 개발하게 만든다.</span> 무설계 바이브 코딩만으로는
-                  품질을 장담할 수 없어 AI 도입이 두려운 SI 개발팀에게, 스펙코드를 권합니다.{" "}
+                  <span className="hl">기존 개발팀이 AI를 더 안정적으로 활용하도록 돕는 것</span>이 목표입니다. 설계
+                  기준과 검토 과정 없이 AI를 도입하기 어려웠던 팀이라면 특히 잘 맞습니다.{" "}
                   <b style={{ color: "var(--ink)" }}>AI와 구현하기 전에, AI와 설계하세요.</b>
                 </p>
               </div>
@@ -807,7 +755,8 @@ export default function IntroAboutPage() {
               <div className="tline yes">
                 <span className="yn">FOR</span>
                 <div className="tx">
-                  2~7억 규모의 공공 SI 사업팀<small>제출 산출물이 많고, 품질을 장담해야 하는 프로젝트</small>
+                  산출물과 유지보수가 중요한 공공 SI 사업팀
+                  <small>요구사항부터 구축 이후 운영까지 기준이 남아야 하는 프로젝트</small>
                 </div>
               </div>
               <div className="tline yes">
@@ -830,10 +779,10 @@ export default function IntroAboutPage() {
               </div>
             </div>
             <div className="target-card reveal d2">
-              <div className="big">2~7억</div>
-              <div className="lab">PUBLIC SI · OPTIMIZED FOR</div>
+              <div className="big">운영까지</div>
+              <div className="lab">산출물 · 운영 · 유지보수</div>
               <div className="dv" />
-              <p>“그 정도면 20층 건물은 되겠네.” 규모 있는 사업에서, AI와 함께 안심하고 올리는 설계.</p>
+              <p>요구사항과 설계 결정, 제출 산출물을 연결해 구축 이후에도 같은 기준으로 운영하고 유지보수할 수 있습니다.</p>
             </div>
           </div>
         </div>
@@ -844,8 +793,7 @@ export default function IntroAboutPage() {
         <div className="blueprint" />
         <div className="wrap">
           <div className="interject reveal" style={{ marginBottom: 44 }}>
-            “스펙코드의 필요성과 그 의미는 이제 좀 이해한 것 같아요. 그럼 실제로 스펙코드로 어떤 정보를 입력하고
-            설계하는지, 구체적으로 설명해 주실 수 있을까요?”
+            이제 실제로 어떤 정보를 입력하고, 그 정보가 어떻게 설계와 산출물로 이어지는지 살펴보겠습니다.
           </div>
 
           <div className="qa-group" style={{ marginBottom: 54 }}>
@@ -855,7 +803,7 @@ export default function IntroAboutPage() {
               </div>
               <div className="a">
                 <p>
-                  <span className="lead">네, 이제 깊은 얘기를 할 때가 됐습니다.</span> 스펙코드는 크게{" "}
+                  스펙코드의 작업 흐름은 크게{" "}
                   <span className="hl">분석 → 설계</span>로 이뤄져 있습니다.
                 </p>
                 <p>
@@ -901,19 +849,17 @@ export default function IntroAboutPage() {
           <div className="qa-group" style={{ marginBottom: 48 }}>
             <div className="qa reveal">
               <div className="q">
-                <span className="mark">Q.</span> 그냥 내가 만들 시스템을 적기만 하면 되는 거네요?
+                <span className="mark">Q.</span> 만들 시스템의 내용을 적기만 하면 되는 건가요?
               </div>
               <div className="a">
                 <p>
-                  흠, <span className="hl">반은 맞고 반은 틀립니다.</span> '적는다'보다 '
-                  <span className="hl">설계한다</span>'는 표현이 맞습니다. 그럼 설계를 어떻게 하느냐 — 지금 설명드릴게요.
+                  내용을 기록하는 것에서 시작하지만, 핵심은 <span className="hl">결정하고 연결하는 것</span>입니다.
+                  요구사항을 화면과 기능으로 나누고, 각 기능의 동작과 데이터를 구체화해야 구현 기준이 됩니다.
                 </p>
                 <p>
-                  요구사항을 분석하면 결국 “아~ 고객이 원하는 기능은 이런 거구나”가 보입니다.{" "}
-                  <b style={{ color: "var(--ink)" }}>멀티 게시판</b>으로 예를 들어볼게요. 그럼 단위업무는 '멀티
-                  게시판'이 됩니다. 이제 화면을 설계하고, 각 화면에서 벌어지는 모든 액션을{" "}
-                  <span className="hl">기능</span>으로 정의합니다. 이렇게 잘게 쪼개고 각 기능에 어떤 일이 벌어질지
-                  상세히 설계하면 — <span className="hl">AI는 우리가 무엇을 만들지 명확히 알게 됩니다.</span>
+                  <b style={{ color: "var(--ink)" }}>멀티 게시판</b>을 예로 들면, 먼저 단위업무를 정의하고 목록·등록·상세
+                  화면으로 나눕니다. 각 화면의 조회, 검색, 저장 같은 동작을 <span className="hl">기능</span>으로
+                  정의하면 <span className="hl">팀과 AI가 같은 구현 범위를 이해</span>할 수 있습니다.
                 </p>
               </div>
             </div>
@@ -979,12 +925,12 @@ export default function IntroAboutPage() {
               </div>
               <div className="a">
                 <p>
-                  영역은 화면과 같은 의미지만 <span className="hl">조금 더 작은 범위</span>입니다. 게시판 목록처럼
-                  간단한 화면도 있지만, 대시보드·메인화면처럼 복잡한 화면은 덩치가 너무 크죠. 이럴 때{" "}
-                  <span className="hl">영역으로 한 번 더 쪼개서</span> 설계하면 관리하기 좋습니다.
+                  영역은 <span className="hl">화면을 구성하는 의미 단위</span>입니다. 대시보드처럼 복잡한 화면을 검색,
+                  요약, 목록 등의 영역으로 나누면 기능의 위치와 책임을 더 명확하게 관리할 수 있습니다.
                 </p>
                 <p>
-                  굳이 쪼갤 필요가 없다면? <span className="hl">화면 1개, 영역 1개</span>로 정의하시면 됩니다.
+                  별도로 나눌 필요가 없는 단순한 화면은 <span className="hl">화면 1개, 영역 1개</span>로 정의하면
+                  됩니다.
                 </p>
               </div>
             </div>
@@ -999,13 +945,12 @@ export default function IntroAboutPage() {
           <div className="qa-group" style={{ marginBottom: 48 }}>
             <div className="qa reveal">
               <div className="q">
-                <span className="mark">Q.</span> 아까 AI와 설계하도록 스펙코드가 뭘 도와준다고 했는데, 그게 뭐죠?
+                <span className="mark">Q.</span> 설계 정보는 스펙코드에 어떻게 등록하나요?
               </div>
               <div className="a">
                 <p>
-                  스펙코드에 정보를 등록하는 방법은 <span className="hl">3가지</span>가 있습니다. 문서를 만드는 게
-                  아니라 <span className="hl">AI와 수다를 떨었는데, 그게 설계 자료가 되는</span> 경험을 하시게 될
-                  거예요.
+                  직접 입력, AI 작업공간에서 만든 JSON 가져오기, MCP 연동의 <span className="hl">세 가지 방법</span>을
+                  제공합니다. 상황에 맞는 방식을 선택하거나 함께 사용할 수 있습니다.
                 </p>
               </div>
             </div>
@@ -1023,17 +968,17 @@ export default function IntroAboutPage() {
             </div>
             <div className="method">
               <div className="mno">METHOD 02</div>
-              <h4>프로젝트 · 젬스 + JSON</h4>
+              <h4>AI 작업공간 + JSON</h4>
               <p>
-                'AI 분석 가져오기 / AI 설계 가져오기' 메뉴에 전용 프롬프트가 준비돼 있습니다. 복사해 클로드
-                프로젝트·제미나이 젬스를 만들고, 거기서 설계하세요.
+                'AI 분석 가져오기 / AI 설계 가져오기' 메뉴의 전용 프롬프트를 클로드 프로젝트나 제미나이 젬스에
+                적용합니다. AI와 설계한 결과를 JSON으로 내보내 한 번에 등록할 수 있습니다.
               </p>
               <div className="mstep">
                 <div className="ms">
                   <i>1</i>전용 프롬프트 복사 → 프로젝트/젬스 생성
                 </div>
                 <div className="ms">
-                  <i>2</i>“자, 우리 설계할까?” — AI가 묻고 결정하며 진행
+                  <i>2</i>AI의 질문에 답하며 분석·설계 진행
                 </div>
                 <div className="ms">
                   <i>3</i>“JSON으로 출력해줘” → 결과를 스펙코드에 등록
@@ -1048,11 +993,11 @@ export default function IntroAboutPage() {
             <div className="method">
               <div className="mno">METHOD 03</div>
               <h4>MCP 연동</h4>
-              <p>AI와 대화하고, 정보 업데이트를 MCP로 등록 요청하면 그대로 반영됩니다.</p>
+              <p>AI와 대화하면서 정리한 내용을 MCP를 통해 스펙코드에 등록하거나 갱신합니다.</p>
               <div className="mstep">
                 <div className="ms">
-                  <i>!</i>어느 정보를 갱신할지 <b style={{ color: "var(--cyan-soft)" }}>명확히</b> 알려주는 버릇 필수
-                  — MCP가 엉뚱한 정보를 건드리지 않도록
+                  <i>!</i>변경 대상과 범위를 <b style={{ color: "var(--cyan-soft)" }}>명확히 지정</b>하면 필요한
+                  정보만 안전하게 반영할 수 있습니다.
                 </div>
               </div>
               <div className="chips">
@@ -1065,18 +1010,17 @@ export default function IntroAboutPage() {
           <div className="qa-group" style={{ marginTop: 54 }}>
             <div className="qa reveal">
               <div className="q">
-                <span className="mark">Q.</span> 아, 그런데 테이블은요?
+                <span className="mark">Q.</span> 테이블과 컬럼 정보도 함께 관리하나요?
               </div>
               <div className="a">
                 <p>
-                  제가 테이블을 말씀 안 드렸네요. 이건 그냥 <span className="hl">테이블 목록과 컬럼 목록을 적는</span>{" "}
-                  겁니다. 솔직히 미쳐버릴 노릇이죠 — 초반엔 테이블이 자주 바뀌고, 복사해 등록하는 것도 너무 귀찮은
-                  작업입니다.
+                  네. 설계에 사용하는 <span className="hl">테이블과 컬럼 정보를 프로젝트 기준으로 관리</span>합니다.
+                  초기에 자주 바뀌는 데이터 구조를 한곳에서 갱신하고, 기능과의 연결 관계를 함께 남길 수 있습니다.
                 </p>
                 <p>
-                  하지만 등록해 두면 <span className="hl">초특급 양질의 설계</span>가 가능해집니다. 나중에 컬럼이
-                  바뀌었을 때 <span className="hl">어느 프로그램이 영향받는지</span>, 또{" "}
-                  <span className="hl">사용 중인 컬럼과 미사용 컬럼</span>까지 파악하실 수 있습니다.
+                  기능과 데이터 구조를 연결해 두면 컬럼이 바뀌었을 때{" "}
+                  <span className="hl">어떤 화면과 기능이 영향을 받는지</span> 확인하고, 사용 중인 컬럼과 정리할 컬럼을
+                  구분할 수 있습니다.
                 </p>
               </div>
             </div>
@@ -1090,23 +1034,20 @@ export default function IntroAboutPage() {
           <div className="qa-group">
             <div className="qa reveal">
               <div className="q">
-                <span className="mark">Q.</span> 테이블·컬럼 정보만 입력했는데, 이게 다 가능한가요?
+                <span className="mark">Q.</span> 기능과 데이터 구조는 어떻게 연결하나요?
               </div>
               <div className="a">
                 <p>
-                  아니요, 제가 빼먹은 게 있습니다. 기능을 설계할 때 그 기능과 연결되는{" "}
-                  <span className="hl">테이블·컬럼을 빠짐없이 매핑</span>해 주셔야 합니다. 싹~ 다요. 엄청 불편하지만,
-                  그래야 양질의 설계가 완성됩니다. (지금 표정, 상상이 됩니다 ^^;)
+                  데이터를 읽거나 변경하는 기능에는 관련 <span className="hl">테이블·컬럼을 매핑</span>합니다. 이
+                  연결 정보가 구현 범위와 변경 영향을 추적하는 기준이 됩니다.
                 </p>
                 <p>
-                  다소 귀찮아도 매핑하면서{" "}
-                  <span className="hl">이 기능에 어떤 테이블이 쓰이는지, 어떤 테이블과 조인되어야 하는지</span> 고민해
-                  주세요. 이 정도는 설계에 참여하셔야, 나중에 AI가 다 구현한 뒤에도 그 속(Backend·Query)이 어떻게
-                  생겼을지 그려집니다.
+                  매핑 과정에서 <span className="hl">어떤 데이터를 조회하고 변경하는지</span>, 다른 데이터와 어떤
+                  관계를 갖는지 검토합니다. 구현이 끝난 뒤에도 백엔드와 쿼리의 근거를 설계에서 확인할 수 있습니다.
                 </p>
                 <p>
-                  <span className="lead">지금의 AI는 우리가 시키는 대로 거의 실수 없이 만들어 줍니다.</span> 좋은
-                  설계였다면, AI는 우리가 설계한 그대로 — 아니, 그보다 더 좋고 안전하게 구현해 냈을 겁니다.
+                  <span className="lead">AI는 맥락과 검증 기준이 명확할수록 더 일관된 결과를 만듭니다.</span> 구체적인
+                  설계는 AI의 구현 입력이면서, 개발팀이 결과를 검토하는 기준이 됩니다.
                 </p>
               </div>
             </div>
@@ -1123,25 +1064,21 @@ export default function IntroAboutPage() {
         />
         <div className="wrap">
           <div className="vision-banner reveal">
-            <div className="v50">
-              50<small>층</small>
-            </div>
+            <div className="v50">NEXT</div>
             <p className="vsub">
-              AI를 이용해 <b>50층 건물</b>까지는 올려봐야겠죠?
+              설계 정보가 쌓일수록 <b>검토와 재사용의 가치</b>도 커집니다.
               <br />
-              안전하게 설계해, 안심하고 쓸 수 있는 시스템을 만드는 것.
+              스펙코드는 현재 기능을 기반으로 다음 방향을 준비하고 있습니다.
             </p>
           </div>
 
           <div className="qa-group" style={{ marginBottom: 40 }}>
             <div className="qa reveal">
               <div className="q">
-                <span className="mark">Q.</span> 좋습니다. 그럼 스펙코드가 꿈꾸는 비전은 무엇인가요?
+                <span className="mark">Q.</span> 스펙코드는 앞으로 어떤 방향으로 확장하나요?
               </div>
               <div className="a">
-                <p>
-                  아직은 오픈 전이지만 <span className="hl">(2026.07 예정)</span>, 그리는 방향은 이렇습니다.
-                </p>
+                <p>현재 제공하는 분석·설계·산출물 기능을 바탕으로, 다음 세 가지 방향을 단계적으로 확장합니다.</p>
               </div>
             </div>
           </div>
@@ -1149,36 +1086,36 @@ export default function IntroAboutPage() {
           <div className="roadmap reveal d1">
             <div className="rm">
               <div className="rm-when">
-                설계 검증<small>NEXT</small>
+                설계 검토<small>EVOLVE</small>
               </div>
               <div>
-                <div className="rm-title">AI가 설계의 빈틈을 찾아냅니다</div>
+                <div className="rm-title">AI 피드백의 범위와 정확도를 높입니다</div>
                 <div className="rm-desc">
-                  입력된 정보를 기반으로 AI가 설계를 <b>검증</b>하고, 빠진 곳·위험한 곳을 찾아 개발팀에게 전달합니다.
+                  기능 단위로 제공하는 AI 피드백을 더 넓은 설계 범위로 확장해, 누락과 충돌을 검토할 수 있도록
+                  고도화합니다.
                 </div>
               </div>
             </div>
             <div className="rm">
               <div className="rm-when">
-                설계 가져오기<small>DATA</small>
+                설계 재사용<small>EXPLORE</small>
               </div>
               <div>
                 <div className="rm-title">다른 프로젝트의 설계를 가져옵니다</div>
                 <div className="rm-desc">
-                  데이터가 충분히 모이면, 원하는 프로그램의 설계를 <b>다른 프로젝트에서 가져오는</b> 기능을 기획하고
-                  있습니다.
+                  검증된 설계 패턴을 다른 프로젝트에서 참고하고 재사용할 수 있는 기능을 준비합니다.
                 </div>
               </div>
             </div>
             <div className="rm">
               <div className="rm-when">
-                표준화닷컴 연계<small>PUBLIC</small>
+                표준화 연계<small>CONNECT</small>
               </div>
               <div>
                 <div className="rm-title">공공 데이터 표준화까지 자동으로</div>
                 <div className="rm-desc">
-                  공공 프로젝트에서 데이터 표준화는 중요하지만 다소 귀찮은 작업이죠. <b>'표준화닷컴'</b>과 연계해,
-                  스펙코드에서 설계된 테이블·컬럼이 데이터 표준에 맞도록 처리할 예정입니다. 이거 좀 괜찮겠죠? ^^;
+                  <b>표준화닷컴</b>과 연계해 스펙코드에서 설계한 테이블·컬럼을 공공 데이터 표준에 맞게 검토하고 정리하는
+                  흐름을 준비합니다.
                 </div>
               </div>
             </div>
@@ -1186,10 +1123,10 @@ export default function IntroAboutPage() {
 
           <div className="quip reveal d2">
             <div className="q-line">
-              “이거… 비전인가요, <span className="grad-text">구현 계획</span>인가요?”
+              한 번 입력한 설계를, <span className="grad-text">더 오래 활용하는 플랫폼</span>으로.
             </div>
             <p className="q-sub">
-              “아… 그랬나요? ^^; <b>개발자다 보니~</b>”
+              현재 제공하는 기능과 앞으로 확장할 기능을 구분해 꾸준히 안내하겠습니다.
             </p>
           </div>
         </div>
@@ -1205,7 +1142,7 @@ export default function IntroAboutPage() {
             <br />
             <span className="grad-text">AI와 설계하세요.</span>
           </h2>
-          <p className="reveal d2">규모 있는 공공 SI를, AI와 함께 안심하고 올리는 방법.</p>
+          <p className="reveal d2">산출물과 유지보수가 중요한 공공 SI를, AI와 함께 일관된 기준으로 완성하는 방법.</p>
           <div className="final-cta reveal d3">
             <Link href={LOGIN_PATH} className="btn btn-primary">
               스펙코드 이용하기 <span className="arr">→</span>
@@ -1223,7 +1160,7 @@ export default function IntroAboutPage() {
       {/* ===================== STICKY DOCK ===================== */}
       <div className="dock">
         <div className="d-txt">
-          AI와 구현하기 전에, AI와 설계하세요<small>2~7억 공공 SI 최적화 · 기존 개발팀을 위한</small>
+          AI와 구현하기 전에, AI와 설계하세요<small>공공 SI 실무 최적화 · 산출물부터 유지보수까지</small>
         </div>
         <Link href={LOGIN_PATH} className="btn btn-primary btn-sm">
           이용하기 <span className="arr">→</span>

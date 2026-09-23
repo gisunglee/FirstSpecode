@@ -55,8 +55,9 @@ export const PRIVACY_EFFECTIVE_DATE = "2026년 10월 1일";
 
 // ─── 결제 오픈 여부 ───────────────────────────────────────────────────────────
 // true 이면 요금제 페이지의 BASIC 버튼이 설정 > 구독·결제 화면으로 이어진다.
-// false 로 내리면 "결제 준비 중" 안내로 바뀐다 (PG 장애 등으로 결제를 잠시 닫을 때 사용).
-export const BILLING_OPEN = true;
+// PG 심사와 운영 점검이 끝나기 전에는 false 로 유지한다.
+// false 이면 실제 결제 화면으로 보내지 않고 "결제 준비 중" 안내를 표시한다.
+export const BILLING_OPEN = false;
 
 // ─── 요금 (정책 문서 §1-2, §1-4 와 동일해야 함) ────────────────────────────────
 export const PRICING = {
