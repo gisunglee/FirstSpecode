@@ -92,3 +92,77 @@ export async function getSeatLimit(ownerMberId: string, db: Db = prisma): Promis
   const limit = sub.pending_seat_cnt !== null ? Math.min(sub.seat_cnt, sub.pending_seat_cnt) : sub.seat_cnt;
   return { limit, seatCnt: sub.seat_cnt, pendingCnt: sub.pending_seat_cnt };
 }
+
+// ─── 좌석 구성 (누가 좌석에 포함되나) ─────────────────────────────────────────
+//
+// 구독 화면·좌석 축소 모달에서 "왜 N좌석인가"를 사람 기준으로 보여 준다. 숫자 판정(countUsedSeats)과
+// 같은 조건(소유 활성 프로젝트 · ACTIVE 멤버 · 편집 역할)을 그대로 쓰므로 두 화면의 숫자가 어긋날 수 없다.
+
+export type SeatMemberRow = {
+  mberId:  string;
+  name:    string | null;
+  email:   string | null;
+  /** 결제자 본인 — 항상 좌석에 포함되고 목록 맨 앞 */
+  isSelf:  boolean;
+  /** 이 사람이 속한 소유 프로젝트와 역할 (좌석 보유자는 편집 역할만, 뷰어는 VIEWER 만) */
+  projects: Array<{ projectId: string; name: string; role: string }>;
+};
+
+export type SeatBreakdown = {
+  /** 소유 활성 프로젝트 수 */
+  projectCount: number;
+  /** 좌석 차감 멤버 — distinct. 길이 = countUsedSeats 와 같다 */
+  editors: SeatMemberRow[];
+  /** 무료 — 어떤 소유 프로젝트에서도 편집 역할이 아닌 사람 */
+  viewers: SeatMemberRow[];
+  /** 초대 중(PENDING·미만료)인 편집 역할 초대 수 — 수락 시 좌석을 더 쓴다 */
+  pendingEditorInvites: number;
+};
+
+export async function getSeatBreakdown(ownerMberId: string, db: Db = prisma, now = new Date()): Promise<SeatBreakdown> {
+  const projects = await db.tbPjProject.findMany({
+    where:  { owner_mber_id: ownerMberId, del_yn: "N" },
+    select: {
+      prjct_id: true, prjct_nm: true,
+      members: {
+        where:  { mber_sttus_code: "ACTIVE" },
+        select: { mber_id: true, role_code: true, member: { select: { mber_nm: true, email_addr: true } } },
+      },
+    },
+    orderBy: { creat_dt: "asc" },
+  });
+
+  // 사람 단위로 모으면서 편집 역할이 하나라도 있으면 좌석 보유자
+  const people = new Map<string, SeatMemberRow & { hasSeat: boolean }>();
+  for (const p of projects) {
+    for (const m of p.members) {
+      const row = people.get(m.mber_id) ?? {
+        mberId: m.mber_id, name: m.member.mber_nm, email: m.member.email_addr,
+        isSelf: m.mber_id === ownerMberId, projects: [], hasSeat: false,
+      };
+      row.projects.push({ projectId: p.prjct_id, name: p.prjct_nm, role: m.role_code });
+      if (isSeatRole(m.role_code)) row.hasSeat = true;
+      people.set(m.mber_id, row);
+    }
+  }
+  const sortRows = (rows: SeatMemberRow[]) =>
+    rows.sort((a, b) => Number(b.isSelf) - Number(a.isSelf) || (a.name ?? a.email ?? "").localeCompare(b.name ?? b.email ?? "", "ko"));
+  const strip = ({ hasSeat: _h, ...rest }: SeatMemberRow & { hasSeat: boolean }): SeatMemberRow => rest;
+  const all = [...people.values()];
+
+  const pendingEditorInvites = projects.length === 0 ? 0 : await db.tbPjProjectInvitation.count({
+    where: {
+      prjct_id:        { in: projects.map((p) => p.prjct_id) },
+      invt_sttus_code: "PENDING",
+      expiry_dt:       { gt: now },
+      role_code:       { in: [...SEAT_ROLES] },
+    },
+  });
+
+  return {
+    projectCount: projects.length,
+    editors: sortRows(all.filter((r) => r.hasSeat).map(strip)),
+    viewers: sortRows(all.filter((r) => !r.hasSeat).map(strip)),
+    pendingEditorInvites,
+  };
+}

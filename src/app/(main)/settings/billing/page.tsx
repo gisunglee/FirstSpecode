@@ -23,6 +23,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch, AuthFetchError } from "@/lib/authFetch";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
+import SeatBreakdown from "@/components/billing/SeatBreakdown";
 import type { BillingOverview, PaymentDto, SeatAdditionPreview, SeatChangeResult, CancelResult, SubscriptionDto } from "@/lib/billing/subscription";
 import type { CardRegistrationStart } from "@/lib/billing/gateway";
 import { PAYMENT_STATUS_LABEL, PAYMENT_TYPE_LABEL, SEAT_INPUT_LIMITS, SUBSCRIPTION_STATUS as S, SUBSCRIPTION_STATUS_LABEL } from "@/lib/billing/constants";
@@ -247,6 +248,9 @@ function PlanCard(props: {
                 hint={`이용 기간 ${fmtDate(sub!.currentPeriodStart)} ~ ${fmtDate(sub!.currentPeriodEnd)}`} />
         </div>
 
+        {/* 좌석에 누가 포함되나 — 숫자만 보면 "왜 N명?"이 생긴다 */}
+        <SeatBreakdown usedSeats={overview.usedSeats} />
+
         {/* 버튼 — 해지는 설정 화면에 바로 (다크패턴 규제) */}
         <div className="sp-btn-row" style={{ flexWrap: "wrap" }}>
           <button className="sp-btn sp-btn-primary" onClick={props.onAddSeats} disabled={busy || sub!.status !== S.ACTIVE}
@@ -317,6 +321,7 @@ function StartBasicCard({ overview, onStart }: { overview: BillingOverview; onSt
           좌석 = 소유한 프로젝트 전체의 편집 멤버 수(중복 제외, 본인 포함). 뷰어는 무료입니다.
           현재 편집 멤버 <b>{overview.usedSeats}명</b>이라 좌석은 {minSeats}개 이상이어야 합니다.
         </div>
+        <SeatBreakdown usedSeats={overview.usedSeats} />
 
         <div className="sp-field-row" style={{ alignItems: "flex-end" }}>
           <div className="sp-field" style={{ flex: "0 0 160px" }}>
@@ -440,7 +445,7 @@ function SeatReduceModal({ subscription, usedSeats, onClose, onDone }: { subscri
 
   return (
     <div className="sp-overlay" onClick={() => !mutation.isPending && onClose()}>
-      <div className="sp-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+      <div className="sp-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" style={{ width: 560 }}>
         <div className="sp-modal-header">
           <div className="sp-modal-title">좌석 축소</div>
           <button className="sp-modal-close" onClick={onClose} aria-label="닫기">✕</button>
@@ -455,6 +460,8 @@ function SeatReduceModal({ subscription, usedSeats, onClose, onDone }: { subscri
             축소는 <b>다음 결제일({fmtDate(subscription.nextBillAt)})부터</b> 적용되고, 이미 결제한 금액은 환불되지 않습니다.
             예약 후에는 예약한 좌석 수가 초대 상한으로 적용됩니다. 현재 좌석 수({subscription.seatCnt})를 그대로 입력하면 예약이 취소됩니다.
           </div>
+          {/* 누굴 뷰어로 바꾸면 줄일 수 있는지 바로 보이게 — 모달에서는 처음부터 펼친다 */}
+          <SeatBreakdown usedSeats={usedSeats} defaultOpen />
         </div>
         <div className="sp-modal-footer">
           <button className="sp-btn sp-btn-ghost" onClick={onClose} disabled={mutation.isPending}>취소</button>

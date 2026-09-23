@@ -125,6 +125,19 @@ async function main(): Promise<void> {
       pm(ids.P2, ids.A, "OWNER"), pm(ids.P2, ids.C, "MEMBER"), ...ids.V.map((v) => pm(ids.P2, v, "VIEWER")),
     ] });
     assert.equal(await seats.countUsedSeats(ids.A), 3, "사용 좌석 = A,B,C (뷰어 제외, 중복 제외)");
+    {
+      // 좌석 구성 — 숫자 판정과 같은 기준. 본인 첫 줄, 프로젝트 2개에 걸친 사람은 칩 2개
+      const bd = await seats.getSeatBreakdown(ids.A);
+      assert.equal(bd.projectCount, 2);
+      assert.equal(bd.editors.length, 3, "editors 길이 = countUsedSeats");
+      assert.equal(bd.editors[0]!.mberId, ids.A);
+      assert.ok(bd.editors[0]!.isSelf && bd.editors[0]!.projects.length === 2, "본인은 두 프로젝트 OWNER");
+      assert.equal(bd.viewers.length, 4, "뷰어 4명(중복 제거)");
+      assert.ok(bd.viewers.some((v) => v.mberId === ids.V[0] && v.projects.length === 2), "V0 은 P1·P2 뷰어 → 칩 2개, 1명");
+      assert.equal(bd.pendingEditorInvites, 0);
+      await prisma.tbPjProjectInvitation.create({ data: { prjct_id: ids.P1, email_addr: "pending@billing-smoke.invalid", role_code: "MEMBER", invt_token_val: `tok-${randomUUID()}`, invtr_mber_id: ids.A, expiry_dt: new Date(Date.now() + days(3)) } });
+      assert.equal((await seats.getSeatBreakdown(ids.A)).pendingEditorInvites, 1, "초대 중 편집 멤버 1");
+    }
 
     const customerKey = buildCustomerKey(ids.A);
     const goodCard = () => encodeMockAuthKey({ cardCompany: "신한", last4: "1234", alwaysFail: false });
