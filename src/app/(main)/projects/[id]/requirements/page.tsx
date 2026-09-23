@@ -444,20 +444,20 @@ function RequirementsPageInner() {
       </div>
 
       {/* 목록 — 빈 상태에서도 헤더가 항상 보이도록 컨테이너+헤더는 분기 밖에 둠 (과업 페이지 패턴과 통일) */}
-      <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-        {/* 헤더 행 */}
-        <div style={gridHeaderStyle}>
+      <div className="sp-grid-table">
+        {/* 헤더 행 — 표 외관(세로선·헤더 톤·hover)은 sp-grid-table 클래스가 담당, 열 폭만 여기서 지정 */}
+        <div className="sp-grid-table-head" style={{ gridTemplateColumns: GRID_TEMPLATE }}>
           <div />
           <div>과업명</div>
           <div>요구사항명</div>
-          <div style={{ textAlign: "center" }}>구분</div>
-          <div style={{ textAlign: "center" }}>담당자</div>
-          <div style={{ textAlign: "center" }}>분석</div>
-          <div style={{ textAlign: "center" }}>우선순위</div>
-          <div style={{ textAlign: "center" }}>출처</div>
-          <div style={{ textAlign: "center" }}>단위업무</div>
-          <div style={{ textAlign: "center" }}>정렬</div>
-          <div style={{ textAlign: "center" }}>수정</div>
+          <div className="is-center">구분</div>
+          <div className="is-center">담당자</div>
+          <div className="is-center">분석</div>
+          <div className="is-center">우선순위</div>
+          <div className="is-center">출처</div>
+          <div className="is-center">단위업무</div>
+          <div className="is-center">정렬</div>
+          <div className="is-center">수정</div>
         </div>
 
         {items.length === 0 ? (
@@ -480,18 +480,17 @@ function RequirementsPageInner() {
                 onDragEnd={handleDragEnd}
                 onDragOver={(e) => e.preventDefault()}
                 onClick={() => router.push(`/projects/${projectId}/requirements/${req.requirementId}`)}
-                style={{
-                  ...gridRowStyle,
-                  borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-                }}
+                className="sp-grid-table-row"
+                style={{ gridTemplateColumns: GRID_TEMPLATE }}
               >
                 {/* 드래그 핸들 */}
-                <div style={{ cursor: "grab", color: "#aaa", userSelect: "none", paddingLeft: 4 }}>
+                <div style={{ cursor: "grab", color: "#aaa", userSelect: "none" }}>
                   ☰
                 </div>
 
-                {/* 과업명 — 동일 과업 연속 시 첫 행에만 표시 */}
-                <div onClick={(e) => e.stopPropagation()}>
+                {/* 과업명 — 동일 과업 연속 시 첫 행에만 표시.
+                    이어지는 행은 is-merged 로 위쪽 가로선을 지워 엑셀 셀 병합처럼 한 칸으로 보이게 한다 */}
+                <div className={showTaskName ? undefined : "is-merged"} onClick={(e) => e.stopPropagation()}>
                   {showTaskName ? (
                     req.taskId ? (
                       <button
@@ -507,7 +506,7 @@ function RequirementsPageInner() {
                 </div>
 
                 {/* 요구사항명 — 연필 아이콘 클릭 시 인라인 편집(입력 후 focus out/Enter로 즉시 저장) */}
-                <div style={{ fontSize: 13, display: "flex", alignItems: "center", minWidth: 0 }} onClick={(e) => e.stopPropagation()}>
+                <div style={{ fontSize: 13 }} onClick={(e) => e.stopPropagation()}>
                   {editingId === req.requirementId ? (
                     <input
                       autoFocus
@@ -545,7 +544,7 @@ function RequirementsPageInner() {
                 </div>
 
                 {/* 사업 범위 구분 — 목록에서 바로 정정 가능(MANAGER 한정, 서버 재판정) */}
-                <div style={{ textAlign: "center" }}>
+                <div className="is-center">
                   <ScopeStatusCell
                     value={req.scopeStatus}
                     canEdit={isSpecManager}
@@ -555,54 +554,55 @@ function RequirementsPageInner() {
 
                 {/* 담당자 — 미지정/퇴장 멤버는 흐린 "-" */}
                 <div
+                  className="is-center"
                   style={{
                     fontSize: 13,
-                    textAlign: "center",
                     color: req.assignMemberName
                       ? "var(--color-text-primary)"
                       : "var(--color-text-tertiary)",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}
                   title={req.assignMemberName ?? undefined}
                 >
-                  {req.assignMemberName ?? "-"}
+                  <span className="is-ellipsis">{req.assignMemberName ?? "-"}</span>
                 </div>
 
                 {/* 분석 진척률 */}
-                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
+                <div className="is-center" style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
                   {req.progress}%
                 </div>
 
                 {/* 우선순위 배지 */}
-                <div style={{ textAlign: "center" }}>
+                <div className="is-center">
                   <span className="sp-badge" style={priorityBadgeStyle(req.priority)}>
                     {PRIORITY_LABELS[req.priority] ?? req.priority}
                   </span>
                 </div>
 
                 {/* 출처 배지 */}
-                <div style={{ textAlign: "center" }}>
+                <div className="is-center">
                   <span className="sp-badge" style={sourceBadgeStyle(req.source)}>
                     {SOURCE_LABELS[req.source] ?? req.source}
                   </span>
                 </div>
 
                 {/* 단위업무 수 */}
-                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
+                <div className="is-center" style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
                   {req.unitWorkCount}
                 </div>
 
                 {/* 정렬 순서 */}
-                <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>
+                <div className="is-center" style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
                   {req.sortOrder || "-"}
                 </div>
 
                 {/* 최종 수정 — MCP 도구가 건드린 항목을 목록에서 바로 식별 */}
-                <ModifiedCell
-                  modifiedAt={req.modifiedAt}
-                  modifiedIsCreate={req.modifiedIsCreate}
-                  modifiedSource={req.modifiedSource}
-                />
+                <div className="is-center">
+                  <ModifiedCell
+                    modifiedAt={req.modifiedAt}
+                    modifiedIsCreate={req.modifiedIsCreate}
+                    modifiedSource={req.modifiedSource}
+                  />
+                </div>
 
               </div>
             );
@@ -809,45 +809,21 @@ function sourceBadgeStyle(source: string): React.CSSProperties {
 // 좁아지지 않으므로 minmax(0, ...) 로 바닥을 0으로 깔아준다.
 // 나머지 컬럼은 실제 표시되는 배지·숫자·헤더 글자 길이에 맞춘 고정폭. 오른쪽 고정 컬럼을
 // 타이트하게 잡을수록 왼쪽 과업명·요구사항명이 넓어지므로(1040px 창에서 fr 영역 330→444px)
-// 각 컬럼은 "헤더 4글자(12px×4=48px) 또는 배지 폭 중 큰 쪽 + 여유" 로 정한다.
-//   구분 52px    — "신규" 배지 + 편집용 select 화살표
-//   담당자 72px  — 한글 4자 이름(52px)까지 온전히, 더 길면 ellipsis + title 툴팁
-//   분석 44px    — "100%" 4글자가 최대치
-//   우선순위 56px / 단위업무 56px — 헤더 4글자(48px)가 하한
-//   출처 52px    — "RFP"·"변경" 배지
-//   정렬 40px    — 숫자 2~3자리
-//   수정 44px    — 축약 상대시간 2~3자 기준. 배지가 붙는 행은 시각이 줄임표 처리되고
-//                  배지만 남는다(정확한 시각은 툴팁). 정렬(40px)과 비슷한 폭으로 맞춤
+// 각 컬럼은 "헤더 4글자(12px×4=48px) 또는 배지 폭 중 큰 쪽 + 여유" 에 셀 좌우 패딩 12px
+// (sp-grid-table 셀 패딩 6px×2 — 세로선은 셀 경계에 놓이므로 간격을 gap 대신 패딩으로 만든다)을
+// 더해 정한다. 아래 수치는 모두 패딩 포함 값이다.
+//   핸들 36px    — ☰ 글자 + 왼쪽 가장자리 여백
+//   구분 64px    — "신규" 배지 + 편집용 select 화살표
+//   담당자 84px  — 한글 4자 이름(52px)까지 온전히, 더 길면 ellipsis + title 툴팁
+//   분석 56px    — "100%" 4글자가 최대치
+//   우선순위 68px / 단위업무 68px — 헤더 4글자(48px)가 하한
+//   출처 64px    — "RFP"·"변경" 배지
+//   정렬 52px    — 숫자 2~3자리
+//   수정 60px    — 축약 상대시간 2~3자 기준. 배지가 붙는 행은 시각이 줄임표 처리되고
+//                  배지만 남는다(정확한 시각은 툴팁)
 // 구분(사업 범위) 컬럼은 요구사항명 바로 오른쪽 — 항목을 읽기 전에 이번 사업분인지 보이게
-const GRID_TEMPLATE = "32px minmax(0, 45fr) minmax(0, 55fr) 52px 72px 44px 56px 52px 56px 40px 44px";
-
-// 컬럼 간격 — 고정 컬럼이 9개라 간격 4px 차이가 총 40px 로 누적된다.
 // 헤더/행이 같은 값을 써야 열이 어긋나지 않으므로 상수로 공유.
-const GRID_GAP = 8;
-
-const gridHeaderStyle: React.CSSProperties = {
-  display:             "grid",
-  gridTemplateColumns: GRID_TEMPLATE,
-  gap:                 GRID_GAP,
-  padding:             "10px 16px",
-  background:          "var(--color-bg-muted)",
-  fontSize:            12,
-  fontWeight:          600,
-  color:               "var(--color-text-secondary)",
-  borderBottom:        "1px solid var(--color-border)",
-  alignItems:          "center",
-};
-
-const gridRowStyle: React.CSSProperties = {
-  display:             "grid",
-  gridTemplateColumns: GRID_TEMPLATE,
-  gap:                 GRID_GAP,
-  padding:             "8px 16px",   // 행간 축소(기본 12px → 8px)
-  alignItems:          "center",
-  background:          "var(--color-bg-card)",
-  transition:          "background 0.1s",
-  cursor:              "pointer",
-};
+const GRID_TEMPLATE = "36px minmax(0, 45fr) minmax(0, 55fr) 64px 84px 56px 68px 64px 68px 52px 60px";
 
 // 인라인 링크 — AI 태스크 페이지 기준에 맞춰 평소엔 일반 텍스트, font: inherit 으로
 // <button> 의 user-agent 폰트가 옆 <span> 과 어긋나는 문제 방지.

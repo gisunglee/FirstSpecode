@@ -416,6 +416,39 @@ function selectRadio(el) {
 
 ---
 
+## Grid Table (div 기반 목록 표)
+
+과업·요구사항·단위업무처럼 드래그 정렬·인라인 편집·subgrid 때문에 `<table>` 대신
+div grid 로 짜인 목록에 `.sp-table` 과 같은 데이터 그리드 외관(셀 세로선·헤더 톤·hover)을
+입힌다. 줄무늬는 없다(세로선과 함께 쓰면 답답해 보여 제외). 열 폭만 페이지가
+`grid-template-columns` 인라인으로 지정하고, 헤더·행이 반드시 같은 값을 쓴다.
+
+```html
+<div class="sp-grid-table">
+  <div class="sp-grid-table-head" style="grid-template-columns: 36px minmax(0,1fr) 64px 84px">
+    <div></div>
+    <div>요구사항명</div>
+    <div class="is-center">구분</div>
+    <div class="is-center">담당자</div>
+  </div>
+  <div class="sp-grid-table-row" style="grid-template-columns: 36px minmax(0,1fr) 64px 84px">
+    <div>☰</div>
+    <div><span class="is-ellipsis">REQ-00001 비밀번호 재설정</span></div>
+    <div class="is-center"><span class="sp-badge">신규</span></div>
+    <div class="is-center"><span class="is-ellipsis">이기성</span></div>
+  </div>
+  <div class="sp-grid-table-row is-selected" style="grid-template-columns: …">…</div>
+</div>
+
+<!-- 셀 규칙 -->
+<!-- 셀은 flex 컨테이너다. 가운데 정렬은 text-align 이 아니라 is-center 로 한다 -->
+<!-- 말줄임은 셀이 아니라 안쪽 span 에 is-ellipsis 를 붙인다 (flex 컨테이너에는 ellipsis 가 먹지 않음) -->
+<!-- is-merged : 위 행과 같은 그룹인 셀 — 위쪽 가로선을 지워 엑셀 셀 병합처럼 보이게 한다 (과업명 열 등) -->
+<!-- 셀 간격은 gap 이 아니라 셀 좌우 패딩 6px 로 만들어지므로, 열 폭은 패딩 12px 을 포함해 잡는다 -->
+```
+
+---
+
 ## Tabs
 
 ```html
@@ -498,6 +531,9 @@ function selectRadio(el) {
 | `is-warn` | 경고 | hint |
 | `is-sorted` | 정렬 기준 | table th |
 | `is-mono` | 모노스페이스 | table td |
+| `is-center` | 셀 가운데 정렬 | grid-table 셀 |
+| `is-ellipsis` | 한 줄 말줄임 | grid-table 셀 안 span |
+| `is-merged` | 위 행과 병합(가로선 제거) | grid-table 셀 |
 | `is-collapsed` | 접힘 | sidebar |
 | `is-primary` | 강조 | toolbar-btn |
 | `is-close` | 닫기 스타일 | win-btn |

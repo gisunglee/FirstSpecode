@@ -82,15 +82,16 @@ function Inner() {
           총 <strong>{items.length}</strong>건
         </div>
 
-        {/* 테이블 — border 컨테이너로 감싸 빈 상태에서도 헤더가 표시되도록 통일 */}
-        <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-          <div style={gridHeader}>
+        {/* 테이블 — 표 외관(세로선·헤더 톤·hover·행간)은 sp-grid-table 클래스가 담당, 열 폭만 여기서 지정.
+            빈 상태에서도 헤더가 표시되도록 컨테이너+헤더는 분기 밖에 둔다 */}
+        <div className="sp-grid-table">
+          <div className="sp-grid-table-head" style={{ gridTemplateColumns: GRID }}>
             <div>기획실ID</div>
             <div>기획실명</div>
-            <div style={{ textAlign: "center" }}>산출물수</div>
-            <div style={{ textAlign: "center" }}>담당자</div>
-            <div style={{ textAlign: "center" }}>수정일시</div>
-            <div style={{ textAlign: "center" }} />
+            <div className="is-center">산출물수</div>
+            <div className="is-center">담당자</div>
+            <div className="is-center">수정일시</div>
+            <div className="is-center" />
           </div>
 
           {isLoading ? (
@@ -98,13 +99,19 @@ function Inner() {
           ) : items.length === 0 ? (
             <div style={{ padding: "64px 0", textAlign: "center", color: "#aaa", fontSize: 14 }}>등록된 기획실이 없습니다. 생성 버튼을 눌러 시작하세요.</div>
           ) : items.map((s) => (
-            <div key={s.planStudioId} onClick={() => router.push(`/projects/${projectId}/plan-studio/${s.planStudioId}`)} style={gridRow}>
+            <div
+              key={s.planStudioId}
+              onClick={() => router.push(`/projects/${projectId}/plan-studio/${s.planStudioId}`)}
+              className="sp-grid-table-row"
+              style={{ gridTemplateColumns: GRID }}
+            >
               <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{s.planStudioDisplayId}</div>
-              <div style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.planStudioNm}</div>
-              <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>{s.artfCount}</div>
-              <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.creatorNm}</div>
-              <div style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-primary)" }}>{formatPlanStudioDt(s.mdfcnDt ?? s.creatDt)}</div>
-              <div style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+              {/* flex 셀에는 ellipsis 가 먹지 않으므로 안쪽 span(is-ellipsis)에 건다 */}
+              <div style={{ fontSize: 13, color: "var(--color-text-primary)" }}><span className="is-ellipsis">{s.planStudioNm}</span></div>
+              <div className="is-center" style={{ fontSize: 13, color: "var(--color-text-primary)" }}>{s.artfCount}</div>
+              <div className="is-center" style={{ fontSize: 13, color: "var(--color-text-primary)" }}><span className="is-ellipsis">{s.creatorNm}</span></div>
+              <div className="is-center" style={{ fontSize: 13, color: "var(--color-text-primary)" }}>{formatPlanStudioDt(s.mdfcnDt ?? s.creatDt)}</div>
+              <div className="is-center" onClick={(e) => e.stopPropagation()}>
                 <button onClick={() => setDeleteTarget({ id: s.planStudioId, name: s.planStudioNm })} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--color-text-tertiary)" }} title="삭제">×</button>
               </div>
             </div>
@@ -145,7 +152,9 @@ function Inner() {
   );
 }
 
-const GRID = "100px 1fr 80px 100px 160px 40px";
+// 열 폭 — 기획실ID / 기획실명 / 산출물수 / 담당자 / 수정일시 / 삭제.
+// 고정폭은 sp-grid-table 셀 좌우 패딩(6px×2=12px)을 포함한 값. 헤더/행이 같은 값을 써야 한다.
+const GRID = "112px 1fr 92px 112px 172px 52px";
 
 // 수정일시 포맷 — "YYYY-MM-DD HH:mm" 으로 짧게.
 // toLocaleString() 기본값(예: "2026. 4. 11. 오전 11:33:32")은 한글 포맷이라
@@ -159,8 +168,6 @@ function formatPlanStudioDt(iso: string): string {
   const mi = String(d.getMinutes()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
 }
-const gridHeader: React.CSSProperties = { display: "grid", gridTemplateColumns: GRID, gap: 8, padding: "10px 16px", background: "var(--color-bg-muted)", fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", borderBottom: "1px solid var(--color-border)" };
-const gridRow: React.CSSProperties = { display: "grid", gridTemplateColumns: GRID, gap: 8, padding: "12px 16px", alignItems: "center", background: "var(--color-bg-card)", borderBottom: "1px solid var(--color-border)", cursor: "pointer", transition: "background 0.1s" };
 const overlay: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 };
 const dialog: React.CSSProperties = { background: "var(--color-bg-card)", borderRadius: 10, padding: "24px 28px", minWidth: 360, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" };
 const input: React.CSSProperties = { width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--color-border)", background: "var(--color-bg-card)", color: "var(--color-text-primary)", fontSize: 14, outline: "none", boxSizing: "border-box" };

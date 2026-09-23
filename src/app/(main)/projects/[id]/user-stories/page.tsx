@@ -60,7 +60,6 @@ function UserStoriesPageInner() {
   const [taskFilter, setTaskFilter] = useState(initialTaskFilter);
   const [reqFilter,  setReqFilter]  = useState(initialReqFilter);
   const [keyword,    setKeyword]    = useState("");
-  const [hoveredId,  setHoveredId]  = useState<string | null>(null);
 
   // ── 과업 목록 (필터 옵션) ──────────────────────────────────────────────────
   const { data: tasksData } = useQuery({
@@ -186,13 +185,13 @@ function UserStoriesPageInner() {
       </div>
 
       {/* ── 테이블 목록 — 빈 상태에서도 헤더 표시 (과업 페이지 패턴과 통일) ────── */}
-      <div style={{ border: "1px solid var(--color-border)", borderRadius: 8, overflow: "hidden" }}>
-        {/* 헤더 */}
-        <div style={gridHeaderStyle}>
+      <div className="sp-grid-table">
+        {/* 헤더 — 표 외관(세로선·헤더 톤·hover)은 sp-grid-table 클래스가 담당, 열 폭만 여기서 지정 */}
+        <div className="sp-grid-table-head" style={{ gridTemplateColumns: GRID_TEMPLATE }}>
           <div>요구사항</div>
           <div>스토리명</div>
           <div>페르소나</div>
-          <div style={{ textAlign: "center" }}>인수기준</div>
+          <div className="is-center">인수기준</div>
         </div>
 
         {stories.length === 0 ? (
@@ -201,61 +200,52 @@ function UserStoriesPageInner() {
           </div>
         ) : (
           /* 행 */
-          stories.map((s, idx) => (
+          stories.map((s) => (
             <div
               key={s.storyId}
               onClick={() => router.push(`/projects/${projectId}/user-stories/${s.storyId}`)}
-              onMouseEnter={() => setHoveredId(s.storyId)}
-              onMouseLeave={() => setHoveredId(null)}
-              style={{
-                ...gridRowStyle,
-                borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-                background: hoveredId === s.storyId ? "var(--color-bg-hover, rgba(99,102,241,0.06))" : "var(--color-bg-card)",
-                borderLeft: hoveredId === s.storyId ? "3px solid var(--color-primary, #6366f1)" : "3px solid transparent",
-                paddingLeft: 13,
-              }}
+              className="sp-grid-table-row"
+              style={{ gridTemplateColumns: GRID_TEMPLATE }}
             >
-              {/* 요구사항 — 표시번호 + 이름. 좁은 폭에서는 ellipsis (title로 전체 노출) */}
+              {/* 요구사항 — 표시번호 + 이름. 좁은 폭에서는 ellipsis (title로 전체 노출).
+                  flex 셀에는 ellipsis 가 먹지 않으므로 안쪽 span(is-ellipsis)에 건다 */}
               <div
-                style={{
-                  fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.4,
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }}
+                style={{ fontSize: 13, color: "var(--color-text-primary)", lineHeight: 1.4 }}
                 title={s.requirementDisplayId ? `${s.requirementDisplayId} ${s.requirementName}` : undefined}
               >
-                {s.requirementDisplayId ? (
-                  <>
-                    <span style={{ color: "var(--color-text-secondary)", fontSize: 13, marginRight: 4 }}>
-                      {s.requirementDisplayId}
-                    </span>
-                    {s.requirementName}
-                  </>
-                ) : (
-                  <span style={{ color: "var(--color-text-tertiary)" }}>-</span>
-                )}
+                <span className="is-ellipsis">
+                  {s.requirementDisplayId ? (
+                    <>
+                      <span style={{ color: "var(--color-text-secondary)", fontSize: 13, marginRight: 4 }}>
+                        {s.requirementDisplayId}
+                      </span>
+                      {s.requirementName}
+                    </>
+                  ) : (
+                    <span style={{ color: "var(--color-text-tertiary)" }}>-</span>
+                  )}
+                </span>
               </div>
 
               {/* 스토리명 — displayId 는 nowrap 유지, 이름만 ellipsis */}
-              <div
-                style={{
-                  fontSize: 13,
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }}
-                title={`${s.displayId} ${s.name}`}
-              >
-                <span style={{ color: "var(--color-text-secondary)", fontSize: 13, marginRight: 6 }}>
-                  {s.displayId}
+              <div style={{ fontSize: 13 }} title={`${s.displayId} ${s.name}`}>
+                <span className="is-ellipsis">
+                  <span style={{ color: "var(--color-text-secondary)", fontSize: 13, marginRight: 6 }}>
+                    {s.displayId}
+                  </span>
+                  {s.name}
                 </span>
-                {s.name}
               </div>
 
               {/* 페르소나 */}
-              <div style={{ fontSize: 13, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {s.persona || <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}
+              <div style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
+                <span className="is-ellipsis">
+                  {s.persona || <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}
+                </span>
               </div>
 
               {/* 인수기준 수 — 알약 디자인은 유지, 폰트만 본문과 통일 */}
-              <div style={{ textAlign: "center" }}>
+              <div className="is-center">
                 <span style={{
                   display: "inline-block", padding: "2px 8px", borderRadius: 4,
                   fontSize: 13, background: "var(--color-bg-muted)", color: "var(--color-text-secondary)",
@@ -275,31 +265,10 @@ function UserStoriesPageInner() {
 
 // ── 스타일 ───────────────────────────────────────────────────────────────────
 
-const gridHeaderStyle: React.CSSProperties = {
-  display:               "grid",
-  // 요구사항(2.5fr) 가장 길어질 수 있는 컬럼에 큰 비중, 페르소나(2fr)는 보통 짧음
-  gridTemplateColumns:   "2.5fr 3fr 2fr 80px",
-  gap:                   12,
-  padding:               "10px 16px",
-  background:            "var(--color-bg-muted)",
-  fontSize:              12,
-  fontWeight:            600,
-  color:                 "var(--color-text-secondary)",
-  borderBottom:          "1px solid var(--color-border)",
-  alignItems:            "center",
-};
-
-const gridRowStyle: React.CSSProperties = {
-  display:               "grid",
-  // 요구사항(2.5fr) 가장 길어질 수 있는 컬럼에 큰 비중, 페르소나(2fr)는 보통 짧음
-  gridTemplateColumns:   "2.5fr 3fr 2fr 80px",
-  gap:                   12,
-  padding:               "8px 16px",   // 행간 축소(기본 12px → 8px)
-  alignItems:            "center",
-  background:            "var(--color-bg-card)",
-  transition:            "background 0.1s",
-  cursor:                "pointer",
-};
+// 열 폭 — 요구사항(2.5fr) 가장 길어질 수 있는 컬럼에 큰 비중, 페르소나(2fr)는 보통 짧음.
+// 인수기준 고정폭은 sp-grid-table 셀 좌우 패딩(6px×2=12px)을 포함한 값.
+// 헤더/행이 같은 값을 써야 열이 어긋나지 않으므로 상수로 공유.
+const GRID_TEMPLATE = "2.5fr 3fr 2fr 92px";
 
 const filterSelectStyle: React.CSSProperties = {
   padding:            "7px 32px 7px 12px",

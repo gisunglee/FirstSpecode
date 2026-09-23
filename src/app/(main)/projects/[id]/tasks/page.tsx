@@ -252,30 +252,16 @@ function TaskListPageInner() {
         </div>
       </div>
 
-      {/* 테이블 */}
-      <div style={{
-        border: "1px solid var(--color-border)",
-        borderRadius: 8,
-        overflow: "hidden",
-      }}>
+      {/* 테이블 — 표 외관(세로선·헤더 톤·hover)은 sp-grid-table 클래스가 담당, 열 폭만 여기서 지정 */}
+      <div className="sp-grid-table">
         {/* 헤더 — 드래그 핸들 컬럼 제거 (2026-05-30) */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: TASK_GRID_TEMPLATE,
-          padding: "10px 16px",
-          background: "var(--color-bg-muted)",
-          borderBottom: "1px solid var(--color-border)",
-          fontSize: 12, fontWeight: 600,
-          color: "var(--color-text-secondary)",
-          gap: 12,
-          alignItems: "center",
-        }}>
+        <div className="sp-grid-table-head" style={{ gridTemplateColumns: TASK_GRID_TEMPLATE }}>
           <span>과업명</span>
-          <span style={{ textAlign: "center" }}>카테고리</span>
-          <span style={{ textAlign: "center" }}>RFP 페이지</span>
-          <span style={{ textAlign: "center" }}>산출물</span>
-          <span style={{ textAlign: "center" }}>담당자</span>
-          <span style={{ textAlign: "center" }}>요구사항</span>
+          <span className="is-center">카테고리</span>
+          <span className="is-center">RFP 페이지</span>
+          <span className="is-center">산출물</span>
+          <span className="is-center">담당자</span>
+          <span className="is-center">요구사항</span>
         </div>
 
         {/* 바디 */}
@@ -284,26 +270,17 @@ function TaskListPageInner() {
             {isError ? "접근 권한이 없거나 프로젝트 정보를 찾을 수 없습니다." : "등록된 과업이 없습니다."}
           </div>
         ) : (
-          tasks.map((task, idx) => {
+          tasks.map((task) => {
             const cc = CATEGORY_COLOR[task.category] ?? { bg: "#f5f5f5", color: "#666" };
             return (
               <div
                 key={task.taskId}
                 onClick={() => router.push(`/projects/${projectId}/tasks/${task.taskId}`)}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: TASK_GRID_TEMPLATE,
-                  padding: "8px 16px",   // 행간 축소(기본 12px → 8px)
-                  borderTop: idx === 0 ? "none" : "1px solid var(--color-border)",
-                  alignItems: "center",
-                  gap: 12,
-                  cursor: "pointer",
-                  background: "var(--color-bg-card)",
-                  transition: "background 0.1s",
-                }}
+                className="sp-grid-table-row"
+                style={{ gridTemplateColumns: TASK_GRID_TEMPLATE }}
               >
                 {/* 과업명 — 유일하게 폭이 늘고 줄어드는 컬럼 */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                <div style={{ gap: 8 }}>
                   <span style={{ fontSize: 13, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
                     {task.displayId}
                   </span>
@@ -313,7 +290,7 @@ function TaskListPageInner() {
                 </div>
 
                 {/* 카테고리 뱃지 */}
-                <div style={{ display: "flex", justifyContent: "center" }}>
+                <div className="is-center">
                   <span style={{
                     display: "inline-block", padding: "3px 10px",
                     borderRadius: 20, fontSize: 11, fontWeight: 600,
@@ -324,37 +301,37 @@ function TaskListPageInner() {
                 </div>
 
                 {/* RFP 페이지 */}
-                <span style={{ fontSize: 13, color: "var(--color-text-primary)", textAlign: "center" }}>
+                <span className="is-center" style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
                   {task.rfpPageNo || <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}
                 </span>
 
-                {/* 산출물 */}
+                {/* 산출물 — flex 셀에는 ellipsis 가 먹지 않으므로 안쪽 span(is-ellipsis)에 건다 */}
                 <span
-                  style={{
-                    fontSize: 13, color: "var(--color-text-primary)", textAlign: "center",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  }}
+                  className="is-center"
+                  style={{ fontSize: 13, color: "var(--color-text-primary)" }}
                   title={task.outputInfo || ""}
                 >
-                  {task.outputInfo || <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}
+                  <span className="is-ellipsis">
+                    {task.outputInfo || <span style={{ color: "var(--color-text-tertiary)" }}>-</span>}
+                  </span>
                 </span>
 
                 {/* 담당자 — 미지정/퇴장 멤버는 흐린 "-" */}
                 <div
+                  className="is-center"
                   style={{
-                    fontSize: 13, textAlign: "center",
+                    fontSize: 13,
                     color: task.assignMemberName
                       ? "var(--color-text-primary)"
                       : "var(--color-text-tertiary)",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}
                   title={task.assignMemberName ?? undefined}
                 >
-                  {task.assignMemberName ?? "-"}
+                  <span className="is-ellipsis">{task.assignMemberName ?? "-"}</span>
                 </div>
 
                 {/* 요구사항 건수 */}
-                <span style={{ fontSize: 13, color: "var(--color-text-primary)", textAlign: "center" }}>
+                <span className="is-center" style={{ fontSize: 13, color: "var(--color-text-primary)" }}>
                   {task.requirementCount}건
                 </span>
 
@@ -470,8 +447,9 @@ function DeleteTaskDialog({
 // 과업명 / 카테고리 / RFP 페이지 / 산출물 / 담당자 / 요구사항 / H·M·L
 // 과업명만 남는 공간을 흡수하며 줄어들 수 있어야 하므로 minmax(0, 1fr) —
 // 나머지는 실제 표시되는 배지·짧은 텍스트 길이에 맞춘 고정폭 + 중앙 정렬.
+// 고정폭은 sp-grid-table 셀 좌우 패딩(6px×2=12px)을 포함한 값이다.
 // H/M/L(우선순위 요약) 컬럼 삭제(2026-07-29)
-const TASK_GRID_TEMPLATE = "minmax(0, 1fr) 80px 76px 140px 60px 52px";
+const TASK_GRID_TEMPLATE = "minmax(0, 1fr) 92px 88px 152px 72px 64px";
 
 // ── 버튼 스타일 ──────────────────────────────────────────────────────────────
 

@@ -560,6 +560,69 @@ body {
 
 
 /* ================================================================
+   GRID TABLE — div 기반 CSS grid 목록용 표 외관 (.sp-table 과 같은 톤)
+   과업·요구사항·단위업무 등 목록 페이지는 드래그 정렬·인라인 편집·subgrid 때문에
+   <table> 대신 div grid 로 짜여 있다. 이 클래스는 그 구조를 유지한 채 .sp-table 과
+   동일한 데이터 그리드 외관(셀 세로선·헤더 톤·hover)을 한 곳에서 제공한다.
+   줄무늬는 넣지 않는다 — 세로선과 함께 쓰면 답답해 보인다는 결정(2026-09-23).
+
+   사용법:
+     <div class="sp-grid-table">
+       <div class="sp-grid-table-head" style="grid-template-columns: ...">
+         <div>과업명</div> <div class="is-center">구분</div> ...
+       </div>
+       <div class="sp-grid-table-row" style="grid-template-columns: ...">
+         <div>…</div> <div class="is-center">…</div> ...
+       </div>
+     </div>
+   - 열 폭(grid-template-columns)만 페이지가 인라인으로 지정한다. 헤더·행이 같은 값을 써야 한다.
+   - 셀은 flex 컨테이너다. 가운데 정렬은 text-align 이 아니라 is-center 로 한다.
+   - 셀 간격은 gap 이 아니라 셀 패딩으로 만든다(세로선이 셀 경계에 정확히 놓이도록).
+     열 폭을 정할 때 좌우 패딩(6px×2)을 포함해서 잡는다.
+================================================================ */
+.sp-grid-table {
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-card); overflow: hidden;
+  font-size: var(--text-base); background: var(--color-bg-card);
+}
+.sp-grid-table-head,
+.sp-grid-table-row {
+  display: grid; align-items: stretch;   /* stretch — 세로선이 행 높이 전체를 채우도록 */
+}
+.sp-grid-table-head {
+  background: linear-gradient(180deg, var(--color-bg-label) 0%, var(--color-bg-input) 100%);
+  border-bottom: 1px solid var(--color-border-strong);   /* 본문 셀 선(--color-border)보다 한 단계 진하게 */
+  font-size: var(--text-sm); font-weight: 600; color: var(--color-text-secondary);
+  user-select: none;
+}
+.sp-grid-table-row {
+  background: var(--color-bg-card);
+  cursor: pointer; transition: background var(--transition-fast);
+}
+.sp-grid-table-row:hover       { background: var(--color-bg-table-hover); }
+.sp-grid-table-row.is-selected { background: var(--color-bg-table-sel); }
+/* 셀 — 세로 가운데 정렬은 flex 로. 텍스트 ellipsis 가 필요하면 안쪽 span 에 is-ellipsis */
+.sp-grid-table-head > *,
+.sp-grid-table-row  > * {
+  display: flex; align-items: center; min-width: 0;
+  padding: var(--space-2) 6px;
+  /* --color-border-subtle(라이트 7%)은 흰 배경에서 거의 안 보인다는 피드백(2026-09-23) → 기본 테두리 토큰 */
+  border-right: 1px solid var(--color-border);
+}
+.sp-grid-table-head > :last-child,
+.sp-grid-table-row  > :last-child { border-right: none; }
+/* 표 바깥 가장자리 여백 — 첫/마지막 셀만 조금 더 띄운다 */
+.sp-grid-table-head > :first-child,
+.sp-grid-table-row  > :first-child { padding-left: var(--space-3); }
+.sp-grid-table-head > :last-child,
+.sp-grid-table-row  > :last-child  { padding-right: var(--space-3); }
+/* 행 사이 가로선 — 행이 아니라 셀에 그린다. 그래야 is-merged 셀만 선을 지워 병합처럼 보일 수 있다 */
+.sp-grid-table-row + .sp-grid-table-row > * { border-top: 1px solid var(--color-border); }
+.sp-grid-table-row > .is-merged { border-top-color: transparent; }
+.sp-grid-table .is-center   { justify-content: center; text-align: center; }
+.sp-grid-table .is-ellipsis { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+
+/* ================================================================
    DOC TABLE — 인쇄물/보고서 느낌의 정형 문서 표 (업무 리포트 전용)
    .sp-table(줄무늬 데이터 그리드)과 달리 모든 셀에 테두리가 있고 각져 있다.
 ================================================================ */
