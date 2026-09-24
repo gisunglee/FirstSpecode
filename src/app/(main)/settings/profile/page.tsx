@@ -601,9 +601,10 @@ function SocialTab({
   const linkedCount = (social.google ? 1 : 0) + (social.github ? 1 : 0);
   const isLastMethod = !hasPassword && linkedCount <= 1;
 
+  // GitHub 연동은 당장 제공하지 않기로 해서 목록에서 뺐다 (연동/해제 로직은 그대로 살아있음)
+  // 다시 열 때는 아래 배열에 { key: "github", label: "GitHub", icon: "GH" } 한 줄만 되살리면 됨
   const providers: { key: "google" | "github"; label: string; icon: string }[] = [
     { key: "google", label: "Google", icon: "G" },
-    { key: "github", label: "GitHub", icon: "GH" },
   ];
 
   return (
