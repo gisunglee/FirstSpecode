@@ -6,8 +6,17 @@ import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/authFetch";
+import {
+  decisionCountChips,
+  formatDate,
+  needsReanalysis,
+  runStatusBadgeClass,
+  runStatusLabel,
+  verdictLabel,
+} from "./_components/labels";
+import type { SyncDecisionCounts } from "./_components/types";
 
-type SyncRunRow = {
+type SyncRunRow = SyncDecisionCounts & {
   syncRunId: string;
   unitWorkDisplayId: string;
   unitWorkName: string;
@@ -19,7 +28,6 @@ type SyncRunRow = {
   evaluatedTargetCount: number;
   normalTargetCount: number;
   issueCount: number;
-  pendingCount: number;
   createdAt: string;
 };
 
@@ -31,15 +39,6 @@ const FILTERS = [
   { code: "COMPLETED", label: "완료" },
   { code: "FAILED", label: "실패" },
 ] as const;
-
-const STATUS_LABEL: Record<string, string> = {
-  RUNNING: "분석 중",
-  NEEDS_INPUT: "범위 확인 필요",
-  NEEDS_REVIEW: "검토 필요",
-  COMPLETED: "완료",
-  FAILED: "실패",
-  CANCELLED: "취소",
-};
 
 export default function SpecReconciliationsPage() {
   const { id: projectId } = useParams<{ id: string }>();
@@ -65,6 +64,11 @@ export default function SpecReconciliationsPage() {
       : items.filter((item) => item.status === filter);
   }, [data?.items, filter]);
 
+  // 우상단 요약 — 사람이 손대야 하는 실행 수. 결정 대기와 재분석 필요를 구분한다.
+  const reviewCount = data?.items.filter((item) => item.pendingCount > 0).length ?? 0;
+  const reanalysisCount =
+    data?.items.filter((item) => needsReanalysis(item.status, item.designChangedCount)).length ?? 0;
+
   return (
     <main className="sp-reconcile-page">
       <header className="sp-reconcile-header">
@@ -75,7 +79,8 @@ export default function SpecReconciliationsPage() {
           </p>
         </div>
         <div className="sp-reconcile-table-summary">
-          검토 필요 {data?.items.filter((item) => item.pendingCount > 0).length ?? 0}건
+          검토 필요 {reviewCount}건
+          {reanalysisCount > 0 ? ` · 재분석 필요 ${reanalysisCount}건` : ""}
         </div>
       </header>
 
@@ -133,7 +138,7 @@ export default function SpecReconciliationsPage() {
                 <th>구현 정합성</th>
                 <th>설계 커버리지</th>
                 <th>상태</th>
-                <th>문제</th>
+                <th>문제 처리 현황</th>
                 <th>요청자</th>
                 <th>요청일</th>
               </tr>
@@ -162,16 +167,13 @@ export default function SpecReconciliationsPage() {
                   <td><VerdictBadge value={row.implementationVerdict} /></td>
                   <td><VerdictBadge value={row.designCoverageVerdict} /></td>
                   <td>
-                    <span className={`sp-badge ${statusBadgeClass(row.status)}`}>
-                      {STATUS_LABEL[row.status] ?? row.status}
+                    <span
+                      className={`sp-badge ${runStatusBadgeClass(row.status, row.designChangedCount)}`}
+                    >
+                      {runStatusLabel(row.status, row.designChangedCount)}
                     </span>
                   </td>
-                  <td>
-                    <div className="sp-reconcile-table-title">문제 {row.issueCount}건</div>
-                    <div className="sp-reconcile-table-subtitle">
-                      결정 대기 {row.pendingCount}건 · 구현 정상 {row.normalTargetCount}건
-                    </div>
-                  </td>
+                  <td><DecisionProgressCell row={row} /></td>
                   <td>{row.requesterName}</td>
                   <td>{formatDate(row.createdAt)}</td>
                 </tr>
@@ -181,6 +183,36 @@ export default function SpecReconciliationsPage() {
         </section>
       )}
     </main>
+  );
+}
+
+/**
+ * "문제 N건" 고정 숫자 아래에 적용·거부·보류·설계변경·대기 건수를 배지로 보여준다.
+ * 이전에는 결정 대기 수만 회색 부제로 있어 결정을 내려도 목록이 바뀐 것처럼 보이지 않았다.
+ */
+function DecisionProgressCell({ row }: { row: SyncRunRow }) {
+  // 분석이 끝나기 전에는 문제 수 자체가 없다.
+  if (["RUNNING", "NEEDS_INPUT", "FAILED", "CANCELLED"].includes(row.status)) {
+    return <span className="sp-reconcile-table-subtitle">분석 결과 대기</span>;
+  }
+  const chips = decisionCountChips(row);
+  return (
+    <div>
+      <div className="sp-reconcile-table-title">
+        문제 {row.issueCount}건 · 구현 정상 {row.normalTargetCount}건
+      </div>
+      {chips.length === 0 ? (
+        <div className="sp-reconcile-table-subtitle">처리할 문제 없음</div>
+      ) : (
+        <div className="sp-reconcile-count-row">
+          {chips.map((chip) => (
+            <span key={chip.code} className={`sp-badge ${chip.badgeClass}`}>
+              {chip.label} {chip.count}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -208,36 +240,8 @@ function Empty({ title, copy }: { title: string; copy: string }) {
   );
 }
 
-function statusBadgeClass(status: string) {
-  if (status === "COMPLETED") return "sp-badge-success";
-  if (status === "FAILED" || status === "CANCELLED") return "sp-badge-error";
-  if (status === "RUNNING") return "sp-badge-info";
-  return "sp-badge-warning";
-}
-
 function verdictBadgeClass(value: string) {
   if (["PASS", "CLEAR"].includes(value)) return "sp-badge-success";
   if (["FAIL", "GAP_CANDIDATE"].includes(value)) return "sp-badge-warning";
   return "sp-badge-info";
-}
-
-function verdictLabel(value: string) {
-  const labels: Record<string, string> = {
-    PASS: "설계대로 구현",
-    FAIL: "불일치 있음",
-    UNKNOWN: "확인 필요",
-    CLEAR: "중요 누락 없음",
-    GAP_CANDIDATE: "누락 후보 있음",
-  };
-  return labels[value] ?? value;
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("ko-KR", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
 }

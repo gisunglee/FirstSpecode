@@ -145,7 +145,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           issueCount: summary.issueCount,
           // 기존 목록 소비자 호환용 별칭. 이제 item은 문제 항목만 뜻한다.
           itemCount: summary.issueCount,
+          // 처리 현황 — 목록에서 "몇 건을 적용/거부/보류했고 몇 건이 남았는지" 보여준다.
           pendingCount: summary.pendingCount,
+          appliedCount: summary.appliedCount,
+          rejectedCount: summary.rejectedCount,
+          deferredCount: summary.deferredCount,
+          designChangedCount: summary.designChangedCount,
           createdAt: run.creat_dt.toISOString(),
           analyzedAt: run.analyzed_dt?.toISOString() ?? null,
           completedAt: run.compl_dt?.toISOString() ?? null,

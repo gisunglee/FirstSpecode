@@ -10,8 +10,9 @@
  *   - 초대 중인 편집 멤버가 있으면 "수락 시 좌석을 더 씁니다" 한 줄 — 딱 맞게 사서 수락이 막히는 민원 방지.
  *   - 역할 변경은 여기서 하지 않는다. 프로젝트 이름 → 그 프로젝트의 멤버 관리로 보낸다.
  *
- * 2026-09-23 사용자 피드백: 사람별 칩 나열은 지저분하다 → 이름 나열 + 프로젝트 행 표로 정리. 이메일은 툴팁만.
- * 기본 접힘, 펼칠 때 /api/billing/seats/breakdown 을 부른다. 시작 카드·플랜 카드·좌석 축소 모달 세 곳 공용.
+ * 부차 정보이므로 자기 테두리를 갖지 않는다(카드 안 박스 중첩 방지). 접힘 라벨도 한 줄 —
+ * 좌석 수·계산식은 이 컴포넌트를 부르는 카드 본문이 이미 말하고 있어 여기서 반복하지 않는다.
+ * 기본 접힘, 펼칠 때 /api/billing/seats/breakdown 을 부른다. 시작 카드·플랜 카드·좌석 변경 모달 세 곳 공용.
  */
 
 import { useState } from "react";
@@ -22,8 +23,6 @@ import { ROLE_LABEL, isRoleCode } from "@/lib/permissions";
 import type { SeatBreakdown as SeatBreakdownData, SeatMemberRow } from "@/lib/billing/seats";
 
 type Props = {
-  /** 헤더에 쓰는 사용 좌석 수 (개요 API 값 — 펼치기 전에도 보이게) */
-  usedSeats: number;
   /** 모달 안처럼 처음부터 펼쳐 둘 때 */
   defaultOpen?: boolean;
 };
@@ -58,11 +57,39 @@ function displayName(r: SeatMemberRow): string {
 
 /** 역할 꼬리표 — 소유자·관리자만 붙인다. MEMBER 는 기본이라 생략해 표를 조용하게 */
 function roleTag(role: string): string {
-  if (role === "OWNER" || role === "ADMIN") return ` · ${isRoleCode(role) ? ROLE_LABEL[role] : role}`;
+  if (role === "OWNER" || role === "ADMIN") return isRoleCode(role) ? ROLE_LABEL[role] : role;
   return "";
 }
 
-export default function SeatBreakdown({ usedSeats, defaultOpen = false }: Props) {
+/**
+ * 이름 한 개 — 이름 중간에서 줄바꿈되지 않게 묶는다.
+ * 여러 명은 가운뎃점(·)으로만 구분한다(쉼표와 섞으면 역할 꼬리표와 헷갈린다).
+ */
+function NameChip({ label, email, role }: { label: string; email: string | null; role?: string }) {
+  const tag = role ? roleTag(role) : "";
+  return (
+    <span title={email ?? undefined} style={{ whiteSpace: "nowrap" }}>
+      {label}
+      {tag && <span style={{ color: "var(--color-text-tertiary)", marginLeft: 4 }}>{tag}</span>}
+    </span>
+  );
+}
+
+/** 이름들을 · 로 이어 준다. 줄바꿈은 이름 사이에서만 일어난다 */
+function NameList({ children }: { children: React.ReactNode[] }) {
+  return (
+    <>
+      {children.map((node, i) => (
+        <span key={i}>
+          {i > 0 && <span style={{ color: "var(--color-text-tertiary)" }}> · </span>}
+          {node}
+        </span>
+      ))}
+    </>
+  );
+}
+
+export default function SeatBreakdown({ defaultOpen = false }: Props) {
   const [open, setOpen] = useState(defaultOpen);
 
   const q = useQuery({
@@ -75,44 +102,46 @@ export default function SeatBreakdown({ usedSeats, defaultOpen = false }: Props)
   const projectRows = d ? toProjectRows(d) : [];
 
   return (
-    <div style={{ border: "1px solid var(--color-border-subtle)", borderRadius: "var(--radius-sm)", background: "var(--color-bg-elevated)" }}>
+    <div>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "none", border: "none", cursor: "pointer", color: "var(--color-text-secondary)", fontSize: "var(--text-sm)", textAlign: "left" }}
+        style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: 0, background: "none", border: "none", cursor: "pointer", color: "var(--color-brand)", fontSize: "var(--text-sm)" }}
       >
-        <span style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>좌석 {usedSeats}</span>
-        <span>= 편집 멤버 {usedSeats}명{d ? ` (소유 프로젝트 ${d.projectCount}개, 중복 제거)` : ""}</span>
-        <span style={{ marginLeft: "auto", color: "var(--color-brand)" }}>{open ? "접기 ▲" : "누가 포함되나요? ▼"}</span>
+        좌석에 누가 포함되나요? {open ? "▲" : "▼"}
       </button>
 
       {open && (
-        <div style={{ padding: "0 12px 12px", display: "grid", gap: 10, fontSize: "var(--text-sm)" }}>
+        <div style={{ marginTop: "var(--space-3)", display: "grid", gap: "var(--space-2)", fontSize: "var(--text-sm)" }}>
           {q.isLoading && <div style={{ color: "var(--color-text-tertiary)" }}>불러오는 중…</div>}
           {q.isError && <div className="sp-hint is-err">{(q.error as Error).message}</div>}
           {d && (
             <>
               {/* 위: 좌석 차감 멤버 이름 한 줄 — 중복 제거된 사람들 그 자체 */}
-              <div style={{ lineHeight: 1.7 }}>
+              <div style={{ lineHeight: 1.8, color: "var(--color-text-primary)" }}>
                 <span style={{ color: "var(--color-text-tertiary)", marginRight: 8 }}>좌석 차감 {d.editors.length}명</span>
-                {d.editors.length === 0
-                  ? <span style={{ color: "var(--color-text-tertiary)" }}>없음</span>
-                  : d.editors.map((e, i) => (
-                      <span key={e.mberId} title={e.email ?? undefined} style={{ color: "var(--color-text-primary)", fontWeight: e.isSelf ? 600 : 400 }}>
-                        {i > 0 && <span style={{ color: "var(--color-text-tertiary)" }}> · </span>}{displayName(e)}
+                {d.editors.length === 0 ? (
+                  <span style={{ color: "var(--color-text-tertiary)" }}>없음</span>
+                ) : (
+                  <NameList>
+                    {d.editors.map((e) => (
+                      <span key={e.mberId} style={{ fontWeight: e.isSelf ? 600 : 400 }}>
+                        <NameChip label={displayName(e)} email={e.email} />
                       </span>
                     ))}
+                  </NameList>
+                )}
                 <span style={{ color: "var(--color-text-tertiary)", marginLeft: 12 }}>
-                  뷰어(무료) {d.viewers.length}명{d.viewers.length > 0 && `: ${d.viewers.map(displayName).join(", ")}`}
+                  뷰어(무료) {d.viewers.length}명{d.viewers.length > 0 && `: ${d.viewers.map(displayName).join(" · ")}`}
                 </span>
               </div>
 
               {/* 아래: 프로젝트 행 표 — 누가 어디에 있나 */}
-              <div className="sp-table-wrap" style={{ background: "var(--color-bg-card)" }}>
+              <div className="sp-table-wrap">
                 <table className="sp-table">
                   <thead>
-                    <tr><th style={{ width: "40%" }}>프로젝트</th><th>편집 멤버 (좌석)</th><th style={{ width: "22%" }}>뷰어 (무료)</th></tr>
+                    <tr><th style={{ width: "38%" }}>프로젝트</th><th>편집 멤버 (좌석)</th><th style={{ width: "22%" }}>뷰어 (무료)</th></tr>
                   </thead>
                   <tbody>
                     {projectRows.length === 0 && <tr><td colSpan={3} className="is-muted" style={{ textAlign: "center" }}>소유한 프로젝트가 없습니다.</td></tr>}
@@ -123,13 +152,15 @@ export default function SeatBreakdown({ usedSeats, defaultOpen = false }: Props)
                             {p.name}
                           </Link>
                         </td>
-                        <td>
-                          {p.editors.map((e, i) => (
-                            <span key={i} title={e.email ?? undefined}>{i > 0 && ", "}{e.label}<span className="is-muted">{roleTag(e.role)}</span></span>
-                          ))}
+                        <td style={{ lineHeight: 1.7 }}>
+                          <NameList>
+                            {p.editors.map((e, i) => <NameChip key={i} label={e.label} email={e.email} role={e.role} />)}
+                          </NameList>
                         </td>
-                        <td className={p.viewers.length ? undefined : "is-muted"}>
-                          {p.viewers.length ? p.viewers.map((v, i) => <span key={i} title={v.email ?? undefined}>{i > 0 && ", "}{v.label}</span>) : "—"}
+                        <td className={p.viewers.length ? undefined : "is-muted"} style={{ lineHeight: 1.7 }}>
+                          {p.viewers.length
+                            ? <NameList>{p.viewers.map((v, i) => <NameChip key={i} label={v.label} email={v.email} />)}</NameList>
+                            : "—"}
                         </td>
                       </tr>
                     ))}

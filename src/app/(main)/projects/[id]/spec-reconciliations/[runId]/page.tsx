@@ -11,22 +11,16 @@ import { usePermissions } from "@/hooks/useMyRole";
 import {
   ResultSection,
   SummaryCell,
+  syncItemAnchorId,
 } from "../_components/SyncResultSection";
 import {
+  decisionCountChips,
   formatDate,
-  statusBadgeClass,
+  runStatusBadgeClass,
+  runStatusLabel,
   verdictLabel,
 } from "../_components/labels";
 import type { SyncRunDetail } from "../_components/types";
-
-const STATUS_LABEL: Record<string, string> = {
-  RUNNING: "분석 중",
-  NEEDS_INPUT: "범위 확인 필요",
-  NEEDS_REVIEW: "검토 필요",
-  COMPLETED: "완료",
-  FAILED: "실패",
-  CANCELLED: "취소",
-};
 
 export default function SpecSyncDetailPage() {
   const { id: projectId, runId } = useParams<{
@@ -110,6 +104,7 @@ export default function SpecSyncDetailPage() {
   const coverageItems = data.items.filter(
     (item) => item.findingType === "DESIGN_COVERAGE",
   );
+  const progressChips = decisionCountChips(data.summary);
 
   return (
     <main className="sp-reconcile-page">
@@ -129,23 +124,44 @@ export default function SpecSyncDetailPage() {
             구현 여부와 설계 누락 후보를 분리해 보고, 항목별로 결정합니다.
           </p>
         </div>
-        <span className={`sp-badge sp-badge-lg ${statusBadgeClass(data.status)}`}>
-          {STATUS_LABEL[data.status] ?? data.status}
+        <span
+          className={`sp-badge sp-badge-lg ${runStatusBadgeClass(data.status, data.summary.designChangedCount)}`}
+        >
+          {runStatusLabel(data.status, data.summary.designChangedCount)}
         </span>
       </header>
 
       <section className="sp-group">
         <div className="sp-group-header"><h2 className="sp-group-title">실행 요약</h2></div>
         <div className="sp-group-body">
-          <div className="sp-reconcile-summary-grid">
+          <div className="sp-reconcile-summary-grid is-compact">
             <SummaryCell label="모드" value={data.mode === "CHECK" ? "기본 점검" : "정밀 동기화"} />
             <SummaryCell label="구현 정합성" value={verdictLabel(data.implementationVerdict)} />
             <SummaryCell label="설계 커버리지" value={verdictLabel(data.designCoverageVerdict)} />
-            <SummaryCell label="점검 대상" value={`${data.summary.evaluatedTargetCount}건`} />
-            <SummaryCell label="구현 정상" value={`${data.summary.normalTargetCount}건`} />
-            <SummaryCell label="문제" value={`${data.summary.issueCount}건`} />
+            {/* 점검 대상·구현 정상·문제는 한 묶음 숫자라 셀 하나에 붙여 보여준다 */}
+            <SummaryCell
+              label="점검 결과"
+              value={`${data.summary.evaluatedTargetCount}건 점검 · 정상 ${data.summary.normalTargetCount} · 문제 ${data.summary.issueCount}`}
+            />
             <SummaryCell label="요청일" value={formatDate(data.createdAt)} />
+            <div className="sp-reconcile-summary-cell">
+              <div className="sp-reconcile-summary-label">문제 처리 현황</div>
+              {progressChips.length === 0 ? (
+                <div className="sp-reconcile-summary-value">처리할 문제 없음</div>
+              ) : (
+                <div className="sp-reconcile-count-row">
+                  {progressChips.map((chip) => (
+                    <span key={chip.code} className={`sp-badge ${chip.badgeClass}`}>
+                      {chip.label} {chip.count}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
+
+          <NextSteps data={data} />
+
           {data.summary.normalTargetCount > 0 ? (
             <div className="sp-reconcile-notice is-info sp-reconcile-action-top">
               구현 정상 {data.summary.normalTargetCount}건은 상세 표시를 생략하고 점검 완료 수에만 반영했습니다.
@@ -211,5 +227,70 @@ export default function SpecSyncDetailPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+/**
+ * "다음 할 일" 안내. 결정 결과가 토스트 한 번으로 사라져 사용자가 남은 일을 몰랐던 문제를
+ * 해결한다. 분석이 끝난 실행(NEEDS_REVIEW·COMPLETED)에서만 보여준다.
+ */
+function NextSteps({ data }: { data: SyncRunDetail }) {
+  if (!["NEEDS_REVIEW", "COMPLETED"].includes(data.status)) return null;
+
+  const { pendingCount, designChangedCount, appliedCount, rejectedCount, deferredCount } =
+    data.summary;
+  const pendingItems = data.items.filter((item) => item.status === "PENDING");
+  // 수정안이 없는 대기 항목은 적용 버튼이 없어 거부·보류만 가능하다. 그 사실을 미리 알려준다.
+  const pendingWithoutProposal = pendingItems.filter((item) => item.proposedValue === null).length;
+  const firstPending = pendingItems[0];
+  const firstDesignChanged = data.items.find((item) => item.status === "DESIGN_CHANGED");
+
+  // 모두 끝났고 미반영도 없으면 성공 안내 한 줄로 끝.
+  if (pendingCount === 0 && designChangedCount === 0) {
+    return (
+      <div className="sp-reconcile-notice is-success sp-reconcile-action-top">
+        <div className="sp-reconcile-notice-title">모든 문제를 처리했습니다.</div>
+        적용 {appliedCount}건 · 거부 {rejectedCount}건 · 보류 {deferredCount}건.
+        더 할 일이 없습니다.
+      </div>
+    );
+  }
+
+  return (
+    <div className="sp-reconcile-notice is-warning sp-reconcile-action-top">
+      <div className="sp-reconcile-notice-title">다음 할 일</div>
+      <ol className="sp-reconcile-next-steps">
+        {pendingCount > 0 ? (
+          <li>
+            결정 대기 {pendingCount}건이 남아 있습니다. 모두 결정해야 상태가 완료로 바뀝니다.
+            {pendingWithoutProposal > 0
+              ? ` 이 중 ${pendingWithoutProposal}건은 AI 수정안이 없어 적용 버튼 없이 거부·보류만 할 수 있습니다.`
+              : ""}
+            {firstPending ? (
+              <>
+                {" "}
+                <a href={`#${syncItemAnchorId(firstPending.syncItemId)}`}>첫 대기 항목으로 이동</a>
+              </>
+            ) : null}
+          </li>
+        ) : null}
+        {designChangedCount > 0 ? (
+          <li>
+            설계 변경 {designChangedCount}건은 적용되지 않았고, 이 화면에서는 더 처리할 수 없습니다.
+            분석 뒤 설계 본문이 바뀌어 자동 반영을 중단한 항목입니다. 최신 설계 기준으로 다시
+            제안을 받으려면 개발 저장소에서{" "}
+            <code className="sp-code">/sync-specode {data.unitWorkDisplayId}</code>를 다시 실행하세요.
+            {firstDesignChanged ? (
+              <>
+                {" "}
+                <a href={`#${syncItemAnchorId(firstDesignChanged.syncItemId)}`}>
+                  첫 설계 변경 항목으로 이동
+                </a>
+              </>
+            ) : null}
+          </li>
+        ) : null}
+      </ol>
+    </div>
   );
 }

@@ -20,7 +20,15 @@ export type NormalizedSyncSummary = {
   issueCount: number;
   implementationIssueCount: number;
   coverageIssueCount: number;
+  /**
+   * 아래 처리 현황은 분석 시점 summary가 아닌 현재 item 상태에서 매번 계산한다.
+   * 사람이 적용·거부·보류를 내릴 때마다 바뀌는 값이라 저장된 summary를 믿으면 안 된다.
+   */
   pendingCount: number;
+  appliedCount: number;
+  rejectedCount: number;
+  deferredCount: number;
+  designChangedCount: number;
 };
 
 export function isSyncIssueResult(resultCode: string) {
@@ -44,6 +52,8 @@ export function normalizeSyncSummary(
     isSyncIssueResult(item.result_code),
   ).length;
   const coverageIssueCount = issueItems.length - implementationIssueCount;
+  const countByStatus = (status: string) =>
+    issueItems.filter((item) => item.item_sttus_code === status).length;
 
   return {
     ...(typeof summary.implementation === "string"
@@ -69,9 +79,11 @@ export function normalizeSyncSummary(
       summary.coverageIssueCount,
       coverageIssueCount,
     ),
-    pendingCount: issueItems.filter(
-      (item) => item.item_sttus_code === "PENDING",
-    ).length,
+    pendingCount: countByStatus("PENDING"),
+    appliedCount: countByStatus("APPLIED"),
+    rejectedCount: countByStatus("REJECTED"),
+    deferredCount: countByStatus("DEFERRED"),
+    designChangedCount: countByStatus("DESIGN_CHANGED"),
   };
 }
 

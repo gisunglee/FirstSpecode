@@ -30,6 +30,18 @@ export type SyncItem = {
   decisionReason: string | null;
 };
 
+/**
+ * 문제 항목의 처리 현황. 목록과 상세가 같은 숫자를 쓴다.
+ * 사람이 결정을 내릴 때마다 서버가 현재 item 상태로 다시 계산한다.
+ */
+export type SyncDecisionCounts = {
+  pendingCount: number;
+  appliedCount: number;
+  rejectedCount: number;
+  deferredCount: number;
+  designChangedCount: number;
+};
+
 export type SyncRunDetail = {
   syncRunId: string;
   unitWorkDisplayId: string;
@@ -42,7 +54,7 @@ export type SyncRunDetail = {
     files?: Array<{ path: string; kind: string; reason: string }>;
     questions?: string[];
   } | null;
-  summary: {
+  summary: SyncDecisionCounts & {
     implementation?: string;
     designCoverage?: string;
     evaluatedTargetCount: number;
@@ -50,7 +62,6 @@ export type SyncRunDetail = {
     issueCount: number;
     implementationIssueCount: number;
     coverageIssueCount: number;
-    pendingCount: number;
   };
   implementationVerdict: string | null;
   designCoverageVerdict: string | null;
