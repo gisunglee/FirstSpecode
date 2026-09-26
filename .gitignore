@@ -13,6 +13,9 @@
 # production
 /build
 
+# legacy local attachment storage (Supabase Storage is the source of truth)
+/uploads/
+
 # misc
 .DS_Store
 *.pem

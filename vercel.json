@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/admin/batch/run/attach-file-cleanup",
+      "schedule": "15 18 * * *"
+    },
+    {
+      "path": "/api/admin/batch/run/project-hard-delete",
+      "schedule": "45 18 * * *"
+    }
+  ]
+}

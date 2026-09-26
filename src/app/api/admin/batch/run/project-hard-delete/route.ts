@@ -89,3 +89,8 @@ export async function POST(request: NextRequest) {
     return apiError("BATCH_ERROR", "배치 실행 중 오류가 발생했습니다.", 500);
   }
 }
+
+/** Vercel Cron은 등록된 경로를 GET으로 호출한다. */
+export async function GET(request: NextRequest) {
+  return POST(request);
+}

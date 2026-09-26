@@ -64,8 +64,17 @@ export async function requireBatchAuth(request: NextRequest): Promise<BatchAuth 
   }
 
   // ── ① 외부 cron — X-Cron-Secret 헤더 검사 ─────────────────────────────
-  const headerSecret = request.headers.get("x-cron-secret");
-  const envSecret    = process.env.BATCH_CRON_SECRET;
+  const legacyHeaderSecret = request.headers.get("x-cron-secret");
+  const authorization = request.headers.get("authorization");
+  const vercelHeaderSecret = authorization?.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length)
+    : null;
+  const headerSecret = legacyHeaderSecret ?? vercelHeaderSecret;
+  const envSecret = legacyHeaderSecret
+    ? process.env.BATCH_CRON_SECRET
+    : vercelHeaderSecret
+      ? process.env.CRON_SECRET
+      : undefined;
 
   // env 미설정 / 너무 짧음 → cron 인증 비활성. 실수 차단.
   const envSecretOk = !!envSecret && envSecret.length >= MIN_SECRET_LEN;

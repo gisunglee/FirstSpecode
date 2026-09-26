@@ -14,6 +14,7 @@ import {
 
 interface OrphanCandidate {
   objectPath: string;
+  systemAttachId: string | null;
 }
 
 const ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
@@ -35,11 +36,50 @@ export async function POST(request: NextRequest) {
       async loadTargets() {
         const [commonFiles, systemFiles] = await Promise.all([
           prisma.tbCmAttachFile.findMany({ select: { file_path_nm: true } }),
-          prisma.tbSysAttachFile.findMany({ select: { file_path_nm: true } }),
+          prisma.tbSysAttachFile.findMany({
+            select: {
+              attach_id: true,
+              ref_tbl_nm: true,
+              ref_id: true,
+              attach_div_code: true,
+              file_path_nm: true,
+              use_yn: true,
+            },
+          }),
         ]);
-        const knownSet = new Set(
-          [...commonFiles, ...systemFiles].map((file) => file.file_path_nm),
+        const docsPageIds = [...new Set(systemFiles
+          .filter((file) => file.ref_tbl_nm === "tb_sys_docs_page")
+          .map((file) => file.ref_id))];
+        const docsPages = docsPageIds.length > 0
+          ? await prisma.tbSysDocsPage.findMany({
+              where: { page_id: { in: docsPageIds } },
+              select: { page_id: true, page_cn: true },
+            })
+          : [];
+        const docsContentByPage = new Map(
+          docsPages.map((page) => [page.page_id, page.page_cn ?? ""]),
         );
+
+        const knownSet = new Set(commonFiles.map((file) => file.file_path_nm));
+        const systemFileByPath = new Map(systemFiles.map((file) => [file.file_path_nm, file]));
+        for (const file of systemFiles) {
+          if (file.use_yn !== "Y") continue;
+          if (file.ref_tbl_nm !== "tb_sys_docs_page") {
+            knownSet.add(file.file_path_nm);
+            continue;
+          }
+
+          const pageContent = docsContentByPage.get(file.ref_id);
+          if (pageContent === undefined) continue;
+          if (
+            file.attach_div_code === "INLINE" &&
+            !pageContent.includes(`/api/docs/files/${file.attach_id}/view`)
+          ) {
+            // 본문 저장 전에 이탈한 인라인 업로드는 24시간 유예 후 정리한다.
+            continue;
+          }
+          knownSet.add(file.file_path_nm);
+        }
         const objects = await listStorageObjects(prefix);
         const orphanBefore = Date.now() - ORPHAN_GRACE_MS;
 
@@ -49,7 +89,10 @@ export async function POST(request: NextRequest) {
             return new Date(object.createdAt).getTime() < orphanBefore;
           })
           .map((object) => ({
-            item: { objectPath: object.path },
+            item: {
+              objectPath: object.path,
+              systemAttachId: systemFileByPath.get(object.path)?.attach_id ?? null,
+            },
             trgtId: object.path,
             label: object.path,
             trgtTy: "ATTACH_FILE",
@@ -66,6 +109,12 @@ export async function POST(request: NextRequest) {
           };
         }
 
+        if (candidate.systemAttachId) {
+          await prisma.tbSysAttachFile.updateMany({
+            where: { attach_id: candidate.systemAttachId, use_yn: "Y" },
+            data: { use_yn: "N", mdfcn_dt: new Date() },
+          });
+        }
         await removeStorageObjects([candidate.objectPath]);
         return { status: "SUCCESS", meta: { path: candidate.objectPath } };
       },
@@ -76,4 +125,9 @@ export async function POST(request: NextRequest) {
     console.error("[POST /api/admin/batch/run/attach-file-cleanup] 오류:", error);
     return apiError("BATCH_ERROR", "배치 실행 중 오류가 발생했습니다.", 500);
   }
+}
+
+/** Vercel Cron은 등록된 경로를 GET으로 호출한다. */
+export async function GET(request: NextRequest) {
+  return POST(request);
 }
