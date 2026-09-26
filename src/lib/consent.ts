@@ -20,8 +20,8 @@ export type ConsentType = (typeof CONSENT_TYPES)[number];
  * 개정하면 이전 버전 원문도 복원 가능해야 한다(전자상거래법) — 첫 개정 때 이력 표기 방식을 정한다.
  */
 export const CURRENT_CONSENT_VERSION: Record<ConsentType, string> = {
-  TERMS:   "2026-10-01",
-  PRIVACY: "2026-10-01",
+  TERMS:   "2026-11-01",
+  PRIVACY: "2026-11-01",
 };
 
 /** "2026-10-01" → "2026년 10월 1일" (약관 화면 표기용) */
