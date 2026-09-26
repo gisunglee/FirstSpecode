@@ -49,6 +49,7 @@ const JOB_TYPES: Array<{ value: string; label: string }> = [
   { value: "PROJECT_HARD_DELETE", label: "프로젝트 영구 삭제" },
   { value: "ATTACH_FILE_CLEANUP", label: "첨부파일 디스크 정리" },
   { value: "BILLING_DAILY",       label: "결제 일일 배치 (청구·재시도·만료)" },
+  { value: "ACCESS_LOG_CLEANUP",  label: "접속 기록 90일 만료 정리" },
 ];
 
 const STATUSES: Array<{ value: string; label: string }> = [

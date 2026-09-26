@@ -7,14 +7,18 @@
  *      - socialToken: 소셜 토큰 검증 후 연동 계정 확인
  *      - 둘 다 없으면: 소유 프로젝트 없는 경우의 단순 탈퇴 (AT만으로 진행)
  *   2. 트랜잭션:
- *      a. 회원 논리 삭제 (WITHDRAWN + wthdrw_dt)
+ *      a. 회원 논리 삭제 + 가명처리 (WITHDRAWN + wthdrw_dt, 이메일→NULL·HMAC 가명값만 보존, 이름→"탈퇴회원",
+ *         비밀번호·프로필 이미지 제거). 회원 row 는 FK(작성자·소유자·결제 이력) 때문에 남기고,
+ *         이메일 UNIQUE 를 비워 같은 이메일로 즉시 재가입할 수 있게 한다. 복구 기간은 두지 않는다
+ *         (2026-09-24 결정). 재가입은 새 mber_id — 이전 데이터와 이어지지 않는다.
  *      b. 소유 프로젝트 보관 삭제 (owner_mber_id 기준, 프로젝트 삭제와 같은 soft delete)
  *         — 과거엔 CASCADE 즉시 물리 삭제였음. 결제 도입 후 "실수 탈퇴 → 데이터 소멸"
  *           분쟁을 막기 위해 보관 기간을 두고 배치(project-hard-delete)가 정리하게 변경.
  *           탈퇴자는 돌아오지 않으므로 본인 멤버십도 함께 REMOVED 처리한다.
  *      c. 참여 프로젝트 멤버 상태 LEFT 처리
  *      d. 참여 프로젝트 OWNER에게 제거 안내 INSERT
- *      e. 소셜 계정 삭제
+ *      e. 소셜 계정 삭제 (→ 같은 구글 계정으로 다시 오면 EXISTING 이 아닌 NEW 로 판정됨)
+ *      e-2. 평문 이메일이 남는 인증 메일 row·비밀번호 재설정 토큰 삭제, MCP 키 폐기, 동의 기록의 IP 제거
  *      f. 전 RT·세션 무효화
  *      g. 구독 해지 + 빌링키 삭제 (정책 §1-10 — 안 하면 탈퇴자 카드에서 계속 출금)
  *
@@ -26,9 +30,9 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { requireAuth } from "@/lib/requireAuth";
-import { verifyPassword, verifySocialToken } from "@/lib/auth";
+import { verifyPassword, verifySocialToken, hashWithdrawnEmail } from "@/lib/auth";
 import { clearRefreshTokenCookie } from "@/lib/authRefreshCookie";
-import { isSystemAdminWithdrawalBlocked } from "@/lib/memberLifecyclePolicy";
+import { isSystemAdminWithdrawalBlocked, WITHDRAWN_MEMBER_NAME } from "@/lib/memberLifecyclePolicy";
 import { resolveSoftDeleteRetentionDays, softDeleteProject } from "@/lib/projectLifecycle";
 import { hasLiveSubscription, withdrawSubscription } from "@/lib/billing/subscription";
 import { toBillingErrorResponse } from "@/lib/billing/errors";
@@ -49,7 +53,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const member = await prisma.tbCmMember.findUnique({
       where:  { mber_id: auth.mberId },
-      select: { pswd_hash: true, mber_sttus_code: true, sys_role_code: true },
+      select: { email_addr: true, pswd_hash: true, mber_sttus_code: true, sys_role_code: true },
     });
 
     if (!member) {
@@ -126,10 +130,22 @@ export async function DELETE(request: NextRequest) {
     const hardDeleteAt  = new Date(now.getTime() + retentionDays * 24 * 60 * 60 * 1000);
 
     await prisma.$transaction(async (tx) => {
-      // a. 회원 논리 삭제
+      // a. 회원 논리 삭제 + 가명처리
+      //    email_addr 를 비우는 것이 핵심 — UNIQUE 가 풀려 같은 이메일로 바로 재가입할 수 있고,
+      //    소셜 콜백의 "동일 이메일 기존 계정(LINK_REQUIRED)" 판정에도 걸리지 않아 새 계정이 된다.
+      //    해시는 운영자가 이메일로 탈퇴 회원을 찾을 때(결제 분쟁 등)만 쓴다.
       await tx.tbCmMember.update({
         where: { mber_id: auth.mberId },
-        data:  { mber_sttus_code: "WITHDRAWN", wthdrw_dt: now },
+        data:  {
+          mber_sttus_code: "WITHDRAWN",
+          wthdrw_dt:       now,
+          mdfcn_dt:        now,
+          email_addr:      null,
+          email_hash:      member.email_addr ? hashWithdrawnEmail(member.email_addr) : null,
+          mber_nm:         WITHDRAWN_MEMBER_NAME,
+          profl_img_url:   null,
+          pswd_hash:       null,
+        },
       });
 
       // b. 소유 프로젝트 보관 삭제 (owner_mber_id 기준)
@@ -202,6 +218,21 @@ export async function DELETE(request: NextRequest) {
       // e. 소셜 계정 삭제
       await tx.tbCmSocialAccount.deleteMany({
         where: { mber_id: auth.mberId },
+      });
+
+      // e-2. 잔여 개인정보·자격증명 정리
+      //    인증 메일 row 는 평문 이메일(가입·이메일 변경 대기)을 들고 있어 함께 지운다.
+      //    MCP 키는 인증 단계에서 비활성 회원을 거부하지만, 탈퇴 시점에 명시적으로 폐기해 둔다.
+      await tx.tbCmEmailVerification.deleteMany({ where: { mber_id: auth.mberId } });
+      await tx.tbCmPasswordResetToken.deleteMany({ where: { mber_id: auth.mberId } });
+      await tx.tbCmMcpKey.updateMany({
+        where: { mber_id: auth.mberId, revoke_dt: null },
+        data:  { revoke_dt: now },
+      });
+      // 동의 기록은 증빙으로 남기되(종류·버전·일시) 개인정보인 IP 는 지운다 — 개인정보처리방침 "탈퇴 시 파기"와 맞춤
+      await tx.tbCmMemberConsent.updateMany({
+        where: { mber_id: auth.mberId, ip_addr: { not: null } },
+        data:  { ip_addr: null },
       });
 
       // f. 전 RT 무효화

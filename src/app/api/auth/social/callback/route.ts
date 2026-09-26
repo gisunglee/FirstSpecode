@@ -6,20 +6,23 @@
  *   2. Provider에 code → Access Token 교환
  *   3. Provider에서 사용자 정보 조회
  *   4. 결과 분기:
- *      - EXISTING:     기존 소셜 계정 → AT/RT 발급
- *      - LINK_REQUIRED: 동일 이메일 기존 계정 존재 → socialToken 발급
- *      - NEW:          신규 → 계정 생성 + AT/RT 발급
- *      - ADD_SOCIAL:   action=add (로그인 회원의 소셜 추가) → socialToken 발급
- *                      클라이언트가 이후 POST /api/member/social/link 호출
+ *      - EXISTING:          기존 소셜 계정 → AT/RT 발급
+ *      - LINK_REQUIRED:     동일 이메일 기존 계정 존재 → socialToken 발급
+ *      - REGISTER_REQUIRED: 신규 → 계정을 만들지 않고 socialToken(이름·이미지 포함) 발급
+ *                           클라이언트가 가입 완료 화면(이름 확인 + 약관 동의)을 거쳐
+ *                           POST /api/auth/social/register 로 계정 생성 (2026-09-24 — 이전 NEW 즉시 가입 폐기)
+ *      - ADD_SOCIAL:        action=add (로그인 회원의 소셜 추가) → socialToken 발급
+ *                           클라이언트가 이후 POST /api/member/social/link 호출
  *
  * Body: { code: string, state: string }
- * 응답: { data: { resultType, accessToken?, refreshToken?, socialToken?, email?, provider? } }
+ * 응답: { data: { resultType, accessToken?, refreshToken?, socialToken?, email?, name?, provider?, redirectTo? } }
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/apiResponse";
+import { sanitizeInternalRedirect } from "@/lib/safeRedirect";
 import {
   signAccessToken,
   signSocialToken,
@@ -57,7 +60,8 @@ export async function POST(request: NextRequest) {
   const provider   = parts[0];
   const nonce      = parts[1];
   const action     = parts[2] || null; // "add", "withdraw" 등
-  const redirectTo = parts[3] || null; // 예: "/invite/accept?token=..."
+  // 예: "/invite/accept?token=...". authorize 가 정제해 넣지만 state 는 클라이언트를 거쳐 돌아오므로 한 번 더 정제
+  const redirectTo = sanitizeInternalRedirect(parts[3], "") || null;
 
   if (!provider || !nonce || !["google", "github"].includes(provider)) {
     return apiError("VALIDATION_ERROR", "인증 요청이 유효하지 않습니다.", 400);
@@ -110,11 +114,19 @@ export async function POST(request: NextRequest) {
         return apiError("PROVIDER_ERROR", "소셜 서비스 연결에 실패했습니다. 잠시 후 다시 시도해 주세요.", 502);
       }
       const userData = await userRes.json();
+
+      // Google 은 소유가 확인되지 않은 이메일도 내려줄 수 있다(email_verified=false).
+      // 그대로 쓰면 남의 이메일로 LINK_REQUIRED 를 타거나 그 이메일을 신규 계정으로 선점할 수 있다.
+      // GitHub 쪽이 primary+verified 만 받는 것과 같은 기준.
+      if (userData.email_verified !== true) {
+        return apiError("PROVIDER_ERROR", "Google 계정의 이메일이 인증되지 않아 사용할 수 없습니다.", 400);
+      }
+
       provdrUserId   = userData.sub;
       provdrEmail    = userData.email    ?? null;
       // Google 이름 우선순위: name → given_name+family_name 조합
       // (비즈니스 계정 등에서 name이 비어 오는 케이스 방어)
-      // 최종 fallback(이메일 앞자리)은 NEW 가입 블록에서 일괄 처리한다.
+      // 둘 다 없으면 null — 가입 완료 화면이 이메일 앞자리를 기본값으로 채우고 사용자가 고친다.
       const combinedName = [userData.given_name, userData.family_name].filter(Boolean).join(" ");
       provdrName     = (userData.name as string | undefined) || combinedName || null;
       provdrImageUrl = userData.picture  ?? null;
@@ -274,55 +286,29 @@ export async function POST(request: NextRequest) {
       return res;
     }
 
-    // NEW — 신규 가입 처리
-    const rt      = generateRefreshToken();
-    const rtHash  = hashRefreshToken(rt);
-    const rtExpiry = refreshTokenExpiryDate();
-
-    // Provider가 이름을 주지 않은 경우(예: Google 계정에 이름 미설정,
-    // GitHub 표시 이름 없음) 이메일 앞자리를 대체 회원명으로 사용한다.
-    // 회원명이 NULL이면 GNB/프로필 등 화면에서 공백으로 보이는 UX 이슈가 발생하므로
-    // 항상 값이 채워지도록 보장한다.
-    const fallbackName = provdrEmail!.split("@")[0];
-    const mberNm       = provdrName?.trim() || fallbackName;
-
-    const { newMember, sesnId } = await prisma.$transaction(async (tx) => {
-      const member = await tx.tbCmMember.create({
-        data: {
-          email_addr:    provdrEmail!,
-          mber_sttus_code: "ACTIVE",
-          mber_nm:       mberNm,
-          ...(provdrImageUrl && { profl_img_url: provdrImageUrl }),
-        },
-      });
-      await tx.tbCmSocialAccount.create({
-        data: {
-          mber_id:           member.mber_id,
-          provdr_code:       provdrCode,
-          provdr_user_id:    provdrUserId,
-          provdr_email_addr: provdrEmail,
-        },
-      });
-      const sesn = await tx.tbCmMemberSession.create({
-        data: { mber_id: member.mber_id, device_info_cn: userAgent, ip_addr: ipAddr },
-      });
-      await tx.tbCmRefreshToken.create({
-        data: { mber_id: member.mber_id, token_hash_val: rtHash, expiry_dt: rtExpiry, sesn_id: sesn.sesn_id },
-      });
-      return { newMember: member, sesnId: sesn.sesn_id };
+    // REGISTER_REQUIRED — 신규. 여기서 계정을 만들지 않는다.
+    // 가입 완료 화면에서 이름 확인 + 약관·개인정보 동의를 받은 뒤 POST /api/auth/social/register 가 만든다.
+    // Provider 가 준 이름·이미지는 서명된 socialToken 에 실어 보낸다(쿼리스트링 위조 방지).
+    // 이름이 비어 오면 가입 화면이 이메일 앞자리를 기본값으로 채운다.
+    const socialToken = signSocialToken({
+      provdrCode,
+      provdrUserId,
+      email: provdrEmail,
+      ...(provdrName?.trim()  ? { name: provdrName.trim() }   : {}),
+      ...(provdrImageUrl      ? { imageUrl: provdrImageUrl } : {}),
     });
-
-    const at  = signAccessToken({ mberId: newMember.mber_id, email: provdrEmail!, sesnId });
     const res = NextResponse.json({
       data: {
-        resultType: "NEW",
-        accessToken: at,
-        ...(!cookieMode ? { refreshToken: rt } : {}),
+        resultType: "REGISTER_REQUIRED",
+        socialToken,
+        email:    provdrEmail,
+        name:     provdrName?.trim() || null,
+        provider: provdrCode.toLowerCase(),
         redirectTo,
       },
     });
     res.cookies.delete("oauth_state");
-    return setRefreshTokenCookie(res, rt, rtExpiry, "N");
+    return res;
 
   } catch (err) {
     console.error("[POST /api/auth/social/callback] 오류:", err);

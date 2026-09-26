@@ -1883,3 +1883,135 @@ body {
   font-size: var(--text-xs);
   margin-bottom: var(--space-2);
 }
+
+
+/* ================================================================
+   AUTH SHELL — (auth) 그룹 공용 2단 레이아웃 (2026-09-24)
+   왼쪽 소개 패널(dark) / 오른쪽 폼 영역(light). 900px 미만은 패널 숨김.
+   사용처: src/app/(auth)/layout.tsx, _components/AuthCard.tsx, ConsentFields.tsx
+================================================================ */
+.sp-auth-shell {
+  min-height: 100vh; display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+}
+.sp-auth-aside {
+  background: var(--color-bg-titlebar); color: var(--color-text-primary);
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--space-12) var(--space-10);
+  border-right: 1px solid var(--color-border-subtle);
+}
+.sp-auth-aside-inner {
+  width: 100%; max-width: 480px;
+  display: flex; flex-direction: column; gap: var(--space-6);
+}
+.sp-auth-brand {
+  display: inline-flex; align-items: center; gap: var(--space-2); align-self: flex-start;
+  font-weight: 800; font-size: var(--text-xl); letter-spacing: 0.06em;
+  color: var(--color-text-primary); text-decoration: none;
+}
+.sp-auth-brand-mark {
+  width: 28px; height: 28px; border-radius: var(--radius-md);
+  background: var(--color-accent); color: var(--color-text-inverse);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: var(--text-lg); box-shadow: var(--shadow-btn-accent);
+}
+.sp-auth-eyebrow {
+  font-size: var(--text-2xs); letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--color-accent); font-weight: 600; margin-bottom: var(--space-3);
+}
+.sp-auth-title {
+  margin: 0; font-size: var(--text-4xl); line-height: 1.25; font-weight: 700;
+  color: var(--color-text-heading); letter-spacing: -0.01em;
+}
+.sp-auth-lead  { margin: 0; font-size: var(--text-lg); line-height: 1.7; color: var(--color-text-secondary); }
+.sp-auth-points { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-4); }
+.sp-auth-point  { display: flex; gap: var(--space-3); }
+.sp-auth-point-check {
+  flex-shrink: 0; width: 20px; height: 20px; margin-top: 1px; border-radius: var(--radius-full);
+  background: var(--color-success-subtle); border: 1px solid var(--color-success-border); color: var(--color-success);
+  display: inline-flex; align-items: center; justify-content: center; font-size: var(--text-xs);
+}
+.sp-auth-point-title { font-size: var(--text-lg); font-weight: 600; color: var(--color-text-primary); }
+.sp-auth-point-desc  { margin-top: 2px; font-size: var(--text-base); line-height: 1.6; color: var(--color-text-secondary); }
+.sp-auth-more { font-size: var(--text-base); color: var(--color-text-link); text-decoration: none; }
+.sp-auth-more:hover { text-decoration: underline; }
+.sp-auth-main {
+  background: var(--color-bg-root);
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--space-10) var(--space-6);
+}
+.sp-auth-main-inner { width: 100%; max-width: 440px; }
+@media (max-width: 900px) {
+  .sp-auth-shell { grid-template-columns: 1fr; }
+  .sp-auth-aside { display: none; }
+}
+
+/* 카드 — 오른쪽 폼 영역의 흰 카드 (AuthCard) */
+.sp-auth-card {
+  background: var(--color-bg-surface); color: var(--color-text-primary);
+  border: 1px solid var(--color-border-subtle); border-radius: var(--radius-lg);
+  padding: var(--space-8); box-shadow: var(--shadow-lg);
+}
+.sp-auth-card-head { display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: var(--space-6); }
+.sp-auth-card-logo {
+  width: 48px; height: 48px; border-radius: var(--radius-lg); margin-bottom: var(--space-3);
+  background: var(--color-accent); color: var(--color-text-inverse); box-shadow: var(--shadow-btn-accent);
+  display: flex; align-items: center; justify-content: center; font-size: var(--text-3xl);
+}
+.sp-auth-card-brand { font-weight: 800; font-size: var(--text-xl); letter-spacing: 0.06em; color: var(--color-text-heading); margin-bottom: var(--space-2); }
+.sp-auth-card-title { margin: 0; font-size: var(--text-2xl); font-weight: 700; color: var(--color-text-heading); }
+.sp-auth-card-sub   { margin: var(--space-1) 0 0; font-size: var(--text-base); color: var(--color-text-tertiary); }
+
+/* 소셜 버튼 · 구분선 · 에러 · 동의 · 하단 링크 · 소셜 신원 표시 */
+.sp-auth-social-btn {
+  display: flex; align-items: center; justify-content: center; gap: var(--space-3);
+  width: 100%; padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--color-bg-surface); color: var(--color-text-primary);
+  font-size: var(--text-lg); font-weight: 500; cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.sp-auth-social-btn:hover:not(:disabled) { border-color: var(--color-border-strong); background: var(--color-bg-input-hover); }
+.sp-auth-social-btn:disabled { opacity: 0.6; cursor: default; }
+.sp-auth-divider {
+  display: flex; align-items: center; gap: var(--space-3); margin: var(--space-5) 0;
+  color: var(--color-text-tertiary); font-size: var(--text-xs);
+}
+.sp-auth-divider::before, .sp-auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--color-border); }
+.sp-auth-error {
+  padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4);
+  border: 1px solid var(--color-error-border); border-radius: var(--radius-md);
+  background: var(--color-error-subtle); color: var(--color-error); font-size: var(--text-sm);
+}
+.sp-auth-consent {
+  display: flex; flex-direction: column; gap: var(--space-2); margin: var(--space-4) 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+}
+.sp-auth-consent .sp-checkbox-wrap { align-items: flex-start; font-size: var(--text-sm); line-height: 1.5; }
+.sp-auth-consent .sp-checkbox { margin-top: 2px; }
+.sp-auth-consent a { color: var(--color-text-link); text-decoration: underline; }
+.sp-auth-foot { margin-top: var(--space-5); text-align: center; font-size: var(--text-sm); color: var(--color-text-tertiary); }
+.sp-auth-foot a { color: var(--color-text-link); font-weight: 600; text-decoration: none; }
+.sp-auth-identity {
+  display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+}
+.sp-auth-identity-email { font-size: var(--text-base); font-weight: 600; color: var(--color-text-primary); word-break: break-all; }
+.sp-auth-identity-via   { font-size: var(--text-xs); color: var(--color-text-tertiary); }
+
+/* 로그인 화면 전용 보조 — 행 배치·링크·잠금 안내·자동 로그인 대기 */
+.sp-auth-row  { display: flex; align-items: center; justify-content: space-between; margin: var(--space-2) 0 var(--space-4); }
+.sp-auth-link { font-size: var(--text-sm); color: var(--color-text-link); text-decoration: none; font-weight: 500; }
+.sp-auth-link:hover { text-decoration: underline; }
+.sp-auth-card .sp-auth-pw-toggle { width: auto; padding: 0 var(--space-2); font-size: var(--text-xs); color: var(--color-text-tertiary); }
+.sp-auth-lock {
+  padding: var(--space-4); margin-bottom: var(--space-4);
+  border: 1px solid var(--color-error-border); border-radius: var(--radius-md); background: var(--color-error-subtle);
+}
+.sp-auth-lock-title { margin: 0 0 var(--space-1); font-size: var(--text-base); font-weight: 600; color: var(--color-error); }
+.sp-auth-lock-desc  { margin: 0 0 var(--space-3); font-size: var(--text-sm); color: var(--color-text-secondary); line-height: 1.5; }
+.sp-auth-loading { display: flex; justify-content: center; padding: var(--space-6) 0; }

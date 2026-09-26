@@ -411,6 +411,7 @@
   --text-xl:  var(--p-text-xl);
   --text-2xl: var(--p-text-2xl);
   --text-3xl: var(--p-text-3xl);
+  --text-4xl: var(--p-text-4xl);
 
   --radius-sm:   var(--p-r-2);
   --radius-md:   var(--p-r-3);

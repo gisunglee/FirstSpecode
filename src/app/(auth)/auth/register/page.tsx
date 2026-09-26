@@ -4,9 +4,13 @@
  * RegisterPage — 회원가입 (PID-00003, AR-00001 + AR-00002)
  *
  * 역할:
- *   - 이메일·비밀번호·확인 입력 폼 (FID-00001~00004)
+ *   - Google 로 계속 (소셜 가입 진입 — 콜백이 REGISTER_REQUIRED 면 가입 완료 화면으로)
+ *   - 이름·이메일·비밀번호·확인 입력 폼 (FID-00001~00004) — 이름은 2026-09-24 부터 필수
  *   - blur 시 인라인 유효성 검증 + 이메일 중복 확인 API (FID-00002)
- *   - 회원가입 버튼 → POST /api/auth/register → 인증 메일 발송 안내로 이동 (FID-00005)
+ *   - 이용약관·개인정보 필수 동의 (ConsentFields)
+ *   - [계정 만들기] → POST /api/auth/register → 인증 메일 발송 안내로 이동 (FID-00005)
+ *
+ * 화면 껍데기는 AuthCard, 2단 레이아웃은 (auth)/layout.tsx 가 담당한다.
  *
  * URL: /auth/register
  */
@@ -15,25 +19,59 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/apiFetch";
+import { MEMBER_NAME_MAX_LENGTH } from "@/lib/memberName";
+import { AuthCard } from "../../_components/AuthCard";
+import { GoogleIcon } from "../../_components/GoogleIcon";
+import { ConsentFields, type ConsentState } from "../../_components/ConsentFields";
 
-// 비밀번호 복잡도: 영문+숫자+특수문자 포함 8자 이상
+// 비밀번호 복잡도: 영문+숫자+특수문자 포함 8자 이상 (서버 register 라우트와 동일)
 const PASSWORD_REGEX = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
 const EMAIL_REGEX    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function RegisterPage() {
   const router = useRouter();
 
-  const [email,         setEmail]         = useState("");
-  const [password,      setPassword]      = useState("");
+  const [name,            setName]            = useState("");
+  const [email,           setEmail]           = useState("");
+  const [password,        setPassword]        = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [consent,         setConsent]         = useState<ConsentState>({ agreeTerms: false, agreePrivacy: false });
 
   // 인라인 에러 메시지
-  const [emailError,    setEmailError]    = useState("");
-  const [pwError,       setPwError]       = useState("");
-  const [pwConfirmError,setPwConfirmError] = useState("");
-  const [submitError,   setSubmitError]   = useState("");
+  const [nameError,      setNameError]      = useState("");
+  const [emailError,     setEmailError]     = useState("");
+  const [pwError,        setPwError]        = useState("");
+  const [pwConfirmError, setPwConfirmError] = useState("");
+  const [consentError,   setConsentError]   = useState("");
+  const [submitError,    setSubmitError]    = useState("");
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting,  setIsSubmitting]  = useState(false);
+  const [socialLoading, setSocialLoading] = useState(false);
+
+  // ── Google 로 계속 — authorize URL 취득 후 이동 (로그인 화면과 같은 흐름) ──
+  async function handleGoogle() {
+    if (socialLoading) return;
+    setSocialLoading(true);
+    setSubmitError("");
+    try {
+      const res  = await fetch("/api/auth/social/google/authorize");
+      const body = await res.json();
+      if (!res.ok) { setSubmitError(body.message ?? "Google 연결에 실패했습니다."); setSocialLoading(false); return; }
+      window.location.href = body.data.url;
+    } catch {
+      setSubmitError("Google 연결 중 오류가 발생했습니다.");
+      setSocialLoading(false);
+    }
+  }
+
+  // ── 이름 검증 ──────────────────────────────────────────────────
+  function validateName(): boolean {
+    const trimmed = name.trim();
+    if (!trimmed) { setNameError("이름을 입력해 주세요."); return false; }
+    if (trimmed.length > MEMBER_NAME_MAX_LENGTH) { setNameError(`이름은 ${MEMBER_NAME_MAX_LENGTH}자 이하로 입력해 주세요.`); return false; }
+    setNameError("");
+    return true;
+  }
 
   // ── FID-00001 이메일 형식 + FID-00002 중복 확인 ──────────────
   async function handleEmailBlur() {
@@ -76,9 +114,10 @@ export default function RegisterPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitError("");
+    setConsentError("");
 
     // 전체 필드 일괄 재검증
-    let hasError = false;
+    let hasError = !validateName();
     if (!email || !EMAIL_REGEX.test(email)) {
       setEmailError("올바른 이메일 형식을 입력해 주세요."); hasError = true;
     }
@@ -88,6 +127,9 @@ export default function RegisterPage() {
     if (!passwordConfirm || passwordConfirm !== password) {
       setPwConfirmError("비밀번호가 일치하지 않습니다."); hasError = true;
     }
+    if (!consent.agreeTerms || !consent.agreePrivacy) {
+      setConsentError("필수 항목에 모두 동의해 주세요."); hasError = true;
+    }
     if (hasError) return;
 
     setIsSubmitting(true);
@@ -95,7 +137,13 @@ export default function RegisterPage() {
       await apiFetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          name:         name.trim(),
+          email,
+          password,
+          agreeTerms:   consent.agreeTerms,
+          agreePrivacy: consent.agreePrivacy,
+        }),
       });
       // 성공 → 인증 메일 발송 안내 화면으로 이동 (email 전달)
       router.push(`/auth/register/verify?email=${encodeURIComponent(email)}`);
@@ -113,105 +161,112 @@ export default function RegisterPage() {
     }
   }
 
+  const busy = isSubmitting || socialLoading;
+
   return (
-    <div className="sp-group">
-      <div className="sp-group-header">
-        <span className="sp-group-title">회원가입</span>
-      </div>
-      <div className="sp-group-body">
-        <form onSubmit={handleSubmit} noValidate>
+    <AuthCard title="SPECODE 계정 만들기" subtitle="무료로 시작하고, 설계부터 함께하세요.">
 
-          {/* 이메일 */}
-          <div className="sp-field">
-            <label className="sp-label">이메일</label>
-            <input
-              className={`sp-input${emailError ? " is-err" : ""}`}
-              type="email"
-              placeholder="name@example.com"
-              value={email}
-              onChange={(e) => { setEmail(e.target.value); setEmailError(""); }}
-              onBlur={handleEmailBlur}
-              autoComplete="email"
-            />
-            {emailError && <div style={{ color: "var(--color-error)", fontSize: "var(--text-xs)", marginTop: 4 }}>{emailError}</div>}
-          </div>
+      {/* 소셜 가입 */}
+      <button type="button" className="sp-auth-social-btn" onClick={handleGoogle} disabled={busy}>
+        <GoogleIcon />
+        {socialLoading ? "연결 중..." : "Google 로 계속"}
+      </button>
 
-          {/* 비밀번호 */}
-          <div className="sp-field">
-            <label className="sp-label">비밀번호</label>
-            <input
-              className={`sp-input${pwError ? " is-err" : ""}`}
-              type="password"
-              placeholder="영문·숫자·특수문자 포함 8자 이상"
-              value={password}
-              onChange={(e) => { setPassword(e.target.value); setPwError(""); }}
-              onBlur={handlePasswordBlur}
-              autoComplete="new-password"
-            />
-            {pwError && <div style={{ color: "var(--color-error)", fontSize: "var(--text-xs)", marginTop: 4 }}>{pwError}</div>}
-          </div>
+      <div className="sp-auth-divider">또는 이메일로 가입</div>
 
-          {/* 비밀번호 확인 */}
-          <div className="sp-field">
-            <label className="sp-label">비밀번호 확인</label>
-            <input
-              className={`sp-input${pwConfirmError ? " is-err" : ""}`}
-              type="password"
-              placeholder="비밀번호를 다시 입력하세요"
-              value={passwordConfirm}
-              onChange={(e) => { setPasswordConfirm(e.target.value); setPwConfirmError(""); }}
-              onBlur={handlePasswordConfirmBlur}
-              autoComplete="new-password"
-            />
-            {pwConfirmError && <div style={{ color: "var(--color-error)", fontSize: "var(--text-xs)", marginTop: 4 }}>{pwConfirmError}</div>}
-          </div>
+      <form onSubmit={handleSubmit} noValidate>
 
-          {/* 서버 에러 */}
-          {submitError && (
-            <div
-              style={{
-                padding: "10px 12px",
-                borderRadius: "var(--radius-md)",
-                background: "var(--color-error-subtle)",
-                border: "1px solid var(--color-error-border)",
-                color: "var(--color-error)",
-                fontSize: "var(--text-sm)",
-                marginBottom: "var(--space-3)",
-              }}
-            >
-              {submitError}
-            </div>
-          )}
+        {/* 이름 — 서비스 안에서 보이는 표시명 */}
+        <div className="sp-field">
+          <label className="sp-label" htmlFor="reg-name">이름 <span className="sp-label-req">필수</span></label>
+          <input
+            id="reg-name"
+            className={`sp-input${nameError ? " is-err" : ""}`}
+            type="text"
+            placeholder="홍길동"
+            value={name}
+            maxLength={MEMBER_NAME_MAX_LENGTH}
+            onChange={(e) => { setName(e.target.value); setNameError(""); }}
+            onBlur={validateName}
+            autoComplete="name"
+            disabled={busy}
+          />
+          {nameError
+            ? <div className="sp-hint is-err">{nameError}</div>
+            : <div className="sp-hint">프로젝트 멤버·담당자·댓글 등 서비스 안에서 이 이름으로 표시됩니다. 프로필에서 언제든 바꿀 수 있어요.</div>}
+        </div>
 
-          {/* 회원가입 버튼 */}
-          <button
-            type="submit"
-            className="sp-btn sp-btn-primary"
-            style={{ width: "100%" }}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? "처리 중..." : "회원가입"}
-          </button>
-        </form>
+        {/* 이메일 */}
+        <div className="sp-field">
+          <label className="sp-label" htmlFor="reg-email">이메일 <span className="sp-label-req">필수</span></label>
+          <input
+            id="reg-email"
+            className={`sp-input${emailError ? " is-err" : ""}`}
+            type="email"
+            placeholder="name@company.com"
+            value={email}
+            onChange={(e) => { setEmail(e.target.value); setEmailError(""); }}
+            onBlur={handleEmailBlur}
+            autoComplete="email"
+            disabled={busy}
+          />
+          {emailError && <div className="sp-hint is-err">{emailError}</div>}
+        </div>
 
-        {/* AR-00002 로그인 이동 안내 (FID-00006) */}
-        <p
-          style={{
-            marginTop: "var(--space-4)",
-            textAlign: "center",
-            fontSize: "var(--text-sm)",
-            color: "var(--color-text-tertiary)",
-          }}
-        >
-          이미 계정이 있으신가요?{" "}
-          <Link
-            href="/auth/login"
-            style={{ color: "var(--color-brand)", textDecoration: "none", fontWeight: 500 }}
-          >
-            로그인
-          </Link>
-        </p>
-      </div>
-    </div>
+        {/* 비밀번호 */}
+        <div className="sp-field">
+          <label className="sp-label" htmlFor="reg-pw">비밀번호 <span className="sp-label-req">필수</span></label>
+          <input
+            id="reg-pw"
+            className={`sp-input${pwError ? " is-err" : ""}`}
+            type="password"
+            placeholder="영문·숫자·특수문자 포함 8자 이상"
+            value={password}
+            onChange={(e) => { setPassword(e.target.value); setPwError(""); }}
+            onBlur={handlePasswordBlur}
+            autoComplete="new-password"
+            disabled={busy}
+          />
+          {pwError && <div className="sp-hint is-err">{pwError}</div>}
+        </div>
+
+        {/* 비밀번호 확인 */}
+        <div className="sp-field">
+          <label className="sp-label" htmlFor="reg-pw2">비밀번호 확인 <span className="sp-label-req">필수</span></label>
+          <input
+            id="reg-pw2"
+            className={`sp-input${pwConfirmError ? " is-err" : ""}`}
+            type="password"
+            placeholder="비밀번호를 다시 입력하세요"
+            value={passwordConfirm}
+            onChange={(e) => { setPasswordConfirm(e.target.value); setPwConfirmError(""); }}
+            onBlur={handlePasswordConfirmBlur}
+            autoComplete="new-password"
+            disabled={busy}
+          />
+          {pwConfirmError && <div className="sp-hint is-err">{pwConfirmError}</div>}
+        </div>
+
+        {/* 약관·개인정보 동의 */}
+        <ConsentFields
+          value={consent}
+          onChange={(next) => { setConsent(next); setConsentError(""); }}
+          disabled={busy}
+          error={consentError}
+        />
+
+        {/* 서버 에러 */}
+        {submitError && <div className="sp-auth-error">{submitError}</div>}
+
+        <button type="submit" className="sp-btn sp-btn-primary sp-btn-lg sp-btn-full" disabled={busy}>
+          {isSubmitting ? "처리 중..." : "계정 만들기"}
+        </button>
+      </form>
+
+      {/* AR-00002 로그인 이동 안내 (FID-00006) */}
+      <p className="sp-auth-foot">
+        이미 계정이 있으신가요? <Link href="/auth/login">로그인</Link>
+      </p>
+    </AuthCard>
   );
 }

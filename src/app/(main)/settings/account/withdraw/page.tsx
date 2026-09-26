@@ -146,7 +146,8 @@ function WithdrawInner() {
       <div style={{ padding: "0 24px 24px", maxWidth: 640 }}>
         <div style={{ width: "100%", maxWidth: 520, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-md)", padding: "32px 32px" }}>
           <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-tertiary)", marginBottom: 32, textAlign: "center", lineHeight: 1.6 }}>
-            탈퇴 즉시 계정이 비활성화되며<br />이전 데이터는 복구할 수 없습니다.
+            탈퇴 즉시 계정이 비활성화되며<br />이전 데이터는 복구할 수 없습니다.<br />
+            같은 이메일로 다시 가입할 수 있지만, 새 계정은 이전 데이터와 연결되지 않습니다.
           </p>
 
           {/* STEP 1 — 소유 프로젝트 처리 */}
@@ -419,6 +420,7 @@ function NoProjectDialog({
         </p>
         <p style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
           탈퇴 즉시 계정이 비활성화되며 이전 데이터는 복구할 수 없습니다.
+          같은 이메일로 다시 가입할 수 있지만, 새 계정은 이전 데이터와 연결되지 않습니다.
         </p>
       </div>
 

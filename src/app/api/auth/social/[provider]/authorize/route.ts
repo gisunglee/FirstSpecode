@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { apiError } from "@/lib/apiResponse";
+import { sanitizeInternalRedirect } from "@/lib/safeRedirect";
 
 const SUPPORTED_PROVIDERS = ["google", "github"] as const;
 type Provider = (typeof SUPPORTED_PROVIDERS)[number];
@@ -32,7 +33,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   // action=add:      이미 로그인한 회원이 소셜 계정을 추가 연동할 때
   // action=withdraw: 회원 탈퇴 시 소셜 계정으로 본인 재인증할 때
   const action   = req.nextUrl.searchParams.get("action")   || "";
-  const redirectTo = req.nextUrl.searchParams.get("redirect") || "";
+  // state 에 실려 콜백 뒤 이동 경로가 된다 — 내부 경로만 허용 (없으면 빈 값 → 콜백이 기본 착지)
+  const redirectTo = sanitizeInternalRedirect(req.nextUrl.searchParams.get("redirect"), "");
 
   const appUrl   = process.env.APP_URL ?? "http://localhost:3000";
   const redirect = `${appUrl}/auth/social/callback`;

@@ -11,6 +11,9 @@ datasource db {
 model TbCmMember {
   mber_id             String                     @id @default(uuid())
   email_addr          String?                    @unique
+  /// 탈퇴 시 원본 이메일의 HMAC-SHA256(hex, 키=JWT_SECRET). 가명처리 — 운영자가 이메일로 탈퇴 회원을 찾는 용도. 활성 회원은 NULL.
+  /// 탈퇴 시 email_addr 는 NULL 로 비워 같은 이메일로 재가입을 허용한다 (DELETE /api/member/me).
+  email_hash          String?                    @db.VarChar(64)
   pswd_hash           String?
   mber_nm             String?
   profl_img_url       String?
@@ -37,6 +40,8 @@ model TbCmMember {
   settingsHistory     TbPjSettingsHistory[]
   supportSessions     TbSysAdminSupportSession[]
   adminAudits         TbSysAdminAudit[]
+  // 2026-09-24 약관·개인정보 동의 기록 (가입 시 필수 2건)
+  consents            TbCmMemberConsent[]
   // 2026-09-20 결제 — 구독(결제자 1인 × 상품 1개). 플랜 미러(plan_code)의 원천
   subscriptions       TbBlSubscription[]
 
@@ -159,6 +164,23 @@ model TbCmPasswordResetToken {
   member           TbCmMember @relation(fields: [mber_id], references: [mber_id])
 
   @@map("tb_cm_password_reset_token")
+}
+
+/// 약관·개인정보 동의 기록 — 가입 시점에 무엇(consent_type)에 어느 버전(consent_ver)으로 동의했는지.
+/// 약관 개정 시 재동의는 새 행으로 쌓아 이력을 보존한다(덮어쓰지 않음).
+/// 탈퇴해도 행은 지우지 않는다 — "동의했었다"는 증빙. 단 개인정보인 ip_addr 는 탈퇴 시 NULL 로 지운다.
+/// 버전 상수·검증 헬퍼: src/lib/consent.ts
+model TbCmMemberConsent {
+  consent_id   String     @id @default(uuid())
+  mber_id      String
+  consent_type String     @db.VarChar(20) // TERMS | PRIVACY (DB CHECK 제약)
+  consent_ver  String     @db.VarChar(20) // 약관 시행일 "YYYY-MM-DD"
+  agree_dt     DateTime   @default(now())
+  ip_addr      String?    @db.VarChar(64)
+  member       TbCmMember @relation(fields: [mber_id], references: [mber_id])
+
+  @@index([mber_id], map: "idx_cm_member_consent_mber")
+  @@map("tb_cm_member_consent")
 }
 
 model TbCmSocialAccount {

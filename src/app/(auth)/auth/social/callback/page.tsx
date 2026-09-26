@@ -5,7 +5,8 @@
  *
  * 역할:
  *   - URL의 code, state 파라미터 → POST /api/auth/social/callback 호출
- *   - NEW/EXISTING: 토큰 저장 → 대시보드 이동
+ *   - EXISTING: 토큰 저장 → 대시보드 이동
+ *   - REGISTER_REQUIRED: 가입 완료 화면(/auth/social/register — 이름 확인 + 약관 동의)으로 이동
  *   - LINK_REQUIRED: 연동 확인 화면(PID-00008)으로 이동
  *   - 에러: 메시지 표시 + 로그인 이동 버튼
  *
@@ -16,6 +17,8 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { clearStoredRefreshTokens, storeAccessToken } from "@/lib/authTokenStorage";
 import { authFetchRaw } from "@/lib/authFetch";
+import { storeSocialHandoff } from "@/lib/socialHandoff";
+import { sanitizeInternalRedirect } from "@/lib/safeRedirect";
 import {
   AUTH_COOKIE_MODE_HEADER,
   AUTH_COOKIE_MODE_VALUE,
@@ -59,11 +62,12 @@ function SocialCallbackInner() {
           return;
         }
 
-        const { resultType, accessToken, socialToken, email, provider, redirectTo } = body.data;
+        const { resultType, accessToken, socialToken, email, name, provider, redirectTo } = body.data;
         // entry=1 — 대시보드의 "로그인 직후 1회" 착지 분기 마커(login/page.tsx와 동일 이유)
-        const finalUrl = redirectTo || "/dashboard?entry=1";
+        // 서버가 정제해 주지만 클라이언트에서도 내부 경로만 통과시킨다
+        const finalUrl = sanitizeInternalRedirect(redirectTo);
 
-        if (resultType === "NEW" || resultType === "EXISTING") {
+        if (resultType === "EXISTING") {
           // AT만 탭 저장소에 두고 RT는 서버가 설정한 HttpOnly 쿠키를 사용한다.
           if (!storeAccessToken(accessToken)) {
             setError("브라우저에 로그인 정보를 저장할 수 없습니다.");
@@ -72,11 +76,22 @@ function SocialCallbackInner() {
           clearStoredRefreshTokens();
           router.replace(finalUrl);
 
+        } else if (resultType === "REGISTER_REQUIRED") {
+          // 신규 — 계정은 아직 없다. 가입 완료 화면에서 이름 확인·약관 동의 후 생성.
+          // socialToken 은 계정 생성 권한이 있어 URL 에 싣지 않고 sessionStorage 로 넘긴다.
+          const ok = storeSocialHandoff({
+            kind: "REGISTER", token: socialToken, email: email ?? "",
+            name: name ?? undefined, provider: provider ?? undefined,
+            redirectTo: redirectTo ? sanitizeInternalRedirect(redirectTo) : undefined,
+          });
+          if (!ok) { setError("브라우저 저장소를 사용할 수 없어 가입을 이어갈 수 없습니다."); return; }
+          router.replace("/auth/social/register");
+
         } else if (resultType === "LINK_REQUIRED") {
-          // 연동 확인 화면으로 이동 (email + socialToken 전달)
-          router.replace(
-            `/auth/social/link?email=${encodeURIComponent(email)}&token=${encodeURIComponent(socialToken)}`
-          );
+          // 연동 확인 화면으로 — 같은 이유로 토큰은 sessionStorage 로 전달
+          const ok = storeSocialHandoff({ kind: "LINK", token: socialToken, email });
+          if (!ok) { setError("브라우저 저장소를 사용할 수 없어 연동을 이어갈 수 없습니다."); return; }
+          router.replace("/auth/social/link");
 
         } else if (resultType === "ADD_SOCIAL") {
           // 이미 로그인한 회원의 소셜 추가 연동 — AT + socialToken으로 연동 API 호출

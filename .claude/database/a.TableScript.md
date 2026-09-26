@@ -23,14 +23,25 @@
 ## 2. 공통 및 회원 관리 (Common & Member)
 * **`tb_cm_member`** (회원)
   * `mber_id` (t, PK): 회원 ID
-  * `email_addr` (t, Unique): 이메일
-  * `mber_sttus_code` (t, NN): 상태 (UNVERIFIED 등)
+  * `email_addr` (t, Unique): 이메일. **탈퇴 시 NULL** 로 비워 같은 이메일로 재가입을 허용한다
+  * `email_hash` (v64): 탈퇴 시 원본 이메일의 HMAC-SHA256(hex, 키=`JWT_SECRET`, 소문자 정규화) — 가명처리(익명 아님). 활성 회원은 NULL.
+    운영자가 이메일로 탈퇴 회원을 찾는 용도(관리자 회원 검색). 2026-09-24 추가(`prisma/sql/2026-09-24_add_member_email_hash.sql`)
+  * `mber_sttus_code` (t, NN): 상태 (UNVERIFIED | ACTIVE | SUSPENDED | WITHDRAWN)
+  * 탈퇴 = 논리삭제 + 가명처리(`DELETE /api/member/me`): `WITHDRAWN`, `email_addr`→NULL, `mber_nm`→"탈퇴회원",
+    `pswd_hash`·`profl_img_url`→NULL. row 는 FK(작성자·소유자·결제 이력) 때문에 지우지 않는다. 복구 기간 없음.
   * `plan_code` (t, 기본 `FREE`) / `plan_expire_dt` (ts): 실효 플랜의 **미러**. 결제 구독(`tb_bl_subscription`)이 살아 있으면
     구독 서비스가 `BASIC`/NULL 로, 종료·강등 시 `FREE`/NULL 로 써 준다. 구독 없는 회원은 관리자 수동 부여값(4단계 PATCH).
     살아 있는 구독이 있는 회원의 수동 변경은 409. 판정: `src/lib/permissions.ts resolveEffectivePlan`
+* **`tb_cm_member_consent`** (약관·개인정보 동의 기록 — 2026-09-24, `prisma/sql/2026-09-24_create_member_consent.sql`)
+  * `consent_id` (t, PK) / `mber_id` (t, NN, FK → tb_cm_member) / `consent_type` (v20, NN, CHECK `TERMS`|`PRIVACY`)
+  * `consent_ver` (v20, NN): 동의한 약관 시행일 `YYYY-MM-DD` — 상수 `src/lib/consent.ts CURRENT_CONSENT_VERSION` (약관 화면 시행일과 함께 개정)
+  * `agree_dt` (ts, NN) / `ip_addr` (v64)
+  * 가입(이메일·소셜) 트랜잭션에서 필수 2건 INSERT. 재동의는 새 행(덮어쓰지 않음). 탈퇴해도 행은 유지(증빙), `ip_addr` 만 NULL.
 * **`tb_cm_member_session`** (회원 세션)
   * `sesn_id` (t, PK) / `mber_id` (t, FK) / `device_info_cn` (t)
 * 인증/보안 관련 테이블: `tb_cm_account_lock`, `tb_cm_email_verification`, `tb_cm_login_attempt`, `tb_cm_password_reset_token`, `tb_cm_refresh_token`, `tb_cm_social_account` (모두 `mber_id` FK 포함)
+  * 접속 기록 보존 90일(통신비밀보호법 3개월, 개인정보처리방침 제3조): `tb_cm_login_attempt`·`tb_cm_refresh_token`·`tb_cm_member_session`·`tb_cm_rate_limit` 의 90일 지난 행은
+    배치 `POST /api/admin/batch/run/access-log-cleanup`(job_ty_code `ACCESS_LOG_CLEANUP`, 일 1회 cron)이 삭제한다. 2026-09-24 추가
 * **`tb_cm_code`** & **`tb_cm_code_group`** (공통 코드)
   * 그룹: `grp_code_id` (PK) / `grp_code` (v100) / `grp_code_nm` (v100)
   * 코드: `cm_code_id` (PK) / `cm_code` (v100) / `code_nm` (v100) / `grp_code_id` (FK)

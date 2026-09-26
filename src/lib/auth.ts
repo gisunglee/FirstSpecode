@@ -177,6 +177,24 @@ export function hashApiKey(rawKey: string): string {
   return crypto.createHash("sha256").update(rawKey).digest("hex");
 }
 
+/**
+ * 탈퇴 회원 이메일 가명값 — tb_cm_member.email_hash 에 저장할 값.
+ * 탈퇴 시 email_addr 는 NULL 로 비우고(같은 이메일 재가입 허용) 이 값만 남긴다.
+ * 운영자가 이메일을 알고 있을 때 "탈퇴한 회원인가" 를 찾는 용도(결제 분쟁·문의).
+ *
+ * 단순 SHA-256 은 이메일 후보를 대입하면 맞춰볼 수 있어 익명이 아니다 → 서버 비밀키로 HMAC.
+ * DB 만 유출돼도 키 없이는 대입 검증이 안 된다. 그래도 "익명화"가 아니라 "가명처리"다(키가 있으면 대조 가능).
+ * 키는 JWT_SECRET 을 재사용한다(이미 필수 환경변수). 이 키를 바꾸면 이전 탈퇴 회원은 이메일로 못 찾는다 —
+ * 세션 전체가 끊기는 사건이라 실제로는 바꿀 일이 없고, 바꾼다면 그 사실을 운영 노트에 남긴다.
+ * 대소문자·공백 차이로 못 찾는 일이 없도록 정규화한다.
+ */
+export function hashWithdrawnEmail(email: string): string {
+  return crypto
+    .createHmac("sha256", getJwtSecret())
+    .update(email.trim().toLowerCase())
+    .digest("hex");
+}
+
 /** API 키 prefix 추출 — 목록에서 식별용 ("spk_" + 앞 8자 = 12자) */
 export function getApiKeyPrefix(rawKey: string): string {
   return rawKey.slice(0, 12);
@@ -196,17 +214,22 @@ export function verifyTokenExpiryDate(): Date {
 
 // ── 소셜 임시 토큰 ─────────────────────────────────────────────
 
-// 동일 이메일 감지 시 연동 확인 대기에 사용하는 임시 JWT — 10분 유효
+// 연동 확인(LINK_REQUIRED)·가입 완료(REGISTER_REQUIRED) 대기에 사용하는 임시 JWT — 10분 유효
 const SOCIAL_TOKEN_EXPIRES = "10m";
 
 export type SocialTokenPayload = {
   provdrCode: string;
   provdrUserId: string;
   email: string;
+  // 신규 가입 대기(REGISTER_REQUIRED) 때만 실린다 — Provider 가 준 이름·프로필 이미지.
+  // 가입 완료 화면이 이름 기본값으로 보여주고, 가입 API 가 이미지 URL 을 그대로 저장한다.
+  // 클라이언트가 위조할 수 없도록 쿼리스트링이 아니라 서명된 토큰에 담는다.
+  name?: string;
+  imageUrl?: string;
   tokenType: "SOCIAL";
 };
 
-/** 소셜 임시 토큰 발급 (LINK_REQUIRED 케이스) */
+/** 소셜 임시 토큰 발급 (LINK_REQUIRED · REGISTER_REQUIRED · ADD_SOCIAL · WITHDRAW 케이스) */
 export function signSocialToken(
   payload: Omit<SocialTokenPayload, "tokenType">
 ): string {
@@ -238,6 +261,8 @@ export function verifySocialToken(token: string): SocialTokenPayload | null {
       provdrCode: decoded.provdrCode,
       provdrUserId: decoded.provdrUserId,
       email: decoded.email,
+      ...(typeof decoded.name === "string" && decoded.name ? { name: decoded.name } : {}),
+      ...(typeof decoded.imageUrl === "string" && decoded.imageUrl ? { imageUrl: decoded.imageUrl } : {}),
       tokenType: "SOCIAL",
     };
   } catch {

@@ -2,7 +2,7 @@
  * GET /api/admin/users — 전체 사용자 목록 (시스템 관리자 전용)
  *
  * 파라미터:
- *   ?search=<이메일 또는 이름 부분 일치>
+ *   ?search=<이메일 또는 이름 부분 일치>  — 이메일 형태(@ 포함)면 탈퇴 회원 해시 정확일치도 포함
  *   ?status=<mber_sttus_code 필터>   (ACTIVE | UNVERIFIED | SUSPENDED | WITHDRAWN)
  *   ?page=1&pageSize=50              (기본 50)
  */
@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { requireSystemAdmin } from "@/lib/requireSystemAdmin";
 import { resolveEffectivePlan } from "@/lib/permissions";
+import { hashWithdrawnEmail } from "@/lib/auth";
 
 // 한 번에 로드 가능한 최대 개수 — 더 큰 쿼리는 인위적으로 제한
 const PAGE_SIZE_MAX = 200;
@@ -33,6 +34,11 @@ export async function GET(request: NextRequest) {
   // 사용자 입력 검색은 부분일치만 필요하니 정상문자만 대상.
   const search = searchRaw.slice(0, 100);
 
+  // 탈퇴 회원은 email_addr 가 NULL 로 비워져 부분일치로는 찾을 수 없다.
+  // 검색어가 이메일 형태면 email_hash 정확일치를 함께 걸어, 운영자가 이메일을 알고 있을 때
+  // (결제 분쟁·문의) 탈퇴 회원도 찾히게 한다.
+  const looksLikeEmail = search.includes("@");
+
   const where = {
     ...(status ? { mber_sttus_code: status } : {}),
     ...(search
@@ -40,6 +46,7 @@ export async function GET(request: NextRequest) {
           OR: [
             { email_addr: { contains: search, mode: "insensitive" as const } },
             { mber_nm:    { contains: search, mode: "insensitive" as const } },
+            ...(looksLikeEmail ? [{ email_hash: hashWithdrawnEmail(search) }] : []),
           ],
         }
       : {}),

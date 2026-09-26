@@ -8,7 +8,10 @@
  *   - 이메일·비밀번호 입력 후 로그인 (FID-00015)
  *   - 5회 실패 또는 잠금 상태 시 잠금 안내 영역 표시 (FID-00016)
  *   - 잠금 해제 메일 발송 (FID-00017)
- *   - Google/GitHub 소셜 로그인 버튼 (UW-00003)
+ *   - Google 소셜 로그인 버튼 (UW-00003) — GitHub 는 보류
+ *
+ * 화면 껍데기는 AuthCard(가입 화면과 동일 톤), 2단 레이아웃은 (auth)/layout.tsx.
+ * 2026-09-24 hex 하드코딩 카드 → DS 토큰 기반 AuthCard 로 이전 (로직 변경 없음).
  *
  * URL: /auth/login
  */
@@ -26,6 +29,9 @@ import {
   AUTH_COOKIE_MODE_HEADER,
   AUTH_COOKIE_MODE_VALUE,
 } from "@/lib/authCookiePolicy";
+import { sanitizeInternalRedirect } from "@/lib/safeRedirect";
+import { AuthCard } from "../../_components/AuthCard";
+import { GoogleIcon } from "../../_components/GoogleIcon";
 
 const LS_SAVED_EMAIL    = "lc_saved_email";
 
@@ -35,15 +41,6 @@ function formatLockTime(isoString: string): string {
   const mm = String(d.getMinutes()).padStart(2, "0");
   return `${hh}:${mm}`;
 }
-
-// ── 카드 공통 스타일 ────────────────────────────────────────────
-const card: React.CSSProperties = {
-  background:   "#ffffff",
-  borderRadius: "20px",
-  padding:      "40px 36px",
-  boxShadow:    "0 24px 64px rgba(0,0,0,0.45)",
-  color:        "#111827",
-};
 
 export default function LoginPage() {
   return (
@@ -58,7 +55,8 @@ function LoginInner() {
   const searchParams = useSearchParams();
   // entry=1 — 대시보드가 "로그인 직후 1회" 착지 분기(내 홈페이지 쿠키 → 없으면 PM 직무 기본값)를
   // 수행하는 마커. redirect 파라미터로 특정 목적지가 이미 지정된 경우(초대 수락 등)는 그대로 존중.
-  const redirectTo = searchParams.get("redirect") || "/dashboard?entry=1";
+  // 외부 URL·javascript: 스킴은 기본값으로 대체 (오픈 리다이렉트 방지)
+  const redirectTo = sanitizeInternalRedirect(searchParams.get("redirect"));
 
   const [email,         setEmail]         = useState("");
   const [password,      setPassword]      = useState("");
@@ -177,256 +175,103 @@ function LoginInner() {
 
   if (isAutoLogging) {
     return (
-      <div style={{ ...card, textAlign: "center" }}>
-        <p style={{ color: "#6b7280", fontSize: 14 }}>자동 로그인 중...</p>
-      </div>
+      <AuthCard title="Welcome back" subtitle="자동 로그인 중...">
+        <div className="sp-auth-loading"><div className="sp-spinner" /></div>
+      </AuthCard>
     );
   }
 
   return (
-    <div style={card}>
+    <AuthCard title="Welcome back" subtitle="SPECODE 계정으로 로그인하세요.">
 
-      {/* 로고 */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 28 }}>
-        <div style={{
-          width: 52, height: 52,
-          background:   "linear-gradient(135deg, #f97316, #ea580c)",
-          borderRadius: "14px",
-          display:       "flex",
-          alignItems:    "center",
-          justifyContent:"center",
-          fontSize:      26,
-          marginBottom:  16,
-          boxShadow:     "0 4px 16px rgba(249,115,22,0.35)",
-        }}>
-          ⚡
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-          <span style={{ fontWeight: 800, fontSize: 20, letterSpacing: "0.06em", color: "#111827" }}>
-            SPECODE
-          </span>
-        </div>
-        <p style={{ fontSize: 22, fontWeight: 700, color: "#111827", margin: "4px 0 4px" }}>
-          Welcome back
-        </p>
-        <p style={{ fontSize: 13, color: "#9ca3af", margin: 0 }}>
-          SPECODE 계정으로 로그인하세요.
-        </p>
-      </div>
+      {/* 소셜 로그인 — 미가입자는 콜백이 REGISTER_REQUIRED 로 판정해 가입 완료 화면으로 보낸다 */}
+      <button
+        type="button"
+        className="sp-auth-social-btn"
+        onClick={() => handleSocialLogin("google")}
+        disabled={!!socialLoading || isLocked}
+      >
+        <GoogleIcon />
+        {socialLoading === "google" ? "연결 중..." : "Google 로 계속"}
+      </button>
+      {/* GitHub 로그인은 당장 제공하지 않는다 (2026-09-24). 다시 열 때 위 버튼과 같은 형태로 provider="github" 를 추가 */}
 
-      {/* 소셜 로그인 */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-        <button
-          type="button"
-          onClick={() => handleSocialLogin("google")}
-          disabled={!!socialLoading || isLocked}
-          style={{
-            display:        "flex",
-            alignItems:     "center",
-            justifyContent: "center",
-            gap:            10,
-            width:          "100%",
-            padding:        "11px 16px",
-            border:         "1.5px solid #e5e7eb",
-            borderRadius:   "10px",
-            background:     socialLoading === "google" ? "#f9fafb" : "#ffffff",
-            cursor:         "pointer",
-            fontSize:       14,
-            fontWeight:     500,
-            color:          "#374151",
-            transition:     "border-color .15s, background .15s",
-          }}
-          onMouseEnter={(e) => { (e.currentTarget.style.borderColor = "#d1d5db"); (e.currentTarget.style.background = "#f9fafb"); }}
-          onMouseLeave={(e) => { (e.currentTarget.style.borderColor = "#e5e7eb"); (e.currentTarget.style.background = "#ffffff"); }}
-        >
-          <GoogleIcon />
-          {socialLoading === "google" ? "연결 중..." : "Google로 계속"}
-        </button>
-
-        {/*
-        <button
-          type="button"
-          onClick={() => handleSocialLogin("github")}
-          disabled={!!socialLoading || isLocked}
-          style={{
-            display:        "flex",
-            alignItems:     "center",
-            justifyContent: "center",
-            gap:            10,
-            width:          "100%",
-            padding:        "11px 16px",
-            border:         "1.5px solid #e5e7eb",
-            borderRadius:   "10px",
-            background:     socialLoading === "github" ? "#f9fafb" : "#ffffff",
-            cursor:         "pointer",
-            fontSize:       14,
-            fontWeight:     500,
-            color:          "#374151",
-            transition:     "border-color .15s, background .15s",
-          }}
-          onMouseEnter={(e) => { (e.currentTarget.style.borderColor = "#d1d5db"); (e.currentTarget.style.background = "#f9fafb"); }}
-          onMouseLeave={(e) => { (e.currentTarget.style.borderColor = "#e5e7eb"); (e.currentTarget.style.background = "#ffffff"); }}
-        >
-          <GitHubIcon />
-          {socialLoading === "github" ? "연결 중..." : "GitHub로 계속"}
-        </button>
-        */}
-      </div>
-
-      {/* 구분선 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-        <div style={{ flex: 1, height: 1, background: "#e5e7eb" }} />
-        <span style={{ fontSize: 12, color: "#9ca3af" }}>또는</span>
-        <div style={{ flex: 1, height: 1, background: "#e5e7eb" }} />
-      </div>
+      <div className="sp-auth-divider">또는</div>
 
       {/* 로그인 폼 */}
       <form onSubmit={handleSubmit} noValidate>
 
         {/* 이메일 */}
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "#374151", marginBottom: 6 }}>
-            이메일
-          </label>
+        <div className="sp-field">
+          <label className="sp-label" htmlFor="login-email">이메일</label>
           <input
+            id="login-email"
+            className="sp-input"
             type="email"
             placeholder="name@company.com"
             value={email}
             onChange={(e) => { setEmail(e.target.value); setSubmitError(""); }}
             disabled={isLocked || isSubmitting}
             autoComplete="email"
-            style={{
-              width:        "100%",
-              padding:      "10px 14px",
-              border:       "1.5px solid #e5e7eb",
-              borderRadius: "10px",
-              fontSize:     14,
-              color:        "#111827",
-              background:   "#ffffff",
-              outline:      "none",
-              boxSizing:    "border-box",
-              transition:   "border-color .15s",
-            }}
-            onFocus={(e)  => { e.currentTarget.style.borderColor = "#3b82f6"; }}
-            onBlur={(e)   => { e.currentTarget.style.borderColor = "#e5e7eb"; }}
           />
         </div>
 
         {/* 비밀번호 */}
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "#374151", marginBottom: 6 }}>
-            비밀번호
-          </label>
-          <div style={{ position: "relative" }}>
+        <div className="sp-field">
+          <label className="sp-label" htmlFor="login-pw">비밀번호</label>
+          <div className="sp-input-wrap">
             <input
+              id="login-pw"
+              className="sp-input"
               type={showPw ? "text" : "password"}
               placeholder="비밀번호 입력"
               value={password}
               onChange={(e) => { setPassword(e.target.value); setSubmitError(""); }}
               disabled={isLocked || isSubmitting}
               autoComplete="current-password"
-              style={{
-                width:        "100%",
-                padding:      "10px 40px 10px 14px",
-                border:       "1.5px solid #e5e7eb",
-                borderRadius: "10px",
-                fontSize:     14,
-                color:        "#111827",
-                background:   "#ffffff",
-                outline:      "none",
-                boxSizing:    "border-box",
-                transition:   "border-color .15s",
-              }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = "#3b82f6"; }}
-              onBlur={(e)  => { e.currentTarget.style.borderColor = "#e5e7eb"; }}
             />
             <button
               type="button"
+              className="sp-input-action sp-auth-pw-toggle"
               onClick={() => setShowPw((v) => !v)}
-              style={{
-                position:   "absolute",
-                right:      12,
-                top:        "50%",
-                transform:  "translateY(-50%)",
-                background: "none",
-                border:     "none",
-                cursor:     "pointer",
-                color:      "#9ca3af",
-                fontSize:   12,
-                padding:    0,
-              }}
+              aria-label={showPw ? "비밀번호 숨기기" : "비밀번호 표시"}
             >
               {showPw ? "숨김" : "표시"}
             </button>
           </div>
         </div>
 
-        {/* 체크박스 + 비밀번호 찾기 */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#6b7280", cursor: "pointer" }}>
+        {/* 로그인 유지 + 비밀번호 찾기 */}
+        <div className="sp-auth-row">
+          <label className="sp-checkbox-wrap">
             <input
+              className="sp-checkbox"
               type="checkbox"
               checked={autoLogin}
               onChange={(e) => setAutoLogin(e.target.checked)}
               disabled={isLocked}
-              style={{ width: 15, height: 15, accentColor: "#3b82f6" }}
             />
-            로그인 유지
+            <span>로그인 유지</span>
           </label>
-          <Link
-            href="/auth/password/request"
-            style={{ fontSize: 13, color: "#3b82f6", textDecoration: "none", fontWeight: 500 }}
-          >
-            비밀번호 찾기
-          </Link>
+          <Link href="/auth/password/request" className="sp-auth-link">비밀번호 찾기</Link>
         </div>
 
         {/* 에러 메시지 */}
-        {submitError && (
-          <div style={{
-            padding:      "10px 12px",
-            borderRadius: "8px",
-            background:   "#fef2f2",
-            border:       "1px solid #fecaca",
-            color:        "#dc2626",
-            fontSize:     13,
-            marginBottom: 16,
-          }}>
-            {submitError}
-          </div>
-        )}
+        {submitError && <div className="sp-auth-error">{submitError}</div>}
 
-        {/* 계정 잠금 안내 */}
+        {/* 계정 잠금 안내 (FID-00016) */}
         {isLocked && (
-          <div style={{
-            padding:      "14px",
-            borderRadius: "10px",
-            background:   "#fef2f2",
-            border:       "1px solid #fecaca",
-            marginBottom: 16,
-          }}>
-            <p style={{ fontSize: 13, fontWeight: 600, color: "#dc2626", marginBottom: 6 }}>
-              🔒 계정이 잠금되었습니다.
-            </p>
-            <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 10 }}>
+          <div className="sp-auth-lock">
+            <p className="sp-auth-lock-title">🔒 계정이 잠금되었습니다.</p>
+            <p className="sp-auth-lock-desc">
               5회 연속 실패로 1시간 동안 로그인이 제한됩니다.
               {lockExpiredAt && <> 해제 시각: <strong>{formatLockTime(lockExpiredAt)}</strong></>}
             </p>
             <button
               type="button"
+              className="sp-btn sp-btn-danger sp-btn-full"
               onClick={handleSendUnlockEmail}
               disabled={isSendingUnlock}
-              style={{
-                width:        "100%",
-                padding:      "8px",
-                border:       "1.5px solid #fecaca",
-                borderRadius: "8px",
-                background:   "#ffffff",
-                color:        "#dc2626",
-                fontSize:     13,
-                fontWeight:   500,
-                cursor:       "pointer",
-              }}
             >
               {isSendingUnlock ? "발송 중..." : "잠금 해제 메일 발송"}
             </button>
@@ -436,55 +281,18 @@ function LoginInner() {
         {/* 로그인 버튼 */}
         <button
           type="submit"
+          className="sp-btn sp-btn-primary sp-btn-lg sp-btn-full"
           disabled={isLocked || isSubmitting}
-          style={{
-            width:        "100%",
-            padding:      "12px",
-            border:       "none",
-            borderRadius: "10px",
-            background:   isLocked ? "#9ca3af" : "linear-gradient(135deg, #3b82f6, #2563eb)",
-            color:        "#ffffff",
-            fontSize:     15,
-            fontWeight:   600,
-            cursor:       isLocked ? "not-allowed" : "pointer",
-            boxShadow:    isLocked ? "none" : "0 4px 14px rgba(59,130,246,0.4)",
-            transition:   "opacity .15s",
-          }}
-          onMouseEnter={(e) => { if (!isLocked) e.currentTarget.style.opacity = "0.9"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
         >
           {isSubmitting ? "로그인 중..." : "로그인"}
         </button>
       </form>
 
       {/* 하단 링크 */}
-      <p style={{ textAlign: "center", marginTop: 20, fontSize: 13, color: "#9ca3af" }}>
-        계정이 없으신가요?{" "}
-        <Link href="/auth/register" style={{ color: "#3b82f6", fontWeight: 600, textDecoration: "none" }}>
-          회원가입
-        </Link>
+      <p className="sp-auth-foot">
+        계정이 없으신가요? <Link href="/auth/register">회원가입</Link>
       </p>
 
-    </div>
-  );
-}
-
-// ── 아이콘 컴포넌트 ───────────────────────────────────────────────
-function GoogleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908C16.658 14.251 17.64 11.943 17.64 9.2z" fill="#4285F4"/>
-      <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
-      <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-      <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-    </svg>
-  );
-}
-
-function GitHubIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="#111827" xmlns="http://www.w3.org/2000/svg">
-      <path d="M12 0C5.37 0 0 5.37 0 12c0 5.303 3.438 9.8 8.205 11.387.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222 0 1.606-.015 2.896-.015 3.286 0 .315.216.69.825.573C20.565 21.795 24 17.298 24 12c0-6.63-5.37-12-12-12z"/>
-    </svg>
+    </AuthCard>
   );
 }

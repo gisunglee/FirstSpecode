@@ -4,16 +4,17 @@
  * SocialLinkPage — 소셜 계정 연동 확인 (PID-00008)
  *
  * 역할:
- *   - URL 파라미터(email, token)에서 연동 대상 정보 표시 (FID-00023)
+ *   - 콜백이 sessionStorage 로 넘긴 email·token 으로 연동 대상 정보 표시 (FID-00023)
  *   - [연동하기] 클릭 → POST /api/auth/social/link → 토큰 저장 → 대시보드 이동 (FID-00024)
  *   - [취소] 클릭 → 로그인 화면 복귀 (FID-00025)
  *
- * URL: /auth/social/link?email=...&token=...
+ * URL: /auth/social/link  (쿼리 없음 — 2026-09-24 부터 토큰은 sessionStorage 로 전달, socialHandoff 참조)
  */
 
 import { useEffect, useState, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { clearStoredRefreshTokens, storeAccessToken } from "@/lib/authTokenStorage";
+import { readSocialHandoff, clearSocialHandoff } from "@/lib/socialHandoff";
 import {
   AUTH_COOKIE_MODE_HEADER,
   AUTH_COOKIE_MODE_VALUE,
@@ -28,20 +29,20 @@ export default function SocialLinkPage() {
 }
 
 function SocialLinkInner() {
-  const router       = useRouter();
-  const searchParams = useSearchParams();
-  const email        = searchParams.get("email") ?? "";
-  const socialToken  = searchParams.get("token") ?? "";
+  const router = useRouter();
+  // sessionStorage 는 서버 렌더 시 없으므로 마운트 후에 읽는다 (undefined = 읽는 중, null = 없음)
+  const [handoff, setHandoff] = useState<ReturnType<typeof readSocialHandoff> | undefined>(undefined);
+  useEffect(() => { setHandoff(readSocialHandoff("LINK")); }, []);
+  const email       = handoff?.email ?? "";
+  const socialToken = handoff?.token ?? "";
 
   const [error,       setError]       = useState("");
   const [isLinking,   setIsLinking]   = useState(false);
 
-  // 필수 파라미터 없으면 로그인으로 복귀
+  // 전달 데이터가 없으면 로그인으로 복귀
   useEffect(() => {
-    if (!email || !socialToken) {
-      router.replace("/auth/login");
-    }
-  }, [email, socialToken, router]);
+    if (handoff === null) router.replace("/auth/login");
+  }, [handoff, router]);
 
   // ── FID-00024 소셜 계정 연동 처리 ─────────────────────────────
   async function handleLink() {
@@ -72,6 +73,7 @@ function SocialLinkInner() {
         return;
       }
       clearStoredRefreshTokens();
+      clearSocialHandoff();
       router.replace("/dashboard");
 
     } catch {
@@ -83,10 +85,11 @@ function SocialLinkInner() {
 
   // ── FID-00025 연동 취소 ────────────────────────────────────────
   function handleCancel() {
+    clearSocialHandoff();
     router.push("/auth/login");
   }
 
-  if (!email || !socialToken) return null;
+  if (!handoff) return null;
 
   return (
     <div className="sp-group">

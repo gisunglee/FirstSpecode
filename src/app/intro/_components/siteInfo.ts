@@ -18,6 +18,8 @@
  */
 
 // ─── 사업자 정보 (전자상거래법 §10 표시 의무 항목) ─────────────────────────────
+import { CURRENT_CONSENT_VERSION, formatConsentVersionKo } from "@/lib/consent";
+
 export const BUSINESS = {
   /** 서비스명 */
   serviceName: "SPECODE",
@@ -48,10 +50,11 @@ export const BUSINESS = {
 } as const;
 
 // ─── 약관·방침 시행일 ─────────────────────────────────────────────────────────
-// 배포일에 맞춰 갱신한다. 개정 시에는 이전 버전 링크를 남겨야 하므로(전자상거래법
-// 시행령) 개정이 실제로 발생하면 그때 이력 표기 방식을 결정한다.
-export const TERMS_EFFECTIVE_DATE = "2026년 10월 1일";
-export const PRIVACY_EFFECTIVE_DATE = "2026년 10월 1일";
+// 단일 출처는 src/lib/consent.ts CURRENT_CONSENT_VERSION (동의 기록의 버전값과 같은 날짜여야 한다).
+// 여기서는 화면 표기용 한글 형식으로만 변환한다. 개정 시 consent.ts 만 바꾼다.
+// 개정 시에는 이전 버전 링크를 남겨야 하므로(전자상거래법 시행령) 개정이 실제로 발생하면 그때 이력 표기 방식을 결정한다.
+export const TERMS_EFFECTIVE_DATE   = formatConsentVersionKo(CURRENT_CONSENT_VERSION.TERMS);
+export const PRIVACY_EFFECTIVE_DATE = formatConsentVersionKo(CURRENT_CONSENT_VERSION.PRIVACY);
 
 // ─── 결제 오픈 여부 ───────────────────────────────────────────────────────────
 // true 이면 요금제 페이지의 BASIC 버튼이 설정 > 구독·결제 화면으로 이어진다.

@@ -2,17 +2,20 @@
  * POST /api/auth/register — 이메일 회원가입 (FID-00005)
  *
  * 역할:
- *   1. tb_cm_member INSERT (mber_sttus_code = 'UNVERIFIED')
- *   2. tb_cm_email_verification INSERT (토큰, 만료 1시간)
- *   3. 인증 메일 발송
+ *   1. tb_cm_member INSERT (mber_sttus_code = 'UNVERIFIED', 이름 필수)
+ *   2. tb_cm_member_consent INSERT (이용약관·개인정보 필수 동의 2건 — 2026-09-24)
+ *   3. tb_cm_email_verification INSERT (토큰, 만료 1시간)
+ *   4. 인증 메일 발송
  *
- * Body: { email: string, password: string }
+ * Body: { name: string, email: string, password: string, agreeTerms: true, agreePrivacy: true }
  */
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
+import { validateRequiredConsents, recordRequiredConsents } from "@/lib/consent";
+import { normalizeMemberName } from "@/lib/memberName";
 import {
   hashPassword,
   generateVerifyToken,
@@ -57,14 +60,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { email, password } = body as Record<string, unknown>;
+  const { name: nameInput, email, password } = body as Record<string, unknown>;
 
   // 입력값 검증
+  const nameResult = normalizeMemberName(nameInput);
+  if ("error" in nameResult) {
+    return apiError("VALIDATION_ERROR", nameResult.error, 400);
+  }
   if (!email || typeof email !== "string" || !EMAIL_REGEX.test(email)) {
     return apiError("VALIDATION_ERROR", "올바른 이메일 형식을 입력해 주세요.", 400);
   }
   if (!password || typeof password !== "string" || !PASSWORD_REGEX.test(password)) {
     return apiError("VALIDATION_ERROR", "비밀번호는 영문·숫자·특수문자를 포함한 8자 이상이어야 합니다.", 400);
+  }
+  // 약관·개인정보 동의 — 체크박스를 우회한 직접 호출까지 서버에서 막는다
+  const consentError = validateRequiredConsents(body as Record<string, unknown>);
+  if (consentError) {
+    return apiError("VALIDATION_ERROR", consentError, 400);
   }
 
   try {
@@ -81,21 +93,19 @@ export async function POST(request: NextRequest) {
     const token    = generateVerifyToken();
     const expiry   = verifyTokenExpiryDate();
 
-    // 회원명 폴백 — 이메일 회원가입은 이름 입력 필드가 없어 mber_nm 이 NULL 로 저장되면
-    // 멤버 목록·담당자 select 등에서 "(이름 없음)" 으로 표시되는 UX 이슈가 발생.
-    // 소셜 콜백과 동일 정책: 이메일 @ 앞부분(로컬파트)을 회원명으로 자동 저장.
-    const fallbackName = email.split("@")[0];
-
-    // 회원 생성 + 인증 토큰 INSERT (트랜잭션)
+    // 회원 생성 + 동의 기록 + 인증 토큰 INSERT (트랜잭션)
     const member = await prisma.$transaction(async (tx) => {
       const newMember = await tx.tbCmMember.create({
         data: {
           email_addr:      email,
           pswd_hash:       pswdHash,
           mber_sttus_code: "UNVERIFIED",
-          mber_nm:         fallbackName,
+          mber_nm:         nameResult.name,
         },
       });
+
+      // 동의 기록은 회원 생성과 같은 트랜잭션 — 회원만 있고 동의 기록이 없는 상태를 만들지 않는다
+      await recordRequiredConsents(tx, newMember.mber_id, ipAddr);
 
       await tx.tbCmEmailVerification.create({
         data: {
