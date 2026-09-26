@@ -117,6 +117,14 @@ export async function checkOwnedProjectLimit(mberId: string): Promise<Response |
   );
 }
 
+/**
+ * 누가 보는 메시지인가 — 같은 상한이라도 할 수 있는 일이 달라 문구가 갈린다.
+ *   inviter  초대하는 소유자·관리자   → "초대할 수 없습니다" + 결제 안내
+ *   invitee  초대를 수락하려는 사람   → 결제 안내 없이 "소유자에게 문의"
+ *   promoter 역할을 바꾸려는 사람     → "편집 역할로 바꿀 수 없습니다" (초대가 아니다)
+ */
+type Perspective = "inviter" | "invitee" | "promoter";
+
 /** 초대·수락으로 합류하려는 사람 1명 — 역할과, 알 수 있는 식별자(회원 ID 또는 이메일) */
 export type MemberAddition = {
   role:    string;
@@ -139,7 +147,7 @@ export type MemberAddition = {
 export async function checkMemberLimit(
   projectId: string,
   adding: MemberAddition[],
-  perspective: "inviter" | "invitee" = "inviter"
+  perspective: Perspective = "inviter"
 ): Promise<Response | null> {
   const owner = await getProjectOwnerPlan(projectId);
   // 프로젝트가 없으면 여기서 막지 않는다 — 호출부의 404 처리에 맡긴다
@@ -165,10 +173,11 @@ export async function checkSeatLimit(
 ): Promise<Response | null> {
   const owner = await getProjectOwnerPlan(projectId);
   if (!owner) return null;
+  // 역할 변경 화면에서 "초대할 수 없습니다"가 뜨면 어색하다 — 승격 전용 문구를 쓴다
   if (owner.plan === "FREE") {
-    return checkFreeEditorLimit(projectId, owner.ownerMberId, owner.plan, adding, "inviter");
+    return checkFreeEditorLimit(projectId, owner.ownerMberId, owner.plan, adding, "promoter");
   }
-  return checkSeatLimitForOwner(owner.ownerMberId, owner.plan, adding, "inviter");
+  return checkSeatLimitForOwner(owner.ownerMberId, owner.plan, adding, "promoter");
 }
 
 /** 구독 좌석 상한 본체 — checkMemberLimit(유료)·checkSeatLimit 공용 */
@@ -176,7 +185,7 @@ async function checkSeatLimitForOwner(
   ownerMberId: string,
   plan: PlanCode,
   adding: MemberAddition[],
-  perspective: "inviter" | "invitee",
+  perspective: Perspective,
 ): Promise<Response | null> {
   const owner = { ownerMberId, plan };
   const seat = await getSeatLimit(owner.ownerMberId);
@@ -190,13 +199,16 @@ async function checkSeatLimitForOwner(
   const used = await countUsedSeats(owner.ownerMberId);
   if (used + newSeats <= seat.limit) return null;
 
+  const tail =
+    seat.pendingCnt !== null && seat.pendingCnt < seat.seatCnt
+      ? "좌석 축소 예약이 있어 예약된 좌석 수가 상한으로 적용됩니다. 예약을 취소하거나 좌석을 추가해 주세요."
+      : "설정 > 구독·결제에서 좌석을 추가해 주세요. 뷰어는 좌석을 차지하지 않습니다.";
   const message =
     perspective === "invitee"
       ? "이 프로젝트 소유자의 구매 좌석이 모두 사용 중이라 지금은 합류할 수 없습니다. 프로젝트 소유자에게 문의해 주세요."
-      : `구매한 좌석 ${seat.limit}개 중 ${used}개를 사용 중이라 편집 멤버 ${newSeats}명을 더 초대할 수 없습니다. ` +
-        (seat.pendingCnt !== null && seat.pendingCnt < seat.seatCnt
-          ? "좌석 축소 예약이 있어 예약된 좌석 수가 상한으로 적용됩니다. 예약을 취소하거나 좌석을 추가해 주세요."
-          : "설정 > 구독·결제에서 좌석을 추가해 주세요. 뷰어는 좌석을 차지하지 않습니다.");
+      : perspective === "promoter"
+      ? `구매한 좌석 ${seat.limit}개 중 ${used}개를 사용 중이라 편집 역할로 바꿀 수 없습니다. ` + tail
+      : `구매한 좌석 ${seat.limit}개 중 ${used}개를 사용 중이라 편집 멤버 ${newSeats}명을 더 초대할 수 없습니다. ` + tail;
 
   return apiError(PLAN_LIMIT_CODES.seat, message, 403, {
     plan:        owner.plan,
@@ -245,7 +257,7 @@ async function checkFreeEditorLimit(
   ownerMberId: string,
   plan: PlanCode,
   adding: MemberAddition[],
-  perspective: "inviter" | "invitee"
+  perspective: Perspective
 ): Promise<Response | null> {
   const editorsAdding = adding.filter((a) => isSeatRole(a.role));
   if (editorsAdding.length === 0) return null;  // 뷰어는 무료·무제한
@@ -264,11 +276,14 @@ async function checkFreeEditorLimit(
   const requiredSeats = used + newSeats;
   const monthlyAmount = requiredSeats * PRODUCTS[SPECODE_PRODUCT].unitPrice;
 
+  const need = `BASIC 좌석 ${requiredSeats}개(월 ${formatWon(monthlyAmount)})가 필요합니다.`;
   const message =
     perspective === "invitee"
       ? "이 프로젝트는 FREE 플랜이라 소유자 외에는 편집 멤버로 합류할 수 없습니다. 프로젝트 소유자에게 문의해 주세요."
+      : perspective === "promoter"
+      ? `FREE 플랜에서는 소유자만 편집할 수 있습니다. 편집 역할로 바꾸려면 ${need} 뷰어로는 제한 없이 둘 수 있습니다.`
       : "FREE 플랜에서는 소유자만 편집할 수 있습니다. " +
-        `편집 멤버 ${editorsAdding.length}명을 더 두려면 BASIC 좌석 ${requiredSeats}개(월 ${formatWon(monthlyAmount)})가 필요합니다. ` +
+        `편집 멤버 ${editorsAdding.length}명을 더 두려면 ${need} ` +
         "뷰어는 무료로 제한 없이 초대할 수 있습니다.";
 
   return apiError(PLAN_LIMIT_CODES.member, message, 403, {

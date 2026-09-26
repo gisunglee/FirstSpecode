@@ -22,8 +22,8 @@ import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 import ProjectAbbrChip from "@/components/ui/ProjectAbbrChip";
-import PlanLimitDialog, { isPlanLimitError, toPlanLimitInfo, type PlanLimitInfo } from "@/components/common/PlanLimitDialog";
-import { AuthFetchError } from "@/lib/authFetch";
+import PlanLimitDialog, { isPlanLimitError, isOpenProjectLimitError, toPlanLimitInfo, type PlanLimitInfo } from "@/components/common/PlanLimitDialog";
+import ProjectSwapDialog, { type ProjectSwapInfo } from "@/components/common/ProjectSwapDialog";
 import {
   parseProjectAbbrInput,
   PROJECT_ABBR_MAX_LEN,
@@ -43,6 +43,8 @@ type ProjectItem = {
   /** 결제 잠금 — 자물쇠 배지. 소유자면 "활성화" 버튼 (정책 §1-6) */
   locked:       boolean;
   isOwner:      boolean;
+  /** 편집 멤버 수 — 내 소유 프로젝트만 채워진다. 교체 시 "누구의 편집이 막히는지" 경고에 쓴다 */
+  editorCount:  number | null;
 };
 
 type ProjectsResponse = {
@@ -248,6 +250,7 @@ function ProjectsPageInner() {
   const [createOpen, setCreateOpen] = useState(false);
   // FREE 상한 안내 모달 문구 — null 이면 닫힘
   const [limit, setLimit] = useState<PlanLimitInfo | null>(null);
+  const [swap, setSwap]   = useState<ProjectSwapInfo | null>(null);
 
   const { data, isLoading } = useQuery<ProjectsResponse>({
     queryKey: ["projects"],
@@ -257,21 +260,44 @@ function ProjectsPageInner() {
 
   const items = data?.data?.items ?? [];
 
-  // 잠긴 프로젝트 "활성화" — 서버가 상한(FREE 편집자 소유자 1명·열린 프로젝트 1개 / 구독 좌석)을 판정한다.
-  // 초과면 403 PROJECT_UNLOCK_OVER_LIMIT 와 함께 무엇을 줄여야 하는지 메시지가 온다.
-  const unlockMutation = useMutation({
-    mutationFn: (projectId: string) =>
-      authFetch<{ data: { unlocked: boolean } }>(`/api/projects/${projectId}/unlock`, { method: "POST" }),
-    onSuccess: () => {
-      toast.success("프로젝트가 활성화되었습니다.");
+  /** 활성화·교체 성공 후 공통 처리 — 잠금 상태가 바뀌면 목록과 내 역할 캐시를 다시 읽어야 한다 */
+  function afterUnlock(message: string) {
+    toast.success(message);
+    queryClient.invalidateQueries({ queryKey: ["projects"] });
+    queryClient.invalidateQueries({ queryKey: ["my-role"] });
+  }
+
+  /**
+   * 잠금 해제 실패 처리 — 사유마다 할 일이 다르다 (정책 §1-6).
+   *   FREE_PROJECTS → 다른 프로젝트를 닫으면 되므로 교체 다이얼로그
+   *   FREE_EDITORS  → 편집 멤버를 줄여야 하므로 멤버 관리로 보내는 안내
+   *   SEATS         → 좌석 추가 안내
+   * 토스트로 띄우면 "무엇을 하라"는 안내가 몇 초 뒤 사라져 행동으로 이어지지 않는다.
+   */
+  function handleUnlockError(err: Error, target: ProjectItem) {
+    if (isOpenProjectLimitError(err)) {
+      // 닫아야 할 대상은 목록이 이미 갖고 있다 — 내가 소유하고 잠기지 않은 프로젝트
+      const openOwned = items.filter((p) => p.isOwner && !p.locked && p.projectId !== target.projectId);
+      if (openOwned.length > 0) {
+        setSwap({
+          open:  { projectId: target.projectId, name: target.name },
+          close: openOwned.map((p) => ({ projectId: p.projectId, name: p.name, editorCount: p.editorCount ?? 1 })),
+        });
+        return;
+      }
+      // 목록에 안 보이는 프로젝트가 열려 있는 경우(캐시 지연 등) — 안내만 하고 목록을 새로 읽는다
       queryClient.invalidateQueries({ queryKey: ["projects"] });
-      queryClient.invalidateQueries({ queryKey: ["my-role"] });
-    },
-    onError: (err: Error) => {
-      // 상한 초과 안내는 길어서 토스트를 오래 보여 준다
-      const long = err instanceof AuthFetchError && err.code === "PROJECT_UNLOCK_OVER_LIMIT";
-      toast.error(err.message, { duration: long ? 8000 : 4000 });
-    },
+    }
+    if (isPlanLimitError(err)) { setLimit(toPlanLimitInfo(err, target.projectId)); return; }
+    toast.error(err.message);
+  }
+
+  // 잠긴 프로젝트 "활성화" — 서버가 상한(FREE 편집자 소유자 1명·열린 프로젝트 1개 / 구독 좌석)을 판정한다.
+  const unlockMutation = useMutation({
+    mutationFn: (target: ProjectItem) =>
+      authFetch<{ data: { unlocked: boolean } }>(`/api/projects/${target.projectId}/unlock`, { method: "POST" }),
+    onSuccess: () => afterUnlock("프로젝트가 활성화되었습니다."),
+    onError:   (err: Error, target) => handleUnlockError(err, target),
   });
 
   function handleProjectClick(projectId: string) {
@@ -418,7 +444,7 @@ function ProjectsPageInner() {
                   className="sp-btn sp-btn-primary sp-btn-xs"
                   onClick={(e) => {
                     e.stopPropagation();
-                    unlockMutation.mutate(item.projectId);
+                    unlockMutation.mutate(item);
                   }}
                   disabled={unlockMutation.isPending}
                   title="소유자 혼자 편집하고, 열려 있는 다른 소유 프로젝트가 없으면 바로 활성화됩니다"
@@ -463,6 +489,19 @@ function ProjectsPageInner() {
 
       {/* FREE 상한 안내 — 요금제 페이지로 유도 */}
       <PlanLimitDialog limit={limit} onClose={() => setLimit(null)} />
+
+      {/* 열린 프로젝트 교체 — FREE 는 한 번에 1개만 열 수 있어 A 를 닫고 B 를 연다 (정책 §1-6) */}
+      <ProjectSwapDialog
+        info={swap}
+        onClose={() => setSwap(null)}
+        onDone={() => { setSwap(null); afterUnlock("열린 프로젝트를 바꿨습니다."); }}
+        onRejected={(err) => {
+          // 교체가 롤백된 경우 — 아무것도 닫히지 않았다. 남은 사유를 그대로 안내한다
+          queryClient.invalidateQueries({ queryKey: ["projects"] });
+          if (isPlanLimitError(err)) setLimit(toPlanLimitInfo(err, swap?.open.projectId));
+          else toast.error(err.message);
+        }}
+      />
     </div>
   );
 }

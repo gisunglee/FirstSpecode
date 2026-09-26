@@ -4,6 +4,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { ACTIVE_PROJECT_RELATION_WHERE } from "@/lib/projectGuard";
+import { SEAT_ROLES } from "@/lib/billing/seats";
 
 export type ProjectListItem = {
   projectId:    string;
@@ -19,6 +20,11 @@ export type ProjectListItem = {
   locked:       boolean;
   /** 내가 소유자(owner_mber_id)인가 — "활성화" 버튼 노출 판정 */
   isOwner:      boolean;
+  /**
+   * 편집 멤버(OWNER/ADMIN/MEMBER, ACTIVE) 수 — 내 소유 프로젝트만 채우고 남의 것은 null.
+   * 열린 프로젝트 교체 다이얼로그가 "이 프로젝트를 닫으면 누구의 편집이 막히는지" 경고에 쓴다.
+   */
+  editorCount:  number | null;
 };
 
 /**
@@ -59,6 +65,20 @@ export async function fetchMyProjects(opts: {
     orderBy: { join_dt: "desc" },
   });
 
+  // 소유 프로젝트의 편집 멤버 수 — 프로젝트마다 세지 않고 groupBy 한 번으로 끝낸다
+  const ownedIds = memberships
+    .filter((m) => m.project.owner_mber_id === mberId)
+    .map((m) => m.project.prjct_id);
+  const editorCounts = new Map<string, number>();
+  if (ownedIds.length > 0) {
+    const grouped = await prisma.tbPjProjectMember.groupBy({
+      by:     ["prjct_id"],
+      where:  { prjct_id: { in: ownedIds }, mber_sttus_code: "ACTIVE", role_code: { in: [...SEAT_ROLES] } },
+      _count: { _all: true },
+    });
+    for (const g of grouped) editorCounts.set(g.prjct_id, g._count._all);
+  }
+
   return memberships
     .sort((a, b) => {
       const aTime = (a.project.mdfcn_dt ?? a.project.creat_dt).getTime();
@@ -75,5 +95,6 @@ export async function fetchMyProjects(opts: {
       myRole:       m.role_code,
       locked:       m.project.lock_yn === "Y",
       isOwner:      m.project.owner_mber_id === mberId,
+      editorCount:  m.project.owner_mber_id === mberId ? editorCounts.get(m.project.prjct_id) ?? 0 : null,
     }));
 }

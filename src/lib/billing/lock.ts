@@ -4,13 +4,15 @@
  * 잠금 = tb_pj_project.lock_yn='Y'. 조회·MCP 읽기는 되고 쓰기 권한만 requirePermission 이 403.
  * 데이터는 절대 지우지 않는다. 잠금은 "지금 이 소유자의 플랜으로는 편집할 수 없다" 는 표시다.
  *
- * 잠금이 걸리는 이벤트 (3개, 정책 §1-10):
+ * 잠금이 걸리는 이벤트 (정책 §1-10):
  *   ① 강등 — 해지 확정·결제 실패 소진 → 소유 프로젝트 전부 잠금 (lockAllOwnedProjects)
  *   ② 소유권 이전·복구 — 새 소유자 플랜으로 상한 초과면 잠금 (applyLockOnTransferOrRestore)
+ *   ③ 열린 프로젝트 교체 — 소유자가 A 를 닫고 B 를 열 때 A 에만 (swapOpenProject)
  * 풀리는 이벤트:
  *   ① 재결제 성공 → 전부 해제 (unlockAllOwnedProjects)
  *   ② 소유자 "활성화" 클릭 → 그 프로젝트가 상한 이하면 해제 (unlockProjectByOwner)
  *   ③ 강등 직후 소유 프로젝트가 1개뿐이고 상한 이하면 자동 해제 (autoUnlockIfSingle)
+ *   ④ 열린 프로젝트 교체 — B (swapOpenProject)
  *
  * "상한 초과" 판정은 한 함수(isProjectOverPlanLimit)로 통일 (정책 §1-6, 2026-09-26):
  *   FREE               → ⓐ 그 프로젝트의 편집 멤버(OWNER/ADMIN/MEMBER) > 1  — 소유자 혼자여야 한다 (FREE_EDITORS)
@@ -126,6 +128,85 @@ export async function unlockProjectByOwner(projectId: string, db: Db = prisma): 
     data:  { lock_yn: "N", lock_dt: null },
   });
   return { unlocked: true };
+}
+
+// ─── 열린 프로젝트 교체 (소유자가 A 를 닫고 B 를 연다) ───────────────────────
+
+export type SwapOpenProjectResult =
+  | { unlocked: true;  closedProjectIds: string[] }
+  /** closeProjectIds 에 요청자 소유가 아니거나 삭제된 프로젝트가 섞여 있다 */
+  | { unlocked: false; reason: "INVALID_CLOSE_TARGET"; invalidIds: string[] }
+  /** 닫은 뒤에도 상한을 넘는다 — 전체 롤백되어 닫기도 취소되었다 */
+  | { unlocked: false; reason: "OVER_LIMIT"; verdict: Extract<OverLimitVerdict, { over: true }> };
+
+/** 트랜잭션 롤백용 내부 신호 — 밖으로 던지지 않는다 */
+class SwapRollback extends Error {
+  constructor(readonly verdict: Extract<OverLimitVerdict, { over: true }>) {
+    super("SWAP_ROLLBACK");
+  }
+}
+
+/**
+ * FREE 소유자가 "열린 프로젝트를 바꾼다" — closeProjectIds 를 잠그고 openProjectId 를 연다.
+ *
+ * 왜 필요한가: FREE 는 열린 소유 프로젝트가 1개뿐이라 A 를 쓰다 B 를 열려면 A 를 닫아야 하는데,
+ * 닫는 수단이 없어 "삭제하거나 양도하라"는 막다른 길이었다(정책 §1-6, 삭제는 절대 없음과 충돌).
+ * 여는 흐름 안에서만 닫히며 단독 "닫기" 버튼은 두지 않는다.
+ *
+ * 안전장치 세 가지:
+ *   ① 닫을 대상은 전부 요청자 소유의 살아 있는 프로젝트여야 한다 — 남의 프로젝트를 잠글 수 없다.
+ *   ② 닫은 뒤 같은 트랜잭션에서 판정을 다시 돌린다. 여전히 초과면(예: 편집 멤버가 여럿) **전체 롤백** —
+ *      "A 는 닫혔는데 B 는 안 열려 둘 다 잠긴" 상태를 만들지 않는다. 사용자가 스스로 복구할 수 없는 상태다.
+ *   ③ 트랜잭션 시작 직후 소유자 회원 행을 FOR UPDATE 로 잠근다. 같은 소유자의 교체 요청이 동시에 오면
+ *      직렬화되어 "둘 다 열린" 상태(불변식 위반)가 생기지 않는다. 다른 소유자끼리는 서로 막지 않는다.
+ *
+ * 트랜잭션 클라이언트를 인자로 받지 않는 이유: 이 함수가 트랜잭션 경계 자체다.
+ */
+export async function swapOpenProject(
+  ownerMberId: string,
+  openProjectId: string,
+  closeProjectIds: string[],
+  now: Date,
+): Promise<SwapOpenProjectResult> {
+  // 열려는 프로젝트가 닫을 목록에 섞여 있으면 무시한다(자기 자신을 닫고 열 수는 없다)
+  const closeIds = [...new Set(closeProjectIds)].filter((id) => id !== openProjectId);
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      // ③ 같은 소유자의 동시 교체 직렬화
+      await tx.$queryRaw`SELECT mber_id FROM tb_cm_member WHERE mber_id = ${ownerMberId} FOR UPDATE`;
+
+      if (closeIds.length > 0) {
+        // ① 닫을 대상 검증 — 하나라도 남의 것이면 아무것도 하지 않는다
+        const owned = await tx.tbPjProject.findMany({
+          where:  { prjct_id: { in: closeIds }, owner_mber_id: ownerMberId, del_yn: "N" },
+          select: { prjct_id: true },
+        });
+        const ownedIds  = new Set(owned.map((p) => p.prjct_id));
+        const invalidIds = closeIds.filter((id) => !ownedIds.has(id));
+        if (invalidIds.length > 0) {
+          return { unlocked: false, reason: "INVALID_CLOSE_TARGET", invalidIds } as const;
+        }
+
+        await tx.tbPjProject.updateMany({
+          where: { prjct_id: { in: closeIds }, owner_mber_id: ownerMberId, del_yn: "N", lock_yn: "N" },
+          data:  { lock_yn: "Y", lock_dt: now },
+        });
+      }
+
+      // ② 닫은 상태에서 다시 판정 — 초과면 throw 로 전체 롤백
+      const r = await unlockProjectByOwner(openProjectId, tx);
+      if (!r.unlocked) throw new SwapRollback(r.verdict);
+
+      return { unlocked: true, closedProjectIds: closeIds } as const;
+    });
+  } catch (err) {
+    // 롤백 신호는 정상 결과로 변환한다 — 닫기도 함께 취소되었다
+    if (err instanceof SwapRollback) {
+      return { unlocked: false, reason: "OVER_LIMIT", verdict: err.verdict };
+    }
+    throw err;
+  }
 }
 
 /**

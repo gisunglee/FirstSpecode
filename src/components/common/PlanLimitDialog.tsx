@@ -4,8 +4,18 @@
  * PlanLimitDialog — 플랜 상한 안내 다이얼로그
  *
  * 역할:
- *   - 프로젝트 생성·복사·멤버 초대·뷰어 승격이 FREE 상한(PLAN_LIMIT_*)에 걸렸을 때
- *     서버 메시지를 보여 주고, 서버가 계산한 "필요 좌석 · 월 금액"이 있으면 같이 보여 준다.
+ *   - 상한에 걸렸을 때 "지금 무엇을 하면 되는지"를 한 화면에서 보여 준다.
+ *   - 같은 "상한 초과"라도 해야 할 일이 다르므로 상황(kind)으로 갈라 제목·주 버튼을 바꾼다:
+ *
+ *     kind        | 언제                                   | 제목                  | 주 버튼
+ *     ------------|----------------------------------------|-----------------------|------------------
+ *     UPGRADE     | FREE 상한 (프로젝트 생성·초대·승격·업로드) | BASIC 플랜이 필요합니다 | BASIC 시작하기
+ *     SEATS       | 구독 좌석 부족 (이미 BASIC)              | 좌석이 부족합니다      | 좌석 추가
+ *     EDITORS     | 잠금 해제 실패 — 편집 멤버가 여럿          | 편집 멤버를 줄여야 합니다 | 멤버 관리로 가기
+ *
+ *     이미 BASIC 인 사람에게 "BASIC 플랜이 필요합니다 / BASIC 시작하기"를 띄우던 문제를 없앤다.
+ *     열린 프로젝트 초과(FREE_PROJECTS)는 "교체"라는 행동이 따로 있어 ProjectSwapDialog 가 맡는다.
+ *
  *   - "BASIC 시작하기" → 구독 시작 화면(/settings/billing)으로 이동. 좌석 수 기본값(seats)과
  *     결제 뒤 돌아올 화면(returnTo)을 쿼리로 넘긴다. 결제 뒤 초대·생성을 자동으로 이어 주지는
  *     않는다(정책 §5) — 사용자가 돌아와서 다시 누른다.
@@ -21,17 +31,68 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { AuthFetchError } from "@/lib/authFetch";
-import { isPlanLimitCode, PRICING_PATH } from "@/lib/planLimits";
-import { BILLING_PATH } from "@/lib/billing/constants";
+import { isPlanLimitCode, PLAN_LIMIT_CODES, PRICING_PATH } from "@/lib/planLimits";
+import { BILLING_ERROR_CODES, BILLING_PATH } from "@/lib/billing/constants";
 import { formatWon } from "@/lib/billing/pricing";
 
+/** 안내 상황 — 해야 할 일이 서로 달라서 제목·주 버튼이 갈린다 */
+export type PlanLimitKind = "UPGRADE" | "SEATS" | "EDITORS";
+
 export type PlanLimitInfo = {
+  kind: PlanLimitKind;
   /** 서버가 내려준 안내 문구 */
   message: string;
   /** BASIC 으로 가면 필요한 좌석 수 — 초대·승격 상한 응답에만 실린다 */
   requiredSeats?: number;
   /** 그 좌석 수의 월 청구액(부가세 포함) */
   monthlyAmount?: number;
+  /** EDITORS — "멤버 관리로 가기" 대상 프로젝트 */
+  projectId?: string;
+};
+
+/** 이 다이얼로그가 처리하는 에러인지 (onError 에서 분기용). 잠금 해제 초과도 포함한다 */
+export function isPlanLimitError(err: unknown): err is AuthFetchError {
+  return (
+    err instanceof AuthFetchError &&
+    (isPlanLimitCode(err.code) || err.code === BILLING_ERROR_CODES.UNLOCK_OVER_LIMIT)
+  );
+}
+
+/** 잠금 해제 실패가 "열린 프로젝트 초과"인지 — 이 경우만 교체 다이얼로그로 보낸다 */
+export function isOpenProjectLimitError(err: unknown): err is AuthFetchError {
+  return (
+    err instanceof AuthFetchError &&
+    err.code === BILLING_ERROR_CODES.UNLOCK_OVER_LIMIT &&
+    err.details.reason === "FREE_PROJECTS"
+  );
+}
+
+/** 에러 코드·사유로 상황을 정한다 */
+function resolveKind(err: AuthFetchError): PlanLimitKind {
+  if (err.code === BILLING_ERROR_CODES.UNLOCK_OVER_LIMIT) {
+    // 잠금 해제 실패 — 사유에 따라 갈린다 (FREE_PROJECTS 는 여기 오지 않는다)
+    return err.details.reason === "FREE_EDITORS" ? "EDITORS" : "SEATS";
+  }
+  return err.code === PLAN_LIMIT_CODES.seat ? "SEATS" : "UPGRADE";
+}
+
+/** 상한 에러 → 다이얼로그 입력. 서버 extra 중 쓰는 값만 타입 확인 후 담는다 */
+export function toPlanLimitInfo(err: AuthFetchError, projectId?: string): PlanLimitInfo {
+  const seats  = err.details.requiredSeats;
+  const amount = err.details.monthlyAmount;
+  return {
+    kind:    resolveKind(err),
+    message: err.message,
+    ...(typeof seats  === "number" ? { requiredSeats: seats }  : {}),
+    ...(typeof amount === "number" ? { monthlyAmount: amount } : {}),
+    ...(projectId ? { projectId } : {}),
+  };
+}
+
+const TITLE: Record<PlanLimitKind, string> = {
+  UPGRADE: "BASIC 플랜이 필요합니다",
+  SEATS:   "좌석이 부족합니다",
+  EDITORS: "편집 멤버를 줄여야 합니다",
 };
 
 type Props = {
@@ -39,22 +100,6 @@ type Props = {
   limit: PlanLimitInfo | null;
   onClose: () => void;
 };
-
-/** authFetch 에러가 플랜 상한 에러인지 판별 (onError 에서 분기용) */
-export function isPlanLimitError(err: unknown): err is AuthFetchError {
-  return err instanceof AuthFetchError && isPlanLimitCode(err.code);
-}
-
-/** 상한 에러 → 다이얼로그 입력. 서버 extra 중 숫자만 골라 담는다 (타입은 여기서 확인) */
-export function toPlanLimitInfo(err: AuthFetchError): PlanLimitInfo {
-  const seats  = err.details.requiredSeats;
-  const amount = err.details.monthlyAmount;
-  return {
-    message: err.message,
-    ...(typeof seats  === "number" ? { requiredSeats: seats }  : {}),
-    ...(typeof amount === "number" ? { monthlyAmount: amount } : {}),
-  };
-}
 
 export default function PlanLimitDialog({ limit, onClose }: Props) {
   // 훅은 조건 없이 먼저 — 아래 early return 보다 앞에 있어야 한다
@@ -68,13 +113,20 @@ export default function PlanLimitDialog({ limit, onClose }: Props) {
     onClose();
   }
 
-  function startBasic() {
-    // 좌석 기본값 + 결제 뒤 돌아올 화면. returnTo 는 구독 화면이 앱 내부 경로인지 다시 검증한다.
+  /** UPGRADE·SEATS 공통 — 구독 화면으로. 좌석 기본값과 돌아올 화면을 실어 보낸다 */
+  function goBilling() {
     const params = new URLSearchParams();
     if (limit?.requiredSeats) params.set("seats", String(limit.requiredSeats));
     params.set("returnTo", pathname);
     onClose();
     router.push(`${BILLING_PATH}?${params.toString()}`);
+  }
+
+  /** EDITORS — 그 프로젝트의 멤버 관리로. 잠긴 프로젝트에서도 뷰어 강등·제외는 허용된다(정책 §1-6) */
+  function goMembers() {
+    const target = limit?.projectId;
+    onClose();
+    if (target) router.push(`/projects/${target}/members`);
   }
 
   const hasEstimate = typeof limit.requiredSeats === "number" && typeof limit.monthlyAmount === "number";
@@ -92,7 +144,7 @@ export default function PlanLimitDialog({ limit, onClose }: Props) {
           id="plan-limit-dialog-title"
           style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}
         >
-          BASIC 플랜이 필요합니다
+          {TITLE[limit.kind]}
         </h3>
         <p style={{ margin: "0 0 16px", fontSize: 14, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
           {limit.message}
@@ -120,12 +172,23 @@ export default function PlanLimitDialog({ limit, onClose }: Props) {
           <button className="sp-btn" onClick={onClose} style={{ fontSize: 13, padding: "6px 14px" }}>
             닫기
           </button>
-          <button className="sp-btn sp-btn-ghost" onClick={openPricing} style={{ fontSize: 13, padding: "6px 14px" }}>
-            요금제 보기
-          </button>
-          <button className="sp-btn sp-btn-primary" onClick={startBasic} style={{ fontSize: 13, padding: "6px 14px" }}>
-            BASIC 시작하기
-          </button>
+
+          {/* UPGRADE 일 때만 요금제 안내 — 이미 구독 중인 사람에게는 볼 이유가 없다 */}
+          {limit.kind === "UPGRADE" && (
+            <button className="sp-btn sp-btn-ghost" onClick={openPricing} style={{ fontSize: 13, padding: "6px 14px" }}>
+              요금제 보기
+            </button>
+          )}
+
+          {limit.kind === "EDITORS" ? (
+            <button className="sp-btn sp-btn-primary" onClick={goMembers} disabled={!limit.projectId} style={{ fontSize: 13, padding: "6px 14px" }}>
+              멤버 관리로 가기
+            </button>
+          ) : (
+            <button className="sp-btn sp-btn-primary" onClick={goBilling} style={{ fontSize: 13, padding: "6px 14px" }}>
+              {limit.kind === "SEATS" ? "좌석 추가" : "BASIC 시작하기"}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -134,7 +197,7 @@ export default function PlanLimitDialog({ limit, onClose }: Props) {
 
 // ── 스타일 — ConfirmDialog 와 동일 값 ─────────────────────────────────────────
 
-const overlayStyle: React.CSSProperties = {
+export const overlayStyle: React.CSSProperties = {
   position:       "fixed",
   inset:          0,
   background:     "rgba(0,0,0,0.45)",
@@ -144,7 +207,7 @@ const overlayStyle: React.CSSProperties = {
   zIndex:         1000,
 };
 
-const dialogStyle: React.CSSProperties = {
+export const dialogStyle: React.CSSProperties = {
   background:   "var(--color-bg-card)",
   borderRadius: 10,
   padding:      "24px 28px",

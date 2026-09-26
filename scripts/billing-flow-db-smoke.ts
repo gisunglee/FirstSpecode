@@ -11,7 +11,8 @@
  *   가격·날짜 순수 함수 → FREE 상한(편집자 소유자 1명·뷰어 무제한·필요 좌석 안내) → BASIC 시작(좌석 검증·첫 결제·플랜 미러) → 좌석 상한(초대 검사)
  *   → 좌석 추가(일할 결제) → 좌석 축소 예약·취소 → 사전 안내 메일(멱등) → 정기 결제(갱신)
  *   → 실패 카드로 변경 → 결제 실패(PAST_DUE) → 3일 간격 재시도 3회 → 강등(EXPIRED·FREE·잠금)
- *   → 잠금 검사(requirePermission 권한·메서드 기준, requireProjectUnlocked) → 활성화(상한 이하/초과) → 재결제(전부 해제)
+ *   → 잠금 검사(requirePermission 권한·메서드 기준, requireProjectUnlocked) → 활성화(상한 이하/초과)
+ *   → 열린 프로젝트 교체(남의 것 거부·롤백·정상 교체·여러 개 닫기) → 재결제(전부 해제)
  *   → 해지 예약·취소·확정 → 관리자 수동 플랜 409 판정 → 탈퇴 시 구독 종료
  */
 
@@ -361,6 +362,67 @@ async function main(): Promise<void> {
     await lock.lockAllOwnedProjects(ids.A, new Date());   // P1 을 다시 잠그면 P2 를 열 수 있다 — 어느 것을 열지는 소유자가 고른다
     assert.equal((await lock.unlockProjectByOwner(ids.P2)).unlocked, true);
     // 뒤 단계(재결제·좌석 계산)를 위해 B·D·C 를 편집 멤버로 되돌리고 다시 잠가 둔다
+    await setRole(ids.P1, ids.B, "MEMBER");
+    await setRole(ids.P1, ids.D, "MEMBER");
+    await setRole(ids.P2, ids.C, "MEMBER");
+    await lock.lockAllOwnedProjects(ids.A, new Date());
+
+    // ── 10-b. 열린 프로젝트 교체 — A 를 닫고 B 를 연다 ─────────────────
+    log("교체 — 남의 프로젝트는 못 닫고, 닫은 뒤 상한을 넘으면 전체 롤백(둘 다 잠기는 상태 금지), 정상이면 A 닫힘·B 열림");
+    const isLocked = async (p: string) =>
+      (await prisma.tbPjProject.findUniqueOrThrow({ where: { prjct_id: p }, select: { lock_yn: true } })).lock_yn === "Y";
+
+    // 준비 — 편집 멤버는 소유자뿐, P1 만 열어 둔다
+    await setRole(ids.P1, ids.B, "VIEWER");
+    await setRole(ids.P1, ids.D, "VIEWER");
+    await setRole(ids.P2, ids.C, "VIEWER");
+    await lock.lockAllOwnedProjects(ids.A, new Date());
+    assert.equal((await lock.unlockProjectByOwner(ids.P1)).unlocked, true, "P1 을 열어 둔다");
+
+    // ① 하위호환 — body 없는 기존 경로는 그대로 거부된다
+    const noSwap = await lock.unlockProjectByOwner(ids.P2);
+    assert.ok(!noSwap.unlocked && noSwap.verdict.reason === "FREE_PROJECTS", "교체 없이는 P2 를 못 연다");
+
+    // ② 남의 프로젝트를 닫으려 하면 아무것도 하지 않는다
+    const foreignP = randomUUID();
+    await prisma.tbPjProject.create({ data: { prjct_id: foreignP, prjct_nm: "foreign", prjct_abrv: "FGN", creat_mber_id: ids.E, owner_mber_id: ids.E } });
+    const swapForeign = await lock.swapOpenProject(ids.A, ids.P2, [foreignP], new Date());
+    assert.ok(!swapForeign.unlocked && swapForeign.reason === "INVALID_CLOSE_TARGET", "남의 프로젝트는 닫을 수 없다");
+    assert.equal(await isLocked(foreignP), false, "남의 프로젝트는 건드리지 않았다");
+    assert.equal(await isLocked(ids.P1),   false, "거부되어도 P1 은 열린 채 그대로");
+    assert.equal(await isLocked(ids.P2),   true,  "P2 도 잠긴 채 그대로");
+
+    // ③ 없는 프로젝트 ID 도 같은 방어에 걸린다
+    const swapGhost = await lock.swapOpenProject(ids.A, ids.P2, [randomUUID()], new Date());
+    assert.ok(!swapGhost.unlocked && swapGhost.reason === "INVALID_CLOSE_TARGET", "존재하지 않는 ID 거부");
+    assert.equal(await isLocked(ids.P1), false, "여전히 P1 열림");
+
+    // ④ 가장 중요 — 닫은 뒤에도 상한을 넘으면 전체 롤백(P1 이 닫힌 채 P2 도 안 열리는 상태 금지)
+    await setRole(ids.P2, ids.C, "MEMBER");   // P2 에 편집 멤버를 하나 더 둔다
+    const swapRollback = await lock.swapOpenProject(ids.A, ids.P2, [ids.P1], new Date());
+    assert.ok(!swapRollback.unlocked && swapRollback.reason === "OVER_LIMIT" && swapRollback.verdict.reason === "FREE_EDITORS",
+      "P2 는 편집 멤버가 둘이라 못 연다");
+    assert.equal(await isLocked(ids.P1), false, "롤백 — P1 은 닫히지 않았다");
+    assert.equal(await isLocked(ids.P2), true,  "롤백 — P2 도 잠긴 그대로");
+
+    // ⑤ 정상 교체 — P1 닫힘, P2 열림
+    await setRole(ids.P2, ids.C, "VIEWER");
+    const swapOk = await lock.swapOpenProject(ids.A, ids.P2, [ids.P1], new Date());
+    assert.ok(swapOk.unlocked && swapOk.closedProjectIds.length === 1 && swapOk.closedProjectIds[0] === ids.P1, "교체 성공");
+    assert.equal(await isLocked(ids.P1), true,  "P1 닫힘");
+    assert.equal(await isLocked(ids.P2), false, "P2 열림");
+
+    // ⑥ 여러 개가 열려 있던 기존 사용자 — 전부 닫고 하나만 연다
+    const extraP = randomUUID();
+    await prisma.tbPjProject.create({ data: { prjct_id: extraP, prjct_nm: "extra", prjct_abrv: "EXT", creat_mber_id: ids.A, owner_mber_id: ids.A, lock_yn: "N" } });
+    const swapMany = await lock.swapOpenProject(ids.A, ids.P1, [ids.P2, extraP], new Date());
+    assert.ok(swapMany.unlocked && swapMany.closedProjectIds.length === 2, "열려 있던 2개를 닫고 P1 을 연다");
+    assert.equal(await isLocked(ids.P1), false, "P1 열림");
+    assert.equal(await isLocked(ids.P2), true,  "P2 닫힘");
+    assert.equal(await isLocked(extraP), true,  "extra 닫힘");
+
+    // 뒤 단계(재결제·좌석 계산)를 위해 원상복구 — 임시 프로젝트 제거, 편집 멤버 복원, 전부 잠금
+    await prisma.tbPjProject.deleteMany({ where: { prjct_id: { in: [foreignP, extraP] } } });
     await setRole(ids.P1, ids.B, "MEMBER");
     await setRole(ids.P1, ids.D, "MEMBER");
     await setRole(ids.P2, ids.C, "MEMBER");
