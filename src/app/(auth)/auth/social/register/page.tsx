@@ -138,7 +138,7 @@ function SocialRegisterInner() {
 
       <form onSubmit={handleSubmit} noValidate>
         <div className="sp-field">
-          <label className="sp-label" htmlFor="soc-name">이름 <span className="sp-label-req">필수</span></label>
+          <label className="sp-label" htmlFor="soc-name">이름</label>
           <input
             id="soc-name"
             className={`sp-input${nameError ? " is-err" : ""}`}
@@ -151,7 +151,7 @@ function SocialRegisterInner() {
           />
           {nameError
             ? <div className="sp-hint is-err">{nameError}</div>
-            : <div className="sp-hint">프로젝트 멤버·담당자·댓글 등 서비스 안에서 이 이름으로 표시됩니다. 프로필에서 언제든 바꿀 수 있어요.</div>}
+            : <div className="sp-hint">서비스 안에서 표시되는 이름이에요. 나중에 프로필에서 바꿀 수 있어요.</div>}
         </div>
 
         <ConsentFields

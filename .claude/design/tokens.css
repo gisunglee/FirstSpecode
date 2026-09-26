@@ -153,6 +153,7 @@
   --color-text-heading:   var(--p-gray-100);
   --color-text-inverse:   var(--p-gray-850);
   --color-text-link:      var(--p-indigo-300);
+  --color-text-on-accent: var(--p-gray-850);   /* accent(amber) 바탕 위 글자·아이콘 — 테마와 무관하게 어둡게 고정 */
 
   --color-brand:        var(--p-indigo-400);
   --color-brand-hover:  var(--p-indigo-300);
@@ -233,6 +234,7 @@
   --color-text-heading:   #2e3248;
   --color-text-inverse:   #ffffff;
   --color-text-link:      var(--p-indigo-500);
+  --color-text-on-accent: var(--p-gray-850);   /* accent(amber) 바탕 위 글자·아이콘 — 테마와 무관하게 어둡게 고정 */
 
   --color-brand:        var(--p-indigo-500);
   --color-brand-hover:  var(--p-indigo-400);
@@ -312,6 +314,7 @@
   --color-text-heading:   #d4cceb;
   --color-text-inverse:   #1a1428;
   --color-text-link:      #c4b5fd;
+  --color-text-on-accent: var(--p-gray-850);   /* accent(amber) 바탕 위 글자·아이콘 — 테마와 무관하게 어둡게 고정 */
 
   --color-brand:        #8b5cf6;
   --color-brand-hover:  #a78bfa;

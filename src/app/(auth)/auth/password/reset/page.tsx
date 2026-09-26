@@ -8,11 +8,14 @@
  *   - 새 비밀번호 정책 검증 (FID-00031)
  *   - [재설정 완료] → POST /api/auth/password/reset (FID-00032)
  *
+ * 화면 껍데기는 AuthCard, 2단 레이아웃은 (auth)/layout.tsx 가 담당한다.
+ *
  * URL: /auth/password/reset?token=...
  */
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { AuthCard } from "../../../_components/AuthCard";
 
 // 비밀번호 정책: 8자 이상, 영문·숫자·특수문자 포함
 const PASSWORD_POLICY = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
@@ -125,145 +128,94 @@ function PasswordResetInner() {
   // 토큰 검증 중
   if (tokenStatus === "checking") {
     return (
-      <div className="sp-group">
-        <div className="sp-group-body" style={{ textAlign: "center", padding: "32px" }}>
-          <p style={{ color: "var(--color-text-tertiary)", fontSize: "var(--text-base)" }}>
-            링크 확인 중...
-          </p>
-        </div>
-      </div>
+      <AuthCard title="새 비밀번호 설정" subtitle="링크 확인 중...">
+        <div className="sp-auth-loading"><div className="sp-spinner" /></div>
+      </AuthCard>
     );
   }
 
   // ── AR-00013 새 비밀번호 입력 폼 ─────────────────────────────
   return (
-    <div className="sp-group">
-      <div className="sp-group-header">
-        <span className="sp-group-title">새 비밀번호를 설정해 주세요</span>
-      </div>
-      <div className="sp-group-body">
-        <form onSubmit={handleSubmit} noValidate>
+    <AuthCard title="새 비밀번호 설정" subtitle="앞으로 로그인할 때 사용할 비밀번호를 입력해 주세요.">
+      <form onSubmit={handleSubmit} noValidate>
 
-          {/* 새 비밀번호 */}
-          <div className="sp-field">
-            <label className="sp-label">새 비밀번호</label>
-            <div style={{ position: "relative" }}>
-              <input
-                className={`sp-input${pwError ? " is-error" : ""}`}
-                type={showPw ? "text" : "password"}
-                placeholder="새 비밀번호 입력"
-                value={newPassword}
-                onChange={(e) => { setNewPassword(e.target.value); setPwError(""); setSubmitError(""); }}
-                onBlur={(e) => validatePassword(e.target.value)}
-                disabled={isSubmitting}
-                style={{ paddingRight: "40px" }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPw(!showPw)}
-                style={{
-                  position:   "absolute",
-                  right:      "10px",
-                  top:        "50%",
-                  transform:  "translateY(-50%)",
-                  background: "none",
-                  border:     "none",
-                  cursor:     "pointer",
-                  color:      "var(--color-text-tertiary)",
-                  fontSize:   "var(--text-sm)",
-                  padding:    "0",
-                }}
-                tabIndex={-1}
-              >
-                {showPw ? "숨김" : "표시"}
-              </button>
-            </div>
-            {pwError && <span className="sp-field-error">{pwError}</span>}
-          </div>
-
-          {/* 새 비밀번호 확인 */}
-          <div className="sp-field">
-            <label className="sp-label">새 비밀번호 확인</label>
-            <div style={{ position: "relative" }}>
-              <input
-                className={`sp-input${confirmError ? " is-error" : ""}`}
-                type={showConfirm ? "text" : "password"}
-                placeholder="새 비밀번호 재입력"
-                value={confirmPw}
-                onChange={(e) => {
-                  setConfirmPw(e.target.value);
-                  // 입력 중 실시간 불일치 확인
-                  validateConfirm(newPassword, e.target.value);
-                }}
-                disabled={isSubmitting}
-                style={{ paddingRight: "40px" }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirm(!showConfirm)}
-                style={{
-                  position:   "absolute",
-                  right:      "10px",
-                  top:        "50%",
-                  transform:  "translateY(-50%)",
-                  background: "none",
-                  border:     "none",
-                  cursor:     "pointer",
-                  color:      "var(--color-text-tertiary)",
-                  fontSize:   "var(--text-sm)",
-                  padding:    "0",
-                }}
-                tabIndex={-1}
-              >
-                {showConfirm ? "숨김" : "표시"}
-              </button>
-            </div>
-            {confirmError && <span className="sp-field-error">{confirmError}</span>}
-          </div>
-
-          {/* 비밀번호 정책 안내 */}
-          <ul
-            style={{
-              listStyle:   "none",
-              padding:     "0",
-              margin:      "0 0 var(--space-4) 0",
-              fontSize:    "var(--text-xs)",
-              color:       "var(--color-text-tertiary)",
-              lineHeight:  1.8,
-            }}
-          >
-            <li>• 8자 이상</li>
-            <li>• 영문·숫자·특수문자 조합</li>
-            <li>• 기존 비밀번호와 다르게 설정</li>
-          </ul>
-
-          {/* 서버 에러 메시지 */}
-          {submitError && (
-            <div
-              style={{
-                padding:      "10px 12px",
-                borderRadius: "var(--radius-md)",
-                background:   "var(--color-error-subtle)",
-                border:       "1px solid var(--color-error-border)",
-                color:        "var(--color-error)",
-                fontSize:     "var(--text-sm)",
-                marginBottom: "var(--space-3)",
-              }}
+        {/* 새 비밀번호 */}
+        <div className="sp-field">
+          <label className="sp-label" htmlFor="pwreset-new">새 비밀번호</label>
+          <div className="sp-input-wrap">
+            <input
+              id="pwreset-new"
+              className={`sp-input${pwError ? " is-err" : ""}`}
+              type={showPw ? "text" : "password"}
+              placeholder="영문·숫자·특수문자 포함 8자 이상"
+              value={newPassword}
+              onChange={(e) => { setNewPassword(e.target.value); setPwError(""); setSubmitError(""); }}
+              onBlur={(e) => validatePassword(e.target.value)}
+              disabled={isSubmitting}
+              autoComplete="new-password"
+            />
+            <button
+              type="button"
+              className="sp-input-action sp-auth-pw-toggle"
+              onClick={() => setShowPw(!showPw)}
+              aria-label={showPw ? "비밀번호 숨기기" : "비밀번호 표시"}
+              tabIndex={-1}
             >
-              {submitError}
-            </div>
-          )}
+              {showPw ? "숨김" : "표시"}
+            </button>
+          </div>
+          {pwError && <div className="sp-hint is-err">{pwError}</div>}
+        </div>
 
-          <button
-            type="submit"
-            className="sp-btn sp-btn-primary"
-            style={{ width: "100%" }}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? "저장 중..." : "재설정 완료"}
-          </button>
-        </form>
-      </div>
-    </div>
+        {/* 새 비밀번호 확인 */}
+        <div className="sp-field">
+          <label className="sp-label" htmlFor="pwreset-confirm">새 비밀번호 확인</label>
+          <div className="sp-input-wrap">
+            <input
+              id="pwreset-confirm"
+              className={`sp-input${confirmError ? " is-err" : ""}`}
+              type={showConfirm ? "text" : "password"}
+              placeholder="새 비밀번호를 다시 입력하세요"
+              value={confirmPw}
+              onChange={(e) => {
+                setConfirmPw(e.target.value);
+                // 입력 중 실시간 불일치 확인
+                validateConfirm(newPassword, e.target.value);
+              }}
+              disabled={isSubmitting}
+              autoComplete="new-password"
+            />
+            <button
+              type="button"
+              className="sp-input-action sp-auth-pw-toggle"
+              onClick={() => setShowConfirm(!showConfirm)}
+              aria-label={showConfirm ? "비밀번호 숨기기" : "비밀번호 표시"}
+              tabIndex={-1}
+            >
+              {showConfirm ? "숨김" : "표시"}
+            </button>
+          </div>
+          {confirmError && <div className="sp-hint is-err">{confirmError}</div>}
+        </div>
+
+        {/* 비밀번호 정책 안내 */}
+        <ul className="sp-auth-rules">
+          <li>• 8자 이상</li>
+          <li>• 영문·숫자·특수문자 조합</li>
+          <li>• 기존 비밀번호와 다르게 설정</li>
+        </ul>
+
+        {/* 서버 에러 메시지 */}
+        {submitError && <div className="sp-auth-error">{submitError}</div>}
+
+        <button
+          type="submit"
+          className="sp-btn sp-btn-primary sp-btn-lg sp-btn-full"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? "저장 중..." : "재설정 완료"}
+        </button>
+      </form>
+    </AuthCard>
   );
 }

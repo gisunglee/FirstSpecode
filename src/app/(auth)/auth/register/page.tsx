@@ -164,7 +164,7 @@ export default function RegisterPage() {
   const busy = isSubmitting || socialLoading;
 
   return (
-    <AuthCard title="SPECODE 계정 만들기" subtitle="무료로 시작하고, 설계부터 함께하세요.">
+    <AuthCard title="계정 만들기" subtitle="무료로 시작하고, 설계부터 함께하세요.">
 
       {/* 소셜 가입 */}
       <button type="button" className="sp-auth-social-btn" onClick={handleGoogle} disabled={busy}>
@@ -172,13 +172,13 @@ export default function RegisterPage() {
         {socialLoading ? "연결 중..." : "Google 로 계속"}
       </button>
 
-      <div className="sp-auth-divider">또는 이메일로 가입</div>
+      <div className="sp-auth-divider">또는 이메일로</div>
 
       <form onSubmit={handleSubmit} noValidate>
 
         {/* 이름 — 서비스 안에서 보이는 표시명 */}
         <div className="sp-field">
-          <label className="sp-label" htmlFor="reg-name">이름 <span className="sp-label-req">필수</span></label>
+          <label className="sp-label" htmlFor="reg-name">이름</label>
           <input
             id="reg-name"
             className={`sp-input${nameError ? " is-err" : ""}`}
@@ -193,12 +193,12 @@ export default function RegisterPage() {
           />
           {nameError
             ? <div className="sp-hint is-err">{nameError}</div>
-            : <div className="sp-hint">프로젝트 멤버·담당자·댓글 등 서비스 안에서 이 이름으로 표시됩니다. 프로필에서 언제든 바꿀 수 있어요.</div>}
+            : <div className="sp-hint">서비스 안에서 표시되는 이름이에요. 나중에 프로필에서 바꿀 수 있어요.</div>}
         </div>
 
         {/* 이메일 */}
         <div className="sp-field">
-          <label className="sp-label" htmlFor="reg-email">이메일 <span className="sp-label-req">필수</span></label>
+          <label className="sp-label" htmlFor="reg-email">이메일</label>
           <input
             id="reg-email"
             className={`sp-input${emailError ? " is-err" : ""}`}
@@ -215,7 +215,7 @@ export default function RegisterPage() {
 
         {/* 비밀번호 */}
         <div className="sp-field">
-          <label className="sp-label" htmlFor="reg-pw">비밀번호 <span className="sp-label-req">필수</span></label>
+          <label className="sp-label" htmlFor="reg-pw">비밀번호</label>
           <input
             id="reg-pw"
             className={`sp-input${pwError ? " is-err" : ""}`}
@@ -232,7 +232,7 @@ export default function RegisterPage() {
 
         {/* 비밀번호 확인 */}
         <div className="sp-field">
-          <label className="sp-label" htmlFor="reg-pw2">비밀번호 확인 <span className="sp-label-req">필수</span></label>
+          <label className="sp-label" htmlFor="reg-pw2">비밀번호 확인</label>
           <input
             id="reg-pw2"
             className={`sp-input${pwConfirmError ? " is-err" : ""}`}

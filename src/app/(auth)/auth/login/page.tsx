@@ -175,14 +175,14 @@ function LoginInner() {
 
   if (isAutoLogging) {
     return (
-      <AuthCard title="Welcome back" subtitle="자동 로그인 중...">
+      <AuthCard title="로그인" subtitle="자동 로그인 중...">
         <div className="sp-auth-loading"><div className="sp-spinner" /></div>
       </AuthCard>
     );
   }
 
   return (
-    <AuthCard title="Welcome back" subtitle="SPECODE 계정으로 로그인하세요.">
+    <AuthCard title="로그인" subtitle="SPECODE 계정으로 로그인하세요.">
 
       {/* 소셜 로그인 — 미가입자는 콜백이 REGISTER_REQUIRED 로 판정해 가입 완료 화면으로 보낸다 */}
       <button
@@ -196,7 +196,7 @@ function LoginInner() {
       </button>
       {/* GitHub 로그인은 당장 제공하지 않는다 (2026-09-24). 다시 열 때 위 버튼과 같은 형태로 provider="github" 를 추가 */}
 
-      <div className="sp-auth-divider">또는</div>
+      <div className="sp-auth-divider">또는 이메일로</div>
 
       {/* 로그인 폼 */}
       <form onSubmit={handleSubmit} noValidate>
