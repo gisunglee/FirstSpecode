@@ -1,216 +1,163 @@
 /**
- * aiTaskAttach — AI 태스크 요청 공통 유틸
+ * AI 태스크 요청 본문과 첨부파일 저장 공통 로직.
  *
- * 역할:
- *   - AI 요청 API( /api/projects/[id]/{functions|areas|unit-works}/[refId]/ai ,
- *     /api/projects/[id]/impl-request/submit )의 요청 본문을
- *     multipart/form-data 와 application/json 둘 다 수용하도록 파싱
- *   - AI 태스크(tb_ai_task)에 첨부 이미지를 저장 (디스크 + tb_cm_attach_file)
- *
- * 하위 호환:
- *   - MCP 도구나 외부 JSON 호출자는 기존대로 application/json으로 호출 → files = []
- *   - 브라우저 FE는 multipart/form-data로 파일 동봉 → 서버에서 Content-Type으로 자동 분기
- *
- * 주요 기술:
- *   - Next.js Web Request.formData() 내장 파싱
- *   - Buffer/Blob 변환: File.arrayBuffer()
+ * 브라우저는 파일을 Supabase Storage에 직접 올린 뒤 attachmentTokens만 전송한다.
+ * multipart files[]는 기존 외부 호출자의 하위 호환을 위해 남겨 두되, 파일은 동일하게
+ * Supabase Storage로 저장한다.
  */
 
 import path from "path";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { saveFile, deleteFile } from "@/lib/fileStorage";
+import { completeStorageUploads } from "@/lib/storageUpload";
+import {
+  buildStoragePath,
+  removeStorageObjects,
+  uploadStorageBuffer,
+} from "@/lib/supabaseStorage";
 
-// ── 제약 ────────────────────────────────────────────────────────────────────
-
-// 이미지로 분류할 확장자 집합 — 이외는 "FILE" 타입으로 저장
-const IMAGE_EXTS = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"];
-
-// 개별 파일 최대 크기 (10MB)
-// Claude 멀티모달 처리 비용과 저장소 부하를 고려한 보수적 상한
+const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"]);
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
-
-// 태스크당 최대 파일 개수 (10장)
 const MAX_FILE_COUNT = 10;
 
-// ── AI 요청 본문 파싱 ───────────────────────────────────────────────────────
-
-/**
- * parseAiRequest — AI 요청 본문을 파싱해 text 필드와 첨부 파일을 분리 반환
- *
- * @returns
- *   raw   : 모든 text 필드를 { [key]: string } 으로 (taskType, coment_cn 등)
- *   files : multipart 요청의 "files" 필드 값(File[]). JSON 요청이면 빈 배열
- *   json  : JSON 요청일 때 원본 객체 — functionIds 같은 복합 타입 필드 필요 시 이것을 사용
- *
- * 호출부 예시:
- *   const { raw, files, json } = await parseAiRequest(request);
- *   const taskType = raw.taskType;
- *   const functionIds = json?.functionIds ?? JSON.parse(raw.functionIds ?? "[]");
- */
 export type ParsedAiRequest = {
-  raw:   Record<string, string>;
+  raw: Record<string, string>;
   files: File[];
-  json:  Record<string, unknown> | null;
+  attachmentTokens: string[];
+  json: Record<string, unknown> | null;
 };
 
 export async function parseAiRequest(request: NextRequest): Promise<ParsedAiRequest> {
   const contentType = request.headers.get("content-type") ?? "";
-
-  // multipart/form-data — 브라우저 FE 요청
   if (contentType.includes("multipart/form-data")) {
-    const fd = await request.formData();
+    const formData = await request.formData();
     const raw: Record<string, string> = {};
     const files: File[] = [];
-    for (const [key, value] of fd.entries()) {
+    for (const [key, value] of formData.entries()) {
       if (value instanceof File) {
-        // "files" 키의 값만 첨부로 처리 (다른 키에 오는 파일은 무시)
         if (key === "files") files.push(value);
       } else {
         raw[key] = value;
       }
     }
-    return { raw, files, json: null };
+    return { raw, files, attachmentTokens: [], json: null };
   }
 
-  // application/json fallback — MCP, 외부 호출자
-  const body = (await request.json()) as Record<string, unknown>;
+  const body = await request.json() as Record<string, unknown>;
   const raw: Record<string, string> = {};
   for (const [key, value] of Object.entries(body)) {
-    // 문자열 필드만 raw에 담는다. 복합 타입(배열/객체)은 json에서 꺼내 쓸 것
     if (typeof value === "string") raw[key] = value;
   }
-  return { raw, files: [], json: body };
+  const attachmentTokens = Array.isArray(body.attachmentTokens)
+    ? body.attachmentTokens.filter((value): value is string => typeof value === "string")
+    : [];
+  return { raw, files: [], attachmentTokens, json: body };
 }
 
-// ── 첨부 파일 저장 ──────────────────────────────────────────────────────────
-
-/**
- * saveAiTaskAttachments — AI 태스크(tb_ai_task)에 첨부 이미지 저장
- *
- * 동작:
- *   1. 제약 검증 (개수/크기) — 실패 시 즉시 throw (디스크 쓰기 전)
- *   2. 각 파일을 uploads/ai-tasks/{projectId}/{taskId}/{UUID}.{ext} 로 저장
- *   3. tb_cm_attach_file 레코드 생성 (ref_tbl_nm="tb_ai_task", req_ref_yn="Y")
- *   4. 중간 실패 시 이미 저장된 파일·레코드를 자동 롤백하고 throw 전파
- *
- * 주의:
- *   - 이 함수 실패 시 호출자는 tb_ai_task 레코드도 함께 삭제해야 한다
- *     (태스크만 남고 첨부가 없는 어색한 상태 방지)
- *   - Prisma 트랜잭션 밖에서 호출 — 디스크 IO가 트랜잭션에 묶이면 롤백 시
- *     파일이 남기 때문에 수동 정리가 더 안전하다
- */
-export async function saveAiTaskAttachments(opts: {
+export async function saveAiTaskAttachments(options: {
   projectId: string;
-  taskId:    string;
-  files:     File[];
+  taskId: string;
+  memberId: string;
+  files?: File[];
+  attachmentTokens?: string[];
 }): Promise<number> {
-  const { projectId, taskId, files } = opts;
-  if (files.length === 0) return 0;
-
-  // 제약 검증 — 태스크 생성 후이므로 여기서 걸리면 호출자가 태스크 롤백해야 함
-  if (files.length > MAX_FILE_COUNT) {
-    throw new Error(`첨부 파일은 최대 ${MAX_FILE_COUNT}장까지 업로드할 수 있습니다.`);
-  }
-  for (const file of files) {
-    if (file.size > MAX_FILE_SIZE) {
-      throw new Error(`파일 "${file.name}" 크기가 ${MAX_FILE_SIZE / 1024 / 1024}MB를 초과합니다.`);
-    }
+  const files = options.files ?? [];
+  const attachmentTokens = options.attachmentTokens ?? [];
+  if (files.length + attachmentTokens.length === 0) return 0;
+  if (files.length + attachmentTokens.length > MAX_FILE_COUNT) {
+    throw new Error(`첨부 파일은 최대 ${MAX_FILE_COUNT}개까지 업로드할 수 있습니다.`);
   }
 
-  // 부분 저장 추적 — 중간 실패 시 롤백 대상
-  const savedPaths:     string[] = [];
-  const createdFileIds: string[] = [];
-
+  const storedFiles: Array<{
+    storagePath: string;
+    storedName: string;
+    originalName: string;
+    extension: string;
+    fileType: "IMAGE" | "FILE";
+    size: number;
+  }> = [];
   try {
-    for (const file of files) {
-      const originalName = file.name;
-      const ext          = path.extname(originalName).replace(".", "").toLowerCase();
-      const storeName    = `${crypto.randomUUID()}.${ext || "bin"}`;
-      // 저장 경로: ai-tasks/{projectId}/{taskId}/{storeName}
-      // 기존 areas/functions/requirements 첨부와 동일한 디렉터리 규약
-      const subPath      = `ai-tasks/${projectId}/${taskId}/${storeName}`;
-
-      const arrayBuffer  = await file.arrayBuffer();
-      const buffer       = Buffer.from(arrayBuffer);
-      const fileType     = IMAGE_EXTS.includes(ext) ? "IMAGE" : "FILE";
-
-      // 디스크 저장 — 실패 시 savedPaths에 쌓인 것들 전부 롤백
-      saveFile(subPath, buffer);
-      savedPaths.push(subPath);
-
-      // DB 레코드 생성
-      const record = await prisma.tbCmAttachFile.create({
-        data: {
-          prjct_id:      projectId,
-          ref_tbl_nm:    "tb_ai_task",
-          ref_id:        taskId,
-          file_ty_code:  fileType,
-          orgnl_file_nm: originalName,
-          stor_file_nm:  storeName,
-          file_path_nm:  subPath,
-          file_sz:       buffer.length,
-          file_extsn_nm: ext || "bin",
-          // AI 태스크 첨부는 기본적으로 AI 참조 대상 (워커가 이미지를 Claude에 전달)
-          req_ref_yn:    "Y",
-        },
+    if (attachmentTokens.length > 0) {
+      const completed = await completeStorageUploads({
+        completionTokens: attachmentTokens,
+        memberId: options.memberId,
+        projectId: options.projectId,
+        refTable: "tb_ai_task",
+        refId: "pending",
       });
-      createdFileIds.push(record.attach_file_id);
+      storedFiles.push(...completed.map((file) => ({
+        storagePath: file.storagePath,
+        storedName: file.storedName,
+        originalName: file.originalName,
+        extension: file.extension,
+        fileType: file.fileType,
+        size: file.size,
+      })));
     }
-    return files.length;
-  } catch (err) {
-    // 롤백 — best-effort. 이미 실패 경로이므로 추가 에러는 로그만 남기고 무시
-    for (const p of savedPaths) {
-      try { deleteFile(p); } catch { /* 디스크 정리 실패는 치명적이지 않음 */ }
+
+    for (const file of files) {
+      if (file.size <= 0 || file.size > MAX_FILE_SIZE) {
+        throw new Error(`파일 "${file.name}" 크기가 ${MAX_FILE_SIZE / 1024 / 1024}MB를 초과합니다.`);
+      }
+      const originalName = path.basename(file.name);
+      const extension = path.extname(originalName).slice(1).toLowerCase() || "bin";
+      const storedName = `${crypto.randomUUID()}.${extension}`;
+      const storagePath = buildStoragePath(`ai-tasks/${options.projectId}/${options.taskId}/${storedName}`);
+      const buffer = Buffer.from(await file.arrayBuffer());
+      await uploadStorageBuffer(storagePath, buffer, file.type || "application/octet-stream");
+      storedFiles.push({
+        storagePath,
+        storedName,
+        originalName,
+        extension,
+        fileType: IMAGE_EXTENSIONS.has(extension) ? "IMAGE" : "FILE",
+        size: buffer.length,
+      });
     }
-    if (createdFileIds.length > 0) {
-      await prisma.tbCmAttachFile.deleteMany({
-        where: { attach_file_id: { in: createdFileIds } },
-      }).catch(() => { /* 정리 실패는 로그만 — 원 에러를 사용자에게 전달하는 것이 우선 */ });
-    }
-    throw err;
+
+    await prisma.$transaction(storedFiles.map((file) =>
+      prisma.tbCmAttachFile.create({
+        data: {
+          prjct_id: options.projectId,
+          ref_tbl_nm: "tb_ai_task",
+          ref_id: options.taskId,
+          file_ty_code: file.fileType,
+          orgnl_file_nm: file.originalName,
+          stor_file_nm: file.storedName,
+          file_path_nm: file.storagePath,
+          file_sz: file.size,
+          file_extsn_nm: file.extension,
+          req_ref_yn: "Y",
+        },
+      }),
+    ));
+    return storedFiles.length;
+  } catch (error) {
+    await removeStorageObjects(storedFiles.map((file) => file.storagePath)).catch(() => undefined);
+    throw error;
   }
 }
 
-// ── 첨부 파일 일괄 삭제 ─────────────────────────────────────────────────────
-
-/**
- * deleteAiTaskAttachments — 특정 AI 태스크에 연결된 모든 첨부 삭제 (디스크 + DB)
- *
- * 용도:
- *   - 태스크 생성 후 첨부 저장이 부분 실패했을 때의 롤백
- *   - 태스크 자체가 삭제될 때의 정리 (별도 이슈에서 tb_ai_task DELETE 경로에 추가)
- *
- * 디스크 ref-count 보호 (재요청 정책 대응):
- *   - 재요청(retry) 은 원본 첨부의 DB 행만 복사하고 file_path_nm 은 동일하게 유지한다.
- *     즉 "같은 디스크 파일을 여러 행이 가리키는" 상태가 정상 시나리오에 존재한다.
- *   - 따라서 한 태스크의 첨부를 디스크에서 unlink 하기 전, 동일 file_path_nm 을
- *     가진 다른 행이 남아있는지 한 번 더 확인한다. 남아있다면 디스크는 보존하고
- *     DB 행만 삭제한다 (형제 태스크의 파일이 의도치 않게 사라지는 것 방지).
- *   - DB 행 삭제 후에도 file_path_nm 을 가리키는 행이 0이 되었다면 orphan 배치
- *     (attach-file-cleanup) 가 결국 정리하므로 이 함수에서 한 발 늦게 unlink 해도
- *     데이터 정합성에는 문제가 없다.
- */
+/** 재요청으로 같은 객체를 공유할 수 있어 마지막 DB 참조가 사라질 때만 객체를 삭제한다. */
 export async function deleteAiTaskAttachments(taskId: string): Promise<void> {
   const files = await prisma.tbCmAttachFile.findMany({
-    where:  { ref_tbl_nm: "tb_ai_task", ref_id: taskId },
+    where: { ref_tbl_nm: "tb_ai_task", ref_id: taskId },
     select: { attach_file_id: true, file_path_nm: true },
   });
 
-  // 디스크 unlink 는 "같은 file_path_nm 을 참조하는 다른 행이 없는 경우"에만 수행
-  // (retry 로 복사된 형제 행이 살아있을 수 있으므로 무조건 unlink 하면 데이터 손상)
-  for (const f of files) {
+  const removablePaths: string[] = [];
+  for (const file of files) {
     const otherCount = await prisma.tbCmAttachFile.count({
       where: {
-        file_path_nm:   f.file_path_nm,
-        attach_file_id: { not: f.attach_file_id },
+        file_path_nm: file.file_path_nm,
+        attach_file_id: { not: file.attach_file_id },
       },
     });
-    if (otherCount === 0) {
-      try { deleteFile(f.file_path_nm); } catch { /* 디스크 정리 실패는 로그만 */ }
-    }
+    if (otherCount === 0) removablePaths.push(file.file_path_nm);
   }
-
+  await removeStorageObjects(removablePaths).catch((error) => {
+    console.warn("[deleteAiTaskAttachments] Storage 객체 삭제 실패:", error);
+  });
   if (files.length > 0) {
     await prisma.tbCmAttachFile.deleteMany({
       where: { ref_tbl_nm: "tb_ai_task", ref_id: taskId },

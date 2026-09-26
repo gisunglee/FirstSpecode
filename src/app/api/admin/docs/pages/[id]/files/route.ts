@@ -21,11 +21,16 @@
  */
 
 import { NextRequest } from "next/server";
-import path from "path";
 import { prisma } from "@/lib/prisma";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { requireSystemAdmin } from "@/lib/requireSystemAdmin";
-import { saveFile } from "@/lib/fileStorage";
+import {
+  abortStorageUploads,
+  completeStorageUploads,
+  prepareStorageUploads,
+  type UploadFileInput,
+} from "@/lib/storageUpload";
+import { removeStorageObjects } from "@/lib/supabaseStorage";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -99,75 +104,86 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   });
   if (!exists) return apiError("NOT_FOUND", "페이지를 찾을 수 없습니다.", 404);
 
-  let formData: FormData;
+  let body: { action?: unknown; kind?: unknown; files?: unknown; completionTokens?: unknown };
   try {
-    formData = await request.formData();
+    body = await request.json();
   } catch {
-    return apiError("VALIDATION_ERROR", "파일 데이터를 파싱할 수 없습니다.", 400);
+    return apiError("VALIDATION_ERROR", "업로드 요청 형식이 올바르지 않습니다.", 400);
   }
 
-  const file = formData.get("file") as File | null;
-  // kind 미지정 시 ATTACH 가 안전한 기본값 (브라우저가 임의로 INLINE 으로 둔갑하지 않도록)
-  const kindRaw = (formData.get("kind") as string | null)?.toUpperCase();
-  const kind = kindRaw === "INLINE" ? "INLINE" : "ATTACH";
-
-  if (!file) return apiError("VALIDATION_ERROR", "업로드할 파일을 선택해 주세요.", 400);
-
-  const orgnlNm = file.name;
-  const ext     = path.extname(orgnlNm).replace(".", "").toLowerCase();
-  const size    = file.size;
-
-  // ── 정책 검증 ──
-  if (kind === "INLINE") {
-    if (!INLINE_EXTS.has(ext)) {
-      return apiError("VALIDATION_ERROR", "본문 이미지는 jpg/jpeg/png/gif/webp 만 허용됩니다.", 400);
-    }
-    if (size > INLINE_MAX) {
-      return apiError("FILE_TOO_LARGE", "본문 이미지는 5MB 이하만 업로드 가능합니다.", 400);
-    }
-  } else {
-    if (ATTACH_BLOCKED.has(ext)) {
-      return apiError("VALIDATION_ERROR", `'.${ext}' 확장자는 보안상 업로드할 수 없습니다.`, 400);
-    }
-    if (size > ATTACH_MAX) {
-      return apiError("FILE_TOO_LARGE", "첨부파일은 50MB 이하만 업로드 가능합니다.", 400);
-    }
-  }
+  const kind = body.kind === "INLINE" ? "INLINE" : "ATTACH";
 
   try {
-    // 저장 — UUID 파일명으로 path traversal 차단 (사용자 입력 파일명은 DB 만)
-    const storeName = `${crypto.randomUUID()}.${ext || "bin"}`;
-    const subPath   = `docs/${pageId}/${storeName}`;
-    const buffer    = Buffer.from(await file.arrayBuffer());
-    saveFile(subPath, buffer);
+    if (body.action === "prepare") {
+      const uploads = await prepareStorageUploads({
+        memberId: gate.mberId,
+        refTable: "tb_sys_docs_page",
+        refId: pageId,
+        relativeDir: `docs/${pageId}`,
+        files: body.files as UploadFileInput[],
+        maxFileCount: 1,
+        maxFileSize: kind === "INLINE" ? INLINE_MAX : ATTACH_MAX,
+        allowedExtensions: kind === "INLINE" ? INLINE_EXTS : undefined,
+        blockedExtensions: kind === "ATTACH" ? ATTACH_BLOCKED : undefined,
+        metadata: { kind },
+      });
+      return apiSuccess({ uploads });
+    }
 
-    const record = await prisma.tbSysAttachFile.create({
-      data: {
-        ref_tbl_nm:      "tb_sys_docs_page",
-        ref_id:          pageId,
-        attach_div_code: kind,
-        orgnl_file_nm:   orgnlNm,
-        stor_file_nm:    storeName,
-        file_path_nm:    subPath,
-        file_sz:         BigInt(size),
-        file_extsn_nm:   ext || "bin",
-        mime_ty:         file.type || "",
-        creat_mber_id:   gate.mberId,
-      },
+    if (body.action === "abort") {
+      await abortStorageUploads(body.completionTokens as string[], gate.mberId);
+      return apiSuccess({ aborted: true });
+    }
+
+    if (body.action !== "complete") {
+      return apiError("VALIDATION_ERROR", "지원하지 않는 업로드 작업입니다.", 400);
+    }
+
+    const completed = await completeStorageUploads({
+      completionTokens: body.completionTokens as string[],
+      memberId: gate.mberId,
+      refTable: "tb_sys_docs_page",
+      refId: pageId,
     });
+    const upload = completed[0];
+    if (!upload || upload.metadata.kind !== kind) {
+      return apiError("VALIDATION_ERROR", "첨부파일 구분이 일치하지 않습니다.", 400);
+    }
 
-    return apiSuccess({
-      fileId:   record.attach_id,
-      kind,
-      fileName: orgnlNm,
-      fileSize: Number(record.file_sz),
-      extension: record.file_extsn_nm,
-      mimeType:  record.mime_ty,
-      // 클라이언트가 markdown 에 즉시 삽입할 URL
-      viewUrl:  `/api/docs/files/${record.attach_id}/view`,
-    }, 201);
+    try {
+      const record = await prisma.tbSysAttachFile.create({
+        data: {
+          ref_tbl_nm: "tb_sys_docs_page",
+          ref_id: pageId,
+          attach_div_code: kind,
+          orgnl_file_nm: upload.originalName,
+          stor_file_nm: upload.storedName,
+          file_path_nm: upload.storagePath,
+          file_sz: BigInt(upload.size),
+          file_extsn_nm: upload.extension,
+          mime_ty: upload.mimeType,
+          creat_mber_id: gate.mberId,
+        },
+      });
+      return apiSuccess({
+        fileId: record.attach_id,
+        kind,
+        fileName: record.orgnl_file_nm,
+        fileSize: Number(record.file_sz),
+        extension: record.file_extsn_nm,
+        mimeType: record.mime_ty,
+        viewUrl: `/api/docs/files/${record.attach_id}/view`,
+      }, 201);
+    } catch (error) {
+      await removeStorageObjects([upload.storagePath]).catch(() => undefined);
+      throw error;
+    }
   } catch (err) {
     console.error("[POST /api/admin/docs/pages/[id]/files]", err);
-    return apiError("DB_ERROR", "파일 업로드 중 오류가 발생했습니다.", 500);
+    return apiError(
+      "FILE_UPLOAD_ERROR",
+      err instanceof Error ? err.message : "파일 업로드 중 오류가 발생했습니다.",
+      400,
+    );
   }
 }

@@ -8,7 +8,7 @@ import { requireAuth } from "@/lib/requireAuth";
 import { requireProjectUnlocked } from "@/lib/requireProjectUnlocked";
 import { checkRole } from "@/lib/checkRole";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
-import { deleteFile } from "@/lib/fileStorage";
+import { removeStorageObjects } from "@/lib/supabaseStorage";
 
 type RouteParams = { params: Promise<{ id: string; reqId: string; fileId: string }> };
 
@@ -39,8 +39,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return apiError("NOT_FOUND", "첨부파일을 찾을 수 없습니다.", 404);
     }
 
-    // 물리 파일 삭제 후 DB 레코드 삭제
-    deleteFile(file.file_path_nm);
+    // Storage 객체 삭제 후 DB 레코드 삭제
+    await removeStorageObjects([file.file_path_nm]);
     await prisma.tbCmAttachFile.delete({ where: { attach_file_id: fileId } });
 
     return apiSuccess({ deleted: true });

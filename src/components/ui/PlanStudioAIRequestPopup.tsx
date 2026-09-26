@@ -21,7 +21,8 @@
 import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { authFetch, authFetchRaw } from "@/lib/authFetch";
+import { authFetch } from "@/lib/authFetch";
+import { abortDirectUploads, prepareFilesDirect } from "@/lib/storageUploadClient";
 import { ARTF_DIV, ARTF_FMT } from "@/constants/planStudio";
 import AiTaskFilePicker from "@/components/ui/AiTaskFilePicker";
 
@@ -101,31 +102,31 @@ export default function PlanStudioAIRequestPopup({
     }
   }, [open]);
 
-  // ── 요청 뮤테이션 (multipart) ──
-  // authFetch 는 Content-Type 을 JSON 으로 고정하므로 raw fetch 사용.
+  // ── 요청 뮤테이션 (Supabase Storage 직접 업로드) ──
   const requestMut = useMutation({
     mutationFn: async () => {
-      const fd = new FormData();
-      fd.append("artfNm",      artfNm);
-      fd.append("artfDivCode", artfDivCode);
-      fd.append("artfFmtCode", artfFmtCode);
-      fd.append("artfIdeaCn",  artfIdeaCn ?? "");
-      fd.append("comentCn",    comment.trim());
-      fd.append("contexts",    JSON.stringify(contexts));
-      files.forEach((f) => fd.append("files", f));
-
-      const res = await authFetchRaw(
-        `/api/projects/${projectId}/plan-studios/${planStudioId}/artifacts/${artfId}/generate`,
-        {
-          method:  "POST",
-          body:    fd,
-        },
-      );
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error((json as { message?: string }).message ?? "AI 요청에 실패했습니다.");
+      const uploadEndpoint = `/api/projects/${projectId}/attachment-uploads`;
+      const attachmentTokens = await prepareFilesDirect({ endpoint: uploadEndpoint, files });
+      try {
+        return await authFetch(
+          `/api/projects/${projectId}/plan-studios/${planStudioId}/artifacts/${artfId}/generate`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              artfNm,
+              artfDivCode,
+              artfFmtCode,
+              artfIdeaCn: artfIdeaCn ?? "",
+              comentCn: comment.trim(),
+              contexts,
+              attachmentTokens,
+            }),
+          },
+        );
+      } catch (error) {
+        await abortDirectUploads(uploadEndpoint, attachmentTokens).catch(() => undefined);
+        throw error;
       }
-      return res.json();
     },
     onSuccess: () => {
       toast.success("AI 요청이 등록되었습니다. AI 태스크 목록에서 확인하세요.");

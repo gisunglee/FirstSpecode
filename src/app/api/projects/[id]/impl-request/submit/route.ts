@@ -34,9 +34,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   // multipart에서는 functionIds를 JSON.stringify된 문자열로 수신
   let body: { entryType: string; entryId: string; functionIds: string[]; comentCn?: string; promptMd: string };
   let files: File[];
+  let attachmentTokens: string[];
   try {
     const parsed = await parseAiRequest(request);
     files = parsed.files;
+    attachmentTokens = parsed.attachmentTokens;
 
     if (parsed.json) {
       // JSON 요청 — 원형 그대로 사용
@@ -148,12 +150,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // 트랜잭션 밖에서 처리 — 디스크 IO가 포함되어 DB 트랜잭션과 묶으면 롤백이 불완전
     // 실패 시 수동 롤백: 태스크 + 스냅샷 전체 삭제
     let attachmentCount = 0;
-    if (files.length > 0) {
+    if (files.length > 0 || attachmentTokens.length > 0) {
       try {
         attachmentCount = await saveAiTaskAttachments({
           projectId,
           taskId: aiTaskId,
+          memberId: gate.mberId,
           files,
+          attachmentTokens,
         });
       } catch (attachErr) {
         await prisma.tbSpImplSnapshot.deleteMany({ where: { ai_task_id: aiTaskId } })

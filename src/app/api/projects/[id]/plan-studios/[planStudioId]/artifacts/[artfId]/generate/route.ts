@@ -38,11 +38,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   // ── 본문 파싱 (JSON / multipart 모두 수용) ──────────────────────────────────
   let raw: Record<string, string>;
   let files: File[];
+  let attachmentTokens: string[];
   let jsonBody: Record<string, unknown> | null;
   try {
     const parsed = await parseAiRequest(request);
     raw      = parsed.raw;
     files    = parsed.files;
+    attachmentTokens = parsed.attachmentTokens;
     jsonBody = parsed.json;
   } catch {
     return apiError("VALIDATION_ERROR", "요청 본문을 파싱할 수 없습니다.", 400);
@@ -160,12 +162,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // [4단계] 첨부 이미지 저장 — multipart 인 경우만. 실패 시 태스크 롤백.
     let attachmentCount = 0;
-    if (files.length > 0) {
+    if (files.length > 0 || attachmentTokens.length > 0) {
       try {
         attachmentCount = await saveAiTaskAttachments({
           projectId,
           taskId: aiTaskId,
+          memberId: gate.mberId,
           files,
+          attachmentTokens,
         });
       } catch (attachErr) {
         await prisma.tbAiTask.delete({ where: { ai_task_id: aiTaskId } })

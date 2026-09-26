@@ -19,7 +19,8 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { authFetch, authFetchRaw } from "@/lib/authFetch";
+import { authFetch } from "@/lib/authFetch";
+import { abortDirectUploads, prepareFilesDirect } from "@/lib/storageUploadClient";
 import { renderMarkdown } from "@/lib/renderMarkdown";
 import AiTaskFilePicker from "@/components/ui/AiTaskFilePicker";
 
@@ -204,42 +205,26 @@ export default function ImplRequestPopup({ projectId, entryType, entryId, functi
   // (서버는 둘 다 수용 — aiTaskAttach.ts)
   async function handleSubmit() {
     setSubmitting(true);
+    const uploadEndpoint = `/api/projects/${projectId}/attachment-uploads`;
+    let attachmentTokens: string[] = [];
     try {
-      if (pickedFiles.length > 0) {
-        // multipart — 첨부 이미지 동봉. functionIds는 JSON.stringify된 문자열로 전달
-        const fd = new FormData();
-        fd.append("entryType",   entryType);
-        fd.append("entryId",     entryId);
-        fd.append("functionIds", JSON.stringify(functionIds));
-        if (comentCn) fd.append("comentCn", comentCn);
-        fd.append("promptMd",    promptMd);
-        pickedFiles.forEach((f) => fd.append("files", f));
-
-        const res = await authFetchRaw(`/api/projects/${projectId}/impl-request/submit`, {
-          method:  "POST",
-          body:    fd,
-        });
-        if (!res.ok) {
-          const json = await res.json().catch(() => ({}));
-          throw new Error((json as { message?: string }).message ?? "구현 요청 등록 실패");
-        }
-      } else {
-        // 첨부 없음 — 기존 JSON 경로 유지 (MCP·외부 호출과 동일 경로)
-        await authFetch(`/api/projects/${projectId}/impl-request/submit`, {
-          method: "POST",
-          body: JSON.stringify({
-            entryType,
-            entryId,
-            functionIds,
-            comentCn: comentCn || undefined,
-            promptMd,
-          }),
-        });
-      }
+      attachmentTokens = await prepareFilesDirect({ endpoint: uploadEndpoint, files: pickedFiles });
+      await authFetch(`/api/projects/${projectId}/impl-request/submit`, {
+        method: "POST",
+        body: JSON.stringify({
+          entryType,
+          entryId,
+          functionIds,
+          comentCn: comentCn || undefined,
+          promptMd,
+          attachmentTokens,
+        }),
+      });
       toast.success("구현 요청이 등록되었습니다.");
       onSubmitted?.();
       onClose();
     } catch (e) {
+      await abortDirectUploads(uploadEndpoint, attachmentTokens).catch(() => undefined);
       toast.error(e instanceof Error ? e.message : "요청 등록 실패");
     } finally {
       setSubmitting(false);

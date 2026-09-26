@@ -16,7 +16,7 @@ import {
 import { isCreatorWindowConflict, lockAndAssertCreatorWindow } from "@/lib/specContentWriteConcurrency";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
-import { deleteFile } from "@/lib/fileStorage";
+import { removeStorageObjects } from "@/lib/supabaseStorage";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { requirementUpdateSchema } from "@/lib/specContentSchemas";
 import { fetchUnitWorkProgress } from "@/lib/pm/progressRollup";
@@ -369,9 +369,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const attachFiles = await prisma.tbCmAttachFile.findMany({
       where: { ref_tbl_nm: "tb_rq_requirement", ref_id: reqId },
     });
-    for (const file of attachFiles) {
-      deleteFile(file.file_path_nm);
-    }
+    await removeStorageObjects(attachFiles.map((file) => file.file_path_nm));
 
     if (deleteChildren) {
       // 하위 전체 삭제: 인수기준 → 스토리 → 이력 → 첨부파일 → 요구사항 (수동 cascade)
@@ -389,7 +387,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         // 이력 삭제
         prisma.tbRqRequirementHistory.deleteMany({ where: { req_id: reqId } }),
         // 첨부파일 DB 레코드 삭제
-        prisma.tbCmAttachFile.deleteMany({ where: { ref_id: reqId } }),
+        prisma.tbCmAttachFile.deleteMany({
+          where: { ref_tbl_nm: "tb_rq_requirement", ref_id: reqId },
+        }),
         // 요구사항 삭제
         prisma.tbRqRequirement.delete({ where: { req_id: reqId } }),
       ]);
@@ -405,7 +405,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         prisma.tbRqAcceptanceCriteria.deleteMany({ where: { story_id: { in: storyIds } } }),
         prisma.tbRqUserStory.deleteMany({ where: { req_id: reqId } }),
         prisma.tbRqRequirementHistory.deleteMany({ where: { req_id: reqId } }),
-        prisma.tbCmAttachFile.deleteMany({ where: { ref_id: reqId } }),
+        prisma.tbCmAttachFile.deleteMany({
+          where: { ref_tbl_nm: "tb_rq_requirement", ref_id: reqId },
+        }),
         prisma.tbRqRequirement.delete({ where: { req_id: reqId } }),
       ]);
     }

@@ -26,7 +26,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { authFetch, authFetchRaw } from "@/lib/authFetch";
+import { authFetch } from "@/lib/authFetch";
+import { uploadFilesDirect } from "@/lib/storageUploadClient";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 
@@ -583,32 +584,17 @@ function FileRow({ file, onDelete, hint }: {
   );
 }
 
-// ── 파일 업로드 직접 fetch ───────────────────────────────────────────────
-// authFetch 는 Content-Type: application/json 을 강제로 부착하므로 multipart
-// 업로드에 부적합 (boundary 가 깨짐). 기존 프로젝트의 다른 업로드 화면
-// (예: requirements/[reqId]/files) 도 동일한 이유로 fetch 직접 호출 패턴.
-// 만료 시 401 자동 갱신은 받지 못하지만, 관리자 세션 재로그인으로 충분.
+// ── Supabase Storage 직접 업로드 ─────────────────────────────────────────
 async function uploadFile(
   pageId: string,
   file:   File,
   kind:   "INLINE" | "ATTACH"
 ): Promise<{ fileName: string; viewUrl: string }> {
-  const fd = new FormData();
-  fd.append("file", file);
-  fd.append("kind", kind);
-
-  const res = await authFetchRaw(`/api/admin/docs/pages/${pageId}/files`, {
-    method:  "POST",
-    body:    fd,
+  return uploadFilesDirect<{ fileName: string; viewUrl: string }>({
+    endpoint: `/api/admin/docs/pages/${pageId}/files`,
+    files: [file],
+    extra: { kind },
   });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({})) as { message?: string };
-    throw new Error(err.message ?? "파일 업로드에 실패했습니다.");
-  }
-
-  const body = await res.json() as { data: { fileName: string; viewUrl: string } };
-  return body.data;
 }
 
 // ── 유틸 ─────────────────────────────────────────────────────────────────

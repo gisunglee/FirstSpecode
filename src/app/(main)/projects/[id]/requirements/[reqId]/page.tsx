@@ -16,6 +16,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch, authFetchRaw } from "@/lib/authFetch";
+import { uploadFilesDirect } from "@/lib/storageUploadClient";
 import { usePermissions } from "@/hooks/useMyRole";
 import { useIdPrefixes } from "@/hooks/useIdPrefixes";
 import { bumpMinorVersion } from "@/lib/exports/version";
@@ -559,23 +560,11 @@ function RequirementDetailPageInner() {
     const selectedFiles = e.target.files;
     if (!selectedFiles || selectedFiles.length === 0) return;
 
-    const formData = new FormData();
-    for (const file of Array.from(selectedFiles)) {
-      formData.append("files", file);
-    }
-
     try {
-      const res = await authFetchRaw(
-        `/api/projects/${projectId}/requirements/${reqId}/files`,
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { message?: string };
-        throw new Error(err.message ?? "파일 업로드에 실패했습니다.");
-      }
+      await uploadFilesDirect({
+        endpoint: `/api/projects/${projectId}/requirements/${reqId}/files`,
+        files: Array.from(selectedFiles),
+      });
       toast.success("파일이 업로드되었습니다.");
       refetchFiles();
     } catch (err) {

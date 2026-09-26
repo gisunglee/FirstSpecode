@@ -3,15 +3,14 @@
  * GET  /api/projects/[id]/requirements/[reqId]/files — 첨부파일 목록 조회
  */
 
-import { NextRequest, NextResponse } from "next/server";
-import path from "path";
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { requireProjectUnlocked } from "@/lib/requireProjectUnlocked";
 import { checkRole } from "@/lib/checkRole";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
-import { saveFile } from "@/lib/fileStorage";
 import { checkUploadAllowed } from "@/lib/planLimits";
+import { handleProjectAttachmentUpload } from "@/lib/projectAttachmentUpload";
 
 type RouteParams = { params: Promise<{ id: string; reqId: string }> };
 
@@ -79,56 +78,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return apiError("NOT_FOUND", "요구사항을 찾을 수 없습니다.", 404);
   }
 
-  let formData: FormData;
-  try {
-    formData = await request.formData();
-  } catch {
-    return apiError("VALIDATION_ERROR", "파일 데이터를 파싱할 수 없습니다.", 400);
-  }
-
-  const files = formData.getAll("files") as File[];
-  if (!files || files.length === 0) {
-    return apiError("VALIDATION_ERROR", "업로드할 파일을 선택해 주세요.", 400);
-  }
-
-  try {
-    const uploaded: { fileId: string; fileName: string }[] = [];
-
-    for (const file of files) {
-      const originalName = file.name;
-      const ext          = path.extname(originalName).replace(".", "").toLowerCase();
-      // 저장 파일명: UUID + 확장자 (중복 방지)
-      const storeName    = `${crypto.randomUUID()}.${ext || "bin"}`;
-      // 물리 경로: requirements/{projectId}/{reqId}/{storeName}
-      const subPath      = `requirements/${projectId}/${reqId}/${storeName}`;
-
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer      = Buffer.from(arrayBuffer);
-
-      // 파일 저장
-      saveFile(subPath, buffer);
-
-      // DB 등록
-      const record = await prisma.tbCmAttachFile.create({
-        data: {
-          prjct_id:      projectId,
-          ref_tbl_nm:    "tb_rq_requirement",
-          ref_id:        reqId,
-          file_ty_code:  "FILE",
-          orgnl_file_nm: originalName,
-          stor_file_nm:  storeName,
-          file_path_nm:  subPath,
-          file_sz:       buffer.length,
-          file_extsn_nm: ext || "bin",
-        },
-      });
-
-      uploaded.push({ fileId: record.attach_file_id, fileName: originalName });
-    }
-
-    return apiSuccess({ uploaded }, 201);
-  } catch (err) {
-    console.error(`[POST files] 업로드 오류:`, err);
-    return apiError("DB_ERROR", "파일 업로드 중 오류가 발생했습니다.", 500);
-  }
+  return handleProjectAttachmentUpload({
+    request,
+    memberId: auth.mberId,
+    projectId,
+    refTable: "tb_rq_requirement",
+    refId: reqId,
+    relativeDir: `requirements/${projectId}/${reqId}`,
+    forceFileType: "FILE",
+  });
 }

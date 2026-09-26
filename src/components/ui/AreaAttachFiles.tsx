@@ -15,6 +15,7 @@ import { useRef, useEffect, useCallback, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch, authFetchRaw } from "@/lib/authFetch";
+import { uploadFilesDirect } from "@/lib/storageUploadClient";
 
 // ── 타입 ────────────────────────────────────────────────────────────────────
 
@@ -128,20 +129,10 @@ export default function AreaAttachFiles({ basePath }: Props) {
 
   // ── 업로드 뮤테이션 ────────────────────────────────────────────────────────
   const uploadMutation = useMutation({
-    mutationFn: async (fileList: File[]) => {
-      const formData = new FormData();
-      fileList.forEach((f) => formData.append("files", f));
-      // multipart 요청은 Content-Type을 브라우저가 boundary와 함께 설정해야 한다.
-      const res = await authFetchRaw(`${basePath}/files`, {
-        method:  "POST",
-        body:    formData,
-      });
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error((json as { message?: string }).message ?? "업로드 실패");
-      }
-      return res.json();
-    },
+    mutationFn: (fileList: File[]) => uploadFilesDirect({
+      endpoint: `${basePath}/files`,
+      files: fileList,
+    }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey }); toast.success("업로드되었습니다."); },
     onError:   (err: Error) => toast.error(err.message),
   });

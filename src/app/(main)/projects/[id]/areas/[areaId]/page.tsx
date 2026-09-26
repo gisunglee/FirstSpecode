@@ -23,7 +23,8 @@ import { createPortal } from "react-dom";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { authFetch, authFetchRaw } from "@/lib/authFetch";
+import { authFetch } from "@/lib/authFetch";
+import { abortDirectUploads, prepareFilesDirect } from "@/lib/storageUploadClient";
 import { usePermissions } from "@/hooks/useMyRole";
 import { useIdPrefixes } from "@/hooks/useIdPrefixes";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
@@ -387,24 +388,24 @@ function AreaDetailPageInner() {
 
 
   // ── 영역 AI 요청 뮤테이션 ─────────────────────────────────────────────────
-  // multipart/form-data로 전송 — 첨부 이미지(aiPickedFiles)를 함께 올림
-  // authFetch는 Content-Type을 JSON으로 고정하므로 raw fetch 사용
+  // 첨부파일은 Supabase Storage로 직접 올리고 API에는 완료 토큰만 전달한다.
   const aiMutation = useMutation({
     mutationFn: async ({ taskType }: { taskType: string }) => {
-      const fd = new FormData();
-      fd.append("taskType", taskType);
-      fd.append("coment_cn", asciiComment.trim());
-      aiPickedFiles.forEach((f) => fd.append("files", f));
-
-      const res = await authFetchRaw(`/api/projects/${projectId}/areas/${areaId}/ai`, {
-        method: "POST",
-        body: fd,
-      });
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error((json as { message?: string }).message ?? "AI 요청에 실패했습니다.");
+      const uploadEndpoint = `/api/projects/${projectId}/attachment-uploads`;
+      const attachmentTokens = await prepareFilesDirect({ endpoint: uploadEndpoint, files: aiPickedFiles });
+      try {
+        return await authFetch(`/api/projects/${projectId}/areas/${areaId}/ai`, {
+          method: "POST",
+          body: JSON.stringify({
+            taskType,
+            coment_cn: asciiComment.trim(),
+            attachmentTokens,
+          }),
+        });
+      } catch (error) {
+        await abortDirectUploads(uploadEndpoint, attachmentTokens).catch(() => undefined);
+        throw error;
       }
-      return res.json();
     },
     onSuccess: (_res, vars) => {
       const labels: Record<string, string> = {
