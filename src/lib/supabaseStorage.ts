@@ -6,9 +6,9 @@
  */
 
 import "server-only";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { StorageClient } from "@supabase/storage-js";
 
-let cachedClient: SupabaseClient | null = null;
+let cachedClient: StorageClient | null = null;
 
 function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -16,17 +16,14 @@ function requiredEnv(name: string): string {
   return value;
 }
 
-function storageClient(): SupabaseClient {
+function storageClient(): StorageClient {
   if (!cachedClient) {
-    cachedClient = createClient(
-      requiredEnv("NEXT_PUBLIC_SUPABASE_URL"),
-      requiredEnv("SUPABASE_SECRET_KEY"),
+    const secretKey = requiredEnv("SUPABASE_SECRET_KEY");
+    cachedClient = new StorageClient(
+      `${requiredEnv("NEXT_PUBLIC_SUPABASE_URL").replace(/\/+$/, "")}/storage/v1`,
       {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-          detectSessionInUrl: false,
-        },
+        apikey: secretKey,
+        Authorization: `Bearer ${secretKey}`,
       },
     );
   }
@@ -57,7 +54,6 @@ export function buildStoragePath(relativePath: string): string {
 
 export async function createStorageUploadUrl(path: string): Promise<{ path: string; token: string }> {
   const { data, error } = await storageClient()
-    .storage
     .from(storageBucketName())
     .createSignedUploadUrl(path, { upsert: false });
   if (error || !data) throw new Error(`Storage 업로드 URL 발급 실패: ${error?.message ?? "unknown"}`);
@@ -65,7 +61,7 @@ export async function createStorageUploadUrl(path: string): Promise<{ path: stri
 }
 
 export async function getStorageObjectInfo(path: string): Promise<{ size: number; contentType: string }> {
-  const { data, error } = await storageClient().storage.from(storageBucketName()).info(path);
+  const { data, error } = await storageClient().from(storageBucketName()).info(path);
   if (error || !data) throw new Error(`Storage 객체 확인 실패: ${error?.message ?? "unknown"}`);
   return {
     size: data.size ?? data.metadata?.size ?? 0,
@@ -78,7 +74,6 @@ export async function createStorageDownloadUrl(
   options: { expiresIn?: number; downloadName?: string } = {},
 ): Promise<string> {
   const { data, error } = await storageClient()
-    .storage
     .from(storageBucketName())
     .createSignedUrl(path, options.expiresIn ?? 60, {
       download: options.downloadName || undefined,
@@ -90,7 +85,7 @@ export async function createStorageDownloadUrl(
 export async function removeStorageObjects(paths: string[]): Promise<void> {
   const uniquePaths = [...new Set(paths.filter(Boolean))];
   if (uniquePaths.length === 0) return;
-  const { error } = await storageClient().storage.from(storageBucketName()).remove(uniquePaths);
+  const { error } = await storageClient().from(storageBucketName()).remove(uniquePaths);
   if (error) throw new Error(`Storage 객체 삭제 실패: ${error.message}`);
 }
 
@@ -104,7 +99,7 @@ export async function listStorageObjects(
   rootPath = storagePrefix(),
   maxDepth = 12,
 ): Promise<StorageObjectEntry[]> {
-  const bucket = storageClient().storage.from(storageBucketName());
+  const bucket = storageClient().from(storageBucketName());
   const objects: StorageObjectEntry[] = [];
 
   async function walk(folder: string, depth: number): Promise<void> {
@@ -147,7 +142,7 @@ export async function uploadStorageBuffer(
   buffer: Buffer,
   contentType = "application/octet-stream",
 ): Promise<void> {
-  const { error } = await storageClient().storage.from(storageBucketName()).upload(path, buffer, {
+  const { error } = await storageClient().from(storageBucketName()).upload(path, buffer, {
     contentType,
     upsert: false,
   });

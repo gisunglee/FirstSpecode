@@ -2,7 +2,7 @@
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { createClient } from "@supabase/supabase-js";
+import { StorageClient } from "@supabase/storage-js";
 import { prisma } from "../src/lib/prisma";
 
 function requiredEnv(name: string): string {
@@ -52,10 +52,13 @@ async function main(): Promise<void> {
   if (!prefix || prefix.includes("..")) throw new Error("SUPABASE_STORAGE_PREFIX 값이 올바르지 않습니다.");
 
   const bucketName = requiredEnv("SUPABASE_STORAGE_BUCKET");
-  const client = createClient(
-    requiredEnv("NEXT_PUBLIC_SUPABASE_URL"),
-    requiredEnv("SUPABASE_SECRET_KEY"),
-    { auth: { autoRefreshToken: false, persistSession: false } },
+  const secretKey = requiredEnv("SUPABASE_SECRET_KEY");
+  const storage = new StorageClient(
+    `${requiredEnv("NEXT_PUBLIC_SUPABASE_URL").replace(/\/+$/, "")}/storage/v1`,
+    {
+      apikey: secretKey,
+      Authorization: `Bearer ${secretKey}`,
+    },
   );
 
   const [commonRows, systemRows] = await Promise.all([
@@ -84,7 +87,7 @@ async function main(): Promise<void> {
     }
 
     const buffer = await fs.readFile(local.absolute);
-    const { error } = await client.storage.from(bucketName).upload(storagePath, buffer, {
+    const { error } = await storage.from(bucketName).upload(storagePath, buffer, {
       contentType: mimeType(local.absolute),
       upsert: true,
     });
