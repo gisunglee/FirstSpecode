@@ -21,7 +21,7 @@ import type { Prisma } from "@prisma/client";
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { logAdminActionStrict, type LogAdminActionInput } from "@/lib/audit";
-import { getPaidFeatureUsage } from "./paidUsage";
+import { getWithdrawalEligibility, WITHDRAWAL_WINDOW_DAYS } from "./withdrawal";
 import {
   BILLING_ERROR_CODES as E,
   ENDED_REASON,
@@ -154,9 +154,6 @@ export async function adminTerminate(sbscrptnId: string, actor: AdminActor, reas
 // 환불 기록
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** 청약철회 가능 기간(일) — 정책 §1-7 */
-const WITHDRAWAL_WINDOW_DAYS = 7;
-
 export type RefundInput = {
   reason: RefundReason;
   /** ADJUSTMENT 만. 생략하면 잔액 전액 */
@@ -174,7 +171,7 @@ export type RefundResult = {
 /**
  * 환불 원장 기록 — 환불 실행(PG 콘솔) 뒤에 부른다.
  *
- *   WITHDRAWAL 청약철회: 첫 결제(INITIAL)·승인 후 7일 이내·유료 기능 미사용(paidUsage) 이어야 한다. 잔액 전액,
+ *   WITHDRAWAL 청약철회: 계정의 첫 구독 시작 결제(계정당 1회)·승인 후 7일 이내 이어야 한다(사용 여부 무관). 잔액 전액,
  *                        구독이 살아 있으면 같은 트랜잭션에서 종료(사유 REFUND_WITHDRAWAL). 이미 종료면 기록만.
  *   ADJUSTMENT 운영 보정: 이중 청구·과청구·장애 보상. 금액은 1원 ~ 잔액. 구독은 그대로.
  *
@@ -189,19 +186,17 @@ export async function adminRecordRefund(paymentId: string, input: RefundInput, a
     throw new BillingError(E.REFUND_NOT_ALLOWED, "환불 행이나 실패한 결제는 환불할 수 없습니다.", 409);
   }
 
-  // 청약철회 조건은 트랜잭션 밖에서 미리 판정 (paidUsage 는 여러 표를 읽는다)
+  // 청약철회 조건은 트랜잭션 밖에서 미리 판정 — 계정의 첫 구독 시작 결제(계정당 1회)·승인 7일 이내.
+  // 사용 여부는 보지 않는다(정책 §1-7, 2026-09-26). 화면 표시와 같은 함수(withdrawal.ts)를 쓴다.
   if (input.reason === REFUND_REASON.WITHDRAWAL) {
-    const approvedAt = original.apprv_dt ?? original.creat_dt;
-    if (original.pymnt_ty_code !== PAYMENT_TYPE.INITIAL) {
-      throw new BillingError(E.REFUND_NOT_ALLOWED, "청약철회는 구독 시작 결제(INITIAL)에만 적용됩니다. 그 외는 운영 보정으로 기록하세요.", 409);
+    const elig = await getWithdrawalEligibility(original.mber_id, now);
+    if (elig.firstPaymentId !== original.pymnt_id) {
+      throw new BillingError(E.REFUND_NOT_ALLOWED, "청약철회는 계정의 첫 구독 시작 결제에만 적용됩니다(계정당 1회). 정기 결제·좌석 추가·재구독 결제는 운영 보정으로 기록하세요.", 409);
     }
-    if (now.getTime() - approvedAt.getTime() > WITHDRAWAL_WINDOW_DAYS * 24 * 60 * 60 * 1000) {
-      throw new BillingError(E.REFUND_NOT_ALLOWED, `청약철회는 결제 후 ${WITHDRAWAL_WINDOW_DAYS}일 이내에만 가능합니다(승인 ${formatKstDate(approvedAt)}). 그 외는 운영 보정으로 기록하세요.`, 409);
+    if (elig.reason === "WINDOW_PASSED") {
+      throw new BillingError(E.REFUND_NOT_ALLOWED, `청약철회는 결제 후 ${WITHDRAWAL_WINDOW_DAYS}일 이내에만 가능합니다(승인 ${formatKstDate(new Date(elig.firstPaidAt!))}, 기한 ${formatKstDate(new Date(elig.deadline!))}). 그 외는 운영 보정으로 기록하세요.`, 409);
     }
-    const usage = await getPaidFeatureUsage(original.mber_id);
-    if (usage.used) {
-      throw new BillingError(E.REFUND_NOT_ALLOWED, "결제 후 유료 기능을 사용해 청약철회 대상이 아닙니다(3플래그 참조). 그 외는 운영 보정으로 기록하세요.", 409);
-    }
+    // ALREADY_REFUNDED 는 아래 트랜잭션의 잔액 검사(전액 환불 409 / 일부 환불 409)가 같은 결론을 낸다
   }
 
   const stamp = now.toISOString().replace(/[-:T.Z]/g, "").slice(0, 14);

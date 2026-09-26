@@ -22,8 +22,9 @@
  * 주요 기술: TanStack Query(조회·무효화), sp-* 디자인 시스템 클래스, ConfirmDialog(해지)
  */
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { authFetch, AuthFetchError } from "@/lib/authFetch";
@@ -31,7 +32,7 @@ import ConfirmDialog from "@/components/common/ConfirmDialog";
 import SeatBreakdown from "@/components/billing/SeatBreakdown";
 import type { BillingOverview, PaymentDto, SeatAdditionPreview, SeatChangeResult, CancelResult, SubscriptionDto } from "@/lib/billing/subscription";
 import type { CardRegistrationStart } from "@/lib/billing/gateway";
-import { PAYMENT_STATUS_LABEL, PAYMENT_TYPE_LABEL, SEAT_INPUT_LIMITS, SUBSCRIPTION_STATUS as S, SUBSCRIPTION_STATUS_LABEL } from "@/lib/billing/constants";
+import { BILLING_RETURN_TO_STORAGE_KEY, PAYMENT_STATUS_LABEL, PAYMENT_TYPE_LABEL, SEAT_INPUT_LIMITS, SUBSCRIPTION_STATUS as S, SUBSCRIPTION_STATUS_LABEL } from "@/lib/billing/constants";
 import { formatKstDate, formatWon, kstDayOfMonth } from "@/lib/billing/pricing";
 
 // ─── 표시 라벨 ────────────────────────────────────────────────────────────────
@@ -49,10 +50,44 @@ function fmtDate(iso: string | null): string {
   return iso ? formatKstDate(new Date(iso)) : "-";
 }
 
+/**
+ * returnTo 쿼리 검증 — 앱 내부 경로("/...")만 허용한다. "//evil.com" 같은 프로토콜 상대 URL 이나
+ * 절대 URL 로 열린 리다이렉트가 되지 않게 막는다. 아니면 null (구독 화면에 머문다).
+ */
+function safeReturnTo(raw: string | null): string | null {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return null;
+  return raw;
+}
+
+/** PG 왕복 뒤 콜백 화면이 돌아갈 곳을 sessionStorage 에 남긴다. 저장이 막힌 브라우저면 조용히 건너뛴다(구독 화면으로 복귀) */
+function rememberReturnTo(returnTo: string | null): void {
+  try {
+    if (returnTo) sessionStorage.setItem(BILLING_RETURN_TO_STORAGE_KEY, returnTo);
+    else sessionStorage.removeItem(BILLING_RETURN_TO_STORAGE_KEY);
+  } catch {
+    // 프라이빗 모드 등에서 sessionStorage 가 막혀 있을 수 있다 — 복귀 경로만 잃고 결제 흐름은 그대로
+  }
+}
+
 // ─── 페이지 ──────────────────────────────────────────────────────────────────
 
+// useSearchParams 는 Suspense 경계 안에서만 동작한다 (Next.js 제약 — 없으면 hydration 에러)
 export default function BillingSettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <BillingSettingsInner />
+    </Suspense>
+  );
+}
+
+function BillingSettingsInner() {
   const queryClient = useQueryClient();
+
+  // 플랜 상한 안내 다이얼로그에서 넘어온 경우 — seats: 좌석 입력 기본값, returnTo: 결제 뒤 돌아갈 화면
+  const searchParams = useSearchParams();
+  const seatsParam   = Number(searchParams.get("seats"));
+  const initialSeats = Number.isInteger(seatsParam) && seatsParam > 0 ? seatsParam : null;
+  const returnTo     = safeReturnTo(searchParams.get("returnTo"));
 
   const overviewQuery = useQuery({
     queryKey: ["billing", "overview"],
@@ -139,6 +174,8 @@ export default function BillingSettingsPage() {
             <PlanCard
               overview={overview}
               onStart={goToCardRegistration}
+              initialSeats={initialSeats}
+              returnTo={returnTo}
               onChangeSeats={() => setSeatChangeOpen(true)}
               onChangeCard={() => changeCardMutation.mutate()}
               onCancel={() => setCancelOpen(true)}
@@ -153,8 +190,8 @@ export default function BillingSettingsPage() {
                 </div>
                 <div className="sp-group-body" style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
                   구독 종료로 소유 프로젝트가 읽기 전용입니다. 데이터는 삭제되지 않습니다.
-                  멤버 5명 이하인 프로젝트는 <Link href="/projects">프로젝트 목록</Link>에서 <b>활성화</b> 버튼으로 바로 풀 수 있고,
-                  다시 구독하면 전부 즉시 해제됩니다.
+                  소유자 혼자 편집하는 프로젝트 1개는 <Link href="/projects">프로젝트 목록</Link>에서 <b>활성화</b> 버튼으로 바로 풀 수 있고
+                  (다른 편집 멤버는 먼저 뷰어로 바꿔 주세요), 다시 구독하면 전부 즉시 해제됩니다.
                 </div>
               </div>
             )}
@@ -225,6 +262,10 @@ function InfoRow({ label, value, hint, action }: { label: string; value: string;
 function PlanCard(props: {
   overview: BillingOverview;
   onStart: (start: CardRegistrationStart) => void;
+  /** 상한 안내 다이얼로그가 넘긴 좌석 기본값 (없으면 null) */
+  initialSeats: number | null;
+  /** 결제 뒤 돌아갈 앱 내부 경로 (없으면 null → 구독 화면에 머문다) */
+  returnTo: string | null;
   onChangeSeats: () => void;
   onChangeCard: () => void;
   onCancel: () => void;
@@ -237,7 +278,7 @@ function PlanCard(props: {
 
   // 살아 있는 구독이 없으면 "BASIC 시작" 카드
   if (!live) {
-    return <StartBasicCard overview={overview} onStart={props.onStart} />;
+    return <StartBasicCard overview={overview} onStart={props.onStart} initialSeats={props.initialSeats} returnTo={props.returnTo} />;
   }
 
   const s = sub!;
@@ -318,9 +359,15 @@ function PlanCard(props: {
 
 // ─── BASIC 시작 카드 ─────────────────────────────────────────────────────────
 
-function StartBasicCard({ overview, onStart }: { overview: BillingOverview; onStart: (s: CardRegistrationStart) => void }) {
+function StartBasicCard({ overview, onStart, initialSeats, returnTo }: {
+  overview: BillingOverview;
+  onStart: (s: CardRegistrationStart) => void;
+  initialSeats: number | null;
+  returnTo: string | null;
+}) {
   const minSeats = Math.max(SEAT_INPUT_LIMITS.min, overview.usedSeats);
-  const [seatCnt, setSeatCnt] = useState<number>(minSeats);
+  // 상한 안내 다이얼로그가 계산해 준 좌석(사용 좌석 + 새 편집자)이 있으면 그 값으로 시작 — 최소값보다 작을 수는 없다
+  const [seatCnt, setSeatCnt] = useState<number>(Math.max(minSeats, initialSeats ?? minSeats));
   const ended = overview.subscription; // 종료된 구독 이력 (재구독)
 
   const startMutation = useMutation({
@@ -328,7 +375,11 @@ function StartBasicCard({ overview, onStart }: { overview: BillingOverview; onSt
       authFetch<{ data: CardRegistrationStart }>("/api/billing/subscription/start", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ seatCnt: n }),
       }).then((r) => r.data),
-    onSuccess: onStart,
+    onSuccess: (s) => {
+      // PG 로 떠나기 직전에 "돌아갈 화면"을 남긴다 — 콜백 화면이 읽고 지운다
+      rememberReturnTo(returnTo);
+      onStart(s);
+    },
     onError:   (err: Error) => toast.error(err.message),
   });
 

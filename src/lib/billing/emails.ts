@@ -213,7 +213,8 @@ export async function sendCancelConfirmedEmail(i: CancelConfirmedEmailInput): Pr
        <strong>${formatKstDate(i.periodEnd)}</strong>까지는 그대로 이용할 수 있고, 그 이후 추가 결제는 없습니다.</p>
        <p>그 전에 마음이 바뀌면 설정에서 <strong>해지 취소</strong>를 누르면 됩니다.</p>
        <p style="font-size:13px; color:#666;">해지가 확정되면 소유한 프로젝트는 읽기 전용으로 잠깁니다. 데이터는 삭제되지 않으며,
-       멤버 5명 이하인 프로젝트는 "활성화" 버튼으로 FREE 플랜에서 계속 편집할 수 있습니다.</p>`,
+       소유자 혼자 편집하는 프로젝트 1개는 "활성화" 버튼으로 FREE 플랜에서 계속 편집할 수 있습니다.
+       함께 편집하던 프로젝트는 다른 편집 멤버를 뷰어로 바꾸면 열 수 있습니다.</p>`,
     ),
   );
 }
@@ -239,7 +240,7 @@ export async function sendDowngradedEmail(i: DowngradedEmailInput): Promise<bool
        편집·생성·초대·업로드만 막힙니다. <strong>데이터는 삭제되지 않습니다.</strong></p>`
     : "";
   const autoLine = i.autoUnlockedProjectName
-    ? `<p>프로젝트 <strong>${esc(i.autoUnlockedProjectName)}</strong>는 멤버 5명 이하라 FREE 플랜으로 바로 활성화되었습니다.</p>`
+    ? `<p>프로젝트 <strong>${esc(i.autoUnlockedProjectName)}</strong>는 소유자 혼자 편집하는 프로젝트라 FREE 플랜으로 바로 활성화되었습니다.</p>`
     : "";
   return sendBillingMail(
     i.to,
@@ -248,8 +249,8 @@ export async function sendDowngradedEmail(i: DowngradedEmailInput): Promise<bool
       "FREE 플랜으로 전환되었습니다",
       `<p>${why} ${esc(i.productName)} 구독이 종료되고 FREE 플랜으로 전환되었습니다.</p>
        ${lockLine}${autoLine}
-       <p>프로젝트 목록에서 멤버 5명 이하인 프로젝트는 <strong>활성화</strong> 버튼으로 바로 풀 수 있고,
-       다시 결제하면 모든 프로젝트가 즉시 해제됩니다.</p>
+       <p>프로젝트 목록에서 소유자 혼자 편집하는 프로젝트 1개는 <strong>활성화</strong> 버튼으로 바로 풀 수 있고
+       (다른 편집 멤버는 먼저 뷰어로 바꿔 주세요), 다시 결제하면 모든 프로젝트가 즉시 해제됩니다.</p>
        <p><a href="${appUrl()}${BILLING_PATH}" style="display:inline-block; margin-top:8px; padding:10px 18px; background:#4a56d4; color:#fff; border-radius:6px; text-decoration:none; font-weight:600;">구독 다시 시작</a></p>`,
     ),
   );

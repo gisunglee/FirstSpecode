@@ -35,7 +35,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return apiError("ALREADY_MEMBER", "이미 해당 프로젝트의 멤버입니다.", 409);
   }
 
-  // 플랜 상한 재검사(FREE 5명 / 구독 좌석) — 초대 발송 후 다른 멤버가 먼저 합류했을 수 있다.
+  // 플랜 상한 재검사(FREE 편집자 1명 / 구독 좌석) — 초대 발송 후 다른 멤버가 먼저 합류했을 수 있다.
   // 합류하려는 사람 입장의 문구(소유자에게 문의)로 안내한다.
   const limitErr = await checkMemberLimit(
     invitation.prjct_id,

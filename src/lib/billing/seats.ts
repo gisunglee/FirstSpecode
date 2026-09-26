@@ -81,7 +81,7 @@ export type SeatLimitInfo = {
 
 /**
  * 결제자의 좌석 상한. 살아 있는 구독이 없으면 null (= 좌석 상한 없음:
- * FREE 는 planLimits 의 프로젝트당 5명 규칙, 관리자 수동 부여 BASIC/ENTERPRISE 는 무제한).
+ * FREE 는 planLimits 의 "편집 멤버는 소유자뿐" 규칙, 관리자 수동 부여 BASIC/ENTERPRISE 는 무제한).
  */
 export async function getSeatLimit(ownerMberId: string, db: Db = prisma): Promise<SeatLimitInfo | null> {
   const sub = await db.tbBlSubscription.findUnique({

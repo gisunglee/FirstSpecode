@@ -72,7 +72,7 @@ function isWritePermission(perm: Permission): boolean {
 }
 
 // 결제 잠금 중에도 허용하는 쓰기 권한 — 잠금을 "해소"하는 데 필요한 동작만.
-// 정책 §1-6 은 "멤버를 5명 이하로 줄이세요" 로 안내하므로 멤버 제거·역할 변경(뷰어로 내리기)은
+// 정책 §1-6 은 "다른 편집 멤버를 뷰어로 내리세요" 로 안내하므로 멤버 제거·역할 변경(뷰어로 내리기)은
 // 잠긴 상태에서도 되어야 한다. 프로젝트 삭제·소유권 양도도 정리 수단이라 막지 않는다.
 // 이 목록 밖의 쓰기(콘텐츠 편집·생성·초대·업로드·설정 등)는 전부 403 PROJECT_LOCKED.
 const LOCK_EXEMPT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>([

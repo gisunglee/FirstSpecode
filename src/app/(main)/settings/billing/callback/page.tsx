@@ -22,7 +22,22 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { authFetch, AuthFetchError } from "@/lib/authFetch";
-import { BILLING_ERROR_CODES, BILLING_PATH } from "@/lib/billing/constants";
+import { BILLING_ERROR_CODES, BILLING_PATH, BILLING_RETURN_TO_STORAGE_KEY } from "@/lib/billing/constants";
+
+/**
+ * 구독 시작 카드가 PG 로 떠나기 전에 남긴 "돌아갈 화면"을 한 번 읽고 지운다.
+ * 앱 내부 경로("/...", "//" 제외)만 믿는다. 없거나 막혀 있으면 구독 화면.
+ */
+function popReturnTo(): string {
+  try {
+    const raw = sessionStorage.getItem(BILLING_RETURN_TO_STORAGE_KEY);
+    sessionStorage.removeItem(BILLING_RETURN_TO_STORAGE_KEY);
+    if (raw && raw.startsWith("/") && !raw.startsWith("//")) return raw;
+  } catch {
+    // sessionStorage 가 막힌 브라우저 — 구독 화면으로
+  }
+  return BILLING_PATH;
+}
 
 export default function BillingCallbackPage() {
   return (
@@ -85,7 +100,8 @@ function BillingCallbackInner() {
         } else {
           toast.success("결제 수단이 변경되었습니다.");
         }
-        router.replace(BILLING_PATH);
+        // 구독 시작이면 상한 안내에서 넘어온 원래 화면으로 돌아간다(초대·생성은 사용자가 다시 누른다). 카드 변경은 구독 화면.
+        router.replace(r.data.purpose === "start" ? popReturnTo() : BILLING_PATH);
       })
       .catch((err: unknown) => {
         const isDeclined = err instanceof AuthFetchError && err.code === BILLING_ERROR_CODES.PAYMENT_FAILED;

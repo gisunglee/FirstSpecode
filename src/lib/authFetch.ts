@@ -231,12 +231,18 @@ export class AuthFetchError extends Error {
   /** 서버 apiError() 의 code. 본문이 JSON 이 아니면 null */
   readonly code: string | null;
   readonly status: number;
+  /**
+   * 서버 apiError() 의 extra 필드(code·message 제외) — 플랜 상한 안내의 필요 좌석·월 금액·구독 경로 등.
+   * 본문이 JSON 이 아니면 빈 객체. 값의 타입은 호출부가 직접 확인한다.
+   */
+  readonly details: Record<string, unknown>;
 
-  constructor(message: string, status: number, code: string | null) {
+  constructor(message: string, status: number, code: string | null, details: Record<string, unknown> = {}) {
     super(message);
-    this.name   = "AuthFetchError";
-    this.status = status;
-    this.code   = code;
+    this.name    = "AuthFetchError";
+    this.status  = status;
+    this.code    = code;
+    this.details = details;
   }
 }
 
@@ -245,14 +251,20 @@ export async function authFetch<T>(url: string, options?: RequestInit): Promise<
   if (!response.ok) {
     let message = `요청 실패 (${response.status})`;
     let code: string | null = null;
+    let details: Record<string, unknown> = {};
     try {
       const errorBody = await response.json();
       if (typeof errorBody?.message === "string") message = errorBody.message;
       if (typeof errorBody?.code    === "string") code    = errorBody.code;
+      // code·message 를 뺀 나머지가 apiError() 의 extra — 화면이 안내에 쓸 수 있게 그대로 넘긴다
+      if (errorBody && typeof errorBody === "object") {
+        const { code: _code, message: _message, ...rest } = errorBody as Record<string, unknown>;
+        details = rest;
+      }
     } catch {
       // JSON 오류 본문이 아니면 상태 코드 기반 기본 메시지를 사용한다.
     }
-    throw new AuthFetchError(message, response.status, code);
+    throw new AuthFetchError(message, response.status, code, details);
   }
 
   return response.json() as Promise<T>;

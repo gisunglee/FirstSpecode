@@ -3,9 +3,11 @@
  *
  * 역할:
  *   - FREE 플랜의 상한 3가지를 API 진입점에서 한 줄로 검사한다.
- *       ① 소유 프로젝트 수      → 프로젝트 생성·복사
- *       ② 프로젝트당 멤버 수    → 멤버 초대·초대 수락
- *       ③ 첨부파일 업로드 차단  → 첨부 업로드 라우트
+ *       ① 소유 프로젝트 수                → 프로젝트 생성·복사
+ *       ② 프로젝트당 편집 멤버(소유자 1명뿐) → 멤버 초대·초대 수락·뷰어 승격. 뷰어는 무료·무제한
+ *       ③ 첨부파일 업로드 차단            → 첨부 업로드 라우트
+ *   - 상한 403 응답에는 "BASIC 으로 가면 몇 좌석·월 얼마"(requiredSeats·monthlyAmount·billingPath)를
+ *     실어 준다. 안내 다이얼로그가 이 값으로 구독 시작 화면(좌석 기본값 채워짐)으로 바로 보낸다.
  *   - 판정 기준은 **프로젝트 소유자의 플랜**이다 (행위자의 플랜이 아님).
  *     소유자가 유료면 그 프로젝트 멤버 전원이 유료 혜택을 받는다.
  *
@@ -30,17 +32,19 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/apiResponse";
 import { resolveEffectivePlan, type PlanCode } from "@/lib/permissions";
-import { BILLING_PATH } from "@/lib/billing/constants";
-import { countUsedSeats, findExistingSeatHolders, getSeatLimit, isSeatRole } from "@/lib/billing/seats";
+import { PRICING } from "@/app/intro/_components/siteInfo";
+import { BILLING_PATH, PRODUCTS, SPECODE_PRODUCT } from "@/lib/billing/constants";
+import { formatWon } from "@/lib/billing/pricing";
+import { countUsedSeats, findExistingSeatHolders, getSeatLimit, isSeatRole, SEAT_ROLES } from "@/lib/billing/seats";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
-// ─── FREE 상한 값 (요금제 페이지 siteInfo.PRICING 과 반드시 같아야 함) ─────────
+// ─── FREE 상한 값 — 요금제 페이지(siteInfo.PRICING)와 같은 상수를 읽는다 ───────
 export const FREE_LIMITS = {
   /** 소유(OWNER) 가능한 활성 프로젝트 수 */
-  ownedProjects: 1,
-  /** 프로젝트당 멤버 수 — 소유자·뷰어 포함 전원 */
-  membersPerProject: 5,
+  ownedProjects: PRICING.freeProjectLimit,
+  /** 프로젝트당 편집 멤버(OWNER/ADMIN/MEMBER) 수 — 소유자 본인뿐. 뷰어는 세지 않는다(무료·무제한) */
+  editorsPerProject: PRICING.freeEditorLimit,
 } as const;
 
 // 에러 코드 — 프론트가 이 코드를 보고 "요금제 안내 모달"을 띄운다
@@ -127,9 +131,10 @@ export type MemberAddition = {
  *   - "inviter": 초대하는 소유자·관리자에게 보여줄 문구 (요금제·좌석 추가 안내)
  *   - "invitee": 초대 링크를 눌러 합류하려는 사람에게 보여줄 문구 (소유자에게 문의)
  *
- * FREE: 뷰어도 상한에 포함된다 (정책 §1-2 — 프로젝트당 5명, 소유자·뷰어 포함).
- * 구독 좌석: 편집 역할(OWNER/ADMIN/MEMBER)만 세고, 이미 내 프로젝트 어딘가에서 좌석을 쓰는
- *           사람은 새 좌석을 먹지 않는다. 축소 예약이 있으면 예약값이 상한(seats.getSeatLimit).
+ * FREE 와 구독 모두 편집 역할(OWNER/ADMIN/MEMBER)만 센다 — 뷰어는 무료·무제한 (정책 §1-2, §1-4).
+ * FREE:      편집 멤버는 소유자 1명뿐 → 편집 역할로 들어오는 사람이 있으면 막힌다.
+ * 구독 좌석: 이미 내 프로젝트 어딘가에서 좌석을 쓰는 사람은 새 좌석을 먹지 않는다.
+ *           축소 예약이 있으면 예약값이 상한(seats.getSeatLimit).
  */
 export async function checkMemberLimit(
   projectId: string,
@@ -141,25 +146,28 @@ export async function checkMemberLimit(
   if (!owner) return null;
 
   if (owner.plan === "FREE") {
-    return checkFreeMemberLimit(projectId, owner.plan, adding.length, perspective);
+    return checkFreeEditorLimit(projectId, owner.ownerMberId, owner.plan, adding, perspective);
   }
 
   return checkSeatLimitForOwner(owner.ownerMberId, owner.plan, adding, perspective);
 }
 
 /**
- * ②-b 구독 좌석만 검사 — 역할 변경(VIEWER → MEMBER/ADMIN) 전에 호출.
+ * ②-b 편집 역할 승격 검사 — 역할 변경(VIEWER → MEMBER/ADMIN) 전에 호출.
  *
- * 초대·수락과 다른 점: 멤버 수는 늘지 않고 편집 멤버만 는다. 그래서 FREE 의 "프로젝트당 5명"
- * 규칙은 건드리지 않고(멤버 수 불변) 구독 좌석 불변식만 지킨다. 뷰어로 내리는 변경은 검사 없음.
- * 2026-09-20 사용자 결정 — 편집 역할이 되는 모든 경로(초대·수락·승격)가 좌석을 먹는다.
+ * 초대·수락과 다른 점: 멤버 수는 늘지 않고 편집 멤버만 는다. FREE 는 "편집 멤버는 소유자뿐",
+ * 구독은 "편집 멤버 ≤ 구매 좌석" — 둘 다 편집 멤버가 느는 경로라 초대와 같은 검사를 탄다.
+ * 뷰어로 내리는 변경은 검사 없음. 2026-09-20 사용자 결정 — 편집 역할이 되는 모든 경로(초대·수락·승격)가 좌석을 먹는다.
  */
 export async function checkSeatLimit(
   projectId: string,
   adding: MemberAddition[],
 ): Promise<Response | null> {
   const owner = await getProjectOwnerPlan(projectId);
-  if (!owner || owner.plan === "FREE") return null;
+  if (!owner) return null;
+  if (owner.plan === "FREE") {
+    return checkFreeEditorLimit(projectId, owner.ownerMberId, owner.plan, adding, "inviter");
+  }
   return checkSeatLimitForOwner(owner.ownerMberId, owner.plan, adding, "inviter");
 }
 
@@ -178,28 +186,7 @@ async function checkSeatLimitForOwner(
   const editors = adding.filter((a) => isSeatRole(a.role));
   if (editors.length === 0) return null;
 
-  // 각 초대자를 회원 ID 로 해석한다 — 회원 ID 가 있으면 그대로, 이메일이면 회원을 찾아서.
-  // 미가입 이메일은 해석 불가(null) → 확실히 새 좌석.
-  const emails = editors
-    .filter((a) => !a.mberId && a.email)
-    .map((a) => a.email!.toLowerCase());
-  const idByEmail = new Map<string, string>();
-  if (emails.length > 0) {
-    const members = await prisma.tbCmMember.findMany({
-      where:  { email_addr: { in: emails } },
-      select: { mber_id: true, email_addr: true },
-    });
-    for (const m of members) if (m.email_addr) idByEmail.set(m.email_addr.toLowerCase(), m.mber_id);
-  }
-  const resolvedIds = editors.map((a) => a.mberId ?? (a.email ? idByEmail.get(a.email.toLowerCase()) ?? null : null));
-
-  // 이미 좌석을 쓰는 사람은 새 좌석이 아니다. 같은 사람이 목록에 두 번 있어도 한 좌석.
-  const knownIds = resolvedIds.filter((v): v is string => v !== null);
-  const holders  = await findExistingSeatHolders(owner.ownerMberId, knownIds);
-  const newIds   = new Set(knownIds.filter((id) => !holders.has(id)));
-  const unresolvedCount = resolvedIds.filter((v) => v === null).length;
-  const newSeats = newIds.size + unresolvedCount;
-
+  const newSeats = await countNewSeats(owner.ownerMberId, editors);
   const used = await countUsedSeats(owner.ownerMberId);
   if (used + newSeats <= seat.limit) return null;
 
@@ -219,32 +206,79 @@ async function checkSeatLimitForOwner(
   });
 }
 
-/** FREE — 프로젝트당 멤버 5명 (역할 무관) */
-async function checkFreeMemberLimit(
+/**
+ * 편집 역할로 들어오는 사람들 중 새 좌석이 필요한 수.
+ *   - 회원 ID 가 있으면 그대로, 이메일이면 회원을 찾아 해석한다. 미가입 이메일은 해석 불가 → 확실히 새 좌석.
+ *   - 이미 내 소유 프로젝트 어딘가에서 좌석을 쓰는 사람은 새 좌석이 아니다. 같은 사람이 목록에 두 번 있어도 한 좌석.
+ * 구독 좌석 검사와 FREE 의 "BASIC 으로 가면 몇 좌석" 안내가 같은 계산을 쓴다.
+ */
+async function countNewSeats(ownerMberId: string, editors: MemberAddition[]): Promise<number> {
+  const emails = editors
+    .filter((a) => !a.mberId && a.email)
+    .map((a) => a.email!.toLowerCase());
+  const idByEmail = new Map<string, string>();
+  if (emails.length > 0) {
+    const members = await prisma.tbCmMember.findMany({
+      where:  { email_addr: { in: emails } },
+      select: { mber_id: true, email_addr: true },
+    });
+    for (const m of members) if (m.email_addr) idByEmail.set(m.email_addr.toLowerCase(), m.mber_id);
+  }
+  const resolvedIds = editors.map((a) => a.mberId ?? (a.email ? idByEmail.get(a.email.toLowerCase()) ?? null : null));
+
+  const knownIds = resolvedIds.filter((v): v is string => v !== null);
+  const holders  = await findExistingSeatHolders(ownerMberId, knownIds);
+  const newIds   = new Set(knownIds.filter((id) => !holders.has(id)));
+  const unresolvedCount = resolvedIds.filter((v) => v === null).length;
+  return newIds.size + unresolvedCount;
+}
+
+/**
+ * FREE — 프로젝트당 편집 멤버는 소유자 1명뿐 (정책 §1-2). 뷰어는 세지 않는다.
+ *
+ * 소유자가 이미 1명을 채우므로 편집 역할로 들어오는 사람이 한 명이라도 있으면 막힌다.
+ * 결제 도입 전부터 FREE 로 편집자 여러 명을 쓰던 프로젝트도 같은 규칙 — 기존은 그대로, 추가만 막는다(§1-6).
+ * 응답에 "BASIC 으로 가면 몇 좌석·월 얼마"를 실어 다이얼로그가 구독 시작 화면으로 바로 보낼 수 있게 한다.
+ */
+async function checkFreeEditorLimit(
   projectId: string,
+  ownerMberId: string,
   plan: PlanCode,
-  addingCount: number,
+  adding: MemberAddition[],
   perspective: "inviter" | "invitee"
 ): Promise<Response | null> {
-  const current = await prisma.tbPjProjectMember.count({
-    where: { prjct_id: projectId, mber_sttus_code: "ACTIVE" },
-  });
-  if (current + addingCount <= FREE_LIMITS.membersPerProject) return null;
+  const editorsAdding = adding.filter((a) => isSeatRole(a.role));
+  if (editorsAdding.length === 0) return null;  // 뷰어는 무료·무제한
 
-  const limit = FREE_LIMITS.membersPerProject;
+  const current = await prisma.tbPjProjectMember.count({
+    where: { prjct_id: projectId, mber_sttus_code: "ACTIVE", role_code: { in: [...SEAT_ROLES] } },
+  });
+  const limit = FREE_LIMITS.editorsPerProject;
+  if (current + editorsAdding.length <= limit) return null;  // 소유자가 없는 프로젝트뿐 — 이론상 도달 불가
+
+  // BASIC 으로 가면 필요한 좌석 = 소유 프로젝트 전체 편집 멤버(distinct) + 이번에 새로 좌석이 필요한 사람
+  const [used, newSeats] = await Promise.all([
+    countUsedSeats(ownerMberId),
+    countNewSeats(ownerMberId, editorsAdding),
+  ]);
+  const requiredSeats = used + newSeats;
+  const monthlyAmount = requiredSeats * PRODUCTS[SPECODE_PRODUCT].unitPrice;
+
   const message =
     perspective === "invitee"
-      ? `이 프로젝트는 FREE 플랜 멤버 상한(${limit}명)에 도달해 지금은 합류할 수 없습니다. ` +
-        "프로젝트 소유자에게 문의해 주세요."
-      : `FREE 플랜은 프로젝트당 멤버 ${limit}명(소유자·뷰어 포함)까지입니다. ` +
-        `현재 ${current}명이라 ${addingCount}명을 더 초대할 수 없습니다. ` +
-        "더 초대하려면 BASIC 플랜이 필요합니다.";
+      ? "이 프로젝트는 FREE 플랜이라 소유자 외에는 편집 멤버로 합류할 수 없습니다. 프로젝트 소유자에게 문의해 주세요."
+      : "FREE 플랜에서는 소유자만 편집할 수 있습니다. " +
+        `편집 멤버 ${editorsAdding.length}명을 더 두려면 BASIC 좌석 ${requiredSeats}개(월 ${formatWon(monthlyAmount)})가 필요합니다. ` +
+        "뷰어는 무료로 제한 없이 초대할 수 있습니다.";
 
   return apiError(PLAN_LIMIT_CODES.member, message, 403, {
     plan,
     limit,
     current,
+    requiredSeats,
+    monthlyAmount,
     pricingPath: PRICING_PATH,
+    billingPath: BILLING_PATH,
   });
 }
 

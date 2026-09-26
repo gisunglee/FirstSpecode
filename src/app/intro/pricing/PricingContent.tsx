@@ -28,6 +28,9 @@ import FaqAccordion, { type FaqItem } from "./FaqAccordion";
 // 좌석 계산 예시 — 본문 설명과 숫자가 어긋나지 않도록 상수로 계산
 const SEAT_EXAMPLE_SEATS = 4;
 const SEAT_EXAMPLE_MONTHLY = SEAT_EXAMPLE_SEATS * PRICING.basicSeatMonthlyKrw;
+// 한 줄 요약 예시 — "3명이 함께 편집하면 3좌석"
+const SIMPLE_EXAMPLE_SEATS = 3;
+const SIMPLE_EXAMPLE_MONTHLY = SIMPLE_EXAMPLE_SEATS * PRICING.basicSeatMonthlyKrw;
 
 const FAQ_ITEMS: FaqItem[] = [
   {
@@ -48,15 +51,15 @@ const FAQ_ITEMS: FaqItem[] = [
     q: "해지와 환불은 어떻게 되나요?",
     a: [
       "해지는 로그인 후 설정 화면에서 버튼 한 번으로 즉시 신청할 수 있습니다. 해지하면 결제한 기간이 끝날 때까지 그대로 이용하고, 다음 결제부터 청구되지 않습니다. 기간 중에는 해지를 취소할 수도 있습니다.",
-      `환불은 결제 후 ${PRICING.refundWindowDays}일 이내이고 유료 기능을 사용하지 않은 경우 전액 환불됩니다. 유료 기능 사용이란 ① 두 번째 소유 프로젝트 생성 ② 6번째 이상 편집 멤버 초대 ③ 첨부파일 업로드 중 하나라도 발생한 경우입니다.`,
-      "유료 기능을 사용한 뒤에는 환불되지 않습니다. 결제 전에 FREE 플랜에서 필요한 기능을 충분히 확인해 주세요.",
+      `첫 BASIC 결제는 결제 후 ${PRICING.refundWindowDays}일 이내에 요청하면 사용 여부와 관계없이 전액 환불됩니다(계정당 1회). 환불하면 구독은 즉시 종료되고 FREE 기준을 넘는 프로젝트는 읽기 전용으로 잠깁니다.`,
+      "정기 결제·좌석 추가·재구독 결제는 환불되지 않습니다. 다음 결제일 전에 해지하면 더 이상 청구되지 않습니다.",
     ],
   },
   {
     q: "결제를 중단하거나 FREE로 전환하면 데이터는 어떻게 되나요?",
     a: [
       "FREE 전환만으로 데이터가 삭제되지는 않습니다. 소유한 프로젝트는 읽기 전용으로 전환되며 조회와 MCP 읽기는 계속할 수 있습니다.",
-      `FREE 기준(소유 프로젝트 1개, 프로젝트당 멤버 ${PRICING.freeMemberLimit}명)에 맞는 프로젝트를 직접 선택해 다시 편집할 수 있습니다. 재결제하면 나머지 프로젝트도 다시 활성화됩니다.`,
+      `FREE 기준(소유자 혼자 편집하는 프로젝트 ${PRICING.freeProjectLimit}개)에 맞는 프로젝트를 직접 선택해 다시 편집할 수 있습니다. 함께 편집하던 프로젝트는 다른 편집 멤버를 뷰어로 바꾸면 열 수 있고, 재결제하면 나머지 프로젝트도 다시 활성화됩니다.`,
     ],
   },
   {
@@ -111,10 +114,13 @@ export default function PricingContent() {
                 <span className="unit">원</span>
               </div>
               <div className="plan-period">카드 등록 없이 · 기간 제한 없음</div>
-              <p className="plan-desc">혼자 시작하거나 소규모 팀에서 SPECODE를 충분히 검토하는 플랜입니다.</p>
+              <p className="plan-desc">혼자 설계하고 팀에 읽기 전용으로 공유하는 플랜입니다.</p>
               <ul className="plan-feats">
                 <li>소유 프로젝트 {PRICING.freeProjectLimit}개</li>
-                <li>프로젝트당 멤버 {PRICING.freeMemberLimit}명 (소유자·뷰어 포함)</li>
+                <li>편집자 {PRICING.freeEditorLimit}명 (소유자 본인)</li>
+                <li>
+                  <b>뷰어는 무료 · 인원 제한 없음</b>
+                </li>
                 <li>AI 설계 · MCP 연동 · 산출물 발행 기능</li>
                 <li>다른 사람의 프로젝트 참여는 무료 · 무제한</li>
                 <li className="no">첨부파일 업로드 불가</li>
@@ -134,7 +140,7 @@ export default function PricingContent() {
                 <span className="per">/ 좌석 · 월</span>
               </div>
               <div className="plan-period">부가세 포함 · 월 결제 · 언제든 해지</div>
-              <p className="plan-desc">여러 프로젝트를 팀과 함께 설계하고, 제출 산출물까지 관리하는 플랜입니다.</p>
+              <p className="plan-desc">팀과 함께 여러 프로젝트를 설계하는 플랜입니다. 편집자 수만큼만 결제하고 뷰어는 무료입니다.</p>
               <ul className="plan-feats">
                 <li>소유 프로젝트 무제한</li>
                 <li>편집 권한이 필요한 인원만 좌석으로 계산</li>
@@ -181,6 +187,10 @@ export default function PricingContent() {
             <p>
               프로젝트 수가 아니라, 내가 소유한 모든 프로젝트에서 <b>편집 권한을 가진 사람</b>을 중복 없이 센
               수가 좌석입니다. 결제자 본인도 포함됩니다.
+            </p>
+            <p>
+              혼자 편집하면 FREE, {SIMPLE_EXAMPLE_SEATS}명이 함께 편집하면 BASIC {SIMPLE_EXAMPLE_SEATS}좌석(월{" "}
+              {formatKrw(SIMPLE_EXAMPLE_MONTHLY)}원)입니다. 뷰어는 좌석에 포함되지 않습니다.
             </p>
           </div>
 
@@ -256,8 +266,8 @@ export default function PricingContent() {
               않습니다. 기간 중 해지 취소도 가능합니다.
             </li>
             <li>
-              환불은 결제 후 {PRICING.refundWindowDays}일 이내이며 유료 기능을 사용하지 않은 경우에 전액 처리합니다.
-              유료 기능을 사용한 뒤에는 환불되지 않습니다.
+              첫 BASIC 결제는 결제 후 {PRICING.refundWindowDays}일 이내에 요청하면 사용 여부와 관계없이 전액 환불됩니다(계정당 1회).
+              이후의 정기 결제·좌석 추가·재구독 결제는 환불되지 않으며, 다음 결제일 전에 해지하면 청구가 멈춥니다.
               자세한 내용은{" "}
               <Link href={INTRO_PATHS.terms}>이용약관</Link>의 환불 조항을 참고하세요.
             </li>

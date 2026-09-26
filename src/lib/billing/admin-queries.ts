@@ -13,7 +13,7 @@
 
 import type { Prisma, TbBlPayment } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getPaidFeatureUsage, type PaidFeatureUsage } from "./paidUsage";
+import { getWithdrawalEligibility, type WithdrawalEligibility } from "./withdrawal";
 import {
   LIVE_SUBSCRIPTION_STATUSES,
   PAYMENT_STATUS,
@@ -171,7 +171,8 @@ export type AdminPaymentDetailRow = PaymentDto & {
 export type AdminSubscriptionDetail = {
   subscription: AdminSubscriptionRow;
   usedSeats:    number;
-  paidUsage:    PaidFeatureUsage;
+  /** 청약철회 가능 여부 — 첫 구독 결제·7일·계정당 1회 (정책 §1-7) */
+  withdrawal:   WithdrawalEligibility;
   /** 소유 활성 프로젝트 — 잠금 상태·멤버 수 (잠금 해제 대행 판단용) */
   ownedProjects: Array<{ projectId: string; name: string; locked: boolean; lockedAt: string | null; memberCount: number; editorCount: number }>;
   payments:     AdminPaymentDetailRow[];
@@ -205,9 +206,9 @@ export async function getSubscriptionDetailForAdmin(sbscrptnId: string, now = ne
   });
   if (!sub) return null;
 
-  const [usedSeats, paidUsage, projects, payments] = await Promise.all([
+  const [usedSeats, withdrawal, projects, payments] = await Promise.all([
     countUsedSeats(sub.mber_id),
-    getPaidFeatureUsage(sub.mber_id),
+    getWithdrawalEligibility(sub.mber_id, now),
     prisma.tbPjProject.findMany({
       where:   { owner_mber_id: sub.mber_id, del_yn: "N" },
       select:  { prjct_id: true, prjct_nm: true, lock_yn: true, lock_dt: true,
@@ -221,7 +222,7 @@ export async function getSubscriptionDetailForAdmin(sbscrptnId: string, now = ne
   return {
     subscription: toAdminRow(sub, now),
     usedSeats,
-    paidUsage,
+    withdrawal,
     ownedProjects: projects.map((p) => ({
       projectId: p.prjct_id, name: p.prjct_nm, locked: p.lock_yn === "Y", lockedAt: p.lock_dt?.toISOString() ?? null,
       memberCount: p.members.length,

@@ -23,8 +23,9 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import type { AdminPaymentDetailRow, AdminSubscriptionDetail } from "@/lib/billing/admin-queries";
 import type { RecurringChargeResult } from "@/lib/billing/subscription";
-import { ENDED_REASON_LABEL, PAYMENT_TYPE, PAYMENT_TYPE_LABEL, REFUND_REASON, REFUND_REASON_LABEL, type RefundReason } from "@/lib/billing/constants";
+import { ENDED_REASON_LABEL, PAYMENT_TYPE, PAYMENT_TYPE_LABEL, REFUND_REASON, REFUND_REASON_LABEL, WITHDRAWAL_REASON_LABEL, type RefundReason } from "@/lib/billing/constants";
 import { formatWon } from "@/lib/billing/pricing";
+import { PRICING } from "@/app/intro/_components/siteInfo";
 import { fmtDate, fmtDateTime, PaymentStatusBadge, SubStatusBadge } from "../_shared";
 
 type Modal =
@@ -105,7 +106,7 @@ export default function AdminSubscriptionDetailPage() {
   if (q.isLoading) return <div style={{ color: "var(--color-text-tertiary)" }}>불러오는 중…</div>;
   if (q.isError || !q.data) return <div className="sp-hint is-err">{(q.error as Error)?.message ?? "구독을 찾을 수 없습니다."}</div>;
 
-  const { subscription: s, usedSeats, paidUsage, ownedProjects, payments } = q.data;
+  const { subscription: s, usedSeats, withdrawal, ownedProjects, payments } = q.data;
   const live = s.status === "ACTIVE" || s.status === "PAST_DUE" || s.status === "CANCEL_SCHEDULED";
   const busy = action.isPending || s.opInProgress;
 
@@ -147,10 +148,19 @@ export default function AdminSubscriptionDetailPage() {
             <Info label="구독 생성 · 갱신" value={`${fmtDate(s.createdAt)} · ${fmtDateTime(s.updatedAt)}`} />
           </div>
 
-          <div style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)" }}>
-            환불 판정(결제 후 유료 기능 사용){paidUsage.firstPaidAt && <span className="is-muted"> · 기준 {fmtDate(paidUsage.firstPaidAt)}</span>}:
-            {" "}① 두 번째 프로젝트 <Flag v={paidUsage.secondProjectCreated} /> ② 6번째 편집 멤버 <Flag v={paidUsage.sixthEditorJoined} /> ③ 첨부 업로드 <Flag v={paidUsage.fileUploaded} />
-            {paidUsage.firstPaidAt && <span className="is-muted"> → 청약철회 {paidUsage.used ? "불가(사용함)" : "가능(미사용, 7일 이내면)"}</span>}
+          {/* 청약철회 — 첫 구독 결제 1건만, 승인 후 7일, 계정당 1회. 사용 여부는 보지 않는다(정책 §1-7) */}
+          <div style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <span>청약철회(첫 구독 결제 · 승인 후 {PRICING.refundWindowDays}일 · 계정당 1회):</span>
+            {withdrawal.firstPaidAt ? (
+              <>
+                <span>첫 결제 {fmtDate(withdrawal.firstPaidAt)} · 기한 {fmtDate(withdrawal.deadline)}</span>
+                <span className={`sp-badge ${withdrawal.eligible ? "sp-badge-success" : "sp-badge-neutral"}`}>
+                  {withdrawal.eligible ? "가능" : `불가 · ${withdrawal.reason ? WITHDRAWAL_REASON_LABEL[withdrawal.reason] : ""}`}
+                </span>
+              </>
+            ) : (
+              <span className="is-muted">결제 이력 없음</span>
+            )}
           </div>
 
           {/* 운영 액션 */}
@@ -283,7 +293,7 @@ export default function AdminSubscriptionDetailPage() {
                   </div>
                   {refundReason === REFUND_REASON.WITHDRAWAL ? (
                     <p style={{ margin: 0, color: "var(--color-warning)" }}>
-                      잔액 <b>{formatWon(modal.payment.refundableAmount)}</b> 전액. 서버가 "구독 시작 결제 · 승인 7일 이내 · 유료 기능 미사용"을 검사하고,
+                      잔액 <b>{formatWon(modal.payment.refundableAmount)}</b> 전액. 서버가 "계정의 첫 구독 시작 결제 · 승인 {PRICING.refundWindowDays}일 이내 · 계정당 1회"를 검사하고(사용 여부 무관),
                       통과하면 <b>구독을 즉시 종료</b>합니다(사유: 청약철회 환불, 강등·잠금·메일 포함). 조건에 안 맞으면 운영 보정으로 기록하세요.
                     </p>
                   ) : (
@@ -298,7 +308,7 @@ export default function AdminSubscriptionDetailPage() {
 
               {modal.kind === "unlock" && (
                 <p style={{ margin: 0 }}>
-                  <b>{modal.name}</b> 의 결제 잠금을 소유자 대신 풉니다. 소유자 "활성화" 버튼과 같은 상한 판정(FREE 멤버 5명 / 구독 좌석)을 탑니다.
+                  <b>{modal.name}</b> 의 결제 잠금을 소유자 대신 풉니다. 소유자 "활성화" 버튼과 같은 상한 판정(FREE 는 편집 멤버 소유자 1명 + 열린 프로젝트 1개 / 구독은 좌석)을 탑니다.
                   초과 상태면 풀리지 않습니다 — 운영 판단으로 풀어야 하면 회원 상세에서 플랜을 부여한 뒤 다시 대행하세요.
                 </p>
               )}
@@ -343,6 +353,3 @@ function Info({ label, value, hint, tone }: { label: string; value: string; hint
   );
 }
 
-function Flag({ v }: { v: boolean }) {
-  return <span className={`sp-badge ${v ? "sp-badge-warning" : "sp-badge-neutral"}`}>{v ? "사용" : "미사용"}</span>;
-}

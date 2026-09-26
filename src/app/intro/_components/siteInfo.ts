@@ -66,8 +66,8 @@ export const BILLING_OPEN = false;
 export const PRICING = {
   /** BASIC 좌석당 월 요금 — 부가세 포함 표시 금액 */
   basicSeatMonthlyKrw: 9_900,
-  /** FREE 프로젝트당 멤버 상한(소유자·뷰어 포함) */
-  freeMemberLimit: 5,
+  /** FREE 프로젝트당 편집 멤버(OWNER/ADMIN/MEMBER) 상한 — 소유자 본인뿐. 뷰어는 무료·무제한 */
+  freeEditorLimit: 1,
   /** FREE 소유 프로젝트 상한 */
   freeProjectLimit: 1,
   /** 첨부파일 용량 표기 (집계·차단은 후속 과제 — 표기만) */

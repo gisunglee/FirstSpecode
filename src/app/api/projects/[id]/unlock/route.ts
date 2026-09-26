@@ -1,7 +1,7 @@
 /**
  * POST /api/projects/[id]/unlock — 잠긴 프로젝트 "활성화" (소유자 전용, 정책 §1-6)
  *
- * 조건: 소유자 플랜 기준 상한 이하 — FREE 는 멤버(소유자·뷰어 포함) 5명 이하,
+ * 조건: 소유자 플랜 기준 상한 이하 — FREE 는 편집 멤버가 소유자뿐이고 열려 있는 다른 소유 프로젝트가 없을 때,
  *       구독이면 사용 좌석 ≤ 구매 좌석. 초과면 403 PROJECT_UNLOCK_OVER_LIMIT + 무엇을 줄여야 하는지 안내.
  * 이미 풀려 있으면 200 (멱등).
  *
@@ -50,11 +50,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const v = result.verdict;
     const message =
-      v.reason === "FREE_MEMBERS"
-        ? `FREE 플랜은 멤버 ${v.limit}명(소유자·뷰어 포함) 이하인 프로젝트만 활성화할 수 있습니다. ` +
-          `현재 ${v.memberCount}명입니다. 멤버를 줄이거나 구독을 시작해 주세요.`
-        : `구매한 좌석 ${v.limit}개를 넘어 편집 멤버 ${v.usedSeats}명이 있습니다. ` +
-          "좌석을 추가하거나 편집 멤버를 뷰어로 바꿔 주세요.";
+      v.reason === "FREE_EDITORS"
+        ? `FREE 플랜은 소유자 혼자 편집하는 프로젝트만 활성화할 수 있습니다. 지금 편집 멤버가 ${v.editorCount}명입니다. ` +
+          "다른 편집 멤버를 뷰어로 바꾸거나 구독을 시작해 주세요."
+        : v.reason === "FREE_PROJECTS"
+          ? `FREE 플랜은 활성 프로젝트를 ${v.limit}개만 둘 수 있습니다. 이미 열려 있는 소유 프로젝트가 ${v.openProjectCount}개 있습니다. ` +
+            "그 프로젝트를 삭제·양도하거나 구독을 시작해 주세요."
+          : `구매한 좌석 ${v.limit}개를 넘어 편집 멤버 ${v.usedSeats}명이 있습니다. ` +
+            "좌석을 추가하거나 편집 멤버를 뷰어로 바꿔 주세요.";
 
     return apiError(BILLING_ERROR_CODES.UNLOCK_OVER_LIMIT, message, 403, { ...v, billingPath: BILLING_PATH });
   } catch (err) {

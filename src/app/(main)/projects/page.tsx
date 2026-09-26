@@ -22,7 +22,7 @@ import { authFetch } from "@/lib/authFetch";
 import { useAppStore } from "@/store/appStore";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 import ProjectAbbrChip from "@/components/ui/ProjectAbbrChip";
-import PlanLimitDialog, { isPlanLimitError } from "@/components/common/PlanLimitDialog";
+import PlanLimitDialog, { isPlanLimitError, toPlanLimitInfo, type PlanLimitInfo } from "@/components/common/PlanLimitDialog";
 import { AuthFetchError } from "@/lib/authFetch";
 import {
   parseProjectAbbrInput,
@@ -86,8 +86,8 @@ function CreateProjectDialog({
 }: {
   onClose: () => void;
   onCreated: (projectId: string) => void;
-  /** FREE 소유 프로젝트 상한(PLAN_LIMIT_PROJECT)에 걸리면 서버 문구를 넘긴다 — 부모가 요금제 안내 모달로 전환 */
-  onLimit: (message: string) => void;
+  /** FREE 소유 프로젝트 상한(PLAN_LIMIT_PROJECT)에 걸리면 안내 정보를 넘긴다 — 부모가 BASIC 안내 모달로 전환 */
+  onLimit: (limit: PlanLimitInfo) => void;
 }) {
   const [name,         setName]         = useState("");
   const [abbreviation, setAbbreviation] = useState("");
@@ -107,7 +107,7 @@ function CreateProjectDialog({
       onCreated(res.data.projectId);
     },
     // 플랜 상한은 토스트가 아니라 요금제 안내 모달로 — 왜 막혔는지와 해결 경로를 같이 보여준다
-    onError: (err: Error) => (isPlanLimitError(err) ? onLimit(err.message) : toast.error(err.message)),
+    onError: (err: Error) => (isPlanLimitError(err) ? onLimit(toPlanLimitInfo(err)) : toast.error(err.message)),
   });
 
   function handleSubmit(e: React.FormEvent) {
@@ -247,7 +247,7 @@ function ProjectsPageInner() {
   const { setCurrentProjectId } = useAppStore();
   const [createOpen, setCreateOpen] = useState(false);
   // FREE 상한 안내 모달 문구 — null 이면 닫힘
-  const [limitMsg, setLimitMsg] = useState<string | null>(null);
+  const [limit, setLimit] = useState<PlanLimitInfo | null>(null);
 
   const { data, isLoading } = useQuery<ProjectsResponse>({
     queryKey: ["projects"],
@@ -257,7 +257,7 @@ function ProjectsPageInner() {
 
   const items = data?.data?.items ?? [];
 
-  // 잠긴 프로젝트 "활성화" — 서버가 상한(FREE 멤버 5명 / 구독 좌석)을 판정한다.
+  // 잠긴 프로젝트 "활성화" — 서버가 상한(FREE 편집자 소유자 1명·열린 프로젝트 1개 / 구독 좌석)을 판정한다.
   // 초과면 403 PROJECT_UNLOCK_OVER_LIMIT 와 함께 무엇을 줄여야 하는지 메시지가 온다.
   const unlockMutation = useMutation({
     mutationFn: (projectId: string) =>
@@ -421,7 +421,7 @@ function ProjectsPageInner() {
                     unlockMutation.mutate(item.projectId);
                   }}
                   disabled={unlockMutation.isPending}
-                  title="FREE 플랜 상한(멤버 5명) 이하이면 바로 활성화됩니다"
+                  title="소유자 혼자 편집하고, 열려 있는 다른 소유 프로젝트가 없으면 바로 활성화됩니다"
                   style={{ whiteSpace: "nowrap", justifySelf: "end" }}
                 >
                   활성화
@@ -457,12 +457,12 @@ function ProjectsPageInner() {
         <CreateProjectDialog
           onClose={() => setCreateOpen(false)}
           onCreated={handleCreated}
-          onLimit={(msg) => { setCreateOpen(false); setLimitMsg(msg); }}
+          onLimit={(info) => { setCreateOpen(false); setLimit(info); }}
         />
       )}
 
       {/* FREE 상한 안내 — 요금제 페이지로 유도 */}
-      <PlanLimitDialog message={limitMsg} onClose={() => setLimitMsg(null)} />
+      <PlanLimitDialog limit={limit} onClose={() => setLimit(null)} />
     </div>
   );
 }

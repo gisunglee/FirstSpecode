@@ -8,7 +8,7 @@
  * 운영 public 스키마는 건드리지 않는다. 메일은 SMTP_HOST 를 지워 콘솔로만 나간다.
  *
  * 검증 흐름 (정책 §3 2단계 "수동 점검" 항목 그대로):
- *   가격·날짜 순수 함수 → BASIC 시작(좌석 검증·첫 결제·플랜 미러) → 좌석 상한(초대 검사)
+ *   가격·날짜 순수 함수 → FREE 상한(편집자 소유자 1명·뷰어 무제한·필요 좌석 안내) → BASIC 시작(좌석 검증·첫 결제·플랜 미러) → 좌석 상한(초대 검사)
  *   → 좌석 추가(일할 결제) → 좌석 축소 예약·취소 → 사전 안내 메일(멱등) → 정기 결제(갱신)
  *   → 실패 카드로 변경 → 결제 실패(PAST_DUE) → 3일 간격 재시도 3회 → 강등(EXPIRED·FREE·잠금)
  *   → 잠금 검사(requirePermission 권한·메서드 기준, requireProjectUnlocked) → 활성화(상한 이하/초과) → 재결제(전부 해제)
@@ -81,6 +81,7 @@ async function main(): Promise<void> {
     const lock    = await import("@/lib/billing/lock");
     const seats   = await import("@/lib/billing/seats");
     const limits  = await import("@/lib/planLimits");
+    const withdrawal = await import("@/lib/billing/withdrawal");
     const { encodeMockAuthKey } = await import("@/lib/billing/mock-auth-key");
     const { buildCustomerKey }  = await import("@/lib/billing/gateway");
     const { BillingError }      = await import("@/lib/billing/errors");
@@ -142,6 +143,26 @@ async function main(): Promise<void> {
     const customerKey = buildCustomerKey(ids.A);
     const goodCard = () => encodeMockAuthKey({ cardCompany: "신한", last4: "1234", alwaysFail: false });
     const failCard = () => encodeMockAuthKey({ cardCompany: "국민", last4: "9999", alwaysFail: true });
+
+    // ── 1-b. FREE 상한 — 편집 멤버는 소유자뿐, 뷰어 무제한 (정책 §1-2, 2026-09-26) ──
+    log("FREE 상한 — 편집 멤버 초대·승격은 403 PLAN_LIMIT_MEMBER(필요 좌석·월 금액 포함), 뷰어 초대는 통과");
+    {
+      // A 는 아직 FREE (plan_code null). P1 편집 멤버 = A, B 로 이미 상한 초과 상태 — 기존은 그대로, 추가만 막힌다
+      const rf = await limits.checkMemberLimit(ids.P1, [{ role: "MEMBER", mberId: ids.D }], "inviter");
+      assert.ok(rf && rf.status === 403);
+      const body = await rf!.clone().json();
+      assert.equal(body.code, "PLAN_LIMIT_MEMBER");
+      assert.equal(body.requiredSeats, 4, "BASIC 으로 가면 사용 좌석 3(A,B,C) + 새 편집자 D = 4좌석");
+      assert.equal(body.monthlyAmount, 39600);
+      assert.equal(await limits.checkMemberLimit(ids.P1, [{ role: "VIEWER", mberId: ids.D }]), null, "뷰어는 무료·무제한");
+      const rfC = await limits.checkMemberLimit(ids.P1, [{ role: "MEMBER", mberId: ids.C }], "inviter");
+      assert.equal((await rfC!.clone().json()).requiredSeats, 3, "이미 좌석 보유자(C)는 새 좌석이 아니지만 FREE 에선 그래도 차단");
+      const rfIn = await limits.checkMemberLimit(ids.P1, [{ role: "MEMBER", mberId: ids.D }], "invitee");
+      assert.ok(rfIn && rfIn.status === 403, "수락 시점 재검사도 같은 결론");
+      const rp = await limits.checkSeatLimit(ids.P1, [{ role: "MEMBER", mberId: ids.V[0]! }]);
+      assert.ok(rp && rp.status === 403 && (await rp.clone().json()).code === "PLAN_LIMIT_MEMBER", "FREE 뷰어 → 편집 승격도 차단");
+      assert.equal(await limits.checkSeatLimit(ids.P1, [{ role: "VIEWER", mberId: ids.B }]), null, "뷰어로 내리는 방향은 검사 없음");
+    }
 
     // ── 2. BASIC 시작 ────────────────────────────────────────────────────
     log("BASIC 시작 — 좌석 2 는 거부, 3 은 성공(첫 결제·ACTIVE·plan_code=BASIC)");
@@ -321,17 +342,28 @@ async function main(): Promise<void> {
     assert.ok(helperGate instanceof Response && helperGate.status === 403, "requireProjectUnlocked → 403");
     assert.equal(await requireProjectUnlocked(randomUUID()), null, "없는 프로젝트는 호출부 404 에 맡김");
 
-    // ── 10. 활성화 — P1(4명) 해제 OK, P2(6명) 초과 거부 → 뷰어 1명 빼면 OK ─
-    log("활성화 — P1(멤버 4명) 해제, P2(6명) 는 FREE 상한 초과로 거부, 뷰어 제거 후 해제");
+    // ── 10. 활성화 — FREE: 소유자 혼자 편집 + 열린 프로젝트 1개 ─────────
+    log("활성화 — P1 은 편집 멤버 3명(A·B·D)이라 거부(FREE_EDITORS), B·D 를 뷰어로 내리면 해제; P2 는 열린 P1 때문에 거부(FREE_PROJECTS), P1 을 잠그면 해제");
+    const u0 = await lock.unlockProjectByOwner(ids.P1);
+    assert.ok(!u0.unlocked && u0.verdict.reason === "FREE_EDITORS" && u0.verdict.editorCount === 3, "A+B+D 편집 멤버 3명 → 거부 (D 는 4단계 좌석 추가 때 합류)");
+    const setRole = (p: string, m: string, role: string) =>
+      prisma.tbPjProjectMember.update({ where: { prjct_id_mber_id: { prjct_id: p, mber_id: m } }, data: { role_code: role } });
+    await setRole(ids.P1, ids.B, "VIEWER");
+    await setRole(ids.P1, ids.D, "VIEWER");
     const u1 = await lock.unlockProjectByOwner(ids.P1);
-    assert.equal(u1.unlocked, true);
+    assert.equal(u1.unlocked, true, "뷰어로 내리면 소유자 혼자 → 해제");
     assert.equal(await requireProjectUnlocked(ids.P1), null, "해제 후 헬퍼 통과");
     const u2 = await lock.unlockProjectByOwner(ids.P2);
-    assert.equal(u2.unlocked, false);
-    assert.ok(!u2.unlocked && u2.verdict.reason === "FREE_MEMBERS" && u2.verdict.memberCount === 6);
-    await prisma.tbPjProjectMember.update({ where: { prjct_id_mber_id: { prjct_id: ids.P2, mber_id: ids.V[3]! } }, data: { mber_sttus_code: "REMOVED" } });
+    assert.ok(!u2.unlocked && u2.verdict.reason === "FREE_EDITORS", "P2 는 C 가 편집 멤버");
+    await setRole(ids.P2, ids.C, "VIEWER");
+    const u3 = await lock.unlockProjectByOwner(ids.P2);
+    assert.ok(!u3.unlocked && u3.verdict.reason === "FREE_PROJECTS" && u3.verdict.openProjectCount === 1, "열린 P1 이 있어 P2 는 못 연다 — FREE 는 활성 1개");
+    await lock.lockAllOwnedProjects(ids.A, new Date());   // P1 을 다시 잠그면 P2 를 열 수 있다 — 어느 것을 열지는 소유자가 고른다
     assert.equal((await lock.unlockProjectByOwner(ids.P2)).unlocked, true);
-    // 재결제 테스트를 위해 다시 잠가 둔다
+    // 뒤 단계(재결제·좌석 계산)를 위해 B·D·C 를 편집 멤버로 되돌리고 다시 잠가 둔다
+    await setRole(ids.P1, ids.B, "MEMBER");
+    await setRole(ids.P1, ids.D, "MEMBER");
+    await setRole(ids.P2, ids.C, "MEMBER");
     await lock.lockAllOwnedProjects(ids.A, new Date());
 
     // ── 11. 재결제 — 종료된 행 재사용, 전부 해제 ──────────────────────
@@ -368,7 +400,7 @@ async function main(): Promise<void> {
     assert.deepEqual(await daily.loadDailyTargets(), [], "종료된 구독은 배치 대상 아님");
 
     // ── 13. 자동 해제 — 프로젝트 1개뿐이면 강등 시 바로 활성 ─────────
-    log("자동 해제 — 소유 프로젝트가 1개(≤5명)뿐인 소유자는 강등 직후 자동 활성화");
+    log("자동 해제 — 소유 프로젝트가 1개(소유자 혼자)뿐인 소유자는 강등 직후 자동 활성화");
     const ids2 = { O: randomUUID(), P: randomUUID() };
     await prisma.tbCmMember.create({ data: mk(ids2.O, "solo") });
     await prisma.tbPjProject.create({ data: { prjct_id: ids2.P, prjct_nm: "solo", prjct_abrv: "SOL", creat_mber_id: ids2.O, owner_mber_id: ids2.O } });
@@ -380,14 +412,20 @@ async function main(): Promise<void> {
     assert.equal(pastDue.status, "CANCEL_SCHEDULED");
     await daily.processSubscriptionDaily(solo.sbscrptn_id, new Date(solo.crrnt_perd_end_dt!.getTime() + days(0.1)));
     const soloP = await prisma.tbPjProject.findUniqueOrThrow({ where: { prjct_id: ids2.P } });
-    assert.equal(soloP.lock_yn, "N", "1개뿐 + 5명 이하 → 자동 해제");
+    assert.equal(soloP.lock_yn, "N", "1개뿐 + 소유자 혼자 → 자동 해제");
 
     // ── 14. 소유권 이전 잠금 판정 + 탈퇴 시 구독 종료 ──────────────────
-    log("이전·복구 판정 — FREE 소유자에게 6명 프로젝트가 가면 잠김 / 탈퇴 시 살아 있는 구독 CANCELED·빌링키 NULL");
-    await prisma.tbPjProjectMember.update({ where: { prjct_id_mber_id: { prjct_id: ids.P2, mber_id: ids.V[3]! } }, data: { mber_sttus_code: "ACTIVE" } }); // P2 다시 6명
+    log("이전·복구 판정 — FREE 소유자에게 편집자 2명 프로젝트가 가면 잠김(FREE_EDITORS), 혼자 프로젝트라도 이미 열린 것이 있으면 잠김(FREE_PROJECTS, 양도 우회 차단) / 탈퇴 시 살아 있는 구독 CANCELED·빌링키 NULL");
     const over = await lock.isProjectOverPlanLimit(ids.P2, ids2.O);
-    assert.ok(over.over && over.reason === "FREE_MEMBERS");
-    assert.equal((await lock.isProjectOverPlanLimit(ids.P1, ids2.O)).over, false);
+    assert.ok(over.over && over.reason === "FREE_EDITORS", "P2 는 A·C 편집 멤버 2명");
+    // 소유자 혼자인 P3 를 O(FREE, 열린 solo 프로젝트 보유)에게 넘기는 상황 → 받은 프로젝트는 잠긴 채 넘어간다
+    const p3 = randomUUID();
+    await prisma.tbPjProject.create({ data: { prjct_id: p3, prjct_nm: "P3", prjct_abrv: "P3", creat_mber_id: ids.A, owner_mber_id: ids.A } });
+    await prisma.tbPjProjectMember.create({ data: pm(p3, ids.A, "OWNER") });
+    const over3 = await lock.isProjectOverPlanLimit(p3, ids2.O);
+    assert.ok(over3.over && over3.reason === "FREE_PROJECTS" && over3.openProjectCount === 1, "열린 solo 가 있어 P3 는 잠긴 채 받는다");
+    assert.equal((await lock.isProjectOverPlanLimit(ids2.P, ids2.O)).over, false, "O 의 유일한 열린 프로젝트는 상한 이하");
+    await prisma.tbPjProject.update({ where: { prjct_id: p3 }, data: { del_yn: "Y" } });  // 뒤 단계의 A 소유 프로젝트 수(2)에 영향 없게 치운다
     // 탈퇴: solo 가 다시 구독한 뒤 withdrawSubscription
     await sub.completeCardRegistration(actor2, { authKey: goodCard(), customerKey: buildCustomerKey(ids2.O), purpose: "start", seatCnt: 1 }, tRe);
     await prisma.$transaction(async (tx) => { assert.equal(await sub.withdrawSubscription(tx, ids2.O, tRe), true); });
@@ -416,13 +454,14 @@ async function main(): Promise<void> {
       assert.equal(allList.items[0]!.endedReason, "USER_CANCEL");
       assert.ok(!JSON.stringify(allList).includes("mockbk_"), "목록에 빌링키 없음");
 
-      // 잠금 해제 대행 — P2(6명) 초과 → 거부(강제 없음). 뷰어 1명 빼면 해제 + 감사 행
+      // 잠금 해제 대행 — P2 는 C 가 편집 멤버라 초과 → 거부(강제 없음). C 를 뷰어로 내리면 해제 + 감사 행 (P1 은 잠겨 있어 열린 프로젝트 0)
       const u1 = await adminA.adminUnlockProject(ids.P2, adminActor, "테스트");
-      assert.ok(!u1.unlocked && u1.verdict.reason === "FREE_MEMBERS");
-      await prisma.tbPjProjectMember.update({ where: { prjct_id_mber_id: { prjct_id: ids.P2, mber_id: ids.V[3]! } }, data: { mber_sttus_code: "REMOVED" } });
-      const u2 = await adminA.adminUnlockProject(ids.P2, adminActor, "뷰어 정리 후 대행");
+      assert.ok(!u1.unlocked && u1.verdict.reason === "FREE_EDITORS");
+      await setRole(ids.P2, ids.C, "VIEWER");
+      const u2 = await adminA.adminUnlockProject(ids.P2, adminActor, "편집 멤버 정리 후 대행");
       assert.ok(u2.unlocked && !u2.alreadyActive);
       assert.equal(await prisma.tbSysAdminAudit.count({ where: { action_type: "PROJECT_UNLOCK_BY_ADMIN", target_id: ids.P2 } }), 1, "해제와 감사가 같은 트랜잭션");
+      await setRole(ids.P2, ids.C, "MEMBER");  // 뒤 단계의 사용 좌석 계산을 위해 되돌린다
 
       // 재구독 → ACTIVE, 종료 사유 리셋. 결제일 연기 +10일(감사 동반), ACTIVE 재결제는 거부
       const tA = new Date(tEnd.getTime() + days(1));
@@ -434,29 +473,63 @@ async function main(): Promise<void> {
       assert.equal(new Date(deferred.nextBillAt!).getTime(), s4.next_bill_dt!.getTime() + days(10));
       assert.equal(await prisma.tbSysAdminAudit.count({ where: { action_type: "BILLING_DEFER_BILL_DATE", target_id: s4.sbscrptn_id } }), 1);
 
-      // 청약철회 환불 — INITIAL·7일 이내·미사용 → 전액 REFUND 행 + 원 결제 REFUNDED + 구독 종료(REFUND_WITHDRAWAL) + 잠금
+      // 청약철회 — 계정의 첫 구독 시작 결제만, 7일 이내, 계정당 1회. 사용 여부는 보지 않는다 (정책 §1-7, 2026-09-26)
+      // A 의 이번 INITIAL 은 재구독(첫 INITIAL 은 t0) → 대상 아님
       const initial4 = (await prisma.tbBlPayment.findFirst({ where: { sbscrptn_id: s4.sbscrptn_id, pymnt_ty_code: "INITIAL", pymnt_sttus_code: "PAID" }, orderBy: { creat_dt: "desc" } }))!;
+      await assert.rejects(adminA.adminRecordRefund(initial4.pymnt_id, { reason: "WITHDRAWAL", memo: "재구독" }, adminActor),
+        (e: unknown) => e instanceof BillingError && e.code === "BILLING_REFUND_NOT_ALLOWED", "재구독 결제는 청약철회 불가(첫 결제만)");
+      const eligA = await withdrawal.getWithdrawalEligibility(ids.A);
+      assert.notEqual(eligA.firstPaymentId, initial4.pymnt_id, "A 의 첫 결제는 t0 의 INITIAL");
+
+      // 새 회원 W — 편집자 2명 프로젝트(옛 기준 "유료 기능 사용")여도 첫 결제 7일 이내면 전액 환불
+      //   → REFUND 행 + 원 결제 REFUNDED + 구독 종료(REFUND_WITHDRAWAL) + FREE 강등 + 잠금
+      const ids3 = { W: randomUUID(), M: randomUUID(), P: randomUUID(), X: randomUUID() };
+      await prisma.tbCmMember.createMany({ data: [mk(ids3.W, "wd"), mk(ids3.M, "wdm"), mk(ids3.X, "late")] });
+      await prisma.tbPjProject.create({ data: { prjct_id: ids3.P, prjct_nm: "wd", prjct_abrv: "WD", creat_mber_id: ids3.W, owner_mber_id: ids3.W } });
+      await prisma.tbPjProjectMember.createMany({ data: [pm(ids3.P, ids3.W, "OWNER"), pm(ids3.P, ids3.M, "MEMBER")] });
+      const emailOf = async (id: string) => (await prisma.tbCmMember.findUniqueOrThrow({ where: { mber_id: id } })).email_addr!;
+      const actorW = { mberId: ids3.W, email: await emailOf(ids3.W) };
+      assert.equal((await withdrawal.getWithdrawalEligibility(ids3.W)).reason, "NO_PAYMENT");
+      await sub.completeCardRegistration(actorW, { authKey: goodCard(), customerKey: buildCustomerKey(ids3.W), purpose: "start", seatCnt: 2 }, tA);
+      const subW = (await sub.findSubscription(ids3.W))!;
+      const initialW = (await prisma.tbBlPayment.findFirst({ where: { sbscrptn_id: subW.sbscrptn_id, pymnt_ty_code: "INITIAL", pymnt_sttus_code: "PAID" } }))!;
+      const eligW = await withdrawal.getWithdrawalEligibility(ids3.W);
+      assert.ok(eligW.eligible && eligW.firstPaymentId === initialW.pymnt_id && eligW.deadline, "첫 결제·7일 이내 → 가능");
       // 청약철회 7일 검사는 PG 승인 시각(실제 현재) 기준 — 시뮬레이션 시각이 아니라 실제 now 로 호출한다
-      const wd = await adminA.adminRecordRefund(initial4.pymnt_id, { reason: "WITHDRAWAL", memo: "7일 이내 청약철회" }, adminActor);
-      assert.equal(wd.refund.amount, -initial4.amt);
-      assert.equal(wd.refund.origPaymentId, initial4.pymnt_id);
+      const wd = await adminA.adminRecordRefund(initialW.pymnt_id, { reason: "WITHDRAWAL", memo: "7일 이내 청약철회" }, adminActor);
+      assert.equal(wd.refund.amount, -initialW.amt);
+      assert.equal(wd.refund.origPaymentId, initialW.pymnt_id);
       assert.equal(wd.refund.refundReason, "WITHDRAWAL");
       assert.equal(wd.original.status, "REFUNDED");
       assert.equal(wd.subscriptionTerminated, true);
-      const s5 = (await sub.findSubscription(ids.A))!;
+      const s5 = (await sub.findSubscription(ids3.W))!;
       assert.equal(s5.sbscrptn_sttus_code, "CANCELED");
       assert.equal(s5.ended_rsn_code, "REFUND_WITHDRAWAL");
       assert.equal(s5.billing_key, null);
-      assert.equal((await prisma.tbCmMember.findUniqueOrThrow({ where: { mber_id: ids.A } })).plan_code, "FREE");
-      await assert.rejects(adminA.adminRecordRefund(initial4.pymnt_id, { reason: "WITHDRAWAL", memo: "중복" }, adminActor), (e: unknown) => e instanceof BillingError && e.code === "BILLING_REFUND_NOT_ALLOWED", "이미 전액 환불");
-      // 8일 지난 청약철회는 거부
-      await sub.completeCardRegistration(actor, { authKey: goodCard(), customerKey, purpose: "start", seatCnt: 4 }, new Date(tA.getTime() + days(3)));
-      const s6 = (await sub.findSubscription(ids.A))!;
-      const initial6 = (await prisma.tbBlPayment.findFirst({ where: { sbscrptn_id: s6.sbscrptn_id, pymnt_ty_code: "INITIAL", pymnt_sttus_code: "PAID" }, orderBy: { creat_dt: "desc" } }))!;
-      // 승인 시각을 12일 전으로 돌려 "7일 초과" 를 재현
-      await prisma.tbBlPayment.update({ where: { pymnt_id: initial6.pymnt_id }, data: { apprv_dt: new Date(Date.now() - days(12)) } });
-      await assert.rejects(adminA.adminRecordRefund(initial6.pymnt_id, { reason: "WITHDRAWAL", memo: "늦음" }, adminActor),
+      assert.equal((await prisma.tbCmMember.findUniqueOrThrow({ where: { mber_id: ids3.W } })).plan_code, "FREE");
+      assert.equal((await prisma.tbPjProject.findUniqueOrThrow({ where: { prjct_id: ids3.P } })).lock_yn, "Y", "편집자 2명 프로젝트는 강등 시 잠김");
+      await assert.rejects(adminA.adminRecordRefund(initialW.pymnt_id, { reason: "WITHDRAWAL", memo: "중복" }, adminActor), (e: unknown) => e instanceof BillingError && e.code === "BILLING_REFUND_NOT_ALLOWED", "이미 전액 환불");
+      assert.equal((await withdrawal.getWithdrawalEligibility(ids3.W)).reason, "ALREADY_REFUNDED");
+      // W 가 다시 구독해도 두 번째 INITIAL 은 대상이 아니다 (계정당 1회) — 첫 결제는 환불된 것이 그대로 첫 결제
+      await sub.completeCardRegistration(actorW, { authKey: goodCard(), customerKey: buildCustomerKey(ids3.W), purpose: "start", seatCnt: 2 }, new Date(tA.getTime() + days(1)));
+      const initialW2 = (await prisma.tbBlPayment.findFirst({ where: { mber_id: ids3.W, pymnt_ty_code: "INITIAL", pymnt_sttus_code: "PAID" }, orderBy: { creat_dt: "desc" } }))!;
+      assert.notEqual(initialW2.pymnt_id, initialW.pymnt_id);
+      assert.equal((await withdrawal.getWithdrawalEligibility(ids3.W)).firstPaymentId, initialW.pymnt_id, "환불된 첫 결제가 여전히 '첫 결제'");
+      await assert.rejects(adminA.adminRecordRefund(initialW2.pymnt_id, { reason: "WITHDRAWAL", memo: "2회차" }, adminActor),
+        (e: unknown) => e instanceof BillingError && e.code === "BILLING_REFUND_NOT_ALLOWED", "계정당 1회");
+
+      // 8일 지난 청약철회는 거부 — 새 회원 X 의 첫 결제 승인 시각을 12일 전으로 돌려 재현
+      const actorX = { mberId: ids3.X, email: await emailOf(ids3.X) };
+      await sub.completeCardRegistration(actorX, { authKey: goodCard(), customerKey: buildCustomerKey(ids3.X), purpose: "start", seatCnt: 1 }, tA);
+      const initialX = (await prisma.tbBlPayment.findFirst({ where: { mber_id: ids3.X, pymnt_ty_code: "INITIAL", pymnt_sttus_code: "PAID" } }))!;
+      await prisma.tbBlPayment.update({ where: { pymnt_id: initialX.pymnt_id }, data: { apprv_dt: new Date(Date.now() - days(12)) } });
+      assert.equal((await withdrawal.getWithdrawalEligibility(ids3.X)).reason, "WINDOW_PASSED");
+      await assert.rejects(adminA.adminRecordRefund(initialX.pymnt_id, { reason: "WITHDRAWAL", memo: "늦음" }, adminActor),
         (e: unknown) => e instanceof BillingError && e.code === "BILLING_REFUND_NOT_ALLOWED", "7일 초과 청약철회 거부");
+
+      // 이후 단계는 A 의 살아 있는 구독(s4)을 그대로 쓴다 — 예전엔 청약철회로 끝낸 뒤 재구독했지만 이제 A 는 대상이 아니다
+      const s6 = s4;
+      const initial6 = initial4;
 
       // 운영 보정 부분 환불 — PARTIALLY_REFUNDED, 잔액. 동시 2건(잔액 전액씩) → 정확히 1건만 성공
       const adj = await adminA.adminRecordRefund(initial6.pymnt_id, { reason: "ADJUSTMENT", amount: 1000, memo: "테스트 보정" }, adminActor);
@@ -515,8 +588,10 @@ async function main(): Promise<void> {
       await assert.rejects(adminA.adminTerminate(s6.sbscrptn_id, adminActor, "x", due2), (e: unknown) => e instanceof BillingError && e.code === "BILLING_INVALID_STATE");
 
       const payList = await adminQ.listPaymentsForAdmin({ search: "owner-", page: 1, pageSize: 200 });
-      assert.ok(payList.items.some((p) => p.type === "REFUND" && p.refundReason === "WITHDRAWAL"));
+      assert.ok(payList.items.some((p) => p.type === "REFUND" && p.refundReason === "ADJUSTMENT"), "A 의 운영 보정 환불 행");
       assert.equal(payList.searchTruncated, false);
+      const payListW = await adminQ.listPaymentsForAdmin({ search: "wd-", page: 1, pageSize: 200 });
+      assert.ok(payListW.items.some((p) => p.type === "REFUND" && p.refundReason === "WITHDRAWAL"), "W 의 청약철회 환불 행");
       assert.deepEqual(await adminQ.listAdminAlertRecipients(), [], "임시 스키마엔 SUPER_ADMIN 없음");
     }
 

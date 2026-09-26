@@ -30,9 +30,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const result = await adminUnlockProject(projectId, gate, parsed.data.reason);
     if (!result.unlocked) {
       const v = result.verdict;
-      const message = v.reason === "FREE_MEMBERS"
-        ? `FREE 상한 초과 — 멤버 ${v.memberCount}명 > ${v.limit}명. 멤버를 줄이거나, 운영 판단이면 회원 상세에서 플랜을 부여한 뒤 다시 대행하세요.`
-        : `좌석 상한 초과 — 사용 좌석 ${v.usedSeats} > ${v.limit}. 편집 멤버를 뷰어로 바꾸거나 좌석을 추가한 뒤 다시 대행하세요.`;
+      const message =
+        v.reason === "FREE_EDITORS"
+          ? `FREE 상한 초과 — 편집 멤버 ${v.editorCount}명 > ${v.limit}명. 편집 멤버를 뷰어로 내리거나, 운영 판단이면 회원 상세에서 플랜을 부여한 뒤 다시 대행하세요.`
+          : v.reason === "FREE_PROJECTS"
+            ? `FREE 상한 초과 — 이미 열려 있는 소유 프로젝트가 ${v.openProjectCount}개(상한 ${v.limit}개). FREE 는 활성 프로젝트 1개뿐입니다. 운영 판단이면 플랜을 부여한 뒤 다시 대행하세요.`
+            : `좌석 상한 초과 — 사용 좌석 ${v.usedSeats} > ${v.limit}. 편집 멤버를 뷰어로 바꾸거나 좌석을 추가한 뒤 다시 대행하세요.`;
       return apiError(BILLING_ERROR_CODES.UNLOCK_OVER_LIMIT, message, 409, { ...v });
     }
     return apiSuccess(result);

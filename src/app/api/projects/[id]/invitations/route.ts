@@ -112,7 +112,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
   }
 
-  // 플랜 상한 — 소유자 플랜 기준. FREE 는 프로젝트당 5명, 구독은 편집 역할의 구매 좌석.
+  // 플랜 상한 — 소유자 플랜 기준. FREE 는 편집 멤버가 소유자뿐(뷰어 무제한), 구독은 편집 역할의 구매 좌석.
   // 이번 요청의 초대 인원을 모두 더해 검사한다 (이메일로 기존 좌석 보유자를 가려낸다).
   // 수락 시점에 다시 검사하므로 PENDING 초대는 여기서 세지 않는다.
   const limitErr = await checkMemberLimit(

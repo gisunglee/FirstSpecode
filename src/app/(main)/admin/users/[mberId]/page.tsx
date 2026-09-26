@@ -21,8 +21,9 @@ import { authFetch } from "@/lib/authFetch";
 import { useIsSystemAdmin } from "@/hooks/useMyRole";
 import { PLAN_CODES, type PlanCode } from "@/lib/permissions";
 import type { SubscriptionDto } from "@/lib/billing/subscription";
-import type { PaidFeatureUsage } from "@/lib/billing/paidUsage";
-import { isLiveSubscriptionStatus, SUBSCRIPTION_STATUS_LABEL } from "@/lib/billing/constants";
+import type { WithdrawalEligibility } from "@/lib/billing/withdrawal";
+import { isLiveSubscriptionStatus, SUBSCRIPTION_STATUS_LABEL, WITHDRAWAL_REASON_LABEL } from "@/lib/billing/constants";
+import { PRICING } from "@/app/intro/_components/siteInfo";
 import { formatKstDate, formatWon } from "@/lib/billing/pricing";
 
 type UserDetail = {
@@ -62,8 +63,8 @@ type UserDetail = {
   };
   /** 결제 구독 요약 (없으면 null) — 살아 있으면 플랜 수동 변경은 서버가 409 */
   subscription: SubscriptionDto | null;
-  /** 환불 판정용 유료 기능 사용 3플래그 (정책 §1-7) */
-  paidFeatureUsage: PaidFeatureUsage;
+  /** 청약철회 가능 여부 — 첫 구독 결제·7일·계정당 1회 (정책 §1-7) */
+  withdrawal: WithdrawalEligibility;
   projects: Array<{
     projectId: string;
     name:      string;
@@ -335,8 +336,8 @@ export default function AdminUserDetailPage({ params }: Props) {
         </div>
       </section>
 
-      {/* 구독·결제 (결제 2단계) — 구독 요약 + 환불 판정 3플래그. 환불 실행은 PG 콘솔 수동 */}
-      <BillingSummarySection subscription={user.subscription} usage={user.paidFeatureUsage} />
+      {/* 구독·결제 (결제 2단계) — 구독 요약 + 청약철회 가능 여부. 환불 실행은 PG 콘솔 수동 */}
+      <BillingSummarySection subscription={user.subscription} withdrawal={user.withdrawal} />
 
       {/* 계정 접근 및 인증 보안 */}
       <section
@@ -608,7 +609,7 @@ export default function AdminUserDetailPage({ params }: Props) {
 // 결제 연동 전 운영자가 BASIC/ENTERPRISE 를 수동 부여하는 유일한 경로.
 // 2단계 이후 활성 구독이 있는 회원은 서버가 409 로 거부한다 (구독이 플랜의 원천).
 const PLAN_OPTION_LABEL: Record<PlanCode, string> = {
-  FREE:       "FREE — 무료 (프로젝트 1개·멤버 5명·첨부 불가)",
+  FREE:       "FREE — 무료 (프로젝트 1개·편집자 소유자 1명·뷰어 무제한·첨부 불가)",
   BASIC:      "BASIC — 좌석당 월 과금 플랜",
   PRO:        "PRO — 준비 중 (수동 부여만)",
   ENTERPRISE: "ENTERPRISE — 별도 계약 (수동 부여만)",
@@ -769,13 +770,10 @@ function AccessActionModal({
 }
 
 // ─── 구독·결제 요약 ────────────────────────────────────────────────────
-// 관리자 구독 목록 화면은 만들지 않는다(정책 §1-10). 회원 상세에서 구독 상태와
-// 환불 판정 플래그(결제 후 ② 프로젝트 생성 / 6번째 편집 멤버 / 첨부 업로드)만 보여 준다.
+// 회원 상세에서는 구독 상태와 청약철회 가능 여부(첫 구독 결제·7일·계정당 1회, 사용 여부 무관)만
+// 보여 준다. 운영 액션·환불 기록은 구독 상세(/admin/billing/[id]).
 
-function BillingSummarySection({ subscription, usage }: { subscription: SubscriptionDto | null; usage: PaidFeatureUsage }) {
-  const flag = (v: boolean) => (
-    <span className={`sp-badge ${v ? "sp-badge-warning" : "sp-badge-neutral"}`}>{v ? "사용" : "미사용"}</span>
-  );
+function BillingSummarySection({ subscription, withdrawal }: { subscription: SubscriptionDto | null; withdrawal: WithdrawalEligibility }) {
   return (
     <section
       style={{
@@ -806,14 +804,19 @@ function BillingSummarySection({ subscription, usage }: { subscription: Subscrip
           {subscription.endedAt && <InfoItem label="종료일" value={formatKstDate(new Date(subscription.endedAt))} />}
         </div>
       )}
-      <div style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", marginBottom: "var(--space-2)" }}>
-        환불 판정 — 결제 후 유료 기능 사용 여부 (7일 이내 + 전부 미사용이면 전액 환불 대상)
-        {usage.firstPaidAt && <span style={{ color: "var(--color-text-tertiary)" }}> · 기준 시각 {formatKstDate(new Date(usage.firstPaidAt))}</span>}
-      </div>
-      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: "var(--text-sm)" }}>
-        <span>① 두 번째 프로젝트 생성 {flag(usage.secondProjectCreated)}</span>
-        <span>② 6번째 이상 편집 멤버 {flag(usage.sixthEditorJoined)}</span>
-        <span>③ 첨부파일 업로드 {flag(usage.fileUploaded)}</span>
+      {/* 청약철회 — 첫 구독 결제 1건만, 승인 후 7일, 계정당 1회. 사용 여부는 보지 않는다(정책 §1-7) */}
+      <div style={{ fontSize: "var(--text-sm)", color: "var(--color-text-secondary)", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <span>청약철회(첫 구독 결제 · 승인 후 {PRICING.refundWindowDays}일 · 계정당 1회):</span>
+        {withdrawal.firstPaidAt ? (
+          <>
+            <span>첫 결제 {formatKstDate(new Date(withdrawal.firstPaidAt))} · 기한 {formatKstDate(new Date(withdrawal.deadline!))}</span>
+            <span className={`sp-badge ${withdrawal.eligible ? "sp-badge-success" : "sp-badge-neutral"}`}>
+              {withdrawal.eligible ? "가능" : `불가 · ${withdrawal.reason ? WITHDRAWAL_REASON_LABEL[withdrawal.reason] : ""}`}
+            </span>
+          </>
+        ) : (
+          <span style={{ color: "var(--color-text-tertiary)" }}>결제 이력 없음</span>
+        )}
       </div>
     </section>
   );

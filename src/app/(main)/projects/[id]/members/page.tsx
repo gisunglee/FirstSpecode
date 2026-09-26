@@ -24,6 +24,7 @@ import { authFetch } from "@/lib/authFetch";
 import { SelectChevron } from "@/components/ui/SelectChevron";
 import ExcelDownloadButton from "@/components/common/ExcelDownloadButton";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
+import PlanLimitDialog, { isPlanLimitError, toPlanLimitInfo, type PlanLimitInfo } from "@/components/common/PlanLimitDialog";
 import {
   ROLE_CODES, ROLE_LABEL,
   JOB_CODES,  JOB_LABEL,
@@ -108,6 +109,8 @@ function MembersPageInner() {
   const [leaveOpen, setLeaveOpen] = useState(false);
   // 소유권 양도 확인 대상 — 드롭다운에서 OWNER 를 고른 멤버. 확인 전에는 API 를 부르지 않는다.
   const [transferTarget, setTransferTarget] = useState<Member | null>(null);
+  // 뷰어 → 편집 역할 승격이 FREE 편집 멤버 상한에 걸리면 BASIC 안내 모달 (필요 좌석·월 금액 포함)
+  const [limit, setLimit] = useState<PlanLimitInfo | null>(null);
 
   // ── 멤버 목록 조회 ─────────────────────────────────────────────────────────
   const { data, isLoading, error } = useQuery({
@@ -134,7 +137,8 @@ function MembersPageInner() {
         toast.success("소유권을 양도했습니다. 내 역할은 관리자로 변경되었습니다.");
       }
     },
-    onError: (err: Error) => toast.error(err.message),
+    // 뷰어 → 편집 승격이 플랜 상한(FREE 편집자 1명 / 구독 좌석)에 걸리면 토스트 대신 BASIC 안내 모달
+    onError: (err: Error) => (isPlanLimitError(err) ? setLimit(toPlanLimitInfo(err)) : toast.error(err.message)),
   });
 
   // ── 직무 변경 ──────────────────────────────────────────────────────────────
@@ -419,6 +423,9 @@ function MembersPageInner() {
       )}
 
       {/* 강제 제거 확인 다이얼로그 (PID-00025) */}
+      {/* 플랜 상한 안내 — 뷰어 승격이 막혔을 때 필요 좌석·금액과 함께 BASIC 시작으로 유도 */}
+      <PlanLimitDialog limit={limit} onClose={() => setLimit(null)} />
+
       {removingMember && (
         <RemoveConfirmDialog
           member={removingMember}
@@ -434,7 +441,7 @@ function MembersPageInner() {
         title="소유권을 양도하시겠습니까?"
         description={
           transferTarget
-            ? `${transferTarget.name ?? transferTarget.email} 님이 이 프로젝트의 소유자가 되고, 내 역할은 관리자로 변경됩니다. 소유자는 한 명만 둘 수 있으며, 되돌리려면 새 소유자가 다시 양도해야 합니다.`
+            ? `${transferTarget.name ?? transferTarget.email} 님이 이 프로젝트의 소유자가 되고, 내 역할은 관리자로 변경됩니다. 소유자는 한 명만 둘 수 있으며, 되돌리려면 새 소유자가 다시 양도해야 합니다. 새 소유자가 FREE 플랜이면 프로젝트가 읽기 전용으로 잠길 수 있고, 이때는 새 소유자가 편집 멤버를 뷰어로 바꾸거나 구독을 시작하면 다시 열립니다.`
             : ""
         }
         confirmLabel="양도"

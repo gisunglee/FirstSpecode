@@ -109,7 +109,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         });
       }
 
-      // 소유자 플랜 기준 상한(FREE 멤버 5명 / 구독 좌석) 초과면 잠긴 상태로 복구된다.
+      // 소유자 플랜 기준 상한(FREE 편집자 1명·열린 프로젝트 1개 / 구독 좌석) 초과면 잠긴 상태로 복구된다.
       // 멤버를 되살린 뒤에 판정해야 정확하다.
       await applyLockOnTransferOrRestore(projectId, now, tx);
     });

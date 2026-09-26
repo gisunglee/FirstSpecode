@@ -22,7 +22,7 @@ import { toast } from "sonner";
 import { authFetch } from "@/lib/authFetch";
 import MarkdownEditor, { MarkdownTabButtons } from "@/components/ui/MarkdownEditor";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
-import PlanLimitDialog, { isPlanLimitError } from "@/components/common/PlanLimitDialog";
+import PlanLimitDialog, { isPlanLimitError, toPlanLimitInfo, type PlanLimitInfo } from "@/components/common/PlanLimitDialog";
 import TextCounter from "@/components/ui/TextCounter";
 import { TEXT_LIMITS } from "@/lib/constants/textLimits";
 import { KR_HOLIDAYS, KR_HOLIDAY_YEARS } from "@/lib/constants/krHolidays";
@@ -238,8 +238,8 @@ function ProjectSettingsInner() {
     }
   }, [project, canEdit, canManageSchedule]);
 
-  // FREE 소유 프로젝트 상한 안내 모달 문구 — null 이면 닫힘 (복사도 새 프로젝트를 만드는 행위)
-  const [limitMsg, setLimitMsg] = useState<string | null>(null);
+  // FREE 소유 프로젝트 상한 안내 모달 — null 이면 닫힘 (복사도 새 프로젝트를 만드는 행위)
+  const [limit, setLimit] = useState<PlanLimitInfo | null>(null);
 
   // ── 복사 뮤테이션 ───────────────────────────────────────────────────
   const copyMutation = useMutation({
@@ -250,7 +250,7 @@ function ProjectSettingsInner() {
       router.push(`/projects/${res.data.newProjectId}/settings`);
     },
     // 플랜 상한은 토스트 대신 요금제 안내 모달로
-    onError: (err: Error) => (isPlanLimitError(err) ? setLimitMsg(err.message) : toast.error(err.message)),
+    onError: (err: Error) => (isPlanLimitError(err) ? setLimit(toPlanLimitInfo(err)) : toast.error(err.message)),
   });
 
   // ── 삭제 뮤테이션 (soft delete) ─────────────────────────────────────
@@ -374,8 +374,8 @@ function ProjectSettingsInner() {
         <CopyDialog projectName={project.name} onCancel={() => setCopyOpen(false)} onConfirm={() => { setCopyOpen(false); copyMutation.mutate(); }} isPending={copyMutation.isPending} />
       )}
       {/* FREE 상한 안내 — 복사가 소유 프로젝트 상한에 걸렸을 때 요금제 페이지로 유도 */}
-      {limitMsg && (
-        <PlanLimitDialog message={limitMsg} onClose={() => setLimitMsg(null)} />
+      {limit && (
+        <PlanLimitDialog limit={limit} onClose={() => setLimit(null)} />
       )}
       {deleteOpen && (
         <DeleteDialog projectName={project.name} onCancel={() => setDeleteOpen(false)} onConfirm={() => deleteMutation.mutate()} isPending={deleteMutation.isPending} />

@@ -98,7 +98,7 @@ export type PaymentStatus = (typeof PAYMENT_STATUS)[keyof typeof PAYMENT_STATUS]
 
 /** 환불 유형 (정책 §1-7) — 동작이 다른 두 가지만. 상세 사유는 텍스트로 */
 export const REFUND_REASON = {
-  /** 청약철회: 결제 후 7일 이내 + 유료 기능 미사용. 전액만, 구독 즉시 종료 */
+  /** 청약철회: 계정의 첫 구독 시작 결제, 승인 후 7일 이내, 계정당 1회(사용 여부 무관). 전액만, 구독 즉시 종료 */
   WITHDRAWAL: "WITHDRAWAL",
   /** 운영 보정: 이중 청구·과청구·장애 보상 등. 전액/부분, 구독 유지 */
   ADJUSTMENT: "ADJUSTMENT",
@@ -140,8 +140,15 @@ export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
 };
 
 export const REFUND_REASON_LABEL: Record<RefundReason, string> = {
-  WITHDRAWAL: "청약철회 (7일 이내 · 미사용 · 전액 · 구독 종료)",
+  WITHDRAWAL: "청약철회 (첫 구독 결제 · 7일 이내 · 계정당 1회 · 전액 · 구독 종료)",
   ADJUSTMENT: "운영 보정 (이중 청구·과청구·장애 보상 · 구독 유지)",
+};
+
+/** 청약철회 불가 사유 표시 — 관리자 회원 상세·구독 상세 공용 (판정은 withdrawal.ts) */
+export const WITHDRAWAL_REASON_LABEL: Record<"NO_PAYMENT" | "WINDOW_PASSED" | "ALREADY_REFUNDED", string> = {
+  NO_PAYMENT:       "결제 이력 없음",
+  WINDOW_PASSED:    "7일 경과",
+  ALREADY_REFUNDED: "이미 환불됨",
 };
 
 export const ENDED_REASON_LABEL: Record<EndedReason, string> = {
@@ -210,7 +217,7 @@ export const BILLING_ERROR_CODES = {
   GATEWAY_UNAVAILABLE:  "BILLING_GATEWAY_UNAVAILABLE",
   /** 같은 구독에 대한 결제 작업이 동시에 들어옴 — 하나만 처리하고 나머지는 거절 (이중 결제 방지·결제 중 변경 차단) */
   CONCURRENT_OPERATION: "BILLING_CONCURRENT_OPERATION",
-  /** 환불 조건 위반 (청약철회 7일·미사용, 잔액 초과 등) */
+  /** 환불 조건 위반 (청약철회는 첫 결제·7일·계정당 1회, 잔액 초과 등) */
   REFUND_NOT_ALLOWED:   "BILLING_REFUND_NOT_ALLOWED",
   /** PG 는 승인했는데 구독 반영이 토큰 인계로 막힘 — 이력은 남았고 운영자 수동 대조 필요 */
   RECONCILE_REQUIRED:   "BILLING_RECONCILE_REQUIRED",
@@ -224,6 +231,12 @@ export const BILLING_ERROR_CODES = {
 
 /** 구독·결제 설정 화면 */
 export const BILLING_PATH = "/settings/billing";
+
+/**
+ * 상한 안내 다이얼로그 → 구독 시작 → PG 왕복 → 콜백 화면이 "원래 화면"으로 돌아가기 위한 sessionStorage 키.
+ * PG 리다이렉트를 건너야 해서 쿼리로는 못 넘긴다. 앱 내부 경로만 저장하고, 콜백 화면이 한 번 읽고 지운다.
+ */
+export const BILLING_RETURN_TO_STORAGE_KEY = "billing.returnTo";
 /** PG 리다이렉트가 돌아오는 앱 화면 (Bearer 인증은 리다이렉트에 실리지 않아 화면이 API 를 대신 호출) */
 export const BILLING_CALLBACK_PATH = "/settings/billing/callback";
 /** Mock PG 창 (PAYMENT_GATEWAY=mock 전용) */
