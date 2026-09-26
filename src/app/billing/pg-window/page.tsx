@@ -14,7 +14,7 @@
  * 돈이 오가지 않는다는 것을 화면에 크게 표시한다.
  */
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { encodeMockAuthKey } from "@/lib/billing/mock-auth-key";
 import { formatWon } from "@/lib/billing/pricing";
@@ -41,8 +41,34 @@ function sameOriginUrl(raw: string | null): string | null {
   }
 }
 
+/**
+ * 브라우저에 마운트된 뒤에만 true.
+ *
+ * 이 창은 화면 전체가 두 가지에 의존한다 — 쿼리스트링(customerKey·successUrl)과
+ * window.location.origin(같은 출처 검사). 둘 다 서버 렌더에는 없어서, 서버는 "정보 없음"
+ * 에러 화면을 그리고 클라이언트는 입력 폼을 그려 hydration 이 깨졌다(2026-09-26).
+ * 마운트 전에는 양쪽 모두 준비 화면만 그려 서버·첫 클라이언트 렌더를 일치시킨다.
+ */
+function useMounted(): boolean {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  return mounted;
+}
+
 function MockPgWindowInner() {
-  const params = useSearchParams();
+  const params  = useSearchParams();
+  const mounted = useMounted();
+
+  if (!mounted) {
+    return (
+      <Shell>
+        <div style={{ textAlign: "center", color: "var(--color-text-tertiary)", fontSize: "var(--text-base)" }}>
+          결제창을 준비하고 있습니다…
+        </div>
+      </Shell>
+    );
+  }
+
   if (params.get("view") === "receipt") return <MockReceipt params={params} />;
   return <MockCardRegistration params={params} />;
 }
