@@ -27,6 +27,7 @@ import { requireSystemAdmin } from "@/lib/requireSystemAdmin";
 import {
   abortStorageUploads,
   completeStorageUploads,
+  consumeStorageUploadPendings,
   prepareStorageUploads,
   type UploadFileInput,
 } from "@/lib/storageUpload";
@@ -151,19 +152,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     try {
-      const record = await prisma.tbSysAttachFile.create({
-        data: {
-          ref_tbl_nm: "tb_sys_docs_page",
-          ref_id: pageId,
-          attach_div_code: kind,
-          orgnl_file_nm: upload.originalName,
-          stor_file_nm: upload.storedName,
-          file_path_nm: upload.storagePath,
-          file_sz: BigInt(upload.size),
-          file_extsn_nm: upload.extension,
-          mime_ty: upload.mimeType,
-          creat_mber_id: gate.mberId,
-        },
+      const record = await prisma.$transaction(async (tx) => {
+        const created = await tx.tbSysAttachFile.create({
+          data: {
+            ref_tbl_nm: "tb_sys_docs_page",
+            ref_id: pageId,
+            attach_div_code: kind,
+            orgnl_file_nm: upload.originalName,
+            stor_file_nm: upload.storedName,
+            file_path_nm: upload.storagePath,
+            file_sz: BigInt(upload.size),
+            file_extsn_nm: upload.extension,
+            mime_ty: upload.mimeType,
+            creat_mber_id: gate.mberId,
+          },
+        });
+        await consumeStorageUploadPendings(tx, [upload]);
+        return created;
       });
       return apiSuccess({
         fileId: record.attach_id,

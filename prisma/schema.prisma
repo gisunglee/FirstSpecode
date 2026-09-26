@@ -1039,6 +1039,30 @@ model TbCmAttachFile {
   @@map("tb_cm_attach_file")
 }
 
+/// 브라우저가 Supabase Storage에 직접 올린 뒤 아직 최종 첨부로 확정하지 않은 객체.
+/// 완료 시 최종 첨부 INSERT와 같은 트랜잭션에서 삭제하고, 만료 행만 배치가 정확한 경로로 정리한다.
+/// 프로젝트/회원 FK를 두지 않는 이유는 원본 삭제와 무관하게 Storage 정리 단서를 끝까지 보존하기 위해서다.
+model TbCmStorageUploadPending {
+  upload_id      String   @id @default(uuid())
+  mber_id        String
+  prjct_id       String?
+  ref_tbl_nm     String
+  ref_id         String
+  orgnl_file_nm  String
+  stor_file_nm   String
+  file_path_nm   String   @unique
+  file_sz        BigInt
+  file_extsn_nm  String
+  file_ty_code   String
+  mime_ty        String
+  expiry_dt      DateTime
+  creat_dt       DateTime @default(now())
+
+  @@index([expiry_dt], map: "tb_cm_storage_upload_pending_expiry_idx")
+  @@index([mber_id, creat_dt(sort: Desc)], map: "tb_cm_storage_upload_pending_mber_idx")
+  @@map("tb_cm_storage_upload_pending")
+}
+
 model TbRqRequirementHistory {
   req_hist_id    String   @id @default(uuid())
   req_id         String
@@ -1884,7 +1908,8 @@ model TbBlPgEvent {
 //
 // 잡 종류 (job_ty_code) — 신규 잡 추가 시 여기에 줄을 늘리면 된다.
 //   - PROJECT_HARD_DELETE   : 보관 기간이 지난 soft-deleted 프로젝트의 영구 삭제
-//   - ATTACH_FILE_CLEANUP   : DB 행 없는 디스크 첨부파일 정리(orphan)
+//   - ATTACH_FILE_CLEANUP   : 만료 pending·논리삭제 첨부의 일일 정밀 정리
+//   - ATTACH_FILE_AUDIT     : Storage 전체 목록을 확인하는 주간 안전 감사
 //
 // 운영 정책:
 //   - 같은 잡을 두 번 돌려도 안전(idempotent) — 대상 조건이 동적이므로 자연 보장.

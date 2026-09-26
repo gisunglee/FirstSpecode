@@ -9,7 +9,7 @@
 import path from "path";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { completeStorageUploads } from "@/lib/storageUpload";
+import { completeStorageUploads, consumeStorageUploadPendings } from "@/lib/storageUpload";
 import {
   buildStoragePath,
   removeStorageObjects,
@@ -75,6 +75,7 @@ export async function saveAiTaskAttachments(options: {
     extension: string;
     fileType: "IMAGE" | "FILE";
     size: number;
+    uploadId?: string;
   }> = [];
   try {
     if (attachmentTokens.length > 0) {
@@ -92,6 +93,7 @@ export async function saveAiTaskAttachments(options: {
         extension: file.extension,
         fileType: file.fileType,
         size: file.size,
+        uploadId: file.uploadId,
       })));
     }
 
@@ -115,22 +117,25 @@ export async function saveAiTaskAttachments(options: {
       });
     }
 
-    await prisma.$transaction(storedFiles.map((file) =>
-      prisma.tbCmAttachFile.create({
-        data: {
-          prjct_id: options.projectId,
-          ref_tbl_nm: "tb_ai_task",
-          ref_id: options.taskId,
-          file_ty_code: file.fileType,
-          orgnl_file_nm: file.originalName,
-          stor_file_nm: file.storedName,
-          file_path_nm: file.storagePath,
-          file_sz: file.size,
-          file_extsn_nm: file.extension,
-          req_ref_yn: "Y",
-        },
-      }),
-    ));
+    await prisma.$transaction(async (tx) => {
+      for (const file of storedFiles) {
+        await tx.tbCmAttachFile.create({
+          data: {
+            prjct_id: options.projectId,
+            ref_tbl_nm: "tb_ai_task",
+            ref_id: options.taskId,
+            file_ty_code: file.fileType,
+            orgnl_file_nm: file.originalName,
+            stor_file_nm: file.storedName,
+            file_path_nm: file.storagePath,
+            file_sz: file.size,
+            file_extsn_nm: file.extension,
+            req_ref_yn: "Y",
+          },
+        });
+      }
+      await consumeStorageUploadPendings(tx, storedFiles);
+    });
     return storedFiles.length;
   } catch (error) {
     await removeStorageObjects(storedFiles.map((file) => file.storagePath)).catch(() => undefined);

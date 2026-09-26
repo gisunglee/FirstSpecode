@@ -47,6 +47,12 @@
   * 코드: `cm_code_id` (PK) / `cm_code` (v100) / `code_nm` (v100) / `grp_code_id` (FK)
 * **`tb_cm_attach_file`** (첨부 파일)
   * `attach_file_id` (t, PK) / `ref_tbl_nm` (t) / `ref_id` (t): 다형 참조 구조
+* **`tb_cm_storage_upload_pending`** (Storage 임시 업로드 추적 — 2026-09-26, `prisma/sql/2026-09-26_create_storage_upload_pending.sql`)
+  * 브라우저 직접 업로드 준비 시 1행 생성, 최종 첨부 저장과 같은 트랜잭션에서 삭제한다
+  * `upload_id` (t, PK) / `mber_id` (t, NN) / `prjct_id` (t) / `ref_tbl_nm`, `ref_id`: 업로드 소유·참조 범위
+  * `file_path_nm` (t, Unique) / 파일명·크기·형식 메타 / `expiry_dt` (ts, NN)
+  * 회원·프로젝트 FK 없음: 원본 행이 먼저 삭제돼도 Storage 정리 단서가 CASCADE로 사라지지 않아야 한다
+  * 일일 `ATTACH_FILE_CLEANUP`은 만료 행의 정확한 경로만 정리하고, 버킷 전체 스캔은 주기적 `ATTACH_FILE_AUDIT`로만 수행한다
 * **`tb_cm_progress`** (진척 현황 — 현재 `tb_ds_function`에서만 사용)
   * `progrs_id` (v36, PK) / `ref_tbl_nm` (v50) / `ref_id` (v36, Unique)
   * `design_rt`, `impl_rt` (i, 0~100): 슬라이더로 직접 입력, 화면/단위업무는 이 값들의 평균 롤업
@@ -318,4 +324,3 @@ PG 는 게이트웨이 인터페이스(`src/lib/billing/gateway.ts`) 뒤에 있�
 DDL 2차: `prisma/sql/2026-09-21_billing_admin_ops.sql` (nullable 6컬럼 추가만, `npm run db:migrate:billing-admin-ops`).
 관리자 운영: `/admin/billing` — 조회 `src/lib/billing/admin-queries.ts`, 액션 `admin-actions.ts`(즉시 재결제·결제일 연기·강제 종료·환불 기록·잠금 해제 대행, 감사 `tb_sys_admin_audit` 와 같은 트랜잭션).
 검증: `npm run test:billing:db` (임시 스키마에서 전체 흐름 스모크 19단계, 동시성 포함, 운영 데이터 무영향).
-

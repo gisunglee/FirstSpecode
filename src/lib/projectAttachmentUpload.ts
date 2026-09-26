@@ -7,6 +7,7 @@ import { apiError, apiSuccess } from "@/lib/apiResponse";
 import {
   abortStorageUploads,
   completeStorageUploads,
+  consumeStorageUploadPendings,
   prepareStorageUploads,
   type UploadFileInput,
 } from "@/lib/storageUpload";
@@ -75,22 +76,27 @@ export async function handleProjectAttachmentUpload(options: {
     });
 
     try {
-      const uploaded = await prisma.$transaction(completed.map((file) =>
-        prisma.tbCmAttachFile.create({
-          data: {
-            prjct_id: options.projectId,
-            ref_tbl_nm: options.refTable,
-            ref_id: options.refId,
-            file_ty_code: options.forceFileType ?? file.fileType,
-            orgnl_file_nm: file.originalName,
-            stor_file_nm: file.storedName,
-            file_path_nm: file.storagePath,
-            file_sz: file.size,
-            file_extsn_nm: file.extension,
-            req_ref_yn: "N",
-          },
-        }),
-      ));
+      const uploaded = await prisma.$transaction(async (tx) => {
+        const records = [];
+        for (const file of completed) {
+          records.push(await tx.tbCmAttachFile.create({
+            data: {
+              prjct_id: options.projectId,
+              ref_tbl_nm: options.refTable,
+              ref_id: options.refId,
+              file_ty_code: options.forceFileType ?? file.fileType,
+              orgnl_file_nm: file.originalName,
+              stor_file_nm: file.storedName,
+              file_path_nm: file.storagePath,
+              file_sz: file.size,
+              file_extsn_nm: file.extension,
+              req_ref_yn: "N",
+            },
+          }));
+        }
+        await consumeStorageUploadPendings(tx, completed);
+        return records;
+      });
       return apiSuccess({
         uploaded: uploaded.map((record, index) => ({
           fileId: record.attach_file_id,

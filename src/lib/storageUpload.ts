@@ -8,6 +8,7 @@
 import "server-only";
 import path from "path";
 import jwt from "jsonwebtoken";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   buildStoragePath,
@@ -18,6 +19,9 @@ import {
 } from "@/lib/supabaseStorage";
 
 const UPLOAD_AUDIENCE = "specode-storage-upload";
+// 업로드 토큰은 2시간만 유효하지만, 느린 네트워크와 배포 중 요청을 보호하려고
+// 정리 가능 시점은 넉넉히 24시간 뒤로 둔다.
+const PENDING_RETENTION_MS = 24 * 60 * 60 * 1000;
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"]);
 
 export type UploadFileInput = {
@@ -28,6 +32,8 @@ export type UploadFileInput = {
 
 type UploadClaim = {
   purpose: "storage-upload";
+  // 2026-09-26 이전 배포에서 발급한 토큰도 완료할 수 있도록 optional로 유지한다.
+  uploadId?: string;
   memberId: string;
   projectId: string | null;
   refTable: string;
@@ -120,6 +126,7 @@ function verifyClaim(token: string): UploadClaim {
 export async function prepareStorageUploads(options: PrepareOptions): Promise<PreparedStorageUpload[]> {
   validateFiles(options.files, options);
   const prepared: PreparedStorageUpload[] = [];
+  const pendingIds: string[] = [];
   try {
     for (const input of options.files) {
       const originalName = cleanOriginalName(input.name);
@@ -127,8 +134,10 @@ export async function prepareStorageUploads(options: PrepareOptions): Promise<Pr
       const storedName = `${crypto.randomUUID()}.${extension}`;
       const storagePath = buildStoragePath(`${options.relativeDir}/${storedName}`);
       const signed = await createStorageUploadUrl(storagePath);
+      const uploadId = crypto.randomUUID();
       const claim: UploadClaim = {
         purpose: "storage-upload",
+        uploadId,
         memberId: options.memberId,
         projectId: options.projectId ?? null,
         refTable: options.refTable,
@@ -142,6 +151,24 @@ export async function prepareStorageUploads(options: PrepareOptions): Promise<Pr
         size: input.size,
         metadata: options.metadata ?? {},
       };
+      await prisma.tbCmStorageUploadPending.create({
+        data: {
+          upload_id: uploadId,
+          mber_id: options.memberId,
+          prjct_id: options.projectId ?? null,
+          ref_tbl_nm: options.refTable,
+          ref_id: options.refId,
+          orgnl_file_nm: originalName,
+          stor_file_nm: storedName,
+          file_path_nm: storagePath,
+          file_sz: BigInt(input.size),
+          file_extsn_nm: extension,
+          file_ty_code: claim.fileType,
+          mime_ty: claim.mimeType,
+          expiry_dt: new Date(Date.now() + PENDING_RETENTION_MS),
+        },
+      });
+      pendingIds.push(uploadId);
       prepared.push({
         bucket: storageBucketName(),
         path: signed.path,
@@ -151,7 +178,12 @@ export async function prepareStorageUploads(options: PrepareOptions): Promise<Pr
     }
     return prepared;
   } catch (error) {
-    await removeStorageObjects(prepared.map((item) => item.path)).catch(() => undefined);
+    await Promise.all([
+      prisma.tbCmStorageUploadPending.deleteMany({
+        where: { upload_id: { in: pendingIds } },
+      }).catch(() => undefined),
+      removeStorageObjects(prepared.map((item) => item.path)).catch(() => undefined),
+    ]);
     throw error;
   }
 }
@@ -167,6 +199,19 @@ export async function completeStorageUploads(options: {
     throw new Error("완료할 업로드가 없습니다.");
   }
   const claims = options.completionTokens.map(verifyClaim);
+  const uniquePaths = new Set(claims.map((claim) => claim.storagePath));
+  if (uniquePaths.size !== claims.length) {
+    throw new Error("같은 업로드 완료 토큰을 중복 사용할 수 없습니다.");
+  }
+
+  const trackedIds = claims
+    .map((claim) => claim.uploadId)
+    .filter((uploadId): uploadId is string => typeof uploadId === "string" && uploadId.length > 0);
+  const pendingRows = trackedIds.length > 0
+    ? await prisma.tbCmStorageUploadPending.findMany({ where: { upload_id: { in: trackedIds } } })
+    : [];
+  const pendingById = new Map(pendingRows.map((row) => [row.upload_id, row]));
+
   for (const claim of claims) {
     if (
       claim.memberId !== options.memberId ||
@@ -175,6 +220,27 @@ export async function completeStorageUploads(options: {
       claim.refId !== options.refId
     ) {
       throw new Error("업로드 대상 정보가 일치하지 않습니다.");
+    }
+    if (claim.uploadId) {
+      const pending = pendingById.get(claim.uploadId);
+      if (!pending) {
+        throw new Error(`파일 "${claim.originalName}" 업로드가 이미 완료됐거나 만료되었습니다.`);
+      }
+      if (
+        pending.mber_id !== claim.memberId ||
+        pending.prjct_id !== claim.projectId ||
+        pending.ref_tbl_nm !== claim.refTable ||
+        pending.ref_id !== claim.refId ||
+        pending.file_path_nm !== claim.storagePath ||
+        pending.stor_file_nm !== claim.storedName ||
+        pending.orgnl_file_nm !== claim.originalName ||
+        pending.file_sz !== BigInt(claim.size) ||
+        pending.file_extsn_nm !== claim.extension ||
+        pending.file_ty_code !== claim.fileType ||
+        pending.mime_ty !== claim.mimeType
+      ) {
+        throw new Error(`파일 "${claim.originalName}"의 업로드 추적 정보가 일치하지 않습니다.`);
+      }
     }
     const info = await getStorageObjectInfo(claim.storagePath);
     if (info.size !== claim.size) {
@@ -185,18 +251,37 @@ export async function completeStorageUploads(options: {
   return claims.map(({ purpose: _purpose, memberId: _memberId, ...claim }) => claim);
 }
 
+/** 최종 첨부 INSERT와 같은 트랜잭션에서 pending 행을 소비해 중간 상태를 남기지 않는다. */
+export async function consumeStorageUploadPendings(
+  tx: Prisma.TransactionClient,
+  uploads: Array<{ uploadId?: string }>,
+): Promise<void> {
+  const uploadIds = uploads
+    .map((upload) => upload.uploadId)
+    .filter((uploadId): uploadId is string => typeof uploadId === "string" && uploadId.length > 0);
+  if (uploadIds.length === 0) return;
+
+  const deleted = await tx.tbCmStorageUploadPending.deleteMany({
+    where: { upload_id: { in: uploadIds } },
+  });
+  if (deleted.count !== uploadIds.length) {
+    throw new Error("업로드 완료 상태가 변경되었습니다. 다시 업로드해 주세요.");
+  }
+}
+
 export async function abortStorageUploads(completionTokens: string[], memberId: string): Promise<void> {
-  const paths: string[] = [];
+  if (!Array.isArray(completionTokens) || completionTokens.length === 0) return;
+  const claims: UploadClaim[] = [];
   for (const token of completionTokens) {
     try {
       const claim = verifyClaim(token);
-      if (claim.memberId === memberId) paths.push(claim.storagePath);
+      if (claim.memberId === memberId) claims.push(claim);
     } catch {
       // 유효하지 않은 토큰은 삭제 대상으로 신뢰하지 않는다.
     }
   }
   const removablePaths: string[] = [];
-  for (const storagePath of new Set(paths)) {
+  for (const storagePath of new Set(claims.map((claim) => claim.storagePath))) {
     const [commonRef, systemRef] = await Promise.all([
       prisma.tbCmAttachFile.findFirst({
         where: { file_path_nm: storagePath },
@@ -211,4 +296,12 @@ export async function abortStorageUploads(completionTokens: string[], memberId: 
     if (!commonRef && !systemRef) removablePaths.push(storagePath);
   }
   await removeStorageObjects(removablePaths);
+  const pendingIds = claims
+    .map((claim) => claim.uploadId)
+    .filter((uploadId): uploadId is string => typeof uploadId === "string" && uploadId.length > 0);
+  if (pendingIds.length > 0) {
+    await prisma.tbCmStorageUploadPending.deleteMany({
+      where: { upload_id: { in: pendingIds }, mber_id: memberId },
+    });
+  }
 }
