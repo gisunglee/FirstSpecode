@@ -6,7 +6,7 @@
  *   - "PM 전용 AI 주간보고 초안" 컨셉 — TbWrWeeklyReport 1:1 매핑
  *
  * 생성 흐름:
- *   POST 로 생성 요청 → TbAiTask PENDING 생성 → (누군가 /run-ai-tasks 실행) →
+ *   POST 로 생성 요청 → TbAiTask PENDING 생성 → (누군가 /specode work 실행) →
  *   draft_cn 반영 → GET 폴링으로 완료 확인. aiTaskStatus 가 이 흐름의 진행 상태.
  */
 

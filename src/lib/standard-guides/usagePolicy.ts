@@ -31,17 +31,17 @@ export function getStandardGuideUsages(
   return [
     {
       key: "IMPLEMENT_REQUEST",
-      label: "/run-ai-tasks IMP",
+      label: "/specode dev",
       level: inactive || !implementationAlways ? "NONE" : "ALWAYS",
       description: inactive
         ? "미사용 상태라 AI 개발 작업에 포함되지 않습니다."
         : implementationAlways
-          ? "구현 요청에 자동 포함되며 /run-ai-tasks IMP로 개발할 때 기준으로 사용됩니다."
+          ? "구현 요청에 자동 포함되며 /specode dev로 개발할 때 기준으로 사용됩니다."
           : "현재 카테고리는 AI 개발 작업에 자동 포함되지 않습니다.",
     },
     {
       key: "REVIEW_UW",
-      label: "/review-uw UW-XXXXX",
+      label: "/specode review UW-XXXXX",
       level: inactive ? "NONE" : reviewAlways ? "ALWAYS" : "CONDITIONAL",
       description: inactive
         ? "미사용 상태라 검토 기준에서 제외됩니다."
@@ -51,7 +51,7 @@ export function getStandardGuideUsages(
     },
     {
       key: "SYNC_SPECODE",
-      label: "/sync-specode UW-XXXXX",
+      label: "/specode sync UW-XXXXX",
       level: "NONE",
       description: "현재 구현-설계 동기화에서는 표준 가이드를 자동 참조하지 않습니다.",
     },
@@ -73,20 +73,20 @@ export function getStandardGuideListUsage(
     return {
       level: "ALWAYS",
       label: "개발 · UW 검토",
-      description: "/run-ai-tasks IMP 개발과 /review-uw UW-XXXXX 검토에서 항상 참조합니다.",
+      description: "/specode dev 개발과 /specode review UW-XXXXX 검토에서 항상 참조합니다.",
     };
   }
   if (category === "UI") {
     return {
       level: "ALWAYS",
       label: "UW 검토",
-      description: "/review-uw UW-XXXXX 검토에서 항상 참조합니다.",
+      description: "/specode review UW-XXXXX 검토에서 항상 참조합니다.",
     };
   }
   return {
     level: "CONDITIONAL",
     label: "관련 UW 검토",
-    description: "/review-uw UW-XXXXX 실행 시 제목이 해당 단위업무와 관련 있다고 판단될 때 참조합니다.",
+    description: "/specode review UW-XXXXX 실행 시 제목이 해당 단위업무와 관련 있다고 판단될 때 참조합니다.",
   };
 }
 

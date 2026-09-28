@@ -35,7 +35,7 @@ interface ProjectOption {
 
 // [2026-04-26] 키 용도 — DB CHECK 제약과 동일
 //   CLIENT — Claude Code MCP 도구용
-//   WORKER — /run-ai-tasks 워커용
+//   WORKER — /specode work 워커용
 // 두 용도 모두 단일 프로젝트 scope 필수 — 전역 발급 정책상 차단됨
 type KeyUseSe = "CLIENT" | "WORKER";
 
@@ -345,8 +345,8 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
           <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--color-border-warning, #ffe082)" }}>
             <p style={{ margin: "0 0 8px", fontSize: "var(--text-sm)", color: "var(--color-text)" }}>
               {createdKeyUseSe === "CLIENT"
-                ? "연결하려는 프로젝트 폴더의 .mcp.json에 아래 내용을 저장하거나, Claude Code에게 그대로 붙여넣고 \"MCP 연결해줘\"라고 요청하세요."
-                : "연결하려는 프로젝트 폴더의 .env.local에 아래 두 줄을 추가하세요. 이후 MCP가 연결된 Claude Code에서 get_worker_command_files 도구를 요청하면 /run-ai-tasks, /sync-specode 커맨드가 설치됩니다."}
+                ? "연결하려는 프로젝트 폴더의 .mcp.json에 아래 내용을 저장하거나, Claude Code에게 그대로 붙여넣고 \"MCP 연결해줘\"라고 요청하세요. 연결 후 \"스펙코드 커맨드 설치해줘\" 또는 \"업데이트해줘\"라고 요청하면 됩니다."
+                : "연결하려는 프로젝트 폴더의 .env.local에 아래 두 줄을 추가하세요. MCP가 연결된 Claude Code에 \"스펙코드 커맨드 설치해줘\" 또는 \"업데이트해줘\"라고 요청하세요. 설치 후 /specode를 입력하면 전체 사용법을 볼 수 있습니다."}
             </p>
             <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
               <pre style={{
@@ -435,7 +435,7 @@ export default function McpKeyManager({ defaultProjectId }: McpKeyManagerProps) 
                   onChange={() => setKeyUseSe("WORKER")}
                 />
                 <span>
-                  <strong>워커 (run-ai-tasks)</strong>
+                  <strong>워커 (SPECODE)</strong>
                   {" "}- AI 태스크 처리 워커용. 프로젝트 scope 필수, 전역 발급 불가
                 </span>
               </label>

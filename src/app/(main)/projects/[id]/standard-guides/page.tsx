@@ -374,9 +374,9 @@ const GUIDE_REFERENCE_COLUMNS: Array<{
   label: string;
   command: string;
 }> = [
-  { key: "IMPLEMENT_REQUEST", label: "개발", command: "/run-ai-tasks IMP" },
-  { key: "REVIEW_UW", label: "UW 검토", command: "/review-uw UW-XXXXX" },
-  { key: "SYNC_SPECODE", label: "설계 동기화", command: "/sync-specode UW-XXXXX" },
+  { key: "IMPLEMENT_REQUEST", label: "개발", command: "/specode dev" },
+  { key: "REVIEW_UW", label: "UW 검토", command: "/specode review UW-XXXXX" },
+  { key: "SYNC_SPECODE", label: "설계 동기화", command: "/specode sync UW-XXXXX" },
 ];
 
 const GUIDE_REFERENCE_ROWS: Array<{ label: string; category: GuideCategory }> = [

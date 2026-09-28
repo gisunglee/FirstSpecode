@@ -46,7 +46,7 @@ test("미사용 가이드와 sync-specode는 자동 참조하지 않는다", () 
 
 test("사용 위치에는 사용자가 실제 실행하는 커맨드를 표시한다", () => {
   const usages = getStandardGuideUsages("COMMON", "Y");
-  assert.equal(usages.find((usage) => usage.key === "IMPLEMENT_REQUEST")?.label, "/run-ai-tasks IMP");
-  assert.equal(usages.find((usage) => usage.key === "REVIEW_UW")?.label, "/review-uw UW-XXXXX");
-  assert.equal(usages.find((usage) => usage.key === "SYNC_SPECODE")?.label, "/sync-specode UW-XXXXX");
+  assert.equal(usages.find((usage) => usage.key === "IMPLEMENT_REQUEST")?.label, "/specode dev");
+  assert.equal(usages.find((usage) => usage.key === "REVIEW_UW")?.label, "/specode review UW-XXXXX");
+  assert.equal(usages.find((usage) => usage.key === "SYNC_SPECODE")?.label, "/specode sync UW-XXXXX");
 });

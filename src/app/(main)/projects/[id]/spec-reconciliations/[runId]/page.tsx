@@ -279,7 +279,7 @@ function NextSteps({ data }: { data: SyncRunDetail }) {
             설계 변경 {designChangedCount}건은 적용되지 않았고, 이 화면에서는 더 처리할 수 없습니다.
             분석 뒤 설계 본문이 바뀌어 자동 반영을 중단한 항목입니다. 최신 설계 기준으로 다시
             제안을 받으려면 개발 저장소에서{" "}
-            <code className="sp-code">/sync-specode {data.unitWorkDisplayId}</code>를 다시 실행하세요.
+            <code className="sp-code">/specode sync {data.unitWorkDisplayId}</code>를 다시 실행하세요.
             {firstDesignChanged ? (
               <>
                 {" "}

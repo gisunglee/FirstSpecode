@@ -14,7 +14,7 @@
  *
  * 키 용도 (key_use_se_code, [2026-04-26] 추가):
  *   - 'CLIENT' (기본) — Claude Code MCP 도구용
- *   - 'WORKER'      — /run-ai-tasks 워커용
+ *   - 'WORKER'      — /specode work 워커용
  *   ※ 두 용도 모두 프로젝트 scope 필수. 전역 키는 정책상 미지원
  *      (사고 폭 축소 — 키 유출/AI 실수 시 다른 프로젝트로 사고 전파 차단)
  *

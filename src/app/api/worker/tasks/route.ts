@@ -24,7 +24,7 @@
  *                     지정 시 taskType/excludeTaskType/refType/limit 은 무시됨(단건 조회라 의미 없음)
  *                     ownerFilter 는 그대로 적용 — 본인 소유 + 자기 프로젝트가 아니면 빈 결과
  *   statusOnly      — "true" 이면 태스크 본문은 가져오지 않고 큐 카운트만 반환 (자가 점검용)
- *                     /run-ai-tasks STATUS 명령에서 사용 — 인증 정보 + 큐 통계만 필요
+ *                     /specode status 명령에서 사용 — 인증 정보 + 큐 통계만 필요
  *
  * 응답:
  *   { count, tasks, meta: { mberName, email, prjctName, prjctId, keyName, lastUsedAt, pending? } }
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
   const limit    = Math.min(Math.max(1, isNaN(limitRaw) ? 10 : limitRaw), 50);
 
   // [2026-04-26] 자가 점검 모드 — 태스크 본문 안 가져오고 카운트만
-  // /run-ai-tasks STATUS 명령에서 사용. 사용자가 키 노출 의심 시 빠른 진단 가능.
+  // /specode status 명령에서 사용. 사용자가 키 노출 의심 시 빠른 진단 가능.
   const statusOnly = url.searchParams.get("statusOnly") === "true";
 
   // 쉼표로 구분된 복수 값을 지원 — "INSPECT,IMPACT" 같은 그룹 필터용
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
   const refTypes         = parseCsvParam(url.searchParams.get("refType"));
 
   // [2026-07-30] 단건 지정 조회 — FIFO 순서 무시하고 특정 taskId 하나만 콕 찍어 처리.
-  // /run-ai-tasks TASK <taskId> 명령에서 사용. ownerFilter 와 AND 결합되므로
+  // /specode work <taskId> 명령에서 사용. ownerFilter 와 AND 결합되므로
   // 타인 소유이거나 이미 PENDING 이 아닌 taskId 를 넣어도 조회되지 않는다.
   const taskId = url.searchParams.get("taskId");
 
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
   }
 
   // ── statusOnly 모드 — 본문 없이 카운트만 ────────────────────────
-  // 자가 점검(/run-ai-tasks STATUS) 전용. DB 부하 최소화.
+  // 자가 점검(/specode status) 전용. DB 부하 최소화.
   // taskType/refType 필터도 동일하게 적용 — 본 조회와 일관된 카운트 보장
   // (예: ?statusOnly=true&taskType=IMPLEMENT → IMPLEMENT 만 카운트)
   if (statusOnly) {

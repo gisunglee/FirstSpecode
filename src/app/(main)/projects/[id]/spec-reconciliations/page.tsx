@@ -90,7 +90,7 @@ export default function SpecReconciliationsPage() {
         </div>
         <div className="sp-group-body">
           <div className="sp-reconcile-summary-grid">
-            <Step number="1" title="UW 지정" copy="개발 저장소에서 /sync-specode UW-XXXXX 실행" />
+            <Step number="1" title="UW 지정" copy="개발 저장소에서 /specode sync UW-XXXXX 실행" />
             <Step number="2" title="현재 상태 비교" copy="AI가 해당 UW 설계 전체와 관련 소스를 직접 대조" />
             <Step number="3" title="근거 검토" copy="구현 불일치와 중요한 설계 누락 후보를 확인" />
             <Step number="4" title="선택 반영" copy="항목별 적용·거부·보류, 승인한 설명만 변경" />
@@ -126,7 +126,7 @@ export default function SpecReconciliationsPage() {
       ) : rows.length === 0 ? (
         <Empty
           title="표시할 동기화 실행이 없습니다."
-          copy="개발 저장소에서 /sync-specode UW-XXXXX를 실행하면 결과가 여기에 저장됩니다."
+          copy="개발 저장소에서 /specode sync UW-XXXXX를 실행하면 결과가 여기에 저장됩니다."
         />
       ) : (
         <section className="sp-table-wrap" aria-label="스펙 동기화 실행 목록">

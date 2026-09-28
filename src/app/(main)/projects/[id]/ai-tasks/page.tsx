@@ -304,12 +304,13 @@ function AiTasksPageInner() {
           <div style={{ fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
             AI 태스크 목록
           </div>
-          <HelpButton title="/run-ai-tasks 이용법">
+          <HelpButton title="/specode 이용법">
             <p>PENDING 태스크를 Claude Code 워커가 대신 처리하는 커맨드입니다. 터미널에서 실행합니다.</p>
-            <p><code className="sp-code">/run-ai-tasks SPEC</code> — 구현(IMPLEMENT) 제외 전체 태스크 처리</p>
-            <p><code className="sp-code">/run-ai-tasks IMP</code> — 구현(IMPLEMENT) 태스크만 처리</p>
-            <p><code className="sp-code">/run-ai-tasks TASK &lt;taskId&gt;</code> — 특정 태스크 1건만 순서 무시하고 실행. taskId는 이 목록에서 행을 클릭해 열리는 상세 팝업 상단에 표시된 값입니다.</p>
-            <p><code className="sp-code">/run-ai-tasks STATUS</code> — 처리 없이 본인 PENDING 큐 건수만 확인</p>
+            <p><code className="sp-code">/specode</code> — 전체 커맨드 설명과 사용 예시 안내</p>
+            <p><code className="sp-code">/specode work</code> — 구현(IMPLEMENT) 제외 전체 태스크 처리</p>
+            <p><code className="sp-code">/specode dev</code> — 구현(IMPLEMENT) 태스크만 처리</p>
+            <p><code className="sp-code">/specode work &lt;taskId&gt;</code> — 특정 태스크 1건만 순서 무시하고 실행. taskId는 이 목록에서 행을 클릭해 열리는 상세 팝업 상단에 표시된 값입니다.</p>
+            <p><code className="sp-code">/specode status</code> — 처리 없이 본인 PENDING 큐 건수만 확인</p>
           </HelpButton>
         </div>
         {(() => {

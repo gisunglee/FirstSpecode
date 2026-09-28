@@ -2,7 +2,7 @@
  * Worker API 인증 헬퍼
  *
  * 역할:
- *   - 외부 AI 워커(/run-ai-tasks 등) 요청을 개인 MCP 키(`spk_`)로만 인증.
+ *   - 외부 AI 워커(/specode work 등) 요청을 개인 MCP 키(`spk_`)로만 인증.
  *   - 화면용 세션 인증(requireAuth)과는 별도 — 워커는 세션이 없음.
  *
  * 인증 모델:
@@ -69,7 +69,7 @@ export async function requireWorkerAuth(
   if (!rawKey || !rawKey.startsWith("spk_")) {
     return apiError(
       "UNAUTHORIZED",
-      "워커 인증이 필요합니다. SPECODE > 설정 > MCP 키 에서 '워커(run-ai-tasks)' 용 키를 발급받아 " +
+      "워커 인증이 필요합니다. SPECODE > 설정 > MCP 키 에서 '워커(SPECODE)' 용 키를 발급받아 " +
       "X-Mcp-Key 헤더로 전송하세요.",
       401,
     );
@@ -116,7 +116,7 @@ export async function requireWorkerAuth(
     return apiError(
       "WRONG_KEY_PURPOSE",
       "이 키는 Claude Code MCP 용입니다. " +
-      "SPECODE > 설정 > MCP 키 에서 '워커 (run-ai-tasks) 용' 키를 발급하세요.",
+      "SPECODE > 설정 > MCP 키 에서 '워커 (SPECODE) 용' 키를 발급하세요.",
       403,
     );
   }

@@ -8,7 +8,7 @@
  *
  * 생성 흐름(POST): 그 주(월~일) 전체 팀원의 TbWrWorkLog(DAILY)+항목을 모아 프롬프트를 조립하고
  * TbAiTask(PENDING)를 생성한다. 실제 처리는 기존 AI 태스크 큐와 동일하게
- * `/run-ai-tasks` 가 담당 — worker complete 라우트의 applyResultToRef(WEEKLY_REPORT)가
+ * `/specode work` 가 담당 — worker complete 라우트의 applyResultToRef(WEEKLY_REPORT)가
  * 결과를 TbWrWeeklyReport.draft_cn 에 자동 반영한다.
  *
  * PATCH는 AI와 완전히 무관하다 — PM이 AI를 한 번도 요청하지 않은 주에도 금주 실적 등을 바로

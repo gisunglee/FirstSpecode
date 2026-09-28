@@ -147,7 +147,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthPayload | R
     if (mcpKey.key_use_se_code === "WORKER") {
       return apiError(
         "WRONG_KEY_PURPOSE",
-        "이 키는 워커(run-ai-tasks) 전용입니다. " +
+        "이 키는 워커(SPECODE) 전용입니다. " +
         "Claude Code 등 일반 API 호출에는 'Claude Code (MCP 도구)' 용도 키를 사용하세요.",
         403,
       );

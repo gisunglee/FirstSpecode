@@ -7,7 +7,7 @@ import {
   hashSourceScope,
   prepareSubmission,
   validateSubmission,
-} from "../.claude/commands/spec_sync_local.mjs";
+} from "../resources/specode/commands/spec_sync_local.mjs";
 
 const resultPath = "scripts/fixtures/spec-sync-valid-result.json";
 
@@ -52,7 +52,7 @@ test("source scope hash는 로컬 파일에서 프로그램이 만든다", () =>
 
 test("실행 응답과 명령은 snapshot 중복 prompt와 MCP 대용량 제출을 사용하지 않는다", () => {
   const startService = fs.readFileSync("src/lib/spec-sync/startService.ts", "utf8");
-  const command = fs.readFileSync(".claude/commands/sync-specode.md", "utf8");
+  const command = fs.readFileSync("resources/specode/workflows/sync.md", "utf8");
   assert.doesNotMatch(startService, /sourceDiscoveryPrompt|analysisPromptTemplate/);
   assert.match(command, /sync_specode\.mjs submit/);
   assert.doesNotMatch(command, /submit_spec_sync_result/);
@@ -60,11 +60,11 @@ test("실행 응답과 명령은 snapshot 중복 prompt와 MCP 대용량 제출�
 
 test("MCP 커맨드 재설치는 새 helper를 배포하고 폐기 validator를 제거한다", () => {
   const distribution = fs.readFileSync(
-    "src/lib/mcp/workerCommandFiles.ts",
+    "src/lib/mcp/workerCommandManifest.ts",
     "utf8",
   );
-  assert.match(distribution, /\.claude\/commands\/sync_specode\.mjs/);
-  assert.match(distribution, /\.claude\/commands\/spec_sync_local\.mjs/);
+  assert.match(distribution, /sync_specode\.mjs/);
+  assert.match(distribution, /spec_sync_local\.mjs/);
   assert.match(distribution, /WORKER_COMMAND_REMOVE_PATHS/);
   assert.match(distribution, /\.claude\/commands\/validate_specode_sync\.mjs/);
 });
