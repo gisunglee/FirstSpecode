@@ -449,7 +449,8 @@ function DeleteTaskDialog({
 // 나머지는 실제 표시되는 배지·짧은 텍스트 길이에 맞춘 고정폭 + 중앙 정렬.
 // 고정폭은 sp-grid-table 셀 좌우 패딩(6px×2=12px)을 포함한 값이다.
 // H/M/L(우선순위 요약) 컬럼 삭제(2026-07-29)
-const TASK_GRID_TEMPLATE = "minmax(0, 1fr) 92px 88px 152px 72px 64px";
+// 요구사항 열은 제목 "요구사항"(4글자)이 한 줄에 들어가야 하므로 84px (2026-09-28)
+const TASK_GRID_TEMPLATE = "minmax(0, 1fr) 92px 88px 152px 72px 84px";
 
 // ── 버튼 스타일 ──────────────────────────────────────────────────────────────
 

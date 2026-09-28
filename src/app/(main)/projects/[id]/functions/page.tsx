@@ -608,18 +608,21 @@ function FunctionsPageInner() {
                     {DOC_STATUS_LABEL[fn.docStatus] ?? fn.docStatus}
                   </div>
 
-                  {/* 정렬순서 — 직접 입력 가능 */}
-                  <div onClick={(e) => e.stopPropagation()}>
+                  {/* 정렬순서 — 직접 입력 가능.
+                      type="number" 는 브라우저 스핀 버튼이 오른쪽을 차지해 두 자리 숫자가 잘렸다(2026-09-28).
+                      인라인 스타일로는 스핀 버튼을 숨길 수 없어 text + inputMode="numeric" 으로 두고 숫자만 받는다. */}
+                  <div onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       value={sortEdits[fn.funcId] ?? fn.sortOrder}
                       onChange={(e) => {
-                        const v = parseInt(e.target.value);
+                        const v = parseInt(e.target.value.replace(/[^0-9]/g, ""));
                         if (!isNaN(v)) setSortEdits((prev) => ({ ...prev, [fn.funcId]: v }));
                       }}
                       style={{
-                        width: 36, boxSizing: "border-box", textAlign: "center", fontSize: 12,
-                        padding: "2px 4px", borderRadius: 4,
+                        width: 40, boxSizing: "border-box", textAlign: "center", fontSize: 12,
+                        padding: "2px 2px", borderRadius: 4,
                         border: "1px solid var(--color-border)",
                         background: sortEdits[fn.funcId] !== undefined
                           ? "var(--color-bg-muted)"
@@ -736,7 +739,7 @@ function PencilIcon() {
 //   왼쪽 이름 컬럼(fr)이 넓어진다. 유형·복잡도·AI 컬럼은 목록에서 제외(상세 화면에서 확인).
 //     구분 52px     — "신규" 배지 + 편집용 select 화살표
 //     작성상태 56px — "작성완료" 4글자(13px)
-//     정렬 40px     — 36px 숫자 input
+//     정렬 40px     — 40px 숫자 input(text+numeric, 스핀 버튼 없음, 가운데 정렬)
 //     공수 40px     — 숫자 1~2자리(편집 input 48px 는 gap 을 조금 침범해도 무방)
 //     설/구 72px    — 비율 칩 30px×2 + 간격 3px
 //     수정 44px     — 축약 상대시간 2~3자 기준. 배지가 붙는 행은 시각이 줄임표 처리되고
