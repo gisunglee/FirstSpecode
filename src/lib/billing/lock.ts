@@ -8,11 +8,13 @@
  *   ① 강등 — 해지 확정·결제 실패 소진 → 소유 프로젝트 전부 잠금 (lockAllOwnedProjects)
  *   ② 소유권 이전·복구 — 새 소유자 플랜으로 상한 초과면 잠금 (applyLockOnTransferOrRestore)
  *   ③ 열린 프로젝트 교체 — 소유자가 A 를 닫고 B 를 열 때 A 에만 (swapOpenProject)
+ *   ④ 관리자 수동 부여 플랜이 FREE 로 떨어짐(만료·수동 강등) → 소유 프로젝트 전부 (syncLockForManualPlan)
  * 풀리는 이벤트:
  *   ① 재결제 성공 → 전부 해제 (unlockAllOwnedProjects)
  *   ② 소유자 "활성화" 클릭 → 그 프로젝트가 상한 이하면 해제 (unlockProjectByOwner)
  *   ③ 강등 직후 소유 프로젝트가 1개뿐이고 상한 이하면 자동 해제 (autoUnlockIfSingle)
  *   ④ 열린 프로젝트 교체 — B (swapOpenProject)
+ *   ⑤ 관리자가 유료 플랜을 (재)부여·연장 → 전부 해제 (syncLockForManualPlan)
  *
  * "상한 초과" 판정은 한 함수(isProjectOverPlanLimit)로 통일 (정책 §1-6, 2026-09-26):
  *   FREE               → ⓐ 그 프로젝트의 편집 멤버(OWNER/ADMIN/MEMBER) > 1  — 소유자 혼자여야 한다 (FREE_EDITORS)
@@ -29,6 +31,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { FREE_LIMITS, getMemberEffectivePlan } from "@/lib/planLimits";
+import type { PlanCode } from "@/lib/permissions";
 import { countUsedSeats, getSeatLimit, SEAT_ROLES } from "./seats";
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -238,6 +241,57 @@ export async function applyLockOnTransferOrRestore(projectId: string, now: Date,
     data:  verdict.over ? { lock_yn: "Y", lock_dt: now } : { lock_yn: "N", lock_dt: null },
   });
   return verdict.over;
+}
+
+// ─── 관리자 수동 부여 플랜의 잠금 동기화 ─────────────────────────────────────
+
+export type ManualPlanLockResult = {
+  /** 동기화 시점의 실효 플랜 */
+  effectivePlan:         PlanCode;
+  /** FREE 로 판정되어 잠근 프로젝트 수 (자동 해제분 제외) */
+  lockedCount:           number;
+  /** 유료로 판정되어 푼 프로젝트 수 */
+  unlockedCount:         number;
+  /** 잠근 뒤 자동 해제된 프로젝트 ID (소유가 1개이고 상한 이하일 때) */
+  autoUnlockedProjectId: string | null;
+};
+
+/**
+ * 구독 없이 관리자가 수동 부여한 플랜의 잠금 상태를 실효 플랜에 맞춘다 (정책 §1-6).
+ *
+ * 왜 필요한가: 배치(daily)는 `tb_bl_subscription` 행이 있는 회원만 훑는다. 수동 부여는 구독 행을
+ * 만들지 않아서, 만료일이 지나도 아무도 잠그지 않았다 — 계약이 끝났는데 프로젝트가 계속 열려 있었다.
+ * 관리자가 날짜를 걸 수 있으면 그 날짜가 지날 때 막혀야 한다는 것이 정책이다.
+ *
+ * 규칙: 실효 플랜이 유료면 전부 해제, FREE 면 전부 잠금.
+ *   - 유료 판정 = plan_code 가 FREE 가 아니고 만료일이 남아 있음(resolveEffectivePlan).
+ *     그래서 관리자가 날짜만 연장해도 잠긴 프로젝트가 다시 열린다 — 잠금과 해제가 짝이어야
+ *     "다시 부여하면 풀린다"가 성립한다.
+ *   - SUPER_ADMIN 은 getMemberEffectivePlan 이 항상 ENTERPRISE 로 돌려주므로 여기서 잠기지 않는다
+ *     (운영자가 자기 계정을 잠가 손발이 묶이는 사고 방지).
+ *   - 구독이 살아 있는 회원에게는 쓰지 않는다 — 그쪽은 구독이 플랜의 원천이고 배치 ①③이 처리한다.
+ *     (관리자 플랜 변경 API 가 살아 있는 구독을 409 로 막고 있어 실제로 섞이지 않는다.)
+ */
+export async function syncLockForManualPlan(
+  mberId: string,
+  now: Date,
+  db: Db = prisma,
+): Promise<ManualPlanLockResult> {
+  const effectivePlan = await getMemberEffectivePlan(mberId, db);
+
+  if (effectivePlan !== "FREE") {
+    const unlockedCount = await unlockAllOwnedProjects(mberId, db);
+    return { effectivePlan, lockedCount: 0, unlockedCount, autoUnlockedProjectId: null };
+  }
+
+  const locked = await lockAllOwnedProjects(mberId, now, db);
+  const autoUnlockedProjectId = await autoUnlockIfSingle(mberId, db);
+  return {
+    effectivePlan,
+    lockedCount:   autoUnlockedProjectId ? locked - 1 : locked,
+    unlockedCount: 0,
+    autoUnlockedProjectId,
+  };
 }
 
 /** 소유자의 잠긴 프로젝트 수 — 강등 메일·구독 화면 안내용 */

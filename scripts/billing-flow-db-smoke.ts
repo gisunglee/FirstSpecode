@@ -14,6 +14,7 @@
  *   → 잠금 검사(requirePermission 권한·메서드 기준, requireProjectUnlocked) → 활성화(상한 이하/초과)
  *   → 열린 프로젝트 교체(남의 것 거부·롤백·정상 교체·여러 개 닫기) → 재결제(전부 해제)
  *   → 해지 예약·취소·확정 → 관리자 수동 플랜 409 판정 → 탈퇴 시 구독 종료
+ *   → 수동 부여 플랜 만료(배치 ⑤·잠금/해제 짝·SUPER_ADMIN 제외)
  */
 
 import assert from "node:assert/strict";
@@ -655,6 +656,70 @@ async function main(): Promise<void> {
       const payListW = await adminQ.listPaymentsForAdmin({ search: "wd-", page: 1, pageSize: 200 });
       assert.ok(payListW.items.some((p) => p.type === "REFUND" && p.refundReason === "WITHDRAWAL"), "W 의 청약철회 환불 행");
       assert.deepEqual(await adminQ.listAdminAlertRecipients(), [], "임시 스키마엔 SUPER_ADMIN 없음");
+    }
+
+    // ── 22. 관리자 수동 부여 플랜 만료 — 배치 ⑤ · 잠금/해제 짝 ────────────
+    log("수동 플랜 만료 — 만료된 ENTERPRISE 는 배치 ⑤ 가 FREE·잠금, 관리자가 날짜를 연장하면 다시 해제. SUPER_ADMIN·구독자는 대상 제외");
+    {
+      const M  = randomUUID();          // 수동 ENTERPRISE, 프로젝트 2개
+      const SA = randomUUID();          // SUPER_ADMIN — 만료돼도 대상 아님
+      const MP = [randomUUID(), randomUUID()];
+      const SP = randomUUID();
+      const past   = new Date(Date.now() - days(1));
+      const future = new Date(Date.now() + days(30));
+
+      await prisma.tbCmMember.createMany({ data: [
+        { ...mk(M,  "manual"), plan_code: "ENTERPRISE", plan_expire_dt: past },
+        { ...mk(SA, "sysadm"), plan_code: "ENTERPRISE", plan_expire_dt: past, sys_role_code: "SUPER_ADMIN" },
+      ] });
+      for (const [i, pid] of MP.entries()) {
+        await prisma.tbPjProject.create({ data: { prjct_id: pid, prjct_nm: `MP${i}`, prjct_abrv: "MP", creat_mber_id: M, owner_mber_id: M } });
+        await prisma.tbPjProjectMember.create({ data: { prjct_id: pid, mber_id: M, role_code: "OWNER", mber_sttus_code: "ACTIVE" } });
+      }
+      await prisma.tbPjProject.create({ data: { prjct_id: SP, prjct_nm: "SAP", prjct_abrv: "SA", creat_mber_id: SA, owner_mber_id: SA } });
+      await prisma.tbPjProjectMember.create({ data: { prjct_id: SP, mber_id: SA, role_code: "OWNER", mber_sttus_code: "ACTIVE" } });
+
+      const isLockedM = async (p: string) =>
+        (await prisma.tbPjProject.findUniqueOrThrow({ where: { prjct_id: p }, select: { lock_yn: true } })).lock_yn === "Y";
+
+      // 대상 선정 — 만료된 수동 플랜만. SUPER_ADMIN 과 구독자(A)는 빠진다
+      const targets = await daily.loadExpiredManualPlanTargets(new Date());
+      const ids4 = targets.map((t) => t.mberId);
+      assert.ok(ids4.includes(M), "만료된 수동 ENTERPRISE 는 대상");
+      assert.ok(!ids4.includes(SA), "SUPER_ADMIN 은 만료돼도 대상 아님 — 운영자 계정 잠금 사고 방지");
+      assert.ok(!ids4.includes(ids.A), "구독 이력이 있는 회원은 구독 흐름이 원천");
+
+      // ⑤ 처리 — FREE 확정 + 소유 프로젝트 전부 잠금 (2개라 자동 해제 없음)
+      const r5 = await daily.processExpiredManualPlan(targets.find((t) => t.mberId === M)!, new Date());
+      assert.equal(r5.previousPlan, "ENTERPRISE");
+      assert.equal(r5.lockedCount, 2, "소유 프로젝트 2개 전부 잠금");
+      assert.equal((await prisma.tbCmMember.findUniqueOrThrow({ where: { mber_id: M } })).plan_code, "FREE");
+      assert.equal(await isLockedM(MP[0]!), true);
+      assert.equal(await isLockedM(MP[1]!), true);
+      assert.equal(await isLockedM(SP), false, "SUPER_ADMIN 프로젝트는 그대로");
+
+      // 멱등 — 처리 뒤에는 대상에서 빠진다(plan_code=FREE, expire=null)
+      assert.ok(!(await daily.loadExpiredManualPlanTargets(new Date())).some((t) => t.mberId === M), "두 번 돌아도 재처리 없음");
+
+      // 관리자가 유료 플랜을 다시 부여(날짜 연장) → 전부 해제. 잠금과 해제가 짝이어야 성립한다
+      await prisma.tbCmMember.update({ where: { mber_id: M }, data: { plan_code: "ENTERPRISE", plan_expire_dt: future } });
+      const reGrant = await lock.syncLockForManualPlan(M, new Date());
+      assert.equal(reGrant.effectivePlan, "ENTERPRISE");
+      assert.equal(reGrant.unlockedCount, 2, "날짜를 연장하면 잠긴 프로젝트가 다시 열린다");
+      assert.equal(await isLockedM(MP[0]!), false);
+      assert.equal(await isLockedM(MP[1]!), false);
+
+      // 관리자가 손으로 FREE 로 내리면 만료를 기다리지 않고 바로 잠긴다
+      await prisma.tbCmMember.update({ where: { mber_id: M }, data: { plan_code: "FREE", plan_expire_dt: null } });
+      const manualDown = await lock.syncLockForManualPlan(M, new Date());
+      assert.equal(manualDown.effectivePlan, "FREE");
+      assert.equal(manualDown.lockedCount, 2);
+      assert.equal(await isLockedM(MP[0]!), true);
+
+      // SUPER_ADMIN 은 syncLock 을 직접 불러도 잠기지 않는다 (실효 플랜이 항상 ENTERPRISE)
+      const saSync = await lock.syncLockForManualPlan(SA, new Date());
+      assert.equal(saSync.effectivePlan, "ENTERPRISE");
+      assert.equal(await isLockedM(SP), false, "운영자 계정은 어떤 경로로도 잠기지 않는다");
     }
 
     log("DTO — 개요·결제 내역에 빌링키 없음, 실패 이력 포함");

@@ -15,6 +15,13 @@
  *   - 플랜 변경 + 감사 기록을 한 트랜잭션으로. memo 에 전후 값 스냅샷
  *   - 자기 자신도 변경 가능 (플랫폼 운영자 계정이므로 차단 이유 없음). 감사 로그로 추적
  *
+ * 프로젝트 잠금 (2026-09-28):
+ *   플랜을 바꾸면 소유 프로젝트의 잠금 상태를 실효 플랜에 맞춘다(같은 트랜잭션).
+ *     유료(만료일이 남아 있음) → 소유 프로젝트 전부 해제
+ *     FREE(또는 만료됨)        → 전부 잠금 + 소유가 1개이고 상한 이하면 자동 해제
+ *   해제가 짝으로 있어야 "관리자가 날짜를 연장하면 다시 열린다"가 성립한다. 잠금만 있으면
+ *   한 번 만료된 회원은 영영 잠긴 채 남는다. 만료 시점의 자동 잠금은 일일 배치 ⑤가 한다.
+ *
  * 구독과의 관계 (2026-09-20 결제 2단계):
  *   - 살아 있는 구독(ACTIVE/PAST_DUE/CANCEL_SCHEDULED)이 있는 회원은 구독이 플랜의 원천이다.
  *     이 API 로 바꾸면 다음 결제 때 구독이 다시 덮어써 어긋나므로 409 로 거부한다.
@@ -29,6 +36,7 @@ import { parseJsonBody } from "@/lib/parseJsonBody";
 import { requireSystemAdmin } from "@/lib/requireSystemAdmin";
 import { PLAN_CODES, resolveEffectivePlan } from "@/lib/permissions";
 import { hasLiveSubscription } from "@/lib/billing/subscription";
+import { syncLockForManualPlan, type ManualPlanLockResult } from "@/lib/billing/lock";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -113,11 +121,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const memo   = `[대상: ${targetSnapshot}] ${before} → ${after} ${reason}`;
   const now    = new Date();
 
+  let lockResult: ManualPlanLockResult;
   await prisma.$transaction(async (tx) => {
     await tx.tbCmMember.update({
       where: { mber_id: targetMberId },
       data:  { plan_code: plan, plan_expire_dt: expiresAt, mdfcn_dt: now },
     });
+    // 바뀐 플랜 기준으로 잠금/해제를 맞춘다 — 같은 트랜잭션이라 플랜만 바뀌고 잠금이 안 따라가는 일이 없다
+    lockResult = await syncLockForManualPlan(targetMberId, now, tx);
     await tx.tbSysAdminAudit.create({
       data: {
         admin_mber_id: gate.mberId,
@@ -137,5 +148,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     effectivePlan: resolveEffectivePlan(plan, expiresAt),
     planExpiresAt: expiresAt?.toISOString() ?? null,
     changed:       true,
+    // 운영자가 "몇 개가 잠겼는지/풀렸는지"를 바로 확인할 수 있게 같이 내려 준다
+    lockedCount:   lockResult!.lockedCount,
+    unlockedCount: lockResult!.unlockedCount,
   });
 }

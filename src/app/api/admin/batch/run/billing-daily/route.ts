@@ -7,8 +7,9 @@
  *
  * 동작 (src/lib/billing/daily.ts):
  *   살아 있는 구독마다 ① 해지 확정 ② 정기 결제 ③ 재시도(3일 간격) ④ 결제 7일 전 안내.
- *   할 일이 없는 구독은 SKIPPED. PG 호출은 항목별로 격리돼 한 건 실패가 다른 건을 막지 않는다.
- *   같은 날 두 번 돌아도 상태 전이·prentc_dt 로 중복 청구·중복 메일이 나지 않는다.
+ *   그리고 구독 없이 관리자가 수동 부여한 플랜 중 ⑤ 만료된 회원 → FREE 확정·프로젝트 잠금·메일.
+ *   할 일이 없는 항목은 SKIPPED. PG 호출은 항목별로 격리돼 한 건 실패가 다른 건을 막지 않는다.
+ *   같은 날 두 번 돌아도 상태 전이·prentc_dt·plan_code 확정으로 중복 청구·중복 메일이 나지 않는다.
  *
  * runJob 이 tb_cm_batch_job / _item 에 항목별 결과(수행 동작 목록)를 남긴다.
  */
@@ -17,7 +18,16 @@ import { NextRequest } from "next/server";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { runJob } from "@/lib/batch/runJob";
 import { requireBatchAuth } from "@/lib/batch/requireBatchAuth";
-import { BILLING_DAILY_JOB_TYPE, loadDailyTargets, processSubscriptionDaily, type DailyAction, type DailyTarget } from "@/lib/billing/daily";
+import {
+  BILLING_DAILY_JOB_TYPE,
+  loadDailyTargets,
+  loadExpiredManualPlanTargets,
+  processExpiredManualPlan,
+  processSubscriptionDaily,
+  type DailyAction,
+  type DailyTarget,
+  type ManualPlanTarget,
+} from "@/lib/billing/daily";
 import { listAdminAlertRecipients } from "@/lib/billing/admin-queries";
 import { sendAdminBillingAlertEmail } from "@/lib/billing/emails";
 
@@ -26,17 +36,27 @@ const ALERT_ACTIONS: ReadonlySet<DailyAction> = new Set<DailyAction>(["EXPIRED",
 const ALERT_LABEL: Record<string, string> = {
   EXPIRED: "재시도 소진 → FREE 강등·잠금", RENEW_FAILED: "정기 결제 실패(재시도 예정)",
   RETRY_FAILED: "재시도 실패", CANCEL_FINALIZED: "해지 확정 → FREE·잠금",
+  PLAN_EXPIRED: "수동 부여 플랜 만료 → FREE·잠금",
 };
+
+/**
+ * 배치 항목 — 구독과 "수동 부여 플랜 만료" 두 종류를 한 잡에서 처리한다.
+ * 잡을 나누지 않는 이유: 둘 다 "플랜이 끝나 잠그는" 같은 일이고, 운영자가 화면에서
+ * 한 번에 보는 편이 낫다. 항목별 trgtTy 로 구분된다.
+ */
+type BatchItem =
+  | { kind: "SUBSCRIPTION"; sub: DailyTarget }
+  | { kind: "MANUAL_PLAN";  manual: ManualPlanTarget };
 
 export async function POST(request: NextRequest) {
   const auth = await requireBatchAuth(request);
   if (auth instanceof Response) return auth;
 
   // 관리자 알림용 — 항목별 동작을 모아 배치가 끝난 뒤 한 통으로 보낸다
-  const notable: Array<{ label: string; actions: DailyAction[] }> = [];
+  const notable: Array<{ label: string; actions: Array<DailyAction | "PLAN_EXPIRED"> }> = [];
 
   try {
-    const result = await runJob<DailyTarget>({
+    const result = await runJob<BatchItem>({
       jobTyCode:  BILLING_DAILY_JOB_TYPE,
       jobNm:      "결제 일일 배치 (청구·재시도·만료·사전안내)",
       trgrTyCode: auth.trigger,
@@ -45,16 +65,34 @@ export async function POST(request: NextRequest) {
       summary:    { invokedAt: new Date().toISOString() },
 
       async loadTargets() {
-        const targets = await loadDailyTargets();
-        return targets.map((t) => ({
-          item:   t,
-          trgtId: t.sbscrptnId,
-          label:  `${t.email ?? t.mberId} (${t.status})`,
-          trgtTy: "SUBSCRIPTION",
-        }));
+        const now = new Date();
+        const [subs, manuals] = await Promise.all([loadDailyTargets(), loadExpiredManualPlanTargets(now)]);
+        return [
+          ...subs.map((t) => ({
+            item:   { kind: "SUBSCRIPTION", sub: t } as BatchItem,
+            trgtId: t.sbscrptnId,
+            label:  `${t.email ?? t.mberId} (${t.status})`,
+            trgtTy: "SUBSCRIPTION",
+          })),
+          ...manuals.map((m) => ({
+            item:   { kind: "MANUAL_PLAN", manual: m } as BatchItem,
+            trgtId: m.mberId,
+            label:  `${m.email ?? m.mberId} (수동 ${m.plan} 만료)`,
+            trgtTy: "MEMBER",
+          })),
+        ];
       },
 
-      async processItem(t) {
+      async processItem(item) {
+        if (item.kind === "MANUAL_PLAN") {
+          const m = item.manual;
+          const r = await processExpiredManualPlan(m, new Date());
+          // 수동 플랜 만료도 강등이므로 관리자 알림 대상
+          notable.push({ label: m.email ?? m.mberId, actions: ["PLAN_EXPIRED"] });
+          return { status: "SUCCESS", meta: { previousPlan: r.previousPlan, lockedCount: r.lockedCount, autoUnlocked: r.autoUnlockedProjectName } };
+        }
+
+        const t = item.sub;
         const actions = await processSubscriptionDaily(t.sbscrptnId, new Date());
         if (actions.length === 0) {
           return { status: "SKIPPED", reason: "오늘 할 일 없음", meta: { statusBefore: t.status } };

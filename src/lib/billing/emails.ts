@@ -224,17 +224,18 @@ export async function sendCancelConfirmedEmail(i: CancelConfirmedEmailInput): Pr
 export type DowngradedEmailInput = {
   to:           string;
   productName:  string;
-  /** CANCELED = 해지 확정, EXPIRED = 결제 실패 소진 */
-  reason:       "CANCELED" | "EXPIRED";
+  /** CANCELED = 해지 확정, EXPIRED = 결제 실패 소진, PLAN_EXPIRED = 관리자 수동 부여 플랜 만료 */
+  reason:       "CANCELED" | "EXPIRED" | "PLAN_EXPIRED";
   lockedCount:  number;
   /** 프로젝트가 1개뿐이라 자동 해제됐으면 그 이름 */
   autoUnlockedProjectName: string | null;
 };
 
 export async function sendDowngradedEmail(i: DowngradedEmailInput): Promise<boolean> {
-  const why = i.reason === "CANCELED"
-    ? "요청하신 해지가 확정되어"
-    : "정기 결제가 재시도까지 모두 실패하여";
+  const why =
+    i.reason === "CANCELED"     ? "요청하신 해지가 확정되어" :
+    i.reason === "PLAN_EXPIRED" ? "이용 기간이 만료되어" :
+                                  "정기 결제가 재시도까지 모두 실패하여";
   const lockLine = i.lockedCount > 0
     ? `<p>소유한 프로젝트 <strong>${i.lockedCount}개</strong>가 읽기 전용으로 잠겼습니다. 조회와 MCP 읽기는 계속 되고,
        편집·생성·초대·업로드만 막힙니다. <strong>데이터는 삭제되지 않습니다.</strong></p>`
