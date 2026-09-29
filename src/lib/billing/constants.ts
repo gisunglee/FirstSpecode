@@ -213,8 +213,10 @@ export const BILLING_ERROR_CODES = {
   PAYMENT_FAILED:       "BILLING_PAYMENT_FAILED",
   /** 카드 등록 콜백의 customerKey 가 로그인 사용자와 다름 */
   CUSTOMER_KEY_MISMATCH: "BILLING_CUSTOMER_KEY_MISMATCH",
-  /** PG 어댑터 미구현·설정 오류 */
+  /** PG 어댑터 미구현·설정 오류·PG 통신 실패(청구되지 않음이 확실한 경우) */
   GATEWAY_UNAVAILABLE:  "BILLING_GATEWAY_UNAVAILABLE",
+  /** PG 청구 결과를 알 수 없음(통신 두절 뒤 조회도 실패) — 실패로 기록하지 말 것. 토큰 만료 뒤 다음 시도가 이어진다 */
+  PAYMENT_STATUS_UNKNOWN: "BILLING_PAYMENT_STATUS_UNKNOWN",
   /** 같은 구독에 대한 결제 작업이 동시에 들어옴 — 하나만 처리하고 나머지는 거절 (이중 결제 방지·결제 중 변경 차단) */
   CONCURRENT_OPERATION: "BILLING_CONCURRENT_OPERATION",
   /** 환불 조건 위반 (청약철회는 첫 결제·7일·계정당 1회, 잔액 초과 등) */

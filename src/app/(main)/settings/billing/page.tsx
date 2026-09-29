@@ -111,13 +111,32 @@ function BillingSettingsInner() {
   const [cancelOpen, setCancelOpen]         = useState(false);
 
   // ── 카드 등록 시작 (BASIC 시작 / 결제 수단 변경) — 서버가 준 mode 로 분기 ──
-  function goToCardRegistration(start: CardRegistrationStart) {
+  async function goToCardRegistration(start: CardRegistrationStart) {
     if (start.mode === "redirect") {
       window.location.assign(start.url);
       return;
     }
-    // 토스 SDK 는 가맹 심사 후 연결 — 지금 이 분기로 오면 서버 설정이 잘못된 것
-    toast.error("토스 결제창 연동은 준비 중입니다. 운영자에게 문의해 주세요.");
+    // 토스: 브라우저 SDK 가 카드 등록창(PC 는 iframe, 모바일은 현재 창)을 띄운다.
+    // 등록이 끝나면 토스가 페이지 전체를 successUrl(authKey·customerKey 부착) / failUrl(code·message) 로 보낸다.
+    // SDK 는 이 분기에서만 필요하므로 동적 import 로 결제 화면 밖 번들에서 뺀다.
+    try {
+      const { loadTossPayments } = await import("@tosspayments/tosspayments-sdk");
+      const toss = await loadTossPayments(start.clientKey);
+      await toss.payment({ customerKey: start.customerKey }).requestBillingAuth({
+        method:     "CARD",
+        successUrl: start.successUrl,
+        failUrl:    start.failUrl,
+      });
+    } catch (err) {
+      // 사용자가 창을 닫은 것은 오류가 아니다
+      const code = (err as { code?: string } | null)?.code;
+      if (code === "USER_CANCEL") {
+        toast("카드 등록을 취소했습니다.");
+        return;
+      }
+      const message = err instanceof Error ? err.message : "";
+      toast.error(`카드 등록창을 열지 못했습니다. ${message}`.trim());
+    }
   }
 
   const changeCardMutation = useMutation({

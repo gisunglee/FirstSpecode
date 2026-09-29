@@ -4,7 +4,7 @@
  * Body: { seatCnt: number }
  * 응답: 게이트웨이 카드 등록 시작 결과
  *   { mode: "redirect", url }              — Mock: 앱 안 "PG 창"으로 이동
- *   { mode: "sdk", clientKey, customerKey } — Toss: 브라우저 SDK 가 창을 띄움 (심사 후)
+ *   { mode: "sdk", clientKey, customerKey, successUrl, failUrl } — Toss: 브라우저 SDK 가 창을 띄움
  *
  * 실제 결제는 PG 가 돌려보낸 뒤 POST /api/billing/card/callback 에서 일어난다.
  * 여기서는 좌석 수만 검증한다(사용 좌석 이상, 범위 내).

@@ -600,7 +600,48 @@ async function main(): Promise<void> {
       assert.equal(adj.subscriptionTerminated, false);
       assert.equal((await sub.findSubscription(ids.A))!.sbscrptn_sttus_code, "ACTIVE", "운영 보정은 구독 유지");
       await assert.rejects(adminA.adminRecordRefund(initial6.pymnt_id, { reason: "WITHDRAWAL", memo: "x" }, adminActor), (e: unknown) => e instanceof BillingError, "일부 환불된 결제는 청약철회 불가");
-      const remaining = initial6.amt - 1000;
+
+      // 토스 웹훅 환불 대조(webhook.ts, 2026-09-30) — 관리자가 먼저 기록한 1,000원 행엔 취소 키만 연결, 콘솔에서만 취소한
+      // 500원은 ADJUSTMENT 행을 새로 만든다. 재전송은 전부 "기존". DONE 은 이력 유무로 PROCESSED/FAILED. 검증 안 된 이벤트·Mock 은 IGNORED
+      log("웹훅 대조 — 콘솔 취소 ↔ 환불 이력 연결·생성·재전송·승인 대조");
+      {
+        const webhook = await import("@/lib/billing/webhook");
+        const at = new Date().toISOString();
+        const paymentBase = { paymentKey: initial6.pg_pymnt_key!, orderId: initial6.pg_order_id, totalAmount: initial6.amt };
+        const cancelEvent = () => ({
+          providerEventId: "evt-smoke-cancel", eventType: "PAYMENT_STATUS_CHANGED",
+          payload: { verified: true, eventType: "PAYMENT_STATUS_CHANGED", createdAt: at, payment: { ...paymentBase, status: "PARTIAL_CANCELED", cancels: [
+            { transactionKey: "smoke-tx-1", cancelAmount: 1000, cancelReason: "관리자 기록 후 콘솔 취소", canceledAt: at, cancelStatus: "DONE" },
+            { transactionKey: "smoke-tx-2", cancelAmount: 500,  cancelReason: "콘솔 단독 취소",           canceledAt: at, cancelStatus: "DONE" },
+          ] } },
+        });
+        const r1 = await webhook.processPgEvent("TOSS", cancelEvent());
+        assert.equal(r1.status, "PROCESSED");
+        assert.ok(r1.reason.includes("연결 1건") && r1.reason.includes("생성 1건"), r1.reason);
+        const linked = await prisma.tbBlPayment.findUniqueOrThrow({ where: { pg_order_id: adj.refund.orderId } });
+        assert.equal(linked.pg_cancel_key, "smoke-tx-1", "관리자 환불 행에 취소 키 연결");
+        const created = await prisma.tbBlPayment.findFirst({ where: { pg_cancel_key: "smoke-tx-2" } });
+        assert.equal(created?.amt, -500);
+        assert.equal(created?.refund_rsn_code, "ADJUSTMENT");
+        assert.equal(created?.orig_pymnt_id, initial6.pymnt_id);
+        assert.equal((await prisma.tbBlPayment.findUniqueOrThrow({ where: { pymnt_id: initial6.pymnt_id } })).pymnt_sttus_code, "PARTIALLY_REFUNDED");
+        const r2 = await webhook.processPgEvent("TOSS", cancelEvent());
+        assert.ok(r2.reason.includes("기존 2건"), "재전송은 아무것도 만들지 않는다");
+        assert.equal(await prisma.tbBlPayment.count({ where: { orig_pymnt_id: initial6.pymnt_id } }), 2);
+
+        const doneEvent = (paymentKey: string) => ({
+          providerEventId: `evt-done-${paymentKey}`, eventType: "PAYMENT_STATUS_CHANGED",
+          payload: { verified: true, eventType: "PAYMENT_STATUS_CHANGED", createdAt: at, payment: { ...paymentBase, paymentKey, status: "DONE" } },
+        });
+        assert.equal((await webhook.processPgEvent("TOSS", doneEvent(initial6.pg_pymnt_key!))).status, "PROCESSED", "승인 이벤트 ↔ 이력 일치");
+        assert.equal((await webhook.processPgEvent("TOSS", doneEvent("no-such-payment"))).status, "FAILED", "이력 없는 승인 = 수동 대조 필요");
+        const unverified = { providerEventId: "evt-unverified", eventType: "PAYMENT_STATUS_CHANGED", payload: { verified: false, eventType: "PAYMENT_STATUS_CHANGED", createdAt: at, data: {} } };
+        assert.equal((await webhook.processPgEvent("TOSS", unverified)).status, "IGNORED");
+        assert.equal((await webhook.processPgEvent("MOCK", cancelEvent())).status, "IGNORED");
+        assert.equal((await webhook.processPgEvent("TOSS", { providerEventId: "evt-bd", eventType: "BILLING_DELETED", payload: { verified: false, eventType: "BILLING_DELETED", createdAt: at, data: { billingKeyLast4: "1234" } } })).status, "IGNORED");
+      }
+      // 웹훅이 만든 500원만큼 잔액이 줄었다
+      const remaining = initial6.amt - 1000 - 500;
       const race = await Promise.allSettled([
         adminA.adminRecordRefund(initial6.pymnt_id, { reason: "ADJUSTMENT", amount: remaining, memo: "동시 A" }, adminActor),
         adminA.adminRecordRefund(initial6.pymnt_id, { reason: "ADJUSTMENT", amount: remaining, memo: "동시 B" }, adminActor),

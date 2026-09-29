@@ -3,28 +3,25 @@
  *
  * 역할:
  *   - 토스페이먼츠 빌링(자동결제) API 모양에 맞춘 추상 인터페이스
- *   - 구현은 두 개: Mock(gateway-mock.ts, 기본) / Toss(가맹 심사 후 파일 하나 추가)
+ *   - 구현은 두 개: Mock(gateway-mock.ts, 기본) / Toss(gateway-toss.ts, 2026-09-30 추가)
  *   - 환경변수 PAYMENT_GATEWAY=mock|toss 로 선택. 미설정 = mock
  *
  * 왜 인터페이스 뒤에 두는가:
  *   PG 가 뜨는 지점(카드 등록창·빌링키 발급·청구·취소·웹훅)만 갈아 끼우면 나머지
  *   구독·좌석·잠금·배치 코드가 그대로 돈다. 운영 사용자가 회사 내부 인원뿐인 동안은
- *   운영에서도 Mock 을 쓴다(정책 §3 2단계 원칙).
+ *   운영에서도 Mock 을 쓴다(정책 §3 2단계 원칙). 토스 전환 = PAYMENT_GATEWAY=toss + 키 env + 재배포.
  *
- * 토스 어댑터 붙일 때 (심사 후):
- *   - src/lib/billing/gateway-toss.ts 에 PaymentGateway 구현
- *   - startCardRegistration → { mode:"sdk", clientKey, customerKey }
- *     (토스 카드 등록은 브라우저 SDK requestBillingAuth 가 띄운다 — 리다이렉트 URL 이 아님)
- *   - issueBillingKey → POST /v1/billing/authorizations/issue
- *   - charge → POST /v1/billing/{billingKey}
- *   - cancelPayment → POST /v1/payments/{paymentKey}/cancel
- *   - parseWebhook → 서명 검증 후 PgEvent
+ * 두 구현의 차이 (호출자가 mode 로 분기하는 유일한 지점은 카드 등록 시작):
+ *   - Mock: startCardRegistration → { mode:"redirect", url } — 앱 안 "PG 창"으로 이동
+ *   - Toss: startCardRegistration → { mode:"sdk", clientKey, customerKey, successUrl, failUrl }
+ *     (토스 카드 등록은 브라우저 SDK requestBillingAuth 가 띄운다 — 서버 리다이렉트 URL 이 아님)
  *   - 빌링키 삭제 API 는 토스에 없다 → 우리 DB 에서 NULL 처리로 끝 (인터페이스에 없음)
  */
 
 import { createHash } from "node:crypto";
 import { PG_PROVIDER, type PgProviderCode } from "./constants";
 import { MockPaymentGateway } from "./gateway-mock";
+import { TossPaymentGateway } from "./gateway-toss";
 
 // ─── 타입 ────────────────────────────────────────────────────────────────────
 
@@ -35,7 +32,8 @@ import { MockPaymentGateway } from "./gateway-mock";
  */
 export type CardRegistrationStart =
   | { mode: "redirect"; url: string }
-  | { mode: "sdk"; clientKey: string; customerKey: string };
+  /** 토스: 프론트가 requestBillingAuth(successUrl, failUrl) 를 부른다 — URL 은 서버가 만든 것을 그대로 쓴다 */
+  | { mode: "sdk"; clientKey: string; customerKey: string; successUrl: string; failUrl: string };
 
 export type StartCardRegistrationParams = {
   customerKey: string;
@@ -74,10 +72,13 @@ export type CancelPaymentParams = {
   paymentKey: string;
   amount:     number;
   reason:     string;
+  /** 같은 취소를 재시도해도 한 번만 실행되게 하는 키 (토스 Idempotency-Key). 없으면 호출 1회만 보호 */
+  idempotencyKey?: string;
 };
 
 export type CancelPaymentResult =
-  | { ok: true }
+  /** cancelKey — PG 취소 트랜잭션 키 (tb_bl_payment.pg_cancel_key). Mock 은 null */
+  | { ok: true; cancelKey: string | null }
   | { ok: false; code: string; message: string };
 
 /** 웹훅 1건 — 저장은 tb_bl_pg_event, 멱등 키는 (provider, providerEventId) */
@@ -90,7 +91,13 @@ export type PgEvent = {
 export interface PaymentGateway {
   readonly provider: PgProviderCode;
   startCardRegistration(params: StartCardRegistrationParams): Promise<CardRegistrationStart>;
+  /** 실패는 BillingError 로 던진다 (토스 메시지 포함). 호출자는 그대로 사용자에게 보여 준다 */
   issueBillingKey(params: IssueBillingKeyParams): Promise<IssuedBillingKey>;
+  /**
+   * ok:false 는 "청구되지 않았다"가 확인된 거절이다 — 실패 이력으로 기록해도 안전.
+   * 결과를 알 수 없으면(통신 두절 뒤 조회도 실패) BillingError(PAYMENT_STATUS_UNKNOWN) 를 던진다.
+   * 호출자는 이 예외를 실패로 기록하면 안 된다(이중 청구 위험) — 그대로 전파하면 결제 작업 토큰이 만료된 뒤 다음 시도가 이어진다.
+   */
   charge(params: ChargeParams): Promise<ChargeResult>;
   cancelPayment(params: CancelPaymentParams): Promise<CancelPaymentResult>;
   /** 서명 검증 포함. 검증 실패·형식 불일치면 null */
@@ -114,12 +121,9 @@ export function getPaymentGateway(): PaymentGateway {
     return cached;
   }
   if (mode === "toss") {
-    // 심사 후 gateway-toss.ts 를 추가하고 여기서 생성한다.
-    // 미구현 상태에서 조용히 Mock 으로 떨어지면 운영 설정 실수를 못 알아차리므로 명시적으로 막는다.
-    throw new Error(
-      "PAYMENT_GATEWAY=toss 는 아직 지원되지 않습니다 (토스 어댑터는 가맹 심사 후 추가). " +
-      "PAYMENT_GATEWAY=mock 으로 두거나 비워 두세요."
-    );
+    // 생성자가 TOSS_SECRET_KEY·TOSS_CLIENT_KEY 를 검사한다 — 없으면 여기서 던져서 설정 실수를 바로 드러낸다
+    cached = new TossPaymentGateway();
+    return cached;
   }
   throw new Error(`알 수 없는 PAYMENT_GATEWAY 값입니다: ${mode} (mock | toss)`);
 }

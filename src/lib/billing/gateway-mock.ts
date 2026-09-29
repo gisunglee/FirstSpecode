@@ -86,7 +86,7 @@ export class MockPaymentGateway implements PaymentGateway {
   }
 
   async cancelPayment(_p: CancelPaymentParams): Promise<CancelPaymentResult> {
-    return { ok: true };
+    return { ok: true, cancelKey: null };
   }
 
   async parseWebhook(request: Request): Promise<PgEvent | null> {

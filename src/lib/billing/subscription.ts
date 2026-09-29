@@ -311,6 +311,8 @@ export async function completeCardRegistration(
   try {
     issued = await gw.issueBillingKey({ authKey: input.authKey, customerKey: input.customerKey });
   } catch (err) {
+    // 게이트웨이가 사유를 담아 BillingError 로 던진 경우(토스 "정지된 카드" 등)는 그대로 사용자에게
+    if (err instanceof BillingError) throw err;
     console.error("[billing] 빌링키 발급 실패:", err);
     throw new BillingError(E.GATEWAY_UNAVAILABLE, "카드 등록에 실패했습니다. 다시 시도해 주세요.", 502);
   }

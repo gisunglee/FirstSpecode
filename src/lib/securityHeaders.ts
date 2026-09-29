@@ -27,6 +27,12 @@ const SOCIAL_IMG_HOSTS = [
   "https://avatars.githubusercontent.com",
 ];
 
+// 토스페이먼츠 결제 SDK (결제 2단계, src/lib/billing/gateway-toss.ts)
+//   - js.tosspayments.com: SDK 스크립트 (npm 패키지도 런타임에 이 주소에서 로드한다)
+//   - *.tosspayments.com : 카드 등록창 iframe + SDK 가 부르는 API/로그
+const TOSS_SCRIPT_HOST = "https://js.tosspayments.com";
+const TOSS_HOSTS       = "https://*.tosspayments.com";
+
 /** 환경별 CSP directive 목록 생성 */
 function buildCspDirectives(isProd: boolean): string[] {
   return [
@@ -35,7 +41,8 @@ function buildCspDirectives(isProd: boolean): string[] {
     // Next.js 런타임이 hydration용 inline script를 주입한다.
     //   dev: React Fast Refresh가 eval 사용 → 'unsafe-eval' 허용 필요
     //   prod: 'unsafe-inline'만 허용(eval 차단)
-    `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
+    //   + 토스 SDK 스크립트
+    `script-src 'self' 'unsafe-inline' ${TOSS_SCRIPT_HOST}${isProd ? "" : " 'unsafe-eval'"}`,
 
     // 프로젝트 전반에 inline style({ style: ... } 및 Tailwind runtime)을 씀.
     "style-src 'self' 'unsafe-inline'",
@@ -47,16 +54,16 @@ function buildCspDirectives(isProd: boolean): string[] {
 
     // XHR/fetch 대상.
     //   dev: HMR이 ws:/wss: 사용 → 허용
-    //   prod: 'self'만 허용 (모든 외부 호출은 서버 경유)
-    `connect-src 'self'${isProd ? "" : " ws: wss:"}`,
+    //   prod: 'self' + 토스 SDK 가 부르는 API (그 외 외부 호출은 서버 경유)
+    `connect-src 'self' ${TOSS_HOSTS}${isProd ? "" : " ws: wss:"}`,
 
     "media-src 'self' blob:",
 
     // 이 사이트를 iframe으로 감싸는 것을 전면 차단(클릭재킹)
     "frame-ancestors 'none'",
 
-    // 우리가 iframe을 쓸 일 없음 — 전면 차단
-    "frame-src 'none'",
+    // 우리가 여는 iframe 은 토스 카드 등록창뿐 — 그 외 전부 차단
+    `frame-src ${TOSS_HOSTS}`,
 
     // 폼 submit 대상 제한
     "form-action 'self'",

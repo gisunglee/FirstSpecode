@@ -22,7 +22,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { authFetch, AuthFetchError } from "@/lib/authFetch";
-import { BILLING_ERROR_CODES, BILLING_PATH, BILLING_RETURN_TO_STORAGE_KEY } from "@/lib/billing/constants";
+import { BILLING_CALLBACK_PATH, BILLING_ERROR_CODES, BILLING_PATH, BILLING_RETURN_TO_STORAGE_KEY } from "@/lib/billing/constants";
 
 /**
  * 구독 시작 카드가 PG 로 떠나기 전에 남긴 "돌아갈 화면"을 한 번 읽고 지운다.
@@ -63,9 +63,11 @@ function BillingCallbackInner() {
 
     const purpose = params.get("purpose") === "change" ? "change" : "start";
 
-    // PG 창에서 실패/취소
+    // PG 창에서 실패/취소 — 토스는 failUrl 에 code·message 를 붙여 준다(사용자 취소는 USER_CANCEL)
     if (params.get("result") === "fail") {
-      toast.error(purpose === "start" ? "카드 등록이 취소되어 구독을 시작하지 않았습니다." : "카드 변경이 취소되었습니다.");
+      const pgMessage = params.get("message");
+      const base = purpose === "start" ? "카드 등록이 취소되어 구독을 시작하지 않았습니다." : "카드 변경이 취소되었습니다.";
+      toast.error(pgMessage && params.get("code") !== "USER_CANCEL" ? `${base} (${pgMessage})` : base);
       router.replace(BILLING_PATH);
       return;
     }
@@ -74,6 +76,9 @@ function BillingCallbackInner() {
     const customerKey = params.get("customerKey");
     const seatCntRaw  = params.get("seatCnt");
     const seatCnt     = seatCntRaw ? Number(seatCntRaw) : undefined;
+
+    // authKey 는 1회용 비밀값 — 읽자마자 주소창·히스토리에서 지운다 (뒤로가기·북마크·화면 공유로 남지 않게)
+    window.history.replaceState(window.history.state, "", BILLING_CALLBACK_PATH);
 
     if (!authKey || !customerKey || (purpose === "start" && !Number.isInteger(seatCnt))) {
       setPhase({ kind: "error", title: "카드 등록 정보가 없습니다", message: "결제창에서 정상적으로 돌아오지 않았습니다. 구독 화면에서 다시 시도해 주세요." });

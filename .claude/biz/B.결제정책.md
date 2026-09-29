@@ -1,5 +1,5 @@
 # B. SPECODE 결제·요금제 정책 (작업 기준 문서)
-> 최종 갱신: 2026-09-26 · 상태: **과금 정책 개정(FREE = 편집자 소유자 1명·열린 프로젝트 1개·뷰어 무제한, 환불 = 첫 결제 7일 무조건·계정당 1회) 코드 완료·로컬 커밋 `6548f54` — 푸시(=운영 배포)는 사용자 확인 대기(§7-1 0번)**. 운영에 배포된 것은 그 직전 상태(결제 기능 + 관리자 결제 운영 화면 + 좌석 구성 펼치기, Mock PG, 내부 사용자용). DDL 없음. 다음은 §7-1(푸시·배포 확인 → env·cron·브라우저 점검) → §7-2 사업자 정보 → 토스 심사, 그 뒤 개발은 §7-3 토스 어댑터
+> 최종 갱신: 2026-09-30 · 상태: **토스 어댑터 1차 커밋(테스트 키 검증 완료, 브라우저 카드 등록 성공). 운영은 여전히 Mock, 푸시 안 함.** 2026-09-30 보안 검토(Claude + GPT 교차)에서 라이브 전 필수 수정 8건 확정 → §7-3 "라이브 전 필수" 순서대로 진행 중. ⚠ 운영 DB 에 로컬 브라우저 테스트로 생긴 TOSS 구독 1건이 남아 있음(§7-3 운영 정리). 라이브 키를 받으면 §7-3 4번 전환 절차
 
 이 문서는 결제 기능이 끝날 때까지 **모든 세션이 가장 먼저 읽는 단일 기준**이다.
 대화에서 결정된 것은 여기에만 쓴다. 여기 없는 규칙은 결정되지 않은 것이다.
@@ -22,7 +22,7 @@
 - SPECODE 는 원래 완전 무료 + "표준화닷컴"으로 수익화할 계획이었다. 표준화닷컴이 아직 없어 SPECODE 로 먼저 결제를 붙였다.
 - 결제의 목적은 매출보다 **① 서버비 브레이크(무료 상한 근거) ② 진지한 사용자 선별 ③ 표준화닷컴에 재사용할 구독 인프라 확보**다.
 - 1인 창업. 운영 부담이 늘어나는 설계는 피한다. "심플하게"가 기본값.
-- 고객 99.99% 국내, 개인(카드) 결제. PG 는 토스페이먼츠 빌링키 자동결제 예정. **현재는 Mock PG** — 운영 사용자가 회사 내부 인원뿐이라 실제 결제 없이 전 흐름을 운영에서 쓴다.
+- 고객 99.99% 국내, 개인(카드) 결제. PG 는 토스페이먼츠 빌링키 자동결제. **어댑터는 구현됨(`gateway-toss.ts`, 2026-09-30, 테스트 키 검증)이나 운영은 아직 Mock PG** — 운영 사용자가 회사 내부 인원뿐이라 실제 결제 없이 전 흐름을 운영에서 쓴다. 가맹 심사 통과 → 라이브 키 → §7-3 4번 전환.
 - AI 호출 비용은 고객이 자기 API 키로 낸다. SPECODE 는 토큰 비용이 없다 → **AI 기능은 전 티어 무료**.
 
 ### 1-2. 티어
@@ -143,7 +143,9 @@
 - 메일은 커밋 뒤 **await** 로 보낸다(서버리스에서 `void` 는 유실). 7일 전 사전 안내는 발송 성공 뒤에만 `prentc_dt` 기록(실패 시 다음 날 재시도). 본문 외부 문자열은 이스케이프.
 - 상한 계산 지점: 프로젝트 생성·복사(소유 수) / 초대·수락·승격(FREE 는 편집 멤버 1명 = 소유자만, 구독은 구매 좌석 — 둘 다 뷰어는 세지 않는다) / 첨부 업로드(FREE 차단). 일상 요청은 아무것도 세지 않는다. 상한 403 응답에는 `requiredSeats`·`monthlyAmount`·`billingPath` 가 실려 다이얼로그가 "필요 좌석 N개 · 월 X원" 과 "BASIC 시작하기"(좌석 기본값 채워진 구독 화면) 를 보여 준다.
 - 배치는 기존 `requireBatchAuth`(X-Cron-Secret 또는 SUPER_ADMIN 세션) + `runJob` 패턴. `job_ty_code=BILLING_DAILY`. 같은 날 두 번 돌아도 상태 전이·`prentc_dt` 로 중복 청구·중복 메일 없음. PG 호출은 항목별 격리.
-- 웹훅(`POST /api/billing/webhook/[provider]`)은 서명 검증 후 원문만 저장하고 `IGNORED` 처리. 청구는 동기 API 로 직접 반영하므로 v1 은 기록·대조용. Mock 은 `MOCK_WEBHOOK_SECRET` 없으면 경로 닫힘.
+- **토스 어댑터 `src/lib/billing/gateway-toss.ts`** (2026-09-30): 카드 등록 = 브라우저 SDK `@tosspayments/tosspayments-sdk` `requestBillingAuth`(서버는 `{mode:"sdk", clientKey, customerKey, successUrl, failUrl}` 만 돌려줌, PC 는 iframe·모바일은 현재 창) → 토스가 successUrl 에 authKey 부착 → 콜백 화면이 authKey 를 읽자마자 주소창에서 지움 → `POST /v1/billing/authorizations/issue`. 청구 `POST /v1/billing/{billingKey}` 에 **Idempotency-Key = orderId**(시도 1건 = 주문 ID 1개). 통신 두절이면 같은 키로 1회 재요청 → 그래도 모르면 주문번호 조회 → 조회도 안 되면 `BILLING_PAYMENT_STATUS_UNKNOWN` 예외(실패로 기록하지 않음, 결제 작업 토큰 2분 만료 뒤 다음 시도). 취소 `POST /v1/payments/{paymentKey}/cancel`(멱등키 선택, `cancelKey` 반환). 카드 표시는 `card.issuerCode` → 이름표(미등록 코드는 그대로). 테스트 키에서만 env `TOSS_TEST_ERROR_CODE` 로 거절 재현. CSP 에 `js.tosspayments.com`(script)·`*.tosspayments.com`(frame·connect) 허용. `/api/billing/*` 응답 `Cache-Control: no-store`.
+- **빌링키 암호화 AES-256-GCM**(2026-09-30): 저장 형식 `v2:iv:tag:ct`, 키는 `sha256("specode-billing-key-v2|" + API_KEY_SECRET)`. 옛 CBC 형식(Mock 시절)은 복호화만 지원 — 토스 전환 시 재등록으로 사라지므로 재암호화 배치 없음. 결제 전용 키·KMS 는 보류 그대로.
+- **웹훅(`POST /api/billing/webhook/[provider]`)**: 토스 빌링 웹훅에는 서명이 없다(서명 헤더는 지급대행 이벤트에만). 그래서 `PAYMENT_STATUS_CHANGED` 는 본문의 paymentKey 로 **결제 조회 API 를 다시 불러 그 결과만 저장**(본문은 신뢰하지 않음). 이벤트 ID 는 (종류·시각·paymentKey·상태) 해시 → 재전송 멱등. IP 당 10분 300건 rate limit, 본문 64KB 상한. 처리(`webhook.ts`): DONE 은 이력 대조(없으면 FAILED + CRITICAL 로그 = "PG 승인·DB 실패" 탐지) / CANCELED·PARTIAL_CANCELED 는 **콘솔 취소 ↔ REFUND 이력 대조** — 관리자가 먼저 기록한 행(키 없음·금액 일치)엔 `pg_cancel_key` 만 연결, 없으면 ADJUSTMENT 행 생성, 원 결제 상태는 누적 합계로 재계산. 구독 종료는 하지 않는다(청약철회로 끝내려면 **관리자 화면에서 먼저 기록 → 콘솔 취소** 순서). `BILLING_DELETED` 는 빌링키가 암호화 저장이라 대조 불가 → 기록만(다음 청구 실패가 재시도 정책으로 처리). 처리 오류도 200(행에 FAILED, 재전송 폭주 방지). Mock 은 `MOCK_WEBHOOK_SECRET` 없으면 경로 닫힘.
 - **관리자 결제 화면 `/admin/billing`** (2026-09-21, 이전의 "PG 대시보드로 대체" 결정을 뒤집음 — Mock 에는 대시보드가 없고, 토스 대시보드도 좌석·잠금·재시도 같은 우리 도메인 상태는 모른다). 요약 카드·구독 목록·결제 이력(엑셀)·구독 상세 운영 액션 5개(즉시 재결제·다음 결제일 연기·강제 종료·환불 기록·잠금 해제 대행). **좌석·단가·플랜은 관리자 화면에서도 바꾸지 않는다** — 구독이 플랜의 원천. 보상은 "결제일 연기"로만. 상한 초과 강제 해제 없음(§1-6). 코드: `src/lib/billing/admin-queries.ts`(조회) · `admin-actions.ts`(액션). 관리자 회원 상세에는 구독 요약·환불 3플래그 + 상세 링크. 배치 화면에 `BILLING_DAILY` 수동 실행.
 - **금융 액션의 감사 기록은 보장된다**: 연기·강제 종료·환불 기록·대행 해제는 상태 변경과 감사 행을 **같은 트랜잭션**에 넣는다(`logAdminActionStrict` — 감사 실패 = 변경 롤백). PG 를 호출하는 즉시 재결제는 호출 전 "시도" 행을 만들고 결과로 memo 를 갱신한다(실패한 시도도 남음). 감사 액션·대상 상수와 라벨은 `src/lib/auditTypes.ts` 한 곳 — 감사 화면 필터가 같은 파일을 읽는다. 구독 상세 → 그 구독의 감사 로그 링크.
 - 표시 라벨(구독 상태·결제 구분·결제 상태·환불 유형·종료 사유)은 `constants.ts` 한 곳 — 사용자 구독 화면·관리자 화면·회원 상세·엑셀이 같은 문구를 쓴다.
@@ -170,7 +172,11 @@
   POST https://www.specode.co.kr/api/admin/batch/run/access-log-cleanup
   X-Cron-Secret: <BATCH_CRON_SECRET>
   ```
-- [ ] **토스페이먼츠 가맹 심사 신청** — 위 사업자 정보 교체·배포 후. 심사 통과 시 시크릿/클라이언트 키 수령 → §7 "토스 어댑터" 착수.
+- [x] **토스 개발자센터 가입·테스트 키** — 2026-09-30 완료. `.env.local` 에 `TOSS_CLIENT_KEY`·`TOSS_SECRET_KEY`(API 개별 연동 키). 로컬 `PAYMENT_GATEWAY=toss`.
+- [ ] **브라우저에서 토스 카드 등록 1회(사용자)** — `npm run dev` → `/settings/billing` → BASIC 시작 → 토스 창에 실카드 입력(테스트 키라 실제 청구 없음) → 콜백 → 구독 ACTIVE·결제 내역 1건·카드사 표시 확인. 결제 수단 변경도 한 번. 창이 안 뜨면 브라우저 콘솔의 CSP 오류를 알려줄 것(`securityHeaders.ts` 조정).
+- [ ] **토스페이먼츠 전자결제(가맹) 신청 + 자동결제(빌링) 별도 신청** — 위 사업자 정보 교체·배포 후. 빌링은 "추가 리스크 검토 및 계약 후" 사용 가능하므로 신청서에 정기결제를 명시. 카드사 심사 약 2주. 통합판매업 신고증은 계약 뒤 상점관리자에서 구매안전서비스 이용확인증을 받아 정부24 신고 → 추후 제출 가능한지 확인. 심사 통과 시 라이브 키 수령 → §7-3 4번 전환.
+- [ ] **토스 웹훅 URL 등록(사용자, 개발자센터 > 웹훅)** — `https://www.specode.co.kr/api/billing/webhook/toss`, 이벤트 `PAYMENT_STATUS_CHANGED`·`BILLING_DELETED`. 테스트/라이브 각각. 운영이 Mock 인 동안은 404 로 거부되므로 전환 직전에 등록.
+- [x] **`npm run test:billing:db`** — 2026-09-30 통과(웹훅 대조 단계 포함, 결제 이력 17건). 집 네트워크는 `DIRECT_URL`(IPv6 전용 호스트)이 안 닿아 pooler 세션 포트(`…pooler.supabase.com:5432`, `pgbouncer` 파라미터 제거)로 `DIRECT_URL` 을 덮어 실행했다.
 
 ## 3. 구현 현황 (2026-09-20 운영 배포 기준)
 
@@ -205,7 +211,7 @@
 | `GET /api/billing/seats/breakdown` | 세션 | 좌석 구성 — editors(distinct 편집 멤버)·viewers·프로젝트별 역할·초대 중 편집 멤버 수. `countUsedSeats` 와 같은 기준(`seats.getSeatBreakdown`) |
 | `POST /api/billing/cancel` · `DELETE /api/billing/cancel` | 세션 | 해지 예약(PAST_DUE 면 즉시 종료) · 해지 취소 |
 | `GET /api/billing/payments` | 세션 | 결제 내역 최신 50건 |
-| `POST /api/billing/webhook/[provider]` | 서명 | 웹훅 원문 저장(멱등) |
+| `POST /api/billing/webhook/[provider]` | 토스: 결제 조회 대조 / Mock: 시크릿 | 원문 저장(멱등) → 종류별 처리(승인 대조·콘솔 취소 ↔ 환불 이력). IP rate limit. §1-10 |
 | `POST /api/projects/[id]/unlock` | 세션·소유자 | 활성화. 초과 시 403 `PROJECT_UNLOCK_OVER_LIMIT` |
 | `POST /api/admin/batch/run/billing-daily` | cron 시크릿 또는 SUPER_ADMIN | 일일 배치 |
 | `PATCH /api/admin/users/[id]/plan` | SUPER_ADMIN | 수동 플랜 변경(구독 있으면 409 `SUBSCRIPTION_ACTIVE`) |
@@ -232,7 +238,9 @@
 - `npm run test:billing:db` — 임시 스키마(`specode_billing_test_*`)에 전체 스키마를 올려 도메인 서비스를 실제 호출, 18단계: 가격·날짜 순수 함수 → BASIC 시작(좌석 부족 거부·customerKey 불일치 403·첫 결제 거절 402·성공) → 좌석 상한(초대·이메일 중복·승격) → 좌석 추가 일할 → 축소 예약·취소 → 사전 안내 멱등 → **주기 종료 후 좌석 추가 거부** → 정기 결제(축소 적용·기간 연속) → **낡은 버전 청구 시도 skipped(이중 결제 방지)** → 실패 카드 변경 → PAST_DUE → 재시도 3회 → EXPIRED·FREE·잠금 → requirePermission 읽기/쓰기/예외/**PUT+read 차단/projectLocked 플래그** + **requireProjectUnlocked** → 활성화(이하/초과) → 재결제 전부 해제 → 해지 예약·취소·확정 → 자동 해제 → 이전 판정·탈퇴 → DTO 빌링키 미노출. 운영 데이터 무영향(운영 DB 서버의 임시 스키마 생성·삭제), SMTP 차단.
 - 2026-09-21 추가 검증(19단계): 종료 사유 기록·리셋 / 관리자 요약·목록·상세 / 대행 해제(초과 거부→정리 후 해제, 감사 동반) / 결제일 연기 / 청약철회 환불(전액·구독 종료·7일 초과 거부·중복 거부) / 운영 보정 부분 환불(PARTIALLY_REFUNDED) / **동시 환불 2건 → 1건만 성공**(FOR UPDATE) / **PG 응답 대기 중(Mock 1.5초 지연) 연기·종료·회원 해지 → 409, 청구 결과는 정상 반영·토큰 해제** / PAST_DUE 즉시 재결제(감사 시도→결과 갱신) / 강제 종료(ADMIN_TERMINATE).
 - 2026-09-26 과금 정책 개정 반영(통과 확인): 단계 [02] FREE 상한 — 편집 멤버 초대·수락·승격 403 `PLAN_LIMIT_MEMBER` + `requiredSeats`(사용 좌석 3 + 새 편집자 = 4)·`monthlyAmount`(39,600), 이미 좌석 보유자도 FREE 에선 차단, 뷰어 초대·강등 통과 / [14] 활성화 — 편집자 3명 프로젝트 `FREE_EDITORS` 거부 → 뷰어로 내리면 해제, 열린 프로젝트가 있으면 `FREE_PROJECTS` 거부 → 그것을 잠그면 해제 / [18] 이전 판정 — 편집자 2명이면 `FREE_EDITORS`, 혼자 프로젝트라도 받는 쪽에 열린 프로젝트가 있으면 `FREE_PROJECTS`(양도 우회 차단) / [20] 관리자 — 대행 해제도 같은 판정, 청약철회는 재구독 결제 거부·새 회원 첫 결제(편집자 2명 프로젝트)는 환불·구독 종료·잠금·`ALREADY_REFUNDED`·재구독 뒤 두 번째 INITIAL 거부(계정당 1회)·승인 12일 전은 `WINDOW_PASSED` 거부.
-- `npm run typecheck`.
+- **`npm run test:billing:toss`** (2026-09-30, DB 없음·테스트 키·돈 안 나감) 16단계: 게이트웨이 선택 → sdk 모드 응답 → 가짜 authKey 거부(토스 코드 포함) → 테스트 환경 카드 직접 입력 API 로 빌링키 → 청구 9,900원(영수증 URL) → **같은 orderId 재청구 = 같은 paymentKey(멱등)** → `TossPayments-Test-Code=REJECT_CARD_PAYMENT` 거절 재현 → 잘못된 빌링키 거절 → 조회 → 부분 취소·**같은 멱등키 재취소 = 같은 cancelKey**·잔액 취소(balance 0) → 웹훅 파싱(본문이 거짓말해도 조회 결과 저장, 재전송 같은 ID, 가짜 키·64KB·비JSON 거부, BILLING_DELETED 는 끝 4자리만) → GCM 왕복·변조 감지·CBC 호환 → 카드 표시 유틸. 테스트 상점 BIN 은 `9410…`(BC)만 빌링 청구가 통과한다(다른 BIN 은 `NOT_SUPPORTED_CARD_TYPE`).
+- 2026-09-30 DB 스모크에 단계 추가(웹훅 대조): 관리자 1,000원 기록 후 토스 취소 이벤트(1,000·500) → 연결 1·생성 1, 재전송은 기존 2, DONE 이력 일치 PROCESSED / 없는 결제 FAILED, 미검증·Mock·BILLING_DELETED 는 IGNORED. 2026-09-30 통과(21단계, pooler 세션 포트 경유).
+- `npm run typecheck` (2026-09-30 통과).
 - 배포 확인은 운영 URL 로: `/intro/pricing` 200 + `/settings/billing` 링크 포함, `/billing/pg-window` 200, `/api/billing/subscription` 미인증 401.
 
 ## 4. 0단계 선행 정리 — 완료 (2026-09-19)
@@ -292,20 +300,26 @@
 2. 요금제·약관·개인정보처리방침·푸터 4곳 표기 확인.
 3. 토스페이먼츠 가맹 심사 신청(사용자). 심사가 보는 것: 요금제·가격 노출, 사업자 정보·통신판매업 번호, 약관(환불 조항), 개인정보처리방침 — 전부 배포되어 있음.
 
-### 7-3. 심사 후 — 토스 어댑터 (Claude, 파일 추가 위주)
-설계는 `gateway.ts` 상단 주석에 있다. 할 일:
-1. `src/lib/billing/gateway-toss.ts` — `PaymentGateway` 구현: `startCardRegistration` → `{mode:"sdk", clientKey, customerKey}` · `issueBillingKey` → `POST /v1/billing/authorizations/issue` · `charge` → `POST /v1/billing/{billingKey}` · `cancelPayment` → `POST /v1/payments/{paymentKey}/cancel` · `parseWebhook` → 토스 서명 검증. env `TOSS_SECRET_KEY`, `TOSS_CLIENT_KEY`, 웹훅 시크릿. `gateway.ts` 의 `toss` 분기에서 생성.
-2. `/settings/billing` 의 `goToCardRegistration` sdk 모드 — 토스 브라우저 SDK `requestBillingAuth(customerKey, successUrl, failUrl)` 호출. successUrl/failUrl 은 지금 콜백 화면 그대로(토스가 `authKey`·`customerKey` 를 붙여 돌려보냄).
-3. 웹훅 이벤트 종류별 처리(필요한 것만) — 현재는 기록만. 토스 빌링 웹훅 문서 확인 후 결정.
-4. **Mock → Toss 전환 절차** (중요): Mock 으로 만든 운영 구독의 빌링키는 토스에서 청구할 수 없다. 전환 시 살아 있는 Mock 구독을 어떻게 할지 결정 필요 — (권장) 내부 사용자 구독은 전환 직전 CANCELED 로 닫고 토스로 재등록. `pg_provdr_code` 로 구분 가능. 전환은 `PAYMENT_GATEWAY=toss` env 변경 + 재배포.
-5. 실카드 소액 결제 → 콘솔 취소로 `cancelPayment` 까지 확인. 영수증 URL 은 토스 `receipt.url` 사용.
-6. 정책 문서 §1-1 "현재는 Mock" 문구 갱신.
-7. **실결제 오픈 전 필수 (2026-09-20 점검·GPT 교차 검토에서 수용, 토스 응답 형태가 정해진 뒤 만들어야 해서 여기로):**
-   - 결제 시도 1건 = 고정 주문 ID + 토스 `Idempotency-Key`. 타임아웃·응답 유실 시 재청구 전에 결제 조회 API 로 상태 확인(UNKNOWN 복구). 지금의 낙관적 잠금(§1-10)은 동시 요청만 막고 "PG 성공·DB 실패" 는 여전히 수동 대조.
-   - 빌링키 암호화를 AES-256-GCM(인증 태그) + 암호문 버전 prefix 로 교체. 지금(CBC)은 Mock 키만 있어 재암호화 부담이 없는 이 시점이 가장 싸다. 결제용 키 분리·KMS 는 보류.
-   - 웹훅: 토스 이벤트 종류별 처리(승인·취소·환불), 서명 검증은 이벤트별 방식 확인(단일 shared-secret 일반화 금지). 환불은 콘솔 수동이므로 최소한 REFUND 이력을 `tb_bl_payment` 에 반영하는 경로(웹훅 또는 관리자 입력) 필요.
-   - 결제 API 응답에 `Cache-Control: no-store`, 콜백 화면에서 authKey 를 읽은 뒤 주소창에서 제거.
-   - `nodemailer` 8→10 메이저 업그레이드(High 취약점 1건 남음) — 메일 발송 회귀 확인과 함께.
+### 7-3. 토스 어댑터 — 심사와 병행 (2026-09-30 코드 완료, 순서 변경: 테스트 키가 가입 즉시 나와 심사 전에 만들 수 있었다)
+완료(§1-10 에 흡수): 1 `gateway-toss.ts` · 2 SDK 카드 등록 · 3 웹훅 종류별 처리 · 7 멱등키+UNKNOWN 복구·GCM·no-store·authKey 제거. 검증은 §3-5. 남은 것:
+1. **사용자 브라우저 점검**(§2) — 테스트 키로 카드 등록·결제 수단 변경 1회. 여기서 CSP·SDK 창이 실제로 뜨는지 본다(스모크는 브라우저 단계를 못 본다).
+2. ~~DB 스모크~~ 통과(§2).
+3. ~~커밋~~ 2026-09-30 1차 커밋 완료(사용자 지시). **라이브 전 필수 수정 8건 (2026-09-30 보안 검토, Claude + GPT 교차 — 순서대로 진행, 각 항목 끝나면 여기 체크):**
+   - [ ] ① 결제 시도 행을 PG 호출 **전에** PENDING 으로 저장, 확정될 때까지 같은 orderId 로만 재조회·재시도(UNKNOWN 복구). 첫 결제 동시성 잠금도 이 행이 맡음 — "회원당 진행 중 시도 1건" 부분 유니크 인덱스 1개(DDL, §0-6 절차)
+   - [ ] ② 결제 작업 토큰 만료 2분 → 5분(토스 최악 경로 65초×3)
+   - [ ] ③ 일일 배치에 토스 **거래 조회 API 대사** 단계 — 자동결제 승인은 웹훅이 오지 않으므로(토스 문서) "PG 승인·DB 실패"는 이걸로만 잡힌다. 불일치는 관리자 알림 메일
+   - [ ] ④ 웹훅: `tosspayments-webhook-transmission-id` 로 멱등, 일시 오류는 500(재전송 유도), 재전송 시 RECEIVED·FAILED 재처리, 금액·주문번호·프로바이더 비교, 모르는 종류 저장 안 함, FAILED 건수 관리자 메일
+   - [ ] ⑤ customerKey 를 서버 비밀 HMAC 으로 + 카드 등록 시작 시 서명된 state(회원·목적·좌석·만료)를 successUrl 에 실어 콜백에서 검증(CSRF 차단). 기존 구독의 customerKey 는 재등록으로 갱신
+   - [ ] ⑥ 청구 시 구독 `pg_provdr_code` ≠ 현재 게이트웨이면 청구 거부
+   - [ ] ⑦ 토스 오류 메시지·로그에서 빌링키 마스킹
+   - [ ] ⑧ 결제 시작·콜백 라우트 회원 단위 rate limit
+   - 운영 정리: 로컬 브라우저 테스트로 생긴 운영 TOSS 구독 1건 강제 종료(사용자, `/admin/billing`). 결정 대기: 개발 DB 분리(`TEST_DATABASE_URL`/별도 Supabase), 결제 전용 암호화 키 `BILLING_KEY_SECRET` 분리(행 1건뿐인 지금이 가장 쌈)
+   - 화면(선택): 해지 버튼 가시성(다크패턴 규제), 플랜 카드 부제 "매월 N일 자동 결제 · 해지 전까지 계속"
+   - 1차 커밋 내용: `gateway-toss.ts`·`webhook.ts`·`billing-key.ts`(GCM)·웹훅 라우트·구독 화면 sdk 분기·콜백 화면·`securityHeaders.ts`·`next.config.ts`·`.env.local.example`·`package.json`(SDK 의존성·스모크 스크립트)·스모크 2종·이 문서. 푸시(=운영 배포)는 `PAYMENT_GATEWAY` 가 비어 있어 운영은 Mock 그대로 — CSP·no-store·GCM(새 저장분만)·웹훅 라우트 변경만 운영에 실린다. Mock 웹훅은 `MOCK_WEBHOOK_SECRET` 미설정이면 닫혀 있으므로 영향 없음.
+4. **Mock → Toss 전환 절차** (라이브 키 수령 후): ① Vercel env `TOSS_CLIENT_KEY`·`TOSS_SECRET_KEY`(live) 추가 ② 살아 있는 Mock 구독(`pg_provdr_code=MOCK`)은 토스에서 청구할 수 없다 → 전환 직전 관리자 강제 종료(또는 회원 해지)로 닫고 토스로 재등록(내부 사용자뿐이라 가능) ③ `PAYMENT_GATEWAY=toss` + 재배포 ④ 개발자센터에 라이브 웹훅 URL 등록 ⑤ 실카드 소액 결제 1건 → 토스 콘솔에서 취소 → 웹훅이 REFUND 행을 만드는지(`/admin/billing` 결제 이력) 확인 ⑥ `mock-access.ts` 는 토스에서 자동 무제한(실카드가 자격) — `BILLING_OPEN` 을 true 로 바꿔 요금제 버튼을 연다.
+5. 정책 문서 §1-1 "운영은 아직 Mock" 문구 갱신(전환 뒤).
+6. `nodemailer` 8→10 메이저 업그레이드(High 취약점 1건 남음) — 메일 발송 회귀 확인과 함께. 토스와 무관하므로 별도 세션.
+7. (제안, 사용자 결정) **환불을 앱에서 직접 실행** — 지금은 "관리자 화면 기록 → 토스 콘솔 취소 → 웹훅 대조" 3단계. `adminRecordRefund` 가 `cancelPayment` 를 호출하면 1단계로 줄고 순서 실수(콘솔 먼저 → ADJUSTMENT 로 잡혀 청약철회 기록 불가)가 사라진다. 어댑터는 이미 `cancelPayment`(멱등키·cancelKey)를 갖고 있어 작업은 작다. §1-7 "환불은 콘솔 수동" 정책 변경이라 여기 둔다.
 
 ### 7-4. 후속 (우선순위 낮음, 각각 사용자 결정 후)
 - 첨부 용량 집계·초과 차단(BASIC 5GB / PRO 20GB 표기만 있음).
@@ -347,3 +361,4 @@
 - 2026-09-26 심사용 법정 표기 확정(사용자): 사업자등록번호 `837-86-02928`, 주소 `서울특별시 송파구 올림픽로8길 20, 221호`, 약관·방침 시행일 `2026-11-01`(`consent.ts` 단일 출처 — 동의 기록 버전값). 문의 이메일은 보류(현행 유지). 전화번호는 "없음"으로 둘 수 없음이 확인되어 §2 에 대안 선택 대기로 남김(전자상거래법 §10 필수 표시). 토스 심사 전 `BILLING_OPEN` 을 켜야 푸터에 사업자 정보가 노출되는 의존 관계도 §2 에 기록.
 - 2026-09-26 상한 안내 정비(사용자 확정, "다 하자 · 100% 되도록"): ① 열린 프로젝트 교체 — FREE 가 A 를 닫고 B 를 여는 수단이 없어 "삭제·양도하라"는 막다른 길이던 것 해소(§1-6). ② `PlanLimitDialog` 를 상황 3가지(UPGRADE/SEATS/EDITORS)로 분기 — 이미 BASIC 인 사람에게 "BASIC 플랜이 필요합니다"를 띄우던 문제 수정, 잠금 해제 실패는 토스트 → 다이얼로그 + 이동 버튼. ③ 승격 거부 문구 "초대할 수 없습니다" → "편집 역할로 바꿀 수 없습니다"(관점 `promoter` 추가). 목록 API 에 `editorCount` 추가(groupBy 1회, 교체 경고용). DB·MCP 변경 없음. 스모크 15단계 추가(남의 것 거부·없는 ID·롤백·정상 교체·여러 개 닫기) 전부 통과.
 - 2026-09-28 수동 부여 플랜 만료 시 잠금(사용자 확정, "관리자가 일자를 설정할 수 있으면 시간 지나면 막혀야 한다"): 일일 배치 ⑤단계 추가 + 관리자 플랜 변경에 잠금/해제 짝 추가(`syncLockForManualPlan`). 유료(만료 전) → 전부 해제 / FREE·만료 → 전부 잠금. SUPER_ADMIN·구독 보유 회원은 대상 제외. 강등 메일에 `PLAN_EXPIRED` 사유 추가. 만료 7일 전 사전 안내는 멱등 표시 컬럼(DDL)이 필요해 보류 — 필요해지면 그때. DB 변경 없음. 스모크 21단계 추가, 전부 통과.
+- 2026-09-30 토스 어댑터 구현(사용자: 개발자센터 가입·테스트 키 제공, 심사 전 병행에 동의): `gateway-toss.ts`(빌링키 발급·청구 멱등키·UNKNOWN 복구·취소·조회·웹훅 조회 검증) · `webhook.ts`(승인 대조, 콘솔 취소 ↔ 환불 이력 연결/생성, 구독 종료는 안 함) · 빌링키 AES-256-GCM v2(CBC 는 복호화만) · SDK `@tosspayments/tosspayments-sdk` 카드 등록(iframe) · 콜백 화면 authKey 주소창 제거 · CSP 토스 허용 · `/api/billing/*` no-store · 웹훅 IP rate limit. 인터페이스 변경: sdk 모드에 successUrl/failUrl, `CancelPaymentResult.cancelKey`, `BILLING_PAYMENT_STATUS_UNKNOWN`. 토스 API 스모크 16단계 통과, typecheck 통과, DB 스모크는 집 네트워크 DB 포트 차단으로 미실행(웹훅 단계 추가됨). DB 변경 없음. MCP 변경 없음. 커밋·푸시는 사용자 확인 대기.

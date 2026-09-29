@@ -36,6 +36,12 @@ const nextConfig: NextConfig = {
         source:  "/:path*",
         headers: getSecurityHeaders(),
       },
+      // 결제 API 응답은 어디에도 캐시되지 않게 — 카드 정보·빌링 상태가 브라우저/프록시 캐시에 남지 않도록
+      // (정책 §7-3 7번, 2026-09-20 점검)
+      {
+        source:  "/api/billing/:path*",
+        headers: [{ key: "Cache-Control", value: "no-store" }],
+      },
     ];
   },
 };
