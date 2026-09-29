@@ -185,6 +185,9 @@ export async function adminRecordRefund(paymentId: string, input: RefundInput, a
   if (original.pymnt_ty_code === PAYMENT_TYPE.REFUND || original.pymnt_sttus_code === PAYMENT_STATUS.FAILED) {
     throw new BillingError(E.REFUND_NOT_ALLOWED, "환불 행이나 실패한 결제는 환불할 수 없습니다.", 409);
   }
+  if (original.pymnt_sttus_code === PAYMENT_STATUS.PENDING) {
+    throw new BillingError(E.REFUND_NOT_ALLOWED, "결과 확인 중인 결제는 환불할 수 없습니다. 확정된 뒤 처리하세요.", 409);
+  }
 
   // 청약철회 조건은 트랜잭션 밖에서 미리 판정 — 계정의 첫 구독 시작 결제(계정당 1회)·승인 7일 이내.
   // 사용 여부는 보지 않는다(정책 §1-7, 2026-09-26). 화면 표시와 같은 함수(withdrawal.ts)를 쓴다.

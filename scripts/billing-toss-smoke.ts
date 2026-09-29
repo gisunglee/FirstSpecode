@@ -125,6 +125,16 @@ async function main() {
   assert.equal(await gw.lookupPayment("nonexistent-payment-key"), null);
   log("lookupPayment → DONE·orderId·금액 일치 / 없는 키 → null");
 
+  // ── 주문 ID 조회 (PENDING 복구용, ①) ──────────────────────────────────────
+  const lookDone = await gw.lookupCharge(orderId);
+  assert.equal(lookDone.status, "DONE");
+  if (lookDone.status === "DONE") assert.equal(lookDone.paymentKey, first.paymentKey);
+  const lookNone = await gw.lookupCharge(`SPC-NEVER-${Date.now()}`);
+  assert.equal(lookNone.status, "NOT_CHARGED");
+  const lookRejected = await gw.lookupCharge(`${orderId}-R`);
+  assert.ok(lookRejected.status === "NOT_CHARGED" || lookRejected.status === "UNKNOWN", `거절된 주문 조회: ${JSON.stringify(lookRejected)}`);
+  log(`lookupCharge → 승인 주문 DONE(같은 paymentKey) / 없는 주문 NOT_CHARGED / 거절 주문 ${lookRejected.status}`);
+
   // ── 취소: 부분 → 같은 멱등키 재시도 → 잔액 ─────────────────────────────────
   const idem = `smoke-cancel-${orderId}`;
   const partial = await gw.cancelPayment({ paymentKey: first.paymentKey, amount: 1_000, reason: "스모크 부분 취소", idempotencyKey: idem });

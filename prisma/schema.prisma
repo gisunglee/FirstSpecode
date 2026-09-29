@@ -1859,7 +1859,7 @@ model TbBlPayment {
   /// 이 결제가 덮는 기간 (SEAT_ADD 는 결제 시점 ~ 현재 주기 종료)
   perd_bgng_dt     DateTime?
   perd_end_dt      DateTime?
-  /// PAID | FAILED | PARTIALLY_REFUNDED | REFUNDED
+  /// PENDING(PG 호출 전 선기록, 2026-09-30) | PAID | FAILED | PARTIALLY_REFUNDED | REFUNDED
   pymnt_sttus_code String            @db.VarChar(20)
   pg_provdr_code   String            @db.VarChar(10)
   pg_pymnt_key     String?           @db.VarChar(200)
@@ -1874,6 +1874,10 @@ model TbBlPayment {
   refund_rsn_code  String?           @db.VarChar(20)
   /// PG 취소 트랜잭션 키 (토스 cancels[].transactionKey). Mock 은 NULL
   pg_cancel_key    String?           @db.VarChar(200)
+  /// 진행 중(PENDING) 결제 시도 잠금 — 값은 mber_id, 확정되면 NULL. UNIQUE 로 회원당 진행 중 1건 (2026-09-30)
+  pndng_lock_key   String?           @unique(map: "tb_bl_payment_pndng_lock_uk") @db.VarChar(36)
+  /// PENDING 확정 시 반영에 필요한 문맥 (INITIAL: 암호화 빌링키·카드·customerKey / SEAT_ADD: 목표 좌석). 확정되면 NULL
+  pndng_meta_json  Json?             @db.Json
   creat_dt         DateTime          @default(now())
   subscription     TbBlSubscription? @relation(fields: [sbscrptn_id], references: [sbscrptn_id], map: "tb_bl_payment_sbscrptn_fk")
   original         TbBlPayment?      @relation("PaymentRefunds", fields: [orig_pymnt_id], references: [pymnt_id], map: "tb_bl_payment_orig_fk")

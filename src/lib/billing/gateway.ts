@@ -68,6 +68,17 @@ export type ChargeResult =
   | { ok: true;  paymentKey: string; receiptUrl: string | null; approvedAt: Date }
   | { ok: false; code: string; message: string };
 
+/**
+ * 주문 ID 로 청구 결과를 확인한 것.
+ *   DONE        — 승인됨 (돈이 나갔다). PAID 로 확정할 수 있다
+ *   NOT_CHARGED — PG 에 그 주문이 없거나 승인되지 않음. FAILED 로 확정하고 새 시도를 해도 안전
+ *   UNKNOWN     — 조회 실패·처리 중. 아무것도 확정하지 말고 나중에 다시
+ */
+export type ChargeLookup =
+  | { status: "DONE"; paymentKey: string; receiptUrl: string | null; approvedAt: Date }
+  | { status: "NOT_CHARGED"; reason: string }
+  | { status: "UNKNOWN"; reason: string };
+
 export type CancelPaymentParams = {
   paymentKey: string;
   amount:     number;
@@ -99,6 +110,8 @@ export interface PaymentGateway {
    * 호출자는 이 예외를 실패로 기록하면 안 된다(이중 청구 위험) — 그대로 전파하면 결제 작업 토큰이 만료된 뒤 다음 시도가 이어진다.
    */
   charge(params: ChargeParams): Promise<ChargeResult>;
+  /** PENDING 시도 복구용 — 주문 ID 로 "청구됐는가"를 PG 에 묻는다. 예외를 던지지 않는다(UNKNOWN 으로 돌려준다) */
+  lookupCharge(orderId: string): Promise<ChargeLookup>;
   cancelPayment(params: CancelPaymentParams): Promise<CancelPaymentResult>;
   /** 서명 검증 포함. 검증 실패·형식 불일치면 null */
   parseWebhook(request: Request): Promise<PgEvent | null>;

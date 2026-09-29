@@ -10,6 +10,8 @@
  * 구독과 별개로, 관리자가 수동 부여한 플랜(구독 행 없음)도 하루 1회 정리한다:
  *   ⑤ plan_expire_dt 가 지난 유료 회원 → FREE 확정 · 소유 프로젝트 잠금 · 메일 (processExpiredManualPlans)
  *      구독 행이 없어 ①~④ 대상에 들어오지 않으므로 별도 단계가 필요하다.
+ *   ⑥ 10분 넘게 PENDING 인 결제 시도 → PG 주문 조회로 확정 (resolvePendingPayments, 2026-09-30 라이브 전 필수 ①)
+ *      "PG 승인 · 우리 DB 미반영"은 자동결제 웹훅이 오지 않아(토스) 이 조회로만 잡힌다. 확정 못 하면 관리자 알림.
  *
  * 멱등성: 같은 날 두 번 돌아도 ①~③은 상태 전이로, ④는 prentc_dt 로 중복 실행되지 않는다.
  * `now` 를 인자로 받는 이유: 스모크 테스트(scripts/billing-flow-db-smoke.ts)가 날짜를 앞으로
@@ -28,7 +30,7 @@ import {
 } from "./constants";
 import { sendDowngradedEmail, sendUpcomingChargeEmail } from "./emails";
 import { addDays, monthlyAmount } from "./pricing";
-import { attemptRecurringCharge, terminateSubscription } from "./subscription";
+import { attemptRecurringCharge, loadStalePendingMembers, resolvePendingPayments, terminateSubscription } from "./subscription";
 import { countLockedProjects, syncLockForManualPlan } from "./lock";
 import { SPECODE_PRODUCT } from "./constants";
 
@@ -41,7 +43,9 @@ export type DailyAction =
   | "RETRY_SUCCEEDED"
   | "RETRY_FAILED"
   | "EXPIRED"
-  | "PRENOTICE_SENT";
+  | "PRENOTICE_SENT"
+  /** 청구 결과 불명 — PENDING 으로 남김. 관리자 알림 대상 */
+  | "CHARGE_UNKNOWN";
 
 export type DailyTarget = {
   sbscrptnId: string;
@@ -88,7 +92,11 @@ export async function processSubscriptionDaily(sbscrptnId: string, now: Date): P
   // ② 정기 결제
   if (sub.sbscrptn_sttus_code === S.ACTIVE && sub.next_bill_dt && sub.next_bill_dt <= now) {
     const r = await attemptRecurringCharge(sub, email, now, "RENEWAL");
-    if (!r.ok && r.skipped) return actions;  // 다른 처리가 선점 — 오늘은 건너뛴다(다음 실행에 다시 판정)
+    if (!r.ok && r.skipped) {
+      // 다른 처리가 선점 — 오늘은 건너뛴다(다음 실행에 다시 판정). 결과 불명은 관리자에게 알린다
+      if (r.unknown) actions.push("CHARGE_UNKNOWN");
+      return actions;
+    }
     actions.push(r.ok ? "RENEWED" : r.expired ? "EXPIRED" : "RENEW_FAILED");
     if (!r.ok) return actions;
     sub = await refetch(sbscrptnId);
@@ -100,7 +108,10 @@ export async function processSubscriptionDaily(sbscrptnId: string, now: Date): P
     const due = sub.last_fail_dt ? addDays(sub.last_fail_dt, RETRY_POLICY.intervalDays) : now;
     if (due <= now) {
       const r = await attemptRecurringCharge(sub, email, now, "RETRY");
-      if (!r.ok && r.skipped) return actions;
+      if (!r.ok && r.skipped) {
+        if (r.unknown) actions.push("CHARGE_UNKNOWN");
+        return actions;
+      }
       actions.push(r.ok ? "RETRY_SUCCEEDED" : r.expired ? "EXPIRED" : "RETRY_FAILED");
       if (!r.ok) return actions;
       sub = await refetch(sbscrptnId);
@@ -221,4 +232,29 @@ export async function processExpiredManualPlan(t: ManualPlanTarget, now: Date): 
   }
 
   return { previousPlan: t.plan, lockedCount: applied.lockedCount, autoUnlockedProjectName };
+}
+
+// ─── ⑥ PENDING 결제 시도 확정 ─────────────────────────────────────────────────
+
+export type PendingTarget = { mberId: string; orderId: string; amount: number; createdAt: Date };
+
+/** 10분 넘게 PENDING 인 시도가 있는 회원 (회원당 1건이라 회원 = 항목) */
+export async function loadPendingTargets(now: Date): Promise<PendingTarget[]> {
+  return loadStalePendingMembers(now);
+}
+
+export type PendingOutcome = { outcome: "PAID" | "FAILED" | "UNKNOWN"; reason: string };
+
+/**
+ * 회원 1명의 PENDING 시도를 PG 조회로 확정한다.
+ *   PAID    — 승인 확인 → 이력 확정 + 구독 반영 + 영수증 (돈은 이미 나갔다)
+ *   FAILED  — 미청구 확인 → 이력만 실패로
+ *   UNKNOWN — 조회로도 확정 못 함 → 그대로 두고 관리자 알림 (PG 콘솔 대조)
+ */
+export async function processPendingTarget(t: PendingTarget, now: Date): Promise<PendingOutcome> {
+  const r = await resolvePendingPayments(t.mberId, now);
+  if (r.blocked) return { outcome: "UNKNOWN", reason: r.reason };
+  const mine = r.resolved[0];  // 회원당 진행 중 1건(UNIQUE)
+  if (!mine) return { outcome: "UNKNOWN", reason: "확정 대상 없음(이미 처리됨)" };
+  return { outcome: mine.outcome, reason: mine.outcome === "PAID" ? "PG 승인 확인 → 반영" : "PG 미청구 확인 → 실패 처리" };
 }

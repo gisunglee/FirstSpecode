@@ -47,7 +47,8 @@ export async function getWithdrawalEligibility(mberId: string, now = new Date())
     where: {
       mber_id:          mberId,
       pymnt_ty_code:    PAYMENT_TYPE.INITIAL,
-      pymnt_sttus_code: { not: PAYMENT_STATUS.FAILED },
+      // FAILED·PENDING(확정 전)은 "결제"가 아니다
+      pymnt_sttus_code: { notIn: [PAYMENT_STATUS.FAILED, PAYMENT_STATUS.PENDING] },
       subscription:     { prdct_code: SPECODE_PRODUCT },
     },
     orderBy: [{ apprv_dt: "asc" }, { creat_dt: "asc" }],

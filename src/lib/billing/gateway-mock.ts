@@ -14,12 +14,14 @@
  */
 
 import { randomBytes } from "node:crypto";
-import { MOCK_PG_WINDOW_PATH, PG_PROVIDER } from "./constants";
+import { BILLING_ERROR_CODES as E, MOCK_PG_WINDOW_PATH, PG_PROVIDER } from "./constants";
+import { BillingError } from "./errors";
 import { decodeMockAuthKey } from "./mock-auth-key";
 import type {
   CancelPaymentParams,
   CancelPaymentResult,
   CardRegistrationStart,
+  ChargeLookup,
   ChargeParams,
   ChargeResult,
   IssueBillingKeyParams,
@@ -31,6 +33,13 @@ import type {
 
 // authKey 인코딩은 PG 창(클라이언트)과 공유 — mock-auth-key.ts
 export { encodeMockAuthKey, type MockAuthPayload } from "./mock-auth-key";
+
+/** 프로세스 안의 Mock PG 장부 — 주문 ID → 청구 결과. 서버 재시작이면 비는데, Mock 은 응답 유실이 없어 문제 없다 */
+const ledger = new Map<string, ChargeResult>();
+
+function unknownError(orderId: string): BillingError {
+  return new BillingError(E.PAYMENT_STATUS_UNKNOWN, "모의 청구 결과 불명 (테스트)", 503, { orderId });
+}
 
 export class MockPaymentGateway implements PaymentGateway {
   readonly provider = PG_PROVIDER.MOCK;
@@ -67,6 +76,13 @@ export class MockPaymentGateway implements PaymentGateway {
     if (p.billingKey.includes("fail")) {
       return { ok: false, code: "MOCK_DECLINED", message: "모의 결제 거절 — 실패 테스트 카드입니다." };
     }
+
+    // 테스트 전용 — "결과를 못 받은 청구" 재현 (스모크가 PENDING 복구를 검증할 때만 설정)
+    //   lost      : PG 는 승인했는데 응답이 유실됨 → 장부에는 남기고 예외. lookupCharge 가 DONE 을 돌려준다
+    //   unreached : 요청이 PG 에 닿지도 못함 → 장부에 없고 예외. lookupCharge 가 NOT_CHARGED 를 돌려준다
+    const outcome = process.env.MOCK_CHARGE_OUTCOME;
+    if (outcome === "unreached") throw unknownError(p.orderId);
+
     const approvedAt = new Date();
     const paymentKey = `mockpay_${randomBytes(10).toString("hex")}`;
     const receipt = new URLSearchParams({
@@ -77,12 +93,23 @@ export class MockPaymentGateway implements PaymentGateway {
       approvedAt: approvedAt.toISOString(),
       paymentKey,
     });
-    return {
+    const result: ChargeResult = {
       ok: true,
       paymentKey,
       receiptUrl: `${MOCK_PG_WINDOW_PATH}?${receipt.toString()}`,
       approvedAt,
     };
+    // Mock PG 의 "장부" — lookupCharge 가 같은 주문 ID 로 같은 결과를 돌려준다 (토스 주문 조회 흉내)
+    ledger.set(p.orderId, result);
+    if (outcome === "lost") throw unknownError(p.orderId);
+    return result;
+  }
+
+  async lookupCharge(orderId: string): Promise<ChargeLookup> {
+    if (process.env.MOCK_LOOKUP_OUTCOME === "unknown") return { status: "UNKNOWN", reason: "모의 조회 실패" };
+    const hit = ledger.get(orderId);
+    if (hit && hit.ok) return { status: "DONE", paymentKey: hit.paymentKey, receiptUrl: hit.receiptUrl, approvedAt: hit.approvedAt };
+    return { status: "NOT_CHARGED", reason: "Mock 장부에 없는 주문" };
   }
 
   async cancelPayment(_p: CancelPaymentParams): Promise<CancelPaymentResult> {

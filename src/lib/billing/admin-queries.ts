@@ -194,7 +194,7 @@ export async function refundedAmountByOriginal(
 
 function withRefundBalance(p: TbBlPayment, refunded: Map<string, number>): AdminPaymentDetailRow {
   const dto = toPaymentDto(p);
-  const isOriginal = p.pymnt_ty_code !== PAYMENT_TYPE.REFUND && p.pymnt_sttus_code !== PAYMENT_STATUS.FAILED;
+  const isOriginal = p.pymnt_ty_code !== PAYMENT_TYPE.REFUND && p.pymnt_sttus_code !== PAYMENT_STATUS.FAILED && p.pymnt_sttus_code !== PAYMENT_STATUS.PENDING;
   const refundedAmount = isOriginal ? (refunded.get(p.pymnt_id) ?? 0) : 0;
   return { ...dto, refundedAmount, refundableAmount: isOriginal ? Math.max(0, p.amt - refundedAmount) : 0 };
 }

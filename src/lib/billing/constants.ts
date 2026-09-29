@@ -87,6 +87,8 @@ export const PAYMENT_TYPE = {
 export type PaymentType = (typeof PAYMENT_TYPE)[keyof typeof PAYMENT_TYPE];
 
 export const PAYMENT_STATUS = {
+  /** PG 호출 전에 먼저 남긴 시도 — 결과가 확정되면 PAID/FAILED. 오래 남아 있으면 조회로 복구한다 (2026-09-30) */
+  PENDING:            "PENDING",
   PAID:               "PAID",
   FAILED:             "FAILED",
   /** 일부 환불됨 — 누적 환불 < 원 금액. 원 결제 행에만 */
@@ -133,6 +135,7 @@ export const PAYMENT_TYPE_LABEL: Record<PaymentType, string> = {
 };
 
 export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
+  PENDING:            "확인 중",
   PAID:               "완료",
   FAILED:             "실패",
   PARTIALLY_REFUNDED: "일부 환불",
@@ -185,6 +188,11 @@ export const RETRY_POLICY = {
 
 /** 정기결제 사전 안내 메일 — 결제 N일 전 (카드사 가이드라인 7일) */
 export const PRENOTICE_DAYS = PRICING.prenoticeDays;
+
+// ─── PENDING 결제 시도 ────────────────────────────────────────────────────────
+// PG 호출 전에 남긴 PENDING 행이 이 시간보다 오래 남아 있으면 "결과를 못 받은 시도"로 보고 배치가 PG 조회로 확정한다.
+// 토큰 만료(5분)보다 길게 — 살아 있는 요청이 아직 처리 중일 수 있다.
+export const PENDING_PAYMENT_STALE_MS = 10 * 60 * 1000;
 
 // ─── 결제 작업 토큰 ──────────────────────────────────────────────────────────
 // PG 청구를 시작한 요청이 토큰을 보유하는 동안 다른 구독 변경은 409.

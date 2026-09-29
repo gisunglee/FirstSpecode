@@ -27,7 +27,17 @@
  *     ③ 결제 결과 반영은 "내 토큰이 그대로일 때만". 0건이면(2분 넘어 다른 작업이 인계) 결제 이력은
  *        남기고 구독은 건드리지 않은 채 CRITICAL 로그 → 운영자가 PG 콘솔과 대조해 수동 반영.
  *   첫 결제는 구독 행이 없을 수 있어 회원 행(mdfcn_dt)을 선점한다.
- *   토스 어댑터를 붙일 때 Idempotency-Key·결제 상태 조회(UNKNOWN 복구)를 이 토큰 위에 얹는다.
+ *
+ * 결제 시도 원칙 — PENDING 선기록 (2026-09-30, 라이브 전 필수 ①):
+ *   PG 를 호출하기 **전에** tb_bl_payment 에 PENDING 행(주문 ID·금액·기간·반영 문맥)을 남긴다.
+ *     - pndng_lock_key = mber_id (UNIQUE) → 회원당 진행 중 시도 1건이 DB 에서 원자적으로 보장된다.
+ *       첫 결제(구독 행 없음)의 동시 이중 청구도 여기서 막힌다.
+ *     - 결과가 오면 같은 행을 PAID/FAILED 로 확정한다. 통신 두절 등으로 결과를 못 받으면(PAYMENT_STATUS_UNKNOWN)
+ *       행은 PENDING 으로 남고, 새 주문 ID 로 다시 청구하지 않는다.
+ *     - 확정은 resolvePendingPayments 가 한다: 10분 넘게 PENDING 인 행을 PG 주문 조회로 DONE → PAID+반영 /
+ *       NOT_CHARGED → FAILED / UNKNOWN → 그대로(사람이 본다). 모든 청구 경로가 시작 전에 이걸 먼저 부르고,
+ *       일일 배치도 ⑥단계로 훑는다. 10분 미만 PENDING 은 "다른 요청이 진행 중"으로 보고 409.
+ *   왜: 토스 멱등키 가이드 — 오류 뒤 키를 바꿔 재시도하면 이중 결제. 주문 ID 가 곧 멱등키라 DB 에 먼저 있어야 한다.
  *
  * 트랜잭션 원칙:
  *   PG 호출(외부)은 트랜잭션 밖에서, DB 반영은 한 트랜잭션으로. 결제는 성공했는데 DB 가 실패하면
@@ -35,7 +45,7 @@
  *   메일은 커밋 뒤에 await 로 보내고(서버리스에서 void 는 유실) 실패해도 흐름을 되돌리지 않는다(emails.ts).
  */
 
-import type { Prisma, PrismaClient, TbBlPayment, TbBlSubscription } from "@prisma/client";
+import { Prisma, type PrismaClient, type TbBlPayment, type TbBlSubscription } from "@prisma/client";
 import { randomBytes, randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { decryptBillingKey, encryptBillingKey } from "./billing-key";
@@ -50,6 +60,7 @@ import {
   isLiveSubscriptionStatus,
   PAYMENT_STATUS,
   PAYMENT_TYPE,
+  PENDING_PAYMENT_STALE_MS,
   PRODUCTS,
   RETRY_POLICY,
   SEAT_INPUT_LIMITS,
@@ -59,7 +70,7 @@ import {
   type SubscriptionStatus,
 } from "./constants";
 import { BillingError } from "./errors";
-import { buildCustomerKey, getPaymentGateway, type CardRegistrationStart, type IssuedBillingKey } from "./gateway";
+import { buildCustomerKey, getPaymentGateway, type CardRegistrationStart, type ChargeResult, type IssuedBillingKey } from "./gateway";
 import { addDays, kstDayOfMonth, monthlyAmount, nextPeriodEnd, prorationForAddedSeats, type ProrationResult } from "./pricing";
 import { countUsedSeats } from "./seats";
 import { autoUnlockIfSingle, countLockedProjects, lockAllOwnedProjects, unlockAllOwnedProjects } from "./lock";
@@ -355,6 +366,8 @@ async function activateSubscription(
   seatCnt: number,
   now: Date,
 ): Promise<TbBlSubscription> {
+  // 결과 불명으로 남은 이전 시도가 있으면 먼저 확정한다 — 확정돼 구독이 살아났으면 아래 "이미 구독 중"이 막는다
+  await requireNoUnresolvedPending(actor.mberId, now);
   const existing = await findSubscription(actor.mberId);
   if (existing && isLiveSubscriptionStatus(existing.sbscrptn_sttus_code)) {
     throw new BillingError(E.ALREADY_SUBSCRIBED, "이미 구독 중입니다.", 409);
@@ -370,6 +383,16 @@ async function activateSubscription(
   const customerKey = buildCustomerKey(actor.mberId);
   const amount      = monthlyAmount(seatCnt, product.unitPrice);
   const orderId     = newOrderId(now);
+  const periodStart = now;
+  const periodEnd   = nextPeriodEnd(periodStart, kstDayOfMonth(periodStart));
+  const encryptedKey = encryptBillingKey(issued.billingKey);
+
+  // PG 호출 전에 시도를 남긴다 — 결과를 못 받아도 이 행(주문 ID + 반영 문맥)으로 복구한다
+  const pending = await createPendingAttempt({
+    mberId: actor.mberId, sbscrptnId: existing?.sbscrptn_id ?? null, type: PAYMENT_TYPE.INITIAL,
+    amount, seatCnt, periodStart, periodEnd, provider: gw.provider, orderId, now,
+    meta: { kind: "INITIAL", billingKeyEnc: encryptedKey, cardCompany: issued.cardCompany, cardNumberMasked: issued.cardNumberMasked, customerKey },
+  });
 
   const charge = await gw.charge({
     billingKey:    issued.billingKey,
@@ -379,86 +402,21 @@ async function activateSubscription(
     orderName:     `${product.name} ${seatCnt}좌석 (1개월)`,
     customerEmail: actor.email,
   });
+  // 결과 불명(PAYMENT_STATUS_UNKNOWN)은 여기서 잡지 않는다 — PENDING 행이 남아 resolvePendingPayments 가 확정한다
 
   if (!charge.ok) {
-    await prisma.tbBlPayment.create({
-      data: {
-        sbscrptn_id:      existing?.sbscrptn_id ?? null,
-        mber_id:          actor.mberId,
-        pymnt_ty_code:    PAYMENT_TYPE.INITIAL,
-        amt:              amount,
-        seat_cnt:         seatCnt,
-        pymnt_sttus_code: PAYMENT_STATUS.FAILED,
-        pg_provdr_code:   gw.provider,
-        pg_order_id:      orderId,
-        fail_rsn_cn:      `${charge.code}: ${charge.message}`,
-      },
-    });
+    await settlePendingFailed(prisma, pending.pymnt_id, `${charge.code}: ${charge.message}`);
     throw new BillingError(E.PAYMENT_FAILED, `결제가 거절되었습니다. ${charge.message}`, 402, { pgCode: charge.code });
   }
 
-  const periodStart = now;
-  const periodEnd   = nextPeriodEnd(periodStart, kstDayOfMonth(periodStart));
-  const encryptedKey = encryptBillingKey(issued.billingKey);
-
   const sub = await prisma.$transaction(async (tx) => {
-    const s = await tx.tbBlSubscription.upsert({
-      where: { mber_id_prdct_code: { mber_id: actor.mberId, prdct_code: SPECODE_PRODUCT } },
-      create: {
-        mber_id:             actor.mberId,
-        prdct_code:          SPECODE_PRODUCT,
-        sbscrptn_sttus_code: S.ACTIVE,
-        seat_cnt:            seatCnt,
-        pending_seat_cnt:    null,
-        unit_price:          product.unitPrice,
-        billing_key:         encryptedKey,
-        card_co_nm:          issued.cardCompany,
-        card_no_masked:      issued.cardNumberMasked,
-        pg_provdr_code:      gw.provider,
-        pg_customer_key:     customerKey,
-        crrnt_perd_bgng_dt:  periodStart,
-        crrnt_perd_end_dt:   periodEnd,
-        next_bill_dt:        periodEnd,
-        prentc_dt:           null,
-        fail_cnt:            0,
-        creat_dt:            now,
-        mdfcn_dt:            now,
-      },
-      update: {
-        // 재구독 — 종료된 행을 되살린다. 단가는 현재 판매가로 새로 계약
-        sbscrptn_sttus_code: S.ACTIVE,
-        seat_cnt:            seatCnt,
-        pending_seat_cnt:    null,
-        unit_price:          product.unitPrice,
-        billing_key:         encryptedKey,
-        card_co_nm:          issued.cardCompany,
-        card_no_masked:      issued.cardNumberMasked,
-        pg_provdr_code:      gw.provider,
-        pg_customer_key:     customerKey,
-        crrnt_perd_bgng_dt:  periodStart,
-        crrnt_perd_end_dt:   periodEnd,
-        next_bill_dt:        periodEnd,
-        prentc_dt:           null,
-        fail_cnt:            0,
-        last_fail_dt:        null,
-        cancel_reqst_dt:     null,
-        ended_dt:            null,
-        ended_rsn_code:      null,
-        billing_op_token:    null,
-        billing_op_started_dt: null,
-        mdfcn_dt:            now,
-      },
+    await settlePendingPaid(tx, pending.pymnt_id, charge);
+    const s = await applyInitialActivation(tx, {
+      mberId: actor.mberId, seatCnt, periodStart, periodEnd, provider: gw.provider, customerKey,
+      billingKeyEnc: encryptedKey, cardCompany: issued.cardCompany, cardNumberMasked: issued.cardNumberMasked, now,
     });
-    await tx.tbBlPayment.create({
-      data: paidPaymentData({
-        sbscrptnId: s.sbscrptn_id, mberId: actor.mberId, type: PAYMENT_TYPE.INITIAL, amount, seatCnt,
-        periodStart, periodEnd, provider: gw.provider, orderId,
-        paymentKey: charge.paymentKey, receiptUrl: charge.receiptUrl, approvedAt: charge.approvedAt,
-      }),
-    });
-    await mirrorPlan(tx, actor.mberId, product.planCode, now);
-    // 강등으로 잠겨 있던 프로젝트가 있으면 재결제로 전부 해제 (정책 §1-6 "재결제하면 전부 즉시 해제")
-    await unlockAllOwnedProjects(actor.mberId, tx);
+    // 첫 결제는 PENDING 을 만들 때 구독 행이 없었을 수 있다 — 지금 연결한다 (청약철회 판정·구독 상세가 이 연결을 본다)
+    await tx.tbBlPayment.update({ where: { pymnt_id: pending.pymnt_id }, data: { sbscrptn_id: s.sbscrptn_id } });
     return s;
   });
 
@@ -565,13 +523,26 @@ export async function changeSeats(actor: BillingActorRef, seatCnt: number, now =
     if (pr.amount <= 0) {
       throw new BillingError(E.INVALID_STATE, "일할 결제 금액이 0원이라 좌석을 추가할 수 없습니다. 정기 결제 뒤 다시 시도해 주세요.", 409);
     }
+    // 이전 시도가 확정되지 않았으면 새 청구를 걸지 않는다 (이중 청구 방지)
+    await requireNoUnresolvedPending(actor.mberId, now);
     // 이중 결제 방지 — 같은 구독 행을 다른 요청이 먼저 선점했으면 청구하지 않는다
     const opToken = await beginBillingOperation(active, now);
     if (!opToken) throw concurrentOperationError();
 
     const gw      = getPaymentGateway();
     const orderId = newOrderId(now);
-    const charge  = await gw.charge({
+    let pending: TbBlPayment;
+    try {
+      pending = await createPendingAttempt({
+        mberId: actor.mberId, sbscrptnId: active.sbscrptn_id, type: PAYMENT_TYPE.SEAT_ADD,
+        amount: pr.amount, seatCnt: addSeats, periodStart: now, periodEnd: active.crrnt_perd_end_dt!,
+        provider: gw.provider, orderId, now, meta: { kind: "SEAT_ADD", targetSeatCnt: seatCnt },
+      });
+    } catch (err) {
+      await releaseBillingOperation(active.sbscrptn_id, opToken, now);
+      throw err;
+    }
+    const charge = await gw.charge({
       billingKey:    decryptBillingKey(active.billing_key),
       customerKey:   active.pg_customer_key,
       amount:        pr.amount,
@@ -579,34 +550,18 @@ export async function changeSeats(actor: BillingActorRef, seatCnt: number, now =
       orderName:     `${product.name} 좌석 ${addSeats}개 추가 (남은 ${pr.remainingDays}일 일할)`,
       customerEmail: actor.email,
     });
+    // 결과 불명은 전파 — PENDING 행·토큰이 남고 resolvePendingPayments 가 확정한다
     if (!charge.ok) {
-      await prisma.tbBlPayment.create({
-        data: {
-          sbscrptn_id: active.sbscrptn_id, mber_id: actor.mberId, pymnt_ty_code: PAYMENT_TYPE.SEAT_ADD,
-          amt: pr.amount, seat_cnt: addSeats, perd_bgng_dt: now, perd_end_dt: active.crrnt_perd_end_dt,
-          pymnt_sttus_code: PAYMENT_STATUS.FAILED, pg_provdr_code: gw.provider, pg_order_id: orderId,
-          fail_rsn_cn: `${charge.code}: ${charge.message}`,
-        },
-      });
+      await settlePendingFailed(prisma, pending.pymnt_id, `${charge.code}: ${charge.message}`);
       await releaseBillingOperation(active.sbscrptn_id, opToken, now);
       throw new BillingError(E.PAYMENT_FAILED, `좌석 추가 결제가 거절되었습니다. ${charge.message}`, 402, { pgCode: charge.code });
     }
 
-    // 정기 결제와 같은 순서 — 결제 이력을 먼저 남기고(돈이 움직였다), 구독 반영은 내 토큰이 그대로일 때만.
-    // 토큰이 인계됐으면(2분 초과) 이력만 남긴 채 커밋하고 운영자 수동 대조로 넘긴다. 이력이 롤백될 경로가 없다.
+    // 정기 결제와 같은 순서 — 결제 이력을 먼저 확정하고(돈이 움직였다), 구독 반영은 내 토큰이 그대로일 때만.
+    // 토큰이 인계됐으면(5분 초과) 이력만 확정한 채 커밋하고 운영자 수동 대조로 넘긴다. 이력이 롤백될 경로가 없다.
     const applied = await prisma.$transaction(async (tx) => {
-      await tx.tbBlPayment.create({
-        data: paidPaymentData({
-          sbscrptnId: active.sbscrptn_id, mberId: actor.mberId, type: PAYMENT_TYPE.SEAT_ADD, amount: pr.amount,
-          seatCnt: addSeats, periodStart: now, periodEnd: active.crrnt_perd_end_dt!, provider: gw.provider, orderId,
-          paymentKey: charge.paymentKey, receiptUrl: charge.receiptUrl, approvedAt: charge.approvedAt,
-        }),
-      });
-      const r = await tx.tbBlSubscription.updateMany({
-        where: { sbscrptn_id: active.sbscrptn_id, billing_op_token: opToken },
-        data:  { seat_cnt: seatCnt, pending_seat_cnt: null, billing_op_token: null, billing_op_started_dt: null, mdfcn_dt: now },
-      });
-      return r.count === 1;
+      await settlePendingPaid(tx, pending.pymnt_id, charge);
+      return applySeatAddition(tx, active.sbscrptn_id, seatCnt, now, opToken);
     });
     if (!applied) {
       console.error(`[billing] CRITICAL 좌석 추가 결제는 승인(${orderId})됐으나 구독 반영 실패 — 토큰 인계됨. sub=${active.sbscrptn_id} 수동 대조 필요`);
@@ -698,8 +653,9 @@ export type RecurringChargeResult =
   /** applied=false: 결제는 승인됐지만 토큰이 인계돼 구독에 반영하지 못함 — 이력만 남김, 운영자 수동 대조 */
   | { ok: true;  periodEnd: Date; amount: number; seatCnt: number; applied: boolean }
   | { ok: false; expired: boolean; failCnt: number; reason: string; skipped?: false }
-  /** 다른 요청(배치·카드 변경)이 같은 구독을 먼저 청구 중 — 시도하지 않았고 실패로 세지도 않는다 */
-  | { ok: false; skipped: true; expired: false; failCnt: number; reason: string };
+  /** 다른 요청(배치·카드 변경)이 같은 구독을 먼저 청구 중 — 시도하지 않았고 실패로 세지도 않는다.
+   *  unknown=true: 청구 결과를 알 수 없어 PENDING 으로 남김(이전 시도 확인 중 포함) — 배치가 관리자에게 알린다 */
+  | { ok: false; skipped: true; unknown?: true; expired: false; failCnt: number; reason: string };
 
 /**
  * 정기 결제 1회 시도.
@@ -721,6 +677,12 @@ export async function attemptRecurringCharge(
     return { ok: false, skipped: true, expired: false, failCnt: sub.fail_cnt, reason: `PG 불일치(${sub.pg_provdr_code}≠${gw.provider})` };
   }
 
+  // 이전 시도가 확정되지 않았으면(결과 불명·확인 중) 새 주문 ID 로 청구하지 않는다 — 이중 청구 방지
+  const unresolved = await resolvePendingPayments(sub.mber_id, now);
+  if (unresolved.blocked) {
+    return { ok: false, skipped: true, unknown: true, expired: false, failCnt: sub.fail_cnt, reason: `이전 결제 시도 확인 중: ${unresolved.reason}` };
+  }
+
   // 이중 결제 방지 — 배치와 카드 변경 즉시 재결제가 겹칠 수 있다. 선점 실패면 청구 없이 물러난다.
   const opToken = await beginBillingOperation(sub, now);
   if (!opToken) {
@@ -740,50 +702,54 @@ export async function attemptRecurringCharge(
     periodEnd   = nextPeriodEnd(now, anchorDay);
   }
 
-  const chargeResult = sub.billing_key
-    ? await gw.charge({
-        billingKey:    decryptBillingKey(sub.billing_key),
-        customerKey:   sub.pg_customer_key,
-        amount,
-        orderId,
-        orderName:     `${product.name} ${seatCnt}좌석 (정기 결제)`,
-        customerEmail: email,
-      })
-    : { ok: false as const, code: "NO_BILLING_KEY", message: "등록된 결제 수단이 없습니다." };
+  if (!sub.billing_key) {
+    // 결제 수단이 없으면 PG 를 부르지 않는다 — PENDING 없이 바로 실패 처리(아래 실패 분기와 같은 흐름)
+    return await recordRecurringFailure(sub, email, now, kind, opToken, gw.provider, orderId, amount, seatCnt, periodStart, periodEnd,
+      { ok: false, code: "NO_BILLING_KEY", message: "등록된 결제 수단이 없습니다." }, null);
+  }
+
+  // PG 호출 전에 시도를 남긴다 (회원당 1건 — 충돌이면 다른 시도가 진행 중)
+  let pending: TbBlPayment;
+  try {
+    pending = await createPendingAttempt({
+      mberId: sub.mber_id, sbscrptnId: sub.sbscrptn_id, type: PAYMENT_TYPE.RECURRING,
+      amount, seatCnt, periodStart, periodEnd, provider: gw.provider, orderId, now, meta: { kind: "RECURRING" },
+    });
+  } catch (err) {
+    await releaseBillingOperation(sub.sbscrptn_id, opToken, now);
+    if (err instanceof BillingError && err.code === E.CONCURRENT_OPERATION) {
+      return { ok: false, skipped: true, expired: false, failCnt: sub.fail_cnt, reason: "다른 결제 시도가 진행 중(PENDING)" };
+    }
+    throw err;
+  }
+
+  let chargeResult: ChargeResult;
+  try {
+    chargeResult = await gw.charge({
+      billingKey:    decryptBillingKey(sub.billing_key),
+      customerKey:   sub.pg_customer_key,
+      amount,
+      orderId,
+      orderName:     `${product.name} ${seatCnt}좌석 (정기 결제)`,
+      customerEmail: email,
+    });
+  } catch (err) {
+    // 결과 불명 — PENDING 행과 토큰을 그대로 둔다(토큰 만료 5분 뒤 다른 변경 허용, 청구는 PENDING 이 막는다).
+    // 다음 배치의 ⑥단계 또는 다음 청구 시도 전 resolvePendingPayments 가 조회로 확정한다.
+    if (err instanceof BillingError && err.code === E.PAYMENT_STATUS_UNKNOWN) {
+      console.error(`[billing] 청구 결과 불명 — sub=${sub.sbscrptn_id} orderId=${orderId} PENDING 유지, 조회로 확정 예정`);
+      return { ok: false, skipped: true, unknown: true, expired: false, failCnt: sub.fail_cnt, reason: `청구 결과 불명(orderId=${orderId})` };
+    }
+    throw err;
+  }
 
   // ── 성공 ────────────────────────────────────────────────────────────────
   if (chargeResult.ok) {
     const applied = await prisma.$transaction(async (tx) => {
-      // 결제 이력은 무조건 남긴다 — 돈이 움직였다
-      await tx.tbBlPayment.create({
-        data: paidPaymentData({
-          sbscrptnId: sub.sbscrptn_id, mberId: sub.mber_id, type: PAYMENT_TYPE.RECURRING, amount, seatCnt,
-          periodStart, periodEnd, provider: gw.provider, orderId,
-          paymentKey: chargeResult.paymentKey, receiptUrl: chargeResult.receiptUrl, approvedAt: chargeResult.approvedAt,
-        }),
-      });
-      // 구독 반영은 내 토큰이 그대로일 때만 (토큰 인계 = 2분 초과 → 다른 작업이 상태를 바꿨을 수 있음)
-      const r = await tx.tbBlSubscription.updateMany({
-        where: { sbscrptn_id: sub.sbscrptn_id, billing_op_token: opToken },
-        data: {
-          sbscrptn_sttus_code: S.ACTIVE,
-          seat_cnt:            seatCnt,
-          pending_seat_cnt:    null,
-          crrnt_perd_bgng_dt:  periodStart,
-          crrnt_perd_end_dt:   periodEnd,
-          next_bill_dt:        periodEnd,
-          prentc_dt:           null,
-          fail_cnt:            0,
-          last_fail_dt:        null,
-          billing_op_token:    null,
-          billing_op_started_dt: null,
-          mdfcn_dt:            now,
-        },
-      });
-      if (r.count !== 1) return false;
-      await mirrorPlan(tx, sub.mber_id, product.planCode, now);
-      await unlockAllOwnedProjects(sub.mber_id, tx);
-      return true;
+      // 결제 이력은 무조건 확정한다 — 돈이 움직였다
+      await settlePendingPaid(tx, pending.pymnt_id, chargeResult);
+      // 구독 반영은 내 토큰이 그대로일 때만 (토큰 인계 = 5분 초과 → 다른 작업이 상태를 바꿨을 수 있음)
+      return applyRecurringRenewal(tx, sub.sbscrptn_id, sub.mber_id, { seatCnt, periodStart, periodEnd, now }, opToken);
     });
     if (!applied) {
       console.error(`[billing] CRITICAL 정기 결제 승인(${orderId})됐으나 구독 반영 실패 — 토큰 인계됨. sub=${sub.sbscrptn_id} 수동 대조 필요`);
@@ -798,16 +764,42 @@ export async function attemptRecurringCharge(
   }
 
   // ── 실패 ────────────────────────────────────────────────────────────────
+  return recordRecurringFailure(sub, email, now, kind, opToken, gw.provider, orderId, amount, seatCnt, periodStart, periodEnd, chargeResult, pending.pymnt_id);
+}
+
+/**
+ * 정기 결제 거절 처리 — 실패 이력 확정(PENDING → FAILED, 없으면 새 FAILED 행) → fail_cnt → PAST_DUE 또는 EXPIRED.
+ * attemptRecurringCharge 의 실패 분기를 함수로 뺀 것(빌링키 없음 경로와 공유).
+ */
+async function recordRecurringFailure(
+  sub: TbBlSubscription,
+  email: string,
+  now: Date,
+  kind: "RENEWAL" | "RETRY",
+  opToken: string,
+  provider: string,
+  orderId: string,
+  amount: number,
+  seatCnt: number,
+  periodStart: Date,
+  periodEnd: Date,
+  chargeResult: { ok: false; code: string; message: string },
+  pendingId: string | null,
+): Promise<RecurringChargeResult> {
   const failCnt = sub.fail_cnt + 1;
   const reason  = `${chargeResult.code}: ${chargeResult.message}`;
-  await prisma.tbBlPayment.create({
-    data: {
-      sbscrptn_id: sub.sbscrptn_id, mber_id: sub.mber_id, pymnt_ty_code: PAYMENT_TYPE.RECURRING,
-      amt: amount, seat_cnt: seatCnt, perd_bgng_dt: periodStart, perd_end_dt: periodEnd,
-      pymnt_sttus_code: PAYMENT_STATUS.FAILED, pg_provdr_code: gw.provider, pg_order_id: orderId,
-      fail_rsn_cn: reason,
-    },
-  });
+  if (pendingId) {
+    await settlePendingFailed(prisma, pendingId, reason);
+  } else {
+    await prisma.tbBlPayment.create({
+      data: {
+        sbscrptn_id: sub.sbscrptn_id, mber_id: sub.mber_id, pymnt_ty_code: PAYMENT_TYPE.RECURRING,
+        amt: amount, seat_cnt: seatCnt, perd_bgng_dt: periodStart, perd_end_dt: periodEnd,
+        pymnt_sttus_code: PAYMENT_STATUS.FAILED, pg_provdr_code: provider, pg_order_id: orderId,
+        fail_rsn_cn: reason,
+      },
+    });
+  }
 
   // 초기 실패(1) + 재시도 3회(2,3,4) 를 다 쓰면 강등 — 종료는 내 토큰으로 이어서 처리
   if (failCnt > RETRY_POLICY.maxRetryCount) {
@@ -1083,24 +1075,300 @@ async function resolveAnchorDay(sub: TbBlSubscription, now: Date): Promise<numbe
   return kstDayOfMonth(base);
 }
 
-function paidPaymentData(p: {
-  sbscrptnId: string; mberId: string; type: PaymentType; amount: number; seatCnt: number;
-  periodStart: Date; periodEnd: Date; provider: string; orderId: string;
-  paymentKey: string; receiptUrl: string | null; approvedAt: Date;
-}): Prisma.TbBlPaymentUncheckedCreateInput {
-  return {
-    sbscrptn_id:      p.sbscrptnId,
-    mber_id:          p.mberId,
-    pymnt_ty_code:    p.type,
-    amt:              p.amount,
-    seat_cnt:         p.seatCnt,
-    perd_bgng_dt:     p.periodStart,
-    perd_end_dt:      p.periodEnd,
-    pymnt_sttus_code: PAYMENT_STATUS.PAID,
-    pg_provdr_code:   p.provider,
-    pg_pymnt_key:     p.paymentKey,
-    pg_order_id:      p.orderId,
-    receipt_url:      p.receiptUrl,
-    apprv_dt:         p.approvedAt,
-  };
+// ═══════════════════════════════════════════════════════════════════════════
+// PENDING 결제 시도 — 선기록·확정·복구 (파일 상단 "결제 시도 원칙")
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** PENDING 행이 확정 시 반영에 필요한 문맥 (pndng_meta_json). 확정되면 지운다 */
+export type PendingMeta =
+  | { kind: "INITIAL"; billingKeyEnc: string; cardCompany: string; cardNumberMasked: string; customerKey: string }
+  | { kind: "SEAT_ADD"; targetSeatCnt: number }
+  | { kind: "RECURRING" };
+
+/**
+ * PG 호출 전 PENDING 행 생성. pndng_lock_key(UNIQUE)=mber_id 라 회원당 1건만 만들어진다 —
+ * 충돌(P2002)이면 다른 시도가 진행 중이거나 결과 불명으로 남아 있는 것 → 409.
+ */
+async function createPendingAttempt(p: {
+  mberId: string; sbscrptnId: string | null; type: PaymentType; amount: number; seatCnt: number;
+  periodStart: Date; periodEnd: Date; provider: string; orderId: string; now: Date; meta: PendingMeta;
+}): Promise<TbBlPayment> {
+  try {
+    return await prisma.tbBlPayment.create({
+      data: {
+        sbscrptn_id:      p.sbscrptnId,
+        mber_id:          p.mberId,
+        pymnt_ty_code:    p.type,
+        amt:              p.amount,
+        seat_cnt:         p.seatCnt,
+        perd_bgng_dt:     p.periodStart,
+        perd_end_dt:      p.periodEnd,
+        pymnt_sttus_code: PAYMENT_STATUS.PENDING,
+        pg_provdr_code:   p.provider,
+        pg_order_id:      p.orderId,
+        pndng_lock_key:   p.mberId,
+        pndng_meta_json:  p.meta as Prisma.InputJsonValue,
+        creat_dt:         p.now,
+      },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      throw concurrentOperationError();
+    }
+    throw err;
+  }
+}
+
+/** PENDING → PAID. 행이 이미 확정돼 있으면(다른 경로가 먼저 확정) 0건 — CRITICAL 로그, 호출자는 계속 진행 */
+async function settlePendingPaid(db: Db, pymntId: string, charge: { paymentKey: string; receiptUrl: string | null; approvedAt: Date }): Promise<void> {
+  const r = await db.tbBlPayment.updateMany({
+    where: { pymnt_id: pymntId, pymnt_sttus_code: PAYMENT_STATUS.PENDING },
+    data: {
+      pymnt_sttus_code: PAYMENT_STATUS.PAID,
+      pg_pymnt_key:     charge.paymentKey,
+      receipt_url:      charge.receiptUrl,
+      apprv_dt:         charge.approvedAt,
+      pndng_lock_key:   null,
+      pndng_meta_json:  Prisma.DbNull,
+    },
+  });
+  if (r.count !== 1) {
+    console.error(`[billing] CRITICAL PENDING→PAID 확정 0건 — pymnt_id=${pymntId} 가 이미 확정돼 있음. PG 승인(${charge.paymentKey})과 대조 필요`);
+  }
+}
+
+/** PENDING → FAILED (청구되지 않았음이 확실할 때만) */
+async function settlePendingFailed(db: Db, pymntId: string, reason: string): Promise<void> {
+  await db.tbBlPayment.updateMany({
+    where: { pymnt_id: pymntId, pymnt_sttus_code: PAYMENT_STATUS.PENDING },
+    data:  { pymnt_sttus_code: PAYMENT_STATUS.FAILED, fail_rsn_cn: reason.slice(0, 500), pndng_lock_key: null, pndng_meta_json: Prisma.DbNull },
+  });
+}
+
+/** 첫 결제 성공 반영 — 구독 upsert(재구독이면 되살림)·플랜 미러·잠금 전부 해제. 라이브 경로와 복구 경로가 같이 쓴다 */
+async function applyInitialActivation(tx: Prisma.TransactionClient, p: {
+  mberId: string; seatCnt: number; periodStart: Date; periodEnd: Date; provider: string; customerKey: string;
+  billingKeyEnc: string; cardCompany: string; cardNumberMasked: string; now: Date;
+}): Promise<TbBlSubscription> {
+  const s = await tx.tbBlSubscription.upsert({
+    where: { mber_id_prdct_code: { mber_id: p.mberId, prdct_code: SPECODE_PRODUCT } },
+    create: {
+      mber_id:             p.mberId,
+      prdct_code:          SPECODE_PRODUCT,
+      sbscrptn_sttus_code: S.ACTIVE,
+      seat_cnt:            p.seatCnt,
+      pending_seat_cnt:    null,
+      unit_price:          product.unitPrice,
+      billing_key:         p.billingKeyEnc,
+      card_co_nm:          p.cardCompany,
+      card_no_masked:      p.cardNumberMasked,
+      pg_provdr_code:      p.provider,
+      pg_customer_key:     p.customerKey,
+      crrnt_perd_bgng_dt:  p.periodStart,
+      crrnt_perd_end_dt:   p.periodEnd,
+      next_bill_dt:        p.periodEnd,
+      prentc_dt:           null,
+      fail_cnt:            0,
+      creat_dt:            p.now,
+      mdfcn_dt:            p.now,
+    },
+    update: {
+      // 재구독 — 종료된 행을 되살린다. 단가는 현재 판매가로 새로 계약
+      sbscrptn_sttus_code: S.ACTIVE,
+      seat_cnt:            p.seatCnt,
+      pending_seat_cnt:    null,
+      unit_price:          product.unitPrice,
+      billing_key:         p.billingKeyEnc,
+      card_co_nm:          p.cardCompany,
+      card_no_masked:      p.cardNumberMasked,
+      pg_provdr_code:      p.provider,
+      pg_customer_key:     p.customerKey,
+      crrnt_perd_bgng_dt:  p.periodStart,
+      crrnt_perd_end_dt:   p.periodEnd,
+      next_bill_dt:        p.periodEnd,
+      prentc_dt:           null,
+      fail_cnt:            0,
+      last_fail_dt:        null,
+      cancel_reqst_dt:     null,
+      ended_dt:            null,
+      ended_rsn_code:      null,
+      billing_op_token:    null,
+      billing_op_started_dt: null,
+      mdfcn_dt:            p.now,
+    },
+  });
+  await mirrorPlan(tx, p.mberId, product.planCode, p.now);
+  // 강등으로 잠겨 있던 프로젝트가 있으면 재결제로 전부 해제 (정책 §1-6 "재결제하면 전부 즉시 해제")
+  await unlockAllOwnedProjects(p.mberId, tx);
+  return s;
+}
+
+/** 좌석 추가 결제 성공 반영 — 내 토큰(또는 토큰 없음/만료)일 때만. 반영됐으면 true */
+async function applySeatAddition(tx: Prisma.TransactionClient, sbscrptnId: string, targetSeatCnt: number, now: Date, opToken?: string): Promise<boolean> {
+  const r = await tx.tbBlSubscription.updateMany({
+    where: { sbscrptn_id: sbscrptnId, ...opTokenWhere(opToken, now) },
+    data:  { seat_cnt: targetSeatCnt, pending_seat_cnt: null, billing_op_token: null, billing_op_started_dt: null, mdfcn_dt: now },
+  });
+  return r.count === 1;
+}
+
+/** 정기 결제 성공 반영 — 새 주기·ACTIVE·실패 카운트 리셋·플랜 미러·잠금 해제. 내 토큰(또는 토큰 없음/만료)일 때만 */
+async function applyRecurringRenewal(
+  tx: Prisma.TransactionClient,
+  sbscrptnId: string,
+  mberId: string,
+  p: { seatCnt: number; periodStart: Date; periodEnd: Date; now: Date },
+  opToken?: string,
+): Promise<boolean> {
+  const r = await tx.tbBlSubscription.updateMany({
+    where: { sbscrptn_id: sbscrptnId, ...opTokenWhere(opToken, p.now) },
+    data: {
+      sbscrptn_sttus_code: S.ACTIVE,
+      seat_cnt:            p.seatCnt,
+      pending_seat_cnt:    null,
+      crrnt_perd_bgng_dt:  p.periodStart,
+      crrnt_perd_end_dt:   p.periodEnd,
+      next_bill_dt:        p.periodEnd,
+      prentc_dt:           null,
+      fail_cnt:            0,
+      last_fail_dt:        null,
+      billing_op_token:    null,
+      billing_op_started_dt: null,
+      mdfcn_dt:            p.now,
+    },
+  });
+  if (r.count !== 1) return false;
+  await mirrorPlan(tx, mberId, product.planCode, p.now);
+  await unlockAllOwnedProjects(mberId, tx);
+  return true;
+}
+
+export type PendingResolution =
+  /** 확정할 것이 없거나 전부 확정됨 */
+  | { blocked: false; resolved: Array<{ pymntId: string; outcome: "PAID" | "FAILED" }> }
+  /** 아직 진행 중(10분 미만)이거나 조회로도 확정 못 함 — 새 청구를 걸면 안 된다 */
+  | { blocked: true; reason: string; resolved: Array<{ pymntId: string; outcome: "PAID" | "FAILED" }> };
+
+/**
+ * 회원의 PENDING 시도를 확정한다. 모든 청구 경로가 시작 전에 부르고, 일일 배치 ⑥단계도 부른다.
+ *   - 10분 미만 PENDING: 다른 요청이 아직 PG 응답을 기다리는 중일 수 있다 → 손대지 않고 blocked
+ *   - PG 가 다르면(전환 뒤 남은 행) 손대지 않고 blocked — 운영자 정리
+ *   - DONE        → PAID 확정 + 종류별 반영(구독이 살아 있지 않으면 반영 없이 CRITICAL — 환불 판단은 사람)
+ *   - NOT_CHARGED → FAILED 확정 (실패 카운트·PAST_DUE 는 건드리지 않는다: 청구가 "시도되지 않은" 것)
+ *   - UNKNOWN     → 그대로, blocked
+ */
+export async function resolvePendingPayments(mberId: string, now = new Date()): Promise<PendingResolution> {
+  const rows = await prisma.tbBlPayment.findMany({
+    where:   { mber_id: mberId, pymnt_sttus_code: PAYMENT_STATUS.PENDING },
+    orderBy: { creat_dt: "asc" },
+  });
+  const resolved: Array<{ pymntId: string; outcome: "PAID" | "FAILED" }> = [];
+  if (rows.length === 0) return { blocked: false, resolved };
+
+  const gw = getPaymentGateway();
+  for (const row of rows) {
+    if (row.creat_dt.getTime() > now.getTime() - PENDING_PAYMENT_STALE_MS) {
+      return { blocked: true, reason: `결제 시도(${row.pg_order_id})가 아직 진행 중`, resolved };
+    }
+    if (row.pg_provdr_code !== gw.provider) {
+      console.error(`[billing] PENDING 확정 불가 — pymnt_id=${row.pymnt_id} 는 ${row.pg_provdr_code} 시도인데 현재 게이트웨이는 ${gw.provider}. 운영자 정리 필요`);
+      return { blocked: true, reason: `PG 불일치(${row.pg_provdr_code}) 시도가 남아 있음`, resolved };
+    }
+    const look = await gw.lookupCharge(row.pg_order_id);
+    if (look.status === "UNKNOWN") {
+      console.error(`[billing] PENDING 확정 불가 — orderId=${row.pg_order_id}: ${look.reason}. PG 콘솔 대조 필요`);
+      return { blocked: true, reason: `${row.pg_order_id}: ${look.reason}`, resolved };
+    }
+    if (look.status === "NOT_CHARGED") {
+      await settlePendingFailed(prisma, row.pymnt_id, `PG 미청구 확인(복구): ${look.reason}`);
+      resolved.push({ pymntId: row.pymnt_id, outcome: "FAILED" });
+      continue;
+    }
+    await applyRecoveredCharge(row, look, now);
+    resolved.push({ pymntId: row.pymnt_id, outcome: "PAID" });
+  }
+  return { blocked: false, resolved };
+}
+
+/** 사용자 요청 경로용 — 확정 안 된 시도가 있으면 503 (배치가 곧 확정한다) */
+async function requireNoUnresolvedPending(mberId: string, now: Date): Promise<void> {
+  const r = await resolvePendingPayments(mberId, now);
+  if (r.blocked) {
+    throw new BillingError(
+      E.PAYMENT_STATUS_UNKNOWN,
+      "이전 결제 시도의 결과를 확인하는 중입니다. 잠시 후 다시 시도해 주세요.",
+      503,
+      { reason: r.reason },
+    );
+  }
+}
+
+/**
+ * 조회로 DONE 이 확인된 PENDING 행을 PAID 로 확정하고 종류별로 반영한다. 영수증 메일도 보낸다(돈이 나갔다).
+ * 반영 조건이 안 맞으면(구독이 종료됨 등) 이력만 확정하고 CRITICAL — 이중 청구·환불 여부는 운영자가 본다.
+ */
+async function applyRecoveredCharge(row: TbBlPayment, look: { paymentKey: string; receiptUrl: string | null; approvedAt: Date }, now: Date): Promise<void> {
+  const meta = (row.pndng_meta_json ?? null) as PendingMeta | null;
+  const type = row.pymnt_ty_code as PaymentType;
+
+  const applied = await prisma.$transaction(async (tx) => {
+    await settlePendingPaid(tx, row.pymnt_id, look);
+
+    if (type === PAYMENT_TYPE.INITIAL) {
+      if (!meta || meta.kind !== "INITIAL") return false;
+      const existing = await findSubscription(row.mber_id, tx);
+      if (existing && isLiveSubscriptionStatus(existing.sbscrptn_sttus_code)) return false;  // 이미 다른 경로로 살아 있음
+      await applyInitialActivation(tx, {
+        mberId: row.mber_id, seatCnt: row.seat_cnt, periodStart: row.perd_bgng_dt ?? now, periodEnd: row.perd_end_dt ?? now,
+        provider: row.pg_provdr_code, customerKey: meta.customerKey, billingKeyEnc: meta.billingKeyEnc,
+        cardCompany: meta.cardCompany, cardNumberMasked: meta.cardNumberMasked, now,
+      });
+      // 첫 결제 행에 구독 ID 를 연결
+      const s = await findSubscription(row.mber_id, tx);
+      if (s) await tx.tbBlPayment.update({ where: { pymnt_id: row.pymnt_id }, data: { sbscrptn_id: s.sbscrptn_id } });
+      return true;
+    }
+
+    if (!row.sbscrptn_id) return false;
+    const sub = await tx.tbBlSubscription.findUnique({ where: { sbscrptn_id: row.sbscrptn_id } });
+    if (!sub || !isLiveSubscriptionStatus(sub.sbscrptn_sttus_code)) return false;
+
+    if (type === PAYMENT_TYPE.SEAT_ADD) {
+      if (!meta || meta.kind !== "SEAT_ADD") return false;
+      return applySeatAddition(tx, sub.sbscrptn_id, meta.targetSeatCnt, now);
+    }
+    if (type === PAYMENT_TYPE.RECURRING) {
+      return applyRecurringRenewal(tx, sub.sbscrptn_id, sub.mber_id, {
+        seatCnt: row.seat_cnt, periodStart: row.perd_bgng_dt ?? now, periodEnd: row.perd_end_dt ?? now, now,
+      });
+    }
+    return false;
+  });
+
+  if (!applied) {
+    console.error(`[billing] CRITICAL 복구된 승인(${row.pg_order_id}, ${row.amt}원)을 구독에 반영하지 못함 — 구독 종료됨/문맥 없음. 환불·수동 반영 판단 필요`);
+    return;
+  }
+  console.warn(`[billing] PENDING 복구 반영 — orderId=${row.pg_order_id} type=${type} ${row.amt}원`);
+
+  const member = await prisma.tbCmMember.findUnique({ where: { mber_id: row.mber_id }, select: { email_addr: true } });
+  const sub = await findSubscription(row.mber_id);
+  if (member?.email_addr && sub) {
+    await sendPaymentReceiptEmail({
+      to: member.email_addr, productName: product.name,
+      kind: type === PAYMENT_TYPE.REFUND ? "RECURRING" : type,
+      amount: row.amt, seatCnt: row.seat_cnt, periodStart: row.perd_bgng_dt, periodEnd: row.perd_end_dt,
+      cardLabel: cardLabel(sub), receiptUrl: look.receiptUrl, nextBillAt: sub.next_bill_dt,
+    });
+  }
+}
+
+/** 배치 ⑥단계용 — 10분 넘게 PENDING 인 시도가 있는 회원 목록 */
+export async function loadStalePendingMembers(now: Date): Promise<Array<{ mberId: string; orderId: string; amount: number; createdAt: Date }>> {
+  const rows = await prisma.tbBlPayment.findMany({
+    where:   { pymnt_sttus_code: PAYMENT_STATUS.PENDING, creat_dt: { lt: new Date(now.getTime() - PENDING_PAYMENT_STALE_MS) } },
+    select:  { mber_id: true, pg_order_id: true, amt: true, creat_dt: true },
+    orderBy: { creat_dt: "asc" },
+  });
+  return rows.map((r) => ({ mberId: r.mber_id, orderId: r.pg_order_id, amount: r.amt, createdAt: r.creat_dt }));
 }

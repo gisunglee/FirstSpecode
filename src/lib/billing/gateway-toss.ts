@@ -30,6 +30,7 @@ import type {
   CancelPaymentParams,
   CancelPaymentResult,
   CardRegistrationStart,
+  ChargeLookup,
   ChargeParams,
   ChargeResult,
   IssueBillingKeyParams,
@@ -306,30 +307,43 @@ export class TossPaymentGateway implements PaymentGateway {
   }
 
   /**
-   * 청구 결과를 주문번호로 확인한다.
-   *   DONE                      → 성공으로 취급 (돈이 나갔다)
-   *   404 / ABORTED / EXPIRED   → 청구되지 않음 → 실패로 기록해도 안전
-   *   그 외(조회 실패·처리 중)  → PAYMENT_STATUS_UNKNOWN 예외 — 호출자는 실패로 기록하지 말 것
+   * 청구 결과를 주문번호로 확인한다 (charge 안의 즉시 복구).
+   *   DONE        → 성공으로 취급 (돈이 나갔다)
+   *   NOT_CHARGED → 청구되지 않음 → 실패로 기록해도 안전
+   *   UNKNOWN     → PAYMENT_STATUS_UNKNOWN 예외 — 호출자는 실패로 기록하지 말 것(PENDING 행이 남아 배치가 다시 조회)
    */
   private async recoverChargeByLookup(orderId: string, cause: unknown): Promise<ChargeResult> {
+    const look = await this.lookupCharge(orderId);
+    if (look.status === "DONE") return { ok: true, paymentKey: look.paymentKey, receiptUrl: look.receiptUrl, approvedAt: look.approvedAt };
+    if (look.status === "NOT_CHARGED") return { ok: false, code: "PG_UNREACHABLE", message: "결제 서버와 통신하지 못해 청구되지 않았습니다. 잠시 후 다시 시도해 주세요." };
+    throw unknownResultError(orderId, { reason: look.reason, cause });
+  }
+
+  /**
+   * 주문 ID 로 결제 조회 — GET /v1/payments/orders/{orderId}
+   *   DONE                       → DONE
+   *   404 / ABORTED / EXPIRED    → NOT_CHARGED (토스에 주문이 없거나 승인되지 않음)
+   *   통신 실패 / 그 외 상태(IN_PROGRESS 등) / 취소됨(CANCELED — 승인은 됐었다) → UNKNOWN 으로 두고 사람이 본다
+   */
+  async lookupCharge(orderId: string): Promise<ChargeLookup> {
     let r: TossResult<TossPayment>;
     try {
       r = await this.request<TossPayment>("GET", `/v1/payments/orders/${encodeURIComponent(orderId)}`);
     } catch (err) {
-      throw unknownResultError(orderId, err);
+      return { status: "UNKNOWN", reason: `조회 통신 실패: ${err instanceof Error ? err.message : String(err)}` };
     }
     if (!r.ok) {
-      if (r.status === 404) {
-        return { ok: false, code: "PG_UNREACHABLE", message: "결제 서버와 통신하지 못해 청구되지 않았습니다. 잠시 후 다시 시도해 주세요." };
-      }
-      throw unknownResultError(orderId, r);
+      if (r.status === 404) return { status: "NOT_CHARGED", reason: "토스에 해당 주문 없음(요청이 도달하지 않음)" };
+      return { status: "UNKNOWN", reason: `조회 오류 ${r.code}: ${r.message}` };
     }
     const status = r.data.status;
-    if (status === TOSS_PAYMENT_STATUS.DONE) return toChargeResult(r.data);
-    if (status === TOSS_PAYMENT_STATUS.ABORTED || status === TOSS_PAYMENT_STATUS.EXPIRED) {
-      return { ok: false, code: `PG_${status}`, message: "결제가 승인되지 않았습니다." };
+    if (status === TOSS_PAYMENT_STATUS.DONE) {
+      return { status: "DONE", paymentKey: r.data.paymentKey, receiptUrl: r.data.receipt?.url ?? null, approvedAt: r.data.approvedAt ? new Date(r.data.approvedAt) : new Date() };
     }
-    throw unknownResultError(orderId, { status, cause });
+    if (status === TOSS_PAYMENT_STATUS.ABORTED || status === TOSS_PAYMENT_STATUS.EXPIRED) {
+      return { status: "NOT_CHARGED", reason: `토스 상태 ${status}` };
+    }
+    return { status: "UNKNOWN", reason: `토스 상태 ${status} — 확정 불가` };
   }
 
   // ── 취소 ──────────────────────────────────────────────────────────────────
