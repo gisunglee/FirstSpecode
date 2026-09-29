@@ -642,6 +642,24 @@ async function main(): Promise<void> {
       }
       // 웹훅이 만든 500원만큼 잔액이 줄었다
       const remaining = initial6.amt - 1000 - 500;
+
+      // PG 불일치 방어(⑥, 2026-09-30) — 빌링키는 발급한 PG 에서만 청구된다. 구독을 TOSS 로 표시해 두고 Mock 게이트웨이로 청구 시도:
+      // 배치 경로는 skipped(실패로 안 셈·상태 불변), 사용자 경로(좌석 추가)는 409 PROVIDER_MISMATCH
+      log("PG 불일치 — 배치는 건너뜀, 좌석 추가는 409, 구독 상태 불변");
+      {
+        await prisma.tbBlSubscription.update({ where: { sbscrptn_id: s6.sbscrptn_id }, data: { pg_provdr_code: "TOSS" } });
+        const mismatched = (await sub.findSubscription(ids.A))!;
+        const r = await sub.attemptRecurringCharge(mismatched, "owner-a@example.com", new Date(), "RENEWAL");
+        assert.equal(r.ok, false);
+        assert.ok(!r.ok && r.skipped === true && r.reason.includes("PG 불일치"), JSON.stringify(r));
+        const after = (await sub.findSubscription(ids.A))!;
+        assert.equal(after.sbscrptn_sttus_code, "ACTIVE");
+        assert.equal(after.fail_cnt, mismatched.fail_cnt, "실패로 세지 않는다");
+        assert.equal(after.billing_op_token, null, "토큰을 잡지 않는다");
+        await assert.rejects(sub.changeSeats(actor, after.seat_cnt + 1, new Date()),
+          (e: unknown) => e instanceof BillingError && e.code === "BILLING_PROVIDER_MISMATCH" && e.status === 409);
+        await prisma.tbBlSubscription.update({ where: { sbscrptn_id: s6.sbscrptn_id }, data: { pg_provdr_code: "MOCK" } });
+      }
       const race = await Promise.allSettled([
         adminA.adminRecordRefund(initial6.pymnt_id, { reason: "ADJUSTMENT", amount: remaining, memo: "동시 A" }, adminActor),
         adminA.adminRecordRefund(initial6.pymnt_id, { reason: "ADJUSTMENT", amount: remaining, memo: "동시 B" }, adminActor),

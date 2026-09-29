@@ -54,7 +54,7 @@ async function issueTestBillingKey(customerKey: string): Promise<string> {
 
 async function main() {
   const { getPaymentGateway, buildCustomerKey } = await import("@/lib/billing/gateway");
-  const { TossPaymentGateway, formatMaskedCardNumber, cardIssuerName } = await import("@/lib/billing/gateway-toss");
+  const { TossPaymentGateway, formatMaskedCardNumber, cardIssuerName, maskBillingKeyInPath } = await import("@/lib/billing/gateway-toss");
   const { encryptBillingKey, decryptBillingKey, isGcmBillingKey } = await import("@/lib/billing/billing-key");
   const { encryptApiKey } = await import("@/lib/encrypt");
   const { BillingError } = await import("@/lib/billing/errors");
@@ -202,6 +202,12 @@ async function main() {
   assert.equal(cardIssuerName("4V"), "4V");
   assert.equal(cardIssuerName(null), "카드");
   log("카드번호 4자리 묶음 · 발급사 코드 → 이름(미등록 코드는 그대로)");
+
+  // ── 오류 메시지 빌링키 마스킹 (⑦, 2026-09-30) ─────────────────────────────
+  assert.equal(maskBillingKeyInPath(`/v1/billing/${billingKey}`), "/v1/billing/{billingKey}");
+  assert.equal(maskBillingKeyInPath("/v1/billing/authorizations/issue"), "/v1/billing/authorizations/issue");
+  assert.equal(maskBillingKeyInPath("/v1/payments/orders/SPC-1"), "/v1/payments/orders/SPC-1");
+  log("청구 경로의 빌링키는 예외 메시지에서 {billingKey} 로 가려진다");
 
   console.log(`\n✅ 토스 어댑터 스모크 ${step}단계 통과`);
 }

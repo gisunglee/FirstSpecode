@@ -560,6 +560,7 @@ export async function changeSeats(actor: BillingActorRef, seatCnt: number, now =
     if (!active.billing_key) {
       throw new BillingError(E.INVALID_STATE, "등록된 결제 수단이 없습니다. 결제 수단을 먼저 등록해 주세요.", 409);
     }
+    assertProviderMatches(active);
     // 0원 청구는 없다 — 남은 일수가 0 이거나 계산이 어긋난 경우 좌석만 늘어나는 사고 방지
     if (pr.amount <= 0) {
       throw new BillingError(E.INVALID_STATE, "일할 결제 금액이 0원이라 좌석을 추가할 수 없습니다. 정기 결제 뒤 다시 시도해 주세요.", 409);
@@ -712,13 +713,20 @@ export async function attemptRecurringCharge(
   now: Date,
   kind: "RENEWAL" | "RETRY",
 ): Promise<RecurringChargeResult> {
+  // 빌링키는 발급한 PG 에서만 청구된다. 다른 PG(예: Mock→Toss 전환 뒤 남은 Mock 구독)면 청구하지 않고,
+  // 실패로도 세지 않는다(재시도·강등·실패 메일이 돌면 안 된다 — 운영자가 §7-3 전환 절차대로 정리해야 할 건).
+  const gw = getPaymentGateway();
+  if (sub.pg_provdr_code !== gw.provider) {
+    console.error(`[billing] PG 불일치 — 구독 ${sub.sbscrptn_id} 는 ${sub.pg_provdr_code} 빌링키인데 현재 게이트웨이는 ${gw.provider}. 청구 건너뜀 — 운영자 정리 필요`);
+    return { ok: false, skipped: true, expired: false, failCnt: sub.fail_cnt, reason: `PG 불일치(${sub.pg_provdr_code}≠${gw.provider})` };
+  }
+
   // 이중 결제 방지 — 배치와 카드 변경 즉시 재결제가 겹칠 수 있다. 선점 실패면 청구 없이 물러난다.
   const opToken = await beginBillingOperation(sub, now);
   if (!opToken) {
     return { ok: false, skipped: true, expired: false, failCnt: sub.fail_cnt, reason: "다른 결제 처리가 진행 중" };
   }
 
-  const gw      = getPaymentGateway();
   const seatCnt = sub.pending_seat_cnt ?? sub.seat_cnt;
   const amount  = monthlyAmount(seatCnt, sub.unit_price);
   const orderId = newOrderId(now);
@@ -1024,6 +1032,22 @@ async function claimMemberForBilling(mberId: string, now: Date): Promise<boolean
     data:  { mdfcn_dt: claimAt },
   });
   return r.count === 1;
+}
+
+/**
+ * 구독의 PG 와 현재 게이트웨이가 같아야 청구할 수 있다 — 빌링키는 발급한 PG 에 묶여 있다.
+ * 사용자 요청 경로(좌석 추가·관리자 즉시 재결제)용. 배치 경로는 attemptRecurringCharge 가 skipped 로 처리한다.
+ */
+function assertProviderMatches(sub: TbBlSubscription): void {
+  const gw = getPaymentGateway();
+  if (sub.pg_provdr_code === gw.provider) return;
+  console.error(`[billing] PG 불일치 — 구독 ${sub.sbscrptn_id} 는 ${sub.pg_provdr_code} 빌링키인데 현재 게이트웨이는 ${gw.provider}`);
+  throw new BillingError(
+    E.PROVIDER_MISMATCH,
+    "등록된 결제 수단이 현재 결제 시스템과 맞지 않습니다. 결제 수단을 다시 등록해 주세요.",
+    409,
+    { subscriptionProvider: sub.pg_provdr_code, gatewayProvider: gw.provider },
+  );
 }
 
 export function concurrentOperationError(): BillingError {

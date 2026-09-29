@@ -187,9 +187,10 @@ export const RETRY_POLICY = {
 export const PRENOTICE_DAYS = PRICING.prenoticeDays;
 
 // ─── 결제 작업 토큰 ──────────────────────────────────────────────────────────
-// PG 청구를 시작한 요청이 토큰을 보유하는 동안 다른 구독 변경은 409. 토스 빌링 API 최대 응답 60초를
-// 넉넉히 넘기는 2분을 만료로 둔다 — 프로세스가 죽어 토큰이 남아도 2분 뒤 다음 작업이 인계한다.
-export const BILLING_OP_TIMEOUT_MS = 2 * 60 * 1000;
+// PG 청구를 시작한 요청이 토큰을 보유하는 동안 다른 구독 변경은 409.
+// 토스 어댑터의 최악 경로 = 청구 65초 타임아웃 + 같은 멱등키 재요청 65초 + 주문 조회 65초 ≈ 195초.
+// 그보다 여유 있게 5분 — 프로세스가 죽어 토큰이 남아도 5분 뒤 다음 작업이 인계한다 (2026-09-30, 2분에서 상향).
+export const BILLING_OP_TIMEOUT_MS = 5 * 60 * 1000;
 
 // ─── 좌석 입력 범위 ──────────────────────────────────────────────────────────
 // 상한은 입력 실수(예: 9999) 방어용. 실제로 이만큼 필요하면 ENTERPRISE 문의 경로다.
@@ -217,6 +218,8 @@ export const BILLING_ERROR_CODES = {
   GATEWAY_UNAVAILABLE:  "BILLING_GATEWAY_UNAVAILABLE",
   /** PG 청구 결과를 알 수 없음(통신 두절 뒤 조회도 실패) — 실패로 기록하지 말 것. 토큰 만료 뒤 다음 시도가 이어진다 */
   PAYMENT_STATUS_UNKNOWN: "BILLING_PAYMENT_STATUS_UNKNOWN",
+  /** 구독의 PG(pg_provdr_code)와 현재 게이트웨이가 다름 — 빌링키를 다른 PG 로 청구할 수 없다. Mock→Toss 전환 시 남은 구독 */
+  PROVIDER_MISMATCH:    "BILLING_PROVIDER_MISMATCH",
   /** 같은 구독에 대한 결제 작업이 동시에 들어옴 — 하나만 처리하고 나머지는 거절 (이중 결제 방지·결제 중 변경 차단) */
   CONCURRENT_OPERATION: "BILLING_CONCURRENT_OPERATION",
   /** 환불 조건 위반 (청약철회는 첫 결제·7일·계정당 1회, 잔액 초과 등) */

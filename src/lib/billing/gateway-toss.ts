@@ -155,6 +155,11 @@ export function formatMaskedCardNumber(raw: string | null | undefined): string {
   return compact.match(/.{1,4}/g)?.join("-") ?? raw;
 }
 
+/** `/v1/billing/{billingKey}` 의 빌링키를 가린다 — 예외 메시지·로그용. 발급·조회 경로는 그대로 */
+export function maskBillingKeyInPath(path: string): string {
+  return path.replace(/^\/v1\/billing\/(?!authorizations\/)[^/?]+/, "/v1/billing/{billingKey}");
+}
+
 /** 웹훅 이벤트 ID — 토스는 이벤트 ID 를 주지 않아 (종류·발생시각·대상·상태) 해시로 만든다. 재전송은 같은 값 */
 function webhookEventId(parts: string[]): string {
   return createHash("sha256").update(parts.join("|")).digest("hex");
@@ -195,6 +200,8 @@ export class TossPaymentGateway implements PaymentGateway {
     path: string,
     opts: { body?: Record<string, unknown>; idempotencyKey?: string } = {},
   ): Promise<TossResult<T>> {
+    // 오류 메시지·로그에는 빌링키가 든 경로를 절대 그대로 쓰지 않는다 (Vercel 로그에 남으면 유출)
+    const safePath = maskBillingKeyInPath(path);
     const headers: Record<string, string> = {
       Authorization: `Basic ${Buffer.from(`${this.secretKey}:`).toString("base64")}`,
       "Content-Type": "application/json",
@@ -215,7 +222,7 @@ export class TossPaymentGateway implements PaymentGateway {
       });
       text = await res.text();
     } catch (err) {
-      throw new TossTransportError(`토스 API 호출 실패: ${method} ${path}`, err);
+      throw new TossTransportError(`토스 API 호출 실패: ${method} ${safePath}`, err);
     } finally {
       clearTimeout(timer);
     }
@@ -225,7 +232,7 @@ export class TossPaymentGateway implements PaymentGateway {
       try {
         json = JSON.parse(text);
       } catch (err) {
-        throw new TossTransportError(`토스 API 응답 파싱 실패: ${method} ${path} (HTTP ${res.status})`, err);
+        throw new TossTransportError(`토스 API 응답 파싱 실패: ${method} ${safePath} (HTTP ${res.status})`, err);
       }
     }
     if (!res.ok) {
