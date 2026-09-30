@@ -200,7 +200,8 @@
 | 관리자 배치 | `/admin/batch` | `BILLING_DAILY` 잡 필터·수동 실행 |
 | **관리자 결제** | `/admin/billing` | 요약 카드(구독 중·재시도 중·월 예정 청구액·7일 내 결제 예정·이번 달 순매출·최근 30일 실패·잠긴 프로젝트·마지막 배치) · [구독] 탭(상태 필터·검색·페이지) · [결제 이력] 탭(기간·상태·구분·검색, 순액 합계, 엑셀) · Mock 안내 배너 |
 | **관리자 구독 상세** | `/admin/billing/[id]` | 구독 정보·사용 좌석·환불 3플래그 · 소유 프로젝트(잠금·멤버 수)+잠금 해제 대행(소유자와 같은 판정, 초과면 409) · 즉시 재결제(PAST_DUE) · 다음 결제일 연기(ACTIVE, 1~90일) · 강제 종료 · 결제 이력(누적 환불·잔액)+환불 기록(청약철회/운영 보정) · 감사 로그 링크. 전부 사유 필수 |
-| 관리자 대시보드 · LNB | `/admin`, 시스템 관리 메뉴 | "구독 중"·"결제 실패 재시도 중" 카드, "결제" 메뉴 |
+| 관리자 대시보드 · LNB | `/admin`, 시스템 관리 메뉴 | "구독 중"·"결제 실패 재시도 중" 카드, "결제"·"결제 시스템 안내" 메뉴 |
+| **결제 시스템 안내** | `/admin/billing/guide` | (2026-09-30) 운영자용 설명서 + 실시간 점검. ① 지금 상태(게이트웨이 모드·테스트/라이브·BILLING_OPEN·살아 있는 구독(PG별)·외부 cron 생존(마지막 CRON 실행 26h 이내)·마지막 배치·확인 필요 건수(미확정 결제·웹훅 실패·미반영)·환경변수 존재 여부(값 미노출)) ② 결제 흐름 ③ 플랜이 걸린 기능 표 ④ 일일 배치 단계·cron 명령·알림 조건 ⑤ 웹훅 ⑥ 안전장치 ⑦ 운영 절차(환불·민원·전환·키 유출) ⑧ 남은 일 ⑨ 코드·문서 위치. 설명 문구는 화면 파일에 기준일(GUIDE_AS_OF)과 함께 — 정책이 바뀌면 같이 갱신 |
 
 ### 3-2. API
 | 메서드·경로 | 인증 | 내용 |
@@ -219,6 +220,7 @@
 | `POST /api/admin/batch/run/billing-daily` | cron 시크릿 또는 SUPER_ADMIN | 일일 배치 |
 | `PATCH /api/admin/users/[id]/plan` | SUPER_ADMIN | 수동 플랜 변경(구독 있으면 409 `SUBSCRIPTION_ACTIVE`) |
 | `GET /api/admin/billing/summary` · `GET .../subscriptions` · `GET .../subscriptions/[id]` | SUPER_ADMIN | 요약 · 구독 목록(status=LIVE 등, search) · 구독 상세 |
+| `GET /api/admin/billing/system-status` | SUPER_ADMIN | 결제 시스템 설정·상태 점검(환경변수 존재 여부·배치/cron·미확정·웹훅 실패·미반영) — 안내 화면용 (2026-09-30) |
 | `GET /api/admin/billing/payments` · `GET .../payments/export` | SUPER_ADMIN | 결제 이력(from/to KST·status·type·search, sumAmount) · 엑셀(최대 10,000행) |
 | `POST .../subscriptions/[id]/retry` · `/defer {days}` · `/terminate` | SUPER_ADMIN | 운영 액션. body `reason` 필수. 결제 진행 중이면 409. 감사는 같은 트랜잭션(재결제는 시도→결과) |
 | `POST .../payments/[id]/refund {reason: WITHDRAWAL|ADJUSTMENT, amount?, memo}` | SUPER_ADMIN | 환불 원장. 청약철회는 서버 검사 + 구독 종료, 운영 보정은 금액 자유·구독 유지. 원 결제 행 잠금 |
@@ -373,3 +375,4 @@
 - 2026-09-30 운영 DDL `2026-09-30_billing_pending_attempt.sql` 적용(사용자 실행 시도 → IPv6 로 실패 → pooler 세션 포트로 적용, 컬럼·인덱스·drift 검증). 운영 tb_bl_payment 2행.
 - 2026-09-30 환불을 관리자 화면에서 PG 취소 API 로 직접 실행(사용자 동의) — 3단계(기록→콘솔→대조)를 1단계로. 해지 버튼 가시성·부제 문구 정비. DB 스모크에 PG 취소 거절 경로 추가.
 - 2026-09-30 GPT 2차 교차 검토 수용: ① 토스 오류 분류(4xx 업무 코드만 FAILED, 5xx/429/처리 중/즉시 404 는 UNKNOWN) ② PENDING 미확정 동안 상태 변경 409 + PAID_UNAPPLIED(회원 비활성 검증 포함) ③ 대사 워터마크·금액 비교·항목 순서 ④ 사실 정정(customerKey 변경은 기존 구독 재등록 불필요). 반려: 없음. 토스 스모크 20단계(5xx 재현), DB 스모크 26단계(가드 4경로·PAID_UNAPPLIED·워터마크) 통과. 외부 cron 등록은 여전히 사용자 몫(§2).
+- 2026-09-30 관리자 "결제 시스템 안내" 화면(`/admin/billing/guide`) + `system-status` API 추가(사용자 요청: 자동으로 도는 것들을 운영자가 읽을 수 있게). 설명 기준일은 화면의 GUIDE_AS_OF — 정책 변경 시 함께 갱신할 것.

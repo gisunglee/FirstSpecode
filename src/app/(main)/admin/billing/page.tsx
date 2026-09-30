@@ -58,9 +58,10 @@ function AdminBillingInner() {
       {summary.data && <SummaryCards s={summary.data} />}
       {summary.isError && <div className="sp-hint is-err">{(summary.error as Error).message}</div>}
 
-      <div className="sp-tab-bar">
+      <div className="sp-tab-bar" style={{ display: "flex", alignItems: "center" }}>
         <div className={`sp-tab${tab === "subscriptions" ? " is-active" : ""}`} onClick={() => switchTab("subscriptions")}>구독</div>
         <div className={`sp-tab${tab === "payments" ? " is-active" : ""}`} onClick={() => switchTab("payments")}>결제 이력</div>
+        <Link href="/admin/billing/guide" className="sp-btn sp-btn-ghost sp-btn-sm" style={{ marginLeft: "auto" }}>결제 시스템 안내 →</Link>
       </div>
 
       {tab === "subscriptions" ? <SubscriptionsTab initialStatus={params.get("status") ?? "LIVE"} /> : <PaymentsTab />}

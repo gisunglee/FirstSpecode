@@ -287,6 +287,8 @@ export default function LNB() {
               { label: "문서 관리",       href: "/admin/docs",              icon: "i_docs" as MenuIconKey },
               // 구독·결제 운영 — 요약·구독 목록·결제 이력·운영 액션 (정책 §3-1)
               { label: "결제",            href: "/admin/billing",           icon: "i_referenceInfo" as MenuIconKey },
+              // 결제 시스템이 어떻게 돌아가는지(흐름·영향 범위·배치·환경변수·남은 일) 운영자가 한 화면에서 읽는 안내 + 실시간 설정 점검
+              { label: "결제 시스템 안내", href: "/admin/billing/guide",     icon: "i_docs" as MenuIconKey },
               { label: "감사 로그",       href: "/admin/audit",             icon: "i_changeLog" as MenuIconKey },
               // 소프트삭제된 프로젝트의 영구 삭제 운영 화면
               { label: "정보 삭제",       href: "/admin/cleanup",           icon: "i_cleanup" as MenuIconKey },
