@@ -243,7 +243,7 @@ export async function loadPendingTargets(now: Date): Promise<PendingTarget[]> {
   return loadStalePendingMembers(now);
 }
 
-export type PendingOutcome = { outcome: "PAID" | "FAILED" | "UNKNOWN"; reason: string };
+export type PendingOutcome = { outcome: "PAID" | "PAID_UNAPPLIED" | "FAILED" | "UNKNOWN"; reason: string };
 
 /**
  * 회원 1명의 PENDING 시도를 PG 조회로 확정한다.
@@ -256,5 +256,9 @@ export async function processPendingTarget(t: PendingTarget, now: Date): Promise
   if (r.blocked) return { outcome: "UNKNOWN", reason: r.reason };
   const mine = r.resolved[0];  // 회원당 진행 중 1건(UNIQUE)
   if (!mine) return { outcome: "UNKNOWN", reason: "확정 대상 없음(이미 처리됨)" };
-  return { outcome: mine.outcome, reason: mine.outcome === "PAID" ? "PG 승인 확인 → 반영" : "PG 미청구 확인 → 실패 처리" };
+  const reason =
+    mine.outcome === "PAID"           ? "PG 승인 확인 → 반영" :
+    mine.outcome === "PAID_UNAPPLIED" ? "PG 승인 확인됐으나 구독에 반영 못 함(종료/탈퇴/문맥 없음) — 환불 또는 수동 반영 판단 필요" :
+                                        "PG 미청구 확인 → 실패 처리";
+  return { outcome: mine.outcome, reason };
 }

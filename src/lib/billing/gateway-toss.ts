@@ -16,11 +16,13 @@
  * 인증: Authorization: Basic base64(secretKey + ":")  (docs.tosspayments.com/reference/using-api/authorization)
  * env : TOSS_SECRET_KEY(test_sk_/live_sk_), TOSS_CLIENT_KEY(test_ck_/live_ck_) — 둘 다 "API 개별 연동 키"
  *
- * 결과를 알 수 없는 청구 (정책 §7-3 7번 "UNKNOWN 복구"):
- *   타임아웃·연결 끊김이면 돈이 나갔는지 모른다. 순서대로 ① 같은 Idempotency-Key 로 1회 재요청(토스가 첫 요청을
- *   처리했으면 같은 결과, 아니면 새로 처리) ② 그래도 모르면 주문번호 조회(GET /v1/payments/orders/{orderId})
- *   ③ 조회도 안 되면 BillingError(PAYMENT_STATUS_UNKNOWN) 를 던진다. 호출자는 이 예외를 "실패"로 기록하면 안 된다
- *   (실패로 세면 다음 시도에서 이중 청구). 결제 작업 토큰이 2분 뒤 만료되면 다음 배치가 다시 시도한다.
+ * 결과를 알 수 없는 청구 (정책 §7-3 7번 "UNKNOWN 복구", 2026-09-30 GPT 교차 검토로 강화):
+ *   "돈이 안 나갔다"고 확정할 수 있는 것은 **카드 거절 같은 업무 오류(4xx 업무 코드)** 뿐이다. 타임아웃·연결 끊김·
+ *   5xx·429·처리 중(IDEMPOTENT_REQUEST_PROCESSING)·모르는 코드는 전부 "결과 불명"으로 다룬다:
+ *   ① 같은 Idempotency-Key 로 1회 재요청(토스가 첫 요청을 처리했으면 같은 결과) ② 주문번호 조회
+ *   ③ 조회가 404 여도 **즉시 경로에서는 UNKNOWN** 으로 둔다(토스가 아직 기록을 만들기 전일 수 있다) → PENDING 행이
+ *   남고 10분 뒤 배치 확정(그때의 404 는 NOT_CHARGED). ④ 조회 실패도 UNKNOWN. 호출자는 UNKNOWN 을 실패로 기록하지 않고
+ *   같은 주문 ID 로만 확정한다 — 새 주문 ID 로 재청구하면 이중 결제(토스 멱등키 가이드).
  *
  * 테스트: 시크릿 키가 test_ 로 시작할 때만 env TOSS_TEST_ERROR_CODE 를 TossPayments-Test-Code 헤더로 보내
  *   거절(REJECT_CARD_PAYMENT 등)을 재현한다(스모크 scripts/billing-toss-smoke.ts). 라이브 키에서는 무시된다.
@@ -316,23 +318,28 @@ export class TossPaymentGateway implements PaymentGateway {
     }
 
     if (!r.ok) {
-      // 첫 요청이 토스 쪽에서 아직 처리 중 — 결과는 조회로 확인
-      if (r.code === "IDEMPOTENT_REQUEST_PROCESSING") return this.recoverChargeByLookup(p.orderId, r);
-      return { ok: false, code: r.code, message: r.message };
+      // 확실한 업무 거절(카드 한도·정지·유효기간 등 4xx 업무 코드)만 실패로 확정한다.
+      // 5xx·429·처리 중·모르는 코드는 "돈이 나갔는지 모른다" → 조회로 확정, 안 되면 UNKNOWN
+      if (isDefiniteDecline(r.status, r.code)) return { ok: false, code: r.code, message: r.message };
+      console.warn(`[billing/toss] 청구 응답이 확정 실패가 아님(HTTP ${r.status} ${r.code}) — 조회로 확인 orderId=${p.orderId}`);
+      return this.recoverChargeByLookup(p.orderId, r);
     }
     return toChargeResult(r.data);
   }
 
   /**
    * 청구 결과를 주문번호로 확인한다 (charge 안의 즉시 복구).
-   *   DONE        → 성공으로 취급 (돈이 나갔다)
-   *   NOT_CHARGED → 청구되지 않음 → 실패로 기록해도 안전
-   *   UNKNOWN     → PAYMENT_STATUS_UNKNOWN 예외 — 호출자는 실패로 기록하지 말 것(PENDING 행이 남아 배치가 다시 조회)
+   *   DONE                 → 성공으로 취급 (돈이 나갔다)
+   *   ABORTED/EXPIRED      → 토스가 "승인 안 됨"을 명시 → 실패로 기록해도 안전
+   *   404 / UNKNOWN        → PAYMENT_STATUS_UNKNOWN 예외 — 즉시 경로의 404 는 아직 기록 전일 수 있어 확정하지 않는다.
+   *                          PENDING 행이 남고 10분 뒤 배치의 lookupCharge 가 404 를 NOT_CHARGED 로 확정한다
    */
   private async recoverChargeByLookup(orderId: string, cause: unknown): Promise<ChargeResult> {
     const look = await this.lookupCharge(orderId);
     if (look.status === "DONE") return { ok: true, paymentKey: look.paymentKey, receiptUrl: look.receiptUrl, approvedAt: look.approvedAt };
-    if (look.status === "NOT_CHARGED") return { ok: false, code: "PG_UNREACHABLE", message: "결제 서버와 통신하지 못해 청구되지 않았습니다. 잠시 후 다시 시도해 주세요." };
+    if (look.status === "NOT_CHARGED" && !look.reason.startsWith("404")) {
+      return { ok: false, code: "PG_NOT_APPROVED", message: `결제가 승인되지 않았습니다. (${look.reason})` };
+    }
     throw unknownResultError(orderId, { reason: look.reason, cause });
   }
 
@@ -350,7 +357,7 @@ export class TossPaymentGateway implements PaymentGateway {
       return { status: "UNKNOWN", reason: `조회 통신 실패: ${err instanceof Error ? err.message : String(err)}` };
     }
     if (!r.ok) {
-      if (r.status === 404) return { status: "NOT_CHARGED", reason: "토스에 해당 주문 없음(요청이 도달하지 않음)" };
+      if (r.status === 404) return { status: "NOT_CHARGED", reason: "404 토스에 해당 주문 없음(요청이 도달하지 않음)" };
       return { status: "UNKNOWN", reason: `조회 오류 ${r.code}: ${r.message}` };
     }
     const status = r.data.status;
@@ -473,6 +480,18 @@ export class TossPaymentGateway implements PaymentGateway {
     // 구독하지 않은 종류 — 저장 가치 없음. 라우트가 "알 수 없는 종류"로 200 처리할 수 있게 표식만 남긴다
     return { providerEventId: transmissionId ?? webhookEventIdFallback([eventType, createdAt]), eventType, payload: { verified: false, eventType, createdAt, data: null, ignored: true } as TossWebhookPayload };
   }
+}
+
+/**
+ * "돈이 안 나갔다"가 확실한 응답인가 — 4xx 이면서 토스 업무 코드(카드 거절·잘못된 요청·빌링키 무효 등).
+ * 429(과다 요청)·5xx·처리 중·코드 없음은 확정하지 않는다. 모르는 4xx 코드는 보수적으로 "거절"로 본다(토스 4xx 는 요청 자체를 처리하지 않은 것).
+ */
+export function isDefiniteDecline(httpStatus: number, code: string): boolean {
+  if (httpStatus < 400 || httpStatus >= 500) return false;
+  if (httpStatus === 429) return false;
+  if (code === "IDEMPOTENT_REQUEST_PROCESSING") return false;
+  if (!code || code.startsWith("HTTP_")) return false;
+  return true;
 }
 
 /** Date → 토스 거래 조회의 KST 로컬 시각 문자열(yyyy-MM-ddTHH:mm:ss, 타임존 표기 없음) */

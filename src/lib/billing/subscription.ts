@@ -862,6 +862,8 @@ export async function terminateSubscriptionTx(
   endedReason: EndedReason,
   opts: { opToken?: string } = {},
 ): Promise<TerminationResult> {
+  // 내 토큰으로 이어서 종료하는 경우(재시도 소진)는 그 청구 자체가 확정된 뒤라 검사할 PENDING 이 없다. 그 외는 미확정 청구가 있으면 종료 금지
+  if (!opts.opToken) await assertNoPendingCharge(sub.mber_id, tx);
   const r = await tx.tbBlSubscription.updateMany({
     where: { sbscrptn_id: sub.sbscrptn_id, ...opTokenWhere(opts.opToken, now) },
     data: {
@@ -922,9 +924,12 @@ export async function terminateSubscription(
  * 탈퇴 라우트의 트랜잭션 안에서 호출. 프로젝트는 탈퇴 라우트가 보관 삭제하므로 여기서 잠그지 않는다.
  */
 export async function withdrawSubscription(tx: Prisma.TransactionClient, mberId: string, now: Date): Promise<boolean> {
+  // 첫 결제가 PENDING 인 회원은 구독 행이 없어도 탈퇴를 막는다 — 승인이 확인되면 활성화할 곳이 있어야 한다
+  await assertNoPendingCharge(mberId, tx);
   const sub = await findSubscription(mberId, tx);
   if (!sub || !isLiveSubscriptionStatus(sub.sbscrptn_sttus_code)) return false;
-  // 청구 진행 중이면 탈퇴를 잠시 막는다(409) — 결제 결과와 교차하면 "돈은 받고 탈퇴" 가 된다. 몇 초 뒤 재시도로 충분
+  // 청구 진행 중(토큰)이거나 미확정 청구(PENDING)가 있으면 탈퇴를 잠시 막는다(409) — 결제 결과와 교차하면 "돈은 받고 탈퇴" 가 된다
+  await assertNoPendingCharge(mberId, tx);
   const r = await tx.tbBlSubscription.updateMany({
     where: { sbscrptn_id: sub.sbscrptn_id, ...opTokenWhere(undefined, now) },
     data: {
@@ -1004,7 +1009,26 @@ async function releaseBillingOperation(sbscrptnId: string, opToken: string, now:
 }
 
 /**
- * 결제 작업 밖의 일반 변경(해지·해지 취소·축소 예약·카드 교체·연기 등) — 토큰이 없거나 만료됐을 때만.
+ * 확정되지 않은 **청구** 시도(PENDING, 환불 제외)가 회원에게 남아 있으면 409.
+ * 왜: 작업 토큰은 5분에 만료되지만 PENDING 확정은 10분 뒤라, 그 사이 해지·종료·탈퇴가 들어가면 나중에 승인이
+ * 확인돼도 반영할 구독이 없다(GPT 교차 검토 2번). 상태를 바꾸는 모든 경로가 이걸 먼저 거친다.
+ */
+export async function assertNoPendingCharge(mberId: string, db: Db = prisma): Promise<void> {
+  const pending = await db.tbBlPayment.findFirst({
+    where:  { mber_id: mberId, pymnt_sttus_code: PAYMENT_STATUS.PENDING, pymnt_ty_code: { not: PAYMENT_TYPE.REFUND } },
+    select: { pg_order_id: true },
+  });
+  if (!pending) return;
+  throw new BillingError(
+    E.PAYMENT_STATUS_UNKNOWN,
+    "확정되지 않은 결제 시도가 있어 지금은 구독을 변경할 수 없습니다. 결제 결과가 확인된 뒤(최대 10분) 다시 시도해 주세요.",
+    409,
+    { orderId: pending.pg_order_id },
+  );
+}
+
+/**
+ * 결제 작업 밖의 일반 변경(해지·해지 취소·축소 예약·카드 교체·연기 등) — 토큰이 없거나 만료됐고, 미확정 청구가 없을 때만.
  * 0건이면 지금 PG 청구가 진행 중 → 409. 성공 시 갱신된 행을 돌려준다.
  */
 export async function guardedSubscriptionUpdate(
@@ -1013,6 +1037,8 @@ export async function guardedSubscriptionUpdate(
   now: Date,
   db: Db = prisma,
 ): Promise<TbBlSubscription> {
+  const owner = await db.tbBlSubscription.findUnique({ where: { sbscrptn_id: sbscrptnId }, select: { mber_id: true } });
+  if (owner) await assertNoPendingCharge(owner.mber_id, db);
   const r = await db.tbBlSubscription.updateMany({
     where: { sbscrptn_id: sbscrptnId, ...opTokenWhere(undefined, now) },
     data:  { ...data, mdfcn_dt: now },
@@ -1254,11 +1280,14 @@ async function applyRecurringRenewal(
   return true;
 }
 
+/** PAID_UNAPPLIED: 돈은 나갔는데(PAID 확정) 구독에 반영할 수 없었다(종료됨·탈퇴·문맥 없음) — 관리자가 환불/수동 반영 판단 */
+export type PendingOutcomeCode = "PAID" | "PAID_UNAPPLIED" | "FAILED";
+
 export type PendingResolution =
   /** 확정할 것이 없거나 전부 확정됨 */
-  | { blocked: false; resolved: Array<{ pymntId: string; outcome: "PAID" | "FAILED" }> }
+  | { blocked: false; resolved: Array<{ pymntId: string; outcome: PendingOutcomeCode }> }
   /** 아직 진행 중(10분 미만)이거나 조회로도 확정 못 함 — 새 청구를 걸면 안 된다 */
-  | { blocked: true; reason: string; resolved: Array<{ pymntId: string; outcome: "PAID" | "FAILED" }> };
+  | { blocked: true; reason: string; resolved: Array<{ pymntId: string; outcome: PendingOutcomeCode }> };
 
 /**
  * 회원의 PENDING 시도를 확정한다. 모든 청구 경로가 시작 전에 부르고, 일일 배치 ⑥단계도 부른다.
@@ -1273,7 +1302,7 @@ export async function resolvePendingPayments(mberId: string, now = new Date()): 
     where:   { mber_id: mberId, pymnt_sttus_code: PAYMENT_STATUS.PENDING },
     orderBy: { creat_dt: "asc" },
   });
-  const resolved: Array<{ pymntId: string; outcome: "PAID" | "FAILED" }> = [];
+  const resolved: Array<{ pymntId: string; outcome: PendingOutcomeCode }> = [];
   if (rows.length === 0) return { blocked: false, resolved };
 
   const gw = getPaymentGateway();
@@ -1303,8 +1332,8 @@ export async function resolvePendingPayments(mberId: string, now = new Date()): 
       resolved.push({ pymntId: row.pymnt_id, outcome: "FAILED" });
       continue;
     }
-    await applyRecoveredCharge(row, look, now);
-    resolved.push({ pymntId: row.pymnt_id, outcome: "PAID" });
+    const applied = await applyRecoveredCharge(row, look, now);
+    resolved.push({ pymntId: row.pymnt_id, outcome: applied ? "PAID" : "PAID_UNAPPLIED" });
   }
   return { blocked: false, resolved };
 }
@@ -1324,9 +1353,10 @@ async function requireNoUnresolvedPending(mberId: string, now: Date): Promise<vo
 
 /**
  * 조회로 DONE 이 확인된 PENDING 행을 PAID 로 확정하고 종류별로 반영한다. 영수증 메일도 보낸다(돈이 나갔다).
- * 반영 조건이 안 맞으면(구독이 종료됨 등) 이력만 확정하고 CRITICAL — 이중 청구·환불 여부는 운영자가 본다.
+ * 반영 조건이 안 맞으면(구독이 종료됨·회원 탈퇴·문맥 없음) 이력은 PAID 로 확정하되 fail_rsn_cn 에 "미반영" 표식을 남기고
+ * false 를 돌려준다 → 배치가 PAID_UNAPPLIED 로 관리자에게 알린다(환불/수동 반영은 사람의 판단).
  */
-async function applyRecoveredCharge(row: TbBlPayment, look: { paymentKey: string; receiptUrl: string | null; approvedAt: Date }, now: Date): Promise<void> {
+async function applyRecoveredCharge(row: TbBlPayment, look: { paymentKey: string; receiptUrl: string | null; approvedAt: Date }, now: Date): Promise<boolean> {
   const meta = (row.pndng_meta_json ?? null) as PendingMeta | null;
   const type = row.pymnt_ty_code as PaymentType;
 
@@ -1335,6 +1365,9 @@ async function applyRecoveredCharge(row: TbBlPayment, look: { paymentKey: string
 
     if (type === PAYMENT_TYPE.INITIAL) {
       if (!meta || meta.kind !== "INITIAL") return false;
+      // 탈퇴·정지된 회원에게 구독을 살리지 않는다 — 돈은 받았으니 환불 판단은 사람이
+      const member = await tx.tbCmMember.findUnique({ where: { mber_id: row.mber_id }, select: { mber_sttus_code: true } });
+      if (!member || member.mber_sttus_code !== "ACTIVE") return false;
       const existing = await findSubscription(row.mber_id, tx);
       if (existing && isLiveSubscriptionStatus(existing.sbscrptn_sttus_code)) return false;  // 이미 다른 경로로 살아 있음
       await applyInitialActivation(tx, {
@@ -1365,8 +1398,9 @@ async function applyRecoveredCharge(row: TbBlPayment, look: { paymentKey: string
   });
 
   if (!applied) {
-    console.error(`[billing] CRITICAL 복구된 승인(${row.pg_order_id}, ${row.amt}원)을 구독에 반영하지 못함 — 구독 종료됨/문맥 없음. 환불·수동 반영 판단 필요`);
-    return;
+    console.error(`[billing] CRITICAL 복구된 승인(${row.pg_order_id}, ${row.amt}원)을 구독에 반영하지 못함 — 구독 종료됨/회원 비활성/문맥 없음. 환불·수동 반영 판단 필요`);
+    await prisma.tbBlPayment.update({ where: { pymnt_id: row.pymnt_id }, data: { fail_rsn_cn: "승인 확인됨 · 구독 미반영(종료/탈퇴/문맥 없음) — 관리자 확인 필요" } }).catch(() => undefined);
+    return false;
   }
   console.warn(`[billing] PENDING 복구 반영 — orderId=${row.pg_order_id} type=${type} ${row.amt}원`);
 
@@ -1380,6 +1414,7 @@ async function applyRecoveredCharge(row: TbBlPayment, look: { paymentKey: string
       cardLabel: cardLabel(sub), receiptUrl: look.receiptUrl, nextBillAt: sub.next_bill_dt,
     });
   }
+  return true;
 }
 
 /** 배치 ⑥단계용 — 10분 넘게 PENDING 인 시도가 있는 회원 목록 */

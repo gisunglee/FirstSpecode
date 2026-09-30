@@ -714,6 +714,14 @@ async function main(): Promise<void> {
         // 사용자 경로(좌석 추가·첫 결제)가 부르는 게이트 — 10분 미만이면 "진행 중"으로 blocked (새 주문 ID 생성 금지)
         const gate = await sub.resolvePendingPayments(ids.A, new Date(dueP.getTime() + 6 * 60_000));
         assert.ok(gate.blocked && gate.reason.includes("진행 중"), JSON.stringify(gate));
+        // 토큰(5분)이 만료돼도 PENDING 이 남아 있으면 해지·강제 종료·탈퇴·축소 예약은 409 (GPT 교차 검토 2번)
+        const t6 = new Date(dueP.getTime() + 6 * 60_000);
+        const isPendingGuard = (e: unknown) => e instanceof BillingError && e.code === "BILLING_PAYMENT_STATUS_UNKNOWN" && e.status === 409;
+        await assert.rejects(sub.cancelSubscription(actor, t6), isPendingGuard, "PENDING 중 해지 409");
+        await assert.rejects(adminA.adminTerminate(s6.sbscrptn_id, adminActor, "PENDING 중", t6), isPendingGuard, "PENDING 중 강제 종료 409");
+        await assert.rejects(adminA.adminDeferBilling(s6.sbscrptn_id, 3, adminActor, "PENDING 중", t6), isPendingGuard, "PENDING 중 결제일 연기 409");
+        await assert.rejects(prisma.$transaction((tx) => sub.withdrawSubscription(tx, ids.A, t6)), isPendingGuard, "PENDING 중 탈퇴 409");
+        assert.equal((await sub.findSubscription(ids.A))!.sbscrptn_sttus_code, "ACTIVE", "아무것도 안 바뀜");
         assert.equal(await prisma.tbBlPayment.count({ where: { mber_id: ids.A, pymnt_sttus_code: "PENDING" } }), 1, "새 주문 ID 생성 없음");
 
         // 10분 뒤 배치 ⑥ — 조회가 DONE → PAID 확정 + 새 주기 반영. 그 뒤 ② 는 next_bill_dt 가 미래라 청구 없음
@@ -757,6 +765,26 @@ async function main(): Promise<void> {
         assert.equal(r2.ok, true, JSON.stringify(r2));
       }
 
+      log("PENDING 선기록 — 회원이 비활성이면 승인이 확인돼도 구독을 살리지 않고 PAID_UNAPPLIED (관리자 판단)");
+      {
+        const U = randomUUID();
+        await prisma.tbCmMember.create({ data: mk(U, "unapplied") });
+        const tU = new Date();
+        process.env.MOCK_CHARGE_OUTCOME = "lost";
+        await assert.rejects(sub.completeCardRegistration({ mberId: U, email: "u@example.com" }, { authKey: goodCard(), customerKey: buildCustomerKey(U), state: st(U, "start", 1, tU), purpose: "start", seatCnt: 1 }, tU));
+        delete process.env.MOCK_CHARGE_OUTCOME;
+        // 관리자가 회원을 정지시킨 상황(탈퇴는 PENDING 가드로 막히지만 정지는 별도 경로)
+        await prisma.tbCmMember.update({ where: { mber_id: U }, data: { mber_sttus_code: "SUSPENDED" } });
+        const laterU = new Date(tU.getTime() + 11 * 60_000);
+        const outU = await daily.processPendingTarget((await daily.loadPendingTargets(laterU)).find((t) => t.mberId === U)!, laterU);
+        assert.equal(outU.outcome, "PAID_UNAPPLIED", JSON.stringify(outU));
+        const rowU = await prisma.tbBlPayment.findFirstOrThrow({ where: { mber_id: U, pymnt_ty_code: "INITIAL" } });
+        assert.equal(rowU.pymnt_sttus_code, "PAID", "돈은 나갔으니 PAID");
+        assert.ok(rowU.fail_rsn_cn?.includes("미반영"), "미반영 표식");
+        assert.equal(await sub.findSubscription(U), null, "구독은 만들지 않는다");
+        assert.equal((await prisma.tbCmMember.findUniqueOrThrow({ where: { mber_id: U } })).plan_code, "FREE");
+      }
+
       log("PENDING 선기록 — 조회도 실패(UNKNOWN) → 그대로 두고 배치 항목 FAILED(관리자 알림), 새 청구 차단");
       {
         const subU0 = (await sub.findSubscription(ids.A))!;
@@ -795,6 +823,8 @@ async function main(): Promise<void> {
         await assert.rejects(sub.completeCardRegistration(actorN, { authKey: goodCard(), customerKey: buildCustomerKey(N), state: st(N, "start", 1, new Date(tN.getTime() + 30_000)), purpose: "start", seatCnt: 1 }, new Date(tN.getTime() + 30_000)),
           (e: unknown) => e instanceof BillingError && e.code === "BILLING_PAYMENT_STATUS_UNKNOWN" && e.status === 503);
         const laterN = new Date(tN.getTime() + 11 * 60_000);
+        // 첫 결제 PENDING 인 회원은 탈퇴 불가(구독 행이 없어도) — 승인이 확인되면 활성화할 곳이 있어야 한다
+        await assert.rejects(prisma.$transaction((tx) => sub.withdrawSubscription(tx, N, laterN)), (e: unknown) => e instanceof BillingError && e.status === 409, "첫 결제 PENDING 중 탈퇴 409");
         const outN = await daily.processPendingTarget((await daily.loadPendingTargets(laterN)).find((t) => t.mberId === N)!, laterN);
         assert.equal(outN.outcome, "PAID");
         const subN = (await sub.findSubscription(N))!;
@@ -850,6 +880,8 @@ async function main(): Promise<void> {
       // 결제 진행 중 경합 — Mock 청구를 1.5초 지연시키고 그 사이 연기·종료 → 409, 청구 결과는 정상 반영
       process.env.MOCK_CHARGE_DELAY_MS = "1500";
       const dueAt = new Date(new Date((await sub.findSubscription(ids.A))!.next_bill_dt!).getTime() + days(0.1));
+      // 청구 진행 중에는 작업 토큰(409 CONCURRENT_OPERATION) 또는 PENDING 가드(409 PAYMENT_STATUS_UNKNOWN) 중 먼저 걸리는 쪽이 막는다
+      const isBlockedDuringCharge = (e: unknown) => e instanceof BillingError && e.status === 409 && (e.code === "BILLING_CONCURRENT_OPERATION" || e.code === "BILLING_PAYMENT_STATUS_UNKNOWN");
       const renewalP = daily.processSubscriptionDaily(s6.sbscrptn_id, dueAt);
       // 청구가 토큰을 잡을 때까지 기다린다 — 고정 300ms 는 네트워크 지연에 따라 토큰 전에 연기가 먼저 들어가 헛경합이 된다
       for (let i = 0; i < 40; i++) {
@@ -857,9 +889,9 @@ async function main(): Promise<void> {
         if (t?.billing_op_token) break;
         await new Promise((r) => setTimeout(r, 50));
       }
-      await assert.rejects(adminA.adminDeferBilling(s6.sbscrptn_id, 5, adminActor, "경합", dueAt), (e: unknown) => e instanceof BillingError && e.code === "BILLING_CONCURRENT_OPERATION", "청구 중 연기 → 409");
-      await assert.rejects(adminA.adminTerminate(s6.sbscrptn_id, adminActor, "경합", dueAt), (e: unknown) => e instanceof BillingError && e.code === "BILLING_CONCURRENT_OPERATION", "청구 중 종료 → 409");
-      await assert.rejects(sub.cancelSubscription(actor, dueAt), (e: unknown) => e instanceof BillingError && e.code === "BILLING_CONCURRENT_OPERATION", "청구 중 회원 해지 → 409");
+      await assert.rejects(adminA.adminDeferBilling(s6.sbscrptn_id, 5, adminActor, "경합", dueAt), isBlockedDuringCharge, "청구 중 연기 → 409");
+      await assert.rejects(adminA.adminTerminate(s6.sbscrptn_id, adminActor, "경합", dueAt), isBlockedDuringCharge, "청구 중 종료 → 409");
+      await assert.rejects(sub.cancelSubscription(actor, dueAt), isBlockedDuringCharge, "청구 중 회원 해지 → 409");
       assert.deepEqual(await renewalP, ["RENEWED"]);
       delete process.env.MOCK_CHARGE_DELAY_MS;
       const afterRenew = (await sub.findSubscription(ids.A))!;
@@ -967,6 +999,14 @@ async function main(): Promise<void> {
       const reconcile = await import("@/lib/billing/reconcile");
       const r = await reconcile.reconcileTransactions(new Date());
       assert.equal(r.supported, false);
+      // 워터마크: 배치 기록이 없으면 25시간, 오래된 성공 기록이 있으면 그 시각-1h(최대 31일)
+      const nowW = new Date();
+      assert.ok(Math.abs((await reconcile.reconcileWindowStart(nowW)).getTime() - (nowW.getTime() - 25 * 3600_000)) < 60_000, "기록 없음 → 25시간");
+      await prisma.tbCmBatchJob.create({ data: { job_ty_code: "BILLING_DAILY", job_nm: "smoke", trgr_ty_code: "MANUAL", sttus_code: "SUCCESS", bgng_dt: new Date(nowW.getTime() - 5 * 24 * 3600_000), end_dt: new Date(nowW.getTime() - 5 * 24 * 3600_000 + 60_000) } });
+      const ws = await reconcile.reconcileWindowStart(nowW);
+      assert.ok(Math.abs(ws.getTime() - (nowW.getTime() - 5 * 24 * 3600_000 - 3600_000)) < 60_000, "5일 전 성공 → 5일+1h 전부터");
+      await prisma.tbCmBatchJob.create({ data: { job_ty_code: "BILLING_DAILY", job_nm: "smoke", trgr_ty_code: "MANUAL", sttus_code: "SUCCESS", bgng_dt: new Date(nowW.getTime() - 60 * 24 * 3600_000), end_dt: new Date(nowW.getTime() - 60 * 24 * 3600_000 + 1) } });
+      assert.ok(Math.abs((await reconcile.reconcileWindowStart(nowW)).getTime() - (nowW.getTime() - 5 * 24 * 3600_000 - 3600_000)) < 60_000, "가장 최근 성공 기준");
     }
 
     log("DTO — 개요·결제 내역에 빌링키 없음, 실패 이력 포함");

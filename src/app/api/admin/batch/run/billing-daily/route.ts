@@ -48,6 +48,7 @@ const ALERT_LABEL: Record<string, string> = {
   CHARGE_UNKNOWN: "⚠ 청구 결과 불명 — PENDING 유지, 다음 배치가 조회로 확정",
   PENDING_RECOVERED: "⚠ 결과 불명이던 청구가 승인으로 확인돼 반영됨(영수증 발송)",
   PENDING_UNRESOLVED: "🚨 PENDING 결제를 조회로도 확정 못 함 — PG 콘솔 대조 필요",
+  PENDING_UNAPPLIED:  "🚨 승인은 확인됐는데 구독에 반영 못 함(종료/탈퇴) — 환불 또는 수동 반영 판단",
   RECONCILE_MISMATCH: "🚨 PG 거래 대사 불일치 — 우리 이력에 없는 승인/취소 (배치 항목 meta 참조)",
 };
 
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   // 관리자 알림용 — 항목별 동작을 모아 배치가 끝난 뒤 한 통으로 보낸다
-  const notable: Array<{ label: string; actions: Array<DailyAction | "PLAN_EXPIRED" | "PENDING_RECOVERED" | "PENDING_UNRESOLVED" | "RECONCILE_MISMATCH"> }> = [];
+  const notable: Array<{ label: string; actions: Array<DailyAction | "PLAN_EXPIRED" | "PENDING_RECOVERED" | "PENDING_UNRESOLVED" | "PENDING_UNAPPLIED" | "RECONCILE_MISMATCH"> }> = [];
 
   try {
     const result = await runJob<BatchItem>({
@@ -89,6 +90,8 @@ export async function POST(request: NextRequest) {
             label:  `${p.orderId} (${p.amount.toLocaleString("ko-KR")}원, PENDING ${p.createdAt.toISOString()})`,
             trgtTy: "PAYMENT",
           })),
+          // ⑦ 대사는 PENDING 확정 바로 뒤, 구독 항목 앞 — maxItems(500) 뒤로 밀려 빠지지 않게 자리를 보장한다
+          { item: { kind: "RECONCILE" } as BatchItem, trgtId: "PG_RECONCILE", label: "PG 거래 대사", trgtTy: "PG" },
           ...subs.map((t) => ({
             item:   { kind: "SUBSCRIPTION", sub: t } as BatchItem,
             trgtId: t.sbscrptnId,
@@ -101,8 +104,6 @@ export async function POST(request: NextRequest) {
             label:  `${m.email ?? m.mberId} (수동 ${m.plan} 만료)`,
             trgtTy: "MEMBER",
           })),
-          // ⑦ 은 항상 1항목 — PENDING 확정 뒤에 돌아야 방금 확정된 승인이 불일치로 잡히지 않는다
-          { item: { kind: "RECONCILE" } as BatchItem, trgtId: "PG_RECONCILE", label: "PG 거래 대사 (25시간)", trgtTy: "PG" },
         ];
       },
 
@@ -110,13 +111,13 @@ export async function POST(request: NextRequest) {
         if (item.kind === "RECONCILE") {
           const r = await reconcileTransactions(new Date());
           if (!r.supported) return { status: "SKIPPED", reason: r.reason };
-          const mismatches = r.unmatchedApprovals.length + r.unmatchedCancels.length;
+          const mismatches = r.unmatchedApprovals.length + r.unmatchedCancels.length + r.amountMismatches.length;
           if (mismatches > 0) {
-            notable.push({ label: `승인 ${r.unmatchedApprovals.length}건 · 취소 ${r.unmatchedCancels.length}건`, actions: ["RECONCILE_MISMATCH"] });
+            notable.push({ label: `승인 누락 ${r.unmatchedApprovals.length} · 취소 누락 ${r.unmatchedCancels.length} · 금액 불일치 ${r.amountMismatches.length}`, actions: ["RECONCILE_MISMATCH"] });
             // 항목 실패로 남겨 배치 결과가 PARTIAL 이 되고 화면에서 눈에 띄게 한다. meta 에 목록
-            throw new Error(`PG 거래 대사 불일치 ${mismatches}건: ${JSON.stringify({ approvals: r.unmatchedApprovals, cancels: r.unmatchedCancels }).slice(0, 1500)}`);
+            throw new Error(`PG 거래 대사 불일치 ${mismatches}건 (창 시작 ${r.windowStart}): ${JSON.stringify({ approvals: r.unmatchedApprovals, cancels: r.unmatchedCancels, amounts: r.amountMismatches }).slice(0, 1500)}`);
           }
-          return { status: "SUCCESS", meta: { checked: r.checked } };
+          return { status: "SUCCESS", meta: { checked: r.checked, windowStart: r.windowStart } };
         }
         if (item.kind === "PENDING_PAYMENT") {
           const r = await processPendingTarget(item.pending, new Date());
@@ -124,6 +125,10 @@ export async function POST(request: NextRequest) {
             notable.push({ label: item.pending.orderId, actions: ["PENDING_UNRESOLVED"] });
             // runJob 은 FAILED 를 throw 로만 받는다 — 항목 실패로 남겨 배치 결과가 PARTIAL 이 되게 한다
             throw new Error(`PENDING 확정 불가: ${r.reason}`);
+          }
+          if (r.outcome === "PAID_UNAPPLIED") {
+            notable.push({ label: item.pending.orderId, actions: ["PENDING_UNAPPLIED"] });
+            throw new Error(`승인 확인·구독 미반영: ${r.reason}`);
           }
           if (r.outcome === "PAID") notable.push({ label: item.pending.orderId, actions: ["PENDING_RECOVERED"] });
           return { status: "SUCCESS", meta: { outcome: r.outcome, reason: r.reason } };

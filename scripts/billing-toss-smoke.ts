@@ -54,7 +54,7 @@ async function issueTestBillingKey(customerKey: string): Promise<string> {
 
 async function main() {
   const { getPaymentGateway, buildCustomerKey } = await import("@/lib/billing/gateway");
-  const { TossPaymentGateway, formatMaskedCardNumber, cardIssuerName, maskBillingKeyInPath } = await import("@/lib/billing/gateway-toss");
+  const { TossPaymentGateway, formatMaskedCardNumber, cardIssuerName, maskBillingKeyInPath, isDefiniteDecline } = await import("@/lib/billing/gateway-toss");
   const { encryptBillingKey, decryptBillingKey, isGcmBillingKey } = await import("@/lib/billing/billing-key");
   const { encryptApiKey } = await import("@/lib/encrypt");
   const { BillingError } = await import("@/lib/billing/errors");
@@ -113,6 +113,25 @@ async function main() {
   assert.equal(rejected.ok, false);
   if (!rejected.ok) assert.equal(rejected.code, "REJECT_CARD_PAYMENT");
   log("TossPayments-Test-Code=REJECT_CARD_PAYMENT → ok:false, code 그대로 (재시도·PAST_DUE 경로 입력값)");
+
+  // ── 오류 분류 — 확실한 거절만 실패, 5xx·429·처리 중은 조회로 (GPT 교차 검토 1번) ─────
+  assert.equal(isDefiniteDecline(403, "REJECT_CARD_PAYMENT"), true);
+  assert.equal(isDefiniteDecline(400, "INVALID_BILL_KEY_REQUEST"), true);
+  assert.equal(isDefiniteDecline(500, "FAILED_INTERNAL_SYSTEM_PROCESSING"), false);
+  assert.equal(isDefiniteDecline(429, "RATE_LIMIT"), false);
+  assert.equal(isDefiniteDecline(409, "IDEMPOTENT_REQUEST_PROCESSING"), false);
+  assert.equal(isDefiniteDecline(502, "HTTP_502"), false);
+  // 테스트 코드로 5xx 를 재현하면 즉시 조회는 404 → 확정하지 않고 UNKNOWN(PENDING 유지)
+  process.env.TOSS_TEST_ERROR_CODE = "FAILED_INTERNAL_SYSTEM_PROCESSING";
+  const fiveXx = await gw.charge({ ...chargeParams, orderId: `${orderId}-5XX` }).then((r) => ({ threw: false as const, r })).catch((e: unknown) => ({ threw: true as const, e }));
+  delete process.env.TOSS_TEST_ERROR_CODE;
+  if (fiveXx.threw) {
+    assert.ok(fiveXx.e instanceof BillingError && fiveXx.e.code === BILLING_ERROR_CODES.PAYMENT_STATUS_UNKNOWN, `5xx → UNKNOWN 이어야: ${String(fiveXx.e)}`);
+    log("TossPayments-Test-Code=5xx → 실패 확정 안 함 → 조회 404 → PAYMENT_STATUS_UNKNOWN (PENDING 유지, 배치가 확정)");
+  } else {
+    // 테스트 코드가 실제 5xx 를 흉내내지 않으면(승인되거나 4xx 로 옴) 그 결과를 기록만 한다
+    log(`TossPayments-Test-Code=5xx 재현 불가 — 응답 ${JSON.stringify(fiveXx.r).slice(0, 100)} (분류 함수는 단위 검증 통과)`);
+  }
 
   // ── 잘못된 빌링키 ──────────────────────────────────────────────────────────
   const badKey = await gw.charge({ ...chargeParams, billingKey: "bogus-billing-key", orderId: `${orderId}-B` });
