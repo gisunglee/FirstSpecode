@@ -6,7 +6,8 @@
  *   리다이렉트에 실리지 않는다. 그래서 successUrl 은 앱 화면(/settings/billing/callback)이고,
  *   그 화면이 PG 가 붙여 준 authKey·customerKey 와 URL 에 실어 둔 purpose·seatCnt 를 이 API 로 보낸다.
  *
- * Body: { authKey, customerKey, purpose: "start"|"change", seatCnt? }
+ * Body: { authKey, customerKey, state, purpose: "start"|"change", seatCnt? }
+ *   state — 등록 시작 때 서버가 서명해 successUrl 에 실은 값. 서비스가 서명·만료·본인을 검증한다(CSRF 차단)
  *   start  → 빌링키 발급 → 즉시 첫 결제 → 구독 ACTIVE (실패 시 402 BILLING_PAYMENT_FAILED)
  *   change → 빌링키 교체. PAST_DUE 였다면 곧바로 재결제 시도 결과(retry)도 함께 응답
  *
@@ -18,6 +19,7 @@ import { z } from "zod";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { parseJsonBody } from "@/lib/parseJsonBody";
 import { requireBillingActor } from "@/lib/billing/actor";
+import { limitCardRegistration } from "@/lib/billing/rate-limit";
 import { getPaymentGateway } from "@/lib/billing/gateway";
 import { checkMockBillingAccess } from "@/lib/billing/mock-access";
 import { SEAT_INPUT_LIMITS } from "@/lib/billing/constants";
@@ -27,6 +29,7 @@ import { completeCardRegistration } from "@/lib/billing/subscription";
 const bodySchema = z.object({
   authKey:     z.string().min(1).max(500),
   customerKey: z.string().min(1).max(100),
+  state:       z.string().min(1).max(1000),
   purpose:     z.enum(["start", "change"]),
   seatCnt:     z.number().int().min(SEAT_INPUT_LIMITS.min).max(SEAT_INPUT_LIMITS.max).optional(),
 });
@@ -34,6 +37,9 @@ const bodySchema = z.object({
 export async function POST(request: NextRequest) {
   const actor = await requireBillingActor(request);
   if (actor instanceof Response) return actor;
+
+  const limited = await limitCardRegistration(actor.mberId);
+  if (limited) return limited;
 
   // Mock PG 단계에서는 지정 계정만 구독 시작/카드 교체 가능 (mock-access.ts)
   const mockErr = checkMockBillingAccess(getPaymentGateway(), actor);

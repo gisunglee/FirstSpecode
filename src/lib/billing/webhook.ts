@@ -7,9 +7,10 @@
  *
  * 처리하는 것:
  *   PAYMENT_STATUS_CHANGED
- *     DONE                        → 우리 이력(pg_pymnt_key)에 있으면 일치 확인. 없으면 "PG 승인·DB 실패" 사고 →
- *                                   CRITICAL 로그 + FAILED 로 남겨 관리자 화면에서 눈에 띄게 한다(자동 생성은 하지 않는다 —
- *                                   어느 구독·좌석·기간의 결제인지 웹훅만으로는 확정할 수 없다).
+ *     DONE                        → 우리 이력(pg_pymnt_key)과 주문번호·금액·PG 까지 비교해 일치 확인. 불일치는 FAILED(경보).
+ *                                   ⚠ 자동결제(빌링) 승인은 토스가 웹훅을 보내지 않는다(토스 문서, 2026-09-30 확인) —
+ *                                   그래서 "PG 승인·DB 미반영" 탐지는 PENDING 조회(subscription.ts)와 거래 조회 대사가 맡는다.
+ *                                   이력 없는 DONE 이 오면(일반 결제 등) 기록만 하고 경고한다.
  *     CANCELED / PARTIAL_CANCELED → 토스 콘솔에서 취소(환불)한 건을 REFUND 이력으로 대조한다(정책 §1-7 "환불은 콘솔 수동").
  *                                   관리자가 먼저 기록한 환불 행(pg_cancel_key 없음·금액 일치)이 있으면 취소 키만 연결하고,
  *                                   없으면 운영 보정(ADJUSTMENT) 환불 행을 만든다. 구독 종료는 하지 않는다 —
@@ -19,6 +20,10 @@
  *   그 외                          → 기록만 (IGNORED)
  *
  * Mock 게이트웨이의 웹훅은 전부 기록만 한다(청구가 동기라 대조할 것이 없다).
+ *
+ * 재처리: 라우트는 일시 오류(DB 등)면 500 을 돌려줘 토스 재전송을 받고, 재전송(같은 transmission-id)이 오면
+ *         RECEIVED/FAILED 행을 다시 처리한다(PROCESSED/IGNORED 는 건너뜀). 그래서 처리 함수는 멱등해야 한다 —
+ *         환불 대조는 취소 키(pg_cancel_key)로, 승인 대조는 읽기만이라 여러 번 돌아도 결과가 같다.
  */
 
 import { randomBytes } from "node:crypto";
@@ -38,7 +43,8 @@ import { TOSS_PAYMENT_STATUS, TOSS_WEBHOOK_EVENT, type TossCancel, type TossPaym
 
 type PgEventStatus = (typeof PG_EVENT_STATUS)[keyof typeof PG_EVENT_STATUS];
 
-export type PgEventOutcome = { status: PgEventStatus; reason: string };
+/** transient=true: 일시 오류(DB 등) — 라우트가 500 을 돌려줘 토스가 재전송하게 한다 */
+export type PgEventOutcome = { status: PgEventStatus; reason: string; transient?: true };
 
 /** 웹훅 1건 처리 — 예외를 던지지 않는다(라우트가 결과를 이벤트 행에 남긴다) */
 export async function processPgEvent(provider: PgProviderCode, event: PgEvent, now = new Date()): Promise<PgEventOutcome> {
@@ -61,7 +67,7 @@ export async function processPgEvent(provider: PgProviderCode, event: PgEvent, n
     return { status: PG_EVENT_STATUS.IGNORED, reason: "처리 대상이 아닌 이벤트 종류 — 원문 기록만" };
   } catch (err) {
     console.error(`[billing/webhook] 처리 오류 eventType=${event.eventType} id=${event.providerEventId}`, err);
-    return { status: PG_EVENT_STATUS.FAILED, reason: `처리 오류: ${err instanceof Error ? err.message : String(err)}`.slice(0, 500) };
+    return { status: PG_EVENT_STATUS.FAILED, reason: `처리 오류: ${err instanceof Error ? err.message : String(err)}`.slice(0, 500), transient: true };
   }
 }
 
@@ -75,16 +81,27 @@ async function processTossPaymentStatus(payment: TossPayment, now: Date): Promis
   });
 
   if (!original) {
+    // 빌링 승인은 웹훅이 오지 않으므로 여기 오는 DONE 은 우리 흐름 밖의 결제(콘솔 수동 결제 등)거나,
+    // PENDING 조회가 아직 확정하지 못한 건일 수 있다 → 경고만. 확정은 PENDING 조회·거래 조회 대사가 한다
     if (payment.status === TOSS_PAYMENT_STATUS.DONE) {
-      // 토스는 승인했는데 우리 이력이 없다 = 청구 응답 뒤 DB 반영이 실패했거나 결과를 못 받은 건.
-      console.error(`[billing/webhook] CRITICAL 토스 승인 결제가 DB 이력에 없음 — paymentKey=${payment.paymentKey} orderId=${payment.orderId} amount=${payment.totalAmount}. 토스 콘솔과 대조해 수동 반영 필요`);
-      return { status: PG_EVENT_STATUS.FAILED, reason: `승인 결제(orderId=${payment.orderId}, ${payment.totalAmount}원)가 결제 이력에 없음 — 수동 대조 필요` };
+      console.warn(`[billing/webhook] 이력에 없는 승인 결제 통지 — paymentKey=${payment.paymentKey} orderId=${payment.orderId} amount=${payment.totalAmount}. 거래 조회 대사에서 확인`);
+      return { status: PG_EVENT_STATUS.IGNORED, reason: `이력에 없는 승인 결제(orderId=${payment.orderId}, ${payment.totalAmount}원) — 거래 조회 대사 대상` };
     }
     return { status: PG_EVENT_STATUS.IGNORED, reason: `결제 이력에 없는 결제(status=${payment.status}) — 처리 대상 아님` };
   }
 
+  // 대조 — 키만 같고 주문번호·금액·PG 가 다르면 뭔가 잘못된 것(경보)
+  const mismatch: string[] = [];
+  if (original.pg_order_id !== payment.orderId) mismatch.push(`주문번호 ${original.pg_order_id}≠${payment.orderId}`);
+  if (original.amt !== payment.totalAmount) mismatch.push(`금액 ${original.amt}≠${payment.totalAmount}`);
+  if (original.pg_provdr_code !== PG_PROVIDER.TOSS) mismatch.push(`PG ${original.pg_provdr_code}≠TOSS`);
+  if (mismatch.length > 0) {
+    console.error(`[billing/webhook] CRITICAL 결제 대조 불일치 paymentKey=${payment.paymentKey}: ${mismatch.join(", ")}`);
+    return { status: PG_EVENT_STATUS.FAILED, reason: `대조 불일치: ${mismatch.join(", ")}` };
+  }
+
   if (payment.status === TOSS_PAYMENT_STATUS.DONE) {
-    return { status: PG_EVENT_STATUS.PROCESSED, reason: `승인 확인 — 결제 이력 ${original.pg_order_id} 과 일치` };
+    return { status: PG_EVENT_STATUS.PROCESSED, reason: `승인 확인 — 결제 이력 ${original.pg_order_id} 과 주문번호·금액 일치` };
   }
   if (payment.status === TOSS_PAYMENT_STATUS.CANCELED || payment.status === TOSS_PAYMENT_STATUS.PARTIAL_CANCELED) {
     return reconcileRefunds(original.pymnt_id, payment.cancels ?? [], now);

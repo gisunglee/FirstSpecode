@@ -8,7 +8,9 @@
  *   - 청구:        POST /v1/billing/{billingKey} — Idempotency-Key = orderId
  *   - 취소:        POST /v1/payments/{paymentKey}/cancel
  *   - 웹훅:        토스 빌링 웹훅에는 서명이 없다 → 본문의 paymentKey 로 결제 조회 API 를 다시 불러
- *                  "토스가 돌려준 값"만 payload 로 쓴다(본문은 신뢰하지 않는다).
+ *                  "토스가 돌려준 값"만 payload 로 쓴다(본문은 신뢰하지 않는다). 이벤트 ID 는 토스 헤더
+ *                  tosspayments-webhook-transmission-id. ⚠ 자동결제(빌링) **승인**은 웹훅이 오지 않는다(토스 문서) —
+ *                  승인 대사는 PENDING 조회·거래 조회 대사가 맡고, 웹훅은 취소(환불)·빌링키 삭제 통지용이다.
  *
  * 인증: Authorization: Basic base64(secretKey + ":")  (docs.tosspayments.com/reference/using-api/authorization)
  * env : TOSS_SECRET_KEY(test_sk_/live_sk_), TOSS_CLIENT_KEY(test_ck_/live_ck_) — 둘 다 "API 개별 연동 키"
@@ -116,10 +118,10 @@ export type TossPayment = {
   card?:        TossCard | null;
 };
 
-/** parseWebhook 이 저장하는 payload 모양 — webhook.ts 가 읽는다 */
+/** parseWebhook 이 저장하는 payload 모양 — webhook.ts 가 읽는다. ignored:true 는 저장하지 않는 종류 */
 export type TossWebhookPayload =
   | { verified: true;  eventType: string; createdAt: string; payment: TossPayment }
-  | { verified: false; eventType: string; createdAt: string; data: unknown };
+  | { verified: false; eventType: string; createdAt: string; data: unknown; ignored?: true };
 
 type TossResult<T> =
   | { ok: true;  status: number; data: T }
@@ -161,9 +163,12 @@ export function maskBillingKeyInPath(path: string): string {
   return path.replace(/^\/v1\/billing\/(?!authorizations\/)[^/?]+/, "/v1/billing/{billingKey}");
 }
 
-/** 웹훅 이벤트 ID — 토스는 이벤트 ID 를 주지 않아 (종류·발생시각·대상·상태) 해시로 만든다. 재전송은 같은 값 */
-function webhookEventId(parts: string[]): string {
-  return createHash("sha256").update(parts.join("|")).digest("hex");
+/** 토스 웹훅 요청 헤더 — 고유 식별자(재전송도 같은 값)·발송 시각·재전송 횟수 */
+const WEBHOOK_TRANSMISSION_ID_HEADER = "tosspayments-webhook-transmission-id";
+
+/** 헤더가 없는 비정상 요청용 폴백 — (종류·발생시각·대상·상태) 해시. 정상 토스 요청은 항상 헤더가 있다 */
+function webhookEventIdFallback(parts: string[]): string {
+  return `h_${createHash("sha256").update(parts.join("|")).digest("hex").slice(0, 48)}`;
 }
 
 function unknownResultError(orderId: string, cause: unknown): BillingError {
@@ -382,8 +387,10 @@ export class TossPaymentGateway implements PaymentGateway {
    * 토스 빌링 웹훅에는 서명이 없다(서명 헤더는 지급대행 이벤트에만 있음). 그래서:
    *   PAYMENT_STATUS_CHANGED → 본문의 paymentKey 로 결제를 다시 조회해 그 결과만 payload 로 저장 (verified:true)
    *   BILLING_DELETED        → 검증 수단이 없어 빌링키 끝 4자리만 남기고 기록 (verified:false)
-   *   그 외 종류             → 원문 기록만 (verified:false). 처리는 webhook.ts 가 verified 를 보고 결정
-   * 형식이 다르거나 조회로 확인되지 않으면 null → 400 (토스가 재전송한다)
+   *   그 외 종류             → **저장하지 않는다**(null → 라우트가 200 으로 조용히 버림). 우리가 구독한 두 종류 외의 본문을
+   *                            그대로 쌓으면 서명 없는 경로로 DB 를 채울 수 있다(2026-09-30 보안 검토).
+   * 이벤트 ID 는 토스 헤더 transmission-id(재전송도 같은 값). 헤더가 없으면 내용 해시로 폴백.
+   * 형식이 다르거나 조회로 확인되지 않으면 null → 라우트가 400(토스 재전송) 또는 200(모르는 종류)으로 응답.
    */
   async parseWebhook(request: Request): Promise<PgEvent | null> {
     const raw = await request.text();
@@ -399,6 +406,7 @@ export class TossPaymentGateway implements PaymentGateway {
     if (typeof eventType !== "string" || !eventType || typeof createdAt !== "string" || !createdAt) return null;
     if (!data || typeof data !== "object") return null;
     const d = data as Record<string, unknown>;
+    const transmissionId = request.headers.get(WEBHOOK_TRANSMISSION_ID_HEADER)?.trim().slice(0, 200) || null;
 
     if (eventType === TOSS_WEBHOOK_EVENT.PAYMENT_STATUS_CHANGED) {
       const paymentKey = d.paymentKey;
@@ -407,7 +415,7 @@ export class TossPaymentGateway implements PaymentGateway {
       if (!payment) return null;
       const payload: TossWebhookPayload = { verified: true, eventType, createdAt, payment };
       return {
-        providerEventId: webhookEventId([eventType, createdAt, paymentKey, payment.status]),
+        providerEventId: transmissionId ?? webhookEventIdFallback([eventType, createdAt, paymentKey, payment.status]),
         eventType,
         payload,
       };
@@ -420,11 +428,11 @@ export class TossPaymentGateway implements PaymentGateway {
         verified: false, eventType, createdAt,
         data: { billingKeyLast4: billingKey.slice(-4), reason: typeof d.reason === "string" ? d.reason.slice(0, 200) : null },
       };
-      return { providerEventId: webhookEventId([eventType, createdAt, billingKey]), eventType, payload };
+      return { providerEventId: transmissionId ?? webhookEventIdFallback([eventType, createdAt, billingKey]), eventType, payload };
     }
 
-    const payload: TossWebhookPayload = { verified: false, eventType, createdAt, data };
-    return { providerEventId: webhookEventId([eventType, createdAt, raw]), eventType, payload };
+    // 구독하지 않은 종류 — 저장 가치 없음. 라우트가 "알 수 없는 종류"로 200 처리할 수 있게 표식만 남긴다
+    return { providerEventId: transmissionId ?? webhookEventIdFallback([eventType, createdAt]), eventType, payload: { verified: false, eventType, createdAt, data: null, ignored: true } as TossWebhookPayload };
   }
 }
 

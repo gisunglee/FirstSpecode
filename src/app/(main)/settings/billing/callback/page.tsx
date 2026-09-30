@@ -5,7 +5,7 @@
  *
  * 역할:
  *   - PG 가 successUrl 에 붙여 준 authKey·customerKey 와, 우리가 successUrl 에 실어 둔
- *     purpose(start|change)·seatCnt 를 읽어 POST /api/billing/card/callback 으로 넘긴다.
+ *     purpose(start|change)·seatCnt·state(서버 서명, CSRF 차단)를 읽어 POST /api/billing/card/callback 으로 넘긴다.
  *   - ?result=fail 이면 사용자가 PG 창에서 취소/실패한 것 → 안내 후 구독 화면으로.
  *   - 성공하면 구독 화면으로 이동. 결제 거절(402) 등 실패는 이 화면에 사유를 남긴다.
  *
@@ -74,13 +74,14 @@ function BillingCallbackInner() {
 
     const authKey     = params.get("authKey");
     const customerKey = params.get("customerKey");
+    const state       = params.get("state");
     const seatCntRaw  = params.get("seatCnt");
     const seatCnt     = seatCntRaw ? Number(seatCntRaw) : undefined;
 
     // authKey 는 1회용 비밀값 — 읽자마자 주소창·히스토리에서 지운다 (뒤로가기·북마크·화면 공유로 남지 않게)
     window.history.replaceState(window.history.state, "", BILLING_CALLBACK_PATH);
 
-    if (!authKey || !customerKey || (purpose === "start" && !Number.isInteger(seatCnt))) {
+    if (!authKey || !customerKey || !state || (purpose === "start" && !Number.isInteger(seatCnt))) {
       setPhase({ kind: "error", title: "카드 등록 정보가 없습니다", message: "결제창에서 정상적으로 돌아오지 않았습니다. 구독 화면에서 다시 시도해 주세요." });
       return;
     }
@@ -88,7 +89,7 @@ function BillingCallbackInner() {
     authFetch<{ data: { purpose: string; retry?: { ok: boolean; expired?: boolean } | null } }>("/api/billing/card/callback", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ authKey, customerKey, purpose, ...(purpose === "start" ? { seatCnt } : {}) }),
+      body:    JSON.stringify({ authKey, customerKey, state, purpose, ...(purpose === "start" ? { seatCnt } : {}) }),
     })
       .then((r) => {
         if (r.data.purpose === "start") {

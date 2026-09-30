@@ -70,7 +70,7 @@ import {
   type SubscriptionStatus,
 } from "./constants";
 import { BillingError } from "./errors";
-import { buildCustomerKey, getPaymentGateway, type CardRegistrationStart, type ChargeResult, type IssuedBillingKey } from "./gateway";
+import { buildCustomerKey, getPaymentGateway, issueCardRegistrationState, verifyCardRegistrationState, type CardRegistrationStart, type ChargeResult, type IssuedBillingKey } from "./gateway";
 import { addDays, kstDayOfMonth, monthlyAmount, nextPeriodEnd, prorationForAddedSeats, type ProrationResult } from "./pricing";
 import { countUsedSeats } from "./seats";
 import { autoUnlockIfSingle, countLockedProjects, lockAllOwnedProjects, unlockAllOwnedProjects } from "./lock";
@@ -284,7 +284,10 @@ export async function beginCardRegistration(
     throw new BillingError(E.NO_SUBSCRIPTION, "변경할 구독이 없습니다.", 404);
   }
 
-  const base = `${appUrl()}${BILLING_CALLBACK_PATH}?purpose=${purpose}`;
+  // state: 서버 서명(회원·목적·좌석·만료). 콜백은 이 값이 없거나 남의 것이면 거부한다 — 남이 만든 authKey 를
+  // 피해자 세션에 붙이는 링크(CSRF)를 막는다. purpose·seatCnt 는 화면 표시용으로 평문도 같이 둔다(서버는 state 만 믿는다)
+  const state = issueCardRegistrationState({ mberId: actor.mberId, purpose, ...(purpose === "start" ? { seatCnt } : {}) });
+  const base = `${appUrl()}${BILLING_CALLBACK_PATH}?purpose=${purpose}&state=${encodeURIComponent(state)}`;
   const successUrl = purpose === "start" ? `${base}&seatCnt=${seatCnt}` : base;
   const failUrl    = `${base}&result=fail`;
 
@@ -298,6 +301,9 @@ export async function beginCardRegistration(
 export type CardRegistrationInput = {
   authKey:     string;
   customerKey: string;
+  /** beginCardRegistration 이 successUrl 에 실은 서명값 — 없거나 위조·만료·남의 것이면 403 */
+  state:       string;
+  /** 화면이 넘기는 평문 — state 안의 값과 같아야 한다(다르면 조작) */
   purpose:     CardRegistrationPurpose;
   seatCnt?:    number;
 };
@@ -312,7 +318,12 @@ export async function completeCardRegistration(
   input: CardRegistrationInput,
   now = new Date(),
 ): Promise<CardRegistrationOutcome> {
-  // 다른 사람의 authKey 를 내 계정에 붙이는 시도 차단 — customerKey 는 회원별 고정값
+  // ① state — 이 계정이 직접 "카드 등록 시작"을 거쳐 받은 서명값이어야 한다 (CSRF 링크 차단, 30분 만료)
+  const st = verifyCardRegistrationState(input.state, actor.mberId, now);
+  if (!st || st.purpose !== input.purpose || (st.purpose === "start" && st.seatCnt !== input.seatCnt)) {
+    throw new BillingError(E.CUSTOMER_KEY_MISMATCH, "카드 등록 요청이 유효하지 않거나 만료되었습니다. 구독 화면에서 다시 시작해 주세요.", 403);
+  }
+  // ② 다른 사람의 authKey 를 내 계정에 붙이는 시도 차단 — customerKey 는 회원별 고정값(서버 비밀 HMAC)
   if (input.customerKey !== buildCustomerKey(actor.mberId)) {
     throw new BillingError(E.CUSTOMER_KEY_MISMATCH, "카드 등록 정보가 현재 계정과 일치하지 않습니다.", 403);
   }

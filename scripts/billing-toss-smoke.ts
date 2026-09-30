@@ -174,7 +174,18 @@ async function main() {
   assert.equal(payload.payment.cancels.length, 2);
   const ev2 = await gw.parseWebhook(webhookReq());
   assert.equal(ev2?.providerEventId, ev1!.providerEventId);
-  log("parseWebhook(PAYMENT_STATUS_CHANGED) → 본문 무시·조회 결과 저장(verified) / 재전송은 같은 이벤트 ID");
+  // 토스가 주는 transmission-id 헤더가 있으면 그것이 이벤트 ID (재전송도 같은 값)
+  const withId = await gw.parseWebhook(new Request("http://localhost/x", {
+    method: "POST", headers: { "Content-Type": "application/json", "tosspayments-webhook-transmission-id": "tx-smoke-0001" },
+    body: JSON.stringify({ eventType: "PAYMENT_STATUS_CHANGED", createdAt, data: { paymentKey: first.paymentKey } }),
+  }));
+  assert.equal(withId?.providerEventId, "tx-smoke-0001");
+  const unknownType = await gw.parseWebhook(new Request("http://localhost/x", {
+    method: "POST", body: JSON.stringify({ eventType: "DEPOSIT_CALLBACK", createdAt, data: { secret: "x".repeat(1000) } }),
+  }));
+  assert.ok(unknownType && (unknownType.payload as { ignored?: true }).ignored === true, "구독하지 않은 종류는 저장 안 함 표식");
+  assert.ok(!JSON.stringify(unknownType!.payload).includes("xxxx"), "본문을 담지 않는다");
+  log("parseWebhook(PAYMENT_STATUS_CHANGED) → 본문 무시·조회 결과 저장(verified) / 재전송·transmission-id 같은 ID / 모르는 종류는 ignored");
 
   const fake = await gw.parseWebhook(new Request("http://localhost/x", {
     method: "POST", body: JSON.stringify({ eventType: "PAYMENT_STATUS_CHANGED", createdAt, data: { paymentKey: "no-such-key" } }),

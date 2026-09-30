@@ -18,7 +18,7 @@
  *   - 빌링키 삭제 API 는 토스에 없다 → 우리 DB 에서 NULL 처리로 끝 (인터페이스에 없음)
  */
 
-import { createHash } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { PG_PROVIDER, type PgProviderCode } from "./constants";
 import { MockPaymentGateway } from "./gateway-mock";
 import { TossPaymentGateway } from "./gateway-toss";
@@ -154,12 +154,72 @@ export function isPgProviderCode(v: unknown): v is PgProviderCode {
 // ─── 고객 키 ─────────────────────────────────────────────────────────────────
 
 /**
+ * 결제 흐름의 서명 비밀 — 회원 UUID 만으로 customerKey·state 를 계산할 수 없게 하는 서버 측 키.
+ * 별도 환경변수 없이 API_KEY_SECRET(운영 필수)에서 용도 문자열로 파생한다. 개발 기본값은 encrypt.ts 와 같다.
+ * ⚠ 바꾸면 기존 구독의 pg_customer_key 와 어긋나 다음 청구가 NOT_MATCHES_CUSTOMER_KEY 로 실패한다 — 재등록 필요.
+ */
+function billingSigningSecret(): string {
+  return process.env.API_KEY_SECRET ?? "specode-dev-key-do-not-use-in-prod!";
+}
+
+/**
  * PG 고객 식별키 — 회원별 고정값.
- *   회원 UUID 를 그대로 PG 에 보내지 않고 해시한다(우리 식별자 노출 최소화).
+ *   회원 UUID 를 그대로 PG 에 보내지 않고 **서버 비밀로 HMAC** 한다(2026-09-30, 라이브 전 필수 ⑤).
+ *   왜 단순 해시가 아닌가: 회원 UUID 는 멤버 목록 등 여러 API 응답에 나간다. 비밀 없는 해시면 누구나 남의
+ *   customerKey 를 계산해 자기 카드를 남의 계정에 붙이는 콜백 링크를 만들 수 있다.
  *   토스 customerKey 규칙: 2~50자, 영문·숫자·-_=.@ — "spc_" + 32 hex = 36자로 만족.
  *   DB 행이 없어도 계산 가능해서 카드 등록 → 콜백 사이에 상태를 저장하지 않아도 된다.
  */
 export function buildCustomerKey(mberId: string): string {
-  const hex = createHash("sha256").update(`specode-customer:${mberId}`).digest("hex");
+  const hex = createHmac("sha256", billingSigningSecret()).update(`specode-customer:${mberId}`).digest("hex");
   return `spc_${hex.slice(0, 32)}`;
+}
+
+// ─── 카드 등록 state (CSRF 차단) ──────────────────────────────────────────────
+
+/** 카드 등록 시작 시 서버가 서명해 successUrl/failUrl 에 싣고, 콜백에서 검증하는 값 */
+export type CardRegistrationState = {
+  mberId:   string;
+  purpose:  "start" | "change";
+  seatCnt?: number;
+  /** 만료 (epoch ms) — 카드 등록창을 열어 둔 채 오래 지난 링크는 거부 */
+  exp:      number;
+};
+
+/** state 유효 시간 — 카드 입력에 충분하고, 공격자가 링크를 묵혀 두고 쓰기엔 짧게 */
+export const CARD_REGISTRATION_STATE_TTL_MS = 30 * 60 * 1000;
+
+function stateSignature(payloadB64: string): string {
+  return createHmac("sha256", billingSigningSecret()).update(`card-registration-state:${payloadB64}`).digest("base64url");
+}
+
+/**
+ * state 발급 — base64url(JSON).서명. URL 쿼리에 그대로 실린다.
+ * 왜 서버 저장이 아닌 서명인가: DB 컬럼·정리 배치 없이 무상태로 검증할 수 있고, 값 자체에 비밀이 없다(회원 ID 는 이미 공개 값).
+ */
+export function issueCardRegistrationState(p: Omit<CardRegistrationState, "exp">, now = new Date()): string {
+  const payload: CardRegistrationState = { ...p, exp: now.getTime() + CARD_REGISTRATION_STATE_TTL_MS };
+  const b64 = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+  return `${b64}.${stateSignature(b64)}`;
+}
+
+/** state 검증 — 서명·만료·본인 여부. 실패하면 null (호출자가 403) */
+export function verifyCardRegistrationState(token: string, mberId: string, now = new Date()): CardRegistrationState | null {
+  const dot = token.lastIndexOf(".");
+  if (dot <= 0) return null;
+  const b64 = token.slice(0, dot);
+  const sig = token.slice(dot + 1);
+  const expected = stateSignature(b64);
+  const a = Buffer.from(sig), b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  let parsed: CardRegistrationState;
+  try {
+    parsed = JSON.parse(Buffer.from(b64, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+  if (parsed.mberId !== mberId) return null;
+  if (typeof parsed.exp !== "number" || parsed.exp < now.getTime()) return null;
+  if (parsed.purpose !== "start" && parsed.purpose !== "change") return null;
+  return parsed;
 }

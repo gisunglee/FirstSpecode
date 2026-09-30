@@ -85,7 +85,9 @@ async function main(): Promise<void> {
     const limits  = await import("@/lib/planLimits");
     const withdrawal = await import("@/lib/billing/withdrawal");
     const { encodeMockAuthKey } = await import("@/lib/billing/mock-auth-key");
-    const { buildCustomerKey }  = await import("@/lib/billing/gateway");
+    const { buildCustomerKey, issueCardRegistrationState, verifyCardRegistrationState } = await import("@/lib/billing/gateway");
+    // 콜백 state — beginCardRegistration 이 successUrl 에 싣는 서명값을 스모크에서 직접 발급 (CSRF 검증 ⑤)
+    const st = (mberId: string, purpose: "start" | "change", seatCnt?: number, now?: Date) => issueCardRegistrationState({ mberId, purpose, ...(purpose === "start" ? { seatCnt } : {}) }, now);
     const { BillingError }      = await import("@/lib/billing/errors");
     const { requirePermission } = await import("@/lib/requirePermission");
     const { requireProjectUnlocked } = await import("@/lib/requireProjectUnlocked");
@@ -173,18 +175,32 @@ async function main(): Promise<void> {
     const startRes = await sub.beginCardRegistration(actor, "start", 3);
     assert.equal(startRes.mode, "redirect");
     assert.ok(startRes.mode === "redirect" && startRes.url.startsWith("/billing/pg-window?"));
+    assert.ok(startRes.mode === "redirect" && decodeURIComponent(startRes.url).includes("state="), "successUrl 에 서명 state");
 
     // 다른 customerKey 로 콜백 → 403
-    await assert.rejects(sub.completeCardRegistration(actor, { authKey: goodCard(), customerKey: "spc_other", purpose: "start", seatCnt: 3 }, t0),
+    // ⑤ CSRF 차단 — state 가 없거나(빈 문자열) 남의 것·만료·좌석 불일치·변조면 403. customerKey 가 맞아도 막힌다
+    await assert.rejects(sub.completeCardRegistration(actor, { authKey: goodCard(), customerKey, state: "", purpose: "start", seatCnt: 3 }, t0),
+      (e: unknown) => e instanceof BillingError && e.code === "BILLING_CUSTOMER_KEY_MISMATCH" && e.status === 403, "state 없음");
+    await assert.rejects(sub.completeCardRegistration(actor, { authKey: goodCard(), customerKey, state: st(ids.B, "start", 3, t0), purpose: "start", seatCnt: 3 }, t0),
+      (e: unknown) => e instanceof BillingError && e.code === "BILLING_CUSTOMER_KEY_MISMATCH", "남의 state");
+    await assert.rejects(sub.completeCardRegistration(actor, { authKey: goodCard(), customerKey, state: st(ids.A, "start", 3, new Date(t0.getTime() - 31 * 60_000)), purpose: "start", seatCnt: 3 }, t0),
+      (e: unknown) => e instanceof BillingError && e.code === "BILLING_CUSTOMER_KEY_MISMATCH", "만료된 state(30분)");
+    await assert.rejects(sub.completeCardRegistration(actor, { authKey: goodCard(), customerKey, state: st(ids.A, "start", 2, t0), purpose: "start", seatCnt: 3 }, t0),
+      (e: unknown) => e instanceof BillingError && e.code === "BILLING_CUSTOMER_KEY_MISMATCH", "state 좌석 ≠ 요청 좌석");
+    await assert.rejects(sub.completeCardRegistration(actor, { authKey: goodCard(), customerKey, state: st(ids.A, "start", 3, t0) + "x", purpose: "start", seatCnt: 3 }, t0),
+      (e: unknown) => e instanceof BillingError && e.code === "BILLING_CUSTOMER_KEY_MISMATCH", "서명 변조");
+    assert.equal(verifyCardRegistrationState(st(ids.A, "change"), ids.A)?.purpose, "change");
+    assert.ok(!buildCustomerKey(ids.A).includes(ids.A.slice(0, 8)), "customerKey 는 HMAC — UUID 가 드러나지 않는다");
+    await assert.rejects(sub.completeCardRegistration(actor, { authKey: goodCard(), customerKey: "spc_other", state: st(ids.A, "start", 3, t0), purpose: "start", seatCnt: 3 }, t0),
       (e: unknown) => e instanceof BillingError && e.code === "BILLING_CUSTOMER_KEY_MISMATCH");
 
     // 실패 카드로 첫 결제 → 402, 구독 행 없음, FAILED 이력만
-    await assert.rejects(sub.completeCardRegistration(actor, { authKey: failCard(), customerKey, purpose: "start", seatCnt: 3 }, t0),
+    await assert.rejects(sub.completeCardRegistration(actor, { authKey: failCard(), customerKey, state: st(ids.A, "start", 3, t0), purpose: "start", seatCnt: 3 }, t0),
       (e: unknown) => e instanceof BillingError && e.code === "BILLING_PAYMENT_FAILED");
     assert.equal(await sub.findSubscription(ids.A), null, "첫 결제 실패 → 구독 행 없음");
     assert.equal((await prisma.tbBlPayment.findMany({ where: { mber_id: ids.A } })).length, 1);
 
-    const started = await sub.completeCardRegistration(actor, { authKey: goodCard(), customerKey, purpose: "start", seatCnt: 3 }, t0);
+    const started = await sub.completeCardRegistration(actor, { authKey: goodCard(), customerKey, state: st(ids.A, "start", 3, t0), purpose: "start", seatCnt: 3 }, t0);
     assert.equal(started.purpose, "start");
     let s = (await sub.findSubscription(ids.A))!;
     assert.equal(s.sbscrptn_sttus_code, "ACTIVE");
@@ -198,7 +214,7 @@ async function main(): Promise<void> {
     assert.equal(paidInitial?.amt, 29700);
     assert.equal(paidInitial?.pymnt_ty_code, "INITIAL");
     assert.equal(await sub.hasLiveSubscription(ids.A), true, "관리자 수동 플랜 변경은 409 대상");
-    await assert.rejects(sub.completeCardRegistration(actor, { authKey: goodCard(), customerKey, purpose: "start", seatCnt: 3 }, t0),
+    await assert.rejects(sub.completeCardRegistration(actor, { authKey: goodCard(), customerKey, state: st(ids.A, "start", 3, t0), purpose: "start", seatCnt: 3 }, t0),
       (e: unknown) => e instanceof BillingError && e.code === "BILLING_ALREADY_SUBSCRIBED");
 
     // ── 3. 좌석 상한 (초대 검사) ─────────────────────────────────────────
@@ -289,7 +305,7 @@ async function main(): Promise<void> {
 
     // ── 8. 실패 카드로 변경 → 결제 실패 → 재시도 3회 → 강등 ──────────
     log("결제 수단 변경(실패 카드) → 다음 결제 실패 → PAST_DUE, 플랜은 유지");
-    const changed = await sub.completeCardRegistration(actor, { authKey: failCard(), customerKey, purpose: "change" }, tBill);
+    const changed = await sub.completeCardRegistration(actor, { authKey: failCard(), customerKey, state: st(ids.A, "change", undefined, tBill), purpose: "change" }, tBill);
     assert.equal(changed.purpose, "change");
     assert.equal(changed.purpose === "change" && changed.retry, null, "ACTIVE 상태에서는 즉시 재결제 없음");
     const bill2 = (await sub.findSubscription(ids.A))!.next_bill_dt!;
@@ -432,7 +448,7 @@ async function main(): Promise<void> {
     // ── 11. 재결제 — 종료된 행 재사용, 전부 해제 ──────────────────────
     log("재결제 — EXPIRED 행 재사용 → ACTIVE, BASIC, 잠금 전부 해제");
     const tRe = new Date(tFail0.getTime() + days(12));
-    const restarted = await sub.completeCardRegistration(actor, { authKey: goodCard(), customerKey, purpose: "start", seatCnt: 4 }, tRe);
+    const restarted = await sub.completeCardRegistration(actor, { authKey: goodCard(), customerKey, state: st(ids.A, "start", 4, tRe), purpose: "start", seatCnt: 4 }, tRe);
     assert.equal(restarted.purpose, "start");
     const s2 = (await sub.findSubscription(ids.A))!;
     assert.equal(s2.sbscrptn_id, s.sbscrptn_id, "행 재사용 (mber_id, prdct_code UNIQUE)");
@@ -469,7 +485,7 @@ async function main(): Promise<void> {
     await prisma.tbPjProject.create({ data: { prjct_id: ids2.P, prjct_nm: "solo", prjct_abrv: "SOL", creat_mber_id: ids2.O, owner_mber_id: ids2.O } });
     await prisma.tbPjProjectMember.create({ data: pm(ids2.P, ids2.O, "OWNER") });
     const actor2 = { mberId: ids2.O, email: "solo@billing-smoke.invalid" };
-    await sub.completeCardRegistration(actor2, { authKey: goodCard(), customerKey: buildCustomerKey(ids2.O), purpose: "start", seatCnt: 1 }, t0);
+    await sub.completeCardRegistration(actor2, { authKey: goodCard(), customerKey: buildCustomerKey(ids2.O), state: st(ids2.O, "start", 1, t0), purpose: "start", seatCnt: 1 }, t0);
     const solo = (await sub.findSubscription(ids2.O))!;
     const pastDue = await sub.cancelSubscription(actor2, t0);         // ACTIVE → 예약
     assert.equal(pastDue.status, "CANCEL_SCHEDULED");
@@ -490,7 +506,7 @@ async function main(): Promise<void> {
     assert.equal((await lock.isProjectOverPlanLimit(ids2.P, ids2.O)).over, false, "O 의 유일한 열린 프로젝트는 상한 이하");
     await prisma.tbPjProject.update({ where: { prjct_id: p3 }, data: { del_yn: "Y" } });  // 뒤 단계의 A 소유 프로젝트 수(2)에 영향 없게 치운다
     // 탈퇴: solo 가 다시 구독한 뒤 withdrawSubscription
-    await sub.completeCardRegistration(actor2, { authKey: goodCard(), customerKey: buildCustomerKey(ids2.O), purpose: "start", seatCnt: 1 }, tRe);
+    await sub.completeCardRegistration(actor2, { authKey: goodCard(), customerKey: buildCustomerKey(ids2.O), state: st(ids2.O, "start", 1, tRe), purpose: "start", seatCnt: 1 }, tRe);
     await prisma.$transaction(async (tx) => { assert.equal(await sub.withdrawSubscription(tx, ids2.O, tRe), true); });
     const soloSub = (await sub.findSubscription(ids2.O))!;
     assert.equal(soloSub.sbscrptn_sttus_code, "CANCELED");
@@ -528,7 +544,7 @@ async function main(): Promise<void> {
 
       // 재구독 → ACTIVE, 종료 사유 리셋. 결제일 연기 +10일(감사 동반), ACTIVE 재결제는 거부
       const tA = new Date(tEnd.getTime() + days(1));
-      await sub.completeCardRegistration(actor, { authKey: goodCard(), customerKey, purpose: "start", seatCnt: 4 }, tA);
+      await sub.completeCardRegistration(actor, { authKey: goodCard(), customerKey, state: st(ids.A, "start", 4, tA), purpose: "start", seatCnt: 4 }, tA);
       const s4 = (await sub.findSubscription(ids.A))!;
       assert.equal(s4.ended_rsn_code, null, "재구독 시 종료 사유 리셋");
       await assert.rejects(adminA.adminRetryCharge(s4.sbscrptn_id, adminActor, "x", tA), (e: unknown) => e instanceof BillingError && e.code === "BILLING_INVALID_STATE");
@@ -553,7 +569,7 @@ async function main(): Promise<void> {
       const emailOf = async (id: string) => (await prisma.tbCmMember.findUniqueOrThrow({ where: { mber_id: id } })).email_addr!;
       const actorW = { mberId: ids3.W, email: await emailOf(ids3.W) };
       assert.equal((await withdrawal.getWithdrawalEligibility(ids3.W)).reason, "NO_PAYMENT");
-      await sub.completeCardRegistration(actorW, { authKey: goodCard(), customerKey: buildCustomerKey(ids3.W), purpose: "start", seatCnt: 2 }, tA);
+      await sub.completeCardRegistration(actorW, { authKey: goodCard(), customerKey: buildCustomerKey(ids3.W), state: st(ids3.W, "start", 2, tA), purpose: "start", seatCnt: 2 }, tA);
       const subW = (await sub.findSubscription(ids3.W))!;
       const initialW = (await prisma.tbBlPayment.findFirst({ where: { sbscrptn_id: subW.sbscrptn_id, pymnt_ty_code: "INITIAL", pymnt_sttus_code: "PAID" } }))!;
       const eligW = await withdrawal.getWithdrawalEligibility(ids3.W);
@@ -574,7 +590,7 @@ async function main(): Promise<void> {
       await assert.rejects(adminA.adminRecordRefund(initialW.pymnt_id, { reason: "WITHDRAWAL", memo: "중복" }, adminActor), (e: unknown) => e instanceof BillingError && e.code === "BILLING_REFUND_NOT_ALLOWED", "이미 전액 환불");
       assert.equal((await withdrawal.getWithdrawalEligibility(ids3.W)).reason, "ALREADY_REFUNDED");
       // W 가 다시 구독해도 두 번째 INITIAL 은 대상이 아니다 (계정당 1회) — 첫 결제는 환불된 것이 그대로 첫 결제
-      await sub.completeCardRegistration(actorW, { authKey: goodCard(), customerKey: buildCustomerKey(ids3.W), purpose: "start", seatCnt: 2 }, new Date(tA.getTime() + days(1)));
+      await sub.completeCardRegistration(actorW, { authKey: goodCard(), customerKey: buildCustomerKey(ids3.W), state: st(ids3.W, "start", 2, new Date(tA.getTime() + days(1))), purpose: "start", seatCnt: 2 }, new Date(tA.getTime() + days(1)));
       const initialW2 = (await prisma.tbBlPayment.findFirst({ where: { mber_id: ids3.W, pymnt_ty_code: "INITIAL", pymnt_sttus_code: "PAID" }, orderBy: { creat_dt: "desc" } }))!;
       assert.notEqual(initialW2.pymnt_id, initialW.pymnt_id);
       assert.equal((await withdrawal.getWithdrawalEligibility(ids3.W)).firstPaymentId, initialW.pymnt_id, "환불된 첫 결제가 여전히 '첫 결제'");
@@ -583,7 +599,7 @@ async function main(): Promise<void> {
 
       // 8일 지난 청약철회는 거부 — 새 회원 X 의 첫 결제 승인 시각을 12일 전으로 돌려 재현
       const actorX = { mberId: ids3.X, email: await emailOf(ids3.X) };
-      await sub.completeCardRegistration(actorX, { authKey: goodCard(), customerKey: buildCustomerKey(ids3.X), purpose: "start", seatCnt: 1 }, tA);
+      await sub.completeCardRegistration(actorX, { authKey: goodCard(), customerKey: buildCustomerKey(ids3.X), state: st(ids3.X, "start", 1, tA), purpose: "start", seatCnt: 1 }, tA);
       const initialX = (await prisma.tbBlPayment.findFirst({ where: { mber_id: ids3.X, pymnt_ty_code: "INITIAL", pymnt_sttus_code: "PAID" } }))!;
       await prisma.tbBlPayment.update({ where: { pymnt_id: initialX.pymnt_id }, data: { apprv_dt: new Date(Date.now() - days(12)) } });
       assert.equal((await withdrawal.getWithdrawalEligibility(ids3.X)).reason, "WINDOW_PASSED");
@@ -607,6 +623,8 @@ async function main(): Promise<void> {
       {
         const webhook = await import("@/lib/billing/webhook");
         const at = new Date().toISOString();
+        // 대조는 이력의 PG 도 비교한다 — 스모크 이력은 Mock 으로 만들어졌으므로 이 블록 동안만 TOSS 로 표시
+        await prisma.tbBlPayment.update({ where: { pymnt_id: initial6.pymnt_id }, data: { pg_provdr_code: "TOSS" } });
         const paymentBase = { paymentKey: initial6.pg_pymnt_key!, orderId: initial6.pg_order_id, totalAmount: initial6.amt };
         const cancelEvent = () => ({
           providerEventId: "evt-smoke-cancel", eventType: "PAYMENT_STATUS_CHANGED",
@@ -633,12 +651,17 @@ async function main(): Promise<void> {
           providerEventId: `evt-done-${paymentKey}`, eventType: "PAYMENT_STATUS_CHANGED",
           payload: { verified: true, eventType: "PAYMENT_STATUS_CHANGED", createdAt: at, payment: { ...paymentBase, paymentKey, status: "DONE" } },
         });
-        assert.equal((await webhook.processPgEvent("TOSS", doneEvent(initial6.pg_pymnt_key!))).status, "PROCESSED", "승인 이벤트 ↔ 이력 일치");
-        assert.equal((await webhook.processPgEvent("TOSS", doneEvent("no-such-payment"))).status, "FAILED", "이력 없는 승인 = 수동 대조 필요");
+        assert.equal((await webhook.processPgEvent("TOSS", doneEvent(initial6.pg_pymnt_key!))).status, "PROCESSED", "승인 이벤트 ↔ 이력·주문번호·금액 일치");
+        // 빌링 승인은 웹훅이 오지 않으므로(토스) 이력 없는 DONE 은 경고·IGNORED (확정은 PENDING 조회·거래 대사)
+        assert.equal((await webhook.processPgEvent("TOSS", doneEvent("no-such-payment"))).status, "IGNORED", "이력 없는 승인 = 대사 대상");
+        const wrongAmt = { ...doneEvent(initial6.pg_pymnt_key!), payload: { verified: true, eventType: "PAYMENT_STATUS_CHANGED", createdAt: at, payment: { ...paymentBase, status: "DONE", totalAmount: initial6.amt + 1 } } };
+        const mm = await webhook.processPgEvent("TOSS", wrongAmt);
+        assert.ok(mm.status === "FAILED" && mm.reason.includes("금액") && !mm.transient, "금액 불일치 → FAILED(확정, 재전송 불필요)");
         const unverified = { providerEventId: "evt-unverified", eventType: "PAYMENT_STATUS_CHANGED", payload: { verified: false, eventType: "PAYMENT_STATUS_CHANGED", createdAt: at, data: {} } };
         assert.equal((await webhook.processPgEvent("TOSS", unverified)).status, "IGNORED");
         assert.equal((await webhook.processPgEvent("MOCK", cancelEvent())).status, "IGNORED");
         assert.equal((await webhook.processPgEvent("TOSS", { providerEventId: "evt-bd", eventType: "BILLING_DELETED", payload: { verified: false, eventType: "BILLING_DELETED", createdAt: at, data: { billingKeyLast4: "1234" } } })).status, "IGNORED");
+        await prisma.tbBlPayment.update({ where: { pymnt_id: initial6.pymnt_id }, data: { pg_provdr_code: "MOCK" } });
       }
       // PENDING 선기록·복구(①, 2026-09-30) — Mock 게이트웨이의 결과 불명 재현(MOCK_CHARGE_OUTCOME)으로 검증
       log("PENDING 선기록 — 결과 유실(lost) → PENDING 유지·실패로 안 셈 → 10분 뒤 조회 DONE → PAID+주기 반영, 이중 청구 없음");
@@ -736,7 +759,7 @@ async function main(): Promise<void> {
         const actorN = { mberId: N, email: "pending-n@example.com" };
         const tN = new Date();
         process.env.MOCK_CHARGE_OUTCOME = "lost";
-        await assert.rejects(sub.completeCardRegistration(actorN, { authKey: goodCard(), customerKey: buildCustomerKey(N), purpose: "start", seatCnt: 1 }, tN),
+        await assert.rejects(sub.completeCardRegistration(actorN, { authKey: goodCard(), customerKey: buildCustomerKey(N), state: st(N, "start", 1, tN), purpose: "start", seatCnt: 1 }, tN),
           (e: unknown) => e instanceof BillingError && e.code === "BILLING_PAYMENT_STATUS_UNKNOWN");
         delete process.env.MOCK_CHARGE_OUTCOME;
         assert.equal(await sub.findSubscription(N), null, "구독은 아직 없다");
@@ -745,7 +768,7 @@ async function main(): Promise<void> {
         assert.equal(metaN.kind, "INITIAL");
         assert.ok(metaN.billingKeyEnc?.startsWith("v2:"), "문맥에 암호화 빌링키");
         // 같은 회원의 두 번째 시작 시도 — 10분 안이라 "진행 중" 503
-        await assert.rejects(sub.completeCardRegistration(actorN, { authKey: goodCard(), customerKey: buildCustomerKey(N), purpose: "start", seatCnt: 1 }, new Date(tN.getTime() + 30_000)),
+        await assert.rejects(sub.completeCardRegistration(actorN, { authKey: goodCard(), customerKey: buildCustomerKey(N), state: st(N, "start", 1, new Date(tN.getTime() + 30_000)), purpose: "start", seatCnt: 1 }, new Date(tN.getTime() + 30_000)),
           (e: unknown) => e instanceof BillingError && e.code === "BILLING_PAYMENT_STATUS_UNKNOWN" && e.status === 503);
         const laterN = new Date(tN.getTime() + 11 * 60_000);
         const outN = await daily.processPendingTarget((await daily.loadPendingTargets(laterN)).find((t) => t.mberId === N)!, laterN);
@@ -759,7 +782,7 @@ async function main(): Promise<void> {
         assert.equal(paidN.pymnt_sttus_code, "PAID");
         assert.equal(paidN.sbscrptn_id, subN.sbscrptn_id, "첫 결제 행에 구독 연결");
         // 복구 뒤 다시 시작하면 "이미 구독 중"
-        await assert.rejects(sub.completeCardRegistration(actorN, { authKey: goodCard(), customerKey: buildCustomerKey(N), purpose: "start", seatCnt: 1 }, laterN),
+        await assert.rejects(sub.completeCardRegistration(actorN, { authKey: goodCard(), customerKey: buildCustomerKey(N), state: st(N, "start", 1, laterN), purpose: "start", seatCnt: 1 }, laterN),
           (e: unknown) => e instanceof BillingError && e.code === "BILLING_ALREADY_SUBSCRIBED");
 
         // UNIQUE 잠금 직접 확인 — 같은 회원의 PENDING 2건은 DB 가 거부한다
@@ -804,7 +827,12 @@ async function main(): Promise<void> {
       process.env.MOCK_CHARGE_DELAY_MS = "1500";
       const dueAt = new Date(new Date((await sub.findSubscription(ids.A))!.next_bill_dt!).getTime() + days(0.1));
       const renewalP = daily.processSubscriptionDaily(s6.sbscrptn_id, dueAt);
-      await new Promise((r) => setTimeout(r, 300));
+      // 청구가 토큰을 잡을 때까지 기다린다 — 고정 300ms 는 네트워크 지연에 따라 토큰 전에 연기가 먼저 들어가 헛경합이 된다
+      for (let i = 0; i < 40; i++) {
+        const t = await prisma.tbBlSubscription.findUnique({ where: { sbscrptn_id: s6.sbscrptn_id }, select: { billing_op_token: true } });
+        if (t?.billing_op_token) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
       await assert.rejects(adminA.adminDeferBilling(s6.sbscrptn_id, 5, adminActor, "경합", dueAt), (e: unknown) => e instanceof BillingError && e.code === "BILLING_CONCURRENT_OPERATION", "청구 중 연기 → 409");
       await assert.rejects(adminA.adminTerminate(s6.sbscrptn_id, adminActor, "경합", dueAt), (e: unknown) => e instanceof BillingError && e.code === "BILLING_CONCURRENT_OPERATION", "청구 중 종료 → 409");
       await assert.rejects(sub.cancelSubscription(actor, dueAt), (e: unknown) => e instanceof BillingError && e.code === "BILLING_CONCURRENT_OPERATION", "청구 중 회원 해지 → 409");
@@ -817,7 +845,7 @@ async function main(): Promise<void> {
       assert.ok(s7dto.nextBillAt, "청구 끝난 뒤 연기는 성공");
 
       // 실패 카드로 변경 → 결제일 실패 → PAST_DUE → 관리자 즉시 재결제(실패, fail_cnt 2) + 감사 "시도"→결과 갱신
-      await sub.completeCardRegistration(actor, { authKey: failCard(), customerKey, purpose: "change" }, dueAt);
+      await sub.completeCardRegistration(actor, { authKey: failCard(), customerKey, state: st(ids.A, "change", undefined, dueAt), purpose: "change" }, dueAt);
       const due2 = new Date(new Date(s7dto.nextBillAt!).getTime() + days(0.1));
       assert.deepEqual(await daily.processSubscriptionDaily(s6.sbscrptn_id, due2), ["RENEW_FAILED"]);
       const retry = await adminA.adminRetryCharge(s6.sbscrptn_id, adminActor, "카드 고쳤다고 함", new Date(due2.getTime() + 60_000));

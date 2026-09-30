@@ -33,6 +33,8 @@ import {
   type PendingTarget,
 } from "@/lib/billing/daily";
 import { listAdminAlertRecipients } from "@/lib/billing/admin-queries";
+import { prisma } from "@/lib/prisma";
+import { PG_EVENT_STATUS } from "@/lib/billing/constants";
 import { sendAdminBillingAlertEmail } from "@/lib/billing/emails";
 
 // 관리자에게 알릴 동작 — 성공 갱신·사전 안내는 평상시 일이라 제외
@@ -127,16 +129,22 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // 관리자 알림 — 배치 자체가 실패/부분 실패했거나, 강등·결제 실패·해지 확정이 있으면 하루 1통.
+    // 웹훅 처리 실패(대조 불일치 등)는 로그·테이블에만 남으므로 여기서 건수를 실어 사람이 보게 한다 (2026-09-30)
+    const failedWebhooks = await prisma.tbBlPgEvent.count({
+      where: { prcs_sttus_code: PG_EVENT_STATUS.FAILED, creat_dt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+    }).catch(() => 0);
+
+    // 관리자 알림 — 배치 자체가 실패/부분 실패했거나, 강등·결제 실패·해지 확정·웹훅 실패가 있으면 하루 1통.
     // 발송 실패는 배치 결과를 바꾸지 않는다.
-    if (result.ttusCode !== "SUCCESS" || notable.length > 0) {
+    if (result.ttusCode !== "SUCCESS" || notable.length > 0 || failedWebhooks > 0) {
       const lines: string[] = [
         `배치 결과 ${result.ttusCode} — 대상 ${result.trgtCnt} · 처리 ${result.successCnt} · 실패 ${result.failCnt} · 건너뜀 ${result.skipCnt}`,
         ...notable.map((n) => `${n.label}: ${n.actions.map((a) => ALERT_LABEL[a] ?? a).join(", ")}`),
+        ...(failedWebhooks > 0 ? [`🚨 최근 24시간 웹훅 처리 실패 ${failedWebhooks}건 — tb_bl_pg_event FAILED 확인(대조 불일치·처리 오류)`] : []),
       ];
       await sendAdminBillingAlertEmail({
         to: await listAdminAlertRecipients(),
-        subject: result.ttusCode !== "SUCCESS" ? `결제 일일 배치 ${result.ttusCode}` : `결제 일일 배치 — 확인 필요 ${notable.length}건`,
+        subject: result.ttusCode !== "SUCCESS" ? `결제 일일 배치 ${result.ttusCode}` : `결제 일일 배치 — 확인 필요 ${notable.length + (failedWebhooks > 0 ? 1 : 0)}건`,
         lines,
       });
     }
