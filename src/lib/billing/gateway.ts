@@ -79,6 +79,22 @@ export type ChargeLookup =
   | { status: "NOT_CHARGED"; reason: string }
   | { status: "UNKNOWN"; reason: string };
 
+/** PG 거래 1건 (승인 또는 취소) — 일일 대사용 */
+export type PgTransaction = {
+  transactionKey: string;
+  paymentKey:     string;
+  orderId:        string;
+  /** DONE = 승인 거래, CANCELED | PARTIAL_CANCELED = 취소 거래 */
+  status:         string;
+  amount:         number;
+  transactionAt:  Date;
+};
+
+export type PgTransactionList =
+  | { supported: true;  transactions: PgTransaction[] }
+  /** Mock 등 거래 목록을 제공하지 않는 PG — 대사를 건너뛴다 */
+  | { supported: false; reason: string };
+
 export type CancelPaymentParams = {
   paymentKey: string;
   amount:     number;
@@ -112,6 +128,8 @@ export interface PaymentGateway {
   charge(params: ChargeParams): Promise<ChargeResult>;
   /** PENDING 시도 복구용 — 주문 ID 로 "청구됐는가"를 PG 에 묻는다. 예외를 던지지 않는다(UNKNOWN 으로 돌려준다) */
   lookupCharge(orderId: string): Promise<ChargeLookup>;
+  /** 일일 대사용 — 기간 내 PG 거래(승인·취소) 전부. 통신 실패는 예외 */
+  listTransactions(from: Date, to: Date): Promise<PgTransactionList>;
   cancelPayment(params: CancelPaymentParams): Promise<CancelPaymentResult>;
   /** 서명 검증 포함. 검증 실패·형식 불일치면 null */
   parseWebhook(request: Request): Promise<PgEvent | null>;

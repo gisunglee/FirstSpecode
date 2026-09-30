@@ -7,6 +7,7 @@
  *   - 빌링키 발급: POST /v1/billing/authorizations/issue (authKey 1회용)
  *   - 청구:        POST /v1/billing/{billingKey} — Idempotency-Key = orderId
  *   - 취소:        POST /v1/payments/{paymentKey}/cancel
+ *   - 거래 목록:   GET /v1/transactions?startDate&endDate (최대 5000건, startingAfter 로 페이지) — 일일 대사(③)
  *   - 웹훅:        토스 빌링 웹훅에는 서명이 없다 → 본문의 paymentKey 로 결제 조회 API 를 다시 불러
  *                  "토스가 돌려준 값"만 payload 로 쓴다(본문은 신뢰하지 않는다). 이벤트 ID 는 토스 헤더
  *                  tosspayments-webhook-transmission-id. ⚠ 자동결제(빌링) **승인**은 웹훅이 오지 않는다(토스 문서) —
@@ -34,6 +35,8 @@ import type {
   CardRegistrationStart,
   ChargeLookup,
   ChargeParams,
+  PgTransaction,
+  PgTransactionList,
   ChargeResult,
   IssueBillingKeyParams,
   IssuedBillingKey,
@@ -102,6 +105,15 @@ export type TossCancel = {
   cancelReason:   string;
   canceledAt:     string;
   cancelStatus?:  string | null;
+};
+
+type TossTransaction = {
+  transactionKey: string;
+  paymentKey:     string;
+  orderId:        string;
+  status:         string;
+  amount:         number;
+  transactionAt:  string;
 };
 
 export type TossPayment = {
@@ -371,6 +383,33 @@ export class TossPaymentGateway implements PaymentGateway {
     return { ok: true, cancelKey: last?.transactionKey ?? null };
   }
 
+  // ── 거래 목록 (일일 대사) ─────────────────────────────────────────────────
+
+  /**
+   * 기간 내 거래 전부 — 승인(DONE)과 취소(CANCELED·PARTIAL_CANCELED)가 각각 한 건씩 온다.
+   * 토스 형식: startDate/endDate = yyyy-MM-dd'T'HH:mm:ss (KST 기준 문자열). limit 최대 5000, 그 이상은 startingAfter.
+   */
+  async listTransactions(from: Date, to: Date): Promise<PgTransactionList> {
+    const out: PgTransaction[] = [];
+    let startingAfter: string | null = null;
+    for (let page = 0; page < 20; page++) {
+      const qs = new URLSearchParams({ startDate: toTossLocalDateTime(from), endDate: toTossLocalDateTime(to), limit: "5000" });
+      if (startingAfter) qs.set("startingAfter", startingAfter);
+      const r = await this.request<TossTransaction[]>("GET", `/v1/transactions?${qs.toString()}`);
+      if (!r.ok) throw new Error(`토스 거래 조회 실패: ${r.code} ${r.message}`);
+      const rows = Array.isArray(r.data) ? r.data : [];
+      for (const t of rows) {
+        out.push({
+          transactionKey: t.transactionKey, paymentKey: t.paymentKey, orderId: t.orderId, status: t.status,
+          amount: t.amount, transactionAt: new Date(t.transactionAt),
+        });
+      }
+      if (rows.length < 5000) break;
+      startingAfter = rows[rows.length - 1].transactionKey;
+    }
+    return { supported: true, transactions: out };
+  }
+
   // ── 조회 ──────────────────────────────────────────────────────────────────
 
   /** 결제 1건 조회 — 없으면 null, 통신·서버 오류는 예외 */
@@ -434,6 +473,12 @@ export class TossPaymentGateway implements PaymentGateway {
     // 구독하지 않은 종류 — 저장 가치 없음. 라우트가 "알 수 없는 종류"로 200 처리할 수 있게 표식만 남긴다
     return { providerEventId: transmissionId ?? webhookEventIdFallback([eventType, createdAt]), eventType, payload: { verified: false, eventType, createdAt, data: null, ignored: true } as TossWebhookPayload };
   }
+}
+
+/** Date → 토스 거래 조회의 KST 로컬 시각 문자열(yyyy-MM-ddTHH:mm:ss, 타임존 표기 없음) */
+function toTossLocalDateTime(d: Date): string {
+  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().slice(0, 19);
 }
 
 /** 토스 Payment → ChargeResult. 동기 빌링 승인은 성공이면 항상 DONE */

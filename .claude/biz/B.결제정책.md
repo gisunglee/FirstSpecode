@@ -1,5 +1,5 @@
 # B. SPECODE 결제·요금제 정책 (작업 기준 문서)
-> 최종 갱신: 2026-09-30 · 상태: **토스 어댑터 1차 커밋(테스트 키 검증 완료, 브라우저 카드 등록 성공). 운영은 여전히 Mock, 푸시 안 함.** 2026-09-30 보안 검토(Claude + GPT 교차)에서 라이브 전 필수 수정 8건 확정 → §7-3 "라이브 전 필수" 순서대로 진행 중. ⚠ 운영 DB 에 로컬 브라우저 테스트로 생긴 TOSS 구독 1건이 남아 있음(§7-3 운영 정리). 라이브 키를 받으면 §7-3 4번 전환 절차
+> 최종 갱신: 2026-09-30 · 상태: **라이브 전 필수 8건 전부 코드 완료 · 로컬 커밋 5개(`ea77ceb`→`14a8abe`), 푸시 안 함. 운영은 Mock.** 푸시 전 필수: ① 운영 DDL `npm run db:migrate:billing-pending`(§0-6 절차) ② 운영 테스트 TOSS 구독 1건 정리(customerKey 산식이 바뀌어 어차피 재등록 필요) ③ 브라우저 재검증(state·HMAC 반영). 결정 대기: 개발 DB 분리, `BILLING_KEY_SECRET` 분리. 라이브 키를 받으면 §7-3 4번 전환 절차
 
 이 문서는 결제 기능이 끝날 때까지 **모든 세션이 가장 먼저 읽는 단일 기준**이다.
 대화에서 결정된 것은 여기에만 쓴다. 여기 없는 규칙은 결정되지 않은 것이다.
@@ -226,9 +226,9 @@
 결제 API 는 MCP 에 노출하지 않는다(`register-tools.ts` 변경 없음). MCP 키로 호출하면 `actor.ts` 가 403.
 
 ### 3-3. 배치·메일
-- `billing-daily` 하루 1회: 살아 있는 구독마다 ① CANCEL_SCHEDULED 기간 종료 → CANCELED ② ACTIVE 결제일 → RECURRING(축소 예약 적용) ③ PAST_DUE 마지막 실패 +3일 → 재시도, 소진 → EXPIRED ④ ACTIVE 결제 7일 전 → 사전 안내. 그리고 구독과 별개로 ⑤ 만료된 관리자 수동 부여 플랜 → FREE 확정·소유 프로젝트 잠금·강등 메일(`loadExpiredManualPlanTargets`/`processExpiredManualPlan`, 항목 `trgtTy=MEMBER`). 할 일 없으면 SKIPPED. 결과는 `tb_cm_batch_job_item.meta_json.actions`.
+- `billing-daily` 하루 1회: 먼저 ⑥ 10분 넘은 PENDING 결제 시도를 PG 주문 조회로 확정(`trgtTy=PAYMENT`, 2026-09-30). 살아 있는 구독마다 ① CANCEL_SCHEDULED 기간 종료 → CANCELED ② ACTIVE 결제일 → RECURRING(축소 예약 적용) ③ PAST_DUE 마지막 실패 +3일 → 재시도, 소진 → EXPIRED ④ ACTIVE 결제 7일 전 → 사전 안내. 구독과 별개로 ⑤ 만료된 관리자 수동 부여 플랜 → FREE 확정·소유 프로젝트 잠금·강등 메일(`trgtTy=MEMBER`). 마지막에 ⑦ PG 거래 25시간 대사(`trgtTy=PG`, Mock 은 SKIPPED). 할 일 없으면 SKIPPED. 결과는 `tb_cm_batch_job_item.meta_json.actions`. 청구 결과 불명은 액션 `CHARGE_UNKNOWN`.
 - 메일 5종 발송 시점: 영수증(시작·정기·좌석 추가 성공 직후) · 사전 안내(배치 ④) · 실패(재시도 남았을 때) · 해지 확인(해지 예약 시) · 강등(CANCELED/EXPIRED 확정 시, 잠긴 수·자동 해제 프로젝트명 포함).
-- 관리자 알림(⑥): 배치 종료 후 결과가 SUCCESS 가 아니거나 EXPIRED·RENEW_FAILED·RETRY_FAILED·CANCEL_FINALIZED 가 한 건이라도 있으면 SUPER_ADMIN 전원에게 요약 1통. 성공 갱신·사전 안내는 알리지 않는다.
+- 관리자 알림: 배치 종료 후 결과가 SUCCESS 가 아니거나 EXPIRED·RENEW_FAILED·RETRY_FAILED·CANCEL_FINALIZED·CHARGE_UNKNOWN·PENDING_RECOVERED·PENDING_UNRESOLVED·RECONCILE_MISMATCH 가 한 건이라도 있거나, 최근 24시간 웹훅 처리 FAILED 가 있으면 SUPER_ADMIN 전원에게 요약 1통. 성공 갱신·사전 안내는 알리지 않는다.
 
 ### 3-4. DB
 - 적용된 SQL: `prisma/sql/2026-09-20_create_billing.sql`(테이블 3·인덱스 8·잠금 컬럼 2) → 배포 → `2026-09-20_drop_project_settings_plan_code.sql`. npm 스크립트 `db:migrate:billing`, `db:migrate:billing-drop-settings-plan`.
@@ -309,7 +309,7 @@
 3. ~~커밋~~ 2026-09-30 1차 커밋 완료(사용자 지시). **라이브 전 필수 수정 8건 (2026-09-30 보안 검토, Claude + GPT 교차 — 순서대로 진행, 각 항목 끝나면 여기 체크):**
    - [x] ① PENDING 선기록 (2026-09-30 코드 완료·스모크 26단계 통과). **⚠ 배포 전 운영 DDL 필수**: `prisma/sql/2026-09-30_billing_pending_attempt.sql` (`npm run db:migrate:billing-pending`) — tb_bl_payment 에 `pndng_lock_key varchar(36) UNIQUE`·`pndng_meta_json json` nullable 추가만. §0-6 절차(읽기 점검 → 사용자 확인 → 적용 → drift 확인) 뒤에 푸시. 부분 인덱스 대신 "값이 있을 때만 유일한 nullable UNIQUE 컬럼"을 써서 Prisma 스키마와 drift 없음. 동작: 모든 청구 경로가 PG 호출 전에 PENDING 행(주문 ID·금액·기간·반영 문맥)을 만들고, 결과 불명이면 행을 남긴 채 새 주문 ID 로 재청구하지 않는다. 10분 넘은 PENDING 은 청구 시작 전·배치 ⑥에서 PG 주문 조회로 확정(DONE → PAID+구독 반영+영수증 / NOT_CHARGED → FAILED, 실패로 안 셈 / UNKNOWN → 유지·관리자 알림 `PENDING_UNRESOLVED`). 첫 결제는 문맥에 암호화 빌링키를 담아 구독 없이도 복구 활성화. 회원당 진행 중 1건은 UNIQUE 로 원자 보장(GPT 지적 2번도 해결).
    - [x] ② 결제 작업 토큰 만료 2분 → 5분(토스 최악 경로 65초×3) — 2026-09-30 커밋 `2e44a05`
-   - [ ] ③ 일일 배치에 토스 **거래 조회 API 대사** 단계 — 자동결제 승인은 웹훅이 오지 않으므로(토스 문서) "PG 승인·DB 실패"는 이걸로만 잡힌다. 불일치는 관리자 알림 메일
+   - [x] ③ 일일 배치 ⑦ PG 거래 대사 (2026-09-30, `src/lib/billing/reconcile.ts`): `GET /v1/transactions` 25시간 창 → 승인(DONE)은 `pg_pymnt_key`, 취소는 `pg_cancel_key` 로 우리 이력과 대조(주문번호는 상점 접두사가 붙어 와서 키로만 맞춤). 불일치면 배치 항목 FAILED(meta 에 목록) + 관리자 알림 `RECONCILE_MISMATCH`. 자동 생성 없음(어느 구독·기간인지 PG 는 모름). Mock 은 SKIPPED. ⑥ PENDING 확정 뒤에 돌려 방금 확정한 승인이 불일치로 안 잡히게
    - [x] ④ 웹훅 재설계 (2026-09-30): 이벤트 ID = `tosspayments-webhook-transmission-id` 헤더(없으면 내용 해시 폴백) · 일시 오류(DB 등)는 500 → 토스 재전송 · 재전송(같은 ID)은 기존 행이 RECEIVED/FAILED 일 때만 재처리(PROCESSED/IGNORED 는 200) · 승인 대조는 주문번호·금액·PG 까지 비교(불일치 FAILED 경보) · 이력 없는 DONE 은 IGNORED+경고(빌링 승인은 웹훅 미발송이므로 확정은 PENDING 조회·③ 대사) · 구독하지 않은 종류는 저장 안 함(200) · 일일 배치 알림에 최근 24h 웹훅 FAILED 건수
    - [x] ⑤ CSRF 차단 (2026-09-30): `buildCustomerKey` 를 `API_KEY_SECRET` 파생 HMAC 으로(UUID 만으론 계산 불가) + 카드 등록 시작 시 서버 서명 `state`(회원·목적·좌석·만료 30분)를 successUrl/failUrl 에 실어 콜백 `POST /api/billing/card/callback` 에서 서명·만료·본인·목적·좌석 일치 검증(불일치 403). ⚠ customerKey 산식이 바뀌어 **기존 구독은 재등록 필요** — 운영엔 테스트 구독 1건뿐(정리 대상). Mock PG 창은 URL 을 그대로 돌려보내므로 영향 없음
    - [x] ⑥ 청구 시 구독 `pg_provdr_code` ≠ 현재 게이트웨이면 청구 거부 — 배치는 skipped(실패로 안 셈·로그), 좌석 추가는 409 `BILLING_PROVIDER_MISMATCH`. 커밋 `2e44a05`
@@ -364,5 +364,6 @@
 - 2026-09-26 상한 안내 정비(사용자 확정, "다 하자 · 100% 되도록"): ① 열린 프로젝트 교체 — FREE 가 A 를 닫고 B 를 여는 수단이 없어 "삭제·양도하라"는 막다른 길이던 것 해소(§1-6). ② `PlanLimitDialog` 를 상황 3가지(UPGRADE/SEATS/EDITORS)로 분기 — 이미 BASIC 인 사람에게 "BASIC 플랜이 필요합니다"를 띄우던 문제 수정, 잠금 해제 실패는 토스트 → 다이얼로그 + 이동 버튼. ③ 승격 거부 문구 "초대할 수 없습니다" → "편집 역할로 바꿀 수 없습니다"(관점 `promoter` 추가). 목록 API 에 `editorCount` 추가(groupBy 1회, 교체 경고용). DB·MCP 변경 없음. 스모크 15단계 추가(남의 것 거부·없는 ID·롤백·정상 교체·여러 개 닫기) 전부 통과.
 - 2026-09-28 수동 부여 플랜 만료 시 잠금(사용자 확정, "관리자가 일자를 설정할 수 있으면 시간 지나면 막혀야 한다"): 일일 배치 ⑤단계 추가 + 관리자 플랜 변경에 잠금/해제 짝 추가(`syncLockForManualPlan`). 유료(만료 전) → 전부 해제 / FREE·만료 → 전부 잠금. SUPER_ADMIN·구독 보유 회원은 대상 제외. 강등 메일에 `PLAN_EXPIRED` 사유 추가. 만료 7일 전 사전 안내는 멱등 표시 컬럼(DDL)이 필요해 보류 — 필요해지면 그때. DB 변경 없음. 스모크 21단계 추가, 전부 통과.
 - 2026-09-30 토스 어댑터 구현(사용자: 개발자센터 가입·테스트 키 제공, 심사 전 병행에 동의): `gateway-toss.ts`(빌링키 발급·청구 멱등키·UNKNOWN 복구·취소·조회·웹훅 조회 검증) · `webhook.ts`(승인 대조, 콘솔 취소 ↔ 환불 이력 연결/생성, 구독 종료는 안 함) · 빌링키 AES-256-GCM v2(CBC 는 복호화만) · SDK `@tosspayments/tosspayments-sdk` 카드 등록(iframe) · 콜백 화면 authKey 주소창 제거 · CSP 토스 허용 · `/api/billing/*` no-store · 웹훅 IP rate limit. 인터페이스 변경: sdk 모드에 successUrl/failUrl, `CancelPaymentResult.cancelKey`, `BILLING_PAYMENT_STATUS_UNKNOWN`. 토스 API 스모크 16단계 통과, typecheck 통과, DB 스모크는 집 네트워크 DB 포트 차단으로 미실행(웹훅 단계 추가됨). DB 변경 없음. MCP 변경 없음. 커밋·푸시는 사용자 확인 대기.
+- 2026-09-30 라이브 전 필수 ③ 구현: 일일 배치 ⑦ PG 거래 대사(`reconcile.ts`, `listTransactions`). 토스 스모크 19단계(거래 목록에서 승인 1·취소 2 확인, orderId 상점 접두사 발견). **라이브 전 필수 8건 코드 전부 완료.** 남은 것은 사용자 몫 — 운영 DDL·테스트 구독 정리·브라우저 재검증·개발 DB/암호화 키 결정.
 - 2026-09-30 라이브 전 필수 ④⑤⑧ 구현: 웹훅 transmission-id 멱등·500 재전송·재처리·대조 비교·미구독 종류 미저장·FAILED 알림, customerKey HMAC + 서명 state(CSRF), 카드 등록 라우트 회원 rate limit. DB 스모크 26단계(CSRF 5케이스·대조 불일치 포함)·토스 18단계·typecheck 통과.
 - 2026-09-30 라이브 전 필수 ①②⑥⑦ 구현: PENDING 선기록(DDL 대기)·토큰 5분·PG 불일치 거부·빌링키 로그 마스킹. GPT 지적 중 "자동결제 승인 웹훅 미발송"을 토스 문서로 확인해 수용 — 승인 대사는 웹훅이 아니라 PENDING 조회(+③ 거래 조회 대사)로.

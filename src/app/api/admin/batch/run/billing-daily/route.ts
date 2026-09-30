@@ -9,6 +9,7 @@
  *   살아 있는 구독마다 ① 해지 확정 ② 정기 결제 ③ 재시도(3일 간격) ④ 결제 7일 전 안내.
  *   그리고 구독 없이 관리자가 수동 부여한 플랜 중 ⑤ 만료된 회원 → FREE 확정·프로젝트 잠금·메일.
  *   ⑥ 10분 넘게 PENDING 인 결제 시도 → PG 주문 조회로 확정(승인이면 반영·미청구면 실패·불명이면 관리자 알림).
+ *   ⑦ PG 거래 목록(25시간) ↔ 결제 이력 대사 — 우리 이력에 없는 승인·취소가 있으면 관리자 알림 (Mock 은 SKIPPED).
  *   할 일이 없는 항목은 SKIPPED. PG 호출은 항목별로 격리돼 한 건 실패가 다른 건을 막지 않는다.
  *   같은 날 두 번 돌아도 상태 전이·prentc_dt·plan_code 확정으로 중복 청구·중복 메일이 나지 않는다.
  *
@@ -33,6 +34,7 @@ import {
   type PendingTarget,
 } from "@/lib/billing/daily";
 import { listAdminAlertRecipients } from "@/lib/billing/admin-queries";
+import { reconcileTransactions } from "@/lib/billing/reconcile";
 import { prisma } from "@/lib/prisma";
 import { PG_EVENT_STATUS } from "@/lib/billing/constants";
 import { sendAdminBillingAlertEmail } from "@/lib/billing/emails";
@@ -46,6 +48,7 @@ const ALERT_LABEL: Record<string, string> = {
   CHARGE_UNKNOWN: "⚠ 청구 결과 불명 — PENDING 유지, 다음 배치가 조회로 확정",
   PENDING_RECOVERED: "⚠ 결과 불명이던 청구가 승인으로 확인돼 반영됨(영수증 발송)",
   PENDING_UNRESOLVED: "🚨 PENDING 결제를 조회로도 확정 못 함 — PG 콘솔 대조 필요",
+  RECONCILE_MISMATCH: "🚨 PG 거래 대사 불일치 — 우리 이력에 없는 승인/취소 (배치 항목 meta 참조)",
 };
 
 /**
@@ -56,14 +59,15 @@ const ALERT_LABEL: Record<string, string> = {
 type BatchItem =
   | { kind: "SUBSCRIPTION";     sub: DailyTarget }
   | { kind: "MANUAL_PLAN";      manual: ManualPlanTarget }
-  | { kind: "PENDING_PAYMENT";  pending: PendingTarget };
+  | { kind: "PENDING_PAYMENT";  pending: PendingTarget }
+  | { kind: "RECONCILE" };
 
 export async function POST(request: NextRequest) {
   const auth = await requireBatchAuth(request);
   if (auth instanceof Response) return auth;
 
   // 관리자 알림용 — 항목별 동작을 모아 배치가 끝난 뒤 한 통으로 보낸다
-  const notable: Array<{ label: string; actions: Array<DailyAction | "PLAN_EXPIRED" | "PENDING_RECOVERED" | "PENDING_UNRESOLVED"> }> = [];
+  const notable: Array<{ label: string; actions: Array<DailyAction | "PLAN_EXPIRED" | "PENDING_RECOVERED" | "PENDING_UNRESOLVED" | "RECONCILE_MISMATCH"> }> = [];
 
   try {
     const result = await runJob<BatchItem>({
@@ -97,10 +101,23 @@ export async function POST(request: NextRequest) {
             label:  `${m.email ?? m.mberId} (수동 ${m.plan} 만료)`,
             trgtTy: "MEMBER",
           })),
+          // ⑦ 은 항상 1항목 — PENDING 확정 뒤에 돌아야 방금 확정된 승인이 불일치로 잡히지 않는다
+          { item: { kind: "RECONCILE" } as BatchItem, trgtId: "PG_RECONCILE", label: "PG 거래 대사 (25시간)", trgtTy: "PG" },
         ];
       },
 
       async processItem(item) {
+        if (item.kind === "RECONCILE") {
+          const r = await reconcileTransactions(new Date());
+          if (!r.supported) return { status: "SKIPPED", reason: r.reason };
+          const mismatches = r.unmatchedApprovals.length + r.unmatchedCancels.length;
+          if (mismatches > 0) {
+            notable.push({ label: `승인 ${r.unmatchedApprovals.length}건 · 취소 ${r.unmatchedCancels.length}건`, actions: ["RECONCILE_MISMATCH"] });
+            // 항목 실패로 남겨 배치 결과가 PARTIAL 이 되고 화면에서 눈에 띄게 한다. meta 에 목록
+            throw new Error(`PG 거래 대사 불일치 ${mismatches}건: ${JSON.stringify({ approvals: r.unmatchedApprovals, cancels: r.unmatchedCancels }).slice(0, 1500)}`);
+          }
+          return { status: "SUCCESS", meta: { checked: r.checked } };
+        }
         if (item.kind === "PENDING_PAYMENT") {
           const r = await processPendingTarget(item.pending, new Date());
           if (r.outcome === "UNKNOWN") {

@@ -23,6 +23,7 @@ import type {
   CardRegistrationStart,
   ChargeLookup,
   ChargeParams,
+  PgTransactionList,
   ChargeResult,
   IssueBillingKeyParams,
   IssuedBillingKey,
@@ -110,6 +111,10 @@ export class MockPaymentGateway implements PaymentGateway {
     const hit = ledger.get(orderId);
     if (hit && hit.ok) return { status: "DONE", paymentKey: hit.paymentKey, receiptUrl: hit.receiptUrl, approvedAt: hit.approvedAt };
     return { status: "NOT_CHARGED", reason: "Mock 장부에 없는 주문" };
+  }
+
+  async listTransactions(_from: Date, _to: Date): Promise<PgTransactionList> {
+    return { supported: false, reason: "Mock PG 는 거래 목록이 없다 — 대사 건너뜀" };
   }
 
   async cancelPayment(_p: CancelPaymentParams): Promise<CancelPaymentResult> {

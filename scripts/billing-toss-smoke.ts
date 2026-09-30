@@ -158,6 +158,20 @@ async function main() {
   assert.equal(afterFull?.cancels?.length, 2);
   log(`잔액 8,900원 취소 → ${afterFull?.status}, balanceAmount 0, cancels 2건`);
 
+  // ── 거래 목록 (일일 대사 ③) ───────────────────────────────────────────────
+  {
+    const list = await gw.listTransactions(new Date(Date.now() - 2 * 60 * 60 * 1000), new Date(Date.now() + 10 * 60 * 1000));
+    assert.equal(list.supported, true);
+    if (list.supported) {
+      const mine = list.transactions.filter((t) => t.paymentKey === first.paymentKey);
+      const approval = mine.find((t) => t.status === "DONE");
+      // 거래 목록의 orderId 는 상점 접두사가 붙어 온다(테스트 상점: "1bf0bf_SPC-…") — 대사는 paymentKey 로 맞추고, 주문번호는 끝부분만 비교
+      assert.ok(approval && approval.orderId.endsWith(orderId) && approval.amount === 9_900, `승인 거래가 목록에 있어야 한다: ${JSON.stringify(mine)}`);
+      const cancelsSeen = mine.filter((t) => t.status === "CANCELED" || t.status === "PARTIAL_CANCELED");
+      log(`listTransactions → 최근 2시간 ${list.transactions.length}건, 이 결제의 승인 1건 + 취소 ${cancelsSeen.length}건(취소 키 ${cancelsSeen.some((t) => t.transactionKey === partial.cancelKey) ? "일치" : "지연/미포함"})`);
+    }
+  }
+
   // ── 웹훅 파싱 (서명 없음 → 결제 조회로 검증) ───────────────────────────────
   const createdAt = new Date().toISOString();
   const webhookReq = () => new Request("http://localhost/api/billing/webhook/toss", {

@@ -938,6 +938,13 @@ async function main(): Promise<void> {
       assert.equal(await isLockedM(SP), false, "운영자 계정은 어떤 경로로도 잠기지 않는다");
     }
 
+    log("거래 대사 ③ — Mock 은 지원 안 함(배치 SKIPPED)");
+    {
+      const reconcile = await import("@/lib/billing/reconcile");
+      const r = await reconcile.reconcileTransactions(new Date());
+      assert.equal(r.supported, false);
+    }
+
     log("DTO — 개요·결제 내역에 빌링키 없음, 실패 이력 포함");
     const overview = await sub.getBillingOverview(ids.A);
     assert.equal(overview.provider, "MOCK");
