@@ -30,7 +30,7 @@ export default function About2Page() {
         <nav aria-label="소개 페이지 탐색" className="sp-story-links">
           <a href="#how">사용 과정</a><a href="#outputs">산출물</a><Link href={INTRO_PATHS.pricing}>요금제</Link>
         </nav>
-        <Link className="sp-story-button" href={INTRO_PATHS.login}>시작하기 <span aria-hidden="true">↗</span></Link>
+        <Link className="sp-story-button" href={INTRO_PATHS.login}>무료로 시작하기 <span aria-hidden="true">↗</span></Link>
       </div>
     </header>
     <main id="story-main">
@@ -38,7 +38,7 @@ export default function About2Page() {
         <div className="sp-story-eyebrow"><span className="sp-story-dot" /> 설계를 아는 팀을 위한 AI 설계 플랫폼</div>
         <h1>AI와 구현하기 전에,<br /><em>AI와 설계하세요.</em></h1>
         <p className="sp-story-lead">AI와 충분히 대화하고, 설계자가 검토하고 결정합니다.<br />스펙코드는 그 결정을 모아,<br className="sp-story-mobile-break" /> AI에게 개발을 맡길 기준으로 만듭니다.</p>
-        <div className="sp-story-actions"><Link className="sp-story-button" href={INTRO_PATHS.login}>스펙코드 시작하기 <span aria-hidden="true">↗</span></Link><a className="sp-story-button sp-story-button-outline" href="#how">어떻게 쓰나요? <span aria-hidden="true">↓</span></a></div>
+        <div className="sp-story-actions"><Link className="sp-story-button" href={INTRO_PATHS.login}>스펙코드 무료로 시작하기 <span aria-hidden="true">↗</span></Link><a className="sp-story-button sp-story-button-outline" href="#how">어떻게 쓰나요? <span aria-hidden="true">↓</span></a></div>
       </section>
 
       {/* 기능 설명에 앞서, 설계자의 판단이 필요한 이유와 제품의 역할을 설명한다. */}
@@ -116,7 +116,7 @@ export default function About2Page() {
         ["어떤 기능을 지금 사용할 수 있나요?", "구조화된 분석·설계, PRD 내보내기, JSON·MCP 연동, 기능·영역 AI 점검, 기획 초안, 테이블·컬럼 관리와 스펙 동기화를 제공합니다. 설계 전체 검증, 변경 영향도 분석 확대, 설계 재사용은 앞으로의 확장 방향입니다."],
       ].map(([question, answer]) => <details key={question}><summary>{question}<span aria-hidden="true">+</span></summary><p>{answer}</p></details>)}</div></section>
 
-      <section className="sp-story-final"><div className="sp-story-wrap"><span className="sp-story-eyebrow">START WITH A SHARED UNDERSTANDING</span><h2>다음 대화는,<br />쌓이는 설계가 되도록.</h2><p>하나의 업무부터, AI와 함께 설계해 보세요.</p><Link className="sp-story-button" href={INTRO_PATHS.login}>스펙코드 시작하기 <span aria-hidden="true">↗</span></Link></div></section>
+      <section className="sp-story-final"><div className="sp-story-wrap"><span className="sp-story-eyebrow">START WITH A SHARED UNDERSTANDING</span><h2>다음 대화는,<br />쌓이는 설계가 되도록.</h2><p>하나의 업무부터, AI와 함께 설계해 보세요.</p><Link className="sp-story-button" href={INTRO_PATHS.login}>스펙코드 무료로 시작하기 <span aria-hidden="true">↗</span></Link></div></section>
     </main>
     <footer className="sp-story-wrap sp-story-footer"><div><Link className="sp-story-logo" href={INTRO_PATHS.home}>SPE<span>CODE</span></Link><p>AI와 구현하기 전에, AI와 설계하세요.</p><small>© {new Date().getFullYear()} {BUSINESS.companyName} · 대표 {BUSINESS.ceoName}</small></div><nav aria-label="법적 고지"><Link href={INTRO_PATHS.about}>기존 소개</Link><Link href={INTRO_PATHS.terms}>이용약관</Link><Link href={INTRO_PATHS.privacy}>개인정보처리방침</Link><a href={`mailto:${BUSINESS.contactEmail}`}>문의</a></nav></footer>
   </div>;
