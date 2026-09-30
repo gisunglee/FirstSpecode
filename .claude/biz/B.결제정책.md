@@ -1,5 +1,5 @@
 # B. SPECODE 결제·요금제 정책 (작업 기준 문서)
-> 최종 갱신: 2026-09-30 · 상태: **라이브 전 필수 8건 전부 코드 완료 · 로컬 커밋 5개(`ea77ceb`→`14a8abe`), 푸시 안 함. 운영은 Mock.** 푸시 전 필수: ① 운영 DDL `npm run db:migrate:billing-pending`(§0-6 절차) ② 운영 테스트 TOSS 구독 1건 정리(customerKey 산식이 바뀌어 어차피 재등록 필요) ③ 브라우저 재검증(state·HMAC 반영). 결정 대기: 개발 DB 분리, `BILLING_KEY_SECRET` 분리. 라이브 키를 받으면 §7-3 4번 전환 절차
+> 최종 갱신: 2026-09-30 · 상태: **라이브 전 필수 8건 전부 코드 완료 · 로컬 커밋 5개(`ea77ceb`→`14a8abe`), 푸시 안 함. 운영은 Mock.** 푸시 전 필수: ① ~~운영 DDL~~ 2026-09-30 적용 완료(컬럼 2·UNIQUE 인덱스 1 확인, tb_bl_* drift 없음) ② 운영 테스트 TOSS 구독 1건 정리(customerKey 산식이 바뀌어 어차피 재등록 필요) ③ 브라우저 재검증(state·HMAC 반영). 결정 대기: 개발 DB 분리, `BILLING_KEY_SECRET` 분리. 라이브 키를 받으면 §7-3 4번 전환 절차
 
 이 문서는 결제 기능이 끝날 때까지 **모든 세션이 가장 먼저 읽는 단일 기준**이다.
 대화에서 결정된 것은 여기에만 쓴다. 여기 없는 규칙은 결정되지 않은 것이다.
@@ -307,7 +307,7 @@
 1. **사용자 브라우저 점검**(§2) — 테스트 키로 카드 등록·결제 수단 변경 1회. 여기서 CSP·SDK 창이 실제로 뜨는지 본다(스모크는 브라우저 단계를 못 본다).
 2. ~~DB 스모크~~ 통과(§2).
 3. ~~커밋~~ 2026-09-30 1차 커밋 완료(사용자 지시). **라이브 전 필수 수정 8건 (2026-09-30 보안 검토, Claude + GPT 교차 — 순서대로 진행, 각 항목 끝나면 여기 체크):**
-   - [x] ① PENDING 선기록 (2026-09-30 코드 완료·스모크 26단계 통과). **⚠ 배포 전 운영 DDL 필수**: `prisma/sql/2026-09-30_billing_pending_attempt.sql` (`npm run db:migrate:billing-pending`) — tb_bl_payment 에 `pndng_lock_key varchar(36) UNIQUE`·`pndng_meta_json json` nullable 추가만. §0-6 절차(읽기 점검 → 사용자 확인 → 적용 → drift 확인) 뒤에 푸시. 부분 인덱스 대신 "값이 있을 때만 유일한 nullable UNIQUE 컬럼"을 써서 Prisma 스키마와 drift 없음. 동작: 모든 청구 경로가 PG 호출 전에 PENDING 행(주문 ID·금액·기간·반영 문맥)을 만들고, 결과 불명이면 행을 남긴 채 새 주문 ID 로 재청구하지 않는다. 10분 넘은 PENDING 은 청구 시작 전·배치 ⑥에서 PG 주문 조회로 확정(DONE → PAID+구독 반영+영수증 / NOT_CHARGED → FAILED, 실패로 안 셈 / UNKNOWN → 유지·관리자 알림 `PENDING_UNRESOLVED`). 첫 결제는 문맥에 암호화 빌링키를 담아 구독 없이도 복구 활성화. 회원당 진행 중 1건은 UNIQUE 로 원자 보장(GPT 지적 2번도 해결).
+   - [x] ① PENDING 선기록 (2026-09-30 코드 완료·스모크 26단계 통과). 운영 DDL **적용 완료(2026-09-30)**: `prisma/sql/2026-09-30_billing_pending_attempt.sql` (`npm run db:migrate:billing-pending`, 집 네트워크에선 `npx prisma db execute --url "<pooler 5432 세션 URL>" --file …`) — tb_bl_payment 에 `pndng_lock_key varchar(36) UNIQUE`·`pndng_meta_json json` nullable 추가만. §0-6 절차(읽기 점검 → 사용자 확인 → 적용 → drift 확인) 뒤에 푸시. 부분 인덱스 대신 "값이 있을 때만 유일한 nullable UNIQUE 컬럼"을 써서 Prisma 스키마와 drift 없음. 동작: 모든 청구 경로가 PG 호출 전에 PENDING 행(주문 ID·금액·기간·반영 문맥)을 만들고, 결과 불명이면 행을 남긴 채 새 주문 ID 로 재청구하지 않는다. 10분 넘은 PENDING 은 청구 시작 전·배치 ⑥에서 PG 주문 조회로 확정(DONE → PAID+구독 반영+영수증 / NOT_CHARGED → FAILED, 실패로 안 셈 / UNKNOWN → 유지·관리자 알림 `PENDING_UNRESOLVED`). 첫 결제는 문맥에 암호화 빌링키를 담아 구독 없이도 복구 활성화. 회원당 진행 중 1건은 UNIQUE 로 원자 보장(GPT 지적 2번도 해결).
    - [x] ② 결제 작업 토큰 만료 2분 → 5분(토스 최악 경로 65초×3) — 2026-09-30 커밋 `2e44a05`
    - [x] ③ 일일 배치 ⑦ PG 거래 대사 (2026-09-30, `src/lib/billing/reconcile.ts`): `GET /v1/transactions` 25시간 창 → 승인(DONE)은 `pg_pymnt_key`, 취소는 `pg_cancel_key` 로 우리 이력과 대조(주문번호는 상점 접두사가 붙어 와서 키로만 맞춤). 불일치면 배치 항목 FAILED(meta 에 목록) + 관리자 알림 `RECONCILE_MISMATCH`. 자동 생성 없음(어느 구독·기간인지 PG 는 모름). Mock 은 SKIPPED. ⑥ PENDING 확정 뒤에 돌려 방금 확정한 승인이 불일치로 안 잡히게
    - [x] ④ 웹훅 재설계 (2026-09-30): 이벤트 ID = `tosspayments-webhook-transmission-id` 헤더(없으면 내용 해시 폴백) · 일시 오류(DB 등)는 500 → 토스 재전송 · 재전송(같은 ID)은 기존 행이 RECEIVED/FAILED 일 때만 재처리(PROCESSED/IGNORED 는 200) · 승인 대조는 주문번호·금액·PG 까지 비교(불일치 FAILED 경보) · 이력 없는 DONE 은 IGNORED+경고(빌링 승인은 웹훅 미발송이므로 확정은 PENDING 조회·③ 대사) · 구독하지 않은 종류는 저장 안 함(200) · 일일 배치 알림에 최근 24h 웹훅 FAILED 건수
@@ -367,3 +367,4 @@
 - 2026-09-30 라이브 전 필수 ③ 구현: 일일 배치 ⑦ PG 거래 대사(`reconcile.ts`, `listTransactions`). 토스 스모크 19단계(거래 목록에서 승인 1·취소 2 확인, orderId 상점 접두사 발견). **라이브 전 필수 8건 코드 전부 완료.** 남은 것은 사용자 몫 — 운영 DDL·테스트 구독 정리·브라우저 재검증·개발 DB/암호화 키 결정.
 - 2026-09-30 라이브 전 필수 ④⑤⑧ 구현: 웹훅 transmission-id 멱등·500 재전송·재처리·대조 비교·미구독 종류 미저장·FAILED 알림, customerKey HMAC + 서명 state(CSRF), 카드 등록 라우트 회원 rate limit. DB 스모크 26단계(CSRF 5케이스·대조 불일치 포함)·토스 18단계·typecheck 통과.
 - 2026-09-30 라이브 전 필수 ①②⑥⑦ 구현: PENDING 선기록(DDL 대기)·토큰 5분·PG 불일치 거부·빌링키 로그 마스킹. GPT 지적 중 "자동결제 승인 웹훅 미발송"을 토스 문서로 확인해 수용 — 승인 대사는 웹훅이 아니라 PENDING 조회(+③ 거래 조회 대사)로.
+- 2026-09-30 운영 DDL `2026-09-30_billing_pending_attempt.sql` 적용(사용자 실행 시도 → IPv6 로 실패 → pooler 세션 포트로 적용, 컬럼·인덱스·drift 검증). 운영 tb_bl_payment 2행.
