@@ -575,7 +575,18 @@ async function main(): Promise<void> {
       const eligW = await withdrawal.getWithdrawalEligibility(ids3.W);
       assert.ok(eligW.eligible && eligW.firstPaymentId === initialW.pymnt_id && eligW.deadline, "첫 결제·7일 이내 → 가능");
       // 청약철회 7일 검사는 PG 승인 시각(실제 현재) 기준 — 시뮬레이션 시각이 아니라 실제 now 로 호출한다
+      // PG 취소 거절 → 환불 행 FAILED, 원 결제·구독 불변, 다시 시도 가능 (2026-09-30 환불 실행 경로)
+      process.env.MOCK_CANCEL_OUTCOME = "fail";
+      await assert.rejects(adminA.adminRecordRefund(initialW.pymnt_id, { reason: "WITHDRAWAL", memo: "PG 거절" }, adminActor),
+        (e: unknown) => e instanceof BillingError && e.code === "BILLING_GATEWAY_UNAVAILABLE" && e.status === 502, "PG 취소 거절 → 502");
+      delete process.env.MOCK_CANCEL_OUTCOME;
+      assert.equal((await prisma.tbBlPayment.findUniqueOrThrow({ where: { pymnt_id: initialW.pymnt_id } })).pymnt_sttus_code, "PAID", "원 결제 불변");
+      assert.equal(await prisma.tbBlPayment.count({ where: { orig_pymnt_id: initialW.pymnt_id, pymnt_sttus_code: "FAILED" } }), 1, "실패한 환불 행 1건");
+      assert.equal(await prisma.tbBlPayment.count({ where: { pndng_lock_key: { not: null } } }), 0, "잠금 해제됨");
+      assert.equal((await sub.findSubscription(ids3.W))!.sbscrptn_sttus_code, "ACTIVE");
       const wd = await adminA.adminRecordRefund(initialW.pymnt_id, { reason: "WITHDRAWAL", memo: "7일 이내 청약철회" }, adminActor);
+      assert.ok(wd.refund.status === "REFUNDED", "환불 행 확정");
+      assert.ok((await prisma.tbBlPayment.findUniqueOrThrow({ where: { pymnt_id: wd.refund.paymentId } })).pg_cancel_key?.startsWith("mockcancel_"), "PG 취소 키 기록");
       assert.equal(wd.refund.amount, -initialW.amt);
       assert.equal(wd.refund.origPaymentId, initialW.pymnt_id);
       assert.equal(wd.refund.refundReason, "WITHDRAWAL");
@@ -626,18 +637,22 @@ async function main(): Promise<void> {
         // 대조는 이력의 PG 도 비교한다 — 스모크 이력은 Mock 으로 만들어졌으므로 이 블록 동안만 TOSS 로 표시
         await prisma.tbBlPayment.update({ where: { pymnt_id: initial6.pymnt_id }, data: { pg_provdr_code: "TOSS" } });
         const paymentBase = { paymentKey: initial6.pg_pymnt_key!, orderId: initial6.pg_order_id, totalAmount: initial6.amt };
+        // 관리자 화면에서 실행한 환불(1,000원)은 이미 PG 취소 키를 갖고 있다 → 웹훅의 같은 취소는 "기존". 콘솔 단독 취소(500원)만 새로 생성.
+        // 관리자가 기록만 남기고(키 없음) 콘솔에서 취소한 옛 방식 행도 금액이 맞으면 연결된다 — 아래 500원 뒤에 그 경우도 한 번 검증
+        const adjRow = await prisma.tbBlPayment.findUniqueOrThrow({ where: { pymnt_id: adj.refund.paymentId } });
+        assert.ok(adjRow.pg_cancel_key, "관리자 환불은 실행 시 PG 취소 키를 갖는다");
         const cancelEvent = () => ({
           providerEventId: "evt-smoke-cancel", eventType: "PAYMENT_STATUS_CHANGED",
           payload: { verified: true, eventType: "PAYMENT_STATUS_CHANGED", createdAt: at, payment: { ...paymentBase, status: "PARTIAL_CANCELED", cancels: [
-            { transactionKey: "smoke-tx-1", cancelAmount: 1000, cancelReason: "관리자 기록 후 콘솔 취소", canceledAt: at, cancelStatus: "DONE" },
-            { transactionKey: "smoke-tx-2", cancelAmount: 500,  cancelReason: "콘솔 단독 취소",           canceledAt: at, cancelStatus: "DONE" },
+            { transactionKey: adjRow.pg_cancel_key!, cancelAmount: 1000, cancelReason: "관리자 화면 환불", canceledAt: at, cancelStatus: "DONE" },
+            { transactionKey: "smoke-tx-2",          cancelAmount: 500,  cancelReason: "콘솔 단독 취소",   canceledAt: at, cancelStatus: "DONE" },
           ] } },
         });
         const r1 = await webhook.processPgEvent("TOSS", cancelEvent());
         assert.equal(r1.status, "PROCESSED");
-        assert.ok(r1.reason.includes("연결 1건") && r1.reason.includes("생성 1건"), r1.reason);
+        assert.ok(r1.reason.includes("기존 1건") && r1.reason.includes("생성 1건"), r1.reason);
         const linked = await prisma.tbBlPayment.findUniqueOrThrow({ where: { pg_order_id: adj.refund.orderId } });
-        assert.equal(linked.pg_cancel_key, "smoke-tx-1", "관리자 환불 행에 취소 키 연결");
+        assert.equal(linked.pg_cancel_key, adjRow.pg_cancel_key, "관리자 환불 행의 취소 키 유지");
         const created = await prisma.tbBlPayment.findFirst({ where: { pg_cancel_key: "smoke-tx-2" } });
         assert.equal(created?.amt, -500);
         assert.equal(created?.refund_rsn_code, "ADJUSTMENT");
@@ -646,6 +661,15 @@ async function main(): Promise<void> {
         const r2 = await webhook.processPgEvent("TOSS", cancelEvent());
         assert.ok(r2.reason.includes("기존 2건"), "재전송은 아무것도 만들지 않는다");
         assert.equal(await prisma.tbBlPayment.count({ where: { orig_pymnt_id: initial6.pymnt_id } }), 2);
+        // 옛 방식(기록만, 키 없음) 행 — 금액이 맞는 콘솔 취소가 오면 키만 연결된다
+        const legacy = await prisma.tbBlPayment.create({ data: { sbscrptn_id: initial6.sbscrptn_id, mber_id: initial6.mber_id, pymnt_ty_code: "REFUND", amt: -300, seat_cnt: initial6.seat_cnt, pymnt_sttus_code: "REFUNDED", pg_provdr_code: "TOSS", pg_pymnt_key: initial6.pg_pymnt_key, pg_order_id: `SPC-RF-LEGACY-${Date.now()}`, orig_pymnt_id: initial6.pymnt_id, refund_rsn_code: "ADJUSTMENT", apprv_dt: new Date() } });
+        const legacyEvent = { ...cancelEvent(), providerEventId: "evt-smoke-legacy", payload: { verified: true, eventType: "PAYMENT_STATUS_CHANGED", createdAt: at, payment: { ...paymentBase, status: "PARTIAL_CANCELED", cancels: [
+          { transactionKey: "smoke-tx-legacy", cancelAmount: 300, cancelReason: "콘솔 취소(기록 먼저)", canceledAt: at, cancelStatus: "DONE" },
+        ] } } };
+        const r3 = await webhook.processPgEvent("TOSS", legacyEvent);
+        assert.ok(r3.reason.includes("연결 1건"), r3.reason);
+        assert.equal((await prisma.tbBlPayment.findUniqueOrThrow({ where: { pymnt_id: legacy.pymnt_id } })).pg_cancel_key, "smoke-tx-legacy");
+        await prisma.tbBlPayment.delete({ where: { pymnt_id: legacy.pymnt_id } });
 
         const doneEvent = (paymentKey: string) => ({
           providerEventId: `evt-done-${paymentKey}`, eventType: "PAYMENT_STATUS_CHANGED",

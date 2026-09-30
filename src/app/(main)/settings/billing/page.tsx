@@ -17,7 +17,7 @@
  *
  * 카드 등록은 서버가 준 mode 로 분기한다:
  *   redirect → Mock "PG 창"으로 이동 (돌아오는 곳: /settings/billing/callback)
- *   sdk      → 토스 브라우저 SDK (심사 후 연결 — 지금은 안내만)
+ *   sdk      → 토스 브라우저 SDK requestBillingAuth (2026-09-30 연결)
  *
  * 주요 기술: TanStack Query(조회·무효화), sp-* 디자인 시스템 클래스, ConfirmDialog(해지)
  */
@@ -335,7 +335,7 @@ function PlanCard(props: {
             sub={
               scheduled
                 ? `추가 결제 없음 · ${fmtDate(s.currentPeriodEnd)} 이용 종료`
-                : `다음 결제 ${fmtDate(s.nextBillAt)} · 좌석 ${s.seatCnt}개 × ${formatWon(s.unitPrice)} (부가세 포함)`
+                : `매월 ${kstDayOfMonth(new Date(s.nextBillAt ?? s.currentPeriodStart ?? Date.now()))}일 자동 결제 · 다음 ${fmtDate(s.nextBillAt)} · 좌석 ${s.seatCnt}개 × ${formatWon(s.unitPrice)} (부가세 포함)`
             }
           />
 
@@ -363,11 +363,14 @@ function PlanCard(props: {
         </div>
       </div>
 
-      {/* 해지는 설정 화면에 바로(다크패턴 규제). 다만 결제 액션과 나란히 두면 오조작 위험이라
-          카드 밖 아래에 조용히 둔다 — 찾는 사람은 바로 찾을 수 있는 위치다 */}
+      {/* 해지는 설정 화면에서 바로, 다른 버튼과 같은 크기로(공정위 다크패턴 규제 — 해지 경로를 숨기지 않는다, 2026-09-30).
+          결제 액션과 나란히 두면 오조작 위험이라 카드 밖 아래 한 줄에 설명과 함께 둔다 */}
       {!scheduled && (
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button className="sp-btn sp-btn-ghost sp-btn-sm" onClick={props.onCancel} disabled={busy} style={{ color: "var(--color-text-tertiary)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-3)", padding: "0 var(--space-1)" }}>
+          <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-tertiary)" }}>
+            해지하면 이미 결제한 {fmtDate(s.currentPeriodEnd)}까지 이용하고 이후 결제되지 않습니다. 그 전엔 언제든 취소할 수 있습니다.
+          </div>
+          <button className="sp-btn sp-btn-secondary sp-btn-sm" onClick={props.onCancel} disabled={busy}>
             구독 해지
           </button>
         </div>

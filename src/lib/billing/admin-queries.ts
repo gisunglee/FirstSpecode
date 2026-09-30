@@ -186,7 +186,8 @@ export async function refundedAmountByOriginal(
   if (paymentIds.length === 0) return new Map();
   const grouped = await db.tbBlPayment.groupBy({
     by:    ["orig_pymnt_id"],
-    where: { orig_pymnt_id: { in: paymentIds }, pymnt_ty_code: PAYMENT_TYPE.REFUND },
+    // PENDING(PG 취소 진행 중)·FAILED(PG 거절) 환불 행은 돈이 안 움직였다 — 확정된 것만 더한다 (2026-09-30)
+    where: { orig_pymnt_id: { in: paymentIds }, pymnt_ty_code: PAYMENT_TYPE.REFUND, pymnt_sttus_code: PAYMENT_STATUS.REFUNDED },
     _sum:  { amt: true },
   });
   return new Map(grouped.filter((g) => g.orig_pymnt_id).map((g) => [g.orig_pymnt_id!, -(g._sum.amt ?? 0)]));

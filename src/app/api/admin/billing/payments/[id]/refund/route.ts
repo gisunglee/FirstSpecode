@@ -1,7 +1,7 @@
 /**
- * POST /api/admin/billing/payments/[id]/refund — 환불 기록 (SUPER_ADMIN)
+ * POST /api/admin/billing/payments/[id]/refund — 환불 실행 (SUPER_ADMIN)
  *
- * 환불 실행은 PG 콘솔에서 수동(정책 §1-7). 실행 뒤 여기서 원장을 남긴다.
+ * PG 취소 API 를 직접 호출하고 원장을 남긴다(정책 §1-7, 2026-09-30 "콘솔 수동"에서 변경). 순서·실패 처리는 admin-actions.ts.
  * Body: { reason: "WITHDRAWAL" | "ADJUSTMENT", amount?: number, memo: string }
  *   WITHDRAWAL 청약철회 — 첫 결제·승인 7일 이내·유료 기능 미사용을 서버가 검사. 잔액 전액. 구독 즉시 종료.
  *   ADJUSTMENT 운영 보정 — amount 1원~잔액(생략 시 잔액 전액). 구독 유지.

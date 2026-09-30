@@ -234,7 +234,7 @@ export default function AdminSubscriptionDetailPage() {
                     <td>{p.receiptUrl ? <a href={p.receiptUrl} target="_blank" rel="noopener noreferrer">보기</a> : <span className="is-muted">-</span>}</td>
                     <td style={{ textAlign: "right" }}>
                       {p.refundableAmount > 0 && (
-                        <button className="sp-btn sp-btn-ghost sp-btn-xs" disabled={action.isPending} onClick={() => open({ kind: "refund", payment: p })}>환불 기록</button>
+                        <button className="sp-btn sp-btn-ghost sp-btn-xs" disabled={action.isPending} onClick={() => open({ kind: "refund", payment: p })}>환불</button>
                       )}
                     </td>
                   </tr>
@@ -253,7 +253,7 @@ export default function AdminSubscriptionDetailPage() {
               <div className="sp-modal-title">
                 {modal.kind === "retry" && "즉시 재결제"}
                 {modal.kind === "defer" && "다음 결제일 연기"}
-                {modal.kind === "refund" && "환불 기록"}
+                {modal.kind === "refund" && "환불 실행"}
                 {modal.kind === "terminate" && "구독 강제 종료"}
                 {modal.kind === "unlock" && "잠금 해제 대행"}
               </div>
@@ -279,7 +279,7 @@ export default function AdminSubscriptionDetailPage() {
               {modal.kind === "refund" && (
                 <>
                   <p style={{ margin: 0 }}>
-                    <b>환불은 PG 콘솔에서 먼저 실행</b>하고, 여기서는 원장만 기록합니다.
+                    <b>확인을 누르면 PG 에 취소를 요청</b>하고 결과를 원장에 남깁니다. 취소된 금액은 카드사 기준 3~7일 뒤 고객 카드로 돌아갑니다.
                     원 결제 <b>{formatWon(modal.payment.amount)}</b> ({PAYMENT_TYPE_LABEL[modal.payment.type]}, {fmtDate(modal.payment.approvedAt)})
                     · 누적 환불 {formatWon(modal.payment.refundedAmount)} · 잔액 <b>{formatWon(modal.payment.refundableAmount)}</b>
                   </p>
@@ -332,7 +332,7 @@ export default function AdminSubscriptionDetailPage() {
                 {action.isPending ? "처리 중…" :
                   modal.kind === "retry" ? "지금 청구" :
                   modal.kind === "defer" ? `${days}일 연기` :
-                  modal.kind === "refund" ? (refundReason === REFUND_REASON.WITHDRAWAL ? `전액 환불 기록 + 구독 종료` : `${formatWon(refundAmount)} 환불 기록`) :
+                  modal.kind === "refund" ? (refundReason === REFUND_REASON.WITHDRAWAL ? `전액 환불 실행 + 구독 종료` : `${formatWon(refundAmount)} 환불 실행`) :
                   modal.kind === "terminate" ? "강제 종료" : "해제"}
               </button>
             </div>

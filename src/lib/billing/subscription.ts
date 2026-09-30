@@ -1281,6 +1281,14 @@ export async function resolvePendingPayments(mberId: string, now = new Date()): 
     if (row.creat_dt.getTime() > now.getTime() - PENDING_PAYMENT_STALE_MS) {
       return { blocked: true, reason: `결제 시도(${row.pg_order_id})가 아직 진행 중`, resolved };
     }
+    // 환불(PG 취소) 시도가 확정 없이 남은 것 — 취소 여부는 주문 조회로 알 수 없다(취소는 결제 조회의 cancels 에만).
+    // FAILED 로 닫아 잠금을 풀고, 실제로 취소됐다면 웹훅 대조·거래 대사가 ADJUSTMENT 로 잡는다
+    if (row.pymnt_ty_code === PAYMENT_TYPE.REFUND) {
+      console.error(`[billing] PENDING 환불 시도가 확정되지 않음 — pymnt_id=${row.pymnt_id} 취소 여부 PG 콘솔 확인 필요`);
+      await settlePendingFailed(prisma, row.pymnt_id, "환불 확정 실패(복구): PG 취소 여부 콘솔 확인 필요");
+      resolved.push({ pymntId: row.pymnt_id, outcome: "FAILED" });
+      continue;
+    }
     if (row.pg_provdr_code !== gw.provider) {
       console.error(`[billing] PENDING 확정 불가 — pymnt_id=${row.pymnt_id} 는 ${row.pg_provdr_code} 시도인데 현재 게이트웨이는 ${gw.provider}. 운영자 정리 필요`);
       return { blocked: true, reason: `PG 불일치(${row.pg_provdr_code}) 시도가 남아 있음`, resolved };

@@ -117,8 +117,10 @@ export class MockPaymentGateway implements PaymentGateway {
     return { supported: false, reason: "Mock PG 는 거래 목록이 없다 — 대사 건너뜀" };
   }
 
-  async cancelPayment(_p: CancelPaymentParams): Promise<CancelPaymentResult> {
-    return { ok: true, cancelKey: null };
+  async cancelPayment(p: CancelPaymentParams): Promise<CancelPaymentResult> {
+    // 테스트 전용 — PG 취소 거절 재현 (스모크가 환불 실패 경로를 검증할 때만 설정)
+    if (process.env.MOCK_CANCEL_OUTCOME === "fail") return { ok: false, code: "MOCK_CANCEL_DECLINED", message: "모의 취소 거절" };
+    return { ok: true, cancelKey: `mockcancel_${p.idempotencyKey ?? randomBytes(6).toString("hex")}` };
   }
 
   async parseWebhook(request: Request): Promise<PgEvent | null> {
