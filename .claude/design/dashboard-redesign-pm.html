@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPECODE — PM 대시보드 시안 (프로젝트 관제실)</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="components.css">
+  <link rel="stylesheet" href="dashboard-redesign.css">
+</head>
+<body>
+<div class="sp-dash-page">
+
+  <!-- ── 상단 바 ─────────────────────────────────────────────── -->
+  <div class="sp-dash-topbar">
+    <div>
+      <span class="sp-dash-topbar-title">대시보드</span>
+      <span class="sp-dash-topbar-sub">관리 뷰 · 온실가스감축인지 예산관리</span>
+    </div>
+    <div class="sp-dash-topbar-right">
+      <span class="sp-dash-muted">기준일 2026-10-02(금)</span>
+      <div class="sp-tab-seg">
+        <div class="sp-tab-seg-item is-active">오늘</div>
+        <div class="sp-tab-seg-item">+3일</div>
+        <div class="sp-tab-seg-item">+7일</div>
+      </div>
+      <button class="sp-btn sp-btn-ghost sp-btn-sm">개발자 뷰로 보기</button>
+    </div>
+  </div>
+
+  <div class="sp-dash-content">
+
+    <div class="sp-dash-note">
+      <span>💡</span>
+      <div>
+        <b>시안 컨셉 — "프로젝트 관제실".</b> 숫자를 나열하는 대신
+        <b>① 건강 신호 4개 → ② 이번 주 결정 큐 → ③ 단계별 흐름(병목) → ④ 사람(부하 vs 활동) → ⑤ 설계 완성도 = PRD 준비도 → ⑥ 변경의 영향</b>
+        순서로 PM이 "무엇을 결정해야 하는지"에 답한다. 일정 지표는 다른 도구도 주지만
+        <b>양식 빈칸·컬럼 매핑·스펙 정합성</b>은 스펙코드만 줄 수 있는 신호라 가운데에 둔다.
+        상세는 PM 현황(항목)·PM 진단(사람)으로 내려간다.
+      </div>
+    </div>
+
+    <!-- ── 히어로 ─────────────────────────────────────────────── -->
+    <section class="sp-dash-hero">
+      <div style="flex:1;min-width:260px">
+        <h1>온실가스감축인지 예산관리 <em>·</em> 설계 단계 D-13</h1>
+        <p>1차 중간보고까지 <strong>6일</strong>. 지난주보다 지연이 <strong>2건</strong> 늘었고,
+           단위업무 <strong>3개</strong>는 아직 AI에 넘길 준비(PRD)가 안 됐어요. 오늘 결정하면 풀리는 것이 <strong>5건</strong> 있어요.</p>
+      </div>
+      <div class="sp-dash-chips">
+        <a class="sp-dash-chip is-error"   href="#decide"><span class="n">6</span> 지연</a>
+        <a class="sp-dash-chip is-warning" href="#decide"><span class="n">11</span> 담당 공백</a>
+        <a class="sp-dash-chip is-info"    href="#decide"><span class="n">3</span> 검토 정체</a>
+        <a class="sp-dash-chip is-brand"   href="#matrix"><span class="n">3</span> PRD 미준비</a>
+      </div>
+    </section>
+
+    <!-- ── 건강 신호 4개 ──────────────────────────────────────── -->
+    <div class="sp-dash-signals">
+      <a class="sp-dash-signal is-error" href="#">
+        <div class="sp-dash-signal-label">일정</div>
+        <div class="sp-dash-signal-value"><span class="big">6</span><span class="unit">건 지연</span><span class="sp-dash-signal-trend is-up">▲ 2 지난주</span></div>
+        <div class="sp-dash-signal-sowhat">설계 2 · 구현 4. 지연 4건이 <b>박서연</b> 한 명에게 몰려 있어요.</div>
+      </a>
+      <a class="sp-dash-signal is-warning" href="#matrix">
+        <div class="sp-dash-signal-label">설계 완성도</div>
+        <div class="sp-dash-signal-value"><span class="big">78</span><span class="unit">% 양식 충족</span><span class="sp-dash-signal-trend is-down">▲ 3 지난주</span></div>
+        <div class="sp-dash-signal-sowhat">기능 184개 중 41개에 빈칸. 컬럼 매핑 없는 기능 <b>29개</b>.</div>
+      </a>
+      <a class="sp-dash-signal is-warning" href="#decide">
+        <div class="sp-dash-signal-label">담당·일정 공백</div>
+        <div class="sp-dash-signal-value"><span class="big">11</span><span class="unit">건 미지정</span><span class="sp-dash-signal-trend is-flat">— 변동 없음</span></div>
+        <div class="sp-dash-signal-sowhat">지연 판정조차 안 되는 사각지대. 화면 4 · 기능 7.</div>
+      </a>
+      <a class="sp-dash-signal is-info" href="#">
+        <div class="sp-dash-signal-label">스펙 정합성</div>
+        <div class="sp-dash-signal-value"><span class="big">4</span><span class="unit">건 불일치</span><span class="sp-dash-signal-trend is-flat">동기화 2일 전</span></div>
+        <div class="sp-dash-signal-sowhat">UW-00014·00020에서 구현이 설계와 어긋남. 승인 대기 중.</div>
+      </a>
+    </div>
+
+    <!-- ── 1행: 결정 큐 + 다음 14일 ───────────────────────────── -->
+    <div class="sp-dash-row is-2-1">
+
+      <div class="sp-group sp-dash-card" id="decide">
+        <div class="sp-group-header">
+          <div class="sp-group-title">⚖️ 이번 주 결정 큐 <span class="sp-dash-help" title="PM이 결정해야만 풀리는 것들. 담당자 지정·일정 재조정·리마인드를 여기서 바로 처리해요.">?</span></div>
+          <span class="sp-dash-muted">오늘 결정하면 <b class="sp-dash-mono">5</b>건 해소</span>
+        </div>
+        <div class="sp-group-body">
+          <div class="sp-dash-queue">
+
+            <div class="sp-dash-queue-group">배정이 필요해요 · 11</div>
+            <div class="sp-dash-item">
+              <div class="sp-dash-item-icon is-gap">∅</div>
+              <div class="sp-dash-item-main">
+                <div class="sp-dash-item-title"><span class="id">PID-00046</span>예산 집행 현황 — 구현 담당자 없음</div>
+                <div class="sp-dash-item-why">구현 종료 예정 <b>D-5</b>인데 아무도 안 맡고 있어요 · 하위 기능 6개</div>
+              </div>
+              <div class="sp-dash-item-act">
+                <div class="sp-select-wrap" style="width:120px"><select class="sp-input" style="height:26px;padding:0 24px 0 8px;font-size:var(--text-xs)"><option>담당자 선택</option><option>김민수 (부하 3)</option><option>오세훈 (부하 2)</option><option>윤지아 (부하 4)</option></select><div class="sp-select-arrow"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="2,4 6,8 10,4"/></svg></div></div>
+              </div>
+            </div>
+            <div class="sp-dash-item">
+              <div class="sp-dash-item-icon is-gap">∅</div>
+              <div class="sp-dash-item-main">
+                <div class="sp-dash-item-title"><span class="id">UW-00023</span>집행 정산 관리 — 하위 기능 7개 담당 없음</div>
+                <div class="sp-dash-item-why">단위업무 담당은 <b>윤지아</b>, 기능은 비어 있음 · 일괄 지정 추천</div>
+              </div>
+              <div class="sp-dash-item-act"><button class="sp-btn sp-btn-secondary sp-btn-xs">윤지아로 일괄</button><button class="sp-btn sp-btn-ghost sp-btn-xs">My Task</button></div>
+            </div>
+
+            <div class="sp-dash-queue-group">지연 — 일정 재조정 또는 독려 · 6</div>
+            <div class="sp-dash-item">
+              <div class="sp-dash-item-icon is-due">D+4</div>
+              <div class="sp-dash-item-main">
+                <div class="sp-dash-item-title"><span class="id">PID-00041</span>편성 요청 등록 · 구현 — 박서연</div>
+                <div class="sp-dash-item-why">진척 <b>90%</b> · 검토 승인(이기성) 대기가 원인 · 일정 문제 아님</div>
+              </div>
+              <div class="sp-dash-item-act"><span class="sp-badge sp-badge-info">검토 병목</span><button class="sp-btn sp-btn-secondary sp-btn-xs">리마인드</button></div>
+            </div>
+            <div class="sp-dash-item">
+              <div class="sp-dash-item-icon is-due">D+9</div>
+              <div class="sp-dash-item-main">
+                <div class="sp-dash-item-title"><span class="id">UW-00020</span>예산 집행 등록 · 설계 — 박서연</div>
+                <div class="sp-dash-item-why">진척 <b>40%</b> · 9일 지연 · 박서연 부하 7(팀 최고) · <b>재배정 또는 일정 연장</b> 필요</div>
+              </div>
+              <div class="sp-dash-item-act"><button class="sp-btn sp-btn-secondary sp-btn-xs">일정 조정</button><button class="sp-btn sp-btn-ghost sp-btn-xs">분담</button></div>
+            </div>
+            <div class="sp-dash-item">
+              <div class="sp-dash-item-icon is-due">D+2</div>
+              <div class="sp-dash-item-main">
+                <div class="sp-dash-item-title"><span class="id">FN-00212</span>집행 금액 검증 · 구현 — 최준호</div>
+                <div class="sp-dash-item-why">진척 <b>0%</b> · 착수도 안 함 · 업무일지에도 3일간 언급 없음</div>
+              </div>
+              <div class="sp-dash-item-act"><span class="sp-badge sp-badge-error">미착수</span><button class="sp-btn sp-btn-secondary sp-btn-xs">확인 요청</button></div>
+            </div>
+
+            <div class="sp-dash-queue-group">검토가 멈춰 있어요 · 3</div>
+            <div class="sp-dash-item">
+              <div class="sp-dash-item-icon is-review">R</div>
+              <div class="sp-dash-item-main">
+                <div class="sp-dash-item-title"><span class="id">PID-00044</span>예산 요청 상세·편집 — 이기성 응답 대기</div>
+                <div class="sp-dash-item-why"><b>6일째</b> · 이 승인에 구현 2건이 묶여 있음 · 위 PID-00041 지연의 원인</div>
+              </div>
+              <div class="sp-dash-item-act"><button class="sp-btn sp-btn-secondary sp-btn-xs">리마인드</button><button class="sp-btn sp-btn-ghost sp-btn-xs">검토자 변경</button></div>
+            </div>
+
+            <div class="sp-dash-queue-group">AI 실패 · 2</div>
+            <div class="sp-dash-item">
+              <div class="sp-dash-item-icon is-ai">AI</div>
+              <div class="sp-dash-item-main">
+                <div class="sp-dash-item-title">UW-00023 일괄 설계(BulkDesign) 타임아웃</div>
+                <div class="sp-dash-item-why">어제 2회 실패 · 입력 기능 수 32개로 큼 · 둘로 나눠 재시도 추천</div>
+              </div>
+              <div class="sp-dash-item-act"><button class="sp-btn sp-btn-secondary sp-btn-xs">재시도</button></div>
+            </div>
+
+          </div>
+          <div class="sp-dash-card-foot">
+            <span>처리한 결정은 설계 변경 이력에 사유와 함께 남아요</span>
+            <a class="sp-dash-link" href="#">PM 진단에서 전체 보기 →</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="sp-group sp-dash-card">
+        <div class="sp-group-header">
+          <div class="sp-group-title">📅 다음 14일</div>
+          <span class="sp-dash-muted">막대 = 그날 마감 건수</span>
+        </div>
+        <div class="sp-group-body">
+          <div class="sp-dash-timeline">
+            <i class="is-today" style="height:40%" title="10/2 · 4건"></i>
+            <i class="is-holiday" style="height:8%" title="10/3 개천절"></i>
+            <i style="height:6%" title="10/4"></i>
+            <i style="height:30%" title="10/5 · 3건"></i>
+            <i style="height:20%" title="10/6 · 2건"></i>
+            <i style="height:50%" title="10/7 · 5건"></i>
+            <i style="height:100%" title="10/8 · 10건"></i>
+            <i class="is-holiday" style="height:8%" title="10/9 한글날"></i>
+            <i style="height:6%" title="10/10"></i>
+            <i style="height:6%" title="10/11"></i>
+            <i style="height:30%" title="10/12 · 3건"></i>
+            <i style="height:40%" title="10/13 · 4건"></i>
+            <i style="height:60%" title="10/14 · 6건"></i>
+            <i style="height:90%" title="10/15 · 9건"></i>
+          </div>
+          <div class="sp-dash-timeline-labels">
+            <span>2</span><span style="color:var(--color-error)">3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span style="color:var(--color-error)">9</span><span>10</span><span>11</span><span>12</span><span>13</span><span>14</span><span>15</span>
+          </div>
+
+          <div class="sp-dash-note" style="padding:8px 12px">
+            <span>⚠</span>
+            <div><b>10/8에 마감 10건</b>이 몰려 있고 다음 날이 공휴일이에요. 중간보고(10/8) 전날 밤샘 구조 — 3건은 앞당기거나 보고 이후로 미루는 결정이 필요해요.</div>
+          </div>
+
+          <div class="sp-section-title">마일스톤 · 단계</div>
+          <div class="sp-dash-milestones">
+            <div class="sp-dash-ms"><span class="dday is-soon">D-6</span><span class="ttl">🏁 1차 중간보고</span><span class="sp-dash-muted">10/8</span></div>
+            <div class="sp-dash-ms"><span class="dday">D-13</span><span class="ttl">설계 단계 종료 → 구현 단계</span><span class="sp-dash-muted">10/15</span></div>
+            <div class="sp-dash-ms"><span class="dday">D-27</span><span class="ttl">🏁 요구사항 추적표 1차 제출</span><span class="sp-dash-muted">10/29</span></div>
+          </div>
+
+          <div class="sp-dash-card-foot">
+            <span>기준일을 +3일로 바꾸면 지연 <b class="sp-dash-mono">6 → 9</b></span>
+            <a class="sp-dash-link" href="#">캘린더 →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 2행: 단계별 흐름 ───────────────────────────────────── -->
+    <div class="sp-group sp-dash-card">
+      <div class="sp-group-header">
+        <div class="sp-group-title">🔁 단계별 흐름 — 일이 어디서 쌓이나 <span class="sp-dash-help" title="각 단계의 완료율보다 '진행 중' 더미가 어디서 커지는지를 봐요. 진행 중이 많고 주간 완료 전환이 적으면 병목이에요.">?</span></div>
+        <div class="sp-dash-legend"><span><i class="seg-done"></i>완료</span><span><i class="seg-wip"></i>진행</span><span><i class="seg-late"></i>지연</span><span><i class="seg-idle"></i>미착수</span></div>
+      </div>
+      <div class="sp-group-body">
+        <div class="sp-dash-pipeline">
+          <div class="sp-dash-stage">
+            <div class="sp-dash-stage-head"><span class="sp-dash-stage-name">요구사항 분석</span><span class="sp-dash-stage-pct">92%</span></div>
+            <div class="sp-dash-bar is-lg"><span class="seg-done" style="width:86%"></span><span class="seg-wip" style="width:10%"></span><span class="seg-late" style="width:4%"></span></div>
+            <div class="sp-dash-stage-nums"><span>58 / 68</span><span>지연 2</span></div>
+            <div class="sp-dash-stage-note">이번 주 완료 전환 +3. 안정.</div>
+            <span class="sp-dash-stage-arrow">›</span>
+          </div>
+          <div class="sp-dash-stage">
+            <div class="sp-dash-stage-head"><span class="sp-dash-stage-name">단위업무 설계</span><span class="sp-dash-stage-pct">81%</span></div>
+            <div class="sp-dash-bar is-lg"><span class="seg-done" style="width:64%"></span><span class="seg-wip" style="width:28%"></span><span class="seg-late" style="width:8%"></span></div>
+            <div class="sp-dash-stage-nums"><span>23 / 36</span><span>지연 2</span></div>
+            <div class="sp-dash-stage-note">D-13 단계 종료까지 13건 남음 — 주 4건 속도면 빠듯.</div>
+            <span class="sp-dash-stage-arrow">›</span>
+          </div>
+          <div class="sp-dash-stage is-bottleneck">
+            <div class="sp-dash-stage-head"><span class="sp-dash-stage-name">화면 설계 <span class="sp-badge sp-badge-warning" style="margin-left:4px">병목</span></span><span class="sp-dash-stage-pct">63%</span></div>
+            <div class="sp-dash-bar is-lg"><span class="seg-done" style="width:45%"></span><span class="seg-wip" style="width:38%"></span><span class="seg-late" style="width:5%"></span></div>
+            <div class="sp-dash-stage-nums"><span>27 / 60</span><span>진행 23</span></div>
+            <div class="sp-dash-stage-note">진행 중 23건인데 주간 완료 전환 2건. <b>검토 승인 대기 7건</b>이 원인.</div>
+            <span class="sp-dash-stage-arrow">›</span>
+          </div>
+          <div class="sp-dash-stage">
+            <div class="sp-dash-stage-head"><span class="sp-dash-stage-name">기능 구현</span><span class="sp-dash-stage-pct">41%</span></div>
+            <div class="sp-dash-bar is-lg"><span class="seg-done" style="width:30%"></span><span class="seg-wip" style="width:22%"></span><span class="seg-late" style="width:6%"></span></div>
+            <div class="sp-dash-stage-nums"><span>55 / 184</span><span>지연 4</span></div>
+            <div class="sp-dash-stage-note">구현 단계 전이라 정상 범위. 미착수 77.</div>
+            <span class="sp-dash-stage-arrow">›</span>
+          </div>
+          <div class="sp-dash-stage">
+            <div class="sp-dash-stage-head"><span class="sp-dash-stage-name">테스트 명세</span><span class="sp-dash-stage-pct">18%</span></div>
+            <div class="sp-dash-bar is-lg"><span class="seg-done" style="width:18%"></span><span class="seg-wip" style="width:6%"></span></div>
+            <div class="sp-dash-stage-nums"><span>UW 6 / 36</span><span>단위 112 · 통합 14</span></div>
+            <div class="sp-dash-stage-note">설계 완료 UW 23개 중 17개에 명세 없음 — 지금 만들 수 있는 것.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 3행: 사람 + 설계 완성도 매트릭스 ───────────────────── -->
+    <div class="sp-dash-row is-1-1">
+
+      <div class="sp-group sp-dash-card">
+        <div class="sp-group-header">
+          <div class="sp-group-title">👥 팀 — 부하 vs 활동 <span class="sp-dash-help" title="부하 = 담당 중 진행+임박+지연 합. 활동 = 최근 7일 일별 변경 이벤트. 부하는 높은데 활동이 없는 사람이 가장 먼저 봐야 할 사람이에요.">?</span></div>
+          <div class="sp-tab-seg"><div class="sp-tab-seg-item is-active">위험순</div><div class="sp-tab-seg-item">이름순</div></div>
+        </div>
+        <div class="sp-group-body">
+          <div class="sp-dash-people-head"><span></span><span>이름</span><span>부하</span><span>활동 7일</span><span>신호</span></div>
+          <div class="sp-dash-people">
+            <div class="sp-dash-person">
+              <div class="sp-avatar sp-avatar-sm">박</div>
+              <div class="nm">박서연<small>개발</small></div>
+              <div class="sp-dash-load"><div class="sp-dash-bar"><span class="seg-wip" style="width:30%"></span><span class="seg-late" style="width:40%"></span></div><span class="n">7</span></div>
+              <div class="sp-dash-spark"><i style="height:60%"></i><i style="height:40%"></i><i style="height:80%"></i><i style="height:30%"></i><i style="height:50%"></i><i class="is-zero"></i><i class="is-zero"></i></div>
+              <span class="sp-badge sp-badge-error"><span class="dot"></span>과부하</span>
+            </div>
+            <div class="sp-dash-person">
+              <div class="sp-avatar sp-avatar-sm">최</div>
+              <div class="nm">최준호<small>개발</small></div>
+              <div class="sp-dash-load"><div class="sp-dash-bar"><span class="seg-wip" style="width:40%"></span><span class="seg-late" style="width:10%"></span></div><span class="n">5</span></div>
+              <div class="sp-dash-spark"><i style="height:30%"></i><i class="is-zero"></i><i class="is-zero"></i><i class="is-zero"></i><i class="is-zero"></i><i class="is-zero"></i><i class="is-zero"></i></div>
+              <span class="sp-badge sp-badge-warning"><span class="dot"></span>조용함 6일</span>
+            </div>
+            <div class="sp-dash-person">
+              <div class="sp-avatar sp-avatar-sm">이</div>
+              <div class="nm">이기성<small>PL</small></div>
+              <div class="sp-dash-load"><div class="sp-dash-bar"><span class="seg-wip" style="width:50%"></span><span class="seg-late" style="width:10%"></span></div><span class="n">6</span></div>
+              <div class="sp-dash-spark"><i style="height:90%"></i><i style="height:100%"></i><i style="height:70%"></i><i style="height:80%"></i><i style="height:60%"></i><i class="is-zero"></i><i style="height:40%"></i></div>
+              <span class="sp-badge sp-badge-info">검토 적체 3</span>
+            </div>
+            <div class="sp-dash-person">
+              <div class="sp-avatar sp-avatar-sm">윤</div>
+              <div class="nm">윤지아<small>설계</small></div>
+              <div class="sp-dash-load"><div class="sp-dash-bar"><span class="seg-wip" style="width:40%"></span></div><span class="n">4</span></div>
+              <div class="sp-dash-spark"><i style="height:50%"></i><i style="height:60%"></i><i style="height:40%"></i><i style="height:70%"></i><i style="height:50%"></i><i class="is-zero"></i><i class="is-zero"></i></div>
+              <span class="sp-badge sp-badge-success"><span class="dot"></span>균형</span>
+            </div>
+            <div class="sp-dash-person">
+              <div class="sp-avatar sp-avatar-sm">김</div>
+              <div class="nm">김민수<small>개발</small></div>
+              <div class="sp-dash-load"><div class="sp-dash-bar"><span class="seg-wip" style="width:30%"></span></div><span class="n">3</span></div>
+              <div class="sp-dash-spark"><i style="height:40%"></i><i style="height:50%"></i><i style="height:60%"></i><i style="height:40%"></i><i style="height:70%"></i><i class="is-zero"></i><i class="is-zero"></i></div>
+              <span class="sp-badge sp-badge-success"><span class="dot"></span>여유</span>
+            </div>
+            <div class="sp-dash-person">
+              <div class="sp-avatar sp-avatar-sm">오</div>
+              <div class="nm">오세훈<small>개발</small></div>
+              <div class="sp-dash-load"><div class="sp-dash-bar"><span class="seg-wip" style="width:20%"></span></div><span class="n">2</span></div>
+              <div class="sp-dash-spark"><i style="height:30%"></i><i style="height:20%"></i><i style="height:40%"></i><i style="height:30%"></i><i style="height:20%"></i><i class="is-zero"></i><i class="is-zero"></i></div>
+              <span class="sp-badge sp-badge-success"><span class="dot"></span>여유</span>
+            </div>
+          </div>
+          <div class="sp-dash-card-foot">
+            <span>박서연 → 김민수·오세훈으로 <b>2건</b> 옮기면 지연 신호가 사라져요</span>
+            <a class="sp-dash-link" href="#">PM 진단 · 팀 부하 →</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="sp-group sp-dash-card" id="matrix">
+        <div class="sp-group-header">
+          <div class="sp-group-title">🧩 설계 완성도 = PRD 준비도 <span class="sp-dash-help" title="단위업무별로 표준 양식 충족·컬럼 매핑·테스트 명세·스펙 정합을 보고, AI에 넘길 PRD를 뽑아도 되는지 판정해요. 빈칸이 있으면 PRD도 비어서 나갑니다.">?</span></div>
+          <span class="sp-dash-muted">설계 완료 UW 중 준비 <b class="sp-dash-mono">20 / 23</b></span>
+        </div>
+        <div class="sp-group-body">
+          <table class="sp-dash-matrix">
+            <thead><tr><th>단위업무</th><th>양식</th><th>컬럼</th><th>테스트</th><th>정합</th><th>PRD</th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="uw"><span class="id">UW-00020</span>예산 집행 등록</td>
+                <td><span class="sp-dash-cell is-low">54%</span></td><td><span class="sp-dash-cell is-low">31%</span></td><td><span class="sp-dash-cell is-none">—</span></td><td><span class="sp-dash-cell is-mid">2건</span></td>
+                <td><span class="sp-badge sp-badge-error">미준비</span></td>
+              </tr>
+              <tr>
+                <td class="uw"><span class="id">UW-00023</span>집행 정산 관리</td>
+                <td><span class="sp-dash-cell is-mid">71%</span></td><td><span class="sp-dash-cell is-low">40%</span></td><td><span class="sp-dash-cell is-none">—</span></td><td><span class="sp-dash-cell is-ok">OK</span></td>
+                <td><span class="sp-badge sp-badge-error">미준비</span></td>
+              </tr>
+              <tr>
+                <td class="uw"><span class="id">UW-00014</span>예산 편성 요청 관리</td>
+                <td><span class="sp-dash-cell is-mid">88%</span></td><td><span class="sp-dash-cell is-ok">92%</span></td><td><span class="sp-dash-cell is-ok">14</span></td><td><span class="sp-dash-cell is-mid">2건</span></td>
+                <td><span class="sp-badge sp-badge-warning">정합 확인</span></td>
+              </tr>
+              <tr>
+                <td class="uw"><span class="id">UW-00017</span>예산 과목 관리</td>
+                <td><span class="sp-dash-cell is-ok">100%</span></td><td><span class="sp-dash-cell is-ok">100%</span></td><td><span class="sp-dash-cell is-ok">9</span></td><td><span class="sp-dash-cell is-ok">OK</span></td>
+                <td><span class="sp-badge sp-badge-success">준비됨</span></td>
+              </tr>
+              <tr>
+                <td class="uw"><span class="id">UW-00011</span>감축사업 등록</td>
+                <td><span class="sp-dash-cell is-ok">97%</span></td><td><span class="sp-dash-cell is-ok">95%</span></td><td><span class="sp-dash-cell is-ok">22</span></td><td><span class="sp-dash-cell is-ok">OK</span></td>
+                <td><span class="sp-badge sp-badge-success">준비됨</span></td>
+              </tr>
+              <tr>
+                <td class="uw"><span class="id">UW-00009</span>사용자·권한 관리</td>
+                <td><span class="sp-dash-cell is-ok">100%</span></td><td><span class="sp-dash-cell is-ok">100%</span></td><td><span class="sp-dash-cell is-mid">4</span></td><td><span class="sp-dash-cell is-ok">OK</span></td>
+                <td><span class="sp-badge sp-badge-success">준비됨</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="sp-dash-kpis">
+            <div class="sp-dash-kpi is-warning"><div class="v">41</div><div class="k">양식 빈칸 기능</div></div>
+            <div class="sp-dash-kpi is-warning"><div class="v">29</div><div class="k">컬럼 매핑 없음</div></div>
+            <div class="sp-dash-kpi"><div class="v">17</div><div class="k">테스트 명세 없는 UW</div></div>
+            <div class="sp-dash-kpi is-success"><div class="v">20</div><div class="k">PRD 준비 완료</div></div>
+          </div>
+          <div class="sp-dash-card-foot">
+            <span>준비된 20개는 지금 바로 MD로 뽑아 개발에 넘길 수 있어요</span>
+            <a class="sp-dash-link" href="#">전체 매트릭스 →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 4행: 변경의 영향 + AI 활용 + 리더 리포트 ───────────── -->
+    <div class="sp-dash-row is-1-1-1">
+
+      <div class="sp-group sp-dash-card">
+        <div class="sp-group-header">
+          <div class="sp-group-title">🌊 요구사항 변경 → 설계 영향</div>
+          <span class="sp-dash-muted">최근 14일</span>
+        </div>
+        <div class="sp-group-body">
+          <div class="sp-dash-impact">
+            <div class="sp-dash-impact-row">
+              <div><div class="t"><span class="id">RQ-00012</span>예산 편성 요청 현행화</div><div class="s">어제 · 정하늘 · 하위 화면 <b>4</b> · 기능 <b>11</b></div></div>
+              <span class="sp-badge sp-badge-error">설계 미반영</span>
+            </div>
+            <div class="sp-dash-impact-row">
+              <div><div class="t"><span class="id">RQ-00027</span>집행 금액 상한 검증 추가</div><div class="s">4일 전 · 발주처 요청 · 기능 <b>3</b> · 테이블 <b>1</b></div></div>
+              <span class="sp-badge sp-badge-warning">일부 반영</span>
+            </div>
+            <div class="sp-dash-impact-row">
+              <div><div class="t"><span class="id">RQ-00005</span>감축 실적 산정 기준 변경</div><div class="s">9일 전 · 화면 <b>2</b> · 기능 <b>6</b></div></div>
+              <span class="sp-badge sp-badge-success">반영 완료</span>
+            </div>
+          </div>
+          <div class="sp-section-title">기준선 대비</div>
+          <div class="sp-dash-meter"><span class="lbl">변경된 요구사항</span><div class="sp-dash-bar"><span class="seg-wip" style="width:22%"></span></div><span class="val">15/68</span></div>
+          <div class="sp-dash-card-foot">
+            <span>기준선 스냅샷 v3 · 2026-09-15</span>
+            <a class="sp-dash-link" href="#">요구사항 이력 →</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="sp-group sp-dash-card">
+        <div class="sp-group-header">
+          <div class="sp-group-title">🤖 AI 활용 — 이번 달</div>
+          <span class="sp-badge sp-badge-error">실패 2</span>
+        </div>
+        <div class="sp-group-body">
+          <div class="sp-dash-kpis">
+            <div class="sp-dash-kpi"><div class="v">86</div><div class="k">태스크</div></div>
+            <div class="sp-dash-kpi is-success"><div class="v">71<span style="font-size:var(--text-sm)">%</span></div><div class="k">적용률</div></div>
+            <div class="sp-dash-kpi is-warning"><div class="v">9</div><div class="k">결과 미확인</div></div>
+          </div>
+          <div class="sp-section-title">무엇에 썼나</div>
+          <div class="sp-dash-meter"><span class="lbl">기능 점검</span><div class="sp-dash-bar"><span class="seg-wip" style="width:48%"></span></div><span class="val">41</span></div>
+          <div class="sp-dash-meter"><span class="lbl">영역 목업</span><div class="sp-dash-bar"><span class="seg-wip" style="width:24%"></span></div><span class="val">21</span></div>
+          <div class="sp-dash-meter"><span class="lbl">일괄 설계</span><div class="sp-dash-bar"><span class="seg-wip" style="width:14%"></span></div><span class="val">12</span></div>
+          <div class="sp-dash-meter"><span class="lbl">스펙 동기화</span><div class="sp-dash-bar"><span class="seg-wip" style="width:9%"></span></div><span class="val">8</span></div>
+          <div class="sp-dash-meter"><span class="lbl">기획실</span><div class="sp-dash-bar"><span class="seg-wip" style="width:5%"></span></div><span class="val">4</span></div>
+          <div class="sp-dash-card-foot">
+            <span>결과 미확인 9건 중 <b>7건</b>이 박서연 — 과부하 신호와 일치</span>
+            <a class="sp-dash-link" href="#">AI 태스크 →</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="sp-group sp-dash-card">
+        <div class="sp-group-header">
+          <div class="sp-group-title">📝 리더 리포트 준비 — 40주차</div>
+          <span class="sp-badge sp-badge-info">금요일</span>
+        </div>
+        <div class="sp-group-body">
+          <div class="sp-dash-meter"><span class="lbl">업무일지 작성</span><div class="sp-dash-bar"><span class="seg-done" style="width:67%"></span></div><span class="val">6/9</span></div>
+          <div class="sp-dash-avatars">
+            <div class="sp-avatar sp-avatar-sm" title="이기성">이</div>
+            <div class="sp-avatar sp-avatar-sm" title="박서연">박</div>
+            <div class="sp-avatar sp-avatar-sm" title="윤지아">윤</div>
+            <div class="sp-avatar sp-avatar-sm" title="김민수">김</div>
+            <div class="sp-avatar sp-avatar-sm" title="정하늘">정</div>
+            <div class="sp-avatar sp-avatar-sm" title="한도윤">한</div>
+            <div class="sp-avatar sp-avatar-sm is-missing" title="최준호 — 3일 미작성">최</div>
+            <div class="sp-avatar sp-avatar-sm is-missing" title="오세훈 — 오늘 미작성">오</div>
+            <div class="sp-avatar sp-avatar-sm is-missing" title="서예린 — 오늘 미작성">서</div>
+          </div>
+          <div class="sp-dash-note" style="padding:8px 12px">
+            <span>✦</span>
+            <div>AI 초안 생성 가능 — 6명 기록으로 <b>금주 실적·차주 계획</b> 초안을 만들 수 있어요. 최준호 기록이 비어 있어 FN-00212 미착수 사유는 직접 확인이 필요해요.</div>
+          </div>
+          <div class="sp-dash-card-foot">
+            <span>지난주 리포트 발송 10/26(월) 09:10</span>
+            <div style="display:flex;gap:6px">
+              <button class="sp-btn sp-btn-secondary sp-btn-xs">미작성 3명 리마인드</button>
+              <button class="sp-btn sp-btn-primary sp-btn-xs">리포트 작성</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── 테마 스위처 (시안 확인용) ───────────────────────────────── -->
+<div class="sp-dash-themebar" id="themebar">
+  <button data-t="dark" class="is-active">dark</button>
+  <button data-t="light">light</button>
+  <button data-t="dark-purple">dark-purple</button>
+</div>
+<script>
+  // 테마 전환은 data-theme 속성으로만 (UI 절대 규칙 3)
+  document.querySelectorAll('#themebar button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.documentElement.setAttribute('data-theme', b.dataset.t);
+      document.querySelectorAll('#themebar button').forEach(function (x) { x.classList.toggle('is-active', x === b); });
+    });
+  });
+</script>
+</body>
+</html>

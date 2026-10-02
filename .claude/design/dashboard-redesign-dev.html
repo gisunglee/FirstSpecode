@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPECODE — 개발자 대시보드 시안 (오늘의 작업대)</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="components.css">
+  <link rel="stylesheet" href="dashboard-redesign.css">
+</head>
+<body>
+<div class="sp-dash-page">
+
+  <!-- ── 상단 바 ─────────────────────────────────────────────── -->
+  <div class="sp-dash-topbar">
+    <div>
+      <span class="sp-dash-topbar-title">대시보드</span>
+      <span class="sp-dash-topbar-sub">개발자 뷰 · 온실가스감축인지 예산관리</span>
+    </div>
+    <div class="sp-dash-topbar-right">
+      <span class="sp-dash-muted">기준 2026-10-02(금) 09:12</span>
+      <button class="sp-btn sp-btn-ghost sp-btn-sm">관리 뷰로 보기</button>
+    </div>
+  </div>
+
+  <div class="sp-dash-content">
+
+    <div class="sp-dash-note">
+      <span>💡</span>
+      <div>
+        <b>시안 컨셉 — "오늘의 작업대".</b> 카드 4개를 나열하던 기존 개발자뷰를
+        <b>① 지금 할 것(행동 큐) → ② 내 설계의 빈칸 → ③ 이번 주 지형 → ④ 하루의 기록</b> 한 흐름으로 재배치했다.
+        검토요청·AI결과·마감·변경알림은 별도 카드가 아니라 하나의 큐에서 긴급도 순으로 처리한다.
+        "내 담당 전체"는 여기 두지 않고 MY 현황으로 보낸다.
+      </div>
+    </div>
+
+    <!-- ── 히어로 ─────────────────────────────────────────────── -->
+    <section class="sp-dash-hero">
+      <div style="flex:1;min-width:260px">
+        <h1>좋은 아침이에요, <em>이기성</em>님 ☀</h1>
+        <p>오늘 처리할 것 <strong>8건</strong> 중 <strong>2건</strong>은 오늘 안에 끝내야 해요.
+           어제 업무일지 결과 칸이 비어 있어요.</p>
+      </div>
+      <div class="sp-dash-chips">
+        <a class="sp-dash-chip is-error"   href="#queue"><span class="n">2</span> 오늘 마감</a>
+        <a class="sp-dash-chip is-info"    href="#queue"><span class="n">3</span> 검토 요청</a>
+        <a class="sp-dash-chip is-brand"   href="#queue"><span class="n">1</span> AI 결과 도착</a>
+        <a class="sp-dash-chip is-warning" href="#gaps"><span class="n">7</span> 설계 빈칸</a>
+      </div>
+    </section>
+
+    <!-- ── 1행: 행동 큐 + 오늘 집중 ───────────────────────────── -->
+    <div class="sp-dash-row is-2-1">
+
+      <div class="sp-group sp-dash-card" id="queue">
+        <div class="sp-group-header">
+          <div class="sp-group-title">📥 지금 할 것 <span class="sp-dash-help" title="나에게 온 요청과 내가 지켜야 할 마감을 긴급도 순으로 모았어요. 처리하면 줄에서 빠집니다.">?</span></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span class="sp-dash-muted">3 / 11 처리</span>
+            <div class="sp-tab-seg">
+              <div class="sp-tab-seg-item is-active">긴급순</div>
+              <div class="sp-tab-seg-item">유형별</div>
+            </div>
+          </div>
+        </div>
+        <div class="sp-group-body">
+          <div class="sp-dash-queue">
+
+            <div class="sp-dash-queue-group">오늘 안에</div>
+
+            <div class="sp-dash-item">
+              <div class="sp-dash-item-icon is-due">D0</div>
+              <div class="sp-dash-item-main">
+                <div class="sp-dash-item-title"><span class="id">UW-00014</span>예산 편성 요청 관리</div>
+                <div class="sp-dash-item-why">설계 종료일 <b>오늘</b> · 설계 진척 <b>80%</b> · 하위 화면 4개 중 1개 미완</div>
+              </div>
+              <div class="sp-dash-item-act">
+                <span class="sp-badge sp-badge-error"><span class="dot"></span>설계 마감</span>
+                <button class="sp-btn sp-btn-primary sp-btn-xs">열기</button>
+              </div>
+            </div>
+
+            <div class="sp-dash-item">
+              <div class="sp-dash-item-icon is-review">R</div>
+              <div class="sp-dash-item-main">
+                <div class="sp-dash-item-title"><span class="id">PID-00044</span>예산 요청 상세·편집 — 화면 설계 검토 요청</div>
+                <div class="sp-dash-item-why"><b>박서연</b>이 요청 · <b>6일째</b> 대기 중 · 승인 없으면 박서연의 구현이 막혀요</div>
+              </div>
+              <div class="sp-dash-item-act">
+                <span class="sp-badge sp-badge-warning">6일 경과</span>
+                <button class="sp-btn sp-btn-secondary sp-btn-xs">검토하기</button>
+              </div>
+            </div>
+
+            <div class="sp-dash-item">
+              <div class="sp-dash-item-icon is-due">D0</div>
+              <div class="sp-dash-item-main">
+                <div class="sp-dash-item-title"><span class="id">FN-00231</span>편성 요청 결재 승인 처리</div>
+                <div class="sp-dash-item-why">화면 구현 종료일 <b>오늘</b> · 구현 진척 <b>60%</b></div>
+              </div>
+              <div class="sp-dash-item-act">
+                <span class="sp-badge sp-badge-error"><span class="dot"></span>구현 마감</span>
+                <button class="sp-btn sp-btn-primary sp-btn-xs">열기</button>
+              </div>
+            </div>
+
+            <div class="sp-dash-queue-group">답을 기다리는 사람</div>
+
+            <div class="sp-dash-item">
+              <div class="sp-dash-item-icon is-review">R</div>
+              <div class="sp-dash-item-main">
+                <div class="sp-dash-item-title"><span class="id">FN-00198</span>예산 과목 자동 분류 — 기능 명세 검토</div>
+                <div class="sp-dash-item-why"><b>김민수</b>가 요청 · 2일째</div>
+              </div>
+              <div class="sp-dash-item-act"><button class="sp-btn sp-btn-secondary sp-btn-xs">검토하기</button></div>
+            </div>
+
+            <div class="sp-dash-item">
+              <div class="sp-dash-item-icon is-review">Q</div>
+              <div class="sp-dash-item-main">
+                <div class="sp-dash-item-title">AS-IS 질문: 기존 시스템의 예산 이월 처리 기준이 뭔가요?</div>
+                <div class="sp-dash-item-why"><b>Claude Code</b>가 온보딩 중 질문 · <b>최준호</b>가 나에게 배정 · 어제</div>
+              </div>
+              <div class="sp-dash-item-act"><button class="sp-btn sp-btn-secondary sp-btn-xs">답하기</button></div>
+            </div>
+
+            <div class="sp-dash-item">
+              <div class="sp-dash-item-icon is-review">R</div>
+              <div class="sp-dash-item-main">
+                <div class="sp-dash-item-title"><span class="id">RQ-00012</span>예산 편성 요구사항 현행화 확정 코멘트</div>
+                <div class="sp-dash-item-why"><b>정하늘</b>이 요청 · 오늘</div>
+              </div>
+              <div class="sp-dash-item-act"><button class="sp-btn sp-btn-secondary sp-btn-xs">검토하기</button></div>
+            </div>
+
+            <div class="sp-dash-queue-group">확인하면 끝</div>
+
+            <div class="sp-dash-item">
+              <div class="sp-dash-item-icon is-ai">AI</div>
+              <div class="sp-dash-item-main">
+                <div class="sp-dash-item-title"><span class="id">FN-00231</span>기능 명세 AI 점검 결과가 도착했어요</div>
+                <div class="sp-dash-item-why">누락 <b>2건</b>(예외 규칙, 권한) · 제안 <b>1건</b> · 적용 여부를 결정해 주세요</div>
+              </div>
+              <div class="sp-dash-item-act">
+                <span class="sp-badge sp-badge-brand"><span class="dot"></span>결과 도착</span>
+                <button class="sp-btn sp-btn-secondary sp-btn-xs">결과 보기</button>
+              </div>
+            </div>
+
+            <div class="sp-dash-item">
+              <div class="sp-dash-item-icon is-change">Δ</div>
+              <div class="sp-dash-item-main">
+                <div class="sp-dash-item-title"><span class="id">RQ-00012</span>내 화면의 상위 요구사항이 바뀌었어요</div>
+                <div class="sp-dash-item-why"><b>정하늘</b>이 어제 수정 · 내 담당 화면 <b>2개</b>(PID-00043, 00044)에 영향 가능</div>
+              </div>
+              <div class="sp-dash-item-act"><button class="sp-btn sp-btn-ghost sp-btn-xs">Diff 보기</button></div>
+            </div>
+
+            <div class="sp-dash-item is-done">
+              <div class="sp-dash-item-icon is-ai">AI</div>
+              <div class="sp-dash-item-main">
+                <div class="sp-dash-item-title"><span class="id">AREA-00047</span>영역 목업 생성 결과 — 적용함</div>
+                <div class="sp-dash-item-why">오늘 08:50 처리</div>
+              </div>
+              <div class="sp-dash-item-act"><span class="sp-badge sp-badge-success">완료</span></div>
+            </div>
+
+          </div>
+          <div class="sp-dash-card-foot">
+            <span>완료된 항목은 하루 동안 흐리게 남아 있다가 사라져요.</span>
+            <a class="sp-dash-link" href="#">리뷰 요청 전체 →</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="sp-group sp-dash-card">
+        <div class="sp-group-header">
+          <div class="sp-group-title">🎯 오늘 집중 <span class="sp-dash-help" title="마감·대기자 수·진척률을 함께 보고 가장 먼저 손대면 좋은 일 하나를 골랐어요.">?</span></div>
+          <button class="sp-btn sp-btn-ghost sp-btn-xs">다른 걸로</button>
+        </div>
+        <div class="sp-group-body">
+          <div class="sp-dash-focus">
+            <div class="sp-dash-focus-kicker">왜 이것부터?</div>
+            <div class="sp-dash-focus-title">
+              <span class="id">PID-00044 · 화면 설계 검토</span>
+              예산 요청 상세·편집 검토 응답
+            </div>
+            <ul class="sp-dash-focus-reasons">
+              <li>박서연이 <b>6일째</b> 기다리고 있고, 이 승인 뒤에 구현 2건이 묶여 있어요</li>
+              <li>내 오늘 마감(UW-00014)의 하위 화면이라 함께 끝나요</li>
+              <li>예상 소요 <b>20분</b> — 가장 적은 시간으로 가장 많은 것이 풀려요</li>
+            </ul>
+            <div class="sp-btn-row">
+              <button class="sp-btn sp-btn-primary sp-btn-sm">검토 시작</button>
+              <button class="sp-btn sp-btn-secondary sp-btn-sm">업무일지에 올리기</button>
+            </div>
+          </div>
+
+          <div class="sp-section-title" style="margin-top:4px">그 다음</div>
+          <div class="sp-dash-item" style="padding:6px 8px">
+            <div class="sp-dash-item-icon is-due">D0</div>
+            <div class="sp-dash-item-main">
+              <div class="sp-dash-item-title"><span class="id">FN-00231</span>결재 승인 처리 구현 마무리</div>
+              <div class="sp-dash-item-why">AI 점검 결과(누락 2건) 먼저 반영하고 진행</div>
+            </div>
+            <div></div>
+          </div>
+          <div class="sp-dash-item" style="padding:6px 8px">
+            <div class="sp-dash-item-icon is-gap">?</div>
+            <div class="sp-dash-item-main">
+              <div class="sp-dash-item-title">설계 빈칸 7개 중 FN-00231 것 3개</div>
+              <div class="sp-dash-item-why">구현 전에 채우면 Claude Code가 추측하지 않아요</div>
+            </div>
+            <div></div>
+          </div>
+
+          <div class="sp-dash-card-foot">
+            <span>이번 주 집중 완료 <b class="sp-dash-mono">3</b> / 4</span>
+            <a class="sp-dash-link" href="#">MY 현황에서 전체 보기 →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 2행: 설계 빈칸 + 이번 주 지형 + 내 주변의 변화 ──────── -->
+    <div class="sp-dash-row is-1-1-1">
+
+      <div class="sp-group sp-dash-card" id="gaps">
+        <div class="sp-group-header">
+          <div class="sp-group-title">🧩 내 설계의 빈칸 <span class="sp-dash-help" title="내가 담당한 기능·화면을 표준 양식과 대조해 아직 안 채워진 칸을 질문 형태로 보여줘요. 빈칸이 있으면 PRD도 비어서 나갑니다.">?</span></div>
+          <span class="sp-badge sp-badge-accent">7 빈칸</span>
+        </div>
+        <div class="sp-group-body">
+          <div class="sp-dash-meter">
+            <span class="lbl">내 기능 양식 충족</span>
+            <div class="sp-dash-bar"><span class="seg-done" style="width:83%"></span></div>
+            <span class="val">35/42</span>
+          </div>
+          <div class="sp-dash-meter">
+            <span class="lbl">컬럼 매핑 연결</span>
+            <div class="sp-dash-bar"><span class="seg-done" style="width:71%"></span></div>
+            <span class="val">30/42</span>
+          </div>
+
+          <div class="sp-dash-gap">
+            <span>❓</span>
+            <div class="q"><span class="id">FN-00231 결재 승인 처리</span>승인이 <b>반려</b>되면 요청 상태와 알림은 어떻게 되나요? <span class="sp-dash-muted">(예외 규칙 비어 있음)</span></div>
+          </div>
+          <div class="sp-dash-gap">
+            <span>❓</span>
+            <div class="q"><span class="id">FN-00231 결재 승인 처리</span>이 기능이 갱신하는 <b>컬럼</b>이 무엇인가요? <span class="sp-dash-muted">(컬럼 매핑 0건)</span></div>
+          </div>
+          <div class="sp-dash-gap">
+            <span>❓</span>
+            <div class="q"><span class="id">FN-00198 예산 과목 자동 분류</span>분류 실패 시 <b>기본값</b>은? 사용자가 수정할 수 있나요? <span class="sp-dash-muted">(처리 규칙 미기재)</span></div>
+          </div>
+          <div class="sp-dash-gap">
+            <span>❓</span>
+            <div class="q"><span class="id">PID-00043 예산 요청 목록</span>목록 기본 정렬과 <b>권한별</b> 노출 범위가 적혀 있지 않아요</div>
+          </div>
+
+          <div class="sp-dash-card-foot">
+            <span>빈칸 7개 → 질문 묶음으로 복사해 Claude Code에 붙이면 바로 채울 수 있어요</span>
+            <button class="sp-btn sp-btn-accent sp-btn-xs">질문 복사</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sp-group sp-dash-card">
+        <div class="sp-group-header">
+          <div class="sp-group-title">🗓 이번 주 지형</div>
+          <div class="sp-dash-legend">
+            <span><i class="seg-wip"></i>설계</span>
+            <span><i style="background:var(--color-accent)"></i>구현</span>
+            <span><i style="background:var(--color-info);border-radius:9999px"></i>마일스톤</span>
+          </div>
+        </div>
+        <div class="sp-group-body">
+          <div class="sp-dash-week">
+            <div class="sp-dash-day"><span class="w">월</span><span class="d">28</span><div class="dots"><i class="is-design"></i></div></div>
+            <div class="sp-dash-day"><span class="w">화</span><span class="d">29</span><div class="dots"></div></div>
+            <div class="sp-dash-day"><span class="w">수</span><span class="d">30</span><div class="dots"><i class="is-late"></i><i class="is-impl"></i></div></div>
+            <div class="sp-dash-day"><span class="w">목</span><span class="d">1</span><div class="dots"><i class="is-impl"></i></div></div>
+            <div class="sp-dash-day is-today"><span class="w">금</span><span class="d">2</span><div class="dots"><i class="is-design"></i><i class="is-impl"></i></div></div>
+            <div class="sp-dash-day is-holiday"><span class="w">토</span><span class="d">3</span><div class="dots"></div><span class="sp-dash-muted" style="font-size:var(--text-2xs)">개천절</span></div>
+            <div class="sp-dash-day"><span class="w">일</span><span class="d">4</span><div class="dots"></div></div>
+          </div>
+
+          <div class="sp-section-title">다음 7일 안에 끝나야 하는 것</div>
+          <div class="sp-dash-milestones">
+            <div class="sp-dash-ms"><span class="dday is-soon">D-0</span><span class="ttl">UW-00014 예산 편성 요청 관리 · 설계</span><span class="sp-dash-mono sp-dash-muted">80%</span></div>
+            <div class="sp-dash-ms"><span class="dday is-soon">D-0</span><span class="ttl">FN-00231 결재 승인 처리 · 구현</span><span class="sp-dash-mono sp-dash-muted">60%</span></div>
+            <div class="sp-dash-ms"><span class="dday" style="color:var(--color-error)">D+2</span><span class="ttl">PID-00041 편성 요청 등록 · 구현 (지연)</span><span class="sp-dash-mono sp-dash-muted">90%</span></div>
+            <div class="sp-dash-ms"><span class="dday">D-5</span><span class="ttl">PID-00046 예산 집행 현황 · 구현</span><span class="sp-dash-mono sp-dash-muted">35%</span></div>
+            <div class="sp-dash-ms"><span class="dday">D-7</span><span class="ttl">🏁 1차 중간보고 (프로젝트 마일스톤)</span><span></span></div>
+          </div>
+
+          <div class="sp-dash-card-foot">
+            <span>화면 <b class="sp-dash-mono">3</b> · 기능 <b class="sp-dash-mono">5</b>가 이 범위에 있어요</span>
+            <a class="sp-dash-link" href="#">캘린더 →</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="sp-group sp-dash-card">
+        <div class="sp-group-header">
+          <div class="sp-group-title">🔔 내 주변의 변화 <span class="sp-dash-help" title="내가 만든 것이 아니라, 내 담당 항목의 위·아래가 남에 의해 바뀐 것만 모았어요.">?</span></div>
+          <span class="sp-dash-muted">최근 7일</span>
+        </div>
+        <div class="sp-group-body">
+          <div class="sp-dash-impact">
+            <div class="sp-dash-impact-row">
+              <div>
+                <div class="t"><span class="id">RQ-00012</span>예산 편성 요구사항 현행화</div>
+                <div class="s"><b>정하늘</b> · 어제 · 내 화면 <b>2개</b>가 이 요구사항 아래에 있어요</div>
+              </div>
+              <span class="sp-badge sp-badge-warning">영향 확인</span>
+            </div>
+            <div class="sp-dash-impact-row">
+              <div>
+                <div class="t"><span class="id">tb_bdg_request</span>컬럼 <code class="sp-code">aprv_sttus_cd</code> 허용값 추가</div>
+                <div class="s"><b>최준호</b> · 3일 전 · 내 기능 <b>FN-00231</b>이 이 컬럼을 써요</div>
+              </div>
+              <span class="sp-badge sp-badge-warning">영향 확인</span>
+            </div>
+            <div class="sp-dash-impact-row">
+              <div>
+                <div class="t"><span class="id">스펙 동기화</span>UW-00014 CHECK 결과 — 불일치 2건</div>
+                <div class="s">구현 소스와 설계가 어긋남 · 항목별 승인 대기</div>
+              </div>
+              <span class="sp-badge sp-badge-info">검토 대기</span>
+            </div>
+            <div class="sp-dash-impact-row">
+              <div>
+                <div class="t"><span class="id">표준 가이드</span>API 응답 규약 v1.3 개정</div>
+                <div class="s"><b>김민수</b> · 5일 전 · 에러 코드 체계 변경</div>
+              </div>
+              <span class="sp-badge sp-badge-neutral">읽음</span>
+            </div>
+          </div>
+          <div class="sp-dash-card-foot">
+            <span>내가 직접 바꾼 것은 여기 안 나와요</span>
+            <a class="sp-dash-link" href="#">설계 변경 이력 →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 3행: 하루의 기록 + 내 흐름 ─────────────────────────── -->
+    <div class="sp-dash-row is-3-2">
+
+      <div class="sp-group sp-dash-card">
+        <div class="sp-group-header">
+          <div class="sp-group-title">📓 하루의 시작과 끝 <span class="sp-dash-help" title="업무일지를 열지 않고도 여기서 바로 적어요. 어제 한 일은 변경 이력에서 자동으로 제안합니다.">?</span></div>
+          <span class="sp-badge sp-badge-warning"><span class="dot"></span>어제 결과 미작성</span>
+        </div>
+        <div class="sp-group-body">
+          <div class="sp-dash-log">
+            <div class="sp-dash-log-row">
+              <span class="tag">어제</span>
+              <span class="sp-dash-muted">이력에서 찾은 어제의 흔적 — 클릭하면 결과 칸에 들어가요</span>
+            </div>
+            <div class="sp-dash-log-suggest" style="padding-left:56px">
+              <button>+ FN-00231 명세 수정 2회</button>
+              <button>+ PID-00043 영역 목업 적용</button>
+              <button>+ 검토 1건 응답(FN-00175)</button>
+              <button>+ 공통코드 3건 등록</button>
+            </div>
+            <div class="sp-dash-log-row" style="margin-top:6px">
+              <span class="tag">오늘</span>
+              <input class="sp-input" type="text" placeholder="오늘 할 일을 한 줄로 — 위 '오늘 집중'에서 올린 항목이 자동으로 들어와요" style="flex:1">
+            </div>
+            <div style="padding-left:56px;display:flex;flex-direction:column;gap:6px">
+              <label class="sp-checkbox-wrap"><input class="sp-checkbox" type="checkbox"><span>PID-00044 화면 설계 검토 응답</span></label>
+              <label class="sp-checkbox-wrap"><input class="sp-checkbox" type="checkbox"><span>FN-00231 AI 점검 결과 반영 후 구현 마무리</span></label>
+              <label class="sp-checkbox-wrap"><input class="sp-checkbox" type="checkbox" checked><span>AREA-00047 목업 적용</span></label>
+            </div>
+          </div>
+          <div class="sp-dash-card-foot">
+            <span>이번 주 기록 <b class="sp-dash-mono">4</b> / 5일 · 리더 리포트에 반영돼요</span>
+            <div style="display:flex;gap:6px">
+              <button class="sp-btn sp-btn-secondary sp-btn-xs">업무일지 열기</button>
+              <button class="sp-btn sp-btn-primary sp-btn-xs">저장</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sp-group sp-dash-card">
+        <div class="sp-group-header">
+          <div class="sp-group-title">📈 내 흐름</div>
+          <span class="sp-dash-muted">최근 4주</span>
+        </div>
+        <div class="sp-group-body">
+          <div class="sp-dash-kpis">
+            <div class="sp-dash-kpi is-success"><div class="v">6</div><div class="k">이번 주 완료</div></div>
+            <div class="sp-dash-kpi"><div class="v">1.8<span style="font-size:var(--text-sm)">일</span></div><div class="k">검토 응답 평균</div></div>
+            <div class="sp-dash-kpi is-warning"><div class="v">1</div><div class="k">지연 중</div></div>
+            <div class="sp-dash-kpi"><div class="v">12</div><div class="k">AI 태스크 요청</div></div>
+          </div>
+
+          <div class="sp-section-title">내 담당 진척</div>
+          <div class="sp-dash-meter"><span class="lbl">요구사항 3</span><div class="sp-dash-bar"><span class="seg-done" style="width:67%"></span><span class="seg-wip" style="width:33%"></span></div><span class="val">72%</span></div>
+          <div class="sp-dash-meter"><span class="lbl">단위업무 2</span><div class="sp-dash-bar"><span class="seg-done" style="width:50%"></span><span class="seg-wip" style="width:50%"></span></div><span class="val">78%</span></div>
+          <div class="sp-dash-meter"><span class="lbl">화면 6</span><div class="sp-dash-bar"><span class="seg-done" style="width:50%"></span><span class="seg-wip" style="width:33%"></span><span class="seg-late" style="width:17%"></span></div><span class="val">64%</span></div>
+          <div class="sp-dash-meter"><span class="lbl">기능 24</span><div class="sp-dash-bar"><span class="seg-done" style="width:58%"></span><span class="seg-wip" style="width:30%"></span><span class="seg-late" style="width:4%"></span></div><span class="val">61%</span></div>
+          <div class="sp-dash-legend"><span><i class="seg-done"></i>완료</span><span><i class="seg-wip"></i>진행</span><span><i class="seg-late"></i>지연</span><span><i class="seg-idle"></i>미착수</span></div>
+
+          <div class="sp-dash-card-foot">
+            <span>4주 전보다 완료 속도 <b style="color:var(--color-success)">+2건/주</b></span>
+            <a class="sp-dash-link" href="#">MY 현황 →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── 테마 스위처 (시안 확인용) ───────────────────────────────── -->
+<div class="sp-dash-themebar" id="themebar">
+  <button data-t="dark" class="is-active">dark</button>
+  <button data-t="light">light</button>
+  <button data-t="dark-purple">dark-purple</button>
+</div>
+<script>
+  // 테마 전환은 data-theme 속성으로만 (UI 절대 규칙 3)
+  document.querySelectorAll('#themebar button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.documentElement.setAttribute('data-theme', b.dataset.t);
+      document.querySelectorAll('#themebar button').forEach(function (x) { x.classList.toggle('is-active', x === b); });
+    });
+  });
+</script>
+</body>
+</html>
