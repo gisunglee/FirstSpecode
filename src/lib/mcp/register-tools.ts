@@ -30,7 +30,7 @@
  *   [표준 가이드]  search_standard_guides, get_standard_guide (프로젝트 코딩/디자인 표준 문서 —
  *                    /specode review의 code-quality/ui-design 리뷰어가 기준 문서로 사용)
  *   [QA-테스트]    list_test_specs, get_test_spec, list_check_masters, get_test_template,
- *                    create_test_spec, import_check_masters, upsert_test_cases
+ *                    create_test_spec, update_test_spec, import_check_masters, upsert_test_cases
  *                    (명세서 작성까지만 — 회차·합부 판정·결함·증적은 도구 없음)
  *   [워커 배포]    get_worker_command_files (/specode work, /specode sync, /specode onboard,
  *                    /specode review 커맨드를 고객 로컬에 설치할 파일 내용 제공)
@@ -92,6 +92,7 @@ import {
   DESIGN_AGREEMENT_FIELDS,
   SCOPE_STATUS_FIELD,
   DESIGN_WRITE_POLICY_POINTER,
+  TOOL_DATA_BOUNDARY_NOTICE,
   checkDesignAgreement,
 } from "@/lib/mcp/design-policy";
 import {
@@ -103,9 +104,24 @@ import {
 
 // ─── 공통 헬퍼 ──────────────────────────────────────────────────
 
-/** 도구 결과를 MCP 텍스트 콘텐츠로 래핑 */
+/**
+ * 도구 결과를 MCP 텍스트 콘텐츠로 래핑
+ *
+ * 첫 번째 블록은 기존과 완전히 동일한 JSON 이다 — get_worker_command_files 처럼
+ * 응답을 JSON.parse 하는 소비자(scripts/worker-command-bundle.test.ts 가 그 계약을
+ * 검증한다)가 있으므로 이 블록의 내용과 위치는 바꾸지 않는다.
+ *
+ * 두 번째 블록에 데이터 경계 안내(TOOL_DATA_BOUNDARY_NOTICE)를 별도로 붙인다 —
+ * 본문 필드에 섞인 AI 지시문을 모델이 사용자 요청으로 착각하지 않게 하기 위함.
+ * JSON 블록 안에 끼워 넣지 않는 이유는 위 계약을 깨지 않기 위해서다.
+ */
 function textResult(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+  return {
+    content: [
+      { type: "text" as const, text: JSON.stringify(data, null, 2) },
+      { type: "text" as const, text: TOOL_DATA_BOUNDARY_NOTICE },
+    ],
+  };
 }
 
 /** 에러를 MCP 에러 결과로 래핑 */
@@ -2007,6 +2023,32 @@ export function registerTools(
   );
 
   server.tool(
+    "update_test_spec",
+    "기존 테스트 명세서의 이름·개요·연결 대상만 수정합니다. 케이스와 회차는 변경하지 않습니다. " +
+      "먼저 get_test_spec으로 현재 연결을 확인하세요. 생략한 필드는 유지됩니다. " +
+      "unitWorkIds/screenIds를 보내면 해당 종류의 전체 연결 목록을 교체하므로 기존 연결도 함께 보내세요. " +
+      "두 종류를 합쳐 최소 하나의 대상이 있어야 합니다. " + TEST_WRITE_POLICY_POINTER,
+    {
+      projectId: z.string(),
+      testSpecId: z.string(),
+      testSpecNm: z.string().trim().min(1).optional(),
+      testSpecDc: z.string().nullable().optional().describe("명세 개요. null 또는 빈 문자열은 비우기"),
+      unitWorkIds: z.array(z.string()).optional().describe("이 종류의 전체 연결 목록. 생략=유지, []=연결 제거"),
+      screenIds: z.array(z.string()).optional().describe("이 종류의 전체 연결 목록. 생략=유지, []=연결 제거"),
+      ...DESIGN_AGREEMENT_FIELDS,
+    },
+    async ({ projectId, testSpecId, userAgreement, discussionSummary, ...body }) => {
+      const blocked = agreementGate({ userAgreement, discussionSummary });
+      if (blocked) return blocked;
+      try {
+        return textResult(await specodeFetch(`/api/projects/${projectId}/test-specs/${testSpecId}`, {
+          method: "PATCH", body: JSON.stringify(body),
+        }));
+      } catch (err) { return errorResult(err); }
+    },
+  );
+
+  server.tool(
     "import_check_masters",
     "공통 점검 가져오기 — 선택한 마스터 항목을 CHECKLIST 케이스로 복사합니다. " +
       "문장은 서버가 마스터 원문을 그대로 복사하므로 내용을 바꿔 쓸 수 없습니다 — " +
@@ -2045,6 +2087,8 @@ export function registerTools(
   server.tool(
     "upsert_test_cases",
     "테스트 케이스 추가·수정 — testCaseId 가 있으면 수정, 없으면 추가합니다. " +
+      "수정 시 생략한 선택 필드는 유지되며, 텍스트는 빈 문자열로 비울 수 있습니다. " +
+      "회차에서 사용한 케이스는 기존 판정 기준 보존을 위해 변경할 수 없습니다(409). 새 케이스 또는 새 명세서를 만드세요. " +
       "직접 작성하는 것은 ctgryCode=FUNCTIONAL 기능 시나리오뿐입니다 — " +
       "CHECKLIST 는 지어내지 말고 import_check_masters 로 가져오세요. " +
       "케이스는 SPECODE 에 등록된 설계(화면·영역·기능)에서 나와야 합니다. 설계에 없는 동작을 " +
@@ -2064,14 +2108,14 @@ export function registerTools(
               .optional()
               .describe("기존 케이스 ID — 있으면 수정, 없으면 신규 추가 (get_test_spec 으로 조회)"),
             caseNo: z
-              .number()
+              .number().int().positive()
               .optional()
               .describe("명세서 내 일련번호. 생략 시 기존 최대값 다음 번호로 자동 부여"),
             ctgryCode: z
               .enum(["CHECKLIST", "FUNCTIONAL"])
               .describe("FUNCTIONAL=기능 시나리오(직접 작성). CHECKLIST=공통 점검(직접 작성 금지 — import_check_masters 사용)"),
             grpNm: z
-              .string()
+              .string().nullable()
               .optional()
               .describe("구분(그룹명) — 화면 안의 기능 묶음 이름. 예: 회원 등록, 권한 변경. FUNCTIONAL 에만 사용(CHECKLIST 는 무시됨)"),
             scenarioCn: z
@@ -2081,17 +2125,17 @@ export function registerTools(
               .string()
               .describe("예상 결과 — 화면에서 관측 가능하게. 예: 저장되지 않고 이메일 입력란 아래에 필수 항목입니다 가 표시된다. 에러가 난다 / 정상 동작한다 같은 판정 불가 문장 금지"),
             preconditionCn: z
-              .string()
+              .string().nullable()
               .optional()
               .describe("전제조건 — 재현에 꼭 필요할 때만. 로그인 상태처럼 모든 케이스에 공통인 것은 반복하지 마세요"),
-            testDataCn: z.string().optional().describe("테스트 데이터. 예: 이메일 a@b.com / 비번 Test1234!"),
-            testAccountCn: z.string().optional().describe("테스트 계정. 예: OWNER 계정 / MEMBER 계정"),
+            testDataCn: z.string().nullable().optional().describe("테스트 데이터. 예: 이메일 a@b.com / 비번 Test1234!"),
+            testAccountCn: z.string().nullable().optional().describe("테스트 계정. 예: OWNER 계정 / MEMBER 계정"),
             priortCode: z.enum(["HIGH", "MEDIUM", "LOW"]).optional().describe("우선순위. 기본 MEDIUM"),
             applicableYn: z
               .enum(["Y", "N"])
               .optional()
               .describe("해당 여부. N=이 화면에는 해당 없음(결과 입력 비활성). 기본 Y"),
-            remarkCn: z.string().optional().describe("비고"),
+            remarkCn: z.string().nullable().optional().describe("비고"),
             aiGenYn: z
               .enum(["Y", "N"])
               .optional()
