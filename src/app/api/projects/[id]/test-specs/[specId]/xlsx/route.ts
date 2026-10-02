@@ -19,6 +19,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { effectiveResultCode } from "@/lib/qa/resultState";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
 import { apiError } from "@/lib/apiResponse";
@@ -42,6 +43,7 @@ const RESULT_LABEL: Record<string, string> = {
   PASS:    "적합",
   FAIL:    "부적합",
   NA:      "N/A",
+  PENDING: "미실행",
   BLOCKED: "차단",
 };
 
@@ -139,7 +141,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       const map = new Map<string, ResultEntry>();
       for (const r of rd.results) {
         map.set(r.test_case_id, {
-          result_code: r.result_code,
+          result_code: effectiveResultCode({
+            ...r, testCase: { applicable_yn: spec.cases.find(c => c.test_case_id === r.test_case_id)?.applicable_yn ?? "Y" },
+          }, rd.sttus_code),
           test_dt:     r.test_dt,
           defects:     r.defects.map((d) => ({
             defect_cn: d.defect_cn,

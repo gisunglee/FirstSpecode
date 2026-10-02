@@ -167,7 +167,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         projectId,
         testSpecId: specId,
       });
-    });
+    }, { isolationLevel: "Serializable" });
 
     const totalCaseCount = await prisma.tbQaTestCase.count({ where: { test_spec_id: specId } });
 
@@ -180,6 +180,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       openRoundResultsAdded: filledResultCount,
     });
   } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "P2034") {
+      return apiError("CONFLICT", "다른 사용자가 테스트를 변경했습니다. 새로고침 후 다시 시도해 주세요.", 409);
+    }
     console.error(`[POST /api/projects/${projectId}/test-specs/${specId}/cases/import-checks] DB 오류:`, err);
     return apiError("DB_ERROR", "공통 점검 가져오기에 실패했습니다.", 500);
   }

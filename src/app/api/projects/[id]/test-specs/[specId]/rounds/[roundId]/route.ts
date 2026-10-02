@@ -14,6 +14,8 @@
  *       모든 결과 PASS/NA → PASSED, FAIL/BLOCKED 1개라도 → FAILED
  */
 
+import { z } from "zod";
+import { effectiveResultCode } from "@/lib/qa/resultState";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
@@ -23,6 +25,10 @@ import { maxDisplayIdSeq } from "@/lib/nextDisplayId";
 import { apiTextLimitGuard } from "@/lib/constants/textLimits";
 
 type RouteParams = { params: Promise<{ id: string; specId: string; roundId: string }> };
+
+class ResultWriteError extends Error {
+  constructor(public code: string, message: string, public status = 409) { super(message); }
+}
 
 // ─── GET: 회차 상세 + 모든 결과 (+ 케이스 정보 조인) ────────────────────────
 export async function GET(request: NextRequest, { params }: RouteParams) {
@@ -69,7 +75,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           scenarioCn:     r.testCase.scenario_cn,
           expectedCn:     r.testCase.expected_cn,
           applicableYn:   r.testCase.applicable_yn,
-          resultCode:     r.result_code,
+          resultCode:     effectiveResultCode(r, round.sttus_code),
           remarkCn:       r.remark_cn,
           testMemberId:   r.test_mber_id,
           testDt:         r.test_dt,
@@ -82,6 +88,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         })),
     });
   } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "P2034") {
+      return apiError("CONFLICT", "다른 사용자가 테스트를 변경했습니다. 새로고침 후 다시 시도해 주세요.", 409);
+    }
     console.error(`[GET round detail] DB 오류:`, err);
     return apiError("DB_ERROR", "조회에 실패했습니다.", 500);
   }
@@ -97,24 +106,23 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   try { body = await request.json(); } catch {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
-  const rawBody = body as Record<string, unknown>;
-  // testMemberId 는 명시 전송된 경우만 변경 — 키 자체가 없으면 기존 값 유지
-  // (이전 버전이 매 저장마다 null 로 덮어쓰던 데이터 손실 방지)
-  const hasTestMemberId = "testMemberId" in rawBody;
-  const { envirCode, bldVrsnNm, testMemberId, sttusCode, endDt, results } = body as {
-    envirCode?:    string;
-    bldVrsnNm?:    string;
-    testMemberId?: string | null;
-    sttusCode?:    string;        // IN_PROGRESS | DONE
-    endDt?:        string | null;
-    results?: Array<{
-      resultId:   string;
-      resultCode: "PASS" | "FAIL" | "BLOCKED" | "NA";
-      remarkCn?:  string | null;
-      testDt?:    string | null;
-      defects?:   Array<{ defectCn: string }>;
-    }>;
-  };
+  const parsed = z.object({
+    envirCode: z.enum(["DEV", "STG", "PROD"]).optional(),
+    bldVrsnNm: z.string().nullable().optional(),
+    testMemberId: z.string().nullable().optional(),
+    sttusCode: z.enum(["IN_PROGRESS", "DONE"]).optional(),
+    endDt: z.string().datetime().nullable().optional(),
+    results: z.array(z.object({
+      resultId: z.string().min(1),
+      resultCode: z.enum(["PASS", "FAIL", "BLOCKED", "NA", "PENDING"]),
+      remarkCn: z.string().nullable().optional(),
+      testDt: z.string().datetime().nullable().optional(),
+      defects: z.array(z.object({ defectCn: z.string() })).optional(),
+    })).optional(),
+  }).safeParse(body);
+  if (!parsed.success) return apiError("VALIDATION_ERROR", "회차 및 결과 입력값을 확인해 주세요.", 400);
+  const hasTestMemberId = "testMemberId" in parsed.data;
+  const { envirCode, bldVrsnNm, testMemberId, sttusCode, endDt, results } = parsed.data;
 
   // 한도 검증 — 결과 비고 + 결함 본문
   if (results) {
@@ -147,6 +155,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     let defectSeq = maxDisplayIdSeq(existingDefects.map((d) => d.defect_display_id), defectPrefix);
 
     await prisma.$transaction(async (tx) => {
+      const current = await tx.tbQaTestRound.findUnique({ where: { round_id: roundId } });
+      if (!current || current.prjct_id !== projectId || current.test_spec_id !== specId) {
+        throw new ResultWriteError("NOT_FOUND", "회차를 찾을 수 없습니다.", 404);
+      }
+      if (current.sttus_code === "DONE" && (sttusCode !== "IN_PROGRESS" || (results?.length ?? 0) > 0)) {
+        throw new ResultWriteError("ROUND_CLOSED", "종료된 회차입니다. 먼저 재오픈해 주세요.");
+      }
+      const ownedResults = await tx.tbQaTestResult.findMany({ where: { round_id: roundId } });
+      const resultIds = (results ?? []).map(r => r.resultId);
+      if (new Set(resultIds).size !== resultIds.length || resultIds.some(id => !ownedResults.some(r => r.result_id === id))) {
+        throw new ResultWriteError("NOT_FOUND", "이 회차에 속하지 않거나 중복된 결과 ID가 있습니다.", 404);
+      }
       // 1) 회차 메타 업데이트
       //    end_dt 규칙:
       //      - DONE 으로 전이 → 지금 시각으로 종료
@@ -211,6 +231,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       //    - IN_PROGRESS 로 재오픈 → 회차가 다시 진행중이므로 명세서도 IN_PROGRESS 로 복원
       //      (배지·아이콘이 회차 상태와 안 맞는 시각적 불일치 방지)
       if (sttusCode === "DONE") {
+        // 새 미실행 및 과거 미판정 NA는 합격으로 종료할 수 없다.
+        const finalResults = await tx.tbQaTestResult.findMany({
+          where: { round_id: roundId }, include: { testCase: true },
+        });
+        if (finalResults.length === 0 || finalResults.some(r => effectiveResultCode(r, "IN_PROGRESS") === "PENDING")) {
+          throw new ResultWriteError("UNTESTED_CASES", "미실행 케이스가 남아 있거나 케이스가 없습니다. 판정 후 회차를 종료해 주세요.");
+        }
         const counts = await tx.tbQaTestResult.groupBy({
           by: ["result_code"],
           where: { round_id: roundId },
@@ -235,10 +262,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           },
         });
       }
-    });
+    }, { isolationLevel: "Serializable" });
 
     return apiSuccess({ ok: true });
   } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "P2034") {
+      return apiError("CONFLICT", "다른 사용자가 테스트를 변경했습니다. 새로고침 후 다시 시도해 주세요.", 409);
+    }
+    if (err instanceof ResultWriteError) return apiError(err.code, err.message, err.status);
     console.error(`[PUT round] DB 오류:`, err);
     return apiError("DB_ERROR", "저장에 실패했습니다.", 500);
   }
@@ -258,6 +289,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     await prisma.tbQaTestRound.delete({ where: { round_id: roundId } });
     return apiSuccess({ ok: true });
   } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "P2034") {
+      return apiError("CONFLICT", "다른 사용자가 테스트를 변경했습니다. 새로고침 후 다시 시도해 주세요.", 409);
+    }
     console.error(`[DELETE round] DB 오류:`, err);
     return apiError("DB_ERROR", "삭제에 실패했습니다.", 500);
   }

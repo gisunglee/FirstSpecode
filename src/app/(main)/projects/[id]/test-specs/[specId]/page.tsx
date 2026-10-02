@@ -38,7 +38,7 @@ type ScreenLink = {
   name:      string | null;
 };
 
-// 매핑 종류 — 한 명세서는 단위업무 또는 화면 중 한 종류로만 연결 (UI 단순화)
+// 매핑 종류는 편집할 목록의 선택이다. 반대쪽 연결도 저장 시 보존한다.
 //   - "UW"     : 통합 테스트의 자연스러운 단위
 //   - "SCREEN" : 단위 테스트의 자연스러운 단위 (감리 시 "이 화면 테스트했어요" 답)
 type MappingType = "UW" | "SCREEN";
@@ -221,9 +221,9 @@ function TestSpecInner() {
     mutationFn: async () => {
       // 입력 검증 (서버에서도 하지만 UX 위해 미리)
       if (!form.testSpecNm.trim()) throw new Error("명세서명을 입력해 주세요.");
-      // 현재 선택된 매핑 종류만 전송 — 다른 쪽은 빈 배열로 정리되어 서버에서도 비워짐.
-      const unitWorkIds = mappingType === "UW"     ? form.unitWorks.map((u) => u.unitWorkId) : [];
-      const screenIds   = mappingType === "SCREEN" ? form.screens.map((s) => s.screenId)     : [];
+      // 목록 전환은 연결 삭제가 아니다. ×로 명시적으로 제거한 항목만 삭제한다.
+      const unitWorkIds = form.unitWorks.map((u) => u.unitWorkId);
+      const screenIds = form.screens.map((s) => s.screenId);
       if (unitWorkIds.length === 0 && screenIds.length === 0) {
         throw new Error(
           mappingType === "UW"
@@ -287,6 +287,7 @@ function TestSpecInner() {
       // 상세 캐시 + 목록 캐시(단위/통합 양쪽 모두) 같이 무효화 — 목록 진입 시 즉시 반영
       queryClient.invalidateQueries({ queryKey: ["test-spec", projectId, specId] });
       queryClient.invalidateQueries({ queryKey: ["test-specs", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["uw-test-specs", projectId] });
       if (isNew) {
         router.replace(`/projects/${projectId}/test-specs/${savedId}`);
       }
@@ -619,7 +620,7 @@ function TestSpecInner() {
             <div style={{ marginTop: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 8 }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
-                  테스트 대상
+                  연결 대상 편집
                 </span>
                 <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, cursor: "pointer" }}>
                   <input
@@ -628,7 +629,7 @@ function TestSpecInner() {
                     checked={mappingType === "SCREEN"}
                     onChange={() => setMappingType("SCREEN")}
                   />
-                  화면
+                  화면 ({form.screens.length})
                 </label>
                 <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, cursor: "pointer" }}>
                   <input
@@ -637,10 +638,10 @@ function TestSpecInner() {
                     checked={mappingType === "UW"}
                     onChange={() => setMappingType("UW")}
                   />
-                  단위업무
+                  단위업무 ({form.unitWorks.length})
                 </label>
                 <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>
-                  (1개 이상)
+                  (합계 1개 이상 · 목록을 전환해도 연결 유지)
                 </span>
               </div>
 
@@ -713,6 +714,7 @@ function TestSpecInner() {
           </div>
 
           {/* 케이스 영역 — 외곽 cardStyle 제거. 각 CaseList 가 자체 외곽 박스(border) 보유 */}
+          {!isNew && <p className="sp-badge sp-badge-info">회차에서 사용한 케이스는 변경·삭제할 수 없습니다. 변경이 필요하면 복제하거나 새 명세서를 만들어 주세요.</p>}
           {/* 결과 작성 화면과 동일한 깔끔한 그리드 톤 */}
           {isNew ? (
             <div style={{ ...cardStyle, marginTop: 16, color: "var(--color-text-tertiary)", fontSize: 13 }}>

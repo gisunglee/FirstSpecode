@@ -58,7 +58,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         ...(kind && { test_kind_code: kind }),
         // 매핑된 단위업무로 필터 — uwLinks 안에 unitWorkId 가 있는 명세서만
         ...(unitWorkId && {
-          uwLinks: { some: { unit_work_id: unitWorkId } },
+          OR: [
+            { uwLinks: { some: { unit_work_id: unitWorkId } } },
+            { screenLinks: { some: { screen: { unit_work_id: unitWorkId } } } },
+          ],
         }),
       },
       include: {

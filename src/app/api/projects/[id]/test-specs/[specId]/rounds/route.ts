@@ -8,7 +8,7 @@
  *   - testMemberId?: string                            (1차 테스터 — 회차 헤더에 1명)
  *
  * round_no 는 명세서 안에서 1부터 자동 증가 (마지막 + 1).
- * 회차 생성 시 즉시 모든 case 에 result row 를 NA 상태로 자동 INSERT — 화면에서 결과 입력 시 UPDATE 만 하면 됨.
+ * 회차 생성 시 PENDING(미실행), 적용 제외 케이스는 NA로 결과를 생성한다.
  */
 
 import { NextRequest } from "next/server";
@@ -65,12 +65,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     return apiSuccess({ items, totalCount: items.length });
   } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "P2034") {
+      return apiError("CONFLICT", "다른 사용자가 테스트를 변경했습니다. 새로고침 후 다시 시도해 주세요.", 409);
+    }
     console.error(`[GET rounds] DB 오류:`, err);
     return apiError("DB_ERROR", "회차 조회에 실패했습니다.", 500);
   }
 }
 
-// ─── POST: 새 회차 생성 + 모든 case 에 NA 결과 자동 INSERT ──────────────────
+// ─── POST: 새 회차 생성 + 미실행/해당없음 결과 자동 INSERT ──────────────────
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, specId } = await params;
   const gate = await requirePermission(request, projectId, "content.create");
@@ -100,13 +103,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     });
     const nextNo = (last?.round_no ?? 0) + 1;
 
-    // 케이스 목록
-    const cases = await prisma.tbQaTestCase.findMany({
-      where:  { test_spec_id: specId },
-      select: { test_case_id: true },
-    });
-
     const round = await prisma.$transaction(async (tx) => {
+      // 회차 범위는 트랜잭션 안에서 확정해 케이스 수정/추가와 충돌을 감지한다.
+      const cases = await tx.tbQaTestCase.findMany({
+        where: { test_spec_id: specId },
+        select: { test_case_id: true, applicable_yn: true },
+      });
       const r = await tx.tbQaTestRound.create({
         data: {
           prjct_id:     projectId,
@@ -118,14 +120,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           sttus_code:   "IN_PROGRESS",
         },
       });
-      // 케이스가 있으면 결과 row 를 NA 로 즉시 생성 — 사용자는 UPDATE 만
+      // 케이스가 있으면 결과 row 생성 — 미실행과 해당없음을 구분한다.
       if (cases.length > 0) {
         await tx.tbQaTestResult.createMany({
           data: cases.map((c) => ({
             prjct_id:     projectId,
             round_id:     r.round_id,
             test_case_id: c.test_case_id,
-            result_code:  "NA",
+            result_code:  c.applicable_yn === "N" ? "NA" : "PENDING",
             test_mber_id: testMemberId || null,
           })),
         });
@@ -138,13 +140,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         });
       }
       return r;
-    });
+    }, { isolationLevel: "Serializable" });
 
     return apiSuccess({
       roundId: round.round_id,
       roundNo: round.round_no,
     }, 201);
   } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "P2034") {
+      return apiError("CONFLICT", "다른 사용자가 테스트를 변경했습니다. 새로고침 후 다시 시도해 주세요.", 409);
+    }
     console.error(`[POST rounds] DB 오류:`, err);
     return apiError("DB_ERROR", "회차 생성에 실패했습니다.", 500);
   }

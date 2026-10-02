@@ -35,6 +35,8 @@
  * 응답: { testSpecId, createdCount, updatedCount, totalCaseCount, openRoundResultsAdded }
  */
 
+import { z } from "zod";
+import { caseWriteData, guardCaseWrites, CaseWriteError, testCaseInput } from "@/lib/qa/caseWrite";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
@@ -53,22 +55,6 @@ const MAX_CASES_PER_REQUEST = 100;
 const VALID_CTGRY    = ["CHECKLIST", "FUNCTIONAL"];
 const VALID_PRIORITY = ["HIGH", "MEDIUM", "LOW"];
 
-type IncomingCase = {
-  testCaseId?:     string;
-  caseNo?:         number;
-  ctgryCode?:      string;
-  grpNm?:          string | null;
-  scenarioCn?:     string;
-  expectedCn?:     string;
-  preconditionCn?: string | null;
-  testDataCn?:     string | null;
-  testAccountCn?:  string | null;
-  priortCode?:     string;
-  applicableYn?:   string;
-  remarkCn?:       string | null;
-  aiGenYn?:        string;
-};
-
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const { id: projectId, specId } = await params;
   const gate = await requirePermission(request, projectId, "content.update");
@@ -79,7 +65,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { cases } = (body ?? {}) as { cases?: IncomingCase[] };
+  const parsed = z.object({ cases: z.array(testCaseInput) }).safeParse(body);
+  if (!parsed.success) return apiError("VALIDATION_ERROR", "케이스의 필수값과 허용값을 확인해 주세요.", 400);
+  const { cases } = parsed.data;
 
   if (!Array.isArray(cases) || cases.length === 0) {
     return apiError("VALIDATION_ERROR", "cases 배열에 1건 이상을 담아 주세요.", 400);
@@ -165,22 +153,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     let filledResultCount = 0;
 
     await prisma.$transaction(async (tx) => {
+      await guardCaseWrites(tx, specId, cases);
       for (const c of cases) {
-        const caseData = {
-          ctgry_code:      c.ctgryCode!,
-          // 구분은 FUNCTIONAL 전용 — CHECKLIST 에 값이 와도 NULL 로 정규화한다
-          // (마스터에서 가져온 공통 점검과 표기가 섞이지 않도록)
-          grp_nm:          c.ctgryCode === "FUNCTIONAL" ? (c.grpNm?.trim() || null) : null,
-          scenario_cn:     c.scenarioCn!.trim(),
-          expected_cn:     c.expectedCn!.trim(),
-          precondition_cn: c.preconditionCn?.trim() || null,
-          test_data_cn:    c.testDataCn?.trim() || null,
-          test_account_cn: c.testAccountCn?.trim() || null,
-          priort_code:     c.priortCode || "MEDIUM",
-          applicable_yn:   c.applicableYn === "N" ? "N" : "Y",
-          remark_cn:       c.remarkCn?.trim() || null,
-          ai_gen_yn:       c.aiGenYn === "Y" ? "Y" : "N",
-        };
+        const caseData = caseWriteData(c);
 
         if (c.testCaseId) {
           await tx.tbQaTestCase.update({
@@ -226,7 +201,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         projectId,
         testSpecId: specId,
       });
-    });
+    }, { isolationLevel: "Serializable" });
 
     const totalCaseCount = await prisma.tbQaTestCase.count({ where: { test_spec_id: specId } });
 
@@ -239,6 +214,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       openRoundResultsAdded: filledResultCount,
     });
   } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "P2034") {
+      return apiError("CONFLICT", "다른 사용자가 테스트를 변경했습니다. 새로고침 후 다시 시도해 주세요.", 409);
+    }
+    if (err instanceof CaseWriteError) return apiError(err.code, err.message, err.status);
     console.error(`[POST /api/projects/${projectId}/test-specs/${specId}/cases] DB 오류:`, err);
     return apiError("DB_ERROR", "테스트 케이스 저장에 실패했습니다.", 500);
   }

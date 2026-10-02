@@ -2,7 +2,7 @@
  * roundResultSync.ts — 진행중 회차에 신규 케이스의 결과 행을 채워 넣는다
  *
  * 왜 필요한가:
- *   회차를 만들 때(POST /rounds) 그 시점의 케이스 전체에 대해 result 행을 NA 로
+ *   회차를 만들 때(POST /rounds) 그 시점의 케이스 전체에 대해 result 행을 미실행으로
  *   미리 만들어 둔다. 결과 입력 화면은 그 행들을 UPDATE 하는 구조라, **회차가 시작된
  *   뒤에 추가된 케이스는 result 행이 없어 화면에 아예 나타나지 않는다.**
  *   테스터가 그 케이스의 합부를 기록할 방법이 없어진다.
@@ -25,7 +25,7 @@
 import type { Prisma } from "@prisma/client";
 
 /**
- * 진행중 회차 × 결과행 없는 케이스 조합에 NA 결과행을 만든다.
+ * 진행중 회차 × 결과행 없는 케이스 조합에 PENDING(해당없음은 NA) 결과행을 만든다.
  *
  * @returns 생성된 결과행 수 (0이면 채울 것이 없었다는 뜻)
  */
@@ -43,7 +43,7 @@ export async function syncInProgressRoundResults(
 
   const cases = await tx.tbQaTestCase.findMany({
     where:  { test_spec_id: testSpecId },
-    select: { test_case_id: true },
+    select: { test_case_id: true, applicable_yn: true },
   });
   if (cases.length === 0) return 0;
 
@@ -65,7 +65,7 @@ export async function syncInProgressRoundResults(
         round_id:     round.round_id,
         test_case_id: c.test_case_id,
         // 아직 판정하지 않은 상태 — 테스터가 화면에서 PASS/FAIL 로 바꾼다
-        result_code:  "NA",
+        result_code:  c.applicable_yn === "N" ? "NA" : "PENDING",
       });
     }
   }

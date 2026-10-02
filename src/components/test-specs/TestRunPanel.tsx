@@ -34,7 +34,7 @@ type RoundSummary = {
 };
 
 // 결과 코드 — UI 에서는 PASS/FAIL/NA 3개만 선택. 기존 DB 의 BLOCKED 값은 표시는 되지만 변경 불가.
-type ResultCode = "PASS" | "FAIL" | "NA" | "BLOCKED";
+type ResultCode = "PASS" | "FAIL" | "NA" | "BLOCKED" | "PENDING";
 
 type ResultRow = {
   resultId: string;
@@ -71,11 +71,13 @@ const RESULT_LABEL: Record<string, string> = {
   PASS: "합격",
   FAIL: "불합격",
   NA: "해당없음",
+  PENDING: "미실행",
   BLOCKED: "차단됨",  // legacy — 기존 데이터 표시용
 };
 
 // 차분한 톤 — Tailwind palette 계열 (channel 낮춤). 활성 시 텍스트 색만 강조.
 const RESULT_COLOR: Record<string, { bg: string; fg: string; border: string }> = {
+  PENDING: { bg: "var(--color-warning-subtle)", fg: "var(--color-warning)", border: "var(--color-warning-border)" },
   PASS: { bg: "#f0fdf4", fg: "#15803d", border: "#bbf7d0" },
   FAIL: { bg: "#fef2f2", fg: "#b91c1c", border: "#fecaca" },
   NA: { bg: "#fafafa", fg: "#52525b", border: "#e4e4e7" },
@@ -167,6 +169,9 @@ export default function TestRunPanel({
   const saveMutation = useMutation({
     mutationFn: (closeRound: boolean) => {
       if (!form) throw new Error("회차 데이터가 없습니다.");
+      if (closeRound && (form.results.length === 0 || form.results.some(r => r.resultCode === "PENDING"))) {
+        throw new Error("미실행 케이스가 남아 있거나 케이스가 없습니다. 판정 후 종료해 주세요.");
+      }
       return authFetch(
         `/api/projects/${projectId}/test-specs/${specId}/rounds/${form.roundId}`,
         {
@@ -251,14 +256,12 @@ export default function TestRunPanel({
   }
 
   // ── 요약 카운트 ───────────────────────────────────────────────────────────
-  // legacy BLOCKED 데이터가 있어도 NA 로 합산 (UI 옵션에서 제거된 상태)
+  // 미실행·차단됨을 해당없음과 합치지 않아 미판정을 확인할 수 있다.
   const summary = useMemo(() => {
-    if (!form) return { PASS: 0, FAIL: 0, NA: 0 };
-    const s = { PASS: 0, FAIL: 0, NA: 0 };
+    const s = { PASS: 0, FAIL: 0, NA: 0, BLOCKED: 0, PENDING: 0 };
+    if (!form) return s;
     for (const r of form.results) {
-      if (r.resultCode === "PASS") s.PASS++;
-      else if (r.resultCode === "FAIL") s.FAIL++;
-      else s.NA++;   // NA + 잔존 BLOCKED 통합
+      s[r.resultCode]++;
     }
     return s;
   }, [form]);
@@ -465,7 +468,7 @@ export default function TestRunPanel({
               <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)" }}>
                 {form.roundNo}차 결과 요약
               </span>
-              {(["PASS", "FAIL", "NA"] as const).map((code) => (
+              {(["PASS", "FAIL", "NA", "BLOCKED", "PENDING"] as const).map((code) => (
                 <span key={code} style={{
                   display: "inline-flex", alignItems: "center", gap: 4,
                   padding: "3px 10px", borderRadius: 10,
@@ -635,6 +638,7 @@ export default function TestRunPanel({
                             </span>
                             <div style={{ display: "flex", alignItems: "start", gap: 6 }}>
                               <div style={{ flex: 1, minWidth: 0 }}>
+                                {r.resultCode === "PENDING" && <span className="sp-badge sp-badge-warning">미실행</span>}
                                 <ResultSegment
                                   value={r.resultCode}
                                   disabled={inactive || form.sttusCode === "DONE"}

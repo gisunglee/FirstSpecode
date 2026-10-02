@@ -20,6 +20,8 @@
  *     단일 트랜잭션으로 처리.
  */
 
+import { z } from "zod";
+import { caseWriteData, guardCaseWrites, CaseWriteError, testCaseInput } from "@/lib/qa/caseWrite";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/requirePermission";
@@ -131,6 +133,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       updatedAt:     spec.mdfcn_dt,
     });
   } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "P2034") {
+      return apiError("CONFLICT", "다른 사용자가 테스트를 변경했습니다. 새로고침 후 다시 시도해 주세요.", 409);
+    }
     console.error(`[GET /api/projects/${projectId}/test-specs/${specId}] DB 오류:`, err);
     return apiError("DB_ERROR", "조회에 실패했습니다.", 500);
   }
@@ -147,7 +152,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
   }
 
-  const { testSpecNm, testSpecDc, sttusCode, asignMemberId, prgrsRt, unitWorkIds, screenIds, cases } = body as {
+  const { testSpecNm, testSpecDc, sttusCode, asignMemberId, prgrsRt, unitWorkIds, screenIds, cases: rawCases } = (body ?? {}) as {
     testSpecNm?:    string;
     testSpecDc?:    string;
     sttusCode?:     string;
@@ -180,9 +185,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   if (uwList.length === 0 && screenList.length === 0) {
     return apiError("VALIDATION_ERROR", "연결할 단위업무 또는 화면을 1개 이상 선택해 주세요.", 400);
   }
-  if (!Array.isArray(cases)) {
-    return apiError("VALIDATION_ERROR", "cases 가 배열이 아닙니다.", 400);
+  // 웹의 공통 점검 마스터에는 예상결과가 빈 기존 항목도 있으므로 보존한다.
+  const parsedCases = z.array(testCaseInput.extend({
+    caseNo: z.number().int().positive(), scenarioCn: z.string(), expectedCn: z.string(),
+  })).safeParse(rawCases);
+  if (!parsedCases.success) {
+    return apiError("VALIDATION_ERROR", "케이스의 필수값과 허용값을 확인해 주세요.", 400);
   }
+
+  const cases = parsedCases.data;
 
   // 한도 — 명세서 메타 + 모든 case 본문
   const limitChecks: Array<[Parameters<typeof apiTextLimitGuard>[0][number][0], unknown]> = [
@@ -232,6 +243,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     await prisma.$transaction(async (tx) => {
+      await guardCaseWrites(tx, specId, cases, true);
       // 1) 메타 업데이트
       await tx.tbQaTestSpec.update({
         where: { test_spec_id: specId },
@@ -283,20 +295,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       }
 
       for (const c of cases) {
-        const caseData = {
-          case_no:          c.caseNo,
-          ctgry_code:       c.ctgryCode,
-          grp_nm:           c.grpNm?.trim() || null,
-          scenario_cn:      c.scenarioCn,
-          expected_cn:      c.expectedCn,
-          precondition_cn:  c.preconditionCn?.trim() || null,
-          test_data_cn:     c.testDataCn?.trim() || null,
-          test_account_cn:  c.testAccountCn?.trim() || null,
-          priort_code:      c.priortCode || "MEDIUM",
-          applicable_yn:    c.applicableYn === "N" ? "N" : "Y",
-          remark_cn:        c.remarkCn?.trim() || null,
-          ai_gen_yn:        c.aiGenYn || "N",
-        };
+        const caseData = { ...caseWriteData(c), case_no: c.caseNo };
         if (c.testCaseId) {
           await tx.tbQaTestCase.update({
             where: { test_case_id: c.testCaseId },
@@ -314,12 +313,87 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       //    케이스는 결과 입력 화면에 나타나지 않는다(합부를 기록할 방법이 없어진다).
       //    완료된 회차는 확정 기록이라 건드리지 않는다 — 헬퍼가 IN_PROGRESS 만 채운다.
       await syncInProgressRoundResults(tx, { projectId, testSpecId: specId });
-    });
+    }, { isolationLevel: "Serializable" });
 
     return apiSuccess({ testSpecId: specId });
   } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "P2034") {
+      return apiError("CONFLICT", "다른 사용자가 테스트를 변경했습니다. 새로고침 후 다시 시도해 주세요.", 409);
+    }
+    if (err instanceof CaseWriteError) return apiError(err.code, err.message, err.status);
     console.error(`[PUT /api/projects/${projectId}/test-specs/${specId}] DB 오류:`, err);
     return apiError("DB_ERROR", "저장에 실패했습니다.", 500);
+  }
+}
+
+/** MCP용 메타 부분 수정. 케이스를 입력받지 않아 누락 삭제가 일어나지 않는다. */
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  const { id: projectId, specId } = await params;
+  const gate = await requirePermission(request, projectId, "content.update");
+  if (gate instanceof Response) return gate;
+  const schema = z.object({
+    testSpecNm: z.string().trim().min(1).optional(),
+    testSpecDc: z.string().nullable().optional(),
+    unitWorkIds: z.array(z.string().min(1)).optional(),
+    screenIds: z.array(z.string().min(1)).optional(),
+  }).strict().refine(v => Object.keys(v).length > 0);
+  let body: unknown;
+  try { body = await request.json(); } catch {
+    return apiError("VALIDATION_ERROR", "올바른 JSON 형식이 아닙니다.", 400);
+  }
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) return apiError("VALIDATION_ERROR", "수정할 명세서 이름·개요·연결 대상을 확인해 주세요.", 400);
+  const input = parsed.data;
+  const limitErr = apiTextLimitGuard([["name", input.testSpecNm], ["description", input.testSpecDc]]);
+  if (limitErr) return limitErr;
+  try {
+    return await prisma.$transaction(async tx => {
+      const spec = await tx.tbQaTestSpec.findFirst({
+        where: { test_spec_id: specId, prjct_id: projectId },
+        include: { uwLinks: true, screenLinks: true },
+      });
+      if (!spec) return apiError("NOT_FOUND", "테스트 명세서를 찾을 수 없습니다.", 404);
+      const uwIds = [...new Set(input.unitWorkIds ?? spec.uwLinks.map(u => u.unit_work_id))];
+      const screenIds = [...new Set(input.screenIds ?? spec.screenLinks.map(s => s.scrn_id))];
+      if (uwIds.length + screenIds.length === 0) {
+        return apiError("VALIDATION_ERROR", "연결할 단위업무 또는 화면을 1개 이상 선택해 주세요.", 400);
+      }
+      const [uwCount, screenCount] = await Promise.all([
+        tx.tbDsUnitWork.count({ where: { prjct_id: projectId, unit_work_id: { in: uwIds } } }),
+        tx.tbDsScreen.count({ where: { prjct_id: projectId, scrn_id: { in: screenIds } } }),
+      ]);
+      if (uwCount !== uwIds.length || screenCount !== screenIds.length) {
+        return apiError("NOT_FOUND", "이 프로젝트에 속하지 않는 연결 대상이 있습니다.", 404);
+      }
+      await tx.tbQaTestSpec.update({
+        where: { test_spec_id: specId },
+        data: {
+          test_spec_nm: input.testSpecNm,
+          test_spec_dc: input.testSpecDc === undefined ? undefined : input.testSpecDc?.trim() || null,
+          mdfcn_dt: new Date(),
+        },
+      });
+      // 미전송된 종류의 연결은 그대로 두고, 명시된 배열만 교체한다.
+      if (input.unitWorkIds !== undefined) {
+        await tx.tbQaTestSpecUw.deleteMany({ where: { test_spec_id: specId } });
+        if (uwIds.length) await tx.tbQaTestSpecUw.createMany({
+          data: uwIds.map((id, i) => ({ test_spec_id: specId, unit_work_id: id, sort_ordr: i })),
+        });
+      }
+      if (input.screenIds !== undefined) {
+        await tx.tbQaTestSpecScreen.deleteMany({ where: { test_spec_id: specId } });
+        if (screenIds.length) await tx.tbQaTestSpecScreen.createMany({
+          data: screenIds.map((id, i) => ({ test_spec_id: specId, scrn_id: id, sort_ordr: i })),
+        });
+      }
+      return apiSuccess({ testSpecId: specId, displayId: spec.test_spec_display_id });
+    }, { isolationLevel: "Serializable" });
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "P2034") {
+      return apiError("CONFLICT", "다른 사용자가 테스트를 변경했습니다. 새로고침 후 다시 시도해 주세요.", 409);
+    }
+    console.error("[PATCH test-spec]", err);
+    return apiError("DB_ERROR", "명세서 수정에 실패했습니다.", 500);
   }
 }
 
@@ -337,6 +411,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     await prisma.tbQaTestSpec.delete({ where: { test_spec_id: specId } });
     return apiSuccess({ ok: true });
   } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "P2034") {
+      return apiError("CONFLICT", "다른 사용자가 테스트를 변경했습니다. 새로고침 후 다시 시도해 주세요.", 409);
+    }
     console.error(`[DELETE /api/projects/${projectId}/test-specs/${specId}] DB 오류:`, err);
     return apiError("DB_ERROR", "삭제에 실패했습니다.", 500);
   }
