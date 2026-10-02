@@ -48,7 +48,7 @@ type TemplateDetail = {
 };
 
 const TASK_TYPE_OPTIONS: { value: TaskType; label: string }[] = [
-  { value: "DESIGN",    label: "설계" },
+  { value: "DESIGN",    label: "설계 (사용 중지)" }, // AI 설계 기능 제거 — 기존 템플릿 표시용으로만 유지
   { value: "INSPECT",   label: "명세 검토" },
   { value: "IMPACT",    label: "영향도 분석" },
   { value: "IMPLEMENT", label: "구현" },

@@ -21,7 +21,8 @@ import { ARTF_DIV, ARTF_FMT } from "@/constants/planStudio";
 import { buildPromptDomainWhere, parsePromptDomain } from "@/lib/prompt-template/domain";
 
 // ── 검증 상수 (일반 API 와 동일 규칙) ────────────────────────────────────────
-const VALID_TASK_TYPES_GENERAL = ["INSPECT", "DESIGN", "IMPLEMENT", "MOCKUP", "IMPACT", "CUSTOM"];
+// DESIGN 은 신규 생성 불가(AI 설계 기능 제거). 기존 DESIGN 템플릿의 조회·수정은 [tmplId] 라우트에서 그대로 허용.
+const VALID_TASK_TYPES_GENERAL = ["INSPECT", "IMPLEMENT", "MOCKUP", "IMPACT", "CUSTOM"];
 const TASK_TYPE_PLAN_STUDIO    = "PLAN_STUDIO_ARTF_GENERATE";
 const VALID_DIV_CODES = Object.keys(ARTF_DIV);
 const VALID_FMT_CODES = Object.keys(ARTF_FMT);

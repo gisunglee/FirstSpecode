@@ -357,7 +357,7 @@ function FunctionDetailPageInner() {
   // aiConfirm이 닫힐 때 초기화 (취소/성공 모두)
   const [aiPickedFiles, setAiPickedFiles] = useState<File[]>([]);
 
-  // DESIGN/INSPECT 공통: 프롬프트 템플릿 조회 결과 (버튼 클릭 시 fetch → 컨펌 창에 표시)
+  // INSPECT: 프롬프트 템플릿 조회 결과 (버튼 클릭 시 fetch → 컨펌 창에 표시)
   const [taskPrompt, setTaskPrompt] = useState<{ tmplId: string; tmplNm: string } | null | "loading" | "none">(null);
 
   async function openPromptConfirm(taskType: string, label: string) {
@@ -402,7 +402,6 @@ function FunctionDetailPageInner() {
     },
     onSuccess: (_res, vars) => {
       const labels: Record<string, string> = {
-        DESIGN: "AI 설계 요청이 접수되었습니다.",
         INSPECT: "AI 점검 요청이 접수되었습니다.",
       };
       toast.success(labels[vars.taskType] ?? "AI 요청이 접수되었습니다.");
@@ -566,8 +565,8 @@ function FunctionDetailPageInner() {
                           : "-";
 
                       function handleRun() {
-                        // DESIGN·INSPECT는 프롬프트 템플릿 조회 후 상세 컨펌 팝업
-                        if (taskType === "DESIGN" || taskType === "INSPECT") { openPromptConfirm(taskType, label); return; }
+                        // INSPECT는 프롬프트 템플릿 조회 후 상세 컨펌 팝업
+                        if (taskType === "INSPECT") { openPromptConfirm(taskType, label); return; }
                         if (!description.trim()) { toast.error("설명을 먼저 입력해 주세요."); return; }
                         setAiConfirm({ taskType, label });
                       }
@@ -1134,12 +1133,12 @@ function FunctionDetailPageInner() {
           style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}
         >
           <div
-            style={{ width: "100%", maxWidth: (aiConfirm.taskType === "DESIGN" || aiConfirm.taskType === "INSPECT") ? 520 : 420, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 12, boxShadow: "0 12px 48px rgba(0,0,0,0.25)", padding: "32px 36px" }}
+            style={{ width: "100%", maxWidth: aiConfirm.taskType === "INSPECT" ? 520 : 420, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 12, boxShadow: "0 12px 48px rgba(0,0,0,0.25)", padding: "32px 36px" }}
           >
 
-            {(aiConfirm.taskType === "DESIGN" || aiConfirm.taskType === "INSPECT") ? (
+            {aiConfirm.taskType === "INSPECT" ? (
               <>
-                {/* DESIGN/INSPECT 공통 헤더 */}
+                {/* INSPECT 헤더 */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
                   <span style={{ fontSize: 24 }}>✦</span>
                   <div>
@@ -1147,7 +1146,7 @@ function FunctionDetailPageInner() {
                       {aiConfirm.label} 요청
                     </p>
                     <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--color-text-secondary)" }}>
-                      작성하신 설명 내용을 기반으로 AI에게 {aiConfirm.taskType === "DESIGN" ? "설계를" : "점검을"} 요청합니다.
+                      작성하신 설명 내용을 기반으로 AI에게 점검을 요청합니다.
                     </p>
                   </div>
                 </div>
@@ -1252,7 +1251,7 @@ function FunctionDetailPageInner() {
               >
                 취소
               </button>
-              {(aiConfirm.taskType === "DESIGN" || aiConfirm.taskType === "INSPECT") && taskPrompt === "none" && (
+              {aiConfirm.taskType === "INSPECT" && taskPrompt === "none" && (
                 <button
                   onClick={() => {
                     aiMutation.mutate({ taskType: aiConfirm.taskType });
@@ -1269,7 +1268,7 @@ function FunctionDetailPageInner() {
                   코멘트로 처리
                 </button>
               )}
-              {/* DESIGN/INSPECT: 프롬프트 찾은 경우만 활성 / 나머지: 항상 활성 */}
+              {/* INSPECT: 프롬프트 찾은 경우만 활성 / 나머지: 항상 활성 */}
               <button
                 onClick={() => {
                   aiMutation.mutate({ taskType: aiConfirm.taskType });
@@ -1278,15 +1277,15 @@ function FunctionDetailPageInner() {
                 }}
                 disabled={
                   aiMutation.isPending ||
-                  ((aiConfirm.taskType === "DESIGN" || aiConfirm.taskType === "INSPECT") &&
+                  (aiConfirm.taskType === "INSPECT" &&
                     (taskPrompt === "loading" || taskPrompt === "none" || taskPrompt === null))
                 }
                 style={{
                   ...primaryBtnStyle, fontSize: 13, padding: "7px 18px",
                   background: "rgba(103,80,164,1)",
-                  opacity: ((aiConfirm.taskType === "DESIGN" || aiConfirm.taskType === "INSPECT") &&
+                  opacity: (aiConfirm.taskType === "INSPECT" &&
                     (taskPrompt === "none" || taskPrompt === null || taskPrompt === "loading")) ? 0.3 : 1,
-                  cursor: ((aiConfirm.taskType === "DESIGN" || aiConfirm.taskType === "INSPECT") &&
+                  cursor: (aiConfirm.taskType === "INSPECT" &&
                     (taskPrompt === "none" || taskPrompt === null || taskPrompt === "loading")) ? "not-allowed" : "pointer",
                 }}
               >
@@ -1393,7 +1392,7 @@ function FunctionDetailPageInner() {
           projectId={projectId}
           refType="FUNCTION"
           refId={functionId}
-          taskType={aiHistoryTaskType as "DESIGN" | "INSPECT" | "IMPLEMENT"}
+          taskType={aiHistoryTaskType as "INSPECT" | "IMPLEMENT"}
           onClose={() => setAiHistoryTaskType(null)}
         />
       )}
@@ -1441,30 +1440,14 @@ function FunctionDetailPageInner() {
 
 // ── AI 태스크 설정 ────────────────────────────────────────────────────────────
 
+// AI 설계(DESIGN)는 제거됨 — 설계는 MCP 가 표준 양식으로 직접 작성하므로 자유 서술을 재구성할 일이 없음.
+// 기존 DESIGN 이력은 AI 태스크 목록·내보내기에서 계속 조회 가능.
 const AI_TASK_CONFIGS = [
-  { taskType: "DESIGN", label: "AI 설계", desc: "자유 형식 설명 → 표준 양식 재구성", icon: { bg: "#e8eaf6", emoji: "⊞" }, hasHelp: true },
   { taskType: "INSPECT", label: "AI 점검", desc: "6가지 관점 설계 검토\n(같은 영역 기능 기준)", icon: { bg: "#e8f5e9", emoji: "✓" }, hasHelp: true },
 ];
 
 // 도움말 팝업 내용 — taskType별 정의
 const AI_HELP_CONTENT: Record<string, { title: string; sections: { heading: string; body: string }[] }> = {
-  DESIGN: {
-    title: "AI 설계 — 표준 양식 재구성 + 피드백",
-    sections: [
-      {
-        heading: "무엇을 하나요?",
-        body: "설명란에 자유 형식으로 작성한 내용을 표준 설계 양식으로 재구성해 줍니다.\n빈 내용을 AI가 만들어 주는 것이 아니라, 내가 쓴 내용을 정리·재배치합니다.\n\n재구성 양식: 기능 헤더 / Input / Output / 참조 테이블 관계 / 처리 로직 / 업무 규칙\n\n함께 제공: 누락 항목, 잘못된 내용, 개선이 필요한 부분에 대한 피드백",
-      },
-      {
-        heading: "잘 쓰려면",
-        body: "설명란에 먼저 내용을 채워야 결과가 나옵니다.\nAPI 경로, Input/Output 파라미터, 처리 로직 등을 자유롭게 적어두면\nAI가 표준 양식에 맞게 정리해 줍니다.",
-      },
-      {
-        heading: "AI에 전달되는 데이터",
-        body: "설명(description) 텍스트만 전달됩니다.\n영역·화면·단위업무 정보는 전달되지 않습니다.",
-      },
-    ],
-  },
   INSPECT: {
     title: "AI 점검 — 6가지 관점 설계 검토",
     sections: [

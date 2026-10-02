@@ -410,7 +410,6 @@ function AreaDetailPageInner() {
     onSuccess: (_res, vars) => {
       const labels: Record<string, string> = {
         INSPECT: "영역 AI 점검 요청이 접수되었습니다.",
-        DESIGN: "AI 설계 요청이 접수되었습니다.",
         IMPACT: "AI 영향도 분석 요청이 접수되었습니다.",
       };
       toast.success(labels[vars.taskType] ?? "AI 요청이 접수되었습니다.");
@@ -583,10 +582,10 @@ function AreaDetailPageInner() {
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }}
         >
           <div
-            style={{ width: "100%", maxWidth: (aiConfirm.taskType === "INSPECT" || aiConfirm.taskType === "DESIGN") ? 520 : 420, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 12, boxShadow: "0 12px 48px rgba(0,0,0,0.25)", padding: "32px 36px" }}
+            style={{ width: "100%", maxWidth: aiConfirm.taskType === "INSPECT" ? 520 : 420, background: "var(--color-bg-card)", border: "1px solid var(--color-border)", borderRadius: 12, boxShadow: "0 12px 48px rgba(0,0,0,0.25)", padding: "32px 36px" }}
             onClick={(e) => e.stopPropagation()}
           >
-            {(aiConfirm.taskType === "INSPECT" || aiConfirm.taskType === "DESIGN") ? (
+            {aiConfirm.taskType === "INSPECT" ? (
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
                   <span style={{ fontSize: 24 }}>✦</span>
@@ -595,7 +594,7 @@ function AreaDetailPageInner() {
                       {aiConfirm.label} 요청
                     </p>
                     <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--color-text-secondary)" }}>
-                      작성하신 설명 내용을 기반으로 AI에게 {aiConfirm.taskType === "DESIGN" ? "설계를" : "점검을"} 요청합니다.
+                      작성하신 설명 내용을 기반으로 AI에게 점검을 요청합니다.
                     </p>
                   </div>
                 </div>
@@ -684,7 +683,7 @@ function AreaDetailPageInner() {
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button onClick={() => { setAiConfirm(null); setTaskPrompt(null); setAiPickedFiles([]); }} style={{ ...secondaryBtnStyle, fontSize: 13, padding: "7px 18px" }}>취소</button>
-              {(aiConfirm.taskType === "INSPECT" || aiConfirm.taskType === "DESIGN") && taskPrompt === "none" && (
+              {aiConfirm.taskType === "INSPECT" && taskPrompt === "none" && (
                 <button
                   onClick={() => { aiMutation.mutate({ taskType: aiConfirm.taskType }); setAiConfirm(null); setTaskPrompt(null); }}
                   disabled={aiMutation.isPending || !asciiComment.trim()}
@@ -697,14 +696,14 @@ function AreaDetailPageInner() {
                 onClick={() => { aiMutation.mutate({ taskType: aiConfirm.taskType }); setAiConfirm(null); setTaskPrompt(null); }}
                 disabled={
                   aiMutation.isPending ||
-                  ((aiConfirm.taskType === "INSPECT" || aiConfirm.taskType === "DESIGN") &&
+                  (aiConfirm.taskType === "INSPECT" &&
                     (taskPrompt === "loading" || taskPrompt === "none" || taskPrompt === null))
                 }
                 style={{
                   ...primaryBtnStyle, fontSize: 13, padding: "7px 20px",
-                  opacity: ((aiConfirm.taskType === "INSPECT" || aiConfirm.taskType === "DESIGN") &&
+                  opacity: (aiConfirm.taskType === "INSPECT" &&
                     (taskPrompt === "none" || taskPrompt === null || taskPrompt === "loading")) ? 0.3 : 1,
-                  cursor: ((aiConfirm.taskType === "INSPECT" || aiConfirm.taskType === "DESIGN") &&
+                  cursor: (aiConfirm.taskType === "INSPECT" &&
                     (taskPrompt === "none" || taskPrompt === null || taskPrompt === "loading")) ? "not-allowed" : "pointer",
                 }}
               >

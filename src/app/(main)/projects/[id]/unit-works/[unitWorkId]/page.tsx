@@ -435,7 +435,6 @@ function UnitWorkDetailPageInner() {
     },
     onSuccess: (_res, vars) => {
       const labels: Record<string, string> = {
-        DESIGN: "AI 설계 요청이 접수되었습니다.",
         INSPECT: "AI 점검 요청이 접수되었습니다.",
       };
       toast.success(labels[vars.taskType] ?? "AI 요청이 접수되었습니다.");
@@ -686,7 +685,7 @@ function UnitWorkDetailPageInner() {
               <div>
                 <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>{aiConfirm.label} 요청</p>
                 <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--color-text-secondary)" }}>
-                  {aiConfirm.taskType === "DESIGN" ? "단위업무 설명을 기반으로 AI에게 설계 적합성을 확인합니다." : "단위업무 전체 tree(화면·영역·기능)를 포함해 AI에게 점검을 요청합니다."}
+                  단위업무 전체 tree(화면·영역·기능)를 포함해 AI에게 점검을 요청합니다.
                 </p>
               </div>
             </div>
@@ -806,7 +805,7 @@ function UnitWorkDetailPageInner() {
           projectId={projectId}
           refType="UNIT_WORK"
           refId={unitWorkId}
-          taskType={aiHistoryTaskType as "DESIGN" | "INSPECT"}
+          taskType={aiHistoryTaskType as "INSPECT"}
           onClose={() => setAiHistoryTaskType(null)}
         />
       )}
@@ -1654,8 +1653,9 @@ const readonlyValueStyle: React.CSSProperties = {
 
 // ── AI 태스크 설정 ────────────────────────────────────────────────────────────
 
+// AI 설계(DESIGN)는 제거됨 — 설계는 MCP 가 표준 양식으로 직접 작성하므로 자유 서술을 재구성할 일이 없음.
+// 기존 DESIGN 이력은 AI 태스크 목록·내보내기에서 계속 조회 가능.
 const UW_AI_TASK_CONFIGS = [
-  { taskType: "DESIGN", label: "AI 설계", desc: "설계 양식 적합성 확인", icon: { bg: "#e8eaf6", emoji: "⊞" } },
   { taskType: "INSPECT", label: "AI 점검", desc: "전체 화면·영역·기능\ntop-down 점검", icon: { bg: "#e8f5e9", emoji: "✓" } },
 ] as const;
 
