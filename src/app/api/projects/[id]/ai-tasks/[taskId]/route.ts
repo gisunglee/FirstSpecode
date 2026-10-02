@@ -7,8 +7,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
-import { requireProjectUnlocked } from "@/lib/requireProjectUnlocked";
-import { checkRole } from "@/lib/checkRole";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { addDaysStr } from "@/lib/weekUtil";
 
@@ -122,22 +121,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 // ── PATCH: 상태 직접 수정 ─────────────────────────────────────────────────────
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, taskId } = await params;
-  // 결제 잠금(정책 §1-6) — 이 라우트는 requirePermission 을 거치지 않아 여기서 직접 막는다
-  const lockErr = await requireProjectUnlocked(projectId);
-  if (lockErr) return lockErr;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
-  const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER"]);
-  if (roleCheck) return roleCheck;
+  // 권한 가드 — 역할 매트릭스(permissions.ts) 기반.
+  // 결제 잠금(§1-6)·지원 세션 읽기전용·프로젝트 삭제 상태도 requirePermission 이 함께 처리한다.
+  const auth = await requirePermission(request, projectId, "ai.request");
+  if (auth instanceof Response) return auth;
 
   let body: unknown;
   try { body = await request.json(); } catch {
@@ -173,22 +162,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 // ── DELETE: AI 태스크 삭제 ────────────────────────────────────────────────────
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, taskId } = await params;
-  // 결제 잠금(정책 §1-6) — 이 라우트는 requirePermission 을 거치지 않아 여기서 직접 막는다
-  const lockErr = await requireProjectUnlocked(projectId);
-  if (lockErr) return lockErr;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
-  const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM"]);
-  if (roleCheck) return roleCheck;
+  // 권한 가드 — 역할 매트릭스(permissions.ts) 기반.
+  // 결제 잠금(§1-6)·지원 세션 읽기전용·프로젝트 삭제 상태도 requirePermission 이 함께 처리한다.
+  const auth = await requirePermission(request, projectId, "ai.taskDelete");
+  if (auth instanceof Response) return auth;
 
   try {
     const task = await prisma.tbAiTask.findUnique({ where: { ai_task_id: taskId } });

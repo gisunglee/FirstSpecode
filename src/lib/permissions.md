@@ -20,7 +20,6 @@
 | [`src/lib/permissions.ts`](./permissions.ts) | 권한 매트릭스 `PERMISSIONS` + `hasPermission()` — **단일 진실 소스** |
 | [`src/lib/requirePermission.ts`](./requirePermission.ts) | API Route 가드 (`인증 + 멤버십 + 권한` 한 줄) |
 | [`src/lib/requireAuth.ts`](./requireAuth.ts) | 순수 인증 헬퍼 (JWT + spk_ API키) |
-| [`src/lib/checkRole.ts`](./checkRole.ts) | **[DEPRECATED]** 구 7-role 호환만 유지 |
 | [`src/hooks/useMyRole.ts`](../hooks/useMyRole.ts) | 프론트 `usePermissions(projectId)` 훅 |
 | [`src/app/api/projects/[id]/my-role/route.ts`](../app/api/projects/[id]/my-role/route.ts) | `{ myRole, myJob, myPlan }` 반환 API |
 | `prisma/sql/2026-04-21_add_permissions.sql` | 마이그레이션 SQL (이미 적용됨) |
@@ -82,6 +81,7 @@
 | `db.table.write` | OWNER / ADMIN | **DBA / DEV** | — |
 | `db.standard.manage` | OWNER / ADMIN | **DBA** | — |
 | `ai.request` | OWNER / ADMIN / MEMBER | — | — |
+| `ai.taskDelete` | OWNER / ADMIN | **PM / PL** | — |
 | `ai.bulkDesign` / `.planStudio` | OWNER / ADMIN / MEMBER | — | **PRO 이상** |
 | `specSync.read` | OWNER / ADMIN / MEMBER / VIEWER | — | — |
 | `specSync.submit` | OWNER / ADMIN / MEMBER | — | — |
@@ -112,12 +112,19 @@
 | **impl-request (build/preview/pre-impl/submit)** | **4** | ai.request |
 | **prompt-templates** | **1** | content.read / content.create |
 
-### 🔶 구 패턴 `checkRole()` 사용 — 41개 route
+### ✅ 구 패턴 `checkRole()` — 2026-10-02 전량 제거
 
-기능 **정상 동작** 중 (`ROLES.EDIT` 에 MEMBER 포함되어 VIEWER 차단 보장).
-**보안 허점 없음**. 단 직무·플랜 규칙은 못 씀 — 필요 시 자연 교체.
+`checkRole.ts` 는 삭제됨. 잔존 route 가 역할 목록을 `["OWNER","ADMIN","PM","DESIGNER","DEVELOPER"]`
+로 **하드코딩**하고 있어 4-role 이관 후 MEMBER 가 403 을 받는 버그가 있었다
+(AI 구현·AI 설계·파일 업로드 등 21개 route). 전부 `requirePermission()` 으로 이관:
 
-주요 잔존 영역: `ai-tasks` 본체 + 액션(retry/cancel/reject) / `areas·functions·requirements/files·ai·excalidraw·inline` / `standard-info` / `planning/bulk-import` / `design/bulk-import` / `phase-progress` / `col-mappings` / `impl-tree` / `*/sort` 11종 / `tasks/[taskId]/copy` / `reviews/[reviewId]` 본체 등
+| 그룹 | 적용 권한 |
+|---|---|
+| ai-tasks 생성·PATCH·cancel·reject·retry / areas·functions·unit-works·requirements AI / impl-tree / attachment-uploads | ai.request |
+| ai-tasks DELETE | ai.taskDelete |
+| areas·functions·requirements files 업로드·PATCH / phase-progress PUT | content.update |
+| files DELETE / requirements history DELETE | content.delete |
+| reviews 관리자 예외(isAdmin) | 역할 코드 직접 비교(OWNER·ADMIN) — 요청자·답변자 동적 규칙과 결합되어 매트릭스로 표현 불가 |
 
 ### ⚪ 가드 최소
 
@@ -175,7 +182,7 @@ const { has, myRole, myJob, myPlan } = usePermissions(projectId);
 - ❌ 프론트만 가드하고 백엔드 안 막기 → 뚫림
 - ❌ `role === "OWNER"` 직접 비교 → 매트릭스 우회, 규칙 변경 시 누락
 - ❌ 모든 버튼에 `has()` 가드 → 유지보수 지옥
-- ❌ 신규 코드에서 `checkRole()` 사용 → deprecated
+- ❌ 역할 목록을 route 에 하드코딩 (`["OWNER","ADMIN",...]`) → 역할 체계 바뀌면 조용히 깨짐. 매트릭스만 쓸 것
 - ❌ OWNER 0명 상태 허용 → 프로젝트 orphan. 역할 변경 API 에서 `ownerCount` 체크 필수
 - ❌ 직무를 권한 주축으로만 쓰기 ("DBA만") → OWNER/ADMIN 도 수정 가능해야 실무에 맞음 → 혼합 규칙
 

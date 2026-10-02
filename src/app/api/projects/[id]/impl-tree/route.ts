@@ -13,8 +13,7 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
-import { checkRole } from "@/lib/checkRole";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import {
   isProjectEntityRefType,
@@ -34,20 +33,12 @@ type TreeNode = {
 };
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId } = await params;
 
-  // 멤버십 확인
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
-  const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER"]);
-  if (roleCheck) return roleCheck;
+  // 권한 가드 — 역할 매트릭스(permissions.ts) 기반.
+  // 결제 잠금(§1-6)·지원 세션 읽기전용·프로젝트 삭제 상태도 requirePermission 이 함께 처리한다.
+  const auth = await requirePermission(request, projectId, "ai.request");
+  if (auth instanceof Response) return auth;
 
   // ── 파라미터 파싱 ─────────────────────────────────────────────────────────
   const url     = new URL(request.url);

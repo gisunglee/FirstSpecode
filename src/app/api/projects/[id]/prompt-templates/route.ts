@@ -19,7 +19,8 @@ type RouteParams = { params: Promise<{ id: string }> };
 // ── 검증 상수 ────────────────────────────────────────────────────────────────
 // 일반 사용처(UNIT_WORK/SCREEN/AREA/FUNCTION)에서 허용되는 작업 유형
 // (TEST 는 화면 전용이라 서버 저장 대상에서 제외)
-const VALID_TASK_TYPES_GENERAL = ["INSPECT", "DESIGN", "IMPLEMENT", "MOCKUP", "IMPACT", "CUSTOM"];
+// DESIGN 은 신규 생성 불가(AI 설계 기능 제거). 기존 DESIGN 템플릿의 조회·수정은 [tmplId] 라우트에서 그대로 허용.
+const VALID_TASK_TYPES_GENERAL = ["INSPECT", "IMPLEMENT", "MOCKUP", "IMPACT", "CUSTOM"];
 
 // 기획실(PLAN_STUDIO_ARTF) 전용 작업 유형 — 단일값
 const TASK_TYPE_PLAN_STUDIO = "PLAN_STUDIO_ARTF_GENERATE";

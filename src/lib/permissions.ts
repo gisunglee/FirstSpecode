@@ -161,6 +161,9 @@ export const PERMISSIONS = {
   "ai.request":         { roles: ["OWNER", "ADMIN", "MEMBER"] },
   "ai.bulkDesign":      { roles: ["OWNER", "ADMIN", "MEMBER"] },
   "ai.planStudio":      { roles: ["OWNER", "ADMIN", "MEMBER"] },
+  // ai.taskDelete: AI 태스크 삭제 — 요청(ai.request)보다 좁게. OWNER/ADMIN 역할 또는 PM/PL 직무.
+  //   구 7-role 시절 "OWNER/ADMIN/PM" 허용을 4-role 체계로 옮긴 것 (requirement.update 와 동일 관례).
+  "ai.taskDelete":      { roles: ["OWNER", "ADMIN"], jobs: ["PM", "PL"] },
 
   // V2 구현-설계 동기화. 결과 제출은 개발 멤버, 실제 설계 반영은 PM/PL 이상이 맡는다.
   "specSync.read":     { roles: ["OWNER", "ADMIN", "MEMBER", "VIEWER"] },

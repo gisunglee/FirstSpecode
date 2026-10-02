@@ -1,23 +1,21 @@
 /**
  * POST /api/projects/[id]/unit-works/[unitWorkId]/ai — 단위업무 AI 태스크 요청
  *
- * Body: { taskType: "DESIGN" | "INSPECT", coment_cn? }
+ * Body: { taskType: "INSPECT", coment_cn? }
+ *   (DESIGN 은 AI 설계 기능 제거로 더 이상 받지 않음 — 설계는 MCP 가 표준 양식으로 직접 작성)
  *
  * 프롬프트 조립:
- *   DESIGN  → <시스템프롬프트> + <코멘트> + <점검 대상>(단위업무 설명만)
  *   INSPECT → <시스템프롬프트> + <전체 설계서>(단위업무 top-down 전체 tree) + <코멘트> + <점검 대상>(단위업무 설명)
  *
  * 프롬프트 탐색 기준:
- *   - task_ty_code: DESIGN | INSPECT (기능과 동일)
+ *   - task_ty_code: INSPECT (기능과 동일)
  *   - ref_ty_code 필터 없음 (넓게 검색)
  *   - default_yn='Y' 우선 → 프로젝트 전용 → 시스템 공통 → 최신 순
  */
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
-import { requireProjectUnlocked } from "@/lib/requireProjectUnlocked";
-import { checkRole } from "@/lib/checkRole";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { buildDesignContext } from "@/lib/buildDesignContext";
 import { parseAiRequest, saveAiTaskAttachments } from "@/lib/aiTaskAttach";
@@ -25,22 +23,12 @@ import { parseAiRequest, saveAiTaskAttachments } from "@/lib/aiTaskAttach";
 type RouteParams = { params: Promise<{ id: string; unitWorkId: string }> };
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, unitWorkId } = await params;
-  // 결제 잠금(정책 §1-6) — 이 라우트는 requirePermission 을 거치지 않아 여기서 직접 막는다
-  const lockErr = await requireProjectUnlocked(projectId);
-  if (lockErr) return lockErr;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
-  const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER"]);
-  if (roleCheck) return roleCheck;
+  // 권한 가드 — 역할 매트릭스(permissions.ts) 기반.
+  // 결제 잠금(§1-6)·지원 세션 읽기전용·프로젝트 삭제 상태도 requirePermission 이 함께 처리한다.
+  const auth = await requirePermission(request, projectId, "ai.request");
+  if (auth instanceof Response) return auth;
 
   // multipart 또는 JSON 둘 다 수용
   let raw: Record<string, string>;
@@ -57,8 +45,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   const { taskType, coment_cn } = raw;
 
-  if (!taskType || !["DESIGN", "INSPECT"].includes(taskType)) {
-    return apiError("VALIDATION_ERROR", "taskType은 DESIGN, INSPECT 중 하나여야 합니다.", 400);
+  if (!taskType || taskType !== "INSPECT") {
+    return apiError("VALIDATION_ERROR", "taskType은 INSPECT 여야 합니다.", 400);
   }
 
   try {
@@ -101,7 +89,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // ── 프롬프트 조립 ────────────────────────────────────────────────────────
     // INSPECT: 전체설계서 자체가 점검 대상 (단위업무 전체 설계를 봐줘)
-    // DESIGN:  단위업무 설명이 점검 대상 (이 설명 기반으로 설계해줘)
+    // 설계서 조립에 실패한 경우에만 단위업무 설명으로 대체
     const parts: string[] = [];
 
     if (sysPrompt) {

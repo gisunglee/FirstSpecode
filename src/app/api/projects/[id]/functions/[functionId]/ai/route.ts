@@ -5,7 +5,7 @@
  *   - application/json  : { taskType, coment_cn?, req_cn? }              ← MCP·외부 호출자
  *   - multipart/form-data: 동일 필드 + files[]                            ← 브라우저 FE
  *
- * 프롬프트 조립 방식 (DESIGN · INSPECT · IMPACT 공통):
+ * 프롬프트 조립 방식 (INSPECT · IMPACT 공통 — DESIGN 은 AI 설계 기능 제거로 더 이상 받지 않음):
  *   1. task_ty_code 에 맞는 프롬프트 템플릿 조회 (default_yn='Y' 우선)
  *   2. <시스템프롬프트>내용</시스템프롬프트>
  *   3. <코멘트>내용</코멘트>  (코멘트 있을 때만)
@@ -18,9 +18,7 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/requireAuth";
-import { requireProjectUnlocked } from "@/lib/requireProjectUnlocked";
-import { checkRole } from "@/lib/checkRole";
+import { requirePermission } from "@/lib/requirePermission";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 import { buildDesignContext } from "@/lib/buildDesignContext";
 import { expandTableScripts } from "@/lib/dbTableScript";
@@ -29,22 +27,12 @@ import { parseAiRequest, saveAiTaskAttachments } from "@/lib/aiTaskAttach";
 type RouteParams = { params: Promise<{ id: string; functionId: string }> };
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
-
   const { id: projectId, functionId } = await params;
-  // 결제 잠금(정책 §1-6) — 이 라우트는 requirePermission 을 거치지 않아 여기서 직접 막는다
-  const lockErr = await requireProjectUnlocked(projectId);
-  if (lockErr) return lockErr;
 
-  const membership = await prisma.tbPjProjectMember.findUnique({
-    where: { prjct_id_mber_id: { prjct_id: projectId, mber_id: auth.mberId } },
-  });
-  if (!membership || membership.mber_sttus_code !== "ACTIVE") {
-    return apiError("FORBIDDEN", "접근 권한이 없습니다.", 403);
-  }
-  const roleCheck = checkRole(membership.role_code, ["OWNER", "ADMIN", "PM", "DESIGNER", "DEVELOPER"]);
-  if (roleCheck) return roleCheck;
+  // 권한 가드 — 역할 매트릭스(permissions.ts) 기반.
+  // 결제 잠금(§1-6)·지원 세션 읽기전용·프로젝트 삭제 상태도 requirePermission 이 함께 처리한다.
+  const auth = await requirePermission(request, projectId, "ai.request");
+  if (auth instanceof Response) return auth;
 
   // multipart 또는 JSON 둘 다 수용 — 브라우저 FE는 multipart(이미지 포함), MCP는 JSON
   let raw: Record<string, string>;
@@ -61,8 +49,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   const { taskType, comment, coment_cn, req_cn } = raw;
 
-  if (!taskType || !["INSPECT", "IMPACT", "DESIGN"].includes(taskType)) {
-    return apiError("VALIDATION_ERROR", "taskType은 INSPECT, IMPACT, DESIGN 중 하나여야 합니다.", 400);
+  if (!taskType || !["INSPECT", "IMPACT"].includes(taskType)) {
+    return apiError("VALIDATION_ERROR", "taskType은 INSPECT, IMPACT 중 하나여야 합니다.", 400);
   }
 
   try {
@@ -74,7 +62,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const effectiveDesc   = req_cn?.trim()                     || fn.func_dc?.trim() || "";
     const commentPart     = (coment_cn || comment)?.trim()     ?? "";
 
-    if ((taskType === "INSPECT" || taskType === "DESIGN") && !effectiveDesc) {
+    if (taskType === "INSPECT" && !effectiveDesc) {
       return apiError("VALIDATION_ERROR", "설명(description)을 먼저 작성해 주세요.", 400);
     }
 

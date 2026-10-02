@@ -12,7 +12,6 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/requireAuth";
 import { requireProjectUnlocked } from "@/lib/requireProjectUnlocked";
-import { checkRole } from "@/lib/checkRole";
 import { apiSuccess, apiError } from "@/lib/apiResponse";
 
 type RouteParams = { params: Promise<{ id: string; reviewId: string }> };
@@ -96,7 +95,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return apiError("NOT_FOUND", "리뷰 요청을 찾을 수 없습니다.", 404);
   }
 
-  const isAdmin     = checkRole(membership.role_code, ["OWNER", "ADMIN"]) === null;
+  // 관리자(OWNER·ADMIN)는 요청자·답변자 제한을 우회한다 (역할 코드 직접 비교 — 4-role 체계)
+  const isAdmin     = membership.role_code === "OWNER" || membership.role_code === "ADMIN";
   const isRequester = review.req_mber_id  === auth.mberId;
   const isReviewer  = review.revwr_mber_id === auth.mberId;
 
@@ -207,7 +207,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     return apiError("NOT_FOUND", "리뷰 요청을 찾을 수 없습니다.", 404);
   }
 
-  const isAdmin     = checkRole(membership.role_code, ["OWNER", "ADMIN"]) === null;
+  // 관리자(OWNER·ADMIN)는 요청자·답변자 제한을 우회한다 (역할 코드 직접 비교 — 4-role 체계)
+  const isAdmin     = membership.role_code === "OWNER" || membership.role_code === "ADMIN";
   const isRequester = review.req_mber_id === auth.mberId;
 
   if (!isAdmin && !isRequester) {
